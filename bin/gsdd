@@ -1,0 +1,155 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+const os = require('os');
+
+const args = process.argv.slice(2);
+const command = args[0];
+
+function checkBranch() {
+  try {
+    const branch = execSync('git branch --show-current', { stdio: 'pipe' }).toString().trim();
+    if (branch === 'main' || branch === 'master') {
+      console.error('\x1b[31mError: You are on the main/master branch.\x1b[0m');
+      console.error('Governance: Please create a feature branch before starting work.');
+      console.error('  git checkout -b feature/your-goal');
+      process.exit(1);
+    }
+  } catch (e) {
+    // If not a git repo, warn but proceed? Or strict?
+    console.warn('\x1b[33mWarning: Not a git repository or git error.\x1b[0m');
+  }
+}
+
+function init() {
+  const configDir = '.planning';
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir);
+  }
+  const configPath = path.join(configDir, 'config.json');
+  if (!fs.existsSync(configPath)) {
+    const config = {
+      commit_docs: false,
+      workflow: {
+        research: true,
+        plan_check: true,
+        verifier: true
+      }
+    };
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    console.log('\x1b[32mInitialized GSD Distilled config at .planning/config.json\x1b[0m');
+    console.log('Governance: commit_docs set to false (no planning artifacts in repo).');
+  } else {
+    console.log('Config already exists at .planning/config.json');
+  }
+
+  // Update .gitignore
+  if (fs.existsSync('.gitignore')) {
+    const gitignore = fs.readFileSync('.gitignore', 'utf8');
+    if (!gitignore.includes('.planning/')) {
+      fs.appendFileSync('.gitignore', '\n.planning/\n');
+      console.log('Added .planning/ to .gitignore');
+    }
+  } else {
+    fs.writeFileSync('.gitignore', '.planning/\n');
+    console.log('Created .gitignore with .planning/');
+  }
+}
+
+function getWorkflowPath(workflow) {
+    // Heuristic to find where GSD is installed
+    // Priority: Local .claude -> Global ~/.claude -> Default to global path string
+
+    if (fs.existsSync('.claude/get-shit-done')) {
+        return `@.claude/get-shit-done/workflows/distilled/${workflow}`;
+    }
+    // Default to global
+    return `@~/.claude/get-shit-done/workflows/distilled/${workflow}`;
+}
+
+function printInstruction(prompt) {
+    console.log('\n\x1b[36m=== Copy and paste this into your AI agent ===\x1b[0m\n');
+    console.log(prompt);
+    console.log('\n\x1b[36m==============================================\x1b[0m\n');
+}
+
+function spec(goalArgs) {
+    checkBranch();
+    init(); // Ensure config exists
+
+    const goal = goalArgs.join(' ');
+    if (!goal) {
+        console.error('Error: Please provide a goal.');
+        console.error('Usage: gsdd spec "Add user login"');
+        process.exit(1);
+    }
+
+    const workflow = getWorkflowPath('spec.md');
+    const prompt = `Execute workflow ${workflow}\n\nGOAL: ${goal}`;
+    printInstruction(prompt);
+}
+
+function execute() {
+    checkBranch();
+    // Check if SPEC.md exists
+    if (!fs.existsSync('.planning/SPEC.md')) {
+        console.error('Error: .planning/SPEC.md not found. Run "gsdd spec <goal>" first.');
+        process.exit(1);
+    }
+
+    const workflow = getWorkflowPath('execute.md');
+    const prompt = `Execute workflow ${workflow}`;
+    printInstruction(prompt);
+}
+
+function verify() {
+    checkBranch();
+
+    const workflow = getWorkflowPath('verify.md');
+    const prompt = `Execute workflow ${workflow}`;
+    printInstruction(prompt);
+}
+
+function help() {
+    console.log(`
+GSD Distilled (gsdd) - A governed, simplified workflow for AI agents.
+
+Usage:
+  gsdd <command> [options]
+
+Commands:
+  init      Initialize project (config, gitignore).
+  spec      Create a specification/plan for a goal.
+  execute   Execute the specification.
+  verify    Verify the implementation.
+  help      Show this help.
+
+Workflow:
+  1. gsdd spec "My Goal"  -> prompts agent to Research & Plan
+  2. gsdd execute         -> prompts agent to Build
+  3. gsdd verify          -> prompts agent to Verify
+`);
+}
+
+switch (command) {
+    case 'init':
+        init();
+        break;
+    case 'spec':
+        spec(args.slice(1));
+        break;
+    case 'execute':
+        execute();
+        break;
+    case 'verify':
+        verify();
+        break;
+    case 'help':
+    case '--help':
+    case '-h':
+    default:
+        help();
+        break;
+}
