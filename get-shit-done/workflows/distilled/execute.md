@@ -1,50 +1,34 @@
-<purpose>
-Execute the specification (SPEC.md) using GSD executors.
-</purpose>
+# PHASE: EXECUTION
 
-<process>
+**Objective:** Implement the plan from `.planning/SPEC.md` atomically and reliably.
 
-## 1. Setup
+**Inputs:**
+-   `.planning/SPEC.md` (The Plan)
+-   Existing codebase
 
-Ensure `.planning/SPEC.md` exists.
+**Instructions:**
 
-## 2. Execute
+1.  **Read and Understand:**
+    -   Read `.planning/SPEC.md` thoroughly.
+    -   Understand the "Must Haves" and the implementation checklist.
 
-Spawn `gsd-executor`.
+2.  **Atomic Execution:**
+    -   Execute the checklist *item by item*.
+    -   For each item:
+        -   Write code or make changes.
+        -   Verify locally (if possible).
+        -   **Commit immediately:** `git commit -m "feat(spec): [Task Description]"` (or fix/test/chore).
+        -   Mark the item as done in `.planning/SPEC.md` (change `[ ]` to `[x]`).
 
-```
-Task(
-  prompt="
-    <objective>
-    Execute the specification: .planning/SPEC.md
-    </objective>
+3.  **Create Summary:**
+    -   Create `.planning/SUMMARY.md`.
+    -   Include:
+        -   **Overview:** What was accomplished.
+        -   **Key Changes:** List of major files modified/created.
+        -   **Deviations:** Note any changes made from the original plan and *why*.
+        -   **Next Steps:** Any follow-up actions required.
 
-    <files_to_read>
-    - .planning/SPEC.md
-    - ./CLAUDE.md (if exists)
-    - .planning/config.json (if exists)
-    </files_to_read>
-
-    <constraints>
-    1. Read and follow .planning/SPEC.md tasks.
-    2. Commit each task atomically.
-    3. Create a SUMMARY.md at .planning/SUMMARY.md when complete.
-    4. Handle deviations: fix bugs, but ask before architectural changes.
-    5. Do not update ROADMAP.md or STATE.md (distilled mode).
-    </constraints>
-
-    <output>
-    Write to: .planning/SUMMARY.md
-    </output>
-  ",
-  subagent_type="gsd-executor",
-  model="claude-3-sonnet-20240229",
-  description="Execute Spec"
-)
-```
-
-## 3. Finish
-
-Report: "Execution complete. Summary at .planning/SUMMARY.md. Run `gsdd verify` to verify."
-
-</process>
+**Deliverable:**
+-   Fully implemented features/fixes.
+-   Updated `.planning/SPEC.md` (all checked).
+-   `.planning/SUMMARY.md` describing the work.

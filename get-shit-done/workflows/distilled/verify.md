@@ -1,49 +1,31 @@
-<purpose>
-Verify the executed specification (SPEC.md) using GSD verifiers.
-</purpose>
+# PHASE: VERIFICATION
 
-<process>
+**Objective:** Verify that the implementation meets the requirements.
 
-## 1. Setup
+**Inputs:**
+-   `.planning/SPEC.md`
+-   `.planning/SUMMARY.md`
+-   The implementation (files changed)
 
-Ensure `.planning/SPEC.md` exists.
+**Instructions:**
 
-## 2. Verify
+1.  **Read Criteria:**
+    -   Read the **Must Haves** section of `.planning/SPEC.md`.
 
-Spawn `gsd-verifier`.
+2.  **Verify Implementation:**
+    -   Check each "Must Have" item individually.
+        -   Is the file created/changed as expected?
+        -   Does the code logic support the requirement?
+        -   Can you manually verify the output/behavior (if applicable)?
+    -   **Automated Tests (Optional):** If tests exist or are created, run them.
 
-```
-Task(
-  prompt="
-    <objective>
-    Verify the implementation of: .planning/SPEC.md
-    </objective>
+3.  **Create Verification Report:**
+    -   Create `.planning/VERIFICATION.md`.
+    -   Include:
+        -   **Status:** "PASSED" or "FAILED" (with details).
+        -   **Findings:** List each requirement and its status.
+        -   **Gaps:** Note any issues found or discrepancies.
+        -   **Action:** Recommend "Approved" or "Fix Required".
 
-    <files_to_read>
-    - .planning/SPEC.md
-    - .planning/SUMMARY.md (if exists)
-    - ./CLAUDE.md (if exists)
-    </files_to_read>
-
-    <constraints>
-    1. Read 'must_haves' from SPEC.md.
-    2. Check each requirement against the codebase.
-    3. Run automated tests if specified in SPEC.md.
-    4. Create a VERIFICATION.md report.
-    </constraints>
-
-    <output>
-    Write to: .planning/VERIFICATION.md
-    </output>
-  ",
-  subagent_type="gsd-verifier",
-  model="claude-3-sonnet-20240229",
-  description="Verify Spec"
-)
-```
-
-## 3. Finish
-
-Report: "Verification complete. Report at .planning/VERIFICATION.md."
-
-</process>
+**Deliverable:**
+-   `.planning/VERIFICATION.md` report.

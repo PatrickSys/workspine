@@ -1,76 +1,30 @@
-<purpose>
-Create a specification (SPEC.md) for a goal, with optional research. Distilled workflow.
-</purpose>
+# PHASE: SPECIFICATION
 
-<process>
+**Objective:** Create a clear, atomic implementation plan for the goal.
 
-## 1. Setup
+**Inputs:**
+- Goal: {GOAL}
+- Current codebase state (if applicable)
 
-Extract goal from arguments.
-Ensure `.planning` directory exists.
+**Instructions:**
 
-## 2. Research (Optional)
+1.  **Research (Optional):**
+    -   If the goal requires new technology or is unclear, perform necessary research (read docs, search web, check existing code).
+    -   *Output:* Briefly summarize findings if research was done.
 
-Check for `--research` flag.
+2.  **Create Specification File:**
+    -   Create a file named `.planning/SPEC.md`.
 
-**If `--research`:**
-Spawn `gsd-project-researcher` to investigate.
+3.  **Populate `.planning/SPEC.md`:**
+    -   **Title:** Clear summary of the goal.
+    -   **Context:** Brief explanation of *why* we are doing this.
+    -   **Must Haves (Verification Criteria):**
+        -   List 3-5 observable truths that must be met for this to be considered done.
+        -   Include specific file paths or conditions where possible.
+    -   **Implementation Plan:**
+        -   Create a checklist of **atomic** tasks.
+        -   Each task should be small enough to be a single commit.
+        -   Format: `- [ ] Task Description`
 
-```
-Task(
-  prompt="
-    <objective>
-    Research the goal: ${GOAL}
-    Identify key requirements, tech stack choices, and potential pitfalls.
-    </objective>
-
-    <output>
-    Write to: .planning/RESEARCH.md
-    </output>
-  ",
-  subagent_type="general-purpose",
-  model="claude-3-opus-20240229",
-  description="Research goal"
-)
-```
-
-## 3. Create Spec
-
-Spawn `gsd-planner`.
-
-```
-Task(
-  prompt="
-    <objective>
-    Create a specification and plan for the goal: ${GOAL}
-    </objective>
-
-    <files_to_read>
-    - .planning/RESEARCH.md (if exists)
-    - ./CLAUDE.md (if exists)
-    </files_to_read>
-
-    <constraints>
-    1. Create a SINGLE file: .planning/SPEC.md
-    2. Format it as a standard GSD PLAN.md (XML tasks), but name it SPEC.md.
-    3. IGNORE roadmap requirements/IDs (this is a standalone spec).
-    4. Include a 'must_haves' section for verification.
-    5. Plan for atomic execution steps.
-    6. Set 'autonomous: true' unless user interaction is strictly required.
-    </constraints>
-
-    <output>
-    Write to: .planning/SPEC.md
-    </output>
-  ",
-  subagent_type="gsd-planner",
-  model="claude-3-opus-20240229",
-  description="Create Spec"
-)
-```
-
-## 4. Finish
-
-Report: "Spec created at .planning/SPEC.md. Run `gsdd execute` to start."
-
-</process>
+**Deliverable:**
+-   A completed `.planning/SPEC.md` file.
