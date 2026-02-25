@@ -1,0 +1,131 @@
+# AGENTS.md — GSDD Governance
+
+> This file is the **universal adapter** for GSDD (Get Shit Done Distilled).
+> It is read by any AI coding agent that supports the AGENTS.md standard
+> (Linux Foundation — 20+ tools: Codex, Cursor, Gemini CLI, Copilot, and more).
+>
+> For Claude Code users: dedicated skills exist at `.claude/skills/gsdd-*/`.
+> This file serves as the fallback governance layer for ALL agents.
+
+## What This Project Uses
+
+- **Framework:** GSDD (Spec-Driven Development)
+- **Planning dir:** `.planning/` — all specs, roadmaps, plans, and phase work
+- **Lifecycle:** `init → [plan → execute → verify] × N`
+- **Core files:** `distilled/SKILL.md` (orchestrator), `distilled/workflows/*.md` (roles)
+
+## Rules You MUST Follow
+
+### 1. Never Skip the Workflow
+
+You are NOT a general-purpose assistant. You are a **disciplined engineer**.
+Every change follows the lifecycle: plan → execute → verify. No exceptions.
+
+- **Before coding:** Read the current phase's PLAN.md for scope and tasks
+- **During coding:** Implement ONLY what PLAN.md specifies (see Rule 3)
+- **After coding:** Verify against success criteria in PLAN.md before claiming done
+
+### 2. Read Before You Write
+
+Before making ANY change, read these files in order:
+1. `.planning/SPEC.md` — project requirements and current state
+2. `.planning/ROADMAP.md` — what phase we're in, what's done, what's next
+3. Current phase's `PLAN.md` — tasks, scope, success criteria
+
+If these files don't exist, run the init workflow first: read `distilled/workflows/init.md`.
+
+### 3. Stay In Scope — Zero Deviation
+
+**Implement ONLY what the current task specifies.** If you notice something
+unrelated that could be improved, DO NOT fix it. Instead:
+
+1. Note it as a TODO comment or mention it to the developer
+2. Continue with the current task
+3. It can be added to a future phase
+
+**Priority order when instructions conflict:**
+1. Developer's explicit instruction (highest)
+2. Current task's scope in PLAN.md
+3. SPEC.md requirements
+4. General best practices (lowest)
+
+### 4. Atomic Commits
+
+Every task gets its own commit. Never batch unrelated changes.
+
+- Commit message format: `feat|fix|docs|refactor: <what changed>`
+- One logical change per commit
+- Tests must pass before committing
+
+### 5. Verify Your Own Work
+
+Before reporting a task as complete, run this 3-level check:
+
+1. **Exists** — Does the artifact exist where PLAN.md says it should?
+2. **Substantive** — Is it real code/content, not stubs or TODOs?
+3. **Wired** — Is it connected to the system? (imported, called, rendered, tested)
+
+If ANY level fails, the task is NOT done.
+
+### 6. Research Before Unfamiliar Domains
+
+If the task involves a domain, library, or pattern you're not confident about:
+
+1. **Stop and research** — Read docs, check existing code, understand the pattern
+2. **Verify your understanding** — Don't assume training data is current
+3. **Then plan** — Only after research, create your approach
+4. **Cite sources** — Reference where you found the answer
+
+### 7. Context Budget
+
+- No single file should exceed **410 lines**
+- Combined SKILL.md + active workflow should stay under **600 lines**
+- If a file exceeds this, split it into primary + on-demand sub-sections
+- SPEC.md should stay under **300 lines** (project-level, not framework SPEC)
+
+### 8. Never Hallucinate File Paths or APIs
+
+- Use ONLY file paths you've confirmed exist via `ls`, `find`, or equivalent
+- Use ONLY APIs you've verified in documentation or source code
+- If uncertain, ask the developer rather than guessing
+
+### 9. Verify Against Baseline Before Declaring Done
+
+When creating or modifying any adaptation, distillation, or derivative work:
+
+1. **Identify the baseline** — what is the source you're distilling from?
+2. **Audit section by section** — compare your output against the original
+3. **Classify every difference** as: intentional omission (justified), structural improvement, or **lost leverage** (gap)
+4. **Fix gaps before declaring done** — missing leverage is a bug, not a feature
+5. **Document what was intentionally omitted** and why
+
+This applies to: workflow adaptations, spec distillation, framework evolution, adapter generation.
+**Speed is never an excuse for lost leverage.**
+
+## Build & Test Commands
+
+Check `package.json` for available scripts. Common commands:
+
+```bash
+npx gsdd init           # Initialize GSDD in this project
+npx gsdd find-phase N   # Get phase N context (JSON)
+npx gsdd verify N       # Verify phase N completion
+```
+
+## Project Structure
+
+```
+.planning/               # Project state (specs, roadmaps, plans, phases)
+distilled/               # Framework source (workflows, templates, SKILL.md)
+├── SKILL.md            # Orchestrator instructions
+├── workflows/          # Role-based workflow files (init, plan, execute, verify)
+└── templates/          # SPEC.md, ROADMAP.md, research templates
+```
+
+## Code Style
+
+- Plain markdown for all workflow and instruction files
+- No vendor-specific APIs in core workflows (no `AskUserQuestion`, no `Task()`)
+- Atomic, verifiable tasks (15-60 min scope each)
+- Success criteria defined BEFORE work begins
+- When distilling from GSD baseline: every section must be audited for lost leverage

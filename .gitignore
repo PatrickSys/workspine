@@ -20,3 +20,7 @@ reports/
 RAILROAD_ARCHITECTURE.md
 
 .planning/
+
+# Backups and local test artifacts
+backups/
+AGENTS.md
