@@ -26,40 +26,19 @@ Determine the situation:
 </detect_mode>
 
 <codebase_audit>
-MANDATORY for brownfield projects. Audit 4 areas:
+MANDATORY for brownfield projects (`mode: resuming` or `mode: brownfield`).
+Before asking ANY questions, you must understand what exists.
 
-### 1. Stack
-Run these commands and note the results:
-```bash
-cat package.json      # or equivalent (requirements.txt, go.mod, Cargo.toml)
-ls -la                # project structure
-```
-Record: languages, frameworks, libraries, versions, build tools, test framework.
+### Subagent Delegation (Hierarchical Orchestrator Pattern)
+To prevent massive context window bloat from reading source files, you MUST delegate the deep codebase mapping to a subagent explicitly. Use this format precisely:
 
-### 2. Architecture
-```bash
-find . -type f -name "*.ts" -o -name "*.js" -o -name "*.py" | head -30  # file structure
-```
-Record: folder organization, entry points, key modules, data flow patterns.
+<delegate>
+Agent: CodebaseMapper
+Context: The user's request, the current working directory, and the template structures from `distilled/templates/codebase/`.
+Instruction: Explore the codebase thoroughly. Write STACK.md, ARCHITECTURE.md, CONVENTIONS.md, and CONCERNS.md to `.planning/codebase/`. Return a brief summary of the project architecture and state.
+</delegate>
 
-### 3. Conventions
-Look at 2-3 existing source files. Record:
-- Naming conventions (camelCase, snake_case, file naming)
-- Import style (absolute vs relative)
-- Test patterns (location, naming, framework)
-- Error handling patterns
-- Linting/formatting setup
-
-### 4. Concerns
-Record what you observe:
-- Missing tests
-- Outdated dependencies
-- Dead code or unused files
-- Missing documentation
-- Security issues (hardcoded secrets, no input validation)
-- Technical debt patterns
-
-Summarize findings in 10-15 bullet points. These feed directly into the spec.
+After the subagent returns, brief the developer with a 3-4 sentence summary of the findings before starting the questioning phase.
 </codebase_audit>
 
 <questioning>
@@ -169,7 +148,7 @@ Research is context-heavy. To prevent polluting your working memory, you MUST de
 <delegate>
 Agent: Researcher
 Context: Read SPEC.md and audit findings.
-Instruction: Execute the research workflow detailed below. Write STACK.md, FEATURES.md, ARCHITECTURE.md, and PITFALLS.md to `.planning/research/`. Then summarize the findings and return the summary to me.
+Instruction: Execute the research workflow detailed below. **You MUST use your internet search tools (Browser, WebSearch, or Exa MCP) to thoroughly investigate the domain against current State-of-the-Art**. Do not rely solely on your training data. Write STACK.md, FEATURES.md, ARCHITECTURE.md, and PITFALLS.md to `.planning/research/`. Then summarize the findings and return the summary to me.
 </delegate>
 
 ### When to Research

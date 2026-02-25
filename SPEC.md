@@ -360,7 +360,8 @@ Based on research into State of the Art agent patterns (LangChain, OpenAI Codex,
    - **Pattern:** The main agent (Orchestrator) delegates a specific, bounded question to a temporary subagent, waits for the result, and integrates it.
    - **Best for:** Sequential, context-heavy tasks where precision is required before moving to the next step.
    - **GSDD Usage:** `init` and `plan` workflows. E.g., The Orchestrator gathers requirements, spins up a Subagent to research an unfamiliar framework, waits for the `<research_summary>`, and then writes `ROADMAP.md`.
-   - **Context Control:** Prevents "context window rot" by ensuring the Orchestrator only sees the final summary, not the verbose research process.
+   - **Context Control (The CodebaseMapper Pattern):** Prevents "context window rot". For brownfield projects, an Orchestrator parsing hundreds of files becomes diluted. We explicitly spawn a `CodebaseMapper` subagent to perform raw `cat` and `find` actions, writing `STACK.md` and `ARCHITECTURE.md` to `.planning/codebase/`. The Orchestrator then only reads the structured abstractions, preserving memory for reasoning.
+   - **Verification over Hallucination (The Web-Search Pattern):** When a `Researcher` subagent is spawned, it is explicitly instructed to break out of its knowledge-cutoff hallucination boundary by using internet search (Browser, OpenSearch, Exa MCP). Without this, an AI researcher is merely a text-generator; with it, it verifies claims against current State-of-the-Art documentation.
 
 2. **The Agent Team Model (Flat / Peer-to-Peer)**
    - **Pattern:** A Lead agent provisions a swarm of specialized agents that share a task list, work in parallel, and communicate directly.
