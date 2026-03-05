@@ -58,7 +58,7 @@ ls .planning/codebase/*.md 2>/dev/null | wc -l
 ```
 
 **If files exist (count > 0):** Skip mappers. Use existing codebase maps.
-- Inform the user: "Existing codebase maps found — using them. Run `gsdd remap` to refresh if the codebase has changed significantly."
+- Inform the user: "Existing codebase maps found — using them. To refresh stale maps, delete `.planning/codebase/*.md` and rerun this workflow. (A dedicated `gsdd remap` command is planned.)"
 - Continue directly to `<questioning>`.
 
 **If no files:** Proceed to spawn mappers below.
@@ -215,8 +215,8 @@ MANDATORY STEP. After the goal is clarified but BEFORE writing any specs.
 
 **Check config first:** Read `.planning/config.json`.
 - If `workflow.research: false` → skip this section entirely, go to `<spec_creation>`.
-- If `researchDepth: "fast"` → spawn a single general-purpose Researcher (not 4 specialists). Acceptable trade-off for well-known domains.
-- If `researchDepth: "balanced"` or `"deep"` → use the 4-specialist pattern below (default).
+- If `researchDepth: "fast"` → spawn the same 4 specialists below, but synthesize SUMMARY.md inline — skip the 5th synthesizer agent. Faster and cheaper; acceptable for well-known domains.
+- If `researchDepth: "balanced"` or `"deep"` → use 4 specialists + synthesizer (default).
 
 ### Why Parallel Specialists, Not One Generalist
 **(SOTA: Anthropic Agent Teams, OpenAI Multi-Agents — 90.2% performance improvement for complex research tasks)**

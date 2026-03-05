@@ -15,6 +15,13 @@ const PLANNING_DIR = join(CWD, '.planning');
 
 const [,, command, ...args] = process.argv;
 
+const WORKFLOWS = [
+  { name: 'gsdd-new-project', workflow: 'new-project.md', description: 'New project - questioning, codebase audit, research, spec, roadmap', agent: 'Plan', opencodeType: 'plan' },
+  { name: 'gsdd-plan', workflow: 'plan.md', description: 'Plan a phase - research check, backward planning, task creation', agent: 'Plan', opencodeType: 'plan' },
+  { name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, commit atomically, verify', agent: 'Code', opencodeType: 'edit' },
+  { name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan', agent: 'Plan', opencodeType: 'plan' },
+];
+
 const COMMANDS = {
   init: cmdInit,
   update: cmdUpdate,
@@ -32,13 +39,6 @@ if (!command || !COMMANDS[command]) {
 (async () => {
   await COMMANDS[command](...args);
 })();
-
-const WORKFLOWS = [
-  { name: 'gsdd-new-project', workflow: 'new-project.md', description: 'New project - questioning, codebase audit, research, spec, roadmap', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-plan', workflow: 'plan.md', description: 'Plan a phase - research check, backward planning, task creation', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, commit atomically, verify', agent: 'Code', opencodeType: 'edit' },
-  { name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan', agent: 'Plan', opencodeType: 'plan' },
-];
 
 async function cmdInit(...initArgs) {
   console.log('gsdd init - setting up SDD workflow\n');
@@ -69,6 +69,20 @@ async function cmdInit(...initArgs) {
   // 3) Create config.json via interactive CLI (only if missing)
   const configFile = join(PLANNING_DIR, 'config.json');
   if (!existsSync(configFile)) {
+    if (!process.stdin.isTTY) {
+      console.log('  - non-interactive mode detected: writing config.json with defaults');
+      const config = {
+        researchDepth: 'balanced',
+        parallelization: true,
+        commitDocs: true,
+        modelProfile: 'balanced',
+        workflow: { research: true, planCheck: true, verifier: true },
+        gitProtocol: { branch: 'feature/[category]-[name]', commit: 'Conventional Commits, logical grouping', pr: 'Create PR via gh cli on phase verification' },
+        initVersion: 'v1.1',
+      };
+      writeFileSync(configFile, JSON.stringify(config, null, 2));
+      console.log('  - saved .planning/config.json (defaults — re-run gsdd init in a terminal to customize)\n');
+    } else {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const askQuestion = (query) => new Promise((resolve) => rl.question(query, resolve));
 
@@ -162,6 +176,7 @@ async function cmdInit(...initArgs) {
     writeFileSync(configFile, JSON.stringify(config, null, 2));
     console.log('\n  - saved .planning/config.json\n');
     rl.close();
+    } // end isTTY else
   } else {
     console.log('  - .planning/config.json already exists');
   }
@@ -342,7 +357,10 @@ function cmdVerify(...args) {
     if (exists) {
       try {
         const content = readFileSync(fullPath, 'utf-8');
-        substantive = content.trim().length > 50 && !content.includes('// TODO: implement');
+        const meaningfulLines = content.split('\n').filter(
+          (l) => l.trim() && !/^\s*(\/\/|\/\*|\*|#)/.test(l)
+        );
+        substantive = meaningfulLines.length >= 3 && !content.includes('// TODO: implement');
       } catch {
         substantive = false;
       }
@@ -360,7 +378,7 @@ function cmdVerify(...args) {
         if (/TODO|FIXME|HACK|XXX/.test(line)) {
           antiPatterns.push({ file: r.file, line: i + 1, pattern: 'TODO/FIXME', content: line.trim() });
         }
-        if (/catch\s*\([^)]*\)\s*\{\s*\}/.test(line)) {
+        if (/catch\s*\([^)]*\)\s*\{[\s]*\}/.test(line) || /catch\s*\([^)]*\)\s*\{\s*$/.test(line)) {
           antiPatterns.push({ file: r.file, line: i + 1, pattern: 'Empty catch', content: line.trim() });
         }
       });

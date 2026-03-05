@@ -678,6 +678,12 @@ These community ports pioneered multi-runtime support:
 
 ---
 
+## Credits
+
+GSDD is a distilled fork of [Get Shit Done](https://github.com/gsd-build/get-shit-done) by [Lex Christopherson](https://github.com/glittercowboy), licensed under MIT.
+
+---
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
