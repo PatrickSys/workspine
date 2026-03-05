@@ -675,4 +675,3 @@ function output(data) {
 }
 
 export { cmdHelp, cmdInit, cmdUpdate, cmdFindPhase, cmdVerify, cmdScaffold, runCli };
-
