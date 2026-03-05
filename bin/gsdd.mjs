@@ -2,9 +2,9 @@
 
 // gsdd - GSD Distilled CLI
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, cpSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, cpSync, realpathSync } from 'fs';
 import { join, dirname, basename } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import * as readline from 'readline';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,7 +13,7 @@ const DISTILLED_DIR = join(__dirname, '..', 'distilled');
 const CWD = process.cwd();
 const PLANNING_DIR = join(CWD, '.planning');
 const IS_MAIN = process.argv[1]
-  ? import.meta.url === pathToFileURL(process.argv[1]).href
+  ? realpathSync(process.argv[1]) === realpathSync(__filename)
   : false;
 
 const [,, command, ...args] = process.argv;
@@ -675,5 +675,4 @@ function output(data) {
 }
 
 export { cmdHelp, cmdInit, cmdUpdate, cmdFindPhase, cmdVerify, cmdScaffold, runCli };
-
 

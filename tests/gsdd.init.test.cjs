@@ -6,7 +6,14 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { cleanup, createTempProject, loadGsdd, readJson, setNonInteractiveStdin } = require('./gsdd.helpers.cjs');
+const {
+  cleanup,
+  createTempProject,
+  loadGsdd,
+  readJson,
+  runCliViaJunction,
+  setNonInteractiveStdin,
+} = require('./gsdd.helpers.cjs');
 
 describe('gsdd init and update', () => {
   let tmpDir;
@@ -103,5 +110,13 @@ describe('gsdd init and update', () => {
     const updated = fs.readFileSync(codexPath, 'utf-8');
     assert.doesNotMatch(updated, /^stale adapter$/m);
     assert.match(updated, /GSDD/);
+  });
+
+  test('cli entrypoint still runs when invoked through an aliased bin path', async () => {
+    const result = await runCliViaJunction(tmpDir, ['help']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /Usage: gsdd <command> \[args\]/);
+    assert.match(result.output, /Commands:/);
   });
 });
