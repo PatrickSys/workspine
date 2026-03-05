@@ -2,7 +2,7 @@
 
 // gsdd - GSD Distilled CLI
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, cpSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, cpSync, realpathSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import * as readline from 'readline';
@@ -12,6 +12,9 @@ const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', 'distilled');
 const CWD = process.cwd();
 const PLANNING_DIR = join(CWD, '.planning');
+const IS_MAIN = process.argv[1]
+  ? realpathSync(process.argv[1]) === realpathSync(__filename)
+  : false;
 
 const [,, command, ...args] = process.argv;
 
@@ -31,14 +34,19 @@ const COMMANDS = {
   help: cmdHelp,
 };
 
-if (!command || !COMMANDS[command]) {
-  cmdHelp();
-  process.exit(command ? 1 : 0);
+async function runCli(cliCommand = command, cliArgs = args) {
+  if (!cliCommand || !COMMANDS[cliCommand]) {
+    cmdHelp();
+    if (cliCommand) process.exitCode = 1;
+    return;
+  }
+
+  await COMMANDS[cliCommand](...cliArgs);
 }
 
-(async () => {
-  await COMMANDS[command](...args);
-})();
+if (IS_MAIN) {
+  await runCli();
+}
 
 async function cmdInit(...initArgs) {
   console.log('gsdd init - setting up SDD workflow\n');
@@ -665,3 +673,5 @@ function parsePhaseStatuses(roadmap) {
 function output(data) {
   console.log(JSON.stringify(data, null, 2));
 }
+
+export { cmdHelp, cmdInit, cmdUpdate, cmdFindPhase, cmdVerify, cmdScaffold, runCli };

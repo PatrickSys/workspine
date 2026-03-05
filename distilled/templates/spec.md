@@ -1,4 +1,4 @@
-﻿# SPEC.md Template
+# SPEC.md Template
 
 Use this template when creating `.planning/SPEC.md` - the project's single source of truth.
 
@@ -38,9 +38,9 @@ Use this template when creating `.planning/SPEC.md` - the project's single sourc
 
 ### Must Have (v1)
 
-- [ ] **[CAT-01]**: [User-centric, testable requirement]
-- [ ] **[CAT-02]**: [User-centric, testable requirement]
-- [ ] **[CAT-03]**: [User-centric, testable requirement]
+- [ ] **[CAT-01]**: [User-centric, testable requirement] [Done-When: observable verification criteria]
+- [ ] **[CAT-02]**: [User-centric, testable requirement] [Done-When: observable verification criteria]
+- [ ] **[CAT-03]**: [User-centric, testable requirement] [Done-When: observable verification criteria]
 
 ### Nice to Have (v2)
 
@@ -82,6 +82,7 @@ Use this template when creating `.planning/SPEC.md` - the project's single sourc
 - **Requirements** must be specific, testable, and user-centric ("User can X", not "System does Y")
 - **Requirement IDs** use `[CATEGORY]-[NUMBER]` format (AUTH-01, DATA-02, UI-03)
 - **v1 requirements** have checkboxes - check them off when verified as complete
+- **Every v1 requirement** must include a `[Done-When: ...]` clause with observable verification criteria
 - **Out of Scope** always includes reasoning (prevents scope creep discussions later)
 - **Key Decisions** are appended throughout the project as they're made
 - **Current State** is updated after each significant milestone - this is how agents resume work across sessions

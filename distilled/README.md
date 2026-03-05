@@ -43,15 +43,16 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 /gsdd:milestone     -> new ROADMAP.md for next milestone
 ```
 
-## Current Status (updated 2026-03-01)
+## Current Status (updated 2026-03-05)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
-| `new-project.md` | ✅ Defined, source-audited | Covers greenfield + brownfield + milestone context |
-| `plan.md` | ⚠️ Stub — not audited | Audit against `get-shit-done/workflows/plan-phase.md` next |
-| `execute.md` | ⚠️ Stub — not audited | Audit against `get-shit-done/workflows/execute-phase.md` |
-| `verify.md` | ⚠️ Stub — not audited | Audit against `get-shit-done/workflows/verify-phase.md` |
-| `gsdd remap` | ❌ Not defined | Phase 2 — selective codebase re-mapping (Refresh/Update/Skip) |
+| `new-project.md` | [OK] Defined, source-audited | Covers greenfield + brownfield + milestone context |
+| `plan.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/plan-phase.md` next |
+| `execute.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/execute-phase.md` |
+| `verify.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/verify-phase.md` |
+
+Standalone codebase remapping is planned for a later PR. For the current init surface, refresh stale codebase maps by deleting `.planning/codebase/*.md` and rerunning `/gsdd:new-project`.
 
 ## Init Workflow Agent Count (by config)
 
@@ -62,7 +63,9 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 | Brownfield, subsequent run, research balanced/deep | 0 (maps exist) | 4 | 1 | 5 |
 | Greenfield, research balanced/deep | 0 | 4 | 1 | 5 |
 | Greenfield, research fast | 0 | 4 | 0 (inline) | 4 |
-| Any, no research | 0–4 | 0 | 0 | 0–4 |
+| Any, no research | 0-4 | 0 | 0 | 0-4 |
+
+Note: `parallelization: false` keeps the same mapper/researcher set but runs them sequentially.
 
 ## What Gets Created (Project Output)
 

@@ -13,7 +13,7 @@ Before starting, read these files (if they exist):
 4. Project root files: `package.json`, `README.md`, main entry point, `.gitignore`
 5. `.planning/config.json` — The deterministic project settings. Key fields:
    - `researchDepth`: balanced | fast | deep — controls research thoroughness
-   - `parallelization`: true | false — whether to spawn parallel subagents
+   - `parallelization`: true | false � whether to run delegate work in parallel when the platform supports it; when false, run the same delegates sequentially
    - `workflow.research`: true | false — whether to do SOTA research before spec
    - `workflow.planCheck`: true | false — whether plan-check agent runs later
    - `workflow.verifier`: true | false — whether verifier runs after execution
@@ -51,25 +51,22 @@ Before asking ANY questions, you must understand what exists.
 
 ### Staleness Check (Run First)
 
-Check if `.planning/codebase/` already has substantive files:
+Check whether `.planning/codebase/STACK.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/CONVENTIONS.md`, or `.planning/codebase/CONCERNS.md` already exist and contain substantive content.
 
-```bash
-ls .planning/codebase/*.md 2>/dev/null | wc -l
-```
-
-**If files exist (count > 0):** Skip mappers. Use existing codebase maps.
-- Inform the user: "Existing codebase maps found — using them. To refresh stale maps, delete `.planning/codebase/*.md` and rerun this workflow. (A dedicated `gsdd remap` command is planned.)"
+**If codebase maps already exist:** Skip mappers. Use the existing codebase maps.
+- Inform the user: "Existing codebase maps found � using them. To refresh stale maps for now, delete `.planning/codebase/*.md` and rerun `/gsdd:new-project`. Standalone codebase remapping is planned, but it is not part of the current init surface."
 - Continue directly to `<questioning>`.
 
-**If no files:** Proceed to spawn mappers below.
+**If no substantive codebase maps exist:** Proceed to spawn mappers below.
 
 ### Why Parallel Mappers
-A single mapper switches between tech, architecture, quality, and concerns — domain switching degrades output quality. Spawn 4 specialized mappers in parallel, each focused on one dimension.
+A single mapper switches between tech, architecture, quality, and concerns � domain switching degrades output quality. Use the same 4 specialized mappers, each focused on one dimension.
 
-**If your platform supports parallel execution — use it.**
+**If `parallelization: true` and your platform supports parallel execution � run them in parallel.**
+**If `parallelization: false` or your platform lacks parallel execution � run the same 4 mappers sequentially.**
 
 ```
-◆ Spawning 4 codebase mappers in parallel...
+- Spawning 4 codebase mappers in parallel...
   → Tech mapper     → .planning/codebase/STACK.md
   → Arch mapper     → .planning/codebase/ARCHITECTURE.md
   → Quality mapper  → .planning/codebase/CONVENTIONS.md
@@ -80,7 +77,7 @@ Ensure `.planning/codebase/` directory exists before spawning.
 
 <delegate>
 Agent: TechMapper
-Parallel: true
+Parallel: (use parallelization value from .planning/config.json)
 Context: Current working directory. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/mapper-tech.md` for full task instructions. Follow them exactly.
 Output: `.planning/codebase/STACK.md`
@@ -90,7 +87,7 @@ Guardrails: Max Agent Hops = 3. No static dumps.
 
 <delegate>
 Agent: ArchMapper
-Parallel: true
+Parallel: (use parallelization value from .planning/config.json)
 Context: Current working directory. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/mapper-arch.md` for full task instructions. Follow them exactly.
 Output: `.planning/codebase/ARCHITECTURE.md`
@@ -100,7 +97,7 @@ Guardrails: Max Agent Hops = 3. No static directory dumps.
 
 <delegate>
 Agent: QualityMapper
-Parallel: true
+Parallel: (use parallelization value from .planning/config.json)
 Context: Current working directory. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/mapper-quality.md` for full task instructions. Follow them exactly.
 Output: `.planning/codebase/CONVENTIONS.md`
@@ -110,7 +107,7 @@ Guardrails: Max Agent Hops = 3. Rules not inventories.
 
 <delegate>
 Agent: ConcernsMapper
-Parallel: true
+Parallel: (use parallelization value from .planning/config.json)
 Context: Current working directory. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/mapper-concerns.md` for full task instructions. Follow them exactly. Hard stop if secrets found — report immediately.
 Output: `.planning/codebase/CONCERNS.md`
@@ -215,8 +212,8 @@ MANDATORY STEP. After the goal is clarified but BEFORE writing any specs.
 
 **Check config first:** Read `.planning/config.json`.
 - If `workflow.research: false` → skip this section entirely, go to `<spec_creation>`.
-- If `researchDepth: "fast"` → spawn the same 4 specialists below, but synthesize SUMMARY.md inline — skip the 5th synthesizer agent. Faster and cheaper; acceptable for well-known domains.
-- If `researchDepth: "balanced"` or `"deep"` → use 4 specialists + synthesizer (default).
+- If `researchDepth: "fast"` � use the same 4 specialists below, then synthesize `SUMMARY.md` inline. Faster and cheaper; acceptable for well-known domains.
+- If `researchDepth: "balanced"` or `"deep"` � use the same 4 specialists below plus the synthesizer (default).
 
 ### Why Parallel Specialists, Not One Generalist
 **(SOTA: Anthropic Agent Teams, OpenAI Multi-Agents — 90.2% performance improvement for complex research tasks)**
@@ -224,8 +221,12 @@ MANDATORY STEP. After the goal is clarified but BEFORE writing any specs.
 DO NOT research in this main thread — noisy intermediate output pollutes the context window.
 DO NOT use a single generalist to write all research files — domain switching degrades quality.
 
-Spawn 4 specialized researchers in parallel. After they complete, synthesize inline — no 5th agent.
-**If your platform supports parallel execution (`run_in_background=true`, async tasks, etc.) — use it. All 4 run simultaneously.**
+Use the same 4 specialized researchers every time. The difference is execution order and synthesis mode.
+- If `parallelization: true` and your platform supports parallel execution (`run_in_background=true`, async tasks, etc.) � run all 4 simultaneously.
+- If `parallelization: false` or your platform lacks parallel execution � run the same 4 researchers sequentially.
+- If `researchDepth: "fast"` � synthesize inline after the 4 researcher outputs return.
+- If `researchDepth: "balanced"` or `"deep"` � use the synthesizer delegate after the 4 researcher outputs are written.
+
 
 ```
 ◆ Spawning 4 researchers in parallel...
@@ -239,7 +240,7 @@ Ensure `.planning/research/` directory exists before spawning.
 
 <delegate>
 Agent: StackResearcher
-Parallel: true
+Parallel: (use parallelization value from .planning/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-stack.md` for full task instructions. Apply the project goal and milestone context provided above.
 Output: `.planning/research/STACK.md`
@@ -249,7 +250,7 @@ Guardrails: Max Agent Hops = 3.
 
 <delegate>
 Agent: FeaturesResearcher
-Parallel: true
+Parallel: (use parallelization value from .planning/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-features.md` for full task instructions. Apply the project goal and milestone context provided above.
 Output: `.planning/research/FEATURES.md`
@@ -259,7 +260,7 @@ Guardrails: Max Agent Hops = 3.
 
 <delegate>
 Agent: ArchitectureResearcher
-Parallel: true
+Parallel: (use parallelization value from .planning/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-architecture.md` for full task instructions. Apply the project goal and milestone context provided above.
 Output: `.planning/research/ARCHITECTURE.md`
@@ -269,7 +270,7 @@ Guardrails: Max Agent Hops = 3.
 
 <delegate>
 Agent: PitfallsResearcher
-Parallel: true
+Parallel: (use parallelization value from .planning/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-pitfalls.md` for full task instructions. Apply the project goal and milestone context provided above.
 Output: `.planning/research/PITFALLS.md`
@@ -407,5 +408,6 @@ Init is DONE when ALL of these are true:
 - [ ] `ROADMAP.md` exists with phases, success criteria, and requirement mapping
 - [ ] `ROADMAP.md` was reviewed and approved by the developer
 - [ ] Every v1 requirement maps to exactly one phase
-- [ ] Planning docs committed
+- [ ] Planning docs are persisted locally
+- [ ] Planning docs are committed only if `commitDocs: true`; local-only mode remains valid if `commitDocs: false`
 </success_criteria>

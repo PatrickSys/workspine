@@ -6,6 +6,9 @@
   "bin": {
     "gsdd": "./bin/gsdd.mjs"
   },
+  "scripts": {
+    "test:gsdd": "node tests/gsdd.init.test.cjs"
+  },
   "files": [
     "bin/",
     "distilled/"
