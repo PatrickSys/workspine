@@ -1,3 +1,7 @@
+**Security: Before exploring, read and follow the `<forbidden_files>` section from `.agents/skills/gsdd-map-codebase/SKILL.md`.** Never read or quote contents from files matching those patterns. Note existence only.
+
+**Output quality:** File paths are critical for downstream agents. Use backtick-formatted paths (`src/...`). Show patterns, not lists. Be prescriptive ("Use X"), not descriptive ("Some use X").
+
 Map the architecture and structure of this codebase. Read key source files to understand component boundaries, data flow, and patterns.
 
 Write ARCHITECTURE.md to `.planning/codebase/` using the template at `.planning/templates/codebase/architecture.md`.
@@ -8,7 +12,7 @@ Include:
 - "Change Routing" table: where to add new code by change type (new endpoint? new model? new UI component?)
 - Key architectural patterns used (e.g., event-driven, layered, modular monolith)
 
-**Anti-staleness:** Do NOT include static directory trees or file inventories. Use component names and patterns, not file paths that change.
+**Anti-staleness:** Do NOT include static directory trees or full file inventories. DO include file paths for key components, entry points, and architectural boundaries (e.g., `src/services/user.ts`) -- downstream agents navigate directly to files.
 
 <quality_gate>
 - [ ] Components have clear responsibility boundaries

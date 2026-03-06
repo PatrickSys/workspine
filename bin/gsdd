@@ -98,7 +98,7 @@ function init() {
 
 function getWorkflowContent(workflowName) {
     // Load local workflow file content directly
-    const workflowPath = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'distilled', workflowName);
+    const workflowPath = path.join(__dirname, '..', 'distilled', 'workflows', workflowName);
 
     if (fs.existsSync(workflowPath)) {
         return fs.readFileSync(workflowPath, 'utf8');

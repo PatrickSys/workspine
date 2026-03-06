@@ -1,3 +1,7 @@
+**Security: Before exploring, read and follow the `<forbidden_files>` section from `.agents/skills/gsdd-map-codebase/SKILL.md`.** Never read or quote contents from files matching those patterns. Note existence only.
+
+**Output quality:** File paths are critical for downstream agents. Use backtick-formatted paths (`src/...`). Show patterns, not lists. Be prescriptive ("Use X"), not descriptive ("Some use X").
+
 Map the technical debt, security concerns, and risks in this codebase.
 
 **Security check first (hard stop):** Before writing anything, grep for these patterns:

@@ -45,94 +45,39 @@ Determine research context before spawning researchers. Check if `.planning/SPEC
 Record this as `[greenfield|subsequent]` and pass it to every researcher delegate below.
 </milestone_context>
 
-<codebase_audit>
+<codebase_context>
 MANDATORY for brownfield projects (`mode: brownfield` or `mode: resuming`).
 Before asking ANY questions, you must understand what exists.
 
-### Staleness Check (Run First)
+### Check for Existing Codebase Maps
 
 Check whether `.planning/codebase/STACK.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/CONVENTIONS.md`, or `.planning/codebase/CONCERNS.md` already exist and contain substantive content.
 
-**If codebase maps already exist:** Skip mappers. Use the existing codebase maps.
-- Inform the user: "Existing codebase maps found � using them. To refresh stale maps for now, delete `.planning/codebase/*.md` and rerun `/gsdd:new-project`. Standalone codebase remapping is planned, but it is not part of the current init surface."
-- Continue directly to `<questioning>`.
+**If codebase maps exist:** Use them directly. Skip to Brownfield Validated Requirements Inference below.
 
-**If no substantive codebase maps exist:** Proceed to spawn mappers below.
+**If no codebase maps exist:** The codebase must be mapped before questioning can begin.
 
-### Why Parallel Mappers
-A single mapper switches between tech, architecture, quality, and concerns � domain switching degrades output quality. Use the same 4 specialized mappers, each focused on one dimension.
+Inform the user: "No codebase maps found. Running codebase mapping before continuing."
 
-**If `parallelization: true` and your platform supports parallel execution � run them in parallel.**
-**If `parallelization: false` or your platform lacks parallel execution � run the same 4 mappers sequentially.**
-
-```
-- Spawning 4 codebase mappers in parallel...
-  → Tech mapper     → .planning/codebase/STACK.md
-  → Arch mapper     → .planning/codebase/ARCHITECTURE.md
-  → Quality mapper  → .planning/codebase/CONVENTIONS.md
-  → Concerns mapper → .planning/codebase/CONCERNS.md
-```
-
-Ensure `.planning/codebase/` directory exists before spawning.
-
-<delegate>
-Agent: TechMapper
-Parallel: (use parallelization value from .planning/config.json)
-Context: Current working directory. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/mapper-tech.md` for full task instructions. Follow them exactly.
-Output: `.planning/codebase/STACK.md`
-Return: 3-5 sentence summary to Orchestrator.
-Guardrails: Max Agent Hops = 3. No static dumps.
-</delegate>
-
-<delegate>
-Agent: ArchMapper
-Parallel: (use parallelization value from .planning/config.json)
-Context: Current working directory. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/mapper-arch.md` for full task instructions. Follow them exactly.
-Output: `.planning/codebase/ARCHITECTURE.md`
-Return: 3-5 sentence summary to Orchestrator.
-Guardrails: Max Agent Hops = 3. No static directory dumps.
-</delegate>
-
-<delegate>
-Agent: QualityMapper
-Parallel: (use parallelization value from .planning/config.json)
-Context: Current working directory. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/mapper-quality.md` for full task instructions. Follow them exactly.
-Output: `.planning/codebase/CONVENTIONS.md`
-Return: 3-5 sentence summary to Orchestrator.
-Guardrails: Max Agent Hops = 3. Rules not inventories.
-</delegate>
-
-<delegate>
-Agent: ConcernsMapper
-Parallel: (use parallelization value from .planning/config.json)
-Context: Current working directory. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/mapper-concerns.md` for full task instructions. Follow them exactly. Hard stop if secrets found — report immediately.
-Output: `.planning/codebase/CONCERNS.md`
-Return: 3-5 sentence summary to Orchestrator. If secrets found, STOP and report immediately.
-Guardrails: Max Agent Hops = 3. Hard stop on secrets.
-</delegate>
-
-**After all 4 mappers complete:**
+Read and follow `.agents/skills/gsdd-map-codebase/SKILL.md` now. Execute its full flow (check existing, spawn mappers, validate, secrets scan). When map-codebase completes, return here and continue from Brownfield Validated Requirements Inference below.
 
 ### Brownfield Validated Requirements Inference
-Read the completed codebase map and infer what the project already does. These become **Validated** requirements in SPEC.md — existing capabilities the new work must not break.
 
-1. Read `.planning/codebase/ARCHITECTURE.md` — identify existing components and their responsibilities
-2. Read `.planning/codebase/STACK.md` — identify what's already integrated
+Read the completed codebase map and infer what the project already does. These become **Validated** requirements in SPEC.md -- existing capabilities the new work must not break.
+
+1. Read `.planning/codebase/ARCHITECTURE.md` -- identify existing components and their responsibilities
+2. Read `.planning/codebase/STACK.md` -- identify what's already integrated
 3. For each existing capability: add as a Validated requirement in SPEC.md later
 
 Example format (for SPEC.md requirements section):
 ```
-### Validated (Existing — must not regress)
-- ✓ [Existing capability 1] — existing
-- ✓ [Existing capability 2] — existing
+### Validated (Existing -- must not regress)
+- [Existing capability 1] -- existing
+- [Existing capability 2] -- existing
 ```
 
 Brief the developer with a 4-5 sentence summary before starting the questioning phase.
-</codebase_audit>
+</codebase_context>
 
 <questioning>
 This is the most important step. You are NOT filling out a form. You are having a CONVERSATION.

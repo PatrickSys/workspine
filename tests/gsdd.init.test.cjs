@@ -39,6 +39,7 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'research')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'spec.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md')));
 
     const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
     assert.strictEqual(config.researchDepth, 'balanced');
@@ -49,6 +50,20 @@ describe('gsdd init and update', () => {
       planCheck: true,
       verifier: true,
     });
+
+    const newProjectSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md'),
+      'utf-8'
+    );
+    assert.match(newProjectSkill, /\.agents\/skills\/gsdd-map-codebase\/SKILL\.md/);
+    assert.doesNotMatch(newProjectSkill, /active platform skill\/adapter/);
+
+    const mapperTechTemplate = fs.readFileSync(
+      path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md'),
+      'utf-8'
+    );
+    assert.match(mapperTechTemplate, /\.agents\/skills\/gsdd-map-codebase\/SKILL\.md/);
+    assert.doesNotMatch(mapperTechTemplate, /active platform skill\/adapter/);
   });
 
   test('init with explicit tools generates requested adapters', async () => {
