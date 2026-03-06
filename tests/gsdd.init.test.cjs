@@ -45,6 +45,11 @@ describe('gsdd init and update', () => {
     assert.strictEqual(config.researchDepth, 'balanced');
     assert.strictEqual(config.parallelization, true);
     assert.strictEqual(config.commitDocs, true);
+    assert.deepStrictEqual(config.gitProtocol, {
+      branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
+      commit: 'Group changes logically and follow the existing repo conventions. Do not mention phase, plan, or task IDs unless explicitly requested.',
+      pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
+    });
     assert.deepStrictEqual(config.workflow, {
       research: true,
       planCheck: true,

@@ -83,7 +83,7 @@ For each artifact, how is it connected to the system?
 ### Step 4: Derive tasks
 Group artifacts into tasks. Each task should:
 - Be completable in one sitting (15-60 minutes)
-- Produce a committable unit of work
+- Produce a reviewable unit of work
 - Have a clear "done when" criterion
 </goal_backward_planning>
 
@@ -222,5 +222,5 @@ Planning is DONE when ALL of these are true:
 - [ ] Plan has 2-5 tasks (split if more)
 - [ ] Plan covers ALL success criteria from ROADMAP.md
 - [ ] Locked decisions from SPEC.md are honored
-- [ ] Plan committed: `docs: plan phase {N} — {name}`
+- [ ] Any git action taken follows existing repo/user conventions and `.planning/config.json` advisory guidance
 </success_criteria>

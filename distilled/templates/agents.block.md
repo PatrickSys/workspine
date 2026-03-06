@@ -6,36 +6,38 @@ Edit the source template in the GSDD framework instead.
 ### What This Project Uses
 - Framework: GSDD (Spec-Driven Development)
 - Planning dir: `.planning/` (specs, roadmaps, plans, research, templates)
-- Lifecycle: `bootstrap (gsdd init) -> new-project -> [plan -> execute -> verify] x N`
+- Lifecycle: `bootstrap (gsdd init) -> new-project -> [plan -> execute -> verify] x N` for roadmap work
 
 ### Rules You MUST Follow
 
 1. Never Skip The Workflow
-- Every change follows: plan -> execute -> verify
-- Before coding: read `.planning/SPEC.md`, `.planning/ROADMAP.md`, and the current phase plan
-- After coding: verify against the plan's success criteria before claiming done
+- Roadmap work should follow: plan -> execute -> verify.
+- Direct user requests do NOT need to be forced into a phase or plan unless the user explicitly wants roadmap tracking.
+- Before coding roadmap work: read `.planning/SPEC.md`, `.planning/ROADMAP.md`, and the relevant phase plan if one exists.
+- After coding: verify against the relevant success criteria before claiming done.
 
 2. Read Before You Write
 - If `.planning/` exists, read in order:
   - `.planning/SPEC.md`
   - `.planning/ROADMAP.md`
   - `.planning/config.json`
-  - Current phase plan in `.planning/phases/`
+  - The relevant phase plan in `.planning/phases/` when the work is roadmap-scoped
 - If `.planning/` does not exist, the project has not been bootstrapped. Run `gsdd init`, then run the new-project workflow (`.agents/skills/gsdd-new-project/SKILL.md`).
 
 3. Stay In Scope (Zero Deviation)
-- Implement ONLY what the current plan/task specifies.
+- Implement ONLY what the approved plan or direct user request specifies.
 - If you notice unrelated improvements, do not implement them. Record them as a TODO for a future phase.
 
 Priority order when instructions conflict:
 - Developer explicit instruction (highest)
-- Current task scope in plan file
+- Current approved plan or direct task scope
 - `.planning/SPEC.md`
 - General best practices (lowest)
 
 4. Version Control Protocol
-- Follow `.planning/config.json` -> `gitProtocol` exactly.
-- Do not hallucinate branch names or commit conventions.
+- Treat `.planning/config.json` -> `gitProtocol` as advisory guidance, not a mandatory naming template.
+- Follow the existing repo or team git conventions first.
+- Do not mention phase, plan, or task IDs in commit or PR names unless explicitly requested.
 - Tests must pass before committing.
 
 5. Verify Your Own Work (Exists -> Substantive -> Wired)

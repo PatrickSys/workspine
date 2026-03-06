@@ -18,6 +18,7 @@ Before starting, read these files (if they exist):
    - `workflow.planCheck`: true | false — whether plan-check agent runs later
    - `workflow.verifier`: true | false — whether verifier runs after execution
    - `modelProfile`: balanced | quality | budget — model selection hint
+   - `gitProtocol`: advisory git guidance only — follow repo/user conventions first and never invent phase/plan/task git naming by default
 6. Any existing `.planning/SPEC.md` or `.planning/ROADMAP.md` (if resuming)
 </load_context>
 

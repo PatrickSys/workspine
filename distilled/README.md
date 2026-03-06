@@ -36,7 +36,7 @@ Notes:
 gsdd init           -> bootstrap (create .planning/, copy templates, generate skills/adapters)
 /gsdd:new-project   -> SPEC.md + ROADMAP.md  (questioning + codebase audit + research)
 /gsdd:plan N        -> phases/N/PLAN.md      (task breakdown + research)
-/gsdd:execute N     -> atomic commits        (plan execution with quality gates)
+/gsdd:execute N     -> code changes          (plan execution with quality gates)
 /gsdd:verify N      -> VERIFICATION.md       (goal-backward validation)
   ... repeat plan/execute/verify per phase ...
 /gsdd:complete      -> archive milestone, evolve SPEC.md

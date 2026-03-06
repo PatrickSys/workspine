@@ -22,7 +22,7 @@ const WORKFLOWS = [
   { name: 'gsdd-new-project', workflow: 'new-project.md', description: 'New project - questioning, codebase audit, research, spec, roadmap', agent: 'Plan', opencodeType: 'plan' },
   { name: 'gsdd-map-codebase', workflow: 'map-codebase.md', description: 'Map or refresh codebase - 4 parallel mappers, staleness check, secrets scan', agent: 'Plan', opencodeType: 'plan' },
   { name: 'gsdd-plan', workflow: 'plan.md', description: 'Plan a phase - research check, backward planning, task creation', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, commit atomically, verify', agent: 'Code', opencodeType: 'edit' },
+  { name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, verify changes, follow repo git conventions', agent: 'Code', opencodeType: 'edit' },
   { name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan', agent: 'Plan', opencodeType: 'plan' },
 ];
 
@@ -33,6 +33,12 @@ const COMMANDS = {
   verify: cmdVerify,
   scaffold: cmdScaffold,
   help: cmdHelp,
+};
+
+const DEFAULT_GIT_PROTOCOL = {
+  branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
+  commit: 'Group changes logically and follow the existing repo conventions. Do not mention phase, plan, or task IDs unless explicitly requested.',
+  pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
 };
 
 async function runCli(cliCommand = command, cliArgs = args) {
@@ -86,7 +92,7 @@ async function cmdInit(...initArgs) {
         commitDocs: true,
         modelProfile: 'balanced',
         workflow: { research: true, planCheck: true, verifier: true },
-        gitProtocol: { branch: 'feature/[category]-[name]', commit: 'Conventional Commits, logical grouping', pr: 'Create PR via gh cli on phase verification' },
+        gitProtocol: { ...DEFAULT_GIT_PROTOCOL },
         initVersion: 'v1.1',
       };
       writeFileSync(configFile, JSON.stringify(config, null, 2));
@@ -142,17 +148,17 @@ async function cmdInit(...initArgs) {
     const workflowVerifier = verifierInput.trim().toLowerCase() !== 'no';
 
     // --- Git protocol ---
-    console.log('\n  Version Control Protocol (Hybrid Git Strategy)');
-    console.log('   Deterministic rules reduce hallucinated branch names and commits.');
+    console.log('\n  Version Control Protocol (Advisory)');
+    console.log('   This captures preferred guidance. Repo/user conventions still win over framework defaults.');
 
-    let branchStrategy = await askQuestion('   Branch strategy (default: feature/[category]-[name]): ');
-    branchStrategy = branchStrategy.trim() || 'feature/[category]-[name]';
+    let branchStrategy = await askQuestion('   Branching guidance (default: follow existing repo conventions; use feature branches for significant changes): ');
+    branchStrategy = branchStrategy.trim() || DEFAULT_GIT_PROTOCOL.branch;
 
-    let commitStrategy = await askQuestion('   Commit strategy (default: Conventional Commits, logical grouping): ');
-    commitStrategy = commitStrategy.trim() || 'Conventional Commits, logical grouping';
+    let commitStrategy = await askQuestion('   Commit guidance (default: logical grouping, no phase/plan/task IDs unless requested): ');
+    commitStrategy = commitStrategy.trim() || DEFAULT_GIT_PROTOCOL.commit;
 
-    let prStrategy = await askQuestion('   PR strategy (default: Create PR via gh cli on phase verification): ');
-    prStrategy = prStrategy.trim() || 'Create PR via gh cli on phase verification';
+    let prStrategy = await askQuestion('   PR guidance (default: follow existing repo review workflow): ');
+    prStrategy = prStrategy.trim() || DEFAULT_GIT_PROTOCOL.pr;
 
     if (!commitDocs) {
       const gitignorePath = join(CWD, '.gitignore');
@@ -179,7 +185,11 @@ async function cmdInit(...initArgs) {
         planCheck: workflowPlanCheck,
         verifier: workflowVerifier,
       },
-      gitProtocol: { branch: branchStrategy, commit: commitStrategy, pr: prStrategy },
+      gitProtocol: {
+        branch: branchStrategy,
+        commit: commitStrategy,
+        pr: prStrategy,
+      },
       initVersion: 'v1.1',
     };
     writeFileSync(configFile, JSON.stringify(config, null, 2));
