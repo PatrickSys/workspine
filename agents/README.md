@@ -29,6 +29,15 @@ Roles define WHAT an agent IS. Delegates define WHAT an agent DOES in a specific
 |------|------|------|
 | Debugger | `debugger.md` | Not part of core lifecycle. Standalone diagnostic utility. |
 
+## Runtime Distribution
+
+`gsdd init` copies all role contracts (excluding this README) from `agents/` into `.planning/templates/roles/` in the consumer project. This gives consumer projects a portable, self-contained copy of the role library — no hard dependency on the GSDD framework repo at runtime.
+
+- **Single source of truth:** `agents/*.md` in this repo. Consumer copies are generated, not edited.
+- **Delegates reference the local copy:** `distilled/templates/delegates/*.md` point to `.planning/templates/roles/<role>.md`, not back to this repo.
+- **Idempotent:** `gsdd init` skips the copy if `.planning/templates/roles/` already exists.
+- **Future updates:** `gsdd update --templates` (planned) will re-copy from latest framework sources.
+
 ## Archive
 
 `_archive/` contains the original 11 GSD agent files (preserved via `git mv` for history). These are the verbose, GSD-specific sources from which canonical roles were distilled. Do not reference them in workflows -- use the canonical roles above.
