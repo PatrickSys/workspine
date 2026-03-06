@@ -88,6 +88,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 
 ```
 distilled/
+  DESIGN.md                # design decisions and rationale (10 decisions, evidence-backed)
   SKILL.md                 # primary entry point (plain markdown)
   workflows/
     new-project.md
