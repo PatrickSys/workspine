@@ -40,6 +40,7 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'spec.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md')));
 
     const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
     assert.strictEqual(config.researchDepth, 'balanced');
@@ -73,6 +74,13 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'mapper.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'researcher.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'synthesizer.md')));
+
+    const planSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      'utf-8'
+    );
+    assert.match(planSkill, /AUDIT STATUS: This workflow is a stub/);
+    assert.doesNotMatch(planSkill, /<plan_check_loop>/);
   });
 
   test('delegates reference canonical role contracts', async () => {
@@ -120,9 +128,29 @@ describe('gsdd init and update', () => {
     }
 
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'gsdd-new-project', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'AGENTS.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'commands', 'gsdd-new-project.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
+
+    const claudePlanChecker = fs.readFileSync(
+      path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
+      'utf-8'
+    );
+    assert.match(claudePlanChecker, /^name: gsdd-plan-checker/m);
+    assert.match(claudePlanChecker, /^tools: Read, Grep, Glob/m);
+    assert.match(claudePlanChecker, /DRAFT PAYLOAD ONLY/);
+
+    const opencodePlanChecker = fs.readFileSync(
+      path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
+      'utf-8'
+    );
+    assert.match(opencodePlanChecker, /^mode: subagent/m);
+    assert.match(opencodePlanChecker, /^\s+write: false/m);
+    assert.match(opencodePlanChecker, /^\s+edit: false/m);
+    assert.match(opencodePlanChecker, /^\s+bash: false/m);
+    assert.match(opencodePlanChecker, /DRAFT PAYLOAD ONLY/);
   });
 
   test('init is idempotent and upserts the bounded AGENTS block without duplicating it', async () => {
@@ -156,19 +184,25 @@ describe('gsdd init and update', () => {
 
     try {
       gsdd = await loadGsdd(tmpDir);
-      await gsdd.cmdInit('--tools', 'codex');
+      await gsdd.cmdInit('--tools', 'claude,codex');
     } finally {
       restoreStdin();
     }
 
     const codexPath = path.join(tmpDir, '.codex', 'AGENTS.md');
+    const claudeAgentPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
     fs.writeFileSync(codexPath, 'stale adapter\n');
+    fs.writeFileSync(claudeAgentPath, 'stale checker\n');
 
     await gsdd.cmdUpdate();
 
     const updated = fs.readFileSync(codexPath, 'utf-8');
     assert.doesNotMatch(updated, /^stale adapter$/m);
     assert.match(updated, /GSDD/);
+
+    const updatedClaudeAgent = fs.readFileSync(claudeAgentPath, 'utf-8');
+    assert.doesNotMatch(updatedClaudeAgent, /^stale checker$/m);
+    assert.match(updatedClaudeAgent, /^name: gsdd-plan-checker/m);
   });
 
   test('cli entrypoint still runs when invoked through an aliased bin path', async () => {

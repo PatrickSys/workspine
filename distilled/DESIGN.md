@@ -56,14 +56,14 @@
 | Canonical role | Absorbs from GSD | Merger criteria |
 |---------------|-------------------|-----------------|
 | `researcher.md` | `gsd-project-researcher.md` + `gsd-phase-researcher.md` | Same algorithm, different scope. Scope is an input parameter, not a role distinction. Clean merger. |
-| `planner.md` | `gsd-planner.md` + `gsd-plan-checker.md` | Reduces coordination overhead. **Tradeoff:** GSD's plan-checker was a fresh-context adversarial pass with a 3-cycle revision loop (planner → checker → revise × 3 max). GSDD's internal quality gate covers the same 7 dimensions but with reduced independence — self-review bias applies. See Gap I17. |
+| `planner.md` | `gsd-planner.md` + `gsd-plan-checker.md` | Reduces coordination overhead. **Tradeoff:** GSD's plan-checker was a fresh-context adversarial pass with a 3-cycle revision loop (planner → checker → revise × 3 max). GSDD now tracks a draft `plan-checker` payload and distributes native-capable agent wrappers for Claude/OpenCode, but the loop itself is still not wired. Self-review bias still applies until a Tier B runtime owns orchestration. See Gap I17. |
 | `verifier.md` | `gsd-verifier.md` + `gsd-integration-checker.md` | Both use goal-backward analysis on post-execution artifacts. **Tradeoff:** `gsd-integration-checker.md` had an explicitly distinct scope (cross-phase wiring: exports/imports, API consumers, E2E flows) with structured output for a milestone auditor. Merging collapses that boundary. See Gap I18. |
 
 **Known tradeoffs in mergers:**
 
 The researcher merger is clean — scope is genuinely a parameter. The planner and verifier mergers each carry a real cost:
 
-- **Planner:** External verification by a fresh-context agent catches blind spots the author cannot catch in self-review. GSD's 3-cycle revision loop is currently absent from the architecture. When `plan.md` workflow is implemented, the orchestrator must explicitly decide whether to restore an independent verification pass.
+- **Planner:** External verification by a fresh-context agent catches blind spots the author cannot catch in self-review. GSD's 3-cycle revision loop is still absent from the architecture. The repo now carries a canonical `plan-checker` payload plus native-capable adapter distribution for Claude/OpenCode, but `plan.md` remains a stub until a Tier B runtime actually owns the loop.
 - **Verifier:** The integration-checker's cross-phase wiring scope (orphaned exports, unconsumed API routes, broken E2E flows) is structurally different from single-phase goal-backward verification. Without an explicit integration-check section or separate pass, this coverage may be silently dropped when `verify.md` is implemented.
 
 **Unchanged roles (1:1):**
@@ -289,10 +289,12 @@ The researcher merger is clean — scope is genuinely a parameter. The planner a
 | Tool | Generated surface | Trigger |
 |------|------------------|---------|
 | Any (portable) | `.agents/skills/gsdd-*/SKILL.md` | Always generated on `gsdd init` |
-| Claude Code | `.claude/skills/gsdd-*/SKILL.md` | `--tools claude` |
+| Claude Code | `.claude/skills/gsdd-*/SKILL.md` + `.claude/agents/gsdd-plan-checker.md` | `--tools claude` |
 | Codex CLI | `.codex/AGENTS.md` | `--tools codex` |
-| OpenCode | `.opencode/commands/gsdd-*.md` | `--tools opencode` |
+| OpenCode | `.opencode/commands/gsdd-*.md` + `.opencode/agents/gsdd-plan-checker.md` | `--tools opencode` |
 | Cursor/Copilot/Gemini | Root `AGENTS.md` (bounded block) | `--tools agents` |
+
+These native agent files are capability groundwork, not proof that `/gsdd:plan` already orchestrates the planner -> checker -> revision loop. I17 stays open until a Tier B runtime path actually invokes them with deterministic state ownership.
 
 **Why generation over conversion:** Converting from a vendor-specific source is lossy and brittle -- every new agent needs a new converter. Generating tool-specific files from vendor-agnostic markdown is lossless and scales linearly. Pattern validated by OpenSpec (24 AI tools, 48 contributors).
 
@@ -300,6 +302,7 @@ The researcher merger is clean — scope is genuinely a parameter. The planner a
 - GSD source: `bin/install.js` (converter with per-runtime conversion logic)
 - GSD source: `get-shit-done/workflows/new-project.md` (851 lines, 10+ AskUserQuestion calls, 7 Task() calls)
 - GSDD: `bin/gsdd.mjs` (adapter generation functions: `generateClaudeSkills`, `generateOpenCodeSkills`, `generateCodexConfig`, `generateRootAgentsMd`)
+- GSDD: `distilled/templates/delegates/plan-checker.md` as the single payload source for native-capable checker-agent generation
 - SPEC.md "Agent Integration Strategy" section
 - AGENTS.md Linux Foundation standard: [agents.md](https://agents.md)
 

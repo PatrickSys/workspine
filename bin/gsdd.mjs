@@ -26,6 +26,24 @@ const WORKFLOWS = [
   { name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan', agent: 'Plan', opencodeType: 'plan' },
 ];
 
+const ADAPTERS = {
+  claude: {
+    kind: 'native_capable',
+    nativeAgentsDir: join(CWD, '.claude', 'agents'),
+    nativeAgents: ['gsdd-plan-checker'],
+  },
+  opencode: {
+    kind: 'native_capable',
+    nativeAgentsDir: join(CWD, '.opencode', 'agents'),
+    nativeAgents: ['gsdd-plan-checker'],
+  },
+  codex: { kind: 'governance_only' },
+  agents: { kind: 'governance_only' },
+  cursor: { kind: 'governance_only' },
+  copilot: { kind: 'governance_only' },
+  gemini: { kind: 'governance_only' },
+};
+
 const COMMANDS = {
   init: cmdInit,
   update: cmdUpdate,
@@ -232,11 +250,13 @@ async function cmdInit(...initArgs) {
   for (const platform of platforms) {
     if (platform === 'claude') {
       generateClaudeSkills();
-      console.log('  - generated Claude Code skills (.claude/skills/gsdd-*)');
+      generateNativeAgents('claude');
+      console.log('  - generated Claude Code skills (.claude/skills/gsdd-*) and native agents (.claude/agents/gsdd-*.md)');
     }
     if (platform === 'opencode') {
       generateOpenCodeSkills();
-      console.log('  - generated OpenCode slash commands (.opencode/commands/gsdd-*.md)');
+      generateNativeAgents('opencode');
+      console.log('  - generated OpenCode slash commands (.opencode/commands/gsdd-*.md) and native agents (.opencode/agents/gsdd-*.md)');
     }
     if (platform === 'codex') {
       generateCodexConfig();
@@ -269,15 +289,25 @@ function cmdUpdate(...updateArgs) {
     updated = true;
   }
 
-  if (platforms.includes('claude') || existsSync(join(CWD, '.claude', 'skills'))) {
+  if (
+    platforms.includes('claude') ||
+    existsSync(join(CWD, '.claude', 'skills')) ||
+    existsSync(join(CWD, '.claude', 'agents'))
+  ) {
     generateClaudeSkills();
-    console.log('  - updated Claude Code skills (.claude/skills/gsdd-*)');
+    generateNativeAgents('claude');
+    console.log('  - updated Claude Code skills (.claude/skills/gsdd-*) and native agents (.claude/agents/gsdd-*.md)');
     updated = true;
   }
 
-  if (platforms.includes('opencode') || existsSync(join(CWD, '.opencode', 'commands'))) {
+  if (
+    platforms.includes('opencode') ||
+    existsSync(join(CWD, '.opencode', 'commands')) ||
+    existsSync(join(CWD, '.opencode', 'agents'))
+  ) {
     generateOpenCodeSkills();
-    console.log('  - updated OpenCode slash commands (.opencode/commands/gsdd-*.md)');
+    generateNativeAgents('opencode');
+    console.log('  - updated OpenCode slash commands (.opencode/commands/gsdd-*.md) and native agents (.opencode/agents/gsdd-*.md)');
     updated = true;
   }
 
@@ -509,8 +539,8 @@ Commands:
   scaffold phase <N> [name]   Create a new phase plan file
 
 Platforms (for --tools):
-  claude    Generate Claude Code skills (.claude/skills/gsdd-*)
-  opencode  Generate OpenCode local slash commands (.opencode/commands/gsdd-*.md)
+  claude    Generate Claude Code skills (.claude/skills/gsdd-*) + native agents (.claude/agents/gsdd-*.md)
+  opencode  Generate OpenCode local slash commands (.opencode/commands/gsdd-*.md) + native agents (.opencode/agents/gsdd-*.md)
   codex     Generate Codex CLI adapter (.codex/AGENTS.md)
   agents    Generate/Update root AGENTS.md (bounded GSDD block)
   cursor    Same as 'agents'
@@ -520,6 +550,8 @@ Platforms (for --tools):
 
 Notes:
   - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)
+  - --tools claude also generates native agents at .claude/agents/gsdd-*.md
+  - --tools opencode also generates native agents at .opencode/agents/gsdd-*.md
   - root AGENTS.md is only written on init when explicitly requested via --tools agents (or all)
 
 Examples:
@@ -597,6 +629,54 @@ ${workflowContent}`;
   }
 }
 
+function generateNativeAgents(platform) {
+  const adapter = ADAPTERS[platform];
+  if (!adapter || adapter.kind !== 'native_capable') return;
+
+  mkdirSync(adapter.nativeAgentsDir, { recursive: true });
+  for (const agentName of adapter.nativeAgents) {
+    writeFileSync(
+      join(adapter.nativeAgentsDir, `${agentName}.md`),
+      renderNativeAgentContent(platform, agentName)
+    );
+  }
+}
+
+function renderNativeAgentContent(platform, agentName) {
+  const payload = getDelegateContent(nativeAgentToDelegate(agentName)).trim();
+  if (platform === 'claude') {
+    return `---
+name: ${agentName}
+description: Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly.
+tools: Read, Grep, Glob
+---
+
+${payload}
+`;
+  }
+
+  if (platform === 'opencode') {
+    return `---
+description: Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly.
+mode: subagent
+tools:
+  write: false
+  edit: false
+  bash: false
+---
+
+${payload}
+`;
+  }
+
+  return `${payload}\n`;
+}
+
+function nativeAgentToDelegate(agentName) {
+  if (agentName === 'gsdd-plan-checker') return 'plan-checker.md';
+  return `${agentName}.md`;
+}
+
 function generateCodexConfig() {
   const codexDir = join(CWD, '.codex');
   mkdirSync(codexDir, { recursive: true });
@@ -621,6 +701,12 @@ function getWorkflowContent(workflowFile) {
   const filePath = join(DISTILLED_DIR, 'workflows', workflowFile);
   if (existsSync(filePath)) return readFileSync(filePath, 'utf-8');
   return `<!-- Workflow file not found: ${workflowFile} -->\n`;
+}
+
+function getDelegateContent(delegateFile) {
+  const filePath = join(DISTILLED_DIR, 'templates', 'delegates', delegateFile);
+  if (existsSync(filePath)) return readFileSync(filePath, 'utf-8');
+  return `<!-- Delegate file not found: ${delegateFile} -->\n`;
 }
 
 function renderAgentsBoundedBlock() {

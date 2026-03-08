@@ -65,7 +65,7 @@ npx gsdd init --tools agents
 
 Behavior:
 - Always: generates open-standard skills at `.agents/skills/gsdd-*/SKILL.md` by embedding `distilled/workflows/*.md`.
-- Optional: generates tool adapters (Codex `.codex/AGENTS.md`, root `AGENTS.md`, Claude `.claude/skills`, OpenCode `.opencode/commands`).
+- Optional: generates tool adapters (Codex `.codex/AGENTS.md`, root `AGENTS.md`, Claude `.claude/skills` + `.claude/agents`, OpenCode `.opencode/commands` + `.opencode/agents`).
 - Root `AGENTS.md` is only written when explicitly requested (so we do not pollute existing user governance).
 </adapters>
 

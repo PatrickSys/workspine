@@ -9,7 +9,7 @@ Distilled from GSD (Get Shit Done): keep rigor and leverage, drop ceremony.
 GSDD is a small set of workflow sources plus a CLI (`gsdd`) that:
 - scaffolds a project planning workspace (`.planning/`)
 - generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)
-- optionally generates tool-specific adapters (Codex `.codex/AGENTS.md`, root `AGENTS.md`, Claude skills, OpenCode commands)
+- optionally generates tool-specific adapters (Codex `.codex/AGENTS.md`, root `AGENTS.md`, Claude skills + native agents, OpenCode commands + native agents)
 
 ## Quick Start
 
@@ -21,6 +21,7 @@ npx gsdd init
 Optional adapters:
 ```bash
 npx gsdd init --tools claude
+npx gsdd init --tools opencode
 npx gsdd init --tools codex
 npx gsdd init --tools agents
 npx gsdd init --tools all
@@ -28,6 +29,8 @@ npx gsdd init --tools all
 
 Notes:
 - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`.
+- `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md`.
+- `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`.
 - Root `AGENTS.md` is only written when explicitly requested (`--tools agents` or `--tools all`).
 
 ## The Workflow
@@ -43,12 +46,12 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 /gsdd:milestone     -> new ROADMAP.md for next milestone
 ```
 
-## Current Status (updated 2026-03-05)
+## Current Status (updated 2026-03-08)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
 | `new-project.md` | [OK] Defined, source-audited | Covers greenfield + brownfield + milestone context |
-| `plan.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/plan-phase.md` next |
+| `plan.md` | [WARN] Stub - not audited | Native-capable checker payloads now distribute for Claude/OpenCode, but the workflow itself remains a stub and I17 stays open |
 | `execute.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/execute-phase.md` |
 | `verify.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/verify-phase.md` |
 
@@ -82,6 +85,10 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-plan/SKILL.md
   gsdd-execute/SKILL.md
   gsdd-verify/SKILL.md
+.claude/agents/
+  gsdd-plan-checker.md      # native-capable draft checker payload source for future I17 wiring
+.opencode/agents/
+  gsdd-plan-checker.md      # native-capable draft checker payload source for future I17 wiring
 ```
 
 ## Files In This Framework
@@ -105,6 +112,7 @@ distilled/
       mapper-arch.md
       mapper-quality.md
       mapper-concerns.md
+      plan-checker.md
       researcher-stack.md
       researcher-features.md
       researcher-architecture.md
