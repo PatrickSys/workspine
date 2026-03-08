@@ -6,6 +6,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, cpSync
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import * as readline from 'readline';
+import { createAdapterRegistry } from './adapters/index.mjs';
+import {
+  renderAgentsBoundedBlock,
+  renderAgentsFileContent,
+  renderOpenCodeCommandContent,
+  renderSkillContent,
+  upsertBoundedBlock,
+  getDelegateContent,
+} from './lib/rendering.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,24 +35,6 @@ const WORKFLOWS = [
   { name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan', agent: 'Plan', opencodeType: 'plan' },
 ];
 
-const ADAPTERS = {
-  claude: {
-    kind: 'native_capable',
-    nativeAgentsDir: join(CWD, '.claude', 'agents'),
-    nativeAgents: ['gsdd-plan-checker'],
-  },
-  opencode: {
-    kind: 'native_capable',
-    nativeAgentsDir: join(CWD, '.opencode', 'agents'),
-    nativeAgents: ['gsdd-plan-checker'],
-  },
-  codex: { kind: 'governance_only' },
-  agents: { kind: 'governance_only' },
-  cursor: { kind: 'governance_only' },
-  copilot: { kind: 'governance_only' },
-  gemini: { kind: 'governance_only' },
-};
-
 const COMMANDS = {
   init: cmdInit,
   update: cmdUpdate,
@@ -58,6 +49,17 @@ const DEFAULT_GIT_PROTOCOL = {
   commit: 'Group changes logically and follow the existing repo conventions. Do not mention phase, plan, or task IDs unless explicitly requested.',
   pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
 };
+
+const ADAPTERS = createAdapterRegistry({
+  cwd: CWD,
+  workflows: WORKFLOWS,
+  renderAgentsBoundedBlock,
+  renderAgentsFileContent,
+  renderOpenCodeCommandContent,
+  renderSkillContent,
+  upsertBoundedBlock,
+  getDelegateContent,
+});
 
 async function runCli(cliCommand = command, cliArgs = args) {
   if (!cliCommand || !COMMANDS[cliCommand]) {
@@ -247,25 +249,9 @@ async function cmdInit(...initArgs) {
   const requestedTools = parseToolsFlag(initArgs);
   const platforms = requestedTools.length > 0 ? requestedTools : detectPlatforms();
 
-  for (const platform of platforms) {
-    if (platform === 'claude') {
-      generateClaudeSkills();
-      generateNativeAgents('claude');
-      console.log('  - generated Claude Code skills (.claude/skills/gsdd-*) and native agents (.claude/agents/gsdd-*.md)');
-    }
-    if (platform === 'opencode') {
-      generateOpenCodeSkills();
-      generateNativeAgents('opencode');
-      console.log('  - generated OpenCode slash commands (.opencode/commands/gsdd-*.md) and native agents (.opencode/agents/gsdd-*.md)');
-    }
-    if (platform === 'codex') {
-      generateCodexConfig();
-      console.log('  - generated Codex CLI adapter (.codex/AGENTS.md)');
-    }
-    if (['agents', 'cursor', 'copilot', 'gemini'].includes(platform)) {
-      generateRootAgentsMd();
-      console.log('  - generated/updated root AGENTS.md (bounded GSDD block)');
-    }
+  for (const adapter of resolveAdapters(platforms)) {
+    adapter.generate();
+    console.log(`  - ${adapter.summary('generated')}`);
   }
 
   console.log('\nSDD initialized.');
@@ -289,44 +275,9 @@ function cmdUpdate(...updateArgs) {
     updated = true;
   }
 
-  if (
-    platforms.includes('claude') ||
-    existsSync(join(CWD, '.claude', 'skills')) ||
-    existsSync(join(CWD, '.claude', 'agents'))
-  ) {
-    generateClaudeSkills();
-    generateNativeAgents('claude');
-    console.log('  - updated Claude Code skills (.claude/skills/gsdd-*) and native agents (.claude/agents/gsdd-*.md)');
-    updated = true;
-  }
-
-  if (
-    platforms.includes('opencode') ||
-    existsSync(join(CWD, '.opencode', 'commands')) ||
-    existsSync(join(CWD, '.opencode', 'agents'))
-  ) {
-    generateOpenCodeSkills();
-    generateNativeAgents('opencode');
-    console.log('  - updated OpenCode slash commands (.opencode/commands/gsdd-*.md) and native agents (.opencode/agents/gsdd-*.md)');
-    updated = true;
-  }
-
-  if (platforms.includes('codex') || existsSync(join(CWD, '.codex', 'AGENTS.md'))) {
-    generateCodexConfig();
-    console.log('  - updated Codex CLI adapter (.codex/AGENTS.md)');
-    updated = true;
-  }
-
-  // Root AGENTS.md is updated if explicitly requested or already present.
-  if (
-    platforms.includes('agents') ||
-    platforms.includes('cursor') ||
-    platforms.includes('copilot') ||
-    platforms.includes('gemini') ||
-    existsSync(join(CWD, 'AGENTS.md'))
-  ) {
-    generateRootAgentsMd();
-    console.log('  - updated root AGENTS.md (bounded GSDD block)');
+  for (const adapter of getAdaptersToUpdate(platforms)) {
+    adapter.generate();
+    console.log(`  - ${adapter.summary('updated')}`);
     updated = true;
   }
 
@@ -539,7 +490,7 @@ Commands:
   scaffold phase <N> [name]   Create a new phase plan file
 
 Platforms (for --tools):
-  claude    Generate Claude Code skills (.claude/skills/gsdd-*) + native agents (.claude/agents/gsdd-*.md)
+  claude    Generate Claude Code skills (.claude/skills/gsdd-*), commands (.claude/commands/gsdd-*.md), and native agents (.claude/agents/gsdd-*.md)
   opencode  Generate OpenCode local slash commands (.opencode/commands/gsdd-*.md) + native agents (.opencode/agents/gsdd-*.md)
   codex     Generate Codex CLI adapter (.codex/AGENTS.md)
   agents    Generate/Update root AGENTS.md (bounded GSDD block)
@@ -550,7 +501,7 @@ Platforms (for --tools):
 
 Notes:
   - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)
-  - --tools claude also generates native agents at .claude/agents/gsdd-*.md
+  - --tools claude also generates native commands at .claude/commands/gsdd-*.md and native agents at .claude/agents/gsdd-*.md
   - --tools opencode also generates native agents at .opencode/agents/gsdd-*.md
   - root AGENTS.md is only written on init when explicitly requested via --tools agents (or all)
 
@@ -570,11 +521,10 @@ Workflows (run via skills/adapters generated by init, not direct CLI):
 }
 
 function detectPlatforms() {
-  const platforms = [];
-  if (existsSync(join(CWD, 'CLAUDE.md')) || existsSync(join(CWD, '.claude'))) platforms.push('claude');
-  if (existsSync(join(CWD, '.opencode'))) platforms.push('opencode');
-  if (existsSync(join(CWD, '.codex'))) platforms.push('codex');
-  return [...new Set(platforms)];
+  return Object.values(ADAPTERS)
+    .filter((adapter, idx, arr) => arr.findIndex((other) => other.id === adapter.id) === idx)
+    .filter((adapter) => adapter.detect())
+    .map((adapter) => adapter.name);
 }
 
 function parseToolsFlag(flagArgs) {
@@ -586,18 +536,6 @@ function parseToolsFlag(flagArgs) {
   return value.split(',').map((v) => v.trim()).filter(Boolean);
 }
 
-function renderSkillContent(w) {
-  const workflowContent = getWorkflowContent(w.workflow);
-  return `---
-name: ${w.name}
-description: ${w.description}
-context: fork
-agent: ${w.agent}
----
-
-${workflowContent}`;
-}
-
 function generateOpenStandardSkills() {
   for (const w of WORKFLOWS) {
     const dir = join(CWD, '.agents', 'skills', w.name);
@@ -606,152 +544,33 @@ function generateOpenStandardSkills() {
   }
 }
 
-function generateClaudeSkills() {
-  for (const w of WORKFLOWS) {
-    const dir = join(CWD, '.claude', 'skills', w.name);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(w));
-  }
-}
+function resolveAdapters(platformNames) {
+  const seen = new Set();
+  const resolved = [];
 
-function generateOpenCodeSkills() {
-  const opencodeDir = join(CWD, '.opencode', 'commands');
-  mkdirSync(opencodeDir, { recursive: true });
-
-  for (const w of WORKFLOWS) {
-    const workflowContent = getWorkflowContent(w.workflow);
-    const skillContent = `---
-description: ${w.description}
----
-
-${workflowContent}`;
-    writeFileSync(join(opencodeDir, `${w.name}.md`), skillContent);
-  }
-}
-
-function generateNativeAgents(platform) {
-  const adapter = ADAPTERS[platform];
-  if (!adapter || adapter.kind !== 'native_capable') return;
-
-  mkdirSync(adapter.nativeAgentsDir, { recursive: true });
-  for (const agentName of adapter.nativeAgents) {
-    writeFileSync(
-      join(adapter.nativeAgentsDir, `${agentName}.md`),
-      renderNativeAgentContent(platform, agentName)
-    );
-  }
-}
-
-function renderNativeAgentContent(platform, agentName) {
-  const payload = getDelegateContent(nativeAgentToDelegate(agentName)).trim();
-  if (platform === 'claude') {
-    return `---
-name: ${agentName}
-description: Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly.
-tools: Read, Grep, Glob
----
-
-${payload}
-`;
+  for (const platformName of platformNames) {
+    const adapter = ADAPTERS[platformName];
+    if (!adapter || seen.has(adapter.id)) continue;
+    seen.add(adapter.id);
+    resolved.push(adapter);
   }
 
-  if (platform === 'opencode') {
-    return `---
-description: Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly.
-mode: subagent
-tools:
-  write: false
-  edit: false
-  bash: false
----
+  return resolved;
+}
 
-${payload}
-`;
+function getAdaptersToUpdate(platformNames) {
+  const requested = new Set(platformNames);
+  const seen = new Set();
+  const adapters = [];
+
+  for (const [platformName, adapter] of Object.entries(ADAPTERS)) {
+    if (seen.has(adapter.id)) continue;
+    if (!requested.has(platformName) && !adapter.isInstalled()) continue;
+    seen.add(adapter.id);
+    adapters.push(adapter);
   }
 
-  return `${payload}\n`;
-}
-
-function nativeAgentToDelegate(agentName) {
-  if (agentName === 'gsdd-plan-checker') return 'plan-checker.md';
-  return `${agentName}.md`;
-}
-
-function generateCodexConfig() {
-  const codexDir = join(CWD, '.codex');
-  mkdirSync(codexDir, { recursive: true });
-  writeFileSync(join(codexDir, 'AGENTS.md'), renderAgentsFileContent());
-}
-
-function generateRootAgentsMd() {
-  const agentsPath = join(CWD, 'AGENTS.md');
-  const block = renderAgentsBoundedBlock();
-
-  if (!existsSync(agentsPath)) {
-    writeFileSync(agentsPath, renderAgentsFileContent());
-    return;
-  }
-
-  const existing = readFileSync(agentsPath, 'utf-8');
-  const updated = upsertBoundedBlock(existing, block);
-  writeFileSync(agentsPath, updated);
-}
-
-function getWorkflowContent(workflowFile) {
-  const filePath = join(DISTILLED_DIR, 'workflows', workflowFile);
-  if (existsSync(filePath)) return readFileSync(filePath, 'utf-8');
-  return `<!-- Workflow file not found: ${workflowFile} -->\n`;
-}
-
-function getDelegateContent(delegateFile) {
-  const filePath = join(DISTILLED_DIR, 'templates', 'delegates', delegateFile);
-  if (existsSync(filePath)) return readFileSync(filePath, 'utf-8');
-  return `<!-- Delegate file not found: ${delegateFile} -->\n`;
-}
-
-function renderAgentsBoundedBlock() {
-  const blockPath = join(DISTILLED_DIR, 'templates', 'agents.block.md');
-  if (existsSync(blockPath)) return readFileSync(blockPath, 'utf-8').trim();
-  return '## GSDD Governance (Generated)\n\n- Framework: GSDD\n- Planning: .planning/\n- Workflows: .agents/skills/gsdd-*/SKILL.md';
-}
-
-function renderAgentsFileContent() {
-  const templatePath = join(DISTILLED_DIR, 'templates', 'agents.md');
-  if (existsSync(templatePath)) {
-    const tpl = readFileSync(templatePath, 'utf-8');
-    return tpl.replace('{{GSDD_BLOCK}}', renderAgentsBoundedBlock()).trimEnd() + '\n';
-  }
-  const block = renderAgentsBoundedBlock();
-  return `# AGENTS.md - GSDD Governance\n\n<!-- BEGIN GSDD -->\n${block}\n<!-- END GSDD -->\n`;
-}
-
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function upsertBoundedBlock(existing, blockContent) {
-  const begin = '<!-- BEGIN GSDD -->';
-  const end = '<!-- END GSDD -->';
-  const bounded = `${begin}\n${blockContent.trimEnd()}\n${end}`;
-
-  const re = new RegExp(`${escapeRegExp(begin)}[\\s\\S]*?${escapeRegExp(end)}`, 'm');
-  if (re.test(existing)) return existing.replace(re, bounded);
-
-  const lines = existing.split(/\r?\n/);
-  const h1Idx = lines.findIndex((l) => /^#\s+/.test(l));
-  if (h1Idx !== -1) {
-    const insertAt = h1Idx + 1;
-    const out = [
-      ...lines.slice(0, insertAt),
-      '',
-      bounded,
-      '',
-      ...lines.slice(insertAt),
-    ];
-    return out.join('\n').replace(/\n{3,}/g, '\n\n');
-  }
-
-  return `${bounded}\n\n${existing}`.replace(/\n{3,}/g, '\n\n');
+  return adapters;
 }
 
 function findFiles(dir, prefix) {
