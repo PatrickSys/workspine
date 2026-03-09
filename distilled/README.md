@@ -9,7 +9,7 @@ Distilled from GSD (Get Shit Done): keep rigor and leverage, drop ceremony.
 GSDD is a small set of workflow sources plus a CLI (`gsdd`) that:
 - scaffolds a project planning workspace (`.planning/`)
 - generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)
-- optionally generates tool-specific adapters (Codex `.codex/AGENTS.md`, root `AGENTS.md`, Claude skills + native agents, OpenCode commands + native agents)
+- optionally generates tool-specific adapters (Codex `.codex/AGENTS.md`, root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)
 
 ## Quick Start
 
@@ -29,7 +29,7 @@ npx gsdd init --tools all
 
 Notes:
 - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`.
-- `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md`.
+- `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`.
 - `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`.
 - Root `AGENTS.md` is only written when explicitly requested (`--tools agents` or `--tools all`).
 
@@ -51,11 +51,13 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 | Workflow | Status | Notes |
 |----------|--------|-------|
 | `new-project.md` | [OK] Defined, source-audited | Covers greenfield + brownfield + milestone context |
-| `plan.md` | [WARN] Stub - not audited | Native-capable checker payloads now distribute for Claude/OpenCode, but the workflow itself remains a stub and I17 stays open |
+| `plan.md` | [WARN] Stub - not audited | Portable workflow remains a stub; Claude now has a skill-primary native `/gsdd-plan` surface plus checker agent and OpenCode now has a specialized `/gsdd-plan` command, but I17 stays open because Claude only has partial live validation and OpenCode runtime parity is not yet proven |
 | `execute.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/execute-phase.md` |
 | `verify.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/verify-phase.md` |
 
 Standalone codebase remapping is planned for a later PR. For the current init surface, refresh stale codebase maps by deleting `.planning/codebase/*.md` and rerunning `/gsdd:new-project`.
+
+Architecture note: `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering now lives in adapter modules. This cleanup does not change the current I17 status.
 
 ## Init Workflow Agent Count (by config)
 
@@ -87,8 +89,14 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-verify/SKILL.md
 .claude/agents/
   gsdd-plan-checker.md      # native-capable draft checker payload source for future I17 wiring
+.claude/commands/
+  gsdd-plan.md              # compatibility alias to the Claude skill-primary plan entry
+.claude/skills/
+  gsdd-plan/SKILL.md        # Claude-native skill-primary planner -> checker surface
 .opencode/agents/
   gsdd-plan-checker.md      # native-capable draft checker payload source for future I17 wiring
+.opencode/commands/
+  gsdd-plan.md              # OpenCode-native specialized planner -> checker command surface
 ```
 
 ## Files In This Framework

@@ -1,0 +1,131 @@
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
+
+function renderClaudePlanChecker(delegateContent) {
+  return `---
+name: gsdd-plan-checker
+description: Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly.
+tools: Read, Grep, Glob
+---
+
+${delegateContent.trim()}
+`;
+}
+
+function renderClaudePlanSkill() {
+  return `---
+name: gsdd-plan
+description: Claude-native Phase planning with fresh-context plan checking for GSDD
+argument-hint: [phase-number]
+---
+
+You are the Claude-native \`/gsdd-plan\` skill for GSDD phase planning.
+
+Portable contract:
+- Read \`.agents/skills/gsdd-plan/SKILL.md\` first. That file remains the canonical vendor-agnostic plan contract.
+- Keep the portable contract honest: it defines the workflow, but it does not by itself prove fresh-context checker orchestration across runtimes.
+- If the portable skill says plan is still a stub, treat that as a portability-status warning for the generic surface, not as a stop signal for this Claude-native adapter path.
+
+Native Claude adapter rule:
+- This skill is the canonical Claude-native entry surface for \`/gsdd-plan\`.
+- Stay in the primary Claude context for orchestration. Do NOT fork this skill into a subagent, because the checker must run as its own fresh-context subagent.
+- Use the native \`gsdd-plan-checker\` subagent to regain the fresh-context checker pass that portable markdown alone cannot guarantee.
+- Do NOT claim that other runtimes have the same behavior unless their own adapters explicitly implement and prove it.
+
+Execution flow:
+1. Read \`.planning/SPEC.md\`, \`.planning/ROADMAP.md\`, \`.planning/config.json\`, relevant phase research, and any existing phase plan files.
+2. Resolve the target phase from the command arguments. If no phase is provided, choose the first roadmap phase that is not complete.
+3. Produce the initial phase plan according to \`.agents/skills/gsdd-plan/SKILL.md\`.
+4. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance.
+5. If \`workflow.planCheck: true\`, invoke the native \`gsdd-plan-checker\` subagent with fresh context.
+6. Pass only explicit inputs to the checker:
+   - target phase goal and requirement IDs
+   - relevant locked decisions / deferred items from \`.planning/SPEC.md\`
+   - relevant phase research file(s)
+   - produced \`.planning/phases/*-PLAN.md\` file(s)
+7. Require the checker to return JSON only using this schema:
+   {
+     "status": "passed" | "issues_found",
+     "summary": "One sentence overall assessment",
+     "issues": [
+       {
+         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance",
+         "severity": "blocker | warning",
+         "description": "What is wrong",
+         "plan": "01-PLAN",
+         "task": "1-02",
+         "fix_hint": "Specific revision instruction"
+       }
+     ]
+   }
+8. If the checker returns \`passed\`, finish and summarize.
+9. If the checker returns \`issues_found\`, revise the existing plan files only where needed, then run the checker again.
+10. Maximum 3 checker cycles total. If blockers remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
+
+Return a concise orchestration summary:
+- target phase
+- whether native plan checking ran
+- checker cycle count
+- final result: passed | reduced_assurance | escalated
+
+Never return raw checker JSON without summarizing it.
+`;
+}
+
+function renderClaudePlanCommand() {
+  return `---
+description: Compatibility alias for the Claude-native \`/gsdd-plan\` skill
+argument-hint: [phase-number]
+allowed-tools: Read
+---
+
+Read \`.claude/skills/gsdd-plan/SKILL.md\` and execute that skill as the canonical Claude-native \`/gsdd-plan\` entry.
+
+Rules:
+- Do NOT duplicate orchestration logic here.
+- Do NOT fork into a separate planning subagent.
+- Preserve the argument value and apply it when resolving the target phase.
+`;
+}
+
+function createClaudeAdapter({ cwd, workflows, renderSkillContent, getDelegateContent }) {
+  const skillsDir = join(cwd, '.claude', 'skills');
+  const commandsDir = join(cwd, '.claude', 'commands');
+  const agentsDir = join(cwd, '.claude', 'agents');
+
+  return {
+    id: 'claude',
+    name: 'claude',
+    kind: 'native_capable',
+    detect() {
+      return existsSync(join(cwd, 'CLAUDE.md')) || existsSync(join(cwd, '.claude'));
+    },
+    isInstalled() {
+      return existsSync(skillsDir) || existsSync(commandsDir) || existsSync(agentsDir);
+    },
+    generate() {
+      for (const workflow of workflows) {
+        const dir = join(skillsDir, workflow.name);
+        mkdirSync(dir, { recursive: true });
+        const content = workflow.name === 'gsdd-plan'
+          ? renderClaudePlanSkill()
+          : renderSkillContent(workflow);
+        writeFileSync(join(dir, 'SKILL.md'), content);
+      }
+
+      mkdirSync(commandsDir, { recursive: true });
+      writeFileSync(join(commandsDir, 'gsdd-plan.md'), renderClaudePlanCommand());
+
+      mkdirSync(agentsDir, { recursive: true });
+      writeFileSync(
+        join(agentsDir, 'gsdd-plan-checker.md'),
+        renderClaudePlanChecker(getDelegateContent('plan-checker.md'))
+      );
+    },
+    summary(action) {
+      return `${action} Claude Code skills (.claude/skills/gsdd-*), native commands (.claude/commands/gsdd-*.md), and native agents (.claude/agents/gsdd-*.md)`;
+    },
+  };
+}
+
+export { createClaudeAdapter };

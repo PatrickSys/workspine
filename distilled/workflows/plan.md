@@ -11,6 +11,12 @@ This workflow's orchestration must explicitly decide:
   (b) rely on the planner's internal quality gate self-check alone, with documented justification.
 Do not silently default to (b).
 
+Current architecture note:
+- This portable workflow remains the canonical vendor-agnostic contract.
+- Any real planner → checker loop must be owned by a native-capable adapter/runtime surface.
+- Do not treat this markdown file alone as proof that the loop executes across runtimes.
+- If `.planning/config.json` has `workflow.planCheck: true` but you are only executing this portable workflow without a validated native adapter path, treat that setting as advisory only and explicitly report reduced assurance rather than pretending an independent checker ran.
+
 OPEN QUESTION (Gap I18 — for verify.md, but set context here):
 GSD's integration-checker had distinct cross-phase scope (orphaned exports, unconsumed API routes,
 E2E flow tracing) separate from single-phase verification. The verify.md workflow must decide whether

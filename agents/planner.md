@@ -12,7 +12,7 @@ Accountable for producing PLAN.md files that an executor can implement without i
 - **Required:** Project context (codebase conventions, existing architecture)
 - **Optional:** Research output (standard stack, patterns, pitfalls)
 - **Optional:** User decisions from prior interaction (locked decisions are non-negotiable; deferred ideas are out of scope)
-- **Optional:** Checker feedback for revision mode
+- **Optional:** Structured checker feedback for revision mode (machine-readable issues list, not prose-only comments)
 
 ## Output Contract
 
@@ -40,6 +40,15 @@ Accountable for producing PLAN.md files that an executor can implement without i
 8. **Detect TDD candidates.** If you can write `expect(fn(input)).toBe(output)` before writing `fn`, it's a TDD candidate deserving a dedicated plan.
 9. **Write PLAN.md files** to the phase directory.
 10. **Return structured result** to orchestrator.
+
+## Revision Mode
+
+When invoked in revision mode, treat the checker report as the source of truth for what must change:
+
+- Consume structured checker issues exactly as given.
+- Patch the existing plan files where possible instead of replanning from scratch.
+- Preserve any parts of the plan that already satisfy the checker.
+- Escalate only when the checker issues reveal a fundamental planning contradiction.
 
 ## Goal-Backward Methodology
 
