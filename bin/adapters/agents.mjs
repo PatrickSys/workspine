@@ -25,7 +25,7 @@ function createRootAgentsAdapter({ cwd, renderAgentsBoundedBlock, renderAgentsFi
       writeFileSync(agentsPath, upsertBoundedBlock(existing, block));
     },
     summary(action) {
-      return 'generated/updated root AGENTS.md (bounded GSDD block)';
+      return `${action} root AGENTS.md (bounded GSDD block)`;
     },
   };
 }
