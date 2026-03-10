@@ -96,6 +96,7 @@ Each task MUST follow this XML structure:
     - CREATE: src/models/user.ts
     - MODIFY: src/index.ts (add route registration)
     - CREATE: tests/user.test.ts
+    - CREATE: tests/user.duplicate-email.test.ts
   </files>
   <action>
     Implement the User model with fields: id (UUID), email (string, unique),
@@ -115,10 +116,10 @@ Each task MUST follow this XML structure:
 
 | Too Vague | Just Right |
 |-------------|-------------|
-| "Set up the database" | "Create the User data schema with fields (id, email, name, createdAt), run the migration, and verify the generated artifacts load successfully" |
-| "Build the UI" | "Create TaskCard component with title, checkbox, due date. Wire to /api/tasks endpoint. Verify toggling checkbox sends PATCH" |
-| "Add authentication" | "Install jose, create JWT sign/verify utility in src/lib/auth.ts, add auth middleware that checks Authorization header" |
-| "Handle errors" | "Add try/catch to all route handlers, return { error: string, code: number } format, verify 404 and 500 responses" |
+| "Set up the database" | "Create the User data schema with fields (id, email, name, createdAt), run the migration, then run `npm test -- --runInBand tests/user-schema.test.ts`" |
+| "Build the UI" | "Create TaskCard component with title, checkbox, due date. Wire it to /api/tasks, then run `npm test -- --runInBand tests/task-card.test.tsx`" |
+| "Add authentication" | "Install jose, create JWT sign/verify utility in src/lib/auth.ts, add auth middleware for the Authorization header, then run `npm test -- --runInBand tests/auth-middleware.test.ts`" |
+| "Handle errors" | "Add try/catch to all route handlers, return { error: string, code: number } format, then run `npm test -- --runInBand tests/error-responses.test.ts`" |
 </task_format>
 
 <task_sizing>

@@ -15,6 +15,24 @@ const {
   setNonInteractiveStdin,
 } = require('./gsdd.helpers.cjs');
 
+function extractSection(content, startMarker, endMarker) {
+  const start = content.indexOf(startMarker);
+  const end = content.indexOf(endMarker, start);
+  assert.notStrictEqual(start, -1, `Missing section start: ${startMarker}`);
+  assert.notStrictEqual(end, -1, `Missing section end: ${endMarker}`);
+  return content.slice(start, end);
+}
+
+function extractExampleTask(content) {
+  const match = content.match(/<task id="N-01">[\s\S]*?<\/task>/);
+  assert.ok(match, 'Missing canonical example task');
+  return match[0];
+}
+
+function collectTestPaths(content) {
+  return [...content.matchAll(/tests\/[\w.-]+\.test\.[\w]+/g)].map((match) => match[0]);
+}
+
 describe('gsdd init and update', () => {
   let tmpDir;
 
@@ -84,6 +102,27 @@ describe('gsdd init and update', () => {
     assert.match(planSkill, /independent checker may review it in fresh context/i);
     assert.match(planSkill, /at least one runnable command/i);
     assert.ok((planSkill.match(/- Run `[^`]+`/g) || []).length >= 3);
+
+    const exampleTask = extractExampleTask(planSkill);
+    const exampleFilePaths = collectTestPaths(exampleTask.match(/<files>[\s\S]*?<\/files>/)?.[0] || '');
+    const exampleVerifyPaths = collectTestPaths(exampleTask.match(/<verify>[\s\S]*?<\/verify>/)?.[0] || '');
+    for (const testPath of exampleVerifyPaths) {
+      assert.ok(
+        exampleFilePaths.includes(testPath),
+        `Example verify path must appear in <files>: ${testPath}`
+      );
+    }
+
+    const specificitySection = extractSection(planSkill, '### Specificity Rules', '</task_format>');
+    const specificityRows = specificitySection
+      .split('\n')
+      .filter((line) => line.startsWith('| "') && line.endsWith('|'));
+    assert.ok(specificityRows.length >= 4, 'Expected specificity examples to remain present');
+    for (const row of specificityRows) {
+      const cells = row.split('|').map((cell) => cell.trim());
+      const justRight = cells[2];
+      assert.match(justRight, /run `[^`]+`/i, `Specificity example must include a runnable command: ${row}`);
+    }
 
     const planCheckerTemplate = fs.readFileSync(
       path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md'),
