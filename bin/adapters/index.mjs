@@ -1,6 +1,5 @@
 import { createRootAgentsAdapter } from './agents.mjs';
 import { createClaudeAdapter } from './claude.mjs';
-import { createCodexAdapter } from './codex.mjs';
 import { createOpenCodeAdapter } from './opencode.mjs';
 
 function createAdapterRegistry(context) {
@@ -9,7 +8,6 @@ function createAdapterRegistry(context) {
   return {
     claude: createClaudeAdapter(context),
     opencode: createOpenCodeAdapter(context),
-    codex: createCodexAdapter(context),
     agents: agentsAdapter,
     cursor: createRootAgentsAdapter(context, 'cursor'),
     copilot: createRootAgentsAdapter(context, 'copilot'),

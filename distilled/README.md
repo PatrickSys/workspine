@@ -9,7 +9,7 @@ Distilled from GSD (Get Shit Done): keep rigor and leverage, drop ceremony.
 GSDD is a small set of workflow sources plus a CLI (`gsdd`) that:
 - scaffolds a project planning workspace (`.planning/`)
 - generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)
-- optionally generates tool-specific adapters (Codex `.codex/AGENTS.md`, root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)
+- optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)
 
 ## Quick Start
 
@@ -22,15 +22,15 @@ Optional adapters:
 ```bash
 npx gsdd init --tools claude
 npx gsdd init --tools opencode
-npx gsdd init --tools codex
 npx gsdd init --tools agents
 npx gsdd init --tools all
 ```
 
 Notes:
-- `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`.
+- `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`. This is also the primary Codex CLI surface.
 - `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`.
 - `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`.
+- `--tools codex` is deprecated compatibility only and does not generate `.codex/AGENTS.md`.
 - Root `AGENTS.md` is only written when explicitly requested (`--tools agents` or `--tools all`).
 
 ## The Workflow
@@ -57,7 +57,9 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 
 Standalone codebase remapping is planned for a later PR. For the current init surface, refresh stale codebase maps by deleting `.planning/codebase/*.md` and rerunning `/gsdd:new-project`.
 
-Architecture note: `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
+Architecture notes:
+- `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
+- Codex CLI support is skills-first: use the always-generated `.agents/skills/gsdd-*` surface rather than a Codex-specific `AGENTS.md` file.
 
 ## Init Workflow Agent Count (by config)
 

@@ -292,11 +292,11 @@ The researcher merger is clean - scope is genuinely a parameter. The planner and
 |------|------------------|---------|
 | Any (portable) | `.agents/skills/gsdd-*/SKILL.md` | Always generated on `gsdd init` |
 | Claude Code | `.claude/skills/gsdd-*/SKILL.md` + `.claude/commands/gsdd-plan.md` (compatibility alias for `plan`) + `.claude/agents/gsdd-plan-checker.md` | `--tools claude` |
-| Codex CLI | `.codex/AGENTS.md` | `--tools codex` |
+| Codex CLI | `.agents/skills/gsdd-*/SKILL.md` | Always generated on `gsdd init`; no Codex-specific adapter file required |
 | OpenCode | `.opencode/commands/gsdd-*.md` + `.opencode/agents/gsdd-plan-checker.md` | `--tools opencode` |
 | Cursor/Copilot/Gemini | Root `AGENTS.md` (bounded block) | `--tools agents` |
 
-These native adapter files provide tool-specific entry surfaces generated from the same portable workflow core. Runtime validation status belongs in the internal status docs, not in this design record.
+Codex is skills-first because the Codex CLI already supports repository skills directly. GSDD should not generate a `.codex/AGENTS.md` file just to simulate a native path that the runtime does not need. Runtime validation status belongs in the internal status docs, not in this design record.
 
 **Why generation over conversion:** Converting from a vendor-specific source is lossy and brittle -- every new agent needs a new converter. Generating tool-specific files from vendor-agnostic markdown is lossless and scales linearly. Pattern validated by OpenSpec (24 AI tools, 48 contributors).
 
@@ -308,6 +308,7 @@ These native adapter files provide tool-specific entry surfaces generated from t
 - GSDD: `distilled/templates/delegates/plan-checker.md` as the single payload source for native-capable checker-agent generation
 - SPEC.md "Agent Integration Strategy" section
 - AGENTS.md Linux Foundation standard: [agents.md](https://agents.md)
+- OpenAI Codex CLI: natively reads repository Agent Skills from `.agents/skills/` (open `agents.md` standard); no `.codex/AGENTS.md` required
 
 ---
 

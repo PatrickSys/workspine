@@ -58,14 +58,14 @@ Recommended: generate adapters with `gsdd`:
 
 ```bash
 npx gsdd init
-npx gsdd init --tools codex
 npx gsdd init --tools claude
 npx gsdd init --tools agents
 ```
 
 Behavior:
-- Always: generates open-standard skills at `.agents/skills/gsdd-*/SKILL.md` by embedding `distilled/workflows/*.md`.
-- Optional: generates tool adapters (Codex `.codex/AGENTS.md`, root `AGENTS.md`, Claude `.claude/skills` + `.claude/commands` alias + `.claude/agents`, OpenCode `.opencode/commands` + `.opencode/agents`).
+- Always: generates open-standard skills at `.agents/skills/gsdd-*/SKILL.md` by embedding `distilled/workflows/*.md`. This is also the primary Codex CLI surface.
+- Optional: generates tool adapters (root `AGENTS.md`, Claude `.claude/skills` + `.claude/commands` alias + `.claude/agents`, OpenCode `.opencode/commands` + `.opencode/agents`).
+- Deprecated compatibility: `--tools codex` does not generate `.codex/AGENTS.md`; Codex CLI should use the default skills directly.
 - Root `AGENTS.md` is only written when explicitly requested (so we do not pollute existing user governance).
 </adapters>
 

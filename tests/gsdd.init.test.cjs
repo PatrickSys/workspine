@@ -114,9 +114,13 @@ describe('gsdd init and update', () => {
     }
 
     const specificitySection = extractSection(planSkill, '### Specificity Rules', '</task_format>');
+    // Rows use quoted strings but may have trailing whitespace; filter by backtick
+    // presence (from runnable commands) to reliably identify specificity example rows.
     const specificityRows = specificitySection
       .split('\n')
-      .filter((line) => line.startsWith('| "') && line.endsWith('|'));
+      .filter((line) => line.startsWith('|'))
+      .filter((line) => !line.includes('Too Vague'))
+      .filter((line) => line.includes('`'));
     assert.ok(specificityRows.length >= 4, 'Expected specificity examples to remain present');
     for (const row of specificityRows) {
       const cells = row.split('|').map((cell) => cell.trim());
@@ -170,22 +174,34 @@ describe('gsdd init and update', () => {
     assert.match(mapperRole, /Hard stop/);
   });
 
-  test('init with explicit tools generates requested adapters', async () => {
+  test('init with explicit tools generates requested adapters and treats codex as a deprecated no-op', async () => {
     const restoreStdin = setNonInteractiveStdin();
+    let output = '';
+    const previousLog = console.log;
+    console.log = (...parts) => {
+      output += `${parts.join(' ')}\n`;
+    };
     try {
       const gsdd = await loadGsdd(tmpDir);
       await gsdd.cmdInit('--tools', 'claude,codex,opencode,agents');
     } finally {
+      console.log = previousLog;
       restoreStdin();
     }
 
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'gsdd-new-project', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'AGENTS.md')));
+    assert.strictEqual(
+      fs.existsSync(path.join(tmpDir, '.codex', 'AGENTS.md')),
+      false,
+      '.codex/AGENTS.md should not be generated for deprecated codex tool'
+    );
     assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'commands', 'gsdd-new-project.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
+    assert.match(output, /--tools codex` is deprecated/i);
+    assert.match(output, /Codex CLI uses the default `?\.agents\/skills\/gsdd-\*`? skills/i);
 
     const claudePlanChecker = fs.readFileSync(
       path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
@@ -217,6 +233,38 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(opencodePlanChecker, /DRAFT PAYLOAD ONLY/);
   });
 
+  test('init with --tools codex only does not fall back to detected adapters', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.claude'), { recursive: true });
+
+    const restoreStdin = setNonInteractiveStdin();
+    let output = '';
+    const previousLog = console.log;
+    console.log = (...parts) => {
+      output += `${parts.join(' ')}\n`;
+    };
+
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'codex');
+    } finally {
+      console.log = previousLog;
+      restoreStdin();
+    }
+
+    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
+    assert.strictEqual(
+      fs.existsSync(path.join(tmpDir, '.codex', 'AGENTS.md')),
+      false,
+      '.codex/AGENTS.md should not be generated for deprecated codex tool'
+    );
+    assert.strictEqual(
+      fs.existsSync(path.join(tmpDir, '.claude', 'skills')),
+      false,
+      'explicit --tools codex should not fall back to detected Claude adapters'
+    );
+    assert.match(output, /--tools codex` is deprecated/i);
+  });
+
   test('init is idempotent and upserts the bounded AGENTS block without duplicating it', async () => {
     const agentsPath = path.join(tmpDir, 'AGENTS.md');
     fs.writeFileSync(
@@ -242,29 +290,25 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(agents, /old block/);
   });
 
-  test('update refreshes previously generated adapters based on detected platforms', async () => {
+  test('update refreshes previously generated adapters based on detected platforms and leaves codex on the default skill path', async () => {
     const restoreStdin = setNonInteractiveStdin();
     let gsdd;
 
     try {
       gsdd = await loadGsdd(tmpDir);
-      await gsdd.cmdInit('--tools', 'claude,codex');
+      await gsdd.cmdInit('--tools', 'claude,agents');
     } finally {
       restoreStdin();
     }
 
-    const codexPath = path.join(tmpDir, '.codex', 'AGENTS.md');
     const claudeAgentPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
     const claudeCommandPath = path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md');
-    fs.writeFileSync(codexPath, 'stale adapter\n');
+    const agentsPath = path.join(tmpDir, 'AGENTS.md');
     fs.writeFileSync(claudeAgentPath, 'stale checker\n');
     fs.writeFileSync(claudeCommandPath, 'stale command\n');
+    fs.writeFileSync(agentsPath, '# Local Rules\n\n<!-- BEGIN GSDD -->\nstale block\n<!-- END GSDD -->\n');
 
     await gsdd.cmdUpdate();
-
-    const updated = fs.readFileSync(codexPath, 'utf-8');
-    assert.doesNotMatch(updated, /^stale adapter$/m);
-    assert.match(updated, /GSDD/);
 
     const updatedClaudeAgent = fs.readFileSync(claudeAgentPath, 'utf-8');
     assert.doesNotMatch(updatedClaudeAgent, /^stale checker$/m);
@@ -273,6 +317,43 @@ describe('gsdd init and update', () => {
     const updatedClaudeCommand = fs.readFileSync(claudeCommandPath, 'utf-8');
     assert.doesNotMatch(updatedClaudeCommand, /^stale command$/m);
     assert.match(updatedClaudeCommand, /Compatibility alias/);
+
+    const updatedAgents = fs.readFileSync(agentsPath, 'utf-8');
+    assert.doesNotMatch(updatedAgents, /stale block/);
+    assert.match(updatedAgents, /GSDD/);
+  });
+
+  test('update with --tools codex only does not fall back to detected adapters', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    let gsdd;
+    try {
+      gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    fs.mkdirSync(path.join(tmpDir, '.claude'), { recursive: true });
+
+    let output = '';
+    const previousLog = console.log;
+    console.log = (...parts) => {
+      output += `${parts.join(' ')}\n`;
+    };
+
+    try {
+      await gsdd.cmdUpdate('--tools', 'codex');
+    } finally {
+      console.log = previousLog;
+    }
+
+    assert.strictEqual(
+      fs.existsSync(path.join(tmpDir, '.claude', 'skills')),
+      false,
+      'explicit --tools codex update should not fall back to detected Claude adapters'
+    );
+    assert.match(output, /--tools codex` is deprecated/i);
+    assert.match(output, /updated open-standard skills/);
   });
 
   test('cli entrypoint still runs when invoked through an aliased bin path', async () => {
@@ -282,5 +363,7 @@ describe('gsdd init and update', () => {
     assert.match(result.output, /Usage: gsdd <command> \[args\]/);
     assert.match(result.output, /Commands:/);
     assert.match(result.output, /claude\s+Generate Claude Code skills .* native agents/);
+    assert.match(result.output, /codex\s+Deprecated compatibility alias/);
+    assert.match(result.output, /primary Codex CLI surface/);
   });
 });
