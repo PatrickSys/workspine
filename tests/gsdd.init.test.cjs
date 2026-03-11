@@ -24,7 +24,7 @@ function extractSection(content, startMarker, endMarker) {
 }
 
 function extractExampleTask(content) {
-  const match = content.match(/<task id="N-01">[\s\S]*?<\/task>/);
+  const match = content.match(/<task id="(?:N-01|01-01)" type="auto">[\s\S]*?<\/task>/);
   assert.ok(match, 'Missing canonical example task');
   return match[0];
 }
@@ -101,6 +101,15 @@ describe('gsdd init and update', () => {
     assert.match(planSkill, /How Plan Checking Works/);
     assert.match(planSkill, /independent checker may review it in fresh context/i);
     assert.match(planSkill, /at least one runnable command/i);
+    assert.match(planSkill, /first phase with status `\[ \]` or `\[-\]`/i);
+    assert.match(planSkill, /^phase: 01-foundation$/m);
+    assert.match(planSkill, /^files-modified:$/m);
+    assert.match(planSkill, /^autonomous: true$/m);
+    assert.match(planSkill, /^must_haves:$/m);
+    assert.match(planSkill, /<task id="01-01" type="auto">/);
+    assert.match(planSkill, /checkpoint:user/);
+    assert.match(planSkill, /checkpoint:review/);
+    assert.doesNotMatch(planSkill, /â|ðŸ|âœ|â†/);
     assert.ok((planSkill.match(/- Run `[^`]+`/g) || []).length >= 3);
 
     const exampleTask = extractExampleTask(planSkill);
@@ -137,6 +146,32 @@ describe('gsdd init and update', () => {
     assert.match(planCheckerTemplate, /Status must be either `"passed"` or `"issues_found"`\./);
     assert.match(planCheckerTemplate, /Use `"status": "passed"` only when no blockers remain/);
     assert.match(planCheckerTemplate, /Use `"status": "issues_found"`/);
+
+    const executeSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-execute', 'SKILL.md'),
+      'utf-8'
+    );
+    assert.match(executeSkill, /type="checkpoint:user"/);
+    assert.match(executeSkill, /type="checkpoint:review"/);
+    assert.match(executeSkill, /\[x\] \*\*Phase \{N\}:/);
+    assert.match(executeSkill, /DO NOT freelance/);
+    assert.match(executeSkill, /Checkpoint tasks are contract boundaries/i);
+    assert.match(executeSkill, /stale reference/i);
+    assert.doesNotMatch(executeSkill, /MARK DONE in the plan file/i);
+    assert.doesNotMatch(executeSkill, /â|ðŸ|âœ|â†/);
+
+    const verifySkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-verify', 'SKILL.md'),
+      'utf-8'
+    );
+    assert.match(verifySkill, /^status: gaps_found$/m);
+    assert.match(verifySkill, /^re_verification:$/m);
+    assert.match(verifySkill, /^gaps:$/m);
+    assert.match(verifySkill, /^human_verification:$/m);
+    assert.match(verifySkill, /\*\*Status:\*\* \[passed \| gaps_found \| human_needed\]/);
+    assert.match(verifySkill, /treat this as re-verification/i);
+    assert.match(verifySkill, /does not claim milestone-wide integration completeness/i);
+    assert.doesNotMatch(verifySkill, /â|ðŸ|âœ|â†/);
   });
 
   test('delegates reference canonical role contracts', async () => {

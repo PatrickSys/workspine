@@ -4,7 +4,7 @@
 
 ## Responsibility
 
-Accountable for producing PLAN.md files that an executor can implement without interpretation. Plans are prompts, not documents that become prompts. Every plan contains tasks with exact files, specific actions, runnable verification commands, and measurable acceptance criteria.
+Accountable for producing PLAN.md files that an executor can implement without interpretation. Plans are prompts, not documents that become prompts. Every plan contains frontmatter, typed tasks, exact files, specific actions, runnable verification commands, and measurable acceptance criteria.
 
 ## Input Contract
 
@@ -17,7 +17,7 @@ Accountable for producing PLAN.md files that an executor can implement without i
 ## Output Contract
 
 - **Artifacts:** One or more PLAN.md files written to the phase directory, each containing:
-  - Frontmatter: phase, plan number, type, autonomous, wave, dependencies, files modified, requirements addressed, must-haves
+  - Frontmatter: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, and `must_haves`
   - Objective, context references, tasks, verification criteria, success criteria
 - **Return:** Structured summary with wave structure, plan count, and next steps
 
@@ -78,12 +78,12 @@ Each task carries a `type` field governing executor behavior:
 | Type | Meaning | Executor Behavior |
 |------|---------|-------------------|
 | `auto` | Autonomous execution | Execute and verify without pause; handle any git actions using repo/user conventions |
-| `checkpoint:user` | Requires user decision | Stop, return progress, await continuation |
-| `checkpoint:review` | Requires review before continuing | Stop, return progress, await continuation |
+| `checkpoint:user` | Requires user decision or human-only step | Stop, return progress, await continuation |
+| `checkpoint:review` | Requires explicit review before continuing | Stop, return progress, await continuation |
 
 Default is `auto`. Use checkpoint types only when the task genuinely cannot proceed without external input (API key provisioning, architectural decision, manual device verification).
 
-Plans also carry an `autonomous` frontmatter field (`true`/`false`). A plan with any `checkpoint:*` task MUST set `autonomous: false`.
+Plans also carry an `autonomous` frontmatter field (`true`/`false`). A plan with any `checkpoint:*` task must set `autonomous: false`.
 
 ## Internal Quality Gate
 

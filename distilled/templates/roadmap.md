@@ -46,6 +46,7 @@ Use this template when creating `.planning/ROADMAP.md` (phase breakdown + progre
 - Every v1 requirement in SPEC.md must map to exactly one phase (no orphans).
 - Success criteria are 2-5 observable behaviors per phase.
 - No time estimates: focus on verifiable outcomes.
+- These status markers are the portable source of truth. Workflow files and summaries should use `[ ]`, `[-]`, and `[x]` consistently.
 
 ## Coverage Verification
 

@@ -7,6 +7,10 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { loadConfig, resolveModelInternal, findPhaseInternal, getRoadmapPhaseInternal, pathExistsInternal, generateSlugInternal, getMilestoneInfo, normalizePhaseName, output, error } = require('./core.cjs');
 
+function portableRelativePath(...segments) {
+  return path.join(...segments).replace(/\\/g, '/');
+}
+
 function cmdInitExecutePhase(cwd, phase, raw) {
   if (!phase) {
     error('phase required for init execute-phase');
@@ -123,19 +127,19 @@ function cmdInitPlanPhase(cwd, phase, raw) {
       const files = fs.readdirSync(phaseDirFull);
       const contextFile = files.find(f => f.endsWith('-CONTEXT.md') || f === 'CONTEXT.md');
       if (contextFile) {
-        result.context_path = path.join(phaseInfo.directory, contextFile);
+        result.context_path = portableRelativePath(phaseInfo.directory, contextFile);
       }
       const researchFile = files.find(f => f.endsWith('-RESEARCH.md') || f === 'RESEARCH.md');
       if (researchFile) {
-        result.research_path = path.join(phaseInfo.directory, researchFile);
+        result.research_path = portableRelativePath(phaseInfo.directory, researchFile);
       }
       const verificationFile = files.find(f => f.endsWith('-VERIFICATION.md') || f === 'VERIFICATION.md');
       if (verificationFile) {
-        result.verification_path = path.join(phaseInfo.directory, verificationFile);
+        result.verification_path = portableRelativePath(phaseInfo.directory, verificationFile);
       }
       const uatFile = files.find(f => f.endsWith('-UAT.md') || f === 'UAT.md');
       if (uatFile) {
-        result.uat_path = path.join(phaseInfo.directory, uatFile);
+        result.uat_path = portableRelativePath(phaseInfo.directory, uatFile);
       }
     } catch {}
   }
@@ -406,19 +410,19 @@ function cmdInitPhaseOp(cwd, phase, raw) {
       const files = fs.readdirSync(phaseDirFull);
       const contextFile = files.find(f => f.endsWith('-CONTEXT.md') || f === 'CONTEXT.md');
       if (contextFile) {
-        result.context_path = path.join(phaseInfo.directory, contextFile);
+        result.context_path = portableRelativePath(phaseInfo.directory, contextFile);
       }
       const researchFile = files.find(f => f.endsWith('-RESEARCH.md') || f === 'RESEARCH.md');
       if (researchFile) {
-        result.research_path = path.join(phaseInfo.directory, researchFile);
+        result.research_path = portableRelativePath(phaseInfo.directory, researchFile);
       }
       const verificationFile = files.find(f => f.endsWith('-VERIFICATION.md') || f === 'VERIFICATION.md');
       if (verificationFile) {
-        result.verification_path = path.join(phaseInfo.directory, verificationFile);
+        result.verification_path = portableRelativePath(phaseInfo.directory, verificationFile);
       }
       const uatFile = files.find(f => f.endsWith('-UAT.md') || f === 'UAT.md');
       if (uatFile) {
-        result.uat_path = path.join(phaseInfo.directory, uatFile);
+        result.uat_path = portableRelativePath(phaseInfo.directory, uatFile);
       }
     } catch {}
   }

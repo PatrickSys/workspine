@@ -46,20 +46,22 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 /gsdd:milestone     -> new ROADMAP.md for next milestone
 ```
 
-## Current Status (updated 2026-03-10)
+## Current Status (updated 2026-03-11)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
 | `new-project.md` | [OK] Defined, source-audited | Covers greenfield + brownfield + milestone context |
 | `plan.md` | [OK] Defined, source-audited | Portable workflow defines the planner contract and supports independent plan checking through generated native adapters |
-| `execute.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/execute-phase.md` |
-| `verify.md` | [WARN] Stub - not audited | Audit against `get-shit-done/workflows/verify-phase.md` |
+| `execute.md` | [WARN] Contract-aligned, full audit pending | Portable workflow now matches the current plan/roadmap/task schema, but the deeper GSD execute audit is still pending |
+| `verify.md` | [OK] Defined, phase-verification only | Structured `VERIFICATION.md`, re-verification, and human-needed handling are defined; milestone integration audit remains separate |
 
 Standalone codebase remapping is planned for a later PR. For the current init surface, refresh stale codebase maps by deleting `.planning/codebase/*.md` and rerunning `/gsdd:new-project`.
 
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
 - Codex CLI support is skills-first: use the always-generated `.agents/skills/gsdd-*` surface rather than a Codex-specific `AGENTS.md` file.
+- Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
+- Phase verification and milestone integration audit are treated as separate concerns.
 
 ## Init Workflow Agent Count (by config)
 
