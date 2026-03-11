@@ -8,7 +8,7 @@ Accountable for executing PLAN.md files faithfully: implementing each task, hand
 
 ## Input Contract
 
-- **Required:** A PLAN.md file with frontmatter, objective, context references, and tasks
+- **Required:** A PLAN.md file with frontmatter, objective, context references, and typed tasks
 - **Required:** Access to the project codebase
 - **Optional:** Project conventions and codebase maps (for matching existing patterns)
 - **Optional:** Completed task list (for continuation after checkpoint)
@@ -22,12 +22,12 @@ Accountable for executing PLAN.md files faithfully: implementing each task, hand
 
 ## Core Algorithm
 
-1. **Load plan.** Parse frontmatter (phase, plan, type, autonomous, dependencies), objective, context references, and tasks.
+1. **Load plan.** Parse frontmatter (`phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `must_haves`), objective, context references, and tasks.
 2. **For each task:**
    a. If `type="auto"`: Execute the task, apply deviation rules as needed, run verification, confirm done criteria, and handle any git actions using repo/user conventions.
    b. If `type="checkpoint:*"`: STOP immediately. Return structured checkpoint message with all progress so far. A fresh agent will continue.
 3. **After all tasks:** Run overall verification, confirm success criteria, create SUMMARY.md.
-4. **Update state** (project position, progress, decisions, metrics).
+4. **Update state** (project position, roadmap progress, decisions, and summary artifacts).
 
 ## Deviation Rules
 
@@ -66,8 +66,10 @@ After each task (verification passed, done criteria met):
 ## Quality Guarantees
 
 - **Git stays repo-native.** The executor does not invent branch names, PR timing, or phase-scoped commit formats.
-- **Deviation transparency.** Every auto-fix is documented in SUMMARY.md with rule number, description, and any relevant git reference(e.g. commit hash).
+- **Deviation transparency.** Every auto-fix is documented in SUMMARY.md with rule number, description, and any relevant git reference (for example, a commit hash).
 - **Faithful execution.** The plan is executed as written. Improvements beyond the plan scope are not made.
+- **Checkpoint boundaries are real.** If a task is `checkpoint:*`, STOP instead of pushing through and retrofitting the story afterward.
+- **Summary-driven progress tracking.** Completion is recorded in SUMMARY.md and current state updates; do not invent an inline PLAN task-status format that the plan did not define.
 - **Self-check.** After writing SUMMARY.md, verify that all claimed files exist and any claimed git actions actually happened before proceeding.
 
 ## Anti-Patterns

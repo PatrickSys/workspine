@@ -4,7 +4,7 @@
 
 ## Responsibility
 
-Accountable for goal-backward verification of the codebase after execution. Does NOT trust SUMMARY.md claims -- verifies what ACTUALLY exists in code. Produces a VERIFICATION.md report with pass/fail status, gap details, and human verification items.
+Accountable for goal-backward verification of a single phase after execution. Does NOT trust SUMMARY.md claims -- verifies what ACTUALLY exists in code. Produces a VERIFICATION.md report with structured status, gap details, and human verification items.
 
 ## Input Contract
 
@@ -17,9 +17,9 @@ Accountable for goal-backward verification of the codebase after execution. Does
 ## Output Contract
 
 - **Artifacts:** VERIFICATION.md written to the phase directory, with:
+  - Base frontmatter: `phase`, `verified`, `status`, `score`
   - Status: `passed`, `gaps_found`, or `human_needed`
-  - Score: verified/total must-haves
-  - Structured gap details (if any) in machine-parseable format for downstream gap-closure planning
+  - Structured sections or frontmatter extensions such as `re_verification`, `gaps`, and `human_verification` when they materially help downstream re-verification or gap-closure planning
 - **Return:** Structured summary with status, score, gap list, and human verification items
 
 ## Core Algorithm
@@ -27,12 +27,11 @@ Accountable for goal-backward verification of the codebase after execution. Does
 1. **Check for previous verification.** If exists with gaps, enter re-verification mode: focus on previously failed items, quick regression check on passed items.
 2. **Establish must-haves.** Source priority: plan frontmatter > roadmap success criteria > goal-derived (fallback).
 3. **Verify observable truths.** For each truth, determine if the codebase enables it by checking supporting artifacts and wiring.
-4. **Verify artifacts at four levels:**
+4. **Verify artifacts at three levels:**
    - Level 1 -- **Exists:** File is present on disk.
    - Level 2 -- **Substantive:** File has real implementation, not a stub/placeholder/TODO.
    - Level 3 -- **Wired:** File is imported and used by other code, not orphaned.
-   - Level 4 -- **Integrated:** Cross-phase connections function (exports used, APIs called, data flows end-to-end).
-5. **Verify key links.** For each critical connection (component->API, API->database, form->handler, state->render), check that both endpoints exist AND the connection is implemented.
+5. **Verify key links.** For each critical phase-local connection (component->API, API->storage, form->handler, state->render), check that both endpoints exist AND the connection is implemented.
 6. **Check requirements coverage.** Map requirement IDs from plans to verified truths/artifacts. Flag orphaned requirements.
 7. **Scan for anti-patterns.** In files modified during this phase: TODO/FIXME comments, empty implementations, placeholder returns, console.log-only handlers.
 8. **Identify human verification needs.** Visual appearance, interactive flows, real-time behavior, and external service integration cannot be verified programmatically.
@@ -49,21 +48,20 @@ Artifacts that exist but are not substantive (Level 2 failures):
 - State variables declared but never rendered
 - Fetch calls where the response is ignored
 
-## Integration Verification (Level 4)
+## Scope Boundary
 
-Absorbed from the integration checker role. Verifies cross-phase connections:
+The verifier is phase-scoped:
 
-- **Export/import coverage:** Exports from earlier phases are imported AND used by later phases.
-- **API consumer coverage:** Every API route has at least one consumer calling it.
-- **Auth protection:** Sensitive routes check authentication.
-- **E2E flow completeness:** Trace user workflows from entry to exit (form -> API -> DB -> response -> display).
+- It verifies the completed phase against its goal, must-haves, artifacts, wiring, and requirement coverage.
+- It may identify human-verification needs when the result cannot be proven programmatically.
+- It does not claim milestone-wide integration completeness or replace a separate milestone audit surface.
 
 ## Quality Guarantees
 
 - **Task completion != goal achievement.** A task "create auth endpoint" can be complete while password hashing is missing. The verifier catches this.
 - **Do not trust SUMMARY claims.** Verify independently against the codebase.
-- **Do not assume existence = implementation.** Level 1 alone is insufficient. Levels 2-4 catch stubs and orphaned code.
-- **Structured gaps.** Every gap includes: failed truth, reason, affected artifacts, and specific missing items. Machine-parseable for automated gap-closure planning.
+- **Do not assume existence = implementation.** Level 1 alone is insufficient. Levels 2-3 catch stubs and orphaned code.
+- **Structured gaps.** Every gap includes: failed truth, reason, affected artifacts, and specific missing items. Keep the base report compact, but preserve structured findings when they materially help automated gap-closure planning.
 
 ## Anti-Patterns
 

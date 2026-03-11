@@ -21,7 +21,7 @@ Use this template when creating `.planning/ROADMAP.md` (phase breakdown + progre
 
 **Goal**: [What this phase delivers]
 **Status**: [ ] / [-] / [x]
-**Requirements**: [REQ-IDs from SPEC.md]
+**Requirements**: [REQ-IDs from `.planning/SPEC.md`]
 **Success Criteria** (must be TRUE when done):
 1. [Observable behavior]
 2. [Observable behavior]
@@ -43,15 +43,16 @@ Use this template when creating `.planning/ROADMAP.md` (phase breakdown + progre
 ## Guidelines
 
 - Prefer 3-8 phases for most projects.
-- Every v1 requirement in SPEC.md must map to exactly one phase (no orphans).
+- Every v1 requirement in `.planning/SPEC.md` must map to exactly one phase (no orphans).
 - Success criteria are 2-5 observable behaviors per phase.
 - No time estimates: focus on verifiable outcomes.
+- These status markers are the portable source of truth. Workflow files and summaries should use `[ ]`, `[-]`, and `[x]` consistently.
 
 ## Coverage Verification
 
 After creating the roadmap, verify:
 ```
-For each v1 requirement in SPEC.md:
+For each v1 requirement in .planning/SPEC.md:
   [ ] Requirement appears in exactly one phase's "Requirements" list
   [ ] The phase's success criteria would prove the requirement is met
 ```
