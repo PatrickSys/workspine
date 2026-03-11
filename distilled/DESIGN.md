@@ -41,7 +41,7 @@
 - GSD source: `agents/_archive/gsd-codebase-mapper.md` lines 72-79 (original 7-file model)
 - GSDD implementation: `agents/mapper.md` input/output contracts (4 files only)
 - External: LeanSpec "Context Economy" principle; Aider tree-sitter dynamic repomaps (2026 SOTA)
-- SPEC.md "Lean Context Decision" section
+- `.planning/SPEC.md` "Lean Context Decision" section
 
 ---
 
@@ -221,26 +221,26 @@ The researcher merger is clean - scope is genuinely a parameter. The planner and
 
 **GSD:** Three project-state files -- PROJECT.md (project definition), REQUIREMENTS.md (scoped features), STATE.md (current phase/status). Milestones archived in MILESTONES.md. Phase numbering continues across milestones (v1.0 phases 1-5, v1.1 starts at phase 6).
 
-**GSDD:** Merged to two files -- SPEC.md (combines PROJECT.md + REQUIREMENTS.md), ROADMAP.md (combines roadmap + inline status, replacing STATE.md). Same milestone semantics.
+**GSDD:** Merged to two files -- `.planning/SPEC.md` (combines PROJECT.md + REQUIREMENTS.md), `.planning/ROADMAP.md` (combines roadmap + inline status, replacing STATE.md). Same milestone semantics.
 
 | GSD file | GSDD equivalent | What changed |
 |----------|----------------|-------------|
-| PROJECT.md | SPEC.md (project definition section) | Merged -- no separate project definition file |
-| REQUIREMENTS.md | SPEC.md (requirements section) | Merged -- requirements live alongside project context |
-| STATE.md | ROADMAP.md (inline status per phase) | Dropped as separate file -- checkbox status in ROADMAP.md is sufficient |
-| ROADMAP.md | ROADMAP.md | Simplified format -- checkboxes, no REQ-ID traceability tables |
+| PROJECT.md | `.planning/SPEC.md` (project definition section) | Merged -- no separate project definition file |
+| REQUIREMENTS.md | `.planning/SPEC.md` (requirements section) | Merged -- requirements live alongside project context |
+| STATE.md | `.planning/ROADMAP.md` (inline status per phase) | Dropped as separate file -- checkbox status in `.planning/ROADMAP.md` is sufficient |
+| ROADMAP.md | `.planning/ROADMAP.md` | Simplified format -- checkboxes, no REQ-ID traceability tables |
 | MILESTONES.md | `.planning/milestones/` directory | Archive of completed milestone roadmaps |
 
 **Preserved semantics:**
-- SPEC.md = project lifetime (grows with validated requirements)
-- ROADMAP.md = current milestone only (archived when milestone completes)
+- `.planning/SPEC.md` = project lifetime (grows with validated requirements)
+- `.planning/ROADMAP.md` = current milestone only (archived when milestone completes)
 - Phase numbering continues across milestones
 - Researchers receive `milestone_context: [subsequent]` on new milestones -- they focus on new features, not existing system
 
 **Evidence:**
 - GSD source: `get-shit-done/workflows/new-milestone.md` lines 101-173 (milestone-aware researchers), line 269 (phase numbering continuation)
 - GSDD: `distilled/README.md` lifecycle diagram
-- SPEC.md "Long-Term Lifecycle" section
+- `.planning/SPEC.md` "Long-Term Lifecycle" section
 
 ---
 
@@ -267,7 +267,6 @@ The researcher merger is clean - scope is genuinely a parameter. The planner and
 - GSD source: `agents/_archive/gsd-executor.md` (mandatory commit in algorithm, TDD flow)
 - GSDD: `agents/executor.md` lines 57-64 (Git Guidance -- repo-native, advisory)
 - PR 5 (merged as PR #7): removed rigid git naming from workflows, adapters, generated governance
-- `.internal-research/lessons-learned.md` entries LL-2026-03-06-GIT-GOVERNANCE-DRIFT and LL-2026-03-06-PR3-HIDDEN-COMMIT-RIGIDITY
 
 ---
 
@@ -307,7 +306,7 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 - GSDD: `bin/gsdd.mjs` (thin CLI entrypoint and adapter dispatcher after the boundary cleanup)
 - GSDD: `bin/adapters/*` (vendor-specific adapter generation and native prompt rendering after the boundary cleanup)
 - GSDD: `distilled/templates/delegates/plan-checker.md` as the single payload source for native-capable checker-agent generation
-- SPEC.md "Agent Integration Strategy" section
+- `.planning/SPEC.md` "Agent Integration Strategy" section
 - AGENTS.md Linux Foundation standard: [agents.md](https://agents.md)
 - OpenAI Codex CLI: natively reads repository Agent Skills from `.agents/skills/` (open `agents.md` standard); no `.codex/AGENTS.md` required
 
@@ -322,7 +321,7 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 **The rule:** Delegates write full documents to disk. They return 3-5 sentence summaries to the orchestrator. The orchestrator never receives document contents in its conversation context.
 
 **Why this matters:**
-- LLM context windows are finite. An orchestrator that receives 4 full research files (each 200+ lines) before writing SPEC.md will be context-starved for the spec-writing step.
+- LLM context windows are finite. An orchestrator that receives 4 full research files (each 200+ lines) before writing `.planning/SPEC.md` will be context-starved for the spec-writing step.
 - Disk is unlimited. Downstream agents (synthesizer, planner) read files directly when they need the full content.
 - Summaries give the orchestrator enough signal to make routing decisions (skip synthesis? flag a blocker?) without consuming the context budget.
 

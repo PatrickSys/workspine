@@ -19,7 +19,7 @@ Identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMA
 <context_fidelity>
 Before planning, acknowledge what is locked:
 
-- Decisions in `SPEC.md` "Key Decisions" - do not revisit them.
+- Decisions in `.planning/SPEC.md` "Key Decisions" - do not revisit them.
 - Patterns from previous phases - match existing conventions. Do not introduce new patterns without cause.
 - Deferred items - items marked v2, nice-to-have, or out of scope. Do not plan for them.
 
@@ -257,7 +257,7 @@ If there is ambiguity in how to implement:
 2. Surface your assumptions explicitly.
 3. Present trade-offs when multiple approaches are valid.
 
-If the approach is obvious or fully defined by `SPEC.md`, skip questions and proceed.
+If the approach is obvious or fully defined by `.planning/SPEC.md`, skip questions and proceed.
 </clarify_approach>
 
 <plan_check_orchestration>
@@ -326,6 +326,6 @@ Planning is done when all of these are true:
 - [ ] Every task has XML structure with `id`, `type`, `files`, `action`, `verify`, and `done`
 - [ ] Every task has at least one runnable verify command
 - [ ] Plan sizing stays within 2-5 tasks, preferring 2-3
-- [ ] Locked decisions from `SPEC.md` are honored
+- [ ] Locked decisions from `.planning/SPEC.md` are honored
 - [ ] Any git guidance stays repo-native and follows `.planning/config.json`
 </success_criteria>

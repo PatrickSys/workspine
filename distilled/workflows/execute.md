@@ -40,7 +40,7 @@ Checkpoint tasks are contract boundaries. Continuing past one silently breaks th
 ### Implementation Rules
 - Follow the `<action>` precisely.
 - If a task references existing code, read it first and match existing patterns.
-- If you are unsure about something, check `SPEC.md` decisions first, then ask if still unclear.
+- If you are unsure about something, check `.planning/SPEC.md` decisions first, then ask if still unclear.
 
 ### Change-Impact Discipline
 Before modifying any existing behavior, run a ripple check:
@@ -124,7 +124,7 @@ If a task fails verification 3 times after fixes, STOP and report the failure to
 <state_updates>
 After completing all tasks in the plan:
 
-### 1. Update SPEC.md "Current State"
+### 1. Update `.planning/SPEC.md` "Current State"
 Keep the update factual and compact:
 
 ```markdown
@@ -190,7 +190,7 @@ For each completed task:
   [ ] Local verification passed
 
 For state updates:
-  [ ] SPEC.md "Current State" is accurate
+  [ ] .planning/SPEC.md "Current State" is accurate
   [ ] ROADMAP.md status uses [ ] / [-] / [x] consistently
   [ ] SUMMARY.md exists and reflects the actual work
 
@@ -208,7 +208,7 @@ Execution is done when all of these are true:
 - [ ] All `type="auto"` tasks in the plan are implemented and verified
 - [ ] Any checkpoint task caused an explicit stop and handoff instead of silent continuation
 - [ ] Deviation rules were followed
-- [ ] `SPEC.md` current state is updated accurately
+- [ ] `.planning/SPEC.md` current state is updated accurately
 - [ ] `ROADMAP.md` uses `[ ]`, `[-]`, `[x]` consistently
 - [ ] `SUMMARY.md` is written
 - [ ] Self-check passed
