@@ -114,6 +114,8 @@ describe('gsdd init and update', () => {
     }
 
     const specificitySection = extractSection(planSkill, '### Specificity Rules', '</task_format>');
+    // Rows use quoted strings but may have trailing whitespace; filter by backtick
+    // presence (from runnable commands) to reliably identify specificity example rows.
     const specificityRows = specificitySection
       .split('\n')
       .filter((line) => line.startsWith('|'))

@@ -308,6 +308,7 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 - GSDD: `distilled/templates/delegates/plan-checker.md` as the single payload source for native-capable checker-agent generation
 - SPEC.md "Agent Integration Strategy" section
 - AGENTS.md Linux Foundation standard: [agents.md](https://agents.md)
+- OpenAI Codex CLI: natively reads repository Agent Skills from `.agents/skills/` (open `agents.md` standard); no `.codex/AGENTS.md` required
 
 ---
 
