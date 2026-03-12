@@ -63,6 +63,7 @@ Architecture notes:
 - Codex CLI support is skills-first: use the always-generated `.agents/skills/gsdd-*` surface rather than a Codex-specific `AGENTS.md` file.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
 - Phase verification and milestone integration audit are treated as separate concerns.
+- Canonical role contracts use bounded sections, typed output examples, and checklist-driven completion where those structures materially improve downstream reliability.
 
 ## Init Workflow Agent Count (by config)
 
