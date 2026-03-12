@@ -92,6 +92,137 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'mapper.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'researcher.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'synthesizer.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'roadmapper.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'planner.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'verifier.md')));
+
+    const synthRole = fs.readFileSync(
+      path.join(tmpDir, '.planning', 'templates', 'roles', 'synthesizer.md'),
+      'utf-8'
+    );
+    assert.match(synthRole, /Mandatory initial read/i);
+    assert.match(synthRole, /<execution_flow>/);
+    assert.match(synthRole, /<output_format>/);
+    assert.match(synthRole, /<structured_returns>/);
+    assert.match(synthRole, /<success_criteria>/);
+    assert.match(synthRole, /\.planning\/research\/STACK\.md/);
+    assert.match(synthRole, /\.planning\/research\/FEATURES\.md/);
+    assert.match(synthRole, /\.planning\/research\/ARCHITECTURE\.md/);
+    assert.match(synthRole, /\.planning\/research\/PITFALLS\.md/);
+    assert.match(synthRole, /If any required file is missing:/);
+    assert.match(synthRole, /do not silently continue with a degraded synthesis/i);
+    assert.match(synthRole, /Write `\.planning\/research\/SUMMARY\.md`/);
+    assert.match(synthRole, /- Sources/);
+    assert.match(synthRole, /- Research Flags/);
+    assert.match(synthRole, /^sources:$/m);
+    assert.match(synthRole, /## SYNTHESIS BLOCKED/);
+    assert.match(synthRole, /\*\*Missing files:\*\*/);
+    assert.match(synthRole, /<scope_boundary>/);
+    assert.match(synthRole, /does not do new web or codebase research/i);
+    assert.match(synthRole, /does not write `\.planning\/ROADMAP\.md`/i);
+    assert.match(synthRole, /does not own git actions or commit output/i);
+    assert.match(synthRole, /```yaml[\s\S]*executive_summary:/);
+    assert.doesNotMatch(synthRole, /~\/\.claude\//i);
+    assert.doesNotMatch(synthRole, /docs: complete project research/i);
+    assert.doesNotMatch(synthRole, /cat \.planning\/research\//i);
+
+    const roadmapperRole = fs.readFileSync(
+      path.join(tmpDir, '.planning', 'templates', 'roles', 'roadmapper.md'),
+      'utf-8'
+    );
+    assert.match(roadmapperRole, /Mandatory initial read/i);
+    assert.match(roadmapperRole, /<coverage_validation>/);
+    assert.match(roadmapperRole, /<structured_returns>/);
+    assert.match(roadmapperRole, /<success_criteria>/);
+    assert.match(roadmapperRole, /Write `\.planning\/ROADMAP\.md`/);
+    assert.match(roadmapperRole, /## Phases/);
+    assert.match(roadmapperRole, /## Phase Details/);
+    assert.match(roadmapperRole, /`\*\*Status\*\*` must use one of: `\[ \]`, `\[-\]`, `\[x\]`/);
+    assert.match(roadmapperRole, /The `### Phase N:` headers, per-phase `\*\*Status\*\*` markers, and per-phase `\*\*Requirements\*\*` lines are parse-critical/i);
+    assert.match(roadmapperRole, /<scope_boundary>/);
+    assert.match(roadmapperRole, /does not create or redefine separate state artifacts such as `STATE\.md`/i);
+    assert.match(roadmapperRole, /## ROADMAP DRAFT/);
+    assert.match(roadmapperRole, /## ROADMAP CREATED/);
+    assert.match(roadmapperRole, /## ROADMAP REVISED/);
+    assert.match(roadmapperRole, /## ROADMAP BLOCKED/);
+    assert.match(roadmapperRole, /\*\*Artifact written:\*\* \.planning\/ROADMAP\.md/);
+    assert.match(roadmapperRole, /\*\*Status\*\*: \[ \]/);
+    assert.match(roadmapperRole, /revise the roadmap in place rather than rewriting it from scratch/i);
+    assert.match(roadmapperRole, /Options:/);
+    assert.match(roadmapperRole, /Awaiting:/);
+    assert.match(roadmapperRole, /Delete anti-enterprise filler on sight/i);
+    assert.match(roadmapperRole, /Write or update the roadmap artifact before returning/i);
+    assert.match(roadmapperRole, /```yaml[\s\S]*phase_count:/);
+    assert.doesNotMatch(roadmapperRole, /progress\/status tracking expected by the current repo runtime/i);
+    assert.doesNotMatch(roadmapperRole, /Initialize STATE\.md/i);
+    assert.doesNotMatch(roadmapperRole, /write .*STATE\.md/i);
+    assert.doesNotMatch(roadmapperRole, /~\/\.claude\//i);
+    assert.doesNotMatch(roadmapperRole, /commit/i);
+
+    const plannerRole = fs.readFileSync(
+      path.join(tmpDir, '.planning', 'templates', 'roles', 'planner.md'),
+      'utf-8'
+    );
+    assert.match(plannerRole, /Mandatory initial read/i);
+    assert.match(plannerRole, /<project_context>/);
+    assert.match(plannerRole, /<context_fidelity>/);
+    assert.match(plannerRole, /<structured_returns>/);
+    assert.match(plannerRole, /<success_criteria>/);
+    assert.match(plannerRole, /## Step 6: Detect TDD candidates/);
+    assert.match(plannerRole, /if you can define the expected input\/output behavior before implementation, the work is a TDD candidate/i);
+    assert.match(plannerRole, /Default is `auto`\./);
+    assert.match(plannerRole, /Any checkpoint must be justified by the task itself/i);
+    assert.match(plannerRole, /`files` must name exact paths/i);
+    assert.match(plannerRole, /`verify` must include a runnable automated command with fast feedback/i);
+    assert.match(plannerRole, /if no runnable automated check exists yet, add a prior task that creates the missing test or scaffold/i);
+    assert.match(plannerRole, /If planning from verification gaps:/);
+    assert.match(plannerRole, /use the failed truths, broken artifacts, missing key links, and reported requirement gaps as the planning scope/i);
+    assert.match(plannerRole, /<dependency_graph_example>/);
+    assert.match(plannerRole, /Wave 1: A/);
+    assert.match(plannerRole, /Wave rule:/);
+    assert.match(plannerRole, /```yaml[\s\S]*files-modified:/);
+    assert.match(plannerRole, /checkpoint:user/);
+    assert.doesNotMatch(plannerRole, /type:\s*tdd/i);
+    assert.doesNotMatch(plannerRole, /user_setup:/);
+    assert.doesNotMatch(plannerRole, /~\/\.claude\//i);
+    assert.doesNotMatch(plannerRole, /node ~\/\.claude\/get-shit-done/i);
+
+    const verifierRole = fs.readFileSync(
+      path.join(tmpDir, '.planning', 'templates', 'roles', 'verifier.md'),
+      'utf-8'
+    );
+    assert.match(verifierRole, /Mandatory initial read/i);
+    assert.match(verifierRole, /<core_principle>/);
+    assert.match(verifierRole, /<output>/);
+    assert.match(verifierRole, /<success_criteria>/);
+    assert.match(verifierRole, /Discovery protocol:/);
+    assert.match(verifierRole, /locate all `\*-PLAN\.md` files for that phase before verifying implementation/i);
+    assert.match(verifierRole, /locate the previous `\*-VERIFICATION\.md` report when it exists/i);
+    assert.match(verifierRole, /treat this as re-verification/i);
+    assert.match(verifierRole, /use each success criterion directly as a truth/i);
+    assert.match(verifierRole, /Truth-level status taxonomy:/);
+    assert.match(verifierRole, /`VERIFIED`/);
+    assert.match(verifierRole, /`FAILED`/);
+    assert.match(verifierRole, /`UNCERTAIN`/);
+    assert.match(verifierRole, /\| L1 \| exists \|/);
+    assert.match(verifierRole, /\| L2 \| substantive \|/);
+    assert.match(verifierRole, /\| L3 \| wired \|/);
+    assert.match(verifierRole, /component -> API route or server action/);
+    assert.match(verifierRole, /API route or server action -> storage or external side effect/);
+    assert.match(verifierRole, /form or user interaction -> handler/);
+    assert.match(verifierRole, /state or fetched data -> rendered output/);
+    assert.match(verifierRole, /Orphaned requirements must be reported/i);
+    assert.match(verifierRole, /requirements expected by roadmap scope but claimed by no plan at all/i);
+    assert.match(verifierRole, /keep them machine-readable in frontmatter\./i);
+    assert.match(verifierRole, /Group related failures before finalizing the report/i);
+    assert.doesNotMatch(verifierRole, /frontmatter or an equivalent machine-usable top-level structure/i);
+    assert.match(verifierRole, /## Verification Basis/);
+    assert.match(verifierRole, /## Requirement Coverage/);
+    assert.match(verifierRole, /^re_verification:$/m);
+    assert.match(verifierRole, /^gaps:$/m);
+    assert.doesNotMatch(verifierRole, /~\/\.claude\//i);
+    assert.doesNotMatch(verifierRole, /grep -E/i);
+    assert.doesNotMatch(verifierRole, /node ~\/\.claude\/get-shit-done/i);
 
     const planSkill = fs.readFileSync(
       path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),

@@ -77,7 +77,36 @@ The first extraction of `integration-checker.md` preserved the milestone scope a
 - **Intentionally stripped:** framework-specific Bash recipes, hardcoded path assumptions, file-extension-specific grep flags, and other tool/runtime details that do not survive vendor-agnostic distillation well.
 - **Gained in GSDD:** a cleaner split between role contract and milestone workflow, a stronger explicit phase-vs-milestone boundary, and a portable typed report shape aligned to the milestone auditor's current schema.
 
-**Unchanged roles (1:1):**
+**Systemic role-contract hardening follow-up (2026-03-12):**
+
+The same over-distillation pattern had also flattened `roadmapper.md`, `synthesizer.md`, `verifier.md`, and `planner.md`. The first recovery pass restored visible structure, but the follow-up audit found that structure alone was not enough. The current hardening pass restores the stricter mechanics that materially improve compliance while continuing to strip vendor/tool specifics. Status should stay conservative until the branch is integrated.
+
+- **Roadmapper kept from GSD:** mandatory initial-read discipline, bounded section structure, explicit coverage validation, parse-critical artifact contract, structured return modes, and checklist-driven completion.
+- **Roadmapper intentionally stripped:** template-path references, commit steps, and vendor-specific file conventions.
+- **Roadmapper gained in GSDD:** an explicit `.planning/ROADMAP.md` ownership contract, explicit `[ ]` / `[-]` / `[x]` status grammar, a concrete `ROADMAP CREATED` artifact example, and a hard boundary that this role does not settle the separate ROADMAP/STATE lifecycle seam.
+
+- **Synthesizer kept from GSD:** mandatory initial-read discipline, deterministic research-input contract, execution-flow structure, output-format block, structured returns, blocked return shape, provenance via `Sources`, and completion checklist.
+- **Synthesizer intentionally stripped:** commit behavior, template paths, and literal shell snippets.
+- **Synthesizer gained in GSDD:** cleaner alignment with conditional invocation by `researchDepth` rather than implying it always runs, plus an explicit scope boundary that keeps research, roadmap authoring, and git ownership separate.
+
+- **Verifier kept from GSD:** mandatory initial-read discipline, explicit must-have derivation steps, named L1/L2/L3 checks, truth-level status taxonomy, explicit key-link categories, typed report example, machine-usable structured gaps, structured return, and completion checklist.
+- **Verifier intentionally stripped:** GSD tool invocations, literal grep/bash procedures, and commit steps.
+- **Verifier gained in GSDD:** a portable verification-basis discovery protocol, grouped-gap guidance, and a stricter frontmatter-only machine-readable findings contract that now lines up directly with the current normalized `VERIFICATION.md` schema and the separate milestone-audit boundary.
+
+- **Planner kept from GSD:** mandatory initial-read discipline, bounded section structure, context-fidelity rules, TDD detection heuristic, automated-verify discipline, test-scaffold-first rule when verification is missing, explicit output block, structured planning return, and completion checklist.
+- **Planner intentionally stripped:** `user_setup`, vendor runtime/tool instructions, commit steps, and GSD-specific validation commands.
+- **Planner gained in GSDD:** recovered strictness without regressing the current GSDD schema (`files-modified`, `checkpoint:user`, `checkpoint:review`, `2-5` tasks max, reduced-assurance checker fallback), plus portable gap-closure semantics and a concrete dependency-graph / wave example. Full `type: tdd` lifecycle support remains later research, not part of this recovery.
+
+This hardening pass also clarified a reusable architectural rule: strict portable workflows are not enough if the canonical role contracts underneath them are flattened into prose. Role strictness and workflow strictness both matter.
+
+**Research-claim narrowing from `agentic-prd-sota.md`:**
+
+- **Keep:** density over brevity, no arbitrary line caps, bounded role contracts, deterministic inputs, and typed/machine-usable handoffs when another agent consumes the result.
+- **Narrow:** the nested-data benchmark is relevant to output schema choices, not to whether XML-style prompt sections should exist. Prompt delimiters and machine-readable output formats are different problems.
+- **Reject as universal claim:** "YAML is better than markdown" is too broad. The defensible rule is narrower: use constrained machine-readable structure when downstream agents must parse and aggregate findings.
+- **Keep scoped:** OWASP auth guidance remains decisive for the milestone integration/audit surface, not for these four role contracts.
+
+**Direct distillations (1:1 source lineage):**
 
 | Canonical role | GSD source |
 |---------------|------------|
