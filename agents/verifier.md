@@ -54,7 +54,7 @@ The verifier is phase-scoped:
 
 - It verifies the completed phase against its goal, must-haves, artifacts, wiring, and requirement coverage.
 - It may identify human-verification needs when the result cannot be proven programmatically.
-- It does not claim milestone-wide integration completeness or replace a separate milestone audit surface.
+- It does not claim milestone-wide integration completeness. Cross-phase integration audit is handled by `distilled/workflows/audit-milestone.md` with its own integration-checker role.
 
 ## Quality Guarantees
 

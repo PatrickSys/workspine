@@ -9,7 +9,7 @@
 ## Table of Contents
 
 1. [4-File Codebase Standard](#1-4-file-codebase-standard)
-2. [Agent Consolidation: 11 to 8](#2-agent-consolidation-11-to-8)
+2. [Agent Consolidation: 11 to 9](#2-agent-consolidation-11-to-9)
 3. [Two-Layer Architecture: Roles and Delegates](#3-two-layer-architecture-roles-and-delegates)
 4. [Zero-Hop Security Propagation](#4-zero-hop-security-propagation)
 5. [Conditional Synthesizer](#5-conditional-synthesizer)
@@ -45,19 +45,20 @@
 
 ---
 
-## 2. Agent Consolidation: 11 to 8
+## 2. Agent Consolidation: 11 to 9
 
 **GSD:** 11 specialized agent files, each scoped to a single concern.
 
-**GSDD:** 8 canonical roles. 3 mergers based on two criteria.
+**GSDD:** 9 canonical roles. 3 mergers and 1 extraction.
 
 **Merger table:**
 
 | Canonical role | Absorbs from GSD | Merger criteria |
 |---------------|-------------------|-----------------|
+| `integration-checker.md` | `gsd-integration-checker.md` | Cross-phase integration checking is structurally different from single-phase verification: different inputs (all phase SUMMARYs/VERIFICATIONs vs single phase), different scope (milestone-wide wiring vs phase goal), different algorithm (connectivity checks vs goal-backward). Extracted as standalone role rather than absorbed into verifier. |
 | `researcher.md` | `gsd-project-researcher.md` + `gsd-phase-researcher.md` | Same algorithm, different scope. Scope is an input parameter, not a role distinction. Clean merger. |
 | `planner.md` | `gsd-planner.md` + `gsd-plan-checker.md` | Reduces coordination overhead. **Tradeoff:** GSD's plan-checker was a fresh-context adversarial pass with a 3-cycle revision loop (planner -> checker -> revise x 3 max). GSDD keeps an explicit `plan-checker` contract, generates native planner/checker entry surfaces where runtimes can support the loop directly, and describes reduced-assurance fallback in the portable workflow when no independent checker runs. |
-| `verifier.md` | `gsd-verifier.md` | Phase-level goal-backward verification remains the verifier's scope. Cross-phase integration audit remains a separate deferred surface rather than being silently absorbed. GSDD keeps the compact verification-report base fields and also preserves richer structured verifier findings where they materially improve re-verification and gap closure. |
+| `verifier.md` | `gsd-verifier.md` | Phase-level goal-backward verification remains the verifier's scope. Cross-phase integration audit remains a separate milestone surface rather than being silently absorbed. GSDD keeps the compact verification-report base fields and also preserves richer structured verifier findings where they materially improve re-verification and gap closure. |
 
 **Known tradeoffs in mergers:**
 
@@ -65,7 +66,7 @@ The researcher merger is clean - scope is genuinely a parameter. The planner and
 
 - **Planner:** External verification by a fresh-context agent catches blind spots the author cannot catch in self-review. GSDD restores that concept with a canonical `plan-checker` delegate, native planner/checker entry surfaces for Claude/OpenCode, and a portable workflow that describes reduced-assurance fallback when no independent checker runs. Verify quality checks now live inside `task_completeness`, so the planner/checker contract enforces runnable, fast, and ordered verification.
 - **Adapter boundary:** `bin/gsdd.mjs` now stays the thin generator entrypoint and adapter dispatcher, while vendor-specific rendering lives under `bin/adapters/`. This is an architecture cleanup, not proof of runtime parity by itself.
-- **Verifier:** The integration-checker's cross-phase wiring scope (orphaned exports, unconsumed API routes, broken E2E flows) is structurally different from single-phase goal-backward verification. GSDD now keeps `verifier.md` phase-scoped and defers milestone integration audit to a separate future surface instead of pretending one contract cleanly does both.
+- **Verifier:** The integration-checker's cross-phase wiring scope (orphaned exports, unconsumed API routes, broken E2E flows) is structurally different from single-phase goal-backward verification. GSDD keeps `verifier.md` phase-scoped and implements milestone integration audit as a separate surface: `distilled/workflows/audit-milestone.md` with `integration-checker.md`.
 - **Verifier output contract:** Upstream GSD exposes two relevant shapes: the slim `verification-report.md` template with base fields (`phase`, `verified`, `status`, `score`) and the richer `gsd-verifier.md` output example with structured `re_verification`, `gaps`, and `human_verification`. GSDD keeps the richer phase-verifier structure intentionally, but labels it as normalized verifier behavior rather than pretending every field came from the slimmer template alone.
 
 **Unchanged roles (1:1):**
@@ -80,7 +81,7 @@ The researcher merger is clean - scope is genuinely a parameter. The planner and
 
 **Evidence:**
 - GSD originals preserved in `agents/_archive/` (11 files, git history intact via `git mv`)
-- GSDD canonicals in `agents/` (8 files + README.md)
+- GSDD canonicals in `agents/` (9 files + README.md)
 - `agents/README.md` lifecycle table maps each canonical role to its GSD sources
 
 ---

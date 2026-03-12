@@ -28,7 +28,7 @@ It does verify:
 - human-verification needs that cannot be checked programmatically
 
 It does not claim milestone-wide integration completeness.
-Cross-phase integration audit and milestone E2E completeness belong to a separate milestone-audit surface.
+Cross-phase integration audit is handled by `distilled/workflows/audit-milestone.md` with its own integration-checker role.
 </scope_boundary>
 
 <reverification_mode>
