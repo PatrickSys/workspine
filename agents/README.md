@@ -23,6 +23,12 @@ Roles define what an agent is. Delegates define what an agent does in a specific
 | Verifier | `verifier.md` | `gsd-verifier.md` |
 | Roadmapper | `roadmapper.md` | `gsd-roadmapper.md` |
 
+## Audit Roles
+
+| Role | File | Absorbs From (GSD) |
+|------|------|--------------------|
+| Integration Checker | `integration-checker.md` | `gsd-integration-checker.md` |
+
 ## Utility Roles
 
 | Role | File | Note |
@@ -40,7 +46,7 @@ Roles define what an agent is. Delegates define what an agent does in a specific
 
 Verifier note:
 - `verifier.md` is phase-scoped.
-- A separate milestone integration-audit surface is still deferred; it is not absorbed into the verifier contract.
+- The milestone integration-audit surface exists as `distilled/workflows/audit-milestone.md` with its own `integration-checker.md` role contract. It is not absorbed into the verifier.
 
 ## Archive
 
