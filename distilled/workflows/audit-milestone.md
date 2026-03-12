@@ -90,8 +90,9 @@ For each phase's VERIFICATION.md, extract the requirements coverage section:
 
 ### 5d. Extract SUMMARY.md Frontmatter
 
-For each phase's SUMMARY.md, extract `requirements-completed` from frontmatter (if present):
+For each phase's SUMMARY.md, extract `requirements-completed` from frontmatter when present:
 - Which requirements the executor claims were completed
+- Treat this as corroborating evidence, not as a hard prerequisite for a satisfied requirement
 
 ### 5e. Status Determination Matrix
 
@@ -101,7 +102,7 @@ For each requirement, determine status using all available sources:
 |---------------------|---------------------|------------------|--------------|
 | passed              | listed              | `[x]`            | **satisfied** |
 | passed              | listed              | `[ ]`            | **satisfied** (update spec) |
-| passed              | missing             | any              | **partial** (verify manually) |
+| passed              | missing             | any              | **satisfied** (lower confidence; note missing SUMMARY corroboration) |
 | gaps_found          | any                 | any              | **unsatisfied** |
 | missing             | listed              | any              | **partial** (verification gap) |
 | missing             | missing             | any              | **unsatisfied** |
@@ -175,7 +176,7 @@ Audit is complete when all of these are true:
 
 - [ ] Milestone scope identified from ROADMAP.md
 - [ ] All phase VERIFICATION.md files read (missing ones flagged as blockers)
-- [ ] SUMMARY.md `requirements-completed` frontmatter extracted for each phase
+- [ ] SUMMARY.md `requirements-completed` frontmatter extracted when present
 - [ ] SPEC.md requirement checkboxes parsed
 - [ ] ROADMAP.md phase-to-requirement mappings extracted
 - [ ] Integration checker ran (subagent or inline with reduced_assurance noted)

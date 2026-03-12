@@ -109,7 +109,7 @@ async function cmdInit(...initArgs) {
     if (existsSync(agentsDir)) {
       mkdirSync(localRolesDir, { recursive: true });
       const roleFiles = readdirSync(agentsDir).filter(
-        f => f.endsWith('.md') && f !== 'README.md'
+        f => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('_')
       );
       for (const f of roleFiles) {
         cpSync(join(agentsDir, f), join(localRolesDir, f));

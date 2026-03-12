@@ -40,9 +40,10 @@ describe('gsdd audit-milestone', () => {
     assert.match(content, /MILESTONE-AUDIT\.md/i, 'must reference MILESTONE-AUDIT.md output');
     assert.match(content, /gaps_found/, 'must include gaps_found status');
     assert.match(content, /orphan/i, 'must include orphan detection');
-    assert.match(content, /integration.checker/i, 'must reference integration checker');
+    assert.match(content, /integration[-\s]checker/i, 'must reference integration checker');
     assert.match(content, /3-source|three.*source/i, 'must reference 3-source cross-reference');
     assert.match(content, /Status Determination Matrix|VERIFICATION.*Status.*SUMMARY.*Frontmatter/i, 'must include status determination matrix');
+    assert.match(content, /corroborating evidence|lower confidence/i, 'must treat SUMMARY frontmatter as corroboration, not a hard requirement');
     assert.doesNotMatch(content, /â|ðŸ|âœ|â†/, 'must not contain mojibake');
   });
 
