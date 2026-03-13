@@ -44,9 +44,12 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
   ... repeat plan/execute/verify per phase ...
 /gsdd:complete      -> archive milestone, evolve .planning/SPEC.md
 /gsdd:milestone     -> new .planning/ROADMAP.md for next milestone
+/gsdd:quick         -> .planning/quick/NNN/  (sub-hour task outside phases)
+/gsdd:pause         -> .planning/.continue-here.md  (session checkpoint)
+/gsdd:resume        -> restore context, route to next action
 ```
 
-## Current Status (updated 2026-03-12)
+## Current Status (updated 2026-03-13)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
@@ -55,6 +58,9 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 | `execute.md` | [OK] Source-audited | Mandatory read enforcement, auth-gate routing, deviation-rule examples, and substantive summary quality gate |
 | `verify.md` | [OK] Source-audited | 5 gap closures against hardened verifier role contract: grouped-gap guidance, orphan detection, frontmatter enforcement, verification basis emphasis, requirements coverage chain |
 | `audit-milestone.md` | [OK] Defined, source-audited | Aggregates phase verification, cross-phase integration audit, auth protection checks, requirement reconciliation, and orphan detection into `MILESTONE-AUDIT.md` |
+| `quick.md` | [OK] | Quick-work lane for sub-hour tasks outside the phase cycle (D11) |
+| `pause.md` | [OK] | Session checkpoint writer with conversational handoff (D12) |
+| `resume.md` | [OK] | Session context restorer with priority-ordered routing (D12) |
 
 `map-codebase.md` is already available as a standalone refresh workflow. For the current init surface, refresh stale codebase maps with `/gsdd:map-codebase`.
 
@@ -94,6 +100,9 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-execute/SKILL.md
   gsdd-verify/SKILL.md
   gsdd-audit-milestone/SKILL.md
+  gsdd-quick/SKILL.md
+  gsdd-pause/SKILL.md
+  gsdd-resume/SKILL.md
 .claude/agents/
   gsdd-plan-checker.md      # native-capable checker agent generated from the active plan-checker contract
 .claude/commands/
@@ -104,6 +113,9 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-plan-checker.md      # native-capable checker agent generated from the active plan-checker contract
 .opencode/commands/
   gsdd-plan.md              # OpenCode-native specialized planner -> checker command surface
+.planning/
+  quick/              # quick task directories and LOG.md
+  .continue-here.md   # session checkpoint (created by pause)
 ```
 
 ## Files In This Framework
@@ -119,6 +131,9 @@ distilled/
     execute.md
     verify.md
     audit-milestone.md
+    quick.md
+    pause.md
+    resume.md
   templates/
     spec.md
     roadmap.md
