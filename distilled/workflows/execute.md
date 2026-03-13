@@ -6,7 +6,8 @@ You DO NOT freelance. You DO NOT add features outside the plan.
 </role>
 
 <load_context>
-Before starting, read these files:
+CRITICAL: Read every file below before performing any other actions. This is your primary context.
+
 1. `.planning/phases/{plan_id}-PLAN.md` or the target plan file provided by the orchestrator
 2. `.planning/SPEC.md` - requirements, constraints, and current state
 3. `.planning/ROADMAP.md` - phase goal and success criteria
@@ -89,27 +90,47 @@ Git rules:
 Reality rarely matches the plan perfectly. Handle deviations with these rules in priority order:
 
 ### Rule 1: Auto-Fix Bugs
+
+**Trigger:** Code doesn't work as intended (broken behavior, errors, incorrect output)
+
 If you introduce a bug while implementing a task:
 - fix it immediately
 - keep the fix grouped with the affected work
 - note it in the completion summary
 
+**Examples:** Wrong queries, logic errors, type errors, null pointer exceptions, broken validation
+
 ### Rule 2: Auto-Add Critical Missing Pieces
+
+**Trigger:** Code missing essential features for correctness, security, or basic operation
+
 If the plan forgot something obviously necessary for the task to work:
 - add it as part of the current task
 - note it in the completion summary
 
+**Examples:** Missing error handling, no input validation, missing null checks, no auth on protected routes, missing authorization
+
 ### Rule 3: Auto-Fix Straightforward Blockers
+
+**Trigger:** Something prevents completing the current task
+
 If an external factor blocks progress and the fix is straightforward:
 - fix it
 - note it in the completion summary
 - if the fix is not straightforward, STOP and ask the developer
 
+**Examples:** Missing dependency, wrong types, broken imports, missing env var, DB connection error, missing referenced file
+
 ### Rule 4: Ask About Architecture Changes
+
+**Trigger:** Fix requires significant structural modification
+
 If the plan's approach will not work or a materially different approach is needed:
 - STOP
 - explain what changed and why the plan needs adjusting
 - wait for approval before proceeding
+
+**Examples:** New DB table (not column), major schema changes, new service layer, switching libraries/frameworks, breaking API changes
 
 ### Scope Boundary
 If you discover something that needs doing but is not in the plan:
@@ -159,6 +180,8 @@ Create `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md` with:
 **Notes for Next Work**: {anything the next planner should know}
 ```
 
+**Summary quality gate:** One-liner must be substantive (e.g., "JWT auth with refresh rotation using jose library" not "Authentication implemented"). If the summary one-liner reads like a placeholder, rewrite it before finalizing.
+
 Do not invent an inline PLAN task-state mutation scheme if the plan does not define one.
 Summary-driven progress tracking avoids silent drift between the plan contract and what execution actually completed.
 </state_updates>
@@ -178,7 +201,14 @@ When encountering a checkpoint task:
 - state what should be reviewed before continuation
 - include focused verification guidance
 
-In both cases, return with the current progress and do not continue until resumed.
+### Auth-gate routing
+
+Auth errors (indicators: 401, 403, "Not authenticated", "Please run {tool} login", "Set {ENV_VAR}") are gates, not bugs. When an auth error occurs during a `type="auto"` task:
+- recognize it as an auth gate, not a deviation
+- STOP and return `checkpoint:user` with exact auth steps (CLI commands, env vars, verification command)
+- document auth gates in SUMMARY.md as normal flow, not deviations
+
+In all checkpoint cases, return with the current progress and do not continue until resumed.
 </checkpoint_protocol>
 
 <self_check>
@@ -208,6 +238,8 @@ Execution is done when all of these are true:
 - [ ] All `type="auto"` tasks in the plan are implemented and verified
 - [ ] Any checkpoint task caused an explicit stop and handoff instead of silent continuation
 - [ ] Deviation rules were followed
+- [ ] Mandatory context files read first when provided
+- [ ] Authentication gates handled with the auth-gate protocol
 - [ ] `.planning/SPEC.md` current state is updated accurately
 - [ ] `ROADMAP.md` uses `[ ]`, `[-]`, `[x]` consistently
 - [ ] `SUMMARY.md` is written

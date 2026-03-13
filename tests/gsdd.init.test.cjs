@@ -95,6 +95,69 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'roadmapper.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'planner.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'verifier.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'executor.md')));
+
+    const executorRole = fs.readFileSync(
+      path.join(tmpDir, '.planning', 'templates', 'roles', 'executor.md'),
+      'utf-8'
+    );
+    // Positive structural assertions — XML section boundaries
+    assert.match(executorRole, /<role>/);
+    assert.match(executorRole, /<scope_boundary>/);
+    assert.match(executorRole, /<deviation_rules>/);
+    assert.match(executorRole, /<authentication_gates>/);
+    assert.match(executorRole, /<output>/);
+    assert.match(executorRole, /<tdd_execution>/);
+    assert.match(executorRole, /<success_criteria>/);
+    assert.match(executorRole, /<checkpoint_protocol>/);
+    assert.match(executorRole, /<self_check>/);
+    assert.match(executorRole, /<quality_guarantees>/);
+    assert.match(executorRole, /<anti_patterns>/);
+    assert.match(executorRole, /<execution_loop>/);
+    assert.match(executorRole, /<vendor_hints>/);
+    assert.match(executorRole, /<\/vendor_hints>/);
+    assert.match(executorRole, /<\/vendor_hints>\s*$/);
+    assert.equal((executorRole.match(/<\/output>/g) || []).length, 1);
+    // Mandatory initial read
+    assert.match(executorRole, /Mandatory initial read/i);
+    assert.match(executorRole, /read every file listed there before performing any other actions/i);
+    // Deviation rule examples
+    assert.match(executorRole, /null pointer/i);
+    assert.match(executorRole, /no auth on protected routes/i);
+    assert.match(executorRole, /Missing dependency/i);
+    assert.match(executorRole, /New DB table/i);
+    // Auth gate indicators
+    assert.match(executorRole, /401/);
+    assert.match(executorRole, /403/);
+    assert.match(executorRole, /Not authenticated/i);
+    // Typed output example (yaml block)
+    assert.match(executorRole, /```yaml[\s\S]*deviations:/);
+    assert.match(executorRole, /key_files:/);
+    // TDD steps
+    assert.match(executorRole, /RED/);
+    assert.match(executorRole, /GREEN/);
+    assert.match(executorRole, /REFACTOR/);
+    assert.match(executorRole, /Check test infrastructure/i);
+    // Completion checklist items
+    assert.match(executorRole, /\[ \] Mandatory context files read first/i);
+    assert.match(executorRole, /\[ \] All `type="auto"` tasks/i);
+    assert.match(executorRole, /\[ \] Authentication gates handled/i);
+    assert.match(executorRole, /\[ \] .*SUMMARY\.md.* is written with substantive one-liner/i);
+    assert.match(executorRole, /\[ \] Self-check passed/i);
+    // Scope boundary content
+    assert.match(executorRole, /does not own planning, verification, or milestone audit/i);
+    // Summary quality gate
+    assert.match(executorRole, /One-liner must be substantive/i);
+    // Negative stripping-boundary assertions
+    assert.doesNotMatch(executorRole, /~\/\.claude\//i);
+    assert.doesNotMatch(executorRole, /gsd-tools\.cjs/i);
+    assert.doesNotMatch(executorRole, /node ~\/\.claude/i);
+    assert.doesNotMatch(executorRole, /\{type\}\(\{phase\}-\{plan\}\):/);
+    assert.doesNotMatch(executorRole, /agent-history\.json/i);
+    assert.doesNotMatch(executorRole, /STRUCTURE\.md/i);
+    assert.doesNotMatch(executorRole, /INTEGRATIONS\.md/i);
+    assert.doesNotMatch(executorRole, /auto_advance/i);
+    assert.doesNotMatch(executorRole, /executor_model/i);
 
     const synthRole = fs.readFileSync(
       path.join(tmpDir, '.planning', 'templates', 'roles', 'synthesizer.md'),
@@ -293,6 +356,8 @@ describe('gsdd init and update', () => {
     assert.match(executeSkill, /stale reference/i);
     assert.doesNotMatch(executeSkill, /MARK DONE in the plan file/i);
     assert.doesNotMatch(executeSkill, /â|ðŸ|âœ|â†/);
+    assert.match(executeSkill, /Mandatory context files read first when provided/i);
+    assert.match(executeSkill, /Authentication gates handled with the auth-gate protocol/i);
 
     const verifySkill = fs.readFileSync(
       path.join(tmpDir, '.agents', 'skills', 'gsdd-verify', 'SKILL.md'),
