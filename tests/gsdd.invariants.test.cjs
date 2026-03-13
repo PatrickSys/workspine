@@ -13,6 +13,7 @@ const path = require('path');
 const AGENTS_DIR = path.join(__dirname, '..', 'agents');
 const DELEGATES_DIR = path.join(__dirname, '..', 'distilled', 'templates', 'delegates');
 const WORKFLOWS_DIR = path.join(__dirname, '..', 'distilled', 'workflows');
+const DESIGN_MD = path.join(__dirname, '..', 'distilled', 'DESIGN.md');
 
 // --- Helpers ---
 
@@ -373,5 +374,381 @@ describe('I5 — Session Management Workflows', () => {
   test('resume.md has no ~/.claude/ vendor paths', () => {
     const content = readWorkflow('resume.md');
     assert.ok(!content.includes('~/.claude/'), 'resume.md must not contain ~/.claude/ vendor paths');
+  });
+});
+
+// --- I6: Artifact Schema Definitions ---
+
+describe('I6 — Artifact Schema Definitions', () => {
+  // --- PLAN.md frontmatter in plan.md (workflow) ---
+  describe('PLAN.md schema in plan.md workflow', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
+
+    test('plan.md documents phase frontmatter key', () => {
+      assert.ok(content.includes('phase:'), 'plan.md must document phase frontmatter key');
+    });
+
+    test('plan.md documents plan frontmatter key', () => {
+      assert.ok(/\bplan:/.test(content), 'plan.md must document plan frontmatter key');
+    });
+
+    test('plan.md documents type frontmatter key', () => {
+      assert.ok(/\btype:/.test(content), 'plan.md must document type frontmatter key');
+    });
+
+    test('plan.md documents wave frontmatter key', () => {
+      assert.ok(content.includes('wave:'), 'plan.md must document wave frontmatter key');
+    });
+
+    test('plan.md documents depends_on frontmatter key', () => {
+      assert.ok(content.includes('depends_on:'), 'plan.md must document depends_on frontmatter key');
+    });
+
+    test('plan.md documents files-modified frontmatter key', () => {
+      assert.ok(content.includes('files-modified:'), 'plan.md must document files-modified frontmatter key');
+    });
+
+    test('plan.md documents autonomous frontmatter key', () => {
+      assert.ok(content.includes('autonomous:'), 'plan.md must document autonomous frontmatter key');
+    });
+
+    test('plan.md documents requirements frontmatter key', () => {
+      assert.ok(content.includes('requirements:'), 'plan.md must document requirements frontmatter key');
+    });
+
+    test('plan.md documents must_haves frontmatter key', () => {
+      assert.ok(content.includes('must_haves:'), 'plan.md must document must_haves frontmatter key');
+    });
+
+    test('plan.md documents <task XML structure', () => {
+      assert.ok(content.includes('<task'), 'plan.md must document <task XML structure');
+    });
+
+    test('plan.md documents <files> task section', () => {
+      assert.ok(content.includes('<files>'), 'plan.md must document <files> task section');
+    });
+
+    test('plan.md documents <action> task section', () => {
+      assert.ok(content.includes('<action>'), 'plan.md must document <action> task section');
+    });
+
+    test('plan.md documents <verify> task section', () => {
+      assert.ok(content.includes('<verify>'), 'plan.md must document <verify> task section');
+    });
+
+    test('plan.md documents <done> task section', () => {
+      assert.ok(content.includes('<done>'), 'plan.md must document <done> task section');
+    });
+  });
+
+  // --- PLAN.md frontmatter in planner.md (role contract) ---
+  describe('PLAN.md schema in planner.md role contract', () => {
+    const content = fs.readFileSync(path.join(AGENTS_DIR, 'planner.md'), 'utf-8');
+
+    test('planner.md documents phase frontmatter key', () => {
+      assert.ok(content.includes('phase:'), 'planner.md must document phase frontmatter key');
+    });
+
+    test('planner.md documents plan frontmatter key', () => {
+      assert.ok(/\bplan:/.test(content), 'planner.md must document plan frontmatter key');
+    });
+
+    test('planner.md documents wave frontmatter key', () => {
+      assert.ok(content.includes('wave:'), 'planner.md must document wave frontmatter key');
+    });
+
+    test('planner.md documents depends_on frontmatter key', () => {
+      assert.ok(content.includes('depends_on:'), 'planner.md must document depends_on frontmatter key');
+    });
+
+    test('planner.md documents files-modified frontmatter key', () => {
+      assert.ok(content.includes('files-modified:'), 'planner.md must document files-modified frontmatter key');
+    });
+
+    test('planner.md documents autonomous frontmatter key', () => {
+      assert.ok(content.includes('autonomous:'), 'planner.md must document autonomous frontmatter key');
+    });
+
+    test('planner.md documents requirements frontmatter key', () => {
+      assert.ok(content.includes('requirements:'), 'planner.md must document requirements frontmatter key');
+    });
+
+    test('planner.md documents must_haves frontmatter key', () => {
+      assert.ok(content.includes('must_haves:'), 'planner.md must document must_haves frontmatter key');
+    });
+
+    test('planner.md documents files task field', () => {
+      assert.ok(/`files`|<files>/.test(content), 'planner.md must document files task field');
+    });
+
+    test('planner.md documents action task field', () => {
+      assert.ok(/`action`|<action>/.test(content), 'planner.md must document action task field');
+    });
+
+    test('planner.md documents verify task field', () => {
+      assert.ok(/`verify`|<verify>/.test(content), 'planner.md must document verify task field');
+    });
+
+    test('planner.md documents done task field', () => {
+      assert.ok(/`done`|<done>/.test(content), 'planner.md must document done task field');
+    });
+  });
+
+  // --- Plan sizing consistency ---
+  describe('Plan sizing consistency', () => {
+    const plannerContent = fs.readFileSync(path.join(AGENTS_DIR, 'planner.md'), 'utf-8');
+    const planWorkflow = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
+
+    test('planner.md mentions 2-5 task sizing', () => {
+      assert.ok(
+        /2[-–]5/.test(plannerContent),
+        'planner.md must mention 2-5 task sizing'
+      );
+    });
+
+    test('plan.md workflow mentions 2-5 task sizing', () => {
+      assert.ok(
+        /2[-–]5/.test(planWorkflow),
+        'plan.md workflow must mention 2-5 task sizing'
+      );
+    });
+  });
+
+  // --- ROADMAP.md grammar in roadmapper.md ---
+  describe('ROADMAP.md grammar in roadmapper.md', () => {
+    const content = fs.readFileSync(path.join(AGENTS_DIR, 'roadmapper.md'), 'utf-8');
+
+    test('roadmapper.md documents [ ] status marker', () => {
+      assert.ok(content.includes('[ ]'), 'roadmapper.md must document [ ] status marker');
+    });
+
+    test('roadmapper.md documents [-] status marker', () => {
+      assert.ok(content.includes('[-]'), 'roadmapper.md must document [-] status marker');
+    });
+
+    test('roadmapper.md documents [x] status marker', () => {
+      assert.ok(content.includes('[x]'), 'roadmapper.md must document [x] status marker');
+    });
+
+    test('roadmapper.md documents **Status** field', () => {
+      assert.ok(content.includes('**Status**'), 'roadmapper.md must document **Status** parse-critical field');
+    });
+
+    test('roadmapper.md documents **Requirements** field', () => {
+      assert.ok(content.includes('**Requirements**'), 'roadmapper.md must document **Requirements** parse-critical field');
+    });
+  });
+
+  // --- VERIFICATION.md schema in verifier.md ---
+  describe('VERIFICATION.md schema in verifier.md', () => {
+    const content = fs.readFileSync(path.join(AGENTS_DIR, 'verifier.md'), 'utf-8');
+
+    test('verifier.md documents phase frontmatter key', () => {
+      assert.ok(content.includes('phase:'), 'verifier.md must document phase frontmatter key');
+    });
+
+    test('verifier.md documents verified frontmatter key', () => {
+      assert.ok(content.includes('verified:'), 'verifier.md must document verified frontmatter key');
+    });
+
+    test('verifier.md documents status frontmatter key', () => {
+      assert.ok(/\bstatus:/.test(content), 'verifier.md must document status frontmatter key');
+    });
+
+    test('verifier.md documents score frontmatter key', () => {
+      assert.ok(content.includes('score:'), 'verifier.md must document score frontmatter key');
+    });
+
+    test('verifier.md documents passed status value', () => {
+      assert.ok(content.includes('passed'), 'verifier.md must document passed status value');
+    });
+
+    test('verifier.md documents gaps_found status value', () => {
+      assert.ok(content.includes('gaps_found'), 'verifier.md must document gaps_found status value');
+    });
+
+    test('verifier.md documents human_needed status value', () => {
+      assert.ok(content.includes('human_needed'), 'verifier.md must document human_needed status value');
+    });
+
+    test('verifier.md documents L1 artifact level', () => {
+      assert.ok(content.includes('L1'), 'verifier.md must document L1 artifact level');
+    });
+
+    test('verifier.md documents L2 artifact level', () => {
+      assert.ok(content.includes('L2'), 'verifier.md must document L2 artifact level');
+    });
+
+    test('verifier.md documents L3 artifact level', () => {
+      assert.ok(content.includes('L3'), 'verifier.md must document L3 artifact level');
+    });
+
+    test('verifier.md has Verification Basis section', () => {
+      assert.ok(content.includes('Verification Basis'), 'verifier.md must have Verification Basis section');
+    });
+
+    test('verifier.md has Must-Haves Checked section', () => {
+      assert.ok(content.includes('Must-Haves Checked'), 'verifier.md must have Must-Haves Checked section');
+    });
+
+    test('verifier.md has Findings section', () => {
+      assert.ok(content.includes('Findings'), 'verifier.md must have Findings section');
+    });
+
+    test('verifier.md has Requirement Coverage section', () => {
+      assert.ok(content.includes('Requirement Coverage'), 'verifier.md must have Requirement Coverage section');
+    });
+  });
+
+  // --- SUMMARY.md schema in executor.md ---
+  describe('SUMMARY.md schema in executor.md', () => {
+    const content = fs.readFileSync(path.join(AGENTS_DIR, 'executor.md'), 'utf-8');
+
+    test('executor.md documents phase frontmatter key', () => {
+      assert.ok(content.includes('phase:'), 'executor.md must document phase frontmatter key');
+    });
+
+    test('executor.md documents completed frontmatter key', () => {
+      assert.ok(content.includes('completed:'), 'executor.md must document completed frontmatter key');
+    });
+
+    test('executor.md documents tasks frontmatter key', () => {
+      assert.ok(/\btasks:/.test(content), 'executor.md must document tasks frontmatter key');
+    });
+
+    test('executor.md documents deviations frontmatter key', () => {
+      assert.ok(content.includes('deviations:'), 'executor.md must document deviations frontmatter key');
+    });
+
+    test('executor.md documents decisions frontmatter key', () => {
+      assert.ok(content.includes('decisions:'), 'executor.md must document decisions frontmatter key');
+    });
+
+    test('executor.md documents key_files frontmatter key', () => {
+      assert.ok(content.includes('key_files:'), 'executor.md must document key_files frontmatter key');
+    });
+
+    test('executor.md documents SUMMARY.md output', () => {
+      assert.ok(content.includes('SUMMARY.md'), 'executor.md must document SUMMARY.md output');
+    });
+  });
+
+  // --- MILESTONE-AUDIT.md schema in audit-milestone.md ---
+  describe('MILESTONE-AUDIT.md schema in audit-milestone.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'audit-milestone.md'), 'utf-8');
+
+    test('audit-milestone.md documents milestone frontmatter key', () => {
+      assert.ok(content.includes('milestone:'), 'audit-milestone.md must document milestone frontmatter key');
+    });
+
+    test('audit-milestone.md documents audited frontmatter key', () => {
+      assert.ok(content.includes('audited:'), 'audit-milestone.md must document audited frontmatter key');
+    });
+
+    test('audit-milestone.md documents status frontmatter key', () => {
+      assert.ok(/\bstatus:/.test(content), 'audit-milestone.md must document status frontmatter key');
+    });
+
+    test('audit-milestone.md documents reduced_assurance frontmatter key', () => {
+      assert.ok(content.includes('reduced_assurance:'), 'audit-milestone.md must document reduced_assurance frontmatter key');
+    });
+
+    test('audit-milestone.md documents scores frontmatter key', () => {
+      assert.ok(content.includes('scores:'), 'audit-milestone.md must document scores frontmatter key');
+    });
+
+    test('audit-milestone.md documents gaps frontmatter key', () => {
+      assert.ok(content.includes('gaps:'), 'audit-milestone.md must document gaps frontmatter key');
+    });
+
+    test('audit-milestone.md documents passed status value', () => {
+      assert.ok(content.includes('passed'), 'audit-milestone.md must document passed status value');
+    });
+
+    test('audit-milestone.md documents gaps_found status value', () => {
+      assert.ok(content.includes('gaps_found'), 'audit-milestone.md must document gaps_found status value');
+    });
+
+    test('audit-milestone.md documents tech_debt status value', () => {
+      assert.ok(content.includes('tech_debt'), 'audit-milestone.md must document tech_debt status value');
+    });
+  });
+
+  // --- Executor consumes planner output ---
+  describe('Executor consumes planner output', () => {
+    const content = fs.readFileSync(path.join(AGENTS_DIR, 'executor.md'), 'utf-8');
+
+    test('executor.md references PLAN.md', () => {
+      assert.ok(content.includes('PLAN.md'), 'executor.md must reference PLAN.md as its input');
+    });
+
+    test('executor.md documents autonomous task type', () => {
+      assert.ok(content.includes('autonomous'), 'executor.md must document autonomous plan field');
+    });
+
+    test('executor.md documents checkpoint task types', () => {
+      assert.ok(content.includes('checkpoint'), 'executor.md must document checkpoint task types');
+    });
+  });
+});
+
+// --- S13: STATE.md Elimination (D7 Compliance) ---
+
+describe('S13 — STATE.md Elimination (D7 Compliance)', () => {
+  // No workflow references STATE.md
+  for (const wf of getWorkflowFiles()) {
+    test(`workflow ${wf} has no STATE.md references`, () => {
+      const content = readWorkflow(wf);
+      assert.ok(
+        !content.includes('STATE.md'),
+        `${wf} must not reference STATE.md (D7: state derived from primary artifacts)`
+      );
+    });
+  }
+
+  // No role contract references STATE.md (except negation)
+  const NEGATION_WORDS = ['not', 'does not', 'replaces', 'eliminated', 'dropped', 'no longer'];
+
+  for (const role of getRoleFiles()) {
+    test(`role ${role} has no STATE.md references (or only negation)`, () => {
+      const content = readRole(role);
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.includes('STATE.md')) {
+          const lower = line.toLowerCase();
+          const hasNegation = NEGATION_WORDS.some(neg => lower.includes(neg));
+          assert.ok(
+            hasNegation,
+            `${role} line ${i + 1} references STATE.md without negation: "${line.trim()}"`
+          );
+        }
+      }
+    });
+  }
+
+  // No delegate references STATE.md
+  for (const delegate of getDelegateFiles()) {
+    test(`delegate ${delegate} has no STATE.md references`, () => {
+      const content = readDelegate(delegate);
+      assert.ok(
+        !content.includes('STATE.md'),
+        `${delegate} must not reference STATE.md`
+      );
+    });
+  }
+
+  // DESIGN.md D7 documents elimination
+  test('DESIGN.md documents STATE.md elimination', () => {
+    const content = fs.readFileSync(DESIGN_MD, 'utf-8');
+    assert.ok(
+      content.includes('STATE.md'),
+      'DESIGN.md must mention STATE.md in context of its elimination'
+    );
+    const hasElimination = /STATE\.md.*(?:replac|drop|eliminat|no longer|merged|inline status)/is.test(content);
+    assert.ok(
+      hasElimination,
+      'DESIGN.md must document STATE.md as replaced/eliminated'
+    );
   });
 });
