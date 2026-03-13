@@ -255,7 +255,7 @@ The system:
 
 1. **Runs plans in waves** — Parallel where possible, sequential when dependent
 2. **Fresh context per plan** — 200k tokens purely for implementation, zero accumulated garbage
-3. **Commits per task** — Every task gets its own atomic commit
+3. **Clean commits** — Changes committed logically following repo conventions
 4. **Verifies against goals** — Checks the codebase delivers what the phase promised
 
 Walk away, come back to completed work with clean git history.
@@ -344,25 +344,26 @@ Then `/gsd:new-milestone` starts the next version — same flow as `new-project`
 ### Quick Mode
 
 ```
-/gsd:quick
+/gsdd:quick
 ```
 
 **For ad-hoc tasks that don't need full planning.**
 
-Quick mode gives you GSD guarantees (atomic commits, state tracking) with a faster path:
+Quick mode gives you the same planner/executor/verifier quality with a faster path:
 
-- **Same agents** — Planner + executor, same quality
-- **Skips optional steps** — No research, no plan checker, no verifier
-- **Separate tracking** — Lives in `.planning/quick/`, not phases
+- **Same roles** — Planner + executor, conditional verifier
+- **Skips research** — No researcher, no synthesizer
+- **Separate tracking** — Lives in `.planning/quick/`, logged in `LOG.md`
+- **Advisory git** — Follows repo conventions, no framework-imposed commit format
 
 Use for: bug fixes, small features, config changes, one-off tasks.
 
 ```
-/gsd:quick
+/gsdd:quick
 > What do you want to do? "Add dark mode toggle to settings"
 ```
 
-**Creates:** `.planning/quick/001-add-dark-mode-toggle/PLAN.md`, `SUMMARY.md`
+**Creates:** `.planning/quick/001-add-dark-mode-toggle/PLAN.md`, `SUMMARY.md`, updates `LOG.md`
 
 ---
 
@@ -422,21 +423,16 @@ The orchestrator never does heavy lifting. It spawns agents, waits, integrates r
 
 **The result:** You can run an entire phase — deep research, multiple plans created and verified, thousands of lines of code written across parallel executors, automated verification against goals — and your main context window stays at 30-40%. The work happens in fresh subagent contexts. Your session stays fast and responsive.
 
-### Atomic Git Commits
+### Advisory Git Protocol
 
-Each task gets its own commit immediately after completion:
+Git guidance is advisory. Repository and team conventions take precedence over framework defaults:
 
-```bash
-abc123f docs(08-02): complete user registration plan
-def456g feat(08-02): add email confirmation flow
-hij789k feat(08-02): implement password hashing
-lmn012o feat(08-02): create registration endpoint
-```
+- **Branching** — Follow existing repo conventions; use feature branches for significant changes when no convention exists
+- **Commits** — Group changes logically following repo conventions; do not bundle unrelated changes
+- **PRs** — Follow existing repo review workflow
 
 > [!NOTE]
-> **Benefits:** Git bisect finds exact failing task. Each task independently revertable. Clear history for Claude in future sessions. Better observability in AI-automated workflow.
-
-Every commit is surgical, traceable, and meaningful.
+> GSDD does not impose commit formats, branch naming, or one-commit-per-task rules. The framework provides structure for planning — it should not dictate git workflow. Configure defaults in `.planning/config.json` under `gitProtocol`.
 
 ### Modular by Design
 

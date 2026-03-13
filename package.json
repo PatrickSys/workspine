@@ -7,7 +7,7 @@
     "gsdd": "./bin/gsdd.mjs"
   },
   "scripts": {
-    "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs"
+    "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs"
   },
   "files": [
     "bin/",

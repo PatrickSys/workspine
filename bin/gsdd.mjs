@@ -34,6 +34,7 @@ const WORKFLOWS = [
   { name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, verify changes, follow repo git conventions', agent: 'Code', opencodeType: 'edit' },
   { name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan', agent: 'Plan', opencodeType: 'plan' },
   { name: 'gsdd-audit-milestone', workflow: 'audit-milestone.md', description: 'Audit a completed milestone - cross-phase integration, requirements coverage, E2E flows', agent: 'Plan', opencodeType: 'plan' },
+  { name: 'gsdd-quick', workflow: 'quick.md', description: 'Quick task - plan and execute a sub-hour task outside the phase cycle', agent: 'Code', opencodeType: 'edit' },
 ];
 
 const COMMANDS = {

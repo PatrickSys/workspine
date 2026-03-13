@@ -18,6 +18,7 @@
 8. [Advisory Git Protocol](#8-advisory-git-protocol)
 9. [Adapter Generation Over Conversion](#9-adapter-generation-over-conversion)
 10. [Context Isolation: Summaries Up, Documents to Disk](#10-context-isolation-summaries-up-documents-to-disk)
+11. [Quick-Work Lane](#11-quick-work-lane)
 
 ---
 
@@ -384,6 +385,43 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 - GSDD: `agents/synthesizer.md` (reads full research files from disk)
 - External: Anthropic Agent Teams (Feb 2026) -- "Shared State, Not Shared Context" using filesystem over context window
 - External: AI21 Modular Intelligence (Feb 2026) -- orchestrator-based designs prevent context drift
+
+---
+
+## 11. Quick-Work Lane
+
+**GSD:** `get-shit-done/workflows/quick.md` (454 lines). Two modes: default (plan + execute) and `--full` (adds plan-checking and verification). Tracks tasks in STATE.md. Uses `gsd-tools.cjs` CLI, `Task()` subagent API, `AskUserQuestion` API, and mandatory atomic commits per task.
+
+**GSDD:** Single mode, ~120 lines. Conditional verifier via `config.json`, LOG.md tracking, advisory git, direct role references.
+
+**What was kept:**
+- `.planning/quick/NNN-slug/` directory structure with sequential numbering
+- 1-3 task maximum for quick plans
+- Separate tracking from phase work (quick tasks don't touch ROADMAP.md)
+- Reuse of planner, executor, and verifier roles (no new roles or delegates)
+
+**What was stripped:**
+- `--full` flag duality (use the full phase cycle when you need plan-checking depth)
+- `STATE.md` tracking (eliminated in D7; replaced with append-only LOG.md)
+- `gsd-tools.cjs` CLI calls for init, commit, and slug generation
+- `Task()` vendor API and `AskUserQuestion` API (replaced with portable `<delegate>` blocks)
+- Mandatory atomic commits (replaced with advisory git per D8)
+- Plan-checker loop for quick tasks (the full phase workflow handles this when needed)
+
+**What was added:**
+- Advisory git protocol (D8) — follows repo conventions, no framework-imposed commit format
+- Context isolation (D10) — delegates write to disk, return summaries
+- Conditional verifier toggle via `config.json` `workflow.verifier` setting
+- `.planning/quick/LOG.md` — append-only table tracking all quick tasks with status
+
+**No new delegates.** Quick workflow uses `<delegate>` blocks referencing existing role contracts directly (same pattern as `audit-milestone.md`). Delegate count stays at 10.
+
+**Evidence:**
+- GSD source: `get-shit-done/workflows/quick.md` (454 lines, two modes, STATE.md tracking)
+- GSDD: `distilled/workflows/quick.md` (~120 lines, single mode, LOG.md tracking)
+- D7 (milestone hierarchy): STATE.md replaced by ROADMAP.md inline status
+- D8 (advisory git): repo conventions over framework defaults
+- D10 (context isolation): summaries up, documents to disk
 
 ---
 

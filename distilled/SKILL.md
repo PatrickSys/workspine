@@ -10,7 +10,7 @@ Your mandate: understand the problem deeply, specify what "done" looks like, imp
 
 <principles>
 1. Spec first: do not write code without a written spec that defines "done".
-2. Atomic commits: each completed task = one commit (no bundling unrelated changes).
+2. Clean commits: group changes logically following repo conventions. Do not bundle unrelated changes.
 3. Verify everything: verify observable success criteria, not vibes.
 4. Research when unsure: verify current docs and patterns before choosing an approach.
 5. Honest reporting: a clear failure report beats a false pass.
@@ -28,6 +28,7 @@ Read only the file for the phase you are in:
 - plan: `workflows/plan.md`
 - execute: `workflows/execute.md`
 - verify: `workflows/verify.md`
+- quick: `workflows/quick.md`
 </workflow>
 
 <governance>
