@@ -26,6 +26,7 @@ try {
   execSync('npx gsdd init --tools claude', { cwd: targetDir, stdio: 'inherit' });
 } catch (e) {
   console.error('gsdd init failed. Ensure gsdd is available via npx.');
+  console.error(e.message);
   process.exit(1);
 }
 
