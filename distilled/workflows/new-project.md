@@ -291,7 +291,11 @@ After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
 - [ ] Is out-of-scope populated with reasoning?
 - [ ] Is the spec structured rigorously? (Do NOT artificially trim it. Be thorough and comprehensive to provide a flawless baseline for downstream tasks).
 
-**Present the `SPEC.md` to the developer for review.** Do NOT proceed until approved.
+<approval_gate id="spec">
+Present the completed `SPEC.md` to the developer.
+State clearly: "Please review this spec. I will not proceed until you confirm it captures your intent."
+Do NOT proceed to roadmap creation until the developer explicitly approves.
+</approval_gate>
 
 **Commit**: `docs: initialize project spec`
 </spec_creation>
@@ -338,7 +342,11 @@ Requirements: AUTH-02, AUTH-03
 - [ ] Phase ordering respects dependencies
 - [ ] No phase has more than 5 requirements (split if needed)
 
-**Present the roadmap to the developer for approval.** Do NOT proceed until approved.
+<approval_gate id="roadmap">
+Present the completed `ROADMAP.md` to the developer.
+State clearly: "Please review this roadmap. I will not proceed to planning until you confirm the phase breakdown."
+Do NOT proceed to planning until the developer explicitly approves.
+</approval_gate>
 
 **Commit**: `docs: create project roadmap`
 </roadmap_creation>

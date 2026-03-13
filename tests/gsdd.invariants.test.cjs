@@ -752,3 +752,195 @@ describe('S13 — STATE.md Elimination (D7 Compliance)', () => {
     );
   });
 });
+
+// --- I7: Plan-Checker Dimension Integrity ---
+
+describe('I7 — Plan-Checker Dimension Integrity', () => {
+  const PLAN_CHECKER_DIMENSIONS = [
+    'requirement_coverage',
+    'task_completeness',
+    'dependency_correctness',
+    'key_link_completeness',
+    'scope_sanity',
+    'must_have_quality',
+    'context_compliance',
+  ];
+
+  const planCheckerContent = fs.readFileSync(
+    path.join(DELEGATES_DIR, 'plan-checker.md'), 'utf-8'
+  );
+  const planWorkflowContent = fs.readFileSync(
+    path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8'
+  );
+  const plannerContent = fs.readFileSync(
+    path.join(AGENTS_DIR, 'planner.md'), 'utf-8'
+  );
+
+  describe('plan-checker.md documents all 7 dimensions', () => {
+    for (const dim of PLAN_CHECKER_DIMENSIONS) {
+      test(`plan-checker.md documents dimension: ${dim}`, () => {
+        assert.ok(
+          planCheckerContent.includes(dim),
+          `plan-checker.md must document dimension ${dim}`
+        );
+      });
+    }
+  });
+
+  describe('plan.md documents all 7 checker dimensions', () => {
+    for (const dim of PLAN_CHECKER_DIMENSIONS) {
+      test(`plan.md documents checker dimension: ${dim}`, () => {
+        assert.ok(
+          planWorkflowContent.includes(dim),
+          `plan.md must document checker dimension ${dim}`
+        );
+      });
+    }
+  });
+
+  describe('planner.md references all 7 checker dimensions', () => {
+    // planner.md uses natural language labels (e.g. "requirement coverage") not underscored JSON keys
+    const PLANNER_DIMENSION_LABELS = [
+      'requirement coverage',
+      'task completeness',
+      'dependency correctness',
+      'key-link completeness',
+      'scope sanity',
+      'must-have quality',
+      'context compliance',
+    ];
+
+    for (const label of PLANNER_DIMENSION_LABELS) {
+      test(`planner.md references dimension: ${label}`, () => {
+        assert.ok(
+          plannerContent.includes(label),
+          `planner.md must reference checker dimension "${label}" in its internal_quality_gate`
+        );
+      });
+    }
+  });
+
+  describe('plan-checker.md JSON output schema', () => {
+    test('plan-checker.md documents "passed" status value', () => {
+      assert.ok(planCheckerContent.includes('"passed"'), 'plan-checker.md must document "passed" JSON status');
+    });
+
+    test('plan-checker.md documents "issues_found" status value', () => {
+      assert.ok(planCheckerContent.includes('"issues_found"'), 'plan-checker.md must document "issues_found" JSON status');
+    });
+
+    test('plan-checker.md documents "status" JSON field', () => {
+      assert.ok(planCheckerContent.includes('"status"'), 'plan-checker.md must document "status" JSON field');
+    });
+
+    test('plan-checker.md documents "summary" JSON field', () => {
+      assert.ok(planCheckerContent.includes('"summary"'), 'plan-checker.md must document "summary" JSON field');
+    });
+
+    test('plan-checker.md documents "issues" JSON field', () => {
+      assert.ok(planCheckerContent.includes('"issues"'), 'plan-checker.md must document "issues" JSON field');
+    });
+
+    test('plan-checker.md documents "severity" field in issue schema', () => {
+      assert.ok(planCheckerContent.includes('"severity"'), 'plan-checker.md must document "severity" in issue schema');
+    });
+
+    test('plan-checker.md documents "fix_hint" field in issue schema', () => {
+      assert.ok(planCheckerContent.includes('"fix_hint"'), 'plan-checker.md must document "fix_hint" in issue schema');
+    });
+
+    test('plan-checker.md documents "blocker" severity value', () => {
+      assert.ok(planCheckerContent.includes('blocker'), 'plan-checker.md must document "blocker" severity');
+    });
+  });
+
+  test('plan.md documents reduced_assurance fallback', () => {
+    assert.ok(
+      planWorkflowContent.includes('reduced_assurance'),
+      'plan.md must document reduced_assurance fallback for runtimes without independent checker'
+    );
+  });
+
+  test('plan.md documents max revision cycles and escalation', () => {
+    assert.ok(
+      planWorkflowContent.includes('escalate'),
+      'plan.md must document escalation when blockers remain after max revision cycles'
+    );
+  });
+});
+
+// --- I8: Workflow Vendor API Cleanliness ---
+
+describe('I8 — Workflow Vendor API Cleanliness', () => {
+  // All 9 portable workflows must be free of vendor-specific APIs that
+  // would break the agent-agnostic portability guarantee.
+  const VENDOR_APIS = [
+    { name: 'AskUserQuestion', pattern: 'AskUserQuestion' },
+    { name: 'Task() vendor API', pattern: 'Task(' },
+    { name: 'SlashCommand()', pattern: 'SlashCommand(' },
+    { name: '~/.claude/ vendor paths', pattern: '~/.claude/' },
+    { name: 'gsd-tools.cjs', pattern: 'gsd-tools.cjs' },
+  ];
+
+  for (const wf of getWorkflowFiles()) {
+    for (const { name, pattern } of VENDOR_APIS) {
+      test(`${wf} has no ${name}`, () => {
+        const content = readWorkflow(wf);
+        assert.ok(
+          !content.includes(pattern),
+          `${wf} must not contain vendor-specific ${name} (breaks portability)`
+        );
+      });
+    }
+  }
+});
+
+// --- I3-gate: New-project.md Approval Gates ---
+
+describe('I3-gate — New-project.md Approval Gates', () => {
+  const newProjectContent = fs.readFileSync(
+    path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8'
+  );
+
+  test('new-project.md has spec approval gate', () => {
+    assert.ok(
+      newProjectContent.includes('<approval_gate id="spec">'),
+      'new-project.md must have an explicit <approval_gate id="spec"> anchor before roadmap creation'
+    );
+  });
+
+  test('new-project.md has roadmap approval gate', () => {
+    assert.ok(
+      newProjectContent.includes('<approval_gate id="roadmap">'),
+      'new-project.md must have an explicit <approval_gate id="roadmap"> anchor before planning'
+    );
+  });
+
+  test('new-project.md approval gate instructs agent to stop', () => {
+    // Both gates must contain a "Do NOT proceed" instruction
+    const specGate = newProjectContent.includes('Do NOT proceed to roadmap creation');
+    const roadmapGate = newProjectContent.includes('Do NOT proceed to planning');
+    assert.ok(
+      specGate,
+      'new-project.md spec approval gate must instruct agent not to proceed until approved'
+    );
+    assert.ok(
+      roadmapGate,
+      'new-project.md roadmap approval gate must instruct agent not to proceed until approved'
+    );
+  });
+
+  test('new-project.md success_criteria references SPEC.md approval', () => {
+    assert.ok(
+      /SPEC\.md.*reviewed and approved/s.test(newProjectContent),
+      'new-project.md success_criteria must require SPEC.md approval by developer'
+    );
+  });
+
+  test('new-project.md success_criteria references ROADMAP.md approval', () => {
+    assert.ok(
+      /ROADMAP\.md.*reviewed and approved/s.test(newProjectContent),
+      'new-project.md success_criteria must require ROADMAP.md approval by developer'
+    );
+  });
+});
