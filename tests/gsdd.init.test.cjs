@@ -356,6 +356,8 @@ describe('gsdd init and update', () => {
     assert.match(executeSkill, /stale reference/i);
     assert.doesNotMatch(executeSkill, /MARK DONE in the plan file/i);
     assert.doesNotMatch(executeSkill, /â|ðŸ|âœ|â†/);
+    assert.match(executeSkill, /Mandatory context files read first when provided/i);
+    assert.match(executeSkill, /Authentication gates handled with the auth-gate protocol/i);
 
     const verifySkill = fs.readFileSync(
       path.join(tmpDir, '.agents', 'skills', 'gsdd-verify', 'SKILL.md'),

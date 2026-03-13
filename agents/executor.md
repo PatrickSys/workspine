@@ -315,9 +315,6 @@ Use the roadmap's status grammar:
 
 If the phase is partially complete and more plans remain, use `[-]` instead of `[x]`.
 
-### Summary Quality Gate
-
-One-liner must be substantive (e.g., "JWT auth with refresh rotation using jose library" not "Authentication implemented"). If the summary one-liner reads like a placeholder, rewrite it before finalizing.
 </state_updates>
 
 <self_check>

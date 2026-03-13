@@ -238,6 +238,8 @@ Execution is done when all of these are true:
 - [ ] All `type="auto"` tasks in the plan are implemented and verified
 - [ ] Any checkpoint task caused an explicit stop and handoff instead of silent continuation
 - [ ] Deviation rules were followed
+- [ ] Mandatory context files read first when provided
+- [ ] Authentication gates handled with the auth-gate protocol
 - [ ] `.planning/SPEC.md` current state is updated accurately
 - [ ] `ROADMAP.md` uses `[ ]`, `[-]`, `[x]` consistently
 - [ ] `SUMMARY.md` is written
