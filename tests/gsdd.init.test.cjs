@@ -371,6 +371,13 @@ describe('gsdd init and update', () => {
     assert.match(verifySkill, /treat this as re-verification/i);
     assert.match(verifySkill, /does not claim milestone-wide integration completeness/i);
     assert.doesNotMatch(verifySkill, /â|ðŸ|âœ|â†/);
+
+    // Gap closures from verify.md source audit (PR #17)
+    assert.match(verifySkill, /Do not return a flat symptom list/i);
+    assert.match(verifySkill, /requirements expected by roadmap scope but claimed by no plan/i);
+    assert.match(verifySkill, /do not collapse .* into prose-only body text/i);
+    assert.match(verifySkill, /verification basis/i);
+    assert.match(verifySkill, /Orphaned requirements must be reported/i);
   });
 
   test('delegates reference canonical role contracts', async () => {

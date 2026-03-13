@@ -15,6 +15,8 @@ Before starting, read these files:
 4. `.planning/SPEC.md` - requirements and constraints for the phase
 5. The relevant codebase files - the code that was actually built
 
+Establish your verification basis (must-have sources, requirement scope, previous report status) before beginning code inspection. Do not jump to loose file reading until this basis is explicit.
+
 If a previous `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md` exists, read it first and treat this as re-verification.
 </load_context>
 
@@ -54,6 +56,10 @@ For each truth:
 - identify the supporting artifacts
 - identify the key links that must work
 - decide whether it is programmatically verifiable or needs human review
+
+Also check for orphan requirements:
+- requirements expected by roadmap scope but claimed by no plan
+- requirements that no verified truth, artifact, or key link actually satisfies
 </must_haves>
 
 <verification_levels>
@@ -123,6 +129,26 @@ Also look for:
 - static mock responses where live behavior is expected
 - orphaned files added in the phase but never referenced
 </anti_pattern_scan>
+
+<grouped_gaps>
+Before finalizing the report, group related failures by concern:
+- truth failures that share the same broken artifact or key link
+- requirement failures caused by the same missing implementation seam
+- human-verification items that belong to the same user-visible flow
+
+Do not return a flat symptom list when the same underlying breakage explains multiple findings.
+</grouped_gaps>
+
+<requirements_coverage>
+Requirements coverage is not optional bookkeeping. For each phase requirement:
+1. Collect the phase requirements from the strongest available planning source
+2. Restate each requirement in concrete implementation terms
+3. Map each requirement to the truths, artifacts, and key links that should satisfy it
+4. Report any requirement with missing or contradictory evidence
+5. Report any requirement expected by roadmap scope but claimed by no plan
+
+Orphaned requirements must be reported even if the overall phase otherwise looks strong.
+</requirements_coverage>
 
 <report_format>
 Write `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md` with structured frontmatter first:
@@ -207,6 +233,7 @@ Status rules:
 
 Frontmatter guidance:
 - `phase`, `verified`, `status`, and `score` are the minimal report fields
+- when gaps or human checks exist, keep them machine-readable in frontmatter — do not collapse them into prose-only body text
 - keep `re_verification`, `gaps`, and `human_verification` structured when they materially help re-verification, gap closure, or explicit human handoff
 </report_format>
 
@@ -242,4 +269,6 @@ Verification is done when all of these are true:
 - [ ] `VERIFICATION.md` was written with structured frontmatter and a full report
 - [ ] Status is one of `passed`, `gaps_found`, or `human_needed`
 - [ ] The developer was informed of the result and recommended next step
+- [ ] Related failures grouped by concern, not returned as a flat symptom list
+- [ ] Requirements coverage chain completed (collect, restate, map, report, check orphans)
 </success_criteria>
