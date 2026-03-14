@@ -430,7 +430,7 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 
 **GSD:** 4 control-plane workflows — `pause-work.md` (123L), `resume-project.md` (307L), `progress.md` (382L), `health.md` (157L) = 969 lines. All depend on `STATE.md` for current position, `gsd-tools.cjs` for timestamps and init, and Claude-specific APIs (`Task()`, `AskUserQuestion`). Resume includes ASCII box UI, progress bars, interrupted-agent detection, and STATE.md reconstruction.
 
-**GSDD:** 2 workflows — `pause.md` (~80L) + `resume.md` (~120L) = ~200 lines.
+**GSDD:** 3 workflows — `pause.md` (~80L) + `resume.md` (~120L) + `progress.md` (~110L) = ~310 lines.
 
 **What was kept from GSD:**
 - Disk-based state detection (phase directories, checkpoint files, plan/summary presence)
@@ -439,8 +439,8 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 - Contextual resume routing (5 priority-ordered branches)
 - Quick-resume shortcut ("continue"/"go" = skip options, execute primary action)
 
-**What was stripped:**
-- `progress.md` (382L) — resume subsumes its status presentation and routing logic
+**What was stripped at D12 design time:**
+- `progress.md` (382L) — initially assessed as subsumed by resume; re-added as separate workflow after audit (see amendment below)
 - `health.md` (157L) — GSDD's simpler `.planning/` structure does not warrant a dedicated error taxonomy and repair workflow
 - `STATE.md` loading and reconstruction — GSDD has no STATE.md (D7)
 - `gsd-tools.cjs` CLI calls for timestamps, init resume, and commit
@@ -460,13 +460,34 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 
 **Design principle:** Derive state from primary artifacts (ROADMAP.md checkboxes, phase directories, checkpoint file), not from secondary summary files that can drift. This extends D7's elimination of STATE.md.
 
-**No new roles or delegates.** Pause and resume are orchestrator-level workflows (read files, present status, route). Same pattern as `audit-milestone.md`. Delegate count stays at 10.
+**No new roles or delegates.** Pause, resume, and progress are orchestrator-level workflows (read files, present status, route). Same pattern as `audit-milestone.md`. Delegate count stays at 10.
+
+**Progress amendment (2026-03-14):**
+
+The initial D12 assessment — that resume subsumes progress — turned out to be incomplete. An external audit (2026-03-13) explicitly listed `progress` as a required control-plane element in its top-3 highest-ROI recommendations. After delivering pause+resume, the gap became clear: the two workflows serve different contracts.
+
+| Workflow | Contract | Side effects |
+|----------|----------|--------------|
+| `resume.md` | Restore session context, load checkpoint, execute the primary next action | Checkpoint cleanup, state restoration, conversational resume |
+| `progress.md` | Read-only status query: where am I, what's next? | None — no files written, no state changed |
+
+A user who wants a quick status snapshot before deciding what to do next should not have to trigger a full session restore. Progress answers "where am I?" without side effects. Resume answers "restore me and get me moving."
+
+GSDD's `progress.md` (~109 lines) is a deep distillation of GSD's 382-line version:
+
+- **Kept from GSD:** project-existence check, ROADMAP.md phase-status parsing (`[ ]`/`[-]`/`[x]`), phase completion count, checkpoint-file detection, incomplete-work scanning (PLAN without SUMMARY, SUMMARY without VERIFICATION), quick-task log check, priority-ordered routing table
+- **Stripped:** `gsd-tools.cjs` CLI calls, `STATE.md` loading, progress-bar rendering, Recent Work from SUMMARY extracts, Key Decisions section, Blockers section, Pending Todos, Active Debug Sessions, Profile display, UAT gap routing
+
+Design principle unchanged: derive state from primary artifacts (ROADMAP.md, SPEC.md, phase directories, checkpoint file). No new roles, no new delegates.
 
 **Evidence:**
 - GSD source: `get-shit-done/workflows/pause-work.md` (123 lines, phase-scoped checkpoint)
 - GSD source: `get-shit-done/workflows/resume-project.md` (307 lines, STATE.md-dependent)
+- GSD source: `get-shit-done/workflows/progress.md` (382 lines, gsd-tools.cjs-dependent, STATE.md-dependent, progress bars, rich session dashboard)
 - GSDD: `distilled/workflows/pause.md` (project-scoped checkpoint, advisory git)
 - GSDD: `distilled/workflows/resume.md` (artifact-derived state, priority-ordered routing)
+- GSDD: `distilled/workflows/progress.md` (109 lines, read-only, no side effects, artifact-derived state)
+- External audit: `.internal-research/gsd-distilled-audit-13rd-march-2026.md` — Highest-ROI recommendation #3: "Add just enough: status/resume/progress/health"
 - D7 (milestone hierarchy): STATE.md replaced by ROADMAP.md inline status
 - D8 (advisory git): WIP commit is suggested, not mandated
 
