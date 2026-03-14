@@ -255,11 +255,11 @@ describe('I3 — Delegate Thinness', () => {
 describe('I4 — Workflow References', () => {
   const workflows = getWorkflowFiles();
 
-  test('exactly 9 workflows exist', () => {
-    assert.strictEqual(workflows.length, 9, `Expected 9 workflows, got ${workflows.length}: ${workflows.join(', ')}`);
+  test('exactly 10 workflows exist', () => {
+    assert.strictEqual(workflows.length, 10, `Expected 10 workflows, got ${workflows.length}: ${workflows.join(', ')}`);
   });
 
-  test('all 9 workflows exist by name', () => {
+  test('all 10 workflows exist by name', () => {
     const expected = [
       'audit-milestone.md',
       'execute.md',
@@ -267,6 +267,7 @@ describe('I4 — Workflow References', () => {
       'new-project.md',
       'pause.md',
       'plan.md',
+      'progress.md',
       'quick.md',
       'resume.md',
       'verify.md',
@@ -311,7 +312,7 @@ describe('I4 — Workflow References', () => {
 // --- I5: Session Management Workflows ---
 
 describe('I5 — Session Management Workflows', () => {
-  const SESSION_WORKFLOWS = ['pause.md', 'resume.md'];
+  const SESSION_WORKFLOWS = ['pause.md', 'resume.md', 'progress.md'];
 
   for (const wf of SESSION_WORKFLOWS) {
     test(`${wf} has no vendor API references (Task(), AskUserQuestion)`, () => {
@@ -374,6 +375,73 @@ describe('I5 — Session Management Workflows', () => {
   test('resume.md has no ~/.claude/ vendor paths', () => {
     const content = readWorkflow('resume.md');
     assert.ok(!content.includes('~/.claude/'), 'resume.md must not contain ~/.claude/ vendor paths');
+  });
+
+  test('progress.md has <prerequisites> section', () => {
+    const content = readWorkflow('progress.md');
+    assert.ok(content.includes('<prerequisites>'), 'progress.md must have <prerequisites> section');
+  });
+
+  test('progress.md references ROADMAP.md for state derivation', () => {
+    const content = readWorkflow('progress.md');
+    assert.ok(content.includes('ROADMAP.md'), 'progress.md must reference ROADMAP.md for state derivation');
+  });
+
+  test('progress.md references SPEC.md for project context', () => {
+    const content = readWorkflow('progress.md');
+    assert.ok(content.includes('SPEC.md'), 'progress.md must reference SPEC.md for project context');
+  });
+
+  test('progress.md is read-only (no file creation instructions)', () => {
+    const content = readWorkflow('progress.md');
+    // Check that process sections don't contain action verbs for file creation
+    const processMatch = content.match(/<process>([\s\S]*?)<\/process>/);
+    if (processMatch) {
+      const processContent = processMatch[1];
+      // These patterns indicate file-writing instructions, not references to existing files
+      assert.ok(!processContent.includes('Write `.planning/'), 'progress.md process must not instruct writing to .planning/');
+      assert.ok(!processContent.includes('Create `.planning/'), 'progress.md process must not instruct creating in .planning/');
+      assert.ok(!processContent.includes('Delete `.planning/'), 'progress.md process must not instruct deleting from .planning/');
+    }
+  });
+});
+
+// --- I5b: Session Workflow Scope Boundaries ---
+
+describe('I5b — Session Workflow Scope Boundaries', () => {
+  test('progress.md has scope boundary distinguishing from resume.md', () => {
+    const content = readWorkflow('progress.md');
+    assert.ok(
+      content.includes('NOT resume.md') || content.includes('not resume.md'),
+      'progress.md must have scope boundary distinguishing it from resume.md'
+    );
+  });
+
+  test('pause.md has scope boundary in <role>', () => {
+    const content = readWorkflow('pause.md');
+    assert.ok(
+      content.includes('Scope boundary'),
+      'pause.md must have scope boundary text in <role>'
+    );
+  });
+
+  test('resume.md has scope boundary in <role>', () => {
+    const content = readWorkflow('resume.md');
+    assert.ok(
+      content.includes('Scope boundary') || content.includes('unlike progress.md'),
+      'resume.md must have scope boundary text in <role>'
+    );
+  });
+
+  test('all 3 session workflows use named XML sections inside <process>', () => {
+    for (const wf of ['pause.md', 'resume.md', 'progress.md']) {
+      const content = readWorkflow(wf);
+      const hasNamedSections = /<(?!process|\/process|role|\/role|prerequisites|\/prerequisites|success_criteria|\/success_criteria)[a-z_]+>/.test(content);
+      assert.ok(
+        hasNamedSections,
+        `${wf} must use named XML sections inside <process> (not flat ## Step N: headings)`
+      );
+    }
   });
 });
 
@@ -872,7 +940,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
 // --- I8: Workflow Vendor API Cleanliness ---
 
 describe('I8 — Workflow Vendor API Cleanliness', () => {
-  // All 9 portable workflows must be free of vendor-specific APIs that
+  // All 10 portable workflows must be free of vendor-specific APIs that
   // would break the agent-agnostic portability guarantee.
   const VENDOR_APIS = [
     { name: 'AskUserQuestion', pattern: 'AskUserQuestion' },

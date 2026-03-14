@@ -37,6 +37,7 @@ const WORKFLOWS = [
   { name: 'gsdd-quick', workflow: 'quick.md', description: 'Quick task - plan and execute a sub-hour task outside the phase cycle', agent: 'Code', opencodeType: 'edit' },
   { name: 'gsdd-pause', workflow: 'pause.md', description: 'Pause work - save session context for seamless resumption', agent: 'Plan', opencodeType: 'plan' },
   { name: 'gsdd-resume', workflow: 'resume.md', description: 'Resume work - restore context and route to next action', agent: 'Plan', opencodeType: 'plan' },
+  { name: 'gsdd-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', agent: 'Plan', opencodeType: 'plan' },
 ];
 
 const COMMANDS = {

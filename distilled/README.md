@@ -47,9 +47,10 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 /gsdd:quick         -> .planning/quick/NNN/  (sub-hour task outside phases)
 /gsdd:pause         -> .planning/.continue-here.md  (session checkpoint)
 /gsdd:resume        -> restore context, route to next action
+/gsdd:progress      -> show status, route to next action
 ```
 
-## Current Status (updated 2026-03-13)
+## Current Status (updated 2026-03-14)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
@@ -59,10 +60,10 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 | `verify.md` | [OK] Source-audited | 5 gap closures against hardened verifier role contract: grouped-gap guidance, orphan detection, frontmatter enforcement, verification basis emphasis, requirements coverage chain |
 | `audit-milestone.md` | [OK] Defined, source-audited | Aggregates phase verification, cross-phase integration audit, auth protection checks, requirement reconciliation, and orphan detection into `MILESTONE-AUDIT.md` |
 | `quick.md` | [OK] | Quick-work lane for sub-hour tasks outside the phase cycle (D11) |
-| `pause.md` | [OK] | Session checkpoint writer with conversational handoff (D12) |
-| `resume.md` | [OK] | Session context restorer with priority-ordered routing (D12) |
-
-`map-codebase.md` is already available as a standalone refresh workflow. For the current init surface, refresh stale codebase maps with `/gsdd:map-codebase`.
+| `pause.md` | [OK] Source-audited | Session checkpoint writer with conversational handoff (D12) |
+| `resume.md` | [OK] Source-audited | Session context restorer with priority-ordered routing (D12) |
+| `progress.md` | [OK] Source-audited | Read-only status reporter with 6 named route branches, recent work, between-milestones detection (D12) |
+| `map-codebase.md` | [OK] Defined, source-audited | Standalone codebase mapping/refresh |
 
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
@@ -103,6 +104,8 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-quick/SKILL.md
   gsdd-pause/SKILL.md
   gsdd-resume/SKILL.md
+  gsdd-progress/SKILL.md
+  gsdd-map-codebase/SKILL.md
 .claude/agents/
   gsdd-plan-checker.md      # native-capable checker agent generated from the active plan-checker contract
 .claude/commands/
@@ -128,6 +131,7 @@ distilled/
     new-project.md
     map-codebase.md
     plan.md
+    progress.md
     execute.md
     verify.md
     audit-milestone.md

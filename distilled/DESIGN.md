@@ -31,15 +31,16 @@
 
 **What was dropped and where the rules went:**
 
-| Dropped file | Absorbed into | Rationale |
-|-------------|---------------|-----------|
-| STRUCTURE.md | CONVENTIONS.md ("Where to put new code") | Physical directory maps break the moment a folder is added. Stale structure causes agent hallucination. Modern agents use dynamic tools (tree-sitter, codebase indexing) to view current structure. |
-| INTEGRATIONS.md | STACK.md + CONVENTIONS.md | Database schemas and endpoint maps change daily. Agents should read definitive `schema.prisma` or `init.sql` dynamically, not trust a stale markdown summary. |
-| TESTING.md | CONVENTIONS.md ("How to mock the database", testing patterns) | Testing conventions are stable rules; test inventories are not. Rules belong in CONVENTIONS.md. |
+| Dropped file    | Absorbed into                                                 | Rationale                                                                                                                                                                                           |
+| --------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| STRUCTURE.md    | CONVENTIONS.md ("Where to put new code")                      | Physical directory maps break the moment a folder is added. Stale structure causes agent hallucination. Modern agents use dynamic tools (tree-sitter, codebase indexing) to view current structure. |
+| INTEGRATIONS.md | STACK.md + CONVENTIONS.md                                     | Database schemas and endpoint maps change daily. Agents should read definitive `schema.prisma` or `init.sql` dynamically, not trust a stale markdown summary.                                       |
+| TESTING.md      | CONVENTIONS.md ("How to mock the database", testing patterns) | Testing conventions are stable rules; test inventories are not. Rules belong in CONVENTIONS.md.                                                                                                     |
 
-**Core principle:** Drop the *state* (which rots), keep the *rules* (which don't). Maximum architectural discipline without feeding stale topologies into limited context windows.
+**Core principle:** Drop the _state_ (which rots), keep the _rules_ (which don't). Maximum architectural discipline without feeding stale topologies into limited context windows.
 
 **Evidence:**
+
 - GSD source: `agents/_archive/gsd-codebase-mapper.md` lines 72-79 (original 7-file model)
 - GSDD implementation: `agents/mapper.md` input/output contracts (4 files only)
 - External: LeanSpec "Context Economy" principle; Aider tree-sitter dynamic repomaps (2026 SOTA)
@@ -55,12 +56,12 @@
 
 **Merger table:**
 
-| Canonical role | Absorbs from GSD | Merger criteria |
-|---------------|-------------------|-----------------|
-| `integration-checker.md` | `gsd-integration-checker.md` | Cross-phase integration checking is structurally different from single-phase verification: different inputs (all phase SUMMARYs/VERIFICATIONs vs single phase), different scope (milestone-wide wiring vs phase goal), different algorithm (connectivity checks vs goal-backward). Extracted as standalone role rather than absorbed into verifier. |
-| `researcher.md` | `gsd-project-researcher.md` + `gsd-phase-researcher.md` | Same algorithm, different scope. Scope is an input parameter, not a role distinction. Clean merger. |
-| `planner.md` | `gsd-planner.md` + `gsd-plan-checker.md` | Reduces coordination overhead. **Tradeoff:** GSD's plan-checker was a fresh-context adversarial pass with a 3-cycle revision loop (planner -> checker -> revise x 3 max). GSDD keeps an explicit `plan-checker` contract, generates native planner/checker entry surfaces where runtimes can support the loop directly, and describes reduced-assurance fallback in the portable workflow when no independent checker runs. |
-| `verifier.md` | `gsd-verifier.md` | Phase-level goal-backward verification remains the verifier's scope. Cross-phase integration audit remains a separate milestone surface rather than being silently absorbed. GSDD keeps the compact verification-report base fields and also preserves richer structured verifier findings where they materially improve re-verification and gap closure. |
+| Canonical role           | Absorbs from GSD                                        | Merger criteria                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `integration-checker.md` | `gsd-integration-checker.md`                            | Cross-phase integration checking is structurally different from single-phase verification: different inputs (all phase SUMMARYs/VERIFICATIONs vs single phase), different scope (milestone-wide wiring vs phase goal), different algorithm (connectivity checks vs goal-backward). Extracted as standalone role rather than absorbed into verifier.                                                                         |
+| `researcher.md`          | `gsd-project-researcher.md` + `gsd-phase-researcher.md` | Same algorithm, different scope. Scope is an input parameter, not a role distinction. Clean merger.                                                                                                                                                                                                                                                                                                                         |
+| `planner.md`             | `gsd-planner.md` + `gsd-plan-checker.md`                | Reduces coordination overhead. **Tradeoff:** GSD's plan-checker was a fresh-context adversarial pass with a 3-cycle revision loop (planner -> checker -> revise x 3 max). GSDD keeps an explicit `plan-checker` contract, generates native planner/checker entry surfaces where runtimes can support the loop directly, and describes reduced-assurance fallback in the portable workflow when no independent checker runs. |
+| `verifier.md`            | `gsd-verifier.md`                                       | Phase-level goal-backward verification remains the verifier's scope. Cross-phase integration audit remains a separate milestone surface rather than being silently absorbed. GSDD keeps the compact verification-report base fields and also preserves richer structured verifier findings where they materially improve re-verification and gap closure.                                                                   |
 
 **Known tradeoffs in mergers:**
 
@@ -120,15 +121,16 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 **Direct distillations (1:1 source lineage):**
 
-| Canonical role | GSD source | Audit status |
-|---------------|------------|-------------|
-| `mapper.md` | `gsd-codebase-mapper.md` | source-audited |
-| `synthesizer.md` | `gsd-research-synthesizer.md` | source-audited (S12) |
-| `executor.md` | `gsd-executor.md` | source-audited (executor audit) |
-| `roadmapper.md` | `gsd-roadmapper.md` | source-audited (S12) |
-| `debugger.md` | `gsd-debugger.md` (standalone utility, not part of core lifecycle) | — |
+| Canonical role   | GSD source                                                         | Audit status                    |
+| ---------------- | ------------------------------------------------------------------ | ------------------------------- |
+| `mapper.md`      | `gsd-codebase-mapper.md`                                           | source-audited                  |
+| `synthesizer.md` | `gsd-research-synthesizer.md`                                      | source-audited (S12)            |
+| `executor.md`    | `gsd-executor.md`                                                  | source-audited (executor audit) |
+| `roadmapper.md`  | `gsd-roadmapper.md`                                                | source-audited (S12)            |
+| `debugger.md`    | `gsd-debugger.md` (standalone utility, not part of core lifecycle) | —                               |
 
 **Evidence:**
+
 - GSD originals preserved in `agents/_archive/` (11 files, git history intact via `git mv`)
 - GSDD canonicals in `agents/` (9 files + README.md)
 - `agents/README.md` lifecycle table maps each canonical role to its GSD sources
@@ -137,16 +139,17 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 ## 3. Two-Layer Architecture: Roles and Delegates
 
-**GSD:** Workflows embed role instructions inline. No separation between what an agent *is* and what it *does* in a given workflow. A single GSD workflow file (e.g., `new-project.md` at 851 lines) contains both orchestration logic and agent behavioral contracts.
+**GSD:** Workflows embed role instructions inline. No separation between what an agent _is_ and what it _does_ in a given workflow. A single GSD workflow file (e.g., `new-project.md` at 851 lines) contains both orchestration logic and agent behavioral contracts.
 
 **GSDD:** Two explicit layers.
 
-| Layer | Location | Purpose | Example |
-|-------|----------|---------|---------|
-| Roles | `agents/*.md` | Durable contracts: identity, algorithm, quality guarantees, anti-patterns | `agents/mapper.md` -- defines the mapper's forbidden-files rule, output format, verification protocol |
-| Delegates | `distilled/templates/delegates/*.md` | Thin task-specific wrappers: scoped instructions referencing a role | `mapper-tech.md` -- tells the mapper to focus on tech stack, write to STACK.md |
+| Layer     | Location                             | Purpose                                                                   | Example                                                                                               |
+| --------- | ------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Roles     | `agents/*.md`                        | Durable contracts: identity, algorithm, quality guarantees, anti-patterns | `agents/mapper.md` -- defines the mapper's forbidden-files rule, output format, verification protocol |
+| Delegates | `distilled/templates/delegates/*.md` | Thin task-specific wrappers: scoped instructions referencing a role       | `mapper-tech.md` -- tells the mapper to focus on tech stack, write to STACK.md                        |
 
 **Why two layers:**
+
 - Roles can be audited and improved independently of workflow wiring.
 - Delegates can be rewired (point to different output paths, change scope) without touching role semantics.
 - New workflows compose existing roles via new delegates without duplicating behavioral definitions.
@@ -156,22 +159,23 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 **Current delegates (10):**
 
-| Delegate | Role | Output | Workflow |
-|----------|------|--------|----------|
-| `mapper-tech.md` | mapper | `.planning/codebase/STACK.md` | map-codebase |
-| `mapper-arch.md` | mapper | `.planning/codebase/ARCHITECTURE.md` | map-codebase |
-| `mapper-quality.md` | mapper | `.planning/codebase/CONVENTIONS.md` | map-codebase |
-| `mapper-concerns.md` | mapper | `.planning/codebase/CONCERNS.md` | map-codebase |
-| `researcher-stack.md` | researcher | `.planning/research/STACK.md` | new-project |
-| `researcher-features.md` | researcher | `.planning/research/FEATURES.md` | new-project |
-| `researcher-architecture.md` | researcher | `.planning/research/ARCHITECTURE.md` | new-project |
-| `researcher-pitfalls.md` | researcher | `.planning/research/PITFALLS.md` | new-project |
-| `researcher-synthesizer.md` | synthesizer | `.planning/research/SUMMARY.md` | new-project |
-| `plan-checker.md` | planner | JSON checker report | plan (native adapters) |
+| Delegate                     | Role        | Output                               | Workflow               |
+| ---------------------------- | ----------- | ------------------------------------ | ---------------------- |
+| `mapper-tech.md`             | mapper      | `.planning/codebase/STACK.md`        | map-codebase           |
+| `mapper-arch.md`             | mapper      | `.planning/codebase/ARCHITECTURE.md` | map-codebase           |
+| `mapper-quality.md`          | mapper      | `.planning/codebase/CONVENTIONS.md`  | map-codebase           |
+| `mapper-concerns.md`         | mapper      | `.planning/codebase/CONCERNS.md`     | map-codebase           |
+| `researcher-stack.md`        | researcher  | `.planning/research/STACK.md`        | new-project            |
+| `researcher-features.md`     | researcher  | `.planning/research/FEATURES.md`     | new-project            |
+| `researcher-architecture.md` | researcher  | `.planning/research/ARCHITECTURE.md` | new-project            |
+| `researcher-pitfalls.md`     | researcher  | `.planning/research/PITFALLS.md`     | new-project            |
+| `researcher-synthesizer.md`  | synthesizer | `.planning/research/SUMMARY.md`      | new-project            |
+| `plan-checker.md`            | planner     | JSON checker report                  | plan (native adapters) |
 
 **Distribution model:** `gsdd init` copies role contracts from `agents/` to `.planning/templates/roles/` in consumer projects. Delegates in `.planning/templates/delegates/` reference the local role copy (`Read .planning/templates/roles/<role>.md`). Consumer projects are self-contained at runtime -- no dependency on the framework repo.
 
 **Evidence:**
+
 - `agents/README.md` (Two-Layer Architecture and Runtime Distribution sections)
 - `bin/gsdd.mjs` lines 84-102 (role copy step with existsSync guard)
 - `tests/gsdd.init.test.cjs` (validates role file existence and delegate-role references)
@@ -185,14 +189,15 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 **GSDD evolution (two phases):**
 
-| Phase | PR | What changed |
-|-------|-----|-------------|
-| A (one-hop) | PR 2 | Mapper delegates cross-referenced `<forbidden_files>` from the map-codebase skill. Security rules reachable but required reading a second file. |
-| B (zero-hop) | PR 4 | Full 12-category forbidden-files list absorbed into `agents/mapper.md`. Delegates reference the role contract directly. No second file needed. |
+| Phase        | PR   | What changed                                                                                                                                    |
+| ------------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| A (one-hop)  | PR 2 | Mapper delegates cross-referenced `<forbidden_files>` from the map-codebase skill. Security rules reachable but required reading a second file. |
+| B (zero-hop) | PR 4 | Full 12-category forbidden-files list absorbed into `agents/mapper.md`. Delegates reference the role contract directly. No second file needed.  |
 
 **The zero-hop rule:** Any rule that a delegate MUST follow belongs in the role contract it references, not in a cross-referenced workflow file that consumer projects may or may not have. When a delegate reads its role contract, it gets the complete behavioral and security contract in one read.
 
 **Forbidden-files categories in `agents/mapper.md`:**
+
 1. `.env`, `.env.*`, `*.env`
 2. `credentials.*`, `secrets.*`, `*secret*`, `*credential*`
 3. `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`
@@ -209,6 +214,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 **Hard stop:** Before writing CONCERNS.md, grep for `API_KEY`, `SECRET`, `PASSWORD`, `PRIVATE_KEY`, `-----BEGIN`, `Authorization:`. If hardcoded secrets found: STOP immediately, report to orchestrator. Mapper output gets committed to git -- leaked secrets are a security incident.
 
 **Evidence:**
+
 - `agents/mapper.md` lines 66-90 (Forbidden Files section + Hard stop)
 - `agents/_archive/gsd-codebase-mapper.md` lines 66-97 (original narrower rules)
 - PR 2 intermediate state (one-hop via SKILL.md cross-reference)
@@ -223,15 +229,16 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 **GSDD:** Conditional on `researchDepth` config:
 
-| researchDepth | Synthesizer behavior |
-|--------------|---------------------|
-| `fast` | Orchestrator writes SUMMARY.md inline from the 4 x 3-5 sentence summaries it holds in context. No delegate spawned. |
-| `balanced` | ResearchSynthesizer delegate spawned. Reads 4 full research files. Cross-references build order constraints, pitfall-to-phase mappings, feature-architecture conflicts that short summaries omit. |
-| `deep` | Same as balanced but researchers produce longer output (more material for synthesizer to cross-reference). |
+| researchDepth | Synthesizer behavior                                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fast`        | Orchestrator writes SUMMARY.md inline from the 4 x 3-5 sentence summaries it holds in context. No delegate spawned.                                                                               |
+| `balanced`    | ResearchSynthesizer delegate spawned. Reads 4 full research files. Cross-references build order constraints, pitfall-to-phase mappings, feature-architecture conflicts that short summaries omit. |
+| `deep`        | Same as balanced but researchers produce longer output (more material for synthesizer to cross-reference).                                                                                        |
 
 **Why conditional:** The synthesizer's value is in cross-referencing specific data across research dimensions. When `researchDepth=fast`, researchers produce 3-5 sentence summaries only -- there's nothing substantive to cross-reference. Spawning a synthesizer to reformat 4 short paragraphs wastes a context window and an agent hop.
 
 **Evidence:**
+
 - GSD source: `get-shit-done/workflows/new-project.md` lines 708-729 (always-spawn synthesizer)
 - GSDD: `distilled/templates/delegates/researcher-synthesizer.md` (active delegate, references `synthesizer.md`)
 - `agents/synthesizer.md` canonical contract (cross-reference algorithm)
@@ -253,13 +260,14 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 **Agent count implications:**
 
-| Scenario | Mappers spawned |
-|----------|----------------|
-| Brownfield, first run | 4 (one per focus area) |
+| Scenario               | Mappers spawned                                   |
+| ---------------------- | ------------------------------------------------- |
+| Brownfield, first run  | 4 (one per focus area)                            |
 | Brownfield, maps exist | 0 (skipped, user directed to standalone workflow) |
-| Greenfield | 0 (no codebase to map) |
+| Greenfield             | 0 (no codebase to map)                            |
 
 **Evidence:**
+
 - GSD source: `get-shit-done/workflows/map-codebase.md` lines 35-62 (staleness check with 3 options)
 - GSD source: `get-shit-done/workflows/new-project.md` lines 61-80 (brownfield offer delegates to map-codebase)
 - GSDD: `distilled/workflows/map-codebase.md` (standalone, re-runnable)
@@ -273,21 +281,23 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 **GSDD:** Merged to two files -- `.planning/SPEC.md` (combines PROJECT.md + REQUIREMENTS.md), `.planning/ROADMAP.md` (combines roadmap + inline status, replacing STATE.md). Same milestone semantics.
 
-| GSD file | GSDD equivalent | What changed |
-|----------|----------------|-------------|
-| PROJECT.md | `.planning/SPEC.md` (project definition section) | Merged -- no separate project definition file |
-| REQUIREMENTS.md | `.planning/SPEC.md` (requirements section) | Merged -- requirements live alongside project context |
-| STATE.md | `.planning/ROADMAP.md` (inline status per phase) | Dropped as separate file -- checkbox status in `.planning/ROADMAP.md` is sufficient |
-| ROADMAP.md | `.planning/ROADMAP.md` | Simplified format -- checkboxes, no REQ-ID traceability tables |
-| MILESTONES.md | `.planning/milestones/` directory | Archive of completed milestone roadmaps |
+| GSD file        | GSDD equivalent                                  | What changed                                                                        |
+| --------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| PROJECT.md      | `.planning/SPEC.md` (project definition section) | Merged -- no separate project definition file                                       |
+| REQUIREMENTS.md | `.planning/SPEC.md` (requirements section)       | Merged -- requirements live alongside project context                               |
+| STATE.md        | `.planning/ROADMAP.md` (inline status per phase) | Dropped as separate file -- checkbox status in `.planning/ROADMAP.md` is sufficient |
+| ROADMAP.md      | `.planning/ROADMAP.md`                           | Simplified format -- checkboxes, no REQ-ID traceability tables                      |
+| MILESTONES.md   | `.planning/milestones/` directory                | Archive of completed milestone roadmaps                                             |
 
 **Preserved semantics:**
+
 - `.planning/SPEC.md` = project lifetime (grows with validated requirements)
 - `.planning/ROADMAP.md` = current milestone only (archived when milestone completes)
 - Phase numbering continues across milestones
 - Researchers receive `milestone_context: [subsequent]` on new milestones -- they focus on new features, not existing system
 
 **Evidence:**
+
 - GSD source: `get-shit-done/workflows/new-milestone.md` lines 101-173 (milestone-aware researchers), line 269 (phase numbering continuation)
 - GSDD: `distilled/README.md` lifecycle diagram
 - `.planning/SPEC.md` "Long-Term Lifecycle" section
@@ -301,12 +311,14 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 **GSDD:** Git guidance is advisory. Repository and team conventions take precedence over framework defaults.
 
 **What was removed:**
+
 - Phase/plan/task ID formatting in commit messages
 - Mandatory one-commit-per-task rule in executor algorithm
 - Mandatory commits at TDD RED/GREEN steps in executor contract
 - Phase-scoped branch naming in generated governance
 
 **What was kept:**
+
 - `gitProtocol` config key in `.planning/config.json` (stable, not renamed)
 - Advisory guidance fields: `branch`, `commit`, `pr` (user fills in or accepts defaults)
 - Defaults state: "Follow the existing repo or team convention"
@@ -314,6 +326,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 **Why advisory:** GSDD targets diverse teams and repos. Imposing one-commit-per-task or phase-scoped branch names on a repo that uses squash-and-merge or trunk-based development creates friction without value. The framework provides structure for planning -- it should not dictate git workflow.
 
 **Evidence:**
+
 - GSD source: `agents/_archive/gsd-executor.md` (mandatory commit in algorithm, TDD flow)
 - GSDD: `agents/executor.md` lines 57-64 (Git Guidance -- repo-native, advisory)
 - PR 5 (merged as PR #7): removed rigid git naming from workflows, adapters, generated governance
@@ -328,29 +341,30 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 **GSD's vendor lock-in surface:**
 
-| API | Call sites in GSD | GSDD replacement |
-|-----|------------------|------------------|
-| `AskUserQuestion` | 38+ (15 workflows + 14 commands) | Plain text: "Ask the user: ..." |
-| `Task()` subagent | 35+ across 15 workflows | `<delegate>` blocks with markdown instructions |
-| `SlashCommand()` | 4 call sites | Skill references or inline workflow steps |
-| `~/.claude/` paths | 39+ files | Install-time paths via CLI |
-| `gsd-tools.cjs` CLI | 28 workflow files | `bin/gsdd.mjs` (simplified) |
+| API                 | Call sites in GSD                | GSDD replacement                               |
+| ------------------- | -------------------------------- | ---------------------------------------------- |
+| `AskUserQuestion`   | 38+ (15 workflows + 14 commands) | Plain text: "Ask the user: ..."                |
+| `Task()` subagent   | 35+ across 15 workflows          | `<delegate>` blocks with markdown instructions |
+| `SlashCommand()`    | 4 call sites                     | Skill references or inline workflow steps      |
+| `~/.claude/` paths  | 39+ files                        | Install-time paths via CLI                     |
+| `gsd-tools.cjs` CLI | 28 workflow files                | `bin/gsdd.mjs` (simplified)                    |
 
 **Adapter output per tool:**
 
-| Tool | Generated surface | Trigger |
-|------|------------------|---------|
-| Any (portable) | `.agents/skills/gsdd-*/SKILL.md` | Always generated on `gsdd init` |
-| Claude Code | `.claude/skills/gsdd-*/SKILL.md` + `.claude/commands/gsdd-plan.md` (compatibility alias for `plan`) + `.claude/agents/gsdd-plan-checker.md` | `--tools claude` |
-| Codex CLI | `.agents/skills/gsdd-*/SKILL.md` | Always generated on `gsdd init`; no Codex-specific adapter file required |
-| OpenCode | `.opencode/commands/gsdd-*.md` + `.opencode/agents/gsdd-plan-checker.md` | `--tools opencode` |
-| Cursor/Copilot/Gemini | Root `AGENTS.md` (bounded block) | `--tools agents` |
+| Tool                  | Generated surface                                                                                                                           | Trigger                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Any (portable)        | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Always generated on `gsdd init`                                          |
+| Claude Code           | `.claude/skills/gsdd-*/SKILL.md` + `.claude/commands/gsdd-plan.md` (compatibility alias for `plan`) + `.claude/agents/gsdd-plan-checker.md` | `--tools claude`                                                         |
+| Codex CLI             | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Always generated on `gsdd init`; no Codex-specific adapter file required |
+| OpenCode              | `.opencode/commands/gsdd-*.md` + `.opencode/agents/gsdd-plan-checker.md`                                                                    | `--tools opencode`                                                       |
+| Cursor/Copilot/Gemini | Root `AGENTS.md` (bounded block)                                                                                                            | `--tools agents`                                                         |
 
 Codex is skills-first because the Codex CLI already supports repository skills directly. GSDD should not generate a `.codex/AGENTS.md` file just to simulate a native path that the runtime does not need. Runtime validation status belongs in the internal status docs, not in this design record.
 
 **Why generation over conversion:** Converting from a vendor-specific source is lossy and brittle -- every new agent needs a new converter. Generating tool-specific files from vendor-agnostic markdown is lossless and scales linearly. Pattern validated by OpenSpec (24 AI tools, 48 contributors).
 
 **Evidence:**
+
 - GSD source: `bin/install.js` (converter with per-runtime conversion logic)
 - GSD source: `get-shit-done/workflows/new-project.md` (851 lines, 10+ AskUserQuestion calls, 7 Task() calls)
 - GSDD: `bin/gsdd.mjs` (thin CLI entrypoint and adapter dispatcher after the boundary cleanup)
@@ -371,16 +385,19 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 **The rule:** Delegates write full documents to disk. They return 3-5 sentence summaries to the orchestrator. The orchestrator never receives document contents in its conversation context.
 
 **Why this matters:**
+
 - LLM context windows are finite. An orchestrator that receives 4 full research files (each 200+ lines) before writing `.planning/SPEC.md` will be context-starved for the spec-writing step.
 - Disk is unlimited. Downstream agents (synthesizer, planner) read files directly when they need the full content.
 - Summaries give the orchestrator enough signal to make routing decisions (skip synthesis? flag a blocker?) without consuming the context budget.
 
 **Implementation:**
+
 - Each delegate's instructions end with: "Return a 3-5 sentence summary of key findings. Do NOT return the full document contents."
 - Output templates in `.planning/templates/research/` and `.planning/templates/codebase/` define the on-disk format.
 - The synthesizer reads all 4 research files from disk -- it is the only agent that sees full research content.
 
 **Evidence:**
+
 - GSD source: `get-shit-done/workflows/new-project.md` lines 544-706 (4 researchers write to files, return summaries)
 - GSDD: all 9 delegate files (return format instructions)
 - GSDD: `agents/synthesizer.md` (reads full research files from disk)
@@ -396,12 +413,14 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 **GSDD:** Single mode, ~120 lines. Conditional verifier via `config.json`, LOG.md tracking, advisory git, direct role references.
 
 **What was kept:**
+
 - `.planning/quick/NNN-slug/` directory structure with sequential numbering
 - 1-3 task maximum for quick plans
 - Separate tracking from phase work (quick tasks don't touch ROADMAP.md)
 - Reuse of planner, executor, and verifier roles (no new roles or delegates)
 
 **What was stripped:**
+
 - `--full` flag duality (use the full phase cycle when you need plan-checking depth)
 - `STATE.md` tracking (eliminated in D7; replaced with append-only LOG.md)
 - `gsd-tools.cjs` CLI calls for init, commit, and slug generation
@@ -410,6 +429,7 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 - Plan-checker loop for quick tasks (the full phase workflow handles this when needed)
 
 **What was added:**
+
 - Advisory git protocol (D8) — follows repo conventions, no framework-imposed commit format
 - Context isolation (D10) — delegates write to disk, return summaries
 - Conditional verifier toggle via `config.json` `workflow.verifier` setting
@@ -418,6 +438,7 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 **No new delegates.** Quick workflow uses `<delegate>` blocks referencing existing role contracts directly (same pattern as `audit-milestone.md`). Delegate count stays at 10.
 
 **Evidence:**
+
 - GSD source: `get-shit-done/workflows/quick.md` (454 lines, two modes, STATE.md tracking)
 - GSDD: `distilled/workflows/quick.md` (~120 lines, single mode, LOG.md tracking)
 - D7 (milestone hierarchy): STATE.md replaced by ROADMAP.md inline status
@@ -430,17 +451,19 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 
 **GSD:** 4 control-plane workflows — `pause-work.md` (123L), `resume-project.md` (307L), `progress.md` (382L), `health.md` (157L) = 969 lines. All depend on `STATE.md` for current position, `gsd-tools.cjs` for timestamps and init, and Claude-specific APIs (`Task()`, `AskUserQuestion`). Resume includes ASCII box UI, progress bars, interrupted-agent detection, and STATE.md reconstruction.
 
-**GSDD:** 2 workflows — `pause.md` (~80L) + `resume.md` (~120L) = ~200 lines.
+**GSDD:** 3 workflows — `pause.md` (~107L) + `resume.md` (~139L) + `progress.md` (~200L) = ~446 lines. All three now use named XML sections inside `<process>` (aligned with core workflow conventions) and explicit scope boundaries in `<role>`.
 
 **What was kept from GSD:**
+
 - Disk-based state detection (phase directories, checkpoint files, plan/summary presence)
 - Conversational pause gathering (ask the user to fill gaps artifacts can't answer)
 - `.continue-here.md` checkpoint file with structured sections
 - Contextual resume routing (5 priority-ordered branches)
 - Quick-resume shortcut ("continue"/"go" = skip options, execute primary action)
 
-**What was stripped:**
-- `progress.md` (382L) — resume subsumes its status presentation and routing logic
+**What was stripped at D12 design time:**
+
+- `progress.md` (382L) — initially assessed as subsumed by resume; re-added as separate workflow after audit (see amendment below)
 - `health.md` (157L) — GSDD's simpler `.planning/` structure does not warrant a dedicated error taxonomy and repair workflow
 - `STATE.md` loading and reconstruction — GSDD has no STATE.md (D7)
 - `gsd-tools.cjs` CLI calls for timestamps, init resume, and commit
@@ -452,6 +475,7 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 - Mandatory WIP commit format
 
 **What was added:**
+
 - Project-scoped checkpoint (single known location `.planning/.continue-here.md` vs GSD's phase-scoped glob)
 - Quick-task awareness (LOG.md incomplete entries detected by both pause and resume)
 - Workflow-type frontmatter in checkpoint (`workflow`, `phase`, `timestamp`) for resume routing
@@ -460,13 +484,35 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 
 **Design principle:** Derive state from primary artifacts (ROADMAP.md checkboxes, phase directories, checkpoint file), not from secondary summary files that can drift. This extends D7's elimination of STATE.md.
 
-**No new roles or delegates.** Pause and resume are orchestrator-level workflows (read files, present status, route). Same pattern as `audit-milestone.md`. Delegate count stays at 10.
+**No new roles or delegates.** Pause, resume, and progress are orchestrator-level workflows (read files, present status, route). Same pattern as `audit-milestone.md`. Delegate count stays at 10.
+
+**Progress amendment (2026-03-14):**
+
+The initial D12 assessment — that resume subsumes progress — turned out to be incomplete. An external audit (2026-03-13) explicitly listed `progress` as a required control-plane element in its top-3 highest-ROI recommendations. After delivering pause+resume, the gap became clear: the two workflows serve different contracts.
+
+| Workflow      | Contract                                                                  | Side effects                                                 |
+| ------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `resume.md`   | Restore session context, load checkpoint, execute the primary next action | Checkpoint cleanup, state restoration, conversational resume |
+| `progress.md` | Read-only status query: where am I, what's next?                          | None — no files written, no state changed                    |
+
+A user who wants a quick status snapshot before deciding what to do next should not have to trigger a full session restore. Progress answers "where am I?" without side effects. Resume answers "restore me and get me moving."
+
+GSDD's `progress.md` (~200 lines) is a deep distillation of GSD's 382-line version:
+
+- **Kept from GSD:** project-existence check, ROADMAP.md phase-status parsing (`[ ]`/`[-]`/`[x]`), phase completion count, checkpoint-file detection, incomplete-work scanning (PLAN without SUMMARY, SUMMARY without VERIFICATION), quick-task log check, priority-ordered routing with 6 named branches (A-F) and output blocks, recent work from 2-3 most recent SUMMARY.md files, between-milestones detection (SPEC exists, ROADMAP absent), edge case handling for compound states, typed filled-in example
+- **Stripped:** `gsd-tools.cjs` CLI calls, `STATE.md` loading, progress-bar rendering, Key Decisions section, Blockers section, Pending Todos, Active Debug Sessions, Profile display, UAT gap routing
+
+Design principle unchanged: derive state from primary artifacts (ROADMAP.md, SPEC.md, phase directories, checkpoint file). No new roles, no new delegates.
 
 **Evidence:**
+
 - GSD source: `get-shit-done/workflows/pause-work.md` (123 lines, phase-scoped checkpoint)
 - GSD source: `get-shit-done/workflows/resume-project.md` (307 lines, STATE.md-dependent)
+- GSD source: `get-shit-done/workflows/progress.md` (382 lines, gsd-tools.cjs-dependent, STATE.md-dependent, progress bars, rich session dashboard)
 - GSDD: `distilled/workflows/pause.md` (project-scoped checkpoint, advisory git)
 - GSDD: `distilled/workflows/resume.md` (artifact-derived state, priority-ordered routing)
+- GSDD: `distilled/workflows/progress.md` (109 lines, read-only, no side effects, artifact-derived state)
+- External audit: `.internal-research/gsd-distilled-audit-13th-march-2026.md` — Highest-ROI recommendation #3: "Add just enough: status/resume/progress/health"
 - D7 (milestone hierarchy): STATE.md replaced by ROADMAP.md inline status
 - D8 (advisory git): WIP commit is suggested, not mandated
 
@@ -475,9 +521,9 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 ## Maintenance
 
 This document is updated when:
+
 - A design decision is revised or reversed (update the relevant section, note the change)
 - A new structural decision lands that affects how GSDD diverges from GSD (add a new section)
 - Evidence is found that contradicts a stated rationale (update or remove the claim)
 
 Do not add speculative decisions. Every section must cite implementation artifacts (files, PRs, tests) and at least one GSD source file for comparison.
-
