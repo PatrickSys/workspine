@@ -1439,4 +1439,162 @@ describe('gsdd init and update', () => {
       assert.match(result.output, /Run gsdd update/);
     });
   });
+
+  // --- Generation Manifest Tests ---
+
+  describe('generation manifest', () => {
+    test('init writes generation-manifest.json with correct shape', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+      assert.ok(fs.existsSync(manifestPath), 'generation-manifest.json must exist after init');
+
+      const manifest = readJson(manifestPath);
+      assert.ok(manifest.frameworkVersion, 'manifest must have frameworkVersion');
+      assert.ok(manifest.generatedAt, 'manifest must have generatedAt');
+      assert.ok(manifest.templates, 'manifest must have templates');
+      assert.ok(manifest.templates.delegates, 'manifest must have templates.delegates');
+      assert.ok(manifest.templates.research, 'manifest must have templates.research');
+      assert.ok(manifest.templates.codebase, 'manifest must have templates.codebase');
+      assert.ok(manifest.templates.root, 'manifest must have templates.root');
+      assert.ok(manifest.roles, 'manifest must have roles');
+
+      // Verify delegate count (>=10)
+      const delegateCount = Object.keys(manifest.templates.delegates).length;
+      assert.ok(delegateCount >= 10, `Expected >=10 delegate hashes, got ${delegateCount}`);
+
+      // Verify role count (>=9)
+      const roleCount = Object.keys(manifest.roles).length;
+      assert.ok(roleCount >= 9, `Expected >=9 role hashes, got ${roleCount}`);
+
+      // Verify SHA-256 format (64 hex chars)
+      const firstDelegateHash = Object.values(manifest.templates.delegates)[0];
+      assert.match(firstDelegateHash, /^[a-f0-9]{64}$/, 'hash must be SHA-256 hex');
+    });
+
+    test('update --templates refreshes corrupted delegate', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      // Corrupt a delegate
+      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+      fs.writeFileSync(delegatePath, 'stale content');
+
+      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+      assert.strictEqual(result.exitCode, 0);
+      assert.match(result.output, /refreshed delegates\/mapper-tech\.md/);
+
+      // Verify content was restored
+      const restored = fs.readFileSync(delegatePath, 'utf-8');
+      assert.ok(restored.includes('role'), 'Restored delegate must reference role contract');
+      assert.notStrictEqual(restored, 'stale content', 'Delegate must no longer be stale');
+    });
+
+    test('update --templates warns about user-modified files', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      // Modify a delegate (simulates user edit — hash differs from manifest)
+      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+      fs.writeFileSync(delegatePath, 'user-modified content');
+
+      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+      assert.match(result.output, /WARN.*mapper-tech\.md/);
+    });
+
+    test('update --dry does not write files', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      // Corrupt a delegate
+      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+      fs.writeFileSync(delegatePath, 'stale content');
+
+      const result = await runCliAsMain(tmpDir, ['update', '--templates', '--dry']);
+      assert.match(result.output, /would refresh delegates\/mapper-tech\.md/);
+      assert.match(result.output, /Dry run/);
+
+      // File must still be stale
+      const content = fs.readFileSync(delegatePath, 'utf-8');
+      assert.strictEqual(content, 'stale content', 'Dry run must not modify files');
+    });
+
+    test('update --templates refreshes role contracts', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      // Corrupt a role
+      const rolePath = path.join(tmpDir, '.planning', 'templates', 'roles', 'mapper.md');
+      fs.writeFileSync(rolePath, 'stale role');
+
+      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+      assert.match(result.output, /refreshed roles\/mapper\.md/);
+
+      const restored = fs.readFileSync(rolePath, 'utf-8');
+      assert.ok(restored.includes('Responsibility') || restored.includes('<role>'), 'Restored role must contain role contract content');
+    });
+
+    test('update --templates skips unchanged files', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      // Run update --templates without corrupting anything
+      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+      assert.ok(!result.output.includes('refreshed delegates/'), 'Should not refresh unchanged delegates');
+      assert.ok(!result.output.includes('refreshed roles/'), 'Should not refresh unchanged roles');
+    });
+
+    test('update without --templates does not touch templates', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      // Corrupt a delegate
+      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+      fs.writeFileSync(delegatePath, 'stale content');
+
+      const result = await runCliAsMain(tmpDir, ['update']);
+      // No template refresh output
+      assert.ok(!result.output.includes('refreshed delegates/'), 'Plain update must not refresh templates');
+
+      // File must still be stale
+      const content = fs.readFileSync(delegatePath, 'utf-8');
+      assert.strictEqual(content, 'stale content', 'Plain update must not modify templates');
+    });
+  });
 });

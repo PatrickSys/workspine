@@ -23,6 +23,7 @@
 13. [Mechanical Invariant Enforcement](#13-mechanical-invariant-enforcement)
 14. [Headless Mode](#14-headless-mode)
 15. [Model Profile Propagation](#15-model-profile-propagation)
+16. [Template Versioning via Generation Manifest](#16-template-versioning-via-generation-manifest)
 
 ---
 
@@ -690,6 +691,58 @@ native checker surfaces honest and explicit. Broader delegate/runtime propagatio
   is why GSDD no longer infers OpenCode ids from vendor releases
   (developers.openai.com/api/docs/models/gpt-5.4)
 - Agent Skills open standard: no `model:` field in spec (agentskills.io/specification) - no change
+
+---
+
+## 16. Template Versioning via Generation Manifest
+
+**GSD:** `install.js` uses SHA-256 manifest (`installedFileHashes`) plus `gsd-local-patches/` backup directory
+(lines 1227-1327). On update, GSD backs up user-modified files before overwriting, enabling rollback.
+
+**GSDD:** Generation manifest in `.planning/generation-manifest.json`, opt-in `--templates` flag on
+`gsdd update`, warn-but-overwrite semantics (no backup directory), `--dry` preview mode.
+
+**Key differences from GSD:**
+- **No backup directory.** Git handles recovery — users can `git checkout` to restore any overwritten
+  template. Adding a `gsd-local-patches/` equivalent would introduce stale-state complexity that Git
+  already solves.
+- **Opt-in flag.** `gsdd update` without `--templates` preserves current behavior (adapter/skill refresh
+  only). Template refresh is explicitly requested, so users are not surprised by file overwrites.
+- **Project-scoped manifest.** `generation-manifest.json` lives in `.planning/` alongside other project
+  artifacts, making it portable and inspectable. The manifest records SHA-256 hashes of all installed
+  templates and role contracts at init/update time.
+- **Modification detection.** When `--templates` runs, GSDD compares installed file hashes against the
+  manifest to detect user modifications. Modified files trigger a `WARN` before overwrite. Files matching
+  the manifest (unchanged) are silently refreshed. Files matching source (already current) are skipped.
+
+**Manifest shape:**
+```json
+{
+  "frameworkVersion": "v1.2",
+  "generatedAt": "ISO-8601",
+  "templates": {
+    "delegates": { "file.md": "sha256..." },
+    "research": { ... },
+    "codebase": { ... },
+    "root": { "agents.block.md": "sha256..." }
+  },
+  "roles": { "mapper.md": "sha256..." }
+}
+```
+
+**`FRAMEWORK_VERSION` vs `initVersion`:** `initVersion` (currently `v1.1`) tracks config schema version.
+`FRAMEWORK_VERSION` (currently `v1.2`) tracks template/generation versions in the manifest. They are
+independent concerns — config shape can change without template changes and vice versa.
+
+**Evidence:**
+- GSD `install.js`: SHA-256 manifest + backup directory pattern
+  (`get-shit-done/install.js` lines 1227-1327)
+- OpenSpec: managed blocks with bounded upsert for vendor-specific surfaces
+  (openspec.dev)
+- Angular/Turborepo/Next.js: ordered migrations with dry-run preview
+  (angular.dev/cli/update, turbo.build/repo/docs/guides/migrate)
+- Langfuse: generation/prompt versioning with hash-based change detection
+  (langfuse.com/docs/prompts/get-started)
 
 ---
 
