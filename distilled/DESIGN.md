@@ -21,6 +21,7 @@
 11. [Quick-Work Lane](#11-quick-work-lane)
 12. [Session Persistence Without State File](#12-session-persistence-without-state-file)
 13. [Mechanical Invariant Enforcement](#13-mechanical-invariant-enforcement)
+14. [Headless Mode](#14-headless-mode)
 
 ---
 
@@ -547,6 +548,52 @@ Design principle unchanged: derive state from primary artifacts (ROADMAP.md, SPE
 - External audit (2026-03-13): recommendation #4 "Mechanize the framework's invariants"
 - GSD source: no equivalent test infrastructure
 - PRs #20-23: orphan `</output>` tags survived 4 manual review cycles before G4 caught them
+
+---
+
+## 14. Headless Mode
+
+**GSD:** `--auto` flag in `new-project.md` — skips interactive questioning, requires idea document,
+auto-approves requirements and roadmap, auto-advances to plan phase. Implemented across 5 workflow files
+with `AskUserQuestion` API gates.
+
+**GSDD:** `gsdd init --auto --tools <platform>` — non-interactive CLI bootstrap. Workflow-level auto mode
+via `autoAdvance: true` in `.planning/config.json` + `<auto_mode>` section in `new-project.md`.
+
+**Key design choices:**
+
+1. **Brief-file over argument-passing.** GSD passes the idea document as a workflow argument or pasted text.
+   GSDD uses a well-known file path (`.planning/PROJECT_BRIEF.md`) because:
+   - File reads work on every agent platform (portable)
+   - Brief can be inspected and edited before the workflow runs
+   - Matches GSDD's "documents to disk" principle (D10)
+   - CI pipelines can prepare the brief as a build artifact
+
+2. **Config-driven, not flag-driven at the workflow level.** The CLI sets `autoAdvance: true` in config.
+   The workflow reads config, not CLI arguments. This means any agent on any platform can detect
+   auto mode by reading config.json — no vendor-specific argument parsing required.
+
+3. **No auto-advance to plan phase.** GSD auto-chains: new-project → discuss → plan → execute.
+   GSDD stops after SPEC.md + ROADMAP.md are created. Reason: GSDD doesn't have a discuss-phase
+   workflow, and chaining the full lifecycle requires auto-mode support in plan.md/execute.md/verify.md
+   (future work). Stopping after init gives CI systems a review checkpoint.
+
+4. **Unified with existing non-TTY fallback.** `bin/gsdd.mjs` already had a non-interactive path
+   for piped stdin. `--auto` and the TTY fallback now share `buildDefaultConfig()`, reducing
+   code duplication and ensuring identical default config shape.
+
+**Evidence:**
+
+- GSD source: `get-shit-done/workflows/new-project.md` lines 9-40 — direct predecessor and
+  only comparable headless workflow found in reviewed spec-framework sources
+- OpenFang comparison: capability-gate emphasis supports keeping security review explicit even in
+  automated flows, which is why auto mode inserts a deferred gate-review placeholder instead of
+  silently omitting the section
+- Claude Code: `-p` flag for headless execution with `--allowedTools` for access control
+  (docs.anthropic.com)
+- Codex CLI: `--quiet` and `--auto-edit` flags for non-interactive modes
+  (developers.openai.com/codex/cli/reference)
+- Cline CLI 2.0: explicit headless CI/CD mode (devops.com, 2025)
 
 ---
 

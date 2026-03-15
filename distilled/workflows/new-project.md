@@ -5,6 +5,26 @@ You are a thinking partner, not an interrogator. Ask good questions. Follow thre
 Your output: SPEC.md (the single source of truth) and ROADMAP.md (the execution plan).
 </role>
 
+<auto_mode>
+Check `.planning/config.json` for `autoAdvance: true`. If NOT set, skip this section entirely.
+
+When `autoAdvance: true`, this workflow runs non-interactively:
+
+1. **Input:** Read `.planning/PROJECT_BRIEF.md`. If it does not exist, stop with a clear error: "Auto mode requires a project brief. Provide one via `gsdd init --auto --brief <path>` or place it at `.planning/PROJECT_BRIEF.md`."
+
+2. **Extract context from brief:** Parse the brief document to understand the project goal, target users, constraints, requirements, and out-of-scope items. Apply the same requirement categorization as `<questioning>` (Table Stakes / Differentiators / Out of Scope). Do NOT ask interactive questions.
+
+3. **Skip approval gates:** When `autoAdvance: true`, skip `<approval_gate id="spec">` and `<approval_gate id="roadmap">`. Create and save the artifacts without waiting for user confirmation.
+
+4. **Keep research:** Research still runs based on `workflow.research` and `researchDepth` config values. Auto mode skips interaction, not quality.
+
+5. **Keep quality gates:** All quality checks in `<spec_creation>` and `<roadmap_creation>` still apply. Thoroughness is preserved; only user wait-points are removed.
+
+6. **After completion:** Report what was created and any assumptions inferred from the brief. Do NOT auto-advance to planning — the user or CI system decides when to start planning.
+
+All other sections (`<detect_mode>`, `<codebase_context>`, `<research>`, `<spec_creation>`, `<roadmap_creation>`, `<success_criteria>`) execute normally. Auto mode bypasses: the `<questioning>` section, both `<approval_gate>` blocks, the user question in `<project_principles>`, and the user question in `<capability_gates>`. All other workflow logic executes normally.
+</auto_mode>
+
 <load_context>
 Before starting, read these files (if they exist):
 1. `AGENTS.md` (root) — understand the full SDD workflow and governance rules.
@@ -25,6 +45,9 @@ Before starting, read these files (if they exist):
 <project_principles>
 **(SOTA Insight: Derived from Spec-Kit)**
 Before diving into technical specifications, establish the core governing principles of the project.
+If `autoAdvance: true` in `.planning/config.json`, skip this question. Infer core principles
+from the project brief (code quality signals, constraint language, scope decisions) and note
+the inferred principles in the completion report. Otherwise:
 Ask the user: "What are the core principles for this project regarding code quality, UI consistency, or performance?"
 Capture these directly at the top of the upcoming `SPEC.md` to guide all future agent execution.
 </project_principles>
@@ -268,6 +291,9 @@ These strict schemas MUST be included in the `SPEC.md` to prevent agent hallucin
 <capability_gates>
 **(SOTA Insight: Derived from OpenFang - "16 Security Systems & Capability Gates")**
 Before finishing SPEC.md, explicitly define what the agents are NOT allowed to do automatically without human approval.
+If `autoAdvance: true`, skip this question. Add a deferred placeholder to SPEC.md:
+"## Capability & Security Gates\n_Deferred — auto mode cannot elicit gate preferences; requires explicit review before production deployment._"
+Otherwise:
 Ask the user: "Are there any destructive actions, purchases, or external API calls that should require mandatory human approval (Capability Gates)?"
 Add these into the new `## Capability & Security Gates` section of the SPEC.md.
 </capability_gates>
@@ -281,7 +307,7 @@ After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
 4. **Requirements are ordered** by priority within each category
 5. **Out of Scope is populated** — includes things the developer explicitly said "not now" AND anti-features found in Research.
 6. **Key Decisions are logged** — any choices made during questioning or dictated by the SOTA research.
-7. **Capability & Security Gates are defined** — explicit human-in-the-loop triggers resulting from OpenFang research.
+7. **Capability & Security Gates are handled explicitly** — define concrete human-in-the-loop triggers in interactive mode, or add the deferred review placeholder in auto mode so the security decision is visible rather than silently omitted.
 8. **Current State is set** to Phase 1, Status: Not started.
 
 ### Quality Check Before Presenting
@@ -355,13 +381,15 @@ Do NOT proceed to planning until the developer explicitly approves.
 Init is DONE when ALL of these are true:
 
 - [ ] Codebase audit completed (brownfield) OR greenfield confirmed
-- [ ] Developer was questioned in depth (3+ rounds for non-trivial projects)
+- [ ] Developer was questioned in depth (3+ rounds for non-trivial projects) — [interactive only; skip when autoAdvance: true]
 - [ ] Research subagent spawned and SOTA patterns retrieved
 - [ ] `SPEC.md` exists with testable requirements, out-of-scope, and current state
-- [ ] `SPEC.md` was reviewed and approved by the developer
-- [ ] `ROADMAP.md` exists with phases, success criteria, and requirement mapping
-- [ ] `ROADMAP.md` was reviewed and approved by the developer
+- [ ] SPEC.md was reviewed and approved by the developer — [interactive only; skip when autoAdvance: true]
+- [ ] ROADMAP.md exists with phases, success criteria, and requirement mapping
+- [ ] ROADMAP.md was reviewed and approved by the developer — [interactive only; skip when autoAdvance: true]
 - [ ] Every v1 requirement maps to exactly one phase
 - [ ] Planning docs are persisted locally
 - [ ] Planning docs are committed only if `commitDocs: true`; local-only mode remains valid if `commitDocs: false`
+- [ ] If `autoAdvance: true`: brief document was read and requirements were extracted from it
+- [ ] If `autoAdvance: true`: approval gates were skipped (not failed — skipped by contract)
 </success_criteria>

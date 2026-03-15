@@ -607,4 +607,178 @@ describe('gsdd init and update', () => {
     assert.match(result.output, /codex\s+Deprecated compatibility alias/);
     assert.match(result.output, /primary Codex CLI surface/);
   });
+
+  describe('auto mode', () => {
+    test('--auto --tools claude produces config with autoAdvance', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'claude');
+      } finally {
+        restoreStdin();
+      }
+
+      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+      assert.strictEqual(config.autoAdvance, true);
+      assert.strictEqual(config.researchDepth, 'balanced');
+      assert.strictEqual(config.parallelization, true);
+      assert.deepStrictEqual(config.workflow, { research: true, planCheck: true, verifier: true });
+    });
+
+    test('--auto without --tools sets exitCode 1', async () => {
+      const previousExitCode = process.exitCode;
+      const previousError = console.error;
+      let errorOutput = '';
+      console.error = (...parts) => { errorOutput += parts.join(' '); };
+
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto');
+        assert.strictEqual(process.exitCode, 1);
+        assert.match(errorOutput, /--tools/);
+      } finally {
+        restoreStdin();
+        console.error = previousError;
+        process.exitCode = previousExitCode;
+      }
+
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
+    });
+
+    test('--auto config has same shape as interactive defaults', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'claude');
+      } finally {
+        restoreStdin();
+      }
+
+      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+      const expectedKeys = [
+        'researchDepth', 'parallelization', 'commitDocs',
+        'modelProfile', 'workflow', 'gitProtocol', 'initVersion', 'autoAdvance',
+      ];
+      for (const key of expectedKeys) {
+        assert.ok(key in config, `config.json missing expected key: ${key}`);
+      }
+      assert.strictEqual(config.initVersion, 'v1.1');
+    });
+
+    test('--brief copies file to .planning/PROJECT_BRIEF.md', async () => {
+      const briefContent = '# Project Brief\n\nBuild a task manager app.\n';
+      fs.writeFileSync(path.join(tmpDir, 'my-brief.md'), briefContent);
+
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'claude', '--brief', 'my-brief.md');
+      } finally {
+        restoreStdin();
+      }
+
+      const briefDest = path.join(tmpDir, '.planning', 'PROJECT_BRIEF.md');
+      assert.ok(fs.existsSync(briefDest));
+      assert.strictEqual(fs.readFileSync(briefDest, 'utf-8'), briefContent);
+    });
+
+    test('--brief with absolute path copies file to .planning/PROJECT_BRIEF.md', async () => {
+      const briefContent = '# Brief\n\nAbsolute path test.\n';
+      const absPath = path.join(tmpDir, 'abs-brief.md');
+      fs.writeFileSync(absPath, briefContent);
+
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'claude', '--brief', absPath);
+      } finally {
+        restoreStdin();
+      }
+
+      const briefDest = path.join(tmpDir, '.planning', 'PROJECT_BRIEF.md');
+      assert.ok(fs.existsSync(briefDest));
+      assert.strictEqual(fs.readFileSync(briefDest, 'utf-8'), briefContent);
+    });
+
+    test('re-running --auto when config exists preserves existing config', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'claude');
+        const configPath = path.join(tmpDir, '.planning', 'config.json');
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        config.researchDepth = 'deep';
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        await gsdd.cmdInit('--auto', '--tools', 'claude');  // re-run
+        const reread = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        assert.strictEqual(reread.researchDepth, 'deep', 're-init must not overwrite existing config');
+      } finally {
+        restoreStdin();
+      }
+    });
+
+    test('--brief with missing file sets exitCode 1', async () => {
+      const previousExitCode = process.exitCode;
+      const previousError = console.error;
+      let errorOutput = '';
+      console.error = (...parts) => { errorOutput += parts.join(' '); };
+
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'claude', '--brief', 'nonexistent.md');
+        assert.strictEqual(process.exitCode, 1);
+        assert.match(errorOutput, /not found/);
+      } finally {
+        restoreStdin();
+        console.error = previousError;
+        process.exitCode = previousExitCode;
+      }
+
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
+    });
+
+    test('--brief followed by another flag sets exitCode 1 and does not write config', async () => {
+      const previousExitCode = process.exitCode;
+      const previousError = console.error;
+      let errorOutput = '';
+      console.error = (...parts) => { errorOutput += parts.join(' '); };
+
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'claude', '--brief', '--auto');
+        assert.strictEqual(process.exitCode, 1);
+        assert.match(errorOutput, /--brief requires a file path/);
+      } finally {
+        restoreStdin();
+        console.error = previousError;
+        process.exitCode = previousExitCode;
+      }
+
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
+    });
+
+    test('--tools followed by another flag sets exitCode 1 and does not write config', async () => {
+      const previousExitCode = process.exitCode;
+      const previousError = console.error;
+      let errorOutput = '';
+      console.error = (...parts) => { errorOutput += parts.join(' '); };
+
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', '--brief', 'idea.md');
+        assert.strictEqual(process.exitCode, 1);
+        assert.match(errorOutput, /--tools requires a value/);
+      } finally {
+        restoreStdin();
+        console.error = previousError;
+        process.exitCode = previousExitCode;
+      }
+
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
+    });
+  });
 });

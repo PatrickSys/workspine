@@ -1147,11 +1147,11 @@ describe('G7 — Delegate Thinness', () => {
 describe('G6 — DESIGN.md Decision Registry', () => {
   const designContent = fs.readFileSync(DESIGN_MD, 'utf-8');
 
-  test('DESIGN.md has at least 13 numbered decision sections', () => {
+  test('DESIGN.md has at least 14 numbered decision sections', () => {
     const sections = designContent.match(/^## \d+\./gm) || [];
     assert.ok(
-      sections.length >= 13,
-      `DESIGN.md has ${sections.length} numbered sections (need >= 13). FIX: Add missing decision records.`
+      sections.length >= 14,
+      `DESIGN.md has ${sections.length} numbered sections (need >= 14). FIX: Add missing decision records.`
     );
   });
 
@@ -1319,5 +1319,89 @@ describe('G5 — Artifact Lifecycle Chain', () => {
   test('integration-checker.md references audit report output', () => {
     assert.ok(/report|audit|findings/i.test(integrationCheckerContent),
       'integration-checker.md must reference its audit report output. FIX: Add report reference to integration-checker output contract.');
+  });
+});
+
+// --- G8: Auto-Mode Contract ---
+
+describe('G8 — Auto-Mode Contract', () => {
+  const newProjectContent = fs.readFileSync(
+    path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8'
+  );
+
+  test('new-project.md contains <auto_mode> section', () => {
+    assert.ok(
+      newProjectContent.includes('<auto_mode>') && newProjectContent.includes('</auto_mode>'),
+      'new-project.md must have <auto_mode> section. FIX: Add the auto-mode contract between <role> and <load_context>.'
+    );
+  });
+
+  test('auto_mode references PROJECT_BRIEF.md', () => {
+    const autoSection = newProjectContent.match(/<auto_mode>([\s\S]*?)<\/auto_mode>/);
+    assert.ok(autoSection, 'new-project.md must have <auto_mode> section');
+    assert.ok(
+      autoSection[1].includes('PROJECT_BRIEF.md'),
+      'auto_mode section must reference PROJECT_BRIEF.md as the input document. FIX: Document the brief-file input contract in <auto_mode>.'
+    );
+  });
+
+  test('auto_mode references autoAdvance config key', () => {
+    const autoSection = newProjectContent.match(/<auto_mode>([\s\S]*?)<\/auto_mode>/);
+    assert.ok(autoSection, 'new-project.md must have <auto_mode> section');
+    assert.ok(
+      autoSection[1].includes('autoAdvance'),
+      'auto_mode section must reference autoAdvance config key. FIX: Document the config detection in <auto_mode>.'
+    );
+  });
+
+  test('auto_mode bypass list includes project_principles and capability_gates', () => {
+    const autoSection = newProjectContent.match(/<auto_mode>([\s\S]*?)<\/auto_mode>/);
+    assert.ok(autoSection, 'new-project.md must have <auto_mode> section');
+    assert.ok(
+      autoSection[1].includes('project_principles'),
+      'auto_mode bypass list must name project_principles. FIX: Update the bypass enumeration in <auto_mode> to include project_principles.'
+    );
+    assert.ok(
+      autoSection[1].includes('capability_gates'),
+      'auto_mode bypass list must name capability_gates. FIX: Update the bypass enumeration in <auto_mode> to include capability_gates.'
+    );
+  });
+
+  test('success_criteria interactive items are marked conditional', () => {
+    const scSection = newProjectContent.match(/<success_criteria>([\s\S]*?)<\/success_criteria>/);
+    assert.ok(scSection, 'new-project.md must have <success_criteria> section');
+    const sc = scSection[1];
+    const interactiveItems = [
+      'questioned in depth',
+      'SPEC.md was reviewed and approved',
+      'ROADMAP.md was reviewed and approved',
+    ];
+    for (const item of interactiveItems) {
+      const lineMatch = sc.split('\n').find(l => l.includes(item));
+      assert.ok(lineMatch, `success_criteria must contain item: "${item}"`);
+      assert.ok(
+        lineMatch.includes('autoAdvance'),
+        `success_criteria item "${item}" must be conditionally marked with autoAdvance. FIX: Add "— [interactive only; skip when autoAdvance: true]" to this item.`
+      );
+    }
+  });
+
+  test('project_principles and capability_gates include explicit autoAdvance guards', () => {
+    const projectPrinciples = newProjectContent.match(/<project_principles>([\s\S]*?)<\/project_principles>/);
+    const capabilityGates = newProjectContent.match(/<capability_gates>([\s\S]*?)<\/capability_gates>/);
+    assert.ok(projectPrinciples, 'new-project.md must have <project_principles> section');
+    assert.ok(capabilityGates, 'new-project.md must have <capability_gates> section');
+    assert.ok(
+      projectPrinciples[1].includes('autoAdvance'),
+      'project_principles must include an autoAdvance guard. FIX: Add an explicit auto-mode branch before the interactive question.'
+    );
+    assert.ok(
+      capabilityGates[1].includes('autoAdvance'),
+      'capability_gates must include an autoAdvance guard. FIX: Add an explicit auto-mode branch before the interactive question.'
+    );
+    assert.ok(
+      capabilityGates[1].includes('Deferred'),
+      'capability_gates must document the deferred-review placeholder for auto mode. FIX: Add the explicit deferred gate-review placeholder text.'
+    );
   });
 });
