@@ -197,4 +197,3 @@ Handle compound states:
 - [ ] No interactive menus, no numbered option lists, no waiting for user selection
 - [ ] Edge cases handled for compound states
 </success_criteria>
-</output>

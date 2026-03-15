@@ -104,4 +104,3 @@ Report to the user:
 - [ ] Advisory git suggestion presented (not mandated)
 - [ ] User informed of checkpoint location and resume instructions
 </success_criteria>
-</output>

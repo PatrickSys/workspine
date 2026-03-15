@@ -20,6 +20,7 @@
 10. [Context Isolation: Summaries Up, Documents to Disk](#10-context-isolation-summaries-up-documents-to-disk)
 11. [Quick-Work Lane](#11-quick-work-lane)
 12. [Session Persistence Without State File](#12-session-persistence-without-state-file)
+13. [Mechanical Invariant Enforcement](#13-mechanical-invariant-enforcement)
 
 ---
 
@@ -511,10 +512,41 @@ Design principle unchanged: derive state from primary artifacts (ROADMAP.md, SPE
 - GSD source: `get-shit-done/workflows/progress.md` (382 lines, gsd-tools.cjs-dependent, STATE.md-dependent, progress bars, rich session dashboard)
 - GSDD: `distilled/workflows/pause.md` (project-scoped checkpoint, advisory git)
 - GSDD: `distilled/workflows/resume.md` (artifact-derived state, priority-ordered routing)
-- GSDD: `distilled/workflows/progress.md` (109 lines, read-only, no side effects, artifact-derived state)
+- GSDD: `distilled/workflows/progress.md` (~200 lines, read-only, no side effects, artifact-derived state)
 - External audit: `.internal-research/gsd-distilled-audit-13th-march-2026.md` — Highest-ROI recommendation #3: "Add just enough: status/resume/progress/health"
 - D7 (milestone hierarchy): STATE.md replaced by ROADMAP.md inline status
 - D8 (advisory git): WIP commit is suggested, not mandated
+
+---
+
+## 13. Mechanical Invariant Enforcement
+
+**GSD:** No structural invariant tests. Framework correctness relies on manual review and ad-hoc checking.
+
+**GSDD:** 6 invariant suites (G1-G7, G2 reserved) with ~106 assertions enforce structural properties across all 29 framework markdown files. Every assertion message includes a `FIX:` instruction so CI agents can self-remediate.
+
+**Suite inventory:**
+
+| Suite | Name | Assertions | What it guards |
+|-------|------|------------|----------------|
+| G1 | Cross-Document Schema Consistency | ~20 | Same field documented in all surfaces that reference it |
+| G3 | File Size Guards | ~29 | Prevent bloat regression (roles ≤500L, workflows ≤400L, delegates ≤100L) |
+| G4 | XML Section Well-Formedness | ~29 | Every `<tag>` has matching `</tag>` across all framework files |
+| G5 | Artifact Lifecycle Chain | ~11 | Each role references its input and output artifacts |
+| G6 | DESIGN.md Decision Registry | ~5 | ≥12 numbered decisions, each with Evidence subsection |
+| G7 | Delegate Thinness | ~9 | Non-empty lines ≤50 (plan-checker exempt) |
+
+**Why remediation messages matter:** OpenAI's Harness Engineering (Feb 2026) confirmed what GSDD's audit surfaced independently: for agent-driven development, **error messages ARE the enforcement mechanism**. When an agent reads `"pause.md: <tag> opened 2x but closed 1x. FIX: Add missing </tag>."`, it can act on the fix instruction directly. Test failures without actionable messages require the agent to reason about intent from stack traces — slower and less reliable.
+
+**The G4 suite caught 4 real bugs on first run:** 3 session workflows (pause.md, progress.md, resume.md) had orphan `</output>` closing tags with no corresponding opener. These were invisible to manual review across PRs #20-23 but immediately flagged by the well-formedness check.
+
+**Evidence:**
+
+- `tests/gsdd.invariants.test.cjs` lines 1015+ (6 suites, ~106 assertions)
+- OpenAI Harness Engineering blog (Feb 2026): "error messages as enforcement mechanism"
+- External audit (2026-03-13): recommendation #4 "Mechanize the framework's invariants"
+- GSD source: no equivalent test infrastructure
+- PRs #20-23: orphan `</output>` tags survived 4 manual review cycles before G4 caught them
 
 ---
 

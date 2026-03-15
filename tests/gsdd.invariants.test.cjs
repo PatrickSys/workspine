@@ -1012,3 +1012,312 @@ describe('I3-gate — New-project.md Approval Gates', () => {
     );
   });
 });
+
+// =============================================================================
+// G-SUITES: Mechanical Invariant Enforcement
+//
+// Suites G1-G7 enforce structural invariants across all framework files.
+// Assertion messages include FIX: instructions so CI agents can self-remediate.
+// Rationale: OpenAI Harness Engineering (Feb 2026) — error messages ARE the
+// enforcement mechanism for agents. External audit rec #4.
+// =============================================================================
+
+// --- Helper: XML tag extraction (used by G4) ---
+
+function extractXmlTags(content) {
+  // Strip fenced code blocks
+  let stripped = content.replace(/```[\s\S]*?```/g, '');
+  // Strip inline code
+  stripped = stripped.replace(/`[^`]+`/g, '');
+
+  const opens = new Map();
+  const closes = new Map();
+
+  // Only match structural XML tags at line start (after optional whitespace).
+  // This avoids false positives from tag references in prose text like
+  // "Ignore <planning_process> Step 1".
+  // Opening tags: <tag>, <tag attr="val">, <tag id="x">
+  for (const m of stripped.matchAll(/^\s*<([a-z_]+)(?:\s[^>]*)?\s*>/gm)) {
+    const tag = m[1];
+    opens.set(tag, (opens.get(tag) || 0) + 1);
+  }
+  // Closing tags: </tag>
+  for (const m of stripped.matchAll(/^\s*<\/([a-z_]+)>/gm)) {
+    const tag = m[1];
+    closes.set(tag, (closes.get(tag) || 0) + 1);
+  }
+
+  return { opens, closes };
+}
+
+// --- G4: XML Section Well-Formedness ---
+
+describe('G4 — XML Section Well-Formedness', () => {
+  const allFiles = [
+    ...getRoleFiles().map(f => ({ name: f, type: 'role', read: () => readRole(f) })),
+    ...getDelegateFiles().map(f => ({ name: f, type: 'delegate', read: () => readDelegate(f) })),
+    ...getWorkflowFiles().map(f => ({ name: f, type: 'workflow', read: () => readWorkflow(f) })),
+  ];
+
+  for (const file of allFiles) {
+    test(`${file.type}/${file.name} has balanced XML tags`, () => {
+      const { opens, closes } = extractXmlTags(file.read());
+      // Check all opened tags have matching closes
+      for (const [tag, count] of opens) {
+        const closeCount = closes.get(tag) || 0;
+        assert.strictEqual(
+          closeCount, count,
+          `${file.name}: <${tag}> opened ${count}x but closed ${closeCount}x. FIX: Add missing </${tag}>.`
+        );
+      }
+      // Check no orphan closing tags
+      for (const [tag, count] of closes) {
+        const openCount = opens.get(tag) || 0;
+        assert.strictEqual(
+          openCount, count,
+          `${file.name}: </${tag}> closed ${count}x but opened ${openCount}x. FIX: Add missing <${tag}> or remove orphan </${tag}>.`
+        );
+      }
+    });
+  }
+});
+
+// --- G3: File Size Guards ---
+
+describe('G3 — File Size Guards', () => {
+  const SIZE_LIMITS = {
+    role: 500,
+    delegate: 100,
+    workflow: 400,
+  };
+
+  for (const role of getRoleFiles()) {
+    test(`role/${role} is under ${SIZE_LIMITS.role} lines`, () => {
+      const lines = readRole(role).split('\n').length;
+      assert.ok(
+        lines <= SIZE_LIMITS.role,
+        `${role} is ${lines} lines (max ${SIZE_LIMITS.role}). FIX: Extract content to delegate or sub-section.`
+      );
+    });
+  }
+
+  for (const delegate of getDelegateFiles()) {
+    test(`delegate/${delegate} is under ${SIZE_LIMITS.delegate} lines`, () => {
+      const lines = readDelegate(delegate).split('\n').length;
+      assert.ok(
+        lines <= SIZE_LIMITS.delegate,
+        `${delegate} is ${lines} lines (max ${SIZE_LIMITS.delegate}). FIX: Extract content to the role contract it references.`
+      );
+    });
+  }
+
+  for (const wf of getWorkflowFiles()) {
+    test(`workflow/${wf} is under ${SIZE_LIMITS.workflow} lines`, () => {
+      const lines = readWorkflow(wf).split('\n').length;
+      assert.ok(
+        lines <= SIZE_LIMITS.workflow,
+        `${wf} is ${lines} lines (max ${SIZE_LIMITS.workflow}). FIX: Extract content to delegate or sub-section.`
+      );
+    });
+  }
+});
+
+// --- G7: Delegate Thinness (non-empty line count) ---
+
+describe('G7 — Delegate Thinness', () => {
+  const MAX_NON_EMPTY = 50;
+  const EXEMPT = ['plan-checker.md']; // 55 lines, justified in DESIGN.md D3
+
+  for (const delegate of getDelegateFiles()) {
+    if (EXEMPT.includes(delegate)) continue;
+
+    test(`${delegate} has at most ${MAX_NON_EMPTY} non-empty lines`, () => {
+      const content = readDelegate(delegate);
+      const nonEmpty = content.split('\n').filter(l => /\S/.test(l)).length;
+      assert.ok(
+        nonEmpty <= MAX_NON_EMPTY,
+        `${delegate} has ${nonEmpty} non-empty lines (max ${MAX_NON_EMPTY}). FIX: Move content to the role contract it references.`
+      );
+    });
+  }
+});
+
+// --- G6: DESIGN.md Decision Registry ---
+
+describe('G6 — DESIGN.md Decision Registry', () => {
+  const designContent = fs.readFileSync(DESIGN_MD, 'utf-8');
+
+  test('DESIGN.md has at least 13 numbered decision sections', () => {
+    const sections = designContent.match(/^## \d+\./gm) || [];
+    assert.ok(
+      sections.length >= 13,
+      `DESIGN.md has ${sections.length} numbered sections (need >= 13). FIX: Add missing decision records.`
+    );
+  });
+
+  // Extract section boundaries
+  const sectionHeaders = [...designContent.matchAll(/^## (\d+)\..*/gm)];
+  for (const header of sectionHeaders) {
+    const sectionNum = header[1];
+    const startIdx = header.index + header[0].length;
+    // Find the next ## header or end of file
+    const nextHeader = designContent.indexOf('\n## ', startIdx);
+    const sectionBody = nextHeader === -1
+      ? designContent.slice(startIdx)
+      : designContent.slice(startIdx, nextHeader);
+
+    test(`DESIGN.md section ${sectionNum} has Evidence subsection`, () => {
+      assert.ok(
+        sectionBody.includes('Evidence'),
+        `DESIGN.md section ${sectionNum} missing Evidence subsection. FIX: Add **Evidence:** with source citations.`
+      );
+    });
+  }
+});
+
+// --- G1: Cross-Document Schema Consistency ---
+
+describe('G1 — Cross-Document Schema Consistency', () => {
+  const plannerContent = fs.readFileSync(path.join(AGENTS_DIR, 'planner.md'), 'utf-8');
+  const executorContent = fs.readFileSync(path.join(AGENTS_DIR, 'executor.md'), 'utf-8');
+  const roadmapperContent = fs.readFileSync(path.join(AGENTS_DIR, 'roadmapper.md'), 'utf-8');
+  const verifierContent = fs.readFileSync(path.join(AGENTS_DIR, 'verifier.md'), 'utf-8');
+  const planWorkflow = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
+  const verifyWorkflow = fs.readFileSync(path.join(WORKFLOWS_DIR, 'verify.md'), 'utf-8');
+  const progressWorkflow = fs.readFileSync(path.join(WORKFLOWS_DIR, 'progress.md'), 'utf-8');
+  const resumeWorkflow = fs.readFileSync(path.join(WORKFLOWS_DIR, 'resume.md'), 'utf-8');
+
+  // PLAN.md frontmatter must appear in both planner.md and plan.md
+  describe('PLAN.md frontmatter in planner.md AND plan.md', () => {
+    const PLAN_FIELDS = ['phase:', 'depends_on:', 'files-modified:', 'autonomous:', 'requirements:', 'must_haves:'];
+    for (const field of PLAN_FIELDS) {
+      test(`${field} appears in both planner.md and plan.md`, () => {
+        assert.ok(plannerContent.includes(field),
+          `planner.md missing ${field}. FIX: Document ${field} in planner.md output contract.`);
+        assert.ok(planWorkflow.includes(field),
+          `plan.md missing ${field}. FIX: Document ${field} in plan.md workflow.`);
+      });
+    }
+  });
+
+  // Task XML structure in both planner (author) and executor (consumer)
+  // <files>, <action>, <verify> must appear literally; <done> may appear as "done criteria" in executor
+  describe('Task XML in planner.md (author) and executor.md (consumer)', () => {
+    const TASK_SECTIONS = ['<files>', '<action>', '<verify>'];
+    for (const section of TASK_SECTIONS) {
+      test(`${section} appears in both planner.md and executor.md`, () => {
+        assert.ok(plannerContent.includes(section) || plannerContent.includes(section.replace('<', '`').replace('>', '`')),
+          `planner.md missing ${section}. FIX: Document ${section} in planner.md task schema.`);
+        assert.ok(executorContent.includes(section) || executorContent.includes(section.replace('<', '`').replace('>', '`')),
+          `executor.md missing ${section}. FIX: Document ${section} in executor.md task consumption.`);
+      });
+    }
+
+    test('<done> concept appears in both planner.md and executor.md', () => {
+      assert.ok(plannerContent.includes('<done>') || plannerContent.includes('`done`'),
+        'planner.md missing <done>. FIX: Document <done> in planner.md task schema.');
+      assert.ok(executorContent.includes('<done>') || /\bdone\b/.test(executorContent),
+        'executor.md missing done concept. FIX: Document done criteria in executor.md task consumption.');
+    });
+  });
+
+  // ROADMAP status grammar in roadmapper, progress, and resume
+  describe('ROADMAP status grammar consistency', () => {
+    const STATUS_MARKERS = ['[ ]', '[-]', '[x]'];
+    for (const marker of STATUS_MARKERS) {
+      test(`${marker} appears in roadmapper.md, progress.md, and resume.md`, () => {
+        assert.ok(roadmapperContent.includes(marker),
+          `roadmapper.md missing ${marker}. FIX: Document ROADMAP status marker ${marker} in roadmapper.md.`);
+        assert.ok(progressWorkflow.includes(marker),
+          `progress.md missing ${marker}. FIX: Document ROADMAP status marker ${marker} in progress.md.`);
+        assert.ok(resumeWorkflow.includes(marker),
+          `resume.md missing ${marker}. FIX: Document ROADMAP status marker ${marker} in resume.md.`);
+      });
+    }
+  });
+
+  // VERIFICATION.md fields in verifier.md and verify.md
+  describe('VERIFICATION.md fields in verifier.md and verify.md', () => {
+    const VERIFICATION_FIELDS = ['verified', 'score'];
+    for (const field of VERIFICATION_FIELDS) {
+      test(`${field} appears in both verifier.md and verify.md`, () => {
+        assert.ok(verifierContent.includes(field),
+          `verifier.md missing ${field}. FIX: Document VERIFICATION.md ${field} field in verifier.md.`);
+        assert.ok(verifyWorkflow.includes(field),
+          `verify.md missing ${field}. FIX: Document VERIFICATION.md ${field} field in verify.md.`);
+      });
+    }
+
+    test('status field appears in both verifier.md and verify.md', () => {
+      assert.ok(/\bstatus\b/.test(verifierContent),
+        'verifier.md missing status. FIX: Document VERIFICATION.md status field in verifier.md.');
+      assert.ok(/\bstatus\b/.test(verifyWorkflow),
+        'verify.md missing status. FIX: Document VERIFICATION.md status field in verify.md.');
+    });
+  });
+});
+
+// --- G5: Artifact Lifecycle Chain ---
+
+describe('G5 — Artifact Lifecycle Chain', () => {
+  const roadmapperContent = fs.readFileSync(path.join(AGENTS_DIR, 'roadmapper.md'), 'utf-8');
+  const plannerContent = fs.readFileSync(path.join(AGENTS_DIR, 'planner.md'), 'utf-8');
+  const executorContent = fs.readFileSync(path.join(AGENTS_DIR, 'executor.md'), 'utf-8');
+  const verifierContent = fs.readFileSync(path.join(AGENTS_DIR, 'verifier.md'), 'utf-8');
+  const integrationCheckerContent = fs.readFileSync(path.join(AGENTS_DIR, 'integration-checker.md'), 'utf-8');
+
+  // roadmapper → produces ROADMAP.md
+  test('roadmapper.md references output ROADMAP.md', () => {
+    assert.ok(roadmapperContent.includes('ROADMAP.md'),
+      'roadmapper.md must reference its output artifact ROADMAP.md. FIX: Add ROADMAP.md to roadmapper output contract.');
+  });
+
+  // planner → reads ROADMAP, produces PLAN.md
+  test('planner.md references input ROADMAP', () => {
+    assert.ok(/ROADMAP/i.test(plannerContent),
+      'planner.md must reference its input ROADMAP. FIX: Add ROADMAP reference to planner.md input contract.');
+  });
+
+  test('planner.md references output PLAN.md', () => {
+    assert.ok(plannerContent.includes('PLAN.md'),
+      'planner.md must reference its output artifact PLAN.md. FIX: Add PLAN.md to planner output contract.');
+  });
+
+  // executor → reads PLAN.md, produces SUMMARY.md
+  test('executor.md references input PLAN.md', () => {
+    assert.ok(executorContent.includes('PLAN.md'),
+      'executor.md must reference its input artifact PLAN.md. FIX: Add PLAN.md to executor input contract.');
+  });
+
+  test('executor.md references output SUMMARY.md', () => {
+    assert.ok(executorContent.includes('SUMMARY.md'),
+      'executor.md must reference its output artifact SUMMARY.md. FIX: Add SUMMARY.md to executor output contract.');
+  });
+
+  // verifier → reads PLAN.md + SUMMARY, produces VERIFICATION.md
+  test('verifier.md references input PLAN.md', () => {
+    assert.ok(verifierContent.includes('PLAN.md'),
+      'verifier.md must reference its input artifact PLAN.md. FIX: Add PLAN.md to verifier input contract.');
+  });
+
+  test('verifier.md references input SUMMARY', () => {
+    assert.ok(/SUMMARY/i.test(verifierContent),
+      'verifier.md must reference its input SUMMARY. FIX: Add SUMMARY reference to verifier input contract.');
+  });
+
+  test('verifier.md references output VERIFICATION.md', () => {
+    assert.ok(verifierContent.includes('VERIFICATION.md'),
+      'verifier.md must reference its output artifact VERIFICATION.md. FIX: Add VERIFICATION.md to verifier output contract.');
+  });
+
+  // integration-checker → reads SUMMARY, produces audit report
+  test('integration-checker.md references input SUMMARY', () => {
+    assert.ok(/SUMMARY/i.test(integrationCheckerContent),
+      'integration-checker.md must reference its input SUMMARY. FIX: Add SUMMARY reference to integration-checker input contract.');
+  });
+
+  test('integration-checker.md references audit report output', () => {
+    assert.ok(/report|audit|findings/i.test(integrationCheckerContent),
+      'integration-checker.md must reference its audit report output. FIX: Add report reference to integration-checker output contract.');
+  });
+});

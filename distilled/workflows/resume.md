@@ -136,4 +136,3 @@ Deleting before routing ensures a failed or interrupted workflow does not leave 
 - [ ] Options presented and user selection waited for
 - [ ] Checkpoint cleaned up after successful routing
 </success_criteria>
-</output>
