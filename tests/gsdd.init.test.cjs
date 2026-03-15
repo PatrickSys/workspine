@@ -1388,5 +1388,55 @@ describe('gsdd init and update', () => {
       assert.strictEqual(result.exitCode, 1);
       assert.match(result.output, /Invalid runtime/);
     });
+
+    test('models show falls back to file config when OPENCODE_CONFIG_CONTENT has an unterminated block comment', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, '.planning', 'config.json'),
+        JSON.stringify({
+          modelProfile: 'balanced',
+          researchDepth: 'balanced',
+          parallelization: true,
+          commitDocs: true,
+          workflow: { research: true, planCheck: true, verifier: true },
+          gitProtocol: { branch: '', commit: '', pr: '' },
+          initVersion: 'v1.1',
+        }, null, 2)
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'opencode.json'),
+        JSON.stringify({ model: 'openai/gpt-5.2' }, null, 2)
+      );
+
+      const result = await withEnv({
+        OPENCODE_CONFIG_CONTENT: '/* unterminated',
+      }, async () => runCliAsMain(tmpDir, ['models', 'show']));
+      assert.strictEqual(result.exitCode, 0);
+
+      const payload = JSON.parse(result.output);
+      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
+        mode: 'inherit',
+        model: null,
+        runtimeDetectedModel: 'openai/gpt-5.2',
+      });
+      assert.strictEqual(payload.detectedRuntimeModels.opencode, 'openai/gpt-5.2');
+    });
+
+    test('mutation commands include update reminder', async () => {
+      let result = await runCliAsMain(tmpDir, ['models', 'profile', 'quality']);
+      assert.match(result.output, /Run gsdd update/);
+
+      result = await runCliAsMain(tmpDir, ['models', 'agent-profile', '--agent', 'plan-checker', '--profile', 'budget']);
+      assert.match(result.output, /Run gsdd update/);
+
+      result = await runCliAsMain(tmpDir, ['models', 'set', '--runtime', 'claude', '--agent', 'plan-checker', '--model', 'opus']);
+      assert.match(result.output, /Run gsdd update/);
+
+      result = await runCliAsMain(tmpDir, ['models', 'clear', '--runtime', 'claude', '--agent', 'plan-checker']);
+      assert.match(result.output, /Run gsdd update/);
+
+      result = await runCliAsMain(tmpDir, ['models', 'clear-agent-profile', '--agent', 'plan-checker']);
+      assert.match(result.output, /Run gsdd update/);
+    });
   });
 });

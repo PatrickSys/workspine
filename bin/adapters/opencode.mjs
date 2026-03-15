@@ -57,7 +57,7 @@ function parseJsonc(content) {
       while (i < content.length - 1 && !(content[i] === '*' && content[i + 1] === '/')) {
         i++;
       }
-      i += 2;
+      if (i < content.length - 1) i += 2;
       continue;
     }
 

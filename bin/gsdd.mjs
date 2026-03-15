@@ -499,6 +499,7 @@ function cmdModelsProfile(profile) {
   config.modelProfile = profile;
   writeProjectConfig(config);
   console.log(`  - set modelProfile to ${profile}`);
+  console.log('  Run gsdd update to regenerate adapter files.');
 }
 
 function cmdModelsAgentProfile(args) {
@@ -521,6 +522,7 @@ function cmdModelsAgentProfile(args) {
   config.agentModelProfiles[agent] = profile;
   writeProjectConfig(config);
   console.log(`  - set ${agent} semantic profile to ${profile}`);
+  console.log('  Run gsdd update to regenerate adapter files.');
 }
 
 function cmdModelsClearAgentProfile(args) {
@@ -540,6 +542,7 @@ function cmdModelsClearAgentProfile(args) {
   }
   writeProjectConfig(config);
   console.log(`  - cleared semantic profile override for ${agent}`);
+  console.log('  Run gsdd update to regenerate adapter files.');
 }
 
 function cmdModelsSetRuntimeOverride(args) {
@@ -569,6 +572,7 @@ function cmdModelsSetRuntimeOverride(args) {
   config.runtimeModelOverrides[runtime][agent] = model.trim();
   writeProjectConfig(config);
   console.log(`  - set ${runtime} runtime override for ${agent}`);
+  console.log('  Run gsdd update to regenerate adapter files.');
 }
 
 function cmdModelsClearRuntimeOverride(args) {
@@ -598,6 +602,7 @@ function cmdModelsClearRuntimeOverride(args) {
   }
   writeProjectConfig(config);
   console.log(`  - cleared ${runtime} runtime override for ${agent}`);
+  console.log('  Run gsdd update to regenerate adapter files.');
 }
 
 function cmdFindPhase(...args) {
