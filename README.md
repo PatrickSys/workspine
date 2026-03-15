@@ -266,7 +266,26 @@ Orchestrators stay thin. Delegates write documents to disk and return summaries 
 | `researchDepth` | `fast`, `balanced`, `deep` | `balanced` | Research thoroughness per phase |
 | `parallelization` | `true`, `false` | `true` | Run independent agents simultaneously |
 | `commitDocs` | `true`, `false` | `true` | Track `.planning/` in git |
-| `modelProfile` | `balanced`, `quality`, `budget` | `balanced` | AI model tier for agents |
+| `modelProfile` | `balanced`, `quality`, `budget` | `balanced` | Portable semantic model tier |
+
+Optional model-control keys:
+
+| Setting | What it controls |
+|---------|------------------|
+| `agentModelProfiles.<agent>` | Per-agent semantic override. Current supported agent id: `plan-checker`. |
+| `runtimeModelOverrides.<runtime>.<agent>` | Exact runtime-native model override. Current supported targets: `claude.plan-checker` and `opencode.plan-checker`. |
+
+Runtime behavior:
+- Claude translates semantic tiers to native aliases for the checker agent.
+- OpenCode inherits its runtime model by default; GSDD only injects an exact OpenCode `model:` when you set an explicit runtime override.
+
+CLI:
+- `gsdd models show`
+- `gsdd models profile <quality|balanced|budget>`
+- `gsdd models agent-profile --agent plan-checker --profile <quality|balanced|budget>`
+- `gsdd models clear-agent-profile --agent plan-checker`
+- `gsdd models set --runtime <claude|opencode> --agent plan-checker --model <id>`
+- `gsdd models clear --runtime <claude|opencode> --agent plan-checker`
 
 ### Workflow Toggles
 

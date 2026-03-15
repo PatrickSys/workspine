@@ -22,6 +22,7 @@
 12. [Session Persistence Without State File](#12-session-persistence-without-state-file)
 13. [Mechanical Invariant Enforcement](#13-mechanical-invariant-enforcement)
 14. [Headless Mode](#14-headless-mode)
+15. [Model Profile Propagation](#15-model-profile-propagation)
 
 ---
 
@@ -594,6 +595,101 @@ via `autoAdvance: true` in `.planning/config.json` + `<auto_mode>` section in `n
 - Codex CLI: `--quiet` and `--auto-edit` flags for non-interactive modes
   (developers.openai.com/codex/cli/reference)
 - Cline CLI 2.0: explicit headless CI/CD mode (devops.com, 2025)
+
+---
+
+## 15. Model Profile Propagation
+
+**GSD:** `modelProfile` stored in `.planning/config.json` with profile-to-model mapping. GSD generates
+`opencode.json` with agent-to-model mappings for the OpenCode runtime; does not inject `model:` into
+individual sub-agent frontmatter files.
+
+**GSDD:** Static injection at generation time, with explicit runtime ownership. `modelProfile`
+remains the portable semantic default. `agentModelProfiles` adds per-agent semantic overrides.
+Claude generation translates those semantic tiers into stable aliases for the native checker agent.
+OpenCode generation no longer infers exact `provider/model-id` strings from detected runtime config;
+it only injects an OpenCode `model:` when the user explicitly sets
+`runtimeModelOverrides.opencode.<agent>`.
+
+**Decision: static injection at generation time, not dynamic runtime config reading.**
+
+Dynamic reading (having agent files instruct the LLM to read config.json and select a model)
+is incompatible with how Claude Code and OpenCode frontmatter works: it is parsed at agent
+spawn time, not by the agent itself. Static injection remains the right mechanic, but the old
+OpenCode approach overreached by guessing runtime-specific ids from detected provider config.
+Current GSDD keeps the portable semantic layer and makes exact runtime ids explicit user-owned
+configuration instead of framework inference.
+
+**Scope: agent files only.** The current supported agent id is `plan-checker`. The `model:` field is injected into:
+- `.claude/agents/gsdd-plan-checker.md` using Claude Code aliases (`opus`, `sonnet`, `haiku`)
+- `.opencode/agents/gsdd-plan-checker.md` using an exact runtime-native string only when the user
+  explicitly configured `runtimeModelOverrides.opencode.plan-checker`
+
+Current repo truth:
+- portable semantic settings:
+  - `modelProfile`
+  - optional `agentModelProfiles.<agent>` (currently consumed by `plan-checker`)
+- exact runtime-native settings:
+  - optional `runtimeModelOverrides.<runtime>.<agent>` (currently consumed by checker agents)
+- Claude checker generation uses the resolved semantic tier unless an exact Claude runtime override exists
+- OpenCode checker generation omits `model:` by default and inherits the active OpenCode runtime model
+- OpenCode checker generation injects `model:` only when `runtimeModelOverrides.opencode.plan-checker`
+  is explicitly set
+- `gsdd models show` returns typed effective-state data and keeps human guidance in `hints` rather than
+  mixing prose into machine-readable model fields
+
+NOT injected into:
+- `.claude/commands/*.md` / `.opencode/commands/*.md` run in main orchestrator context; model is
+  orchestrator-determined
+- `.agents/skills/*/SKILL.md` because the Agent Skills open standard has no `model:` field
+
+**Resolution order:**
+
+1. `runtimeModelOverrides.<runtime>.<agent>`
+2. `agentModelProfiles.<agent>`
+3. global `modelProfile`
+4. runtime default / omitted `model:`
+
+**CLI surface:**
+- `gsdd models show`
+- `gsdd models profile <quality|balanced|budget>`
+- `gsdd models agent-profile --agent plan-checker --profile <quality|balanced|budget>`
+- `gsdd models clear-agent-profile --agent plan-checker`
+- `gsdd models set --runtime <claude|opencode> --agent plan-checker --model <id>`
+- `gsdd models clear --runtime <claude|opencode> --agent plan-checker`
+
+**Trade-off: static files become stale after a profile change.** If the user changes `modelProfile`
+or runtime override config directly, generated checker files are not updated until `gsdd update`
+is run. This is consistent with D9 (adapter generation over conversion): adapter files are generated
+on demand.
+
+**Boundary:** This is a narrow native-adapter decision, not closure of Gap I4. It makes the current
+native checker surfaces honest and explicit. Broader delegate/runtime propagation remains follow-up work.
+
+**Evidence:**
+- GSD reference: `modelProfile` in `.planning/config.json` plus per-agent model resolution, including
+  per-agent overrides, in `get-shit-done/references/model-profiles.md` and
+  `get-shit-done/references/model-profile-resolution.md`
+- OpenSpec: portable spec/workflow core is tool-agnostic and leaves runtime-specific execution concerns
+  to integrations rather than encoding them into the portable spec surface (openspec.dev)
+- MetaGPT: role-specialized orchestration is a legitimate place to express role-level model intent, but
+  that does not imply exact vendor model ids belong in a portable workflow contract
+  (github.com/FoundationAgents/MetaGPT)
+- Claude Code: `model:` field with aliases `sonnet`, `opus`, `haiku` documented for sub-agents
+  (docs.anthropic.com/en/docs/claude-code/sub-agents)
+- OpenCode: `model:` in agent frontmatter uses `provider/model-id`, and when omitted the agent
+  inherits the current model (opencode.ai/docs/agents)
+- OpenCode config docs: OpenCode already owns project/global model configuration through runtime-native
+  config, including `model` and `small_model`, so GSDD does not need to guess exact ids to regain DX
+  (opencode.ai/docs/config)
+- OpenCode troubleshooting: `ProviderModelNotFoundError` usually means a bad `provider/model-id`
+  reference, which argues for explicit user-owned runtime ids instead of inferred framework guesses
+  (opencode.ai/docs/troubleshooting)
+- OpenAI API models: `gpt-5.4` exists and is positioned as a top-tier model for coding and agentic
+  work, but vendor API availability alone does not prove an OpenCode-safe `provider/model-id`, which
+  is why GSDD no longer infers OpenCode ids from vendor releases
+  (developers.openai.com/api/docs/models/gpt-5.4)
+- Agent Skills open standard: no `model:` field in spec (agentskills.io/specification) - no change
 
 ---
 

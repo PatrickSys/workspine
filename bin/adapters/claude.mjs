@@ -1,10 +1,17 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-function renderClaudePlanChecker(delegateContent) {
+const CLAUDE_MODEL_PROFILES = {
+  quality: 'opus',
+  balanced: 'sonnet',
+  budget: 'haiku',
+};
+
+function renderClaudePlanChecker(delegateContent, modelAlias = 'sonnet') {
   return `---
 name: gsdd-plan-checker
 description: Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly.
+model: ${modelAlias}
 tools: Read, Grep, Glob
 ---
 
@@ -89,7 +96,7 @@ Rules:
 `;
 }
 
-function createClaudeAdapter({ cwd, workflows, renderSkillContent, getDelegateContent }) {
+function createClaudeAdapter({ cwd, workflows, renderSkillContent, getDelegateContent, resolveRuntimeAgentModel }) {
   const skillsDir = join(cwd, '.claude', 'skills');
   const commandsDir = join(cwd, '.claude', 'commands');
   const agentsDir = join(cwd, '.claude', 'agents');
@@ -105,6 +112,12 @@ function createClaudeAdapter({ cwd, workflows, renderSkillContent, getDelegateCo
       return existsSync(skillsDir) || existsSync(commandsDir) || existsSync(agentsDir);
     },
     generate() {
+      const modelAlias = resolveRuntimeAgentModel({
+        cwd,
+        runtime: 'claude',
+        agentId: 'plan-checker',
+        profileMap: CLAUDE_MODEL_PROFILES,
+      });
       for (const workflow of workflows) {
         const dir = join(skillsDir, workflow.name);
         mkdirSync(dir, { recursive: true });
@@ -120,7 +133,7 @@ function createClaudeAdapter({ cwd, workflows, renderSkillContent, getDelegateCo
       mkdirSync(agentsDir, { recursive: true });
       writeFileSync(
         join(agentsDir, 'gsdd-plan-checker.md'),
-        renderClaudePlanChecker(getDelegateContent('plan-checker.md'))
+        renderClaudePlanChecker(getDelegateContent('plan-checker.md'), modelAlias)
       );
     },
     summary(action) {
@@ -129,4 +142,4 @@ function createClaudeAdapter({ cwd, workflows, renderSkillContent, getDelegateCo
   };
 }
 
-export { createClaudeAdapter };
+export { createClaudeAdapter, CLAUDE_MODEL_PROFILES };

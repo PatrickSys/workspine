@@ -7,6 +7,8 @@ import { join, dirname, basename, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import * as readline from 'readline';
 import { createAdapterRegistry } from './adapters/index.mjs';
+import { CLAUDE_MODEL_PROFILES } from './adapters/claude.mjs';
+import { detectOpenCodeConfiguredModel } from './adapters/opencode.mjs';
 import {
   renderAgentsBoundedBlock,
   renderAgentsFileContent,
@@ -43,6 +45,7 @@ const WORKFLOWS = [
 const COMMANDS = {
   init: cmdInit,
   update: cmdUpdate,
+  models: cmdModels,
   'find-phase': cmdFindPhase,
   verify: cmdVerify,
   scaffold: cmdScaffold,
@@ -55,6 +58,88 @@ const DEFAULT_GIT_PROTOCOL = {
   pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
 };
 
+const VALID_MODEL_PROFILES = ['quality', 'balanced', 'budget'];
+const PORTABLE_AGENT_IDS = ['plan-checker'];
+const MODEL_RUNTIME_IDS = ['claude', 'opencode'];
+
+function normalizeModelProfile(value) {
+  return VALID_MODEL_PROFILES.includes(value) ? value : 'balanced';
+}
+
+function loadProjectModelConfig(cwd = CWD) {
+  const configPath = join(cwd, '.planning', 'config.json');
+  if (!existsSync(configPath)) return buildDefaultConfig();
+
+  try {
+    return {
+      ...buildDefaultConfig(),
+      ...JSON.parse(readFileSync(configPath, 'utf-8')),
+    };
+  } catch {
+    return buildDefaultConfig();
+  }
+}
+
+function ensureProjectConfig(cwd = CWD) {
+  mkdirSync(join(cwd, '.planning'), { recursive: true });
+  const config = loadProjectModelConfig(cwd);
+  writeProjectConfig(config, cwd);
+  return config;
+}
+
+function writeProjectConfig(config, cwd = CWD) {
+  const configPath = join(cwd, '.planning', 'config.json');
+  writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+function getPortableAgentProfile(config, agentId) {
+  const override = config.agentModelProfiles?.[agentId];
+  if (VALID_MODEL_PROFILES.includes(override)) return override;
+  return normalizeModelProfile(config.modelProfile);
+}
+
+function getRuntimeModelOverride(config, runtime, agentId) {
+  const override = config.runtimeModelOverrides?.[runtime]?.[agentId];
+  return typeof override === 'string' && override.trim() ? override.trim() : null;
+}
+
+function resolveRuntimeAgentModel({ cwd = CWD, runtime, agentId, profileMap = null }) {
+  const config = loadProjectModelConfig(cwd);
+  const runtimeOverride = getRuntimeModelOverride(config, runtime, agentId);
+  if (runtimeOverride) return runtimeOverride;
+
+  if (!profileMap) return null;
+  const profile = getPortableAgentProfile(config, agentId);
+  return profileMap[profile] ?? profileMap.balanced ?? null;
+}
+
+function getRuntimeAgentModelState({ config, runtime, agentId, profileMap = null }) {
+  const runtimeOverride = getRuntimeModelOverride(config, runtime, agentId);
+  if (runtimeOverride) {
+    return {
+      mode: 'override',
+      model: runtimeOverride,
+      source: 'runtimeOverride',
+    };
+  }
+
+  if (!profileMap) {
+    return {
+      mode: 'inherit',
+      model: null,
+      runtimeDetectedModel: null,
+    };
+  }
+
+  const agentOverride = config.agentModelProfiles?.[agentId];
+  const profile = getPortableAgentProfile(config, agentId);
+  return {
+    mode: 'mapped',
+    model: profileMap[profile] ?? profileMap.balanced ?? null,
+    source: VALID_MODEL_PROFILES.includes(agentOverride) ? 'agentModelProfile' : 'modelProfile',
+  };
+}
+
 const ADAPTERS = createAdapterRegistry({
   cwd: CWD,
   workflows: WORKFLOWS,
@@ -64,6 +149,9 @@ const ADAPTERS = createAdapterRegistry({
   renderSkillContent,
   upsertBoundedBlock,
   getDelegateContent,
+  loadProjectModelConfig,
+  getRuntimeModelOverride,
+  resolveRuntimeAgentModel,
 });
 
 async function runCli(cliCommand = command, cliArgs = args) {
@@ -219,7 +307,7 @@ async function cmdInit(...initArgs) {
     console.log('   - budget: fastest/cheapest model (lower quality for complex tasks)');
     let modelProfile = await askQuestion('  Model profile [balanced/quality/budget] (default: balanced): ');
     modelProfile = modelProfile.trim().toLowerCase();
-    if (!['balanced', 'quality', 'budget'].includes(modelProfile)) modelProfile = 'balanced';
+    modelProfile = normalizeModelProfile(modelProfile);
 
     // --- Workflow toggles ---
     console.log('\n  Workflow agents (each adds quality but costs tokens/time):');
@@ -342,6 +430,174 @@ function cmdUpdate(...updateArgs) {
   } else {
     console.log('\nAdapters updated.\n');
   }
+}
+
+function cmdModels(...modelArgs) {
+  const subcommand = modelArgs[0] || 'show';
+
+  switch (subcommand) {
+    case 'show':
+      return cmdModelsShow();
+    case 'profile':
+      return cmdModelsProfile(modelArgs[1]);
+    case 'agent-profile':
+      return cmdModelsAgentProfile(modelArgs.slice(1));
+    case 'clear-agent-profile':
+      return cmdModelsClearAgentProfile(modelArgs.slice(1));
+    case 'set':
+      return cmdModelsSetRuntimeOverride(modelArgs.slice(1));
+    case 'clear':
+      return cmdModelsClearRuntimeOverride(modelArgs.slice(1));
+    default:
+      console.error('Usage: gsdd models [show|profile|agent-profile|clear-agent-profile|set|clear]');
+      process.exitCode = 1;
+  }
+}
+
+function cmdModelsShow() {
+  const config = loadProjectModelConfig();
+  const ocOverride = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
+  const ocDetected = detectOpenCodeConfiguredModel(CWD);
+  output({
+    modelProfile: normalizeModelProfile(config.modelProfile),
+    agentModelProfiles: config.agentModelProfiles || {},
+    runtimeModelOverrides: config.runtimeModelOverrides || {},
+    effective: {
+      claude: {
+        'plan-checker': getRuntimeAgentModelState({
+          config,
+          runtime: 'claude',
+          agentId: 'plan-checker',
+          profileMap: CLAUDE_MODEL_PROFILES,
+        }),
+      },
+      opencode: {
+        'plan-checker': {
+          mode: ocOverride ? 'override' : 'inherit',
+          model: ocOverride,
+          runtimeDetectedModel: ocDetected,
+        },
+      },
+    },
+    detectedRuntimeModels: {
+      opencode: ocDetected,
+    },
+    hints: !ocOverride ? {
+      opencode: 'OpenCode currently inherits its runtime model unless you set an explicit override. Use gsdd models set --runtime opencode --agent plan-checker --model <provider/model-id> to inject an explicit checker model.',
+    } : undefined,
+  });
+}
+
+function cmdModelsProfile(profile) {
+  if (!VALID_MODEL_PROFILES.includes(profile)) {
+    console.error(`ERROR: Invalid profile "${profile}". Valid profiles: ${VALID_MODEL_PROFILES.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = ensureProjectConfig();
+  config.modelProfile = profile;
+  writeProjectConfig(config);
+  console.log(`  - set modelProfile to ${profile}`);
+}
+
+function cmdModelsAgentProfile(args) {
+  const agent = parseFlagValue(args, '--agent').value;
+  const profile = parseFlagValue(args, '--profile').value;
+
+  if (!PORTABLE_AGENT_IDS.includes(agent)) {
+    console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${PORTABLE_AGENT_IDS.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!VALID_MODEL_PROFILES.includes(profile)) {
+    console.error(`ERROR: Invalid profile "${profile}". Valid profiles: ${VALID_MODEL_PROFILES.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = ensureProjectConfig();
+  config.agentModelProfiles = config.agentModelProfiles || {};
+  config.agentModelProfiles[agent] = profile;
+  writeProjectConfig(config);
+  console.log(`  - set ${agent} semantic profile to ${profile}`);
+}
+
+function cmdModelsClearAgentProfile(args) {
+  const agent = parseFlagValue(args, '--agent').value;
+  if (!PORTABLE_AGENT_IDS.includes(agent)) {
+    console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${PORTABLE_AGENT_IDS.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = ensureProjectConfig();
+  if (config.agentModelProfiles) {
+    delete config.agentModelProfiles[agent];
+    if (Object.keys(config.agentModelProfiles).length === 0) {
+      delete config.agentModelProfiles;
+    }
+  }
+  writeProjectConfig(config);
+  console.log(`  - cleared semantic profile override for ${agent}`);
+}
+
+function cmdModelsSetRuntimeOverride(args) {
+  const runtime = parseFlagValue(args, '--runtime').value;
+  const agent = parseFlagValue(args, '--agent').value;
+  const model = parseFlagValue(args, '--model').value;
+
+  if (!MODEL_RUNTIME_IDS.includes(runtime)) {
+    console.error(`ERROR: Invalid runtime "${runtime}". Valid runtimes: ${MODEL_RUNTIME_IDS.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!PORTABLE_AGENT_IDS.includes(agent)) {
+    console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${PORTABLE_AGENT_IDS.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!model) {
+    console.error('ERROR: --model requires a value.');
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = ensureProjectConfig();
+  config.runtimeModelOverrides = config.runtimeModelOverrides || {};
+  config.runtimeModelOverrides[runtime] = config.runtimeModelOverrides[runtime] || {};
+  config.runtimeModelOverrides[runtime][agent] = model.trim();
+  writeProjectConfig(config);
+  console.log(`  - set ${runtime} runtime override for ${agent}`);
+}
+
+function cmdModelsClearRuntimeOverride(args) {
+  const runtime = parseFlagValue(args, '--runtime').value;
+  const agent = parseFlagValue(args, '--agent').value;
+
+  if (!MODEL_RUNTIME_IDS.includes(runtime)) {
+    console.error(`ERROR: Invalid runtime "${runtime}". Valid runtimes: ${MODEL_RUNTIME_IDS.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!PORTABLE_AGENT_IDS.includes(agent)) {
+    console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${PORTABLE_AGENT_IDS.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = ensureProjectConfig();
+  if (config.runtimeModelOverrides?.[runtime]) {
+    delete config.runtimeModelOverrides[runtime][agent];
+    if (Object.keys(config.runtimeModelOverrides[runtime]).length === 0) {
+      delete config.runtimeModelOverrides[runtime];
+    }
+    if (Object.keys(config.runtimeModelOverrides).length === 0) {
+      delete config.runtimeModelOverrides;
+    }
+  }
+  writeProjectConfig(config);
+  console.log(`  - cleared ${runtime} runtime override for ${agent}`);
 }
 
 function cmdFindPhase(...args) {
@@ -544,6 +800,7 @@ Commands:
                               --auto: non-interactive mode with smart defaults (requires --tools)
                               --brief <file>: copy project brief to .planning/PROJECT_BRIEF.md
   update [--tools <platform>] Regenerate adapters from latest framework sources
+  models [subcommand]         Inspect or update model profile / runtime overrides
   find-phase [N]              Show phase info as JSON (for agent consumption)
   verify <N>                  Run artifact checks for phase N
   scaffold phase <N> [name]   Create a new phase plan file
@@ -570,6 +827,11 @@ Examples:
   npx gsdd init --tools claude
   npx gsdd init --auto --tools claude --brief project-idea.md
   npx gsdd init --auto --tools all
+  npx gsdd models show
+  npx gsdd models profile quality
+  npx gsdd models agent-profile --agent plan-checker --profile quality
+  npx gsdd models set --runtime opencode --agent plan-checker --model anthropic/claude-opus-4-6
+  npx gsdd models clear --runtime opencode --agent plan-checker
   npx gsdd init --tools agents
   npx gsdd init --tools all
   npx gsdd update
@@ -697,4 +959,4 @@ function output(data) {
   console.log(JSON.stringify(data, null, 2));
 }
 
-export { cmdHelp, cmdInit, cmdUpdate, cmdFindPhase, cmdVerify, cmdScaffold, runCli };
+export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdFindPhase, cmdVerify, cmdScaffold, runCli };

@@ -84,6 +84,34 @@ function setNonInteractiveStdin() {
   };
 }
 
+async function withEnv(overrides, fn) {
+  const previous = new Map();
+  for (const [key, value] of Object.entries(overrides)) {
+    previous.set(key, Object.prototype.hasOwnProperty.call(process.env, key) ? process.env[key] : undefined);
+    if (value === undefined || value === null) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  const restore = () => {
+    for (const [key, value] of previous.entries()) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+
+  try {
+    return await fn();
+  } finally {
+    restore();
+  }
+}
+
 module.exports = {
   cleanup,
   createTempProject,
@@ -92,4 +120,5 @@ module.exports = {
   runCliAsMain,
   runCliViaJunction,
   setNonInteractiveStdin,
+  withEnv,
 };
