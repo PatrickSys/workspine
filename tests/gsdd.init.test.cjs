@@ -11,10 +11,8 @@ const {
   createTempProject,
   loadGsdd,
   readJson,
-  runCliAsMain,
   runCliViaJunction,
   setNonInteractiveStdin,
-  withEnv,
 } = require('./gsdd.helpers.cjs');
 
 function extractSection(content, startMarker, endMarker) {
@@ -91,239 +89,258 @@ describe('gsdd init and update', () => {
     assert.match(mapperTechTemplate, /\.planning\/templates\/roles\/mapper\.md/);
     assert.doesNotMatch(mapperTechTemplate, /active platform skill\/adapter/);
 
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'mapper.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'researcher.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'synthesizer.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'roadmapper.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'planner.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'verifier.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'executor.md')));
+    const requiredRoles = [
+      'mapper.md',
+      'researcher.md',
+      'synthesizer.md',
+      'roadmapper.md',
+      'planner.md',
+      'verifier.md',
+      'executor.md',
+    ];
+    for (const role of requiredRoles) {
+      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', role)));
+    }
 
     const executorRole = fs.readFileSync(
       path.join(tmpDir, '.planning', 'templates', 'roles', 'executor.md'),
       'utf-8'
     );
-    // Positive structural assertions — XML section boundaries
-    assert.match(executorRole, /<role>/);
-    assert.match(executorRole, /<scope_boundary>/);
-    assert.match(executorRole, /<deviation_rules>/);
-    assert.match(executorRole, /<authentication_gates>/);
-    assert.match(executorRole, /<output>/);
-    assert.match(executorRole, /<tdd_execution>/);
-    assert.match(executorRole, /<success_criteria>/);
-    assert.match(executorRole, /<checkpoint_protocol>/);
-    assert.match(executorRole, /<self_check>/);
-    assert.match(executorRole, /<quality_guarantees>/);
-    assert.match(executorRole, /<anti_patterns>/);
-    assert.match(executorRole, /<execution_loop>/);
-    assert.match(executorRole, /<vendor_hints>/);
-    assert.match(executorRole, /<\/vendor_hints>/);
-    assert.match(executorRole, /<\/vendor_hints>\s*$/);
-    assert.equal((executorRole.match(/<\/output>/g) || []).length, 1);
-    // Mandatory initial read
+    for (const token of [
+      '<role>',
+      '<scope_boundary>',
+      '<deviation_rules>',
+      '<authentication_gates>',
+      '<output>',
+      '<tdd_execution>',
+      '<success_criteria>',
+      '<checkpoint_protocol>',
+      '<self_check>',
+      '<quality_guarantees>',
+      '<anti_patterns>',
+      '<execution_loop>',
+      '<vendor_hints>',
+    ]) {
+      assert.match(executorRole, new RegExp(token.replace(/[<>/]/g, '\\$&')));
+    }
     assert.match(executorRole, /Mandatory initial read/i);
-    assert.match(executorRole, /read every file listed there before performing any other actions/i);
-    // Deviation rule examples
     assert.match(executorRole, /null pointer/i);
     assert.match(executorRole, /no auth on protected routes/i);
     assert.match(executorRole, /Missing dependency/i);
     assert.match(executorRole, /New DB table/i);
-    // Auth gate indicators
     assert.match(executorRole, /401/);
     assert.match(executorRole, /403/);
-    assert.match(executorRole, /Not authenticated/i);
-    // Typed output example (yaml block)
     assert.match(executorRole, /```yaml[\s\S]*deviations:/);
     assert.match(executorRole, /key_files:/);
-    // TDD steps
     assert.match(executorRole, /RED/);
     assert.match(executorRole, /GREEN/);
     assert.match(executorRole, /REFACTOR/);
-    assert.match(executorRole, /Check test infrastructure/i);
-    // Completion checklist items
     assert.match(executorRole, /\[ \] Mandatory context files read first/i);
     assert.match(executorRole, /\[ \] All `type="auto"` tasks/i);
     assert.match(executorRole, /\[ \] Authentication gates handled/i);
     assert.match(executorRole, /\[ \] .*SUMMARY\.md.* is written with substantive one-liner/i);
     assert.match(executorRole, /\[ \] Self-check passed/i);
-    // Scope boundary content
     assert.match(executorRole, /does not own planning, verification, or milestone audit/i);
-    // Summary quality gate
     assert.match(executorRole, /One-liner must be substantive/i);
-    // Negative stripping-boundary assertions
-    assert.doesNotMatch(executorRole, /~\/\.claude\//i);
-    assert.doesNotMatch(executorRole, /gsd-tools\.cjs/i);
-    assert.doesNotMatch(executorRole, /node ~\/\.claude/i);
-    assert.doesNotMatch(executorRole, /\{type\}\(\{phase\}-\{plan\}\):/);
-    assert.doesNotMatch(executorRole, /agent-history\.json/i);
-    assert.doesNotMatch(executorRole, /STRUCTURE\.md/i);
-    assert.doesNotMatch(executorRole, /INTEGRATIONS\.md/i);
-    assert.doesNotMatch(executorRole, /auto_advance/i);
-    assert.doesNotMatch(executorRole, /executor_model/i);
+    for (const banned of [
+      /~\/\.claude\//i,
+      /gsd-tools\.cjs/i,
+      /node ~\/\.claude/i,
+      /\{type\}\(\{phase\}-\{plan\}\):/,
+      /agent-history\.json/i,
+      /STRUCTURE\.md/i,
+      /INTEGRATIONS\.md/i,
+      /auto_advance/i,
+      /executor_model/i,
+    ]) {
+      assert.doesNotMatch(executorRole, banned);
+    }
 
     const synthRole = fs.readFileSync(
       path.join(tmpDir, '.planning', 'templates', 'roles', 'synthesizer.md'),
       'utf-8'
     );
-    assert.match(synthRole, /Mandatory initial read/i);
-    assert.match(synthRole, /<execution_flow>/);
-    assert.match(synthRole, /<output_format>/);
-    assert.match(synthRole, /<structured_returns>/);
-    assert.match(synthRole, /<success_criteria>/);
-    assert.match(synthRole, /\.planning\/research\/STACK\.md/);
-    assert.match(synthRole, /\.planning\/research\/FEATURES\.md/);
-    assert.match(synthRole, /\.planning\/research\/ARCHITECTURE\.md/);
-    assert.match(synthRole, /\.planning\/research\/PITFALLS\.md/);
-    assert.match(synthRole, /If any required file is missing:/);
-    assert.match(synthRole, /do not silently continue with a degraded synthesis/i);
-    assert.match(synthRole, /Write `\.planning\/research\/SUMMARY\.md`/);
-    assert.match(synthRole, /- Sources/);
-    assert.match(synthRole, /- Research Flags/);
-    assert.match(synthRole, /^sources:$/m);
-    assert.match(synthRole, /## SYNTHESIS BLOCKED/);
-    assert.match(synthRole, /\*\*Missing files:\*\*/);
-    assert.match(synthRole, /<scope_boundary>/);
-    assert.match(synthRole, /does not do new web or codebase research/i);
-    assert.match(synthRole, /does not write `\.planning\/ROADMAP\.md`/i);
-    assert.match(synthRole, /does not own git actions or commit output/i);
-    assert.match(synthRole, /```yaml[\s\S]*executive_summary:/);
-    assert.doesNotMatch(synthRole, /~\/\.claude\//i);
-    assert.doesNotMatch(synthRole, /docs: complete project research/i);
-    assert.doesNotMatch(synthRole, /cat \.planning\/research\//i);
+    for (const required of [
+      /Mandatory initial read/i,
+      /<execution_flow>/,
+      /<output_format>/,
+      /<structured_returns>/,
+      /<success_criteria>/,
+      /\.planning\/research\/STACK\.md/,
+      /\.planning\/research\/FEATURES\.md/,
+      /\.planning\/research\/ARCHITECTURE\.md/,
+      /\.planning\/research\/PITFALLS\.md/,
+      /If any required file is missing:/,
+      /do not silently continue with a degraded synthesis/i,
+      /Write `\.planning\/research\/SUMMARY\.md`/,
+      /- Sources/,
+      /- Research Flags/,
+      /^sources:$/m,
+      /## SYNTHESIS BLOCKED/,
+      /\*\*Missing files:\*\*/,
+      /<scope_boundary>/,
+      /does not do new web or codebase research/i,
+      /does not write `\.planning\/ROADMAP\.md`/i,
+      /does not own git actions or commit output/i,
+      /```yaml[\s\S]*executive_summary:/,
+    ]) {
+      assert.match(synthRole, required);
+    }
+    for (const banned of [/~\/\.claude\//i, /docs: complete project research/i, /cat \.planning\/research\//i]) {
+      assert.doesNotMatch(synthRole, banned);
+    }
 
     const roadmapperRole = fs.readFileSync(
       path.join(tmpDir, '.planning', 'templates', 'roles', 'roadmapper.md'),
       'utf-8'
     );
-    assert.match(roadmapperRole, /Mandatory initial read/i);
-    assert.match(roadmapperRole, /<coverage_validation>/);
-    assert.match(roadmapperRole, /<structured_returns>/);
-    assert.match(roadmapperRole, /<success_criteria>/);
-    assert.match(roadmapperRole, /Write `\.planning\/ROADMAP\.md`/);
-    assert.match(roadmapperRole, /## Phases/);
-    assert.match(roadmapperRole, /## Phase Details/);
-    assert.match(roadmapperRole, /`\*\*Status\*\*` must use one of: `\[ \]`, `\[-\]`, `\[x\]`/);
-    assert.match(roadmapperRole, /The `### Phase N:` headers, per-phase `\*\*Status\*\*` markers, and per-phase `\*\*Requirements\*\*` lines are parse-critical/i);
-    assert.match(roadmapperRole, /<scope_boundary>/);
-    assert.match(roadmapperRole, /does not create or redefine separate state artifacts such as `STATE\.md`/i);
-    assert.match(roadmapperRole, /## ROADMAP DRAFT/);
-    assert.match(roadmapperRole, /## ROADMAP CREATED/);
-    assert.match(roadmapperRole, /## ROADMAP REVISED/);
-    assert.match(roadmapperRole, /## ROADMAP BLOCKED/);
-    assert.match(roadmapperRole, /\*\*Artifact written:\*\* \.planning\/ROADMAP\.md/);
-    assert.match(roadmapperRole, /\*\*Status\*\*: \[ \]/);
-    assert.match(roadmapperRole, /revise the roadmap in place rather than rewriting it from scratch/i);
-    assert.match(roadmapperRole, /Options:/);
-    assert.match(roadmapperRole, /Awaiting:/);
-    assert.match(roadmapperRole, /Delete anti-enterprise filler on sight/i);
-    assert.match(roadmapperRole, /Write or update the roadmap artifact before returning/i);
-    assert.match(roadmapperRole, /```yaml[\s\S]*phase_count:/);
-    assert.doesNotMatch(roadmapperRole, /progress\/status tracking expected by the current repo runtime/i);
-    assert.doesNotMatch(roadmapperRole, /Initialize STATE\.md/i);
-    assert.doesNotMatch(roadmapperRole, /write .*STATE\.md/i);
-    assert.doesNotMatch(roadmapperRole, /~\/\.claude\//i);
-    assert.doesNotMatch(roadmapperRole, /commit/i);
+    for (const required of [
+      /Mandatory initial read/i,
+      /<coverage_validation>/,
+      /<structured_returns>/,
+      /<success_criteria>/,
+      /Write `\.planning\/ROADMAP\.md`/,
+      /## Phases/,
+      /## Phase Details/,
+      /`\*\*Status\*\*` must use one of: `\[ \]`, `\[-\]`, `\[x\]`/,
+      /parse-critical/i,
+      /<scope_boundary>/,
+      /does not create or redefine separate state artifacts such as `STATE\.md`/i,
+      /## ROADMAP DRAFT/,
+      /## ROADMAP CREATED/,
+      /## ROADMAP REVISED/,
+      /## ROADMAP BLOCKED/,
+      /\*\*Artifact written:\*\* \.planning\/ROADMAP\.md/,
+      /\*\*Status\*\*: \[ \]/,
+      /revise the roadmap in place rather than rewriting it from scratch/i,
+      /Options:/,
+      /Awaiting:/,
+      /Delete anti-enterprise filler on sight/i,
+      /Write or update the roadmap artifact before returning/i,
+      /```yaml[\s\S]*phase_count:/,
+    ]) {
+      assert.match(roadmapperRole, required);
+    }
+    for (const banned of [
+      /progress\/status tracking expected by the current repo runtime/i,
+      /Initialize STATE\.md/i,
+      /write .*STATE\.md/i,
+      /~\/\.claude\//i,
+      /commit/i,
+    ]) {
+      assert.doesNotMatch(roadmapperRole, banned);
+    }
 
     const plannerRole = fs.readFileSync(
       path.join(tmpDir, '.planning', 'templates', 'roles', 'planner.md'),
       'utf-8'
     );
-    assert.match(plannerRole, /Mandatory initial read/i);
-    assert.match(plannerRole, /<project_context>/);
-    assert.match(plannerRole, /<context_fidelity>/);
-    assert.match(plannerRole, /<structured_returns>/);
-    assert.match(plannerRole, /<success_criteria>/);
-    assert.match(plannerRole, /## Step 6: Detect TDD candidates/);
-    assert.match(plannerRole, /if you can define the expected input\/output behavior before implementation, the work is a TDD candidate/i);
-    assert.match(plannerRole, /Default is `auto`\./);
-    assert.match(plannerRole, /Any checkpoint must be justified by the task itself/i);
-    assert.match(plannerRole, /`files` must name exact paths/i);
-    assert.match(plannerRole, /`verify` must include a runnable automated command with fast feedback/i);
-    assert.match(plannerRole, /if no runnable automated check exists yet, add a prior task that creates the missing test or scaffold/i);
-    assert.match(plannerRole, /If planning from verification gaps:/);
-    assert.match(plannerRole, /use the failed truths, broken artifacts, missing key links, and reported requirement gaps as the planning scope/i);
-    assert.match(plannerRole, /<dependency_graph_example>/);
-    assert.match(plannerRole, /Wave 1: A/);
-    assert.match(plannerRole, /Wave rule:/);
-    assert.match(plannerRole, /```yaml[\s\S]*files-modified:/);
-    assert.match(plannerRole, /checkpoint:user/);
-    assert.doesNotMatch(plannerRole, /type:\s*tdd/i);
-    assert.doesNotMatch(plannerRole, /user_setup:/);
-    assert.doesNotMatch(plannerRole, /~\/\.claude\//i);
-    assert.doesNotMatch(plannerRole, /node ~\/\.claude\/get-shit-done/i);
+    for (const required of [
+      /Mandatory initial read/i,
+      /<project_context>/,
+      /<context_fidelity>/,
+      /<structured_returns>/,
+      /<success_criteria>/,
+      /## Step 6: Detect TDD candidates/,
+      /work is a TDD candidate/i,
+      /Default is `auto`\./,
+      /Any checkpoint must be justified by the task itself/i,
+      /`files` must name exact paths/i,
+      /`verify` must include a runnable automated command with fast feedback/i,
+      /if no runnable automated check exists yet, add a prior task/i,
+      /If planning from verification gaps:/,
+      /use the failed truths, broken artifacts/i,
+      /<dependency_graph_example>/,
+      /Wave 1: A/,
+      /Wave rule:/,
+      /```yaml[\s\S]*files-modified:/,
+      /checkpoint:user/,
+    ]) {
+      assert.match(plannerRole, required);
+    }
+    for (const banned of [/type:\s*tdd/i, /user_setup:/, /~\/\.claude\//i, /node ~\/\.claude\/get-shit-done/i]) {
+      assert.doesNotMatch(plannerRole, banned);
+    }
 
     const verifierRole = fs.readFileSync(
       path.join(tmpDir, '.planning', 'templates', 'roles', 'verifier.md'),
       'utf-8'
     );
-    assert.match(verifierRole, /Mandatory initial read/i);
-    assert.match(verifierRole, /<core_principle>/);
-    assert.match(verifierRole, /<output>/);
-    assert.match(verifierRole, /<success_criteria>/);
-    assert.match(verifierRole, /Discovery protocol:/);
-    assert.match(verifierRole, /locate all `\*-PLAN\.md` files for that phase before verifying implementation/i);
-    assert.match(verifierRole, /locate the previous `\*-VERIFICATION\.md` report when it exists/i);
-    assert.match(verifierRole, /treat this as re-verification/i);
-    assert.match(verifierRole, /use each success criterion directly as a truth/i);
-    assert.match(verifierRole, /Truth-level status taxonomy:/);
-    assert.match(verifierRole, /`VERIFIED`/);
-    assert.match(verifierRole, /`FAILED`/);
-    assert.match(verifierRole, /`UNCERTAIN`/);
-    assert.match(verifierRole, /\| L1 \| exists \|/);
-    assert.match(verifierRole, /\| L2 \| substantive \|/);
-    assert.match(verifierRole, /\| L3 \| wired \|/);
-    assert.match(verifierRole, /component -> API route or server action/);
-    assert.match(verifierRole, /API route or server action -> storage or external side effect/);
-    assert.match(verifierRole, /form or user interaction -> handler/);
-    assert.match(verifierRole, /state or fetched data -> rendered output/);
-    assert.match(verifierRole, /Orphaned requirements must be reported/i);
-    assert.match(verifierRole, /requirements expected by roadmap scope but claimed by no plan at all/i);
-    assert.match(verifierRole, /keep them machine-readable in frontmatter\./i);
-    assert.match(verifierRole, /Group related failures before finalizing the report/i);
-    assert.doesNotMatch(verifierRole, /frontmatter or an equivalent machine-usable top-level structure/i);
-    assert.match(verifierRole, /## Verification Basis/);
-    assert.match(verifierRole, /## Requirement Coverage/);
-    assert.match(verifierRole, /^re_verification:$/m);
-    assert.match(verifierRole, /^gaps:$/m);
-    assert.match(verifierRole, /<structured_returns>/);
-    assert.match(verifierRole, /Return a concise machine-usable summary to the orchestrator/i);
-    assert.match(verifierRole, /^report: "\.planning\/phases\/01-foundation\/01-VERIFICATION\.md"$/m);
-    assert.doesNotMatch(verifierRole, /~\/\.claude\//i);
-    assert.doesNotMatch(verifierRole, /grep -E/i);
-    assert.doesNotMatch(verifierRole, /node ~\/\.claude\/get-shit-done/i);
+    for (const required of [
+      /Mandatory initial read/i,
+      /<core_principle>/,
+      /<output>/,
+      /<success_criteria>/,
+      /Discovery protocol:/,
+      /locate all `\*-PLAN\.md` files/i,
+      /locate the previous `\*-VERIFICATION\.md` report/i,
+      /treat this as re-verification/i,
+      /use each success criterion directly as a truth/i,
+      /Truth-level status taxonomy:/,
+      /`VERIFIED`/,
+      /`FAILED`/,
+      /`UNCERTAIN`/,
+      /\| L1 \| exists \|/,
+      /\| L2 \| substantive \|/,
+      /\| L3 \| wired \|/,
+      /component -> API route or server action/,
+      /API route or server action -> storage or external side effect/,
+      /form or user interaction -> handler/,
+      /state or fetched data -> rendered output/,
+      /Orphaned requirements must be reported/i,
+      /requirements expected by roadmap scope but claimed by no plan at all/i,
+      /keep them machine-readable in frontmatter\./i,
+      /Group related failures before finalizing the report/i,
+      /## Verification Basis/,
+      /## Requirement Coverage/,
+      /^re_verification:$/m,
+      /^gaps:$/m,
+      /<structured_returns>/,
+      /Return a concise machine-usable summary to the orchestrator/i,
+      /^report: "\.planning\/phases\/01-foundation\/01-VERIFICATION\.md"$/m,
+    ]) {
+      assert.match(verifierRole, required);
+    }
+    for (const banned of [
+      /frontmatter or an equivalent machine-usable top-level structure/i,
+      /~\/\.claude\//i,
+      /grep -E/i,
+      /node ~\/\.claude\/get-shit-done/i,
+    ]) {
+      assert.doesNotMatch(verifierRole, banned);
+    }
 
     const planSkill = fs.readFileSync(
       path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
       'utf-8'
     );
+    for (const required of [
+      /How Plan Checking Works/,
+      /independent checker may review it in fresh context/i,
+      /at least one runnable command/i,
+      /first phase with status `\[ \]` or `\[-\]`/i,
+      /^phase: 01-foundation$/m,
+      /^files-modified:$/m,
+      /^autonomous: true$/m,
+      /^must_haves:$/m,
+      /<task id="01-01" type="auto">/,
+      /checkpoint:user/,
+      /checkpoint:review/,
+    ]) {
+      assert.match(planSkill, required);
+    }
     assert.doesNotMatch(planSkill, /AUDIT STATUS: This workflow is a stub/);
-    assert.match(planSkill, /How Plan Checking Works/);
-    assert.match(planSkill, /independent checker may review it in fresh context/i);
-    assert.match(planSkill, /at least one runnable command/i);
-    assert.match(planSkill, /first phase with status `\[ \]` or `\[-\]`/i);
-    assert.match(planSkill, /^phase: 01-foundation$/m);
-    assert.match(planSkill, /^files-modified:$/m);
-    assert.match(planSkill, /^autonomous: true$/m);
-    assert.match(planSkill, /^must_haves:$/m);
-    assert.match(planSkill, /<task id="01-01" type="auto">/);
-    assert.match(planSkill, /checkpoint:user/);
-    assert.match(planSkill, /checkpoint:review/);
-    assert.doesNotMatch(planSkill, /â|ðŸ|âœ|â†/);
+    assert.doesNotMatch(planSkill, /Ã¢|Ã°Å¸|Ã¢Å“|Ã¢â€ /);
     assert.ok((planSkill.match(/- Run `[^`]+`/g) || []).length >= 3);
 
     const exampleTask = extractExampleTask(planSkill);
     const exampleFilePaths = collectTestPaths(exampleTask.match(/<files>[\s\S]*?<\/files>/)?.[0] || '');
     const exampleVerifyPaths = collectTestPaths(exampleTask.match(/<verify>[\s\S]*?<\/verify>/)?.[0] || '');
     for (const testPath of exampleVerifyPaths) {
-      assert.ok(
-        exampleFilePaths.includes(testPath),
-        `Example verify path must appear in <files>: ${testPath}`
-      );
+      assert.ok(exampleFilePaths.includes(testPath), `Example verify path must appear in <files>: ${testPath}`);
     }
 
     const specificitySection = extractSection(planSkill, '### Specificity Rules', '</task_format>');
-    // Rows use quoted strings but may have trailing whitespace; filter by backtick
-    // presence (from runnable commands) to reliably identify specificity example rows.
     const specificityRows = specificitySection
       .split('\n')
       .filter((line) => line.startsWith('|'))
@@ -332,8 +349,7 @@ describe('gsdd init and update', () => {
     assert.ok(specificityRows.length >= 4, 'Expected specificity examples to remain present');
     for (const row of specificityRows) {
       const cells = row.split('|').map((cell) => cell.trim());
-      const justRight = cells[2];
-      assert.match(justRight, /run `[^`]+`/i, `Specificity example must include a runnable command: ${row}`);
+      assert.match(cells[2], /run `[^`]+`/i, `Specificity example must include a runnable command: ${row}`);
     }
 
     const planCheckerTemplate = fs.readFileSync(
@@ -350,36 +366,42 @@ describe('gsdd init and update', () => {
       path.join(tmpDir, '.agents', 'skills', 'gsdd-execute', 'SKILL.md'),
       'utf-8'
     );
-    assert.match(executeSkill, /type="checkpoint:user"/);
-    assert.match(executeSkill, /type="checkpoint:review"/);
-    assert.match(executeSkill, /\[x\] \*\*Phase \{N\}:/);
-    assert.match(executeSkill, /DO NOT freelance/);
-    assert.match(executeSkill, /Checkpoint tasks are contract boundaries/i);
-    assert.match(executeSkill, /stale reference/i);
+    for (const required of [
+      /type="checkpoint:user"/,
+      /type="checkpoint:review"/,
+      /\[x\] \*\*Phase \{N\}:/,
+      /DO NOT freelance/,
+      /Checkpoint tasks are contract boundaries/i,
+      /stale reference/i,
+      /Mandatory context files read first when provided/i,
+      /Authentication gates handled with the auth-gate protocol/i,
+    ]) {
+      assert.match(executeSkill, required);
+    }
     assert.doesNotMatch(executeSkill, /MARK DONE in the plan file/i);
-    assert.doesNotMatch(executeSkill, /â|ðŸ|âœ|â†/);
-    assert.match(executeSkill, /Mandatory context files read first when provided/i);
-    assert.match(executeSkill, /Authentication gates handled with the auth-gate protocol/i);
+    assert.doesNotMatch(executeSkill, /Ã¢|Ã°Å¸|Ã¢Å“|Ã¢â€ /);
 
     const verifySkill = fs.readFileSync(
       path.join(tmpDir, '.agents', 'skills', 'gsdd-verify', 'SKILL.md'),
       'utf-8'
     );
-    assert.match(verifySkill, /^status: gaps_found$/m);
-    assert.match(verifySkill, /^re_verification:$/m);
-    assert.match(verifySkill, /^gaps:$/m);
-    assert.match(verifySkill, /^human_verification:$/m);
-    assert.match(verifySkill, /\*\*Status:\*\* \[passed \| gaps_found \| human_needed\]/);
-    assert.match(verifySkill, /treat this as re-verification/i);
-    assert.match(verifySkill, /does not claim milestone-wide integration completeness/i);
-    assert.doesNotMatch(verifySkill, /â|ðŸ|âœ|â†/);
-
-    // Gap closures from verify.md source audit (PR #17)
-    assert.match(verifySkill, /Do not return a flat symptom list/i);
-    assert.match(verifySkill, /requirements expected by roadmap scope but claimed by no plan/i);
-    assert.match(verifySkill, /do not collapse .* into prose-only body text/i);
-    assert.match(verifySkill, /verification basis/i);
-    assert.match(verifySkill, /Orphaned requirements must be reported/i);
+    for (const required of [
+      /^status: gaps_found$/m,
+      /^re_verification:$/m,
+      /^gaps:$/m,
+      /^human_verification:$/m,
+      /\*\*Status:\*\* \[passed \| gaps_found \| human_needed\]/,
+      /treat this as re-verification/i,
+      /does not claim milestone-wide integration completeness/i,
+      /Do not return a flat symptom list/i,
+      /requirements expected by roadmap scope but claimed by no plan/i,
+      /do not collapse .* into prose-only body text/i,
+      /verification basis/i,
+      /Orphaned requirements must be reported/i,
+    ]) {
+      assert.match(verifySkill, required);
+    }
+    assert.doesNotMatch(verifySkill, /Ã¢|Ã°Å¸|Ã¢Å“|Ã¢â€ /);
   });
 
   test('delegates reference canonical role contracts', async () => {
@@ -435,11 +457,7 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'gsdd-new-project', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')));
-    assert.strictEqual(
-      fs.existsSync(path.join(tmpDir, '.codex', 'AGENTS.md')),
-      false,
-      '.codex/AGENTS.md should not be generated for deprecated codex tool'
-    );
+    assert.strictEqual(fs.existsSync(path.join(tmpDir, '.codex', 'AGENTS.md')), false);
     assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'commands', 'gsdd-new-project.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
@@ -495,16 +513,8 @@ describe('gsdd init and update', () => {
     }
 
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
-    assert.strictEqual(
-      fs.existsSync(path.join(tmpDir, '.codex', 'AGENTS.md')),
-      false,
-      '.codex/AGENTS.md should not be generated for deprecated codex tool'
-    );
-    assert.strictEqual(
-      fs.existsSync(path.join(tmpDir, '.claude', 'skills')),
-      false,
-      'explicit --tools codex should not fall back to detected Claude adapters'
-    );
+    assert.strictEqual(fs.existsSync(path.join(tmpDir, '.codex', 'AGENTS.md')), false);
+    assert.strictEqual(fs.existsSync(path.join(tmpDir, '.claude', 'skills')), false);
     assert.match(output, /--tools codex` is deprecated/i);
   });
 
@@ -525,10 +535,8 @@ describe('gsdd init and update', () => {
     }
 
     const agents = fs.readFileSync(agentsPath, 'utf-8');
-    const beginMatches = agents.match(/<!-- BEGIN GSDD -->/g) || [];
-    const endMatches = agents.match(/<!-- END GSDD -->/g) || [];
-    assert.strictEqual(beginMatches.length, 1);
-    assert.strictEqual(endMatches.length, 1);
+    assert.strictEqual((agents.match(/<!-- BEGIN GSDD -->/g) || []).length, 1);
+    assert.strictEqual((agents.match(/<!-- END GSDD -->/g) || []).length, 1);
     assert.match(agents, /# Local Rules/);
     assert.doesNotMatch(agents, /old block/);
   });
@@ -590,11 +598,7 @@ describe('gsdd init and update', () => {
       console.log = previousLog;
     }
 
-    assert.strictEqual(
-      fs.existsSync(path.join(tmpDir, '.claude', 'skills')),
-      false,
-      'explicit --tools codex update should not fall back to detected Claude adapters'
-    );
+    assert.strictEqual(fs.existsSync(path.join(tmpDir, '.claude', 'skills')), false);
     assert.match(output, /--tools codex` is deprecated/i);
     assert.match(output, /updated open-standard skills/);
   });
@@ -659,8 +663,14 @@ describe('gsdd init and update', () => {
 
       const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
       const expectedKeys = [
-        'researchDepth', 'parallelization', 'commitDocs',
-        'modelProfile', 'workflow', 'gitProtocol', 'initVersion', 'autoAdvance',
+        'researchDepth',
+        'parallelization',
+        'commitDocs',
+        'modelProfile',
+        'workflow',
+        'gitProtocol',
+        'initVersion',
+        'autoAdvance',
       ];
       for (const key of expectedKeys) {
         assert.ok(key in config, `config.json missing expected key: ${key}`);
@@ -712,7 +722,7 @@ describe('gsdd init and update', () => {
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         config.researchDepth = 'deep';
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-        await gsdd.cmdInit('--auto', '--tools', 'claude');  // re-run
+        await gsdd.cmdInit('--auto', '--tools', 'claude');
         const reread = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         assert.strictEqual(reread.researchDepth, 'deep', 're-init must not overwrite existing config');
       } finally {
@@ -781,880 +791,6 @@ describe('gsdd init and update', () => {
       }
 
       assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
-    });
-  });
-
-  describe('model profile propagation', () => {
-    function writeOpenCodeConfig(projectDir, config) {
-      fs.writeFileSync(
-        path.join(projectDir, 'opencode.json'),
-        JSON.stringify(config, null, 2)
-      );
-    }
-
-    test('quality profile injects model: opus into Claude plan-checker', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'quality',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--tools', 'claude');
-      } finally {
-        restoreStdin();
-      }
-
-      const checker = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.match(checker, /^model: opus$/m);
-    });
-
-    test('balanced profile (default --auto) injects model: sonnet into Claude plan-checker', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--auto', '--tools', 'claude');
-      } finally {
-        restoreStdin();
-      }
-
-      const checker = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.match(checker, /^model: sonnet$/m);
-    });
-
-    test('budget profile injects model: haiku into Claude plan-checker', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'budget',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--tools', 'claude');
-      } finally {
-        restoreStdin();
-      }
-
-      const checker = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.match(checker, /^model: haiku$/m);
-    });
-
-    test('OpenCode omits model by default even when runtime config exists', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      writeOpenCodeConfig(tmpDir, { model: 'anthropic/claude-opus-4-5' });
-
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--tools', 'opencode');
-      } finally {
-        restoreStdin();
-      }
-
-      const checker = fs.readFileSync(
-        path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.doesNotMatch(checker, /^model:/m);
-    });
-
-    test('OpenCode runtime override injects exact model id verbatim', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          runtimeModelOverrides: {
-            opencode: {
-              'plan-checker': 'anthropic/claude-opus-4-6',
-            },
-          },
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      writeOpenCodeConfig(tmpDir, { model: 'openai/gpt-5' });
-
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--tools', 'opencode');
-      } finally {
-        restoreStdin();
-      }
-
-      const checker = fs.readFileSync(
-        path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.match(checker, /^model: anthropic\/claude-opus-4-6$/m);
-    });
-
-    test('OpenCode semantic agent profile alone does not inject runtime model', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          agentModelProfiles: {
-            'plan-checker': 'quality',
-          },
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      writeOpenCodeConfig(tmpDir, { model: 'anthropic/claude-sonnet-4-5' });
-
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--tools', 'opencode');
-      } finally {
-        restoreStdin();
-      }
-
-      const checker = fs.readFileSync(
-        path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.doesNotMatch(checker, /^model:/m);
-    });
-
-    test('OpenCode update re-renders model after runtime override changes', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      writeOpenCodeConfig(tmpDir, { model: 'openai/gpt-5' });
-
-      let gsdd;
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--tools', 'opencode');
-      } finally {
-        restoreStdin();
-      }
-
-      let checker = fs.readFileSync(
-        path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.doesNotMatch(checker, /^model:/m);
-
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          runtimeModelOverrides: {
-            opencode: {
-              'plan-checker': 'openai/gpt-5.2',
-            },
-          },
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      await gsdd.cmdUpdate('--tools', 'opencode');
-
-      checker = fs.readFileSync(
-        path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.match(checker, /^model: openai\/gpt-5\.2$/m);
-
-      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
-      delete config.runtimeModelOverrides;
-      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify(config, null, 2));
-      await gsdd.cmdUpdate('--tools', 'opencode');
-
-      checker = fs.readFileSync(
-        path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.doesNotMatch(checker, /^model:/m);
-    });
-
-    test('Claude semantic agent profile overrides global model profile', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'budget',
-          agentModelProfiles: {
-            'plan-checker': 'quality',
-          },
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--tools', 'claude');
-      } finally {
-        restoreStdin();
-      }
-
-      const checker = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.match(checker, /^model: opus$/m);
-    });
-
-    test('Claude runtime override wins over semantic profile', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'quality',
-          runtimeModelOverrides: {
-            claude: {
-              'plan-checker': 'haiku',
-            },
-          },
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--tools', 'claude');
-      } finally {
-        restoreStdin();
-      }
-
-      const checker = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
-        'utf-8'
-      );
-      assert.match(checker, /^model: haiku$/m);
-    });
-  });
-
-  describe('models command', () => {
-    test('models show reports effective runtime model state', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'quality',
-          agentModelProfiles: {
-            'plan-checker': 'budget',
-          },
-          runtimeModelOverrides: {
-            opencode: {
-              'plan-checker': 'anthropic/claude-opus-4-6',
-            },
-          },
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      fs.writeFileSync(
-        path.join(tmpDir, 'opencode.json'),
-        JSON.stringify({ model: 'anthropic/claude-sonnet-4-5' }, null, 2)
-      );
-
-      const result = await runCliAsMain(tmpDir, ['models', 'show']);
-      assert.strictEqual(result.exitCode, 0);
-
-      const payload = JSON.parse(result.output);
-      assert.strictEqual(payload.modelProfile, 'quality');
-      assert.strictEqual(payload.agentModelProfiles['plan-checker'], 'budget');
-      assert.strictEqual(payload.runtimeModelOverrides.opencode['plan-checker'], 'anthropic/claude-opus-4-6');
-      assert.deepStrictEqual(payload.effective.claude['plan-checker'], {
-        mode: 'mapped',
-        model: 'haiku',
-        source: 'agentModelProfile',
-      });
-      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
-        mode: 'override',
-        model: 'anthropic/claude-opus-4-6',
-        runtimeDetectedModel: 'anthropic/claude-sonnet-4-5',
-      });
-      assert.strictEqual(payload.detectedRuntimeModels.opencode, 'anthropic/claude-sonnet-4-5');
-    });
-
-    test('models profile writes global modelProfile', async () => {
-      const result = await runCliAsMain(tmpDir, ['models', 'profile', 'quality']);
-      assert.strictEqual(result.exitCode, 0);
-
-      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
-      assert.strictEqual(config.modelProfile, 'quality');
-    });
-
-    test('models agent-profile writes semantic agent override', async () => {
-      const result = await runCliAsMain(tmpDir, ['models', 'agent-profile', '--agent', 'plan-checker', '--profile', 'quality']);
-      assert.strictEqual(result.exitCode, 0);
-
-      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
-      assert.strictEqual(config.agentModelProfiles['plan-checker'], 'quality');
-    });
-
-    test('models set writes runtime override and clear removes it', async () => {
-      let result = await runCliAsMain(tmpDir, ['models', 'set', '--runtime', 'opencode', '--agent', 'plan-checker', '--model', 'anthropic/claude-opus-4-6']);
-      assert.strictEqual(result.exitCode, 0);
-
-      let config = readJson(path.join(tmpDir, '.planning', 'config.json'));
-      assert.strictEqual(config.runtimeModelOverrides.opencode['plan-checker'], 'anthropic/claude-opus-4-6');
-
-      result = await runCliAsMain(tmpDir, ['models', 'clear', '--runtime', 'opencode', '--agent', 'plan-checker']);
-      assert.strictEqual(result.exitCode, 0);
-
-      config = readJson(path.join(tmpDir, '.planning', 'config.json'));
-      assert.strictEqual(config.runtimeModelOverrides, undefined);
-    });
-
-    test('models clear-agent-profile removes semantic override only', async () => {
-      await runCliAsMain(tmpDir, ['models', 'agent-profile', '--agent', 'plan-checker', '--profile', 'quality']);
-      const result = await runCliAsMain(tmpDir, ['models', 'clear-agent-profile', '--agent', 'plan-checker']);
-      assert.strictEqual(result.exitCode, 0);
-
-      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
-      assert.strictEqual(config.agentModelProfiles, undefined);
-    });
-
-    test('models show displays inherited model when no OpenCode override exists', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      fs.writeFileSync(
-        path.join(tmpDir, 'opencode.json'),
-        JSON.stringify({ model: 'anthropic/claude-sonnet-4-5' }, null, 2)
-      );
-
-      const result = await runCliAsMain(tmpDir, ['models', 'show']);
-      assert.strictEqual(result.exitCode, 0);
-
-      const payload = JSON.parse(result.output);
-      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
-        mode: 'inherit',
-        model: null,
-        runtimeDetectedModel: 'anthropic/claude-sonnet-4-5',
-      });
-      assert.ok(payload.hints);
-      assert.ok(payload.hints.opencode);
-      assert.match(payload.hints.opencode, /OpenCode currently inherits its runtime model/);
-    });
-
-    test('models show displays no-detection message when no OpenCode config exists', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-
-      const result = await runCliAsMain(tmpDir, ['models', 'show']);
-      assert.strictEqual(result.exitCode, 0);
-
-      const payload = JSON.parse(result.output);
-      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
-        mode: 'inherit',
-        model: null,
-        runtimeDetectedModel: null,
-      });
-      assert.ok(payload.hints);
-      assert.ok(payload.hints.opencode);
-    });
-
-    test('models show omits hints when OpenCode runtime override exists', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          runtimeModelOverrides: {
-            opencode: {
-              'plan-checker': 'anthropic/claude-opus-4-6',
-            },
-          },
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-
-      const result = await runCliAsMain(tmpDir, ['models', 'show']);
-      assert.strictEqual(result.exitCode, 0);
-
-      const payload = JSON.parse(result.output);
-      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
-        mode: 'override',
-        model: 'anthropic/claude-opus-4-6',
-        runtimeDetectedModel: null,
-      });
-      assert.strictEqual(payload.hints, undefined);
-    });
-
-    test('models show detects OpenCode model from OPENCODE_CONFIG', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      const customConfigPath = path.join(tmpDir, 'custom-opencode.json');
-      fs.writeFileSync(customConfigPath, JSON.stringify({ model: 'openai/gpt-5.2' }, null, 2));
-
-      const result = await withEnv({ OPENCODE_CONFIG: customConfigPath }, async () => (
-        runCliAsMain(tmpDir, ['models', 'show'])
-      ));
-      assert.strictEqual(result.exitCode, 0);
-
-      const payload = JSON.parse(result.output);
-      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
-        mode: 'inherit',
-        model: null,
-        runtimeDetectedModel: 'openai/gpt-5.2',
-      });
-      assert.strictEqual(payload.detectedRuntimeModels.opencode, 'openai/gpt-5.2');
-    });
-
-    test('models show lets OPENCODE_CONFIG_CONTENT override file config', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      fs.writeFileSync(
-        path.join(tmpDir, 'opencode.json'),
-        JSON.stringify({ model: 'anthropic/claude-sonnet-4-5' }, null, 2)
-      );
-
-      const result = await withEnv({
-        OPENCODE_CONFIG_CONTENT: JSON.stringify({ model: 'openai/gpt-5.2' }),
-      }, async () => runCliAsMain(tmpDir, ['models', 'show']));
-      assert.strictEqual(result.exitCode, 0);
-
-      const payload = JSON.parse(result.output);
-      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
-        mode: 'inherit',
-        model: null,
-        runtimeDetectedModel: 'openai/gpt-5.2',
-      });
-      assert.strictEqual(payload.detectedRuntimeModels.opencode, 'openai/gpt-5.2');
-    });
-
-    test('models show falls back to file config when OPENCODE_CONFIG_CONTENT is malformed', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      fs.writeFileSync(
-        path.join(tmpDir, 'opencode.json'),
-        JSON.stringify({ model: 'anthropic/claude-sonnet-4-5' }, null, 2)
-      );
-
-      const result = await withEnv({
-        OPENCODE_CONFIG_CONTENT: '{not valid json',
-      }, async () => runCliAsMain(tmpDir, ['models', 'show']));
-      assert.strictEqual(result.exitCode, 0);
-
-      const payload = JSON.parse(result.output);
-      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
-        mode: 'inherit',
-        model: null,
-        runtimeDetectedModel: 'anthropic/claude-sonnet-4-5',
-      });
-      assert.strictEqual(payload.detectedRuntimeModels.opencode, 'anthropic/claude-sonnet-4-5');
-    });
-
-    test('models rejects invalid runtime', async () => {
-      const result = await runCliAsMain(tmpDir, ['models', 'set', '--runtime', 'copilot', '--agent', 'plan-checker', '--model', 'foo']);
-      assert.strictEqual(result.exitCode, 1);
-      assert.match(result.output, /Invalid runtime/);
-    });
-
-    test('models show falls back to file config when OPENCODE_CONFIG_CONTENT has an unterminated block comment', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({
-          modelProfile: 'balanced',
-          researchDepth: 'balanced',
-          parallelization: true,
-          commitDocs: true,
-          workflow: { research: true, planCheck: true, verifier: true },
-          gitProtocol: { branch: '', commit: '', pr: '' },
-          initVersion: 'v1.1',
-        }, null, 2)
-      );
-      fs.writeFileSync(
-        path.join(tmpDir, 'opencode.json'),
-        JSON.stringify({ model: 'openai/gpt-5.2' }, null, 2)
-      );
-
-      const result = await withEnv({
-        OPENCODE_CONFIG_CONTENT: '/* unterminated',
-      }, async () => runCliAsMain(tmpDir, ['models', 'show']));
-      assert.strictEqual(result.exitCode, 0);
-
-      const payload = JSON.parse(result.output);
-      assert.deepStrictEqual(payload.effective.opencode['plan-checker'], {
-        mode: 'inherit',
-        model: null,
-        runtimeDetectedModel: 'openai/gpt-5.2',
-      });
-      assert.strictEqual(payload.detectedRuntimeModels.opencode, 'openai/gpt-5.2');
-    });
-
-    test('mutation commands include update reminder', async () => {
-      let result = await runCliAsMain(tmpDir, ['models', 'profile', 'quality']);
-      assert.match(result.output, /Run gsdd update/);
-
-      result = await runCliAsMain(tmpDir, ['models', 'agent-profile', '--agent', 'plan-checker', '--profile', 'budget']);
-      assert.match(result.output, /Run gsdd update/);
-
-      result = await runCliAsMain(tmpDir, ['models', 'set', '--runtime', 'claude', '--agent', 'plan-checker', '--model', 'opus']);
-      assert.match(result.output, /Run gsdd update/);
-
-      result = await runCliAsMain(tmpDir, ['models', 'clear', '--runtime', 'claude', '--agent', 'plan-checker']);
-      assert.match(result.output, /Run gsdd update/);
-
-      result = await runCliAsMain(tmpDir, ['models', 'clear-agent-profile', '--agent', 'plan-checker']);
-      assert.match(result.output, /Run gsdd update/);
-    });
-  });
-
-  // --- Generation Manifest Tests ---
-
-  describe('generation manifest', () => {
-    test('init writes generation-manifest.json with correct shape', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
-      assert.ok(fs.existsSync(manifestPath), 'generation-manifest.json must exist after init');
-
-      const manifest = readJson(manifestPath);
-      assert.ok(manifest.frameworkVersion, 'manifest must have frameworkVersion');
-      assert.ok(manifest.generatedAt, 'manifest must have generatedAt');
-      assert.ok(manifest.templates, 'manifest must have templates');
-      assert.ok(manifest.templates.delegates, 'manifest must have templates.delegates');
-      assert.ok(manifest.templates.research, 'manifest must have templates.research');
-      assert.ok(manifest.templates.codebase, 'manifest must have templates.codebase');
-      assert.ok(manifest.templates.root, 'manifest must have templates.root');
-      assert.ok(manifest.roles, 'manifest must have roles');
-
-      // Verify delegate count (>=10)
-      const delegateCount = Object.keys(manifest.templates.delegates).length;
-      assert.ok(delegateCount >= 10, `Expected >=10 delegate hashes, got ${delegateCount}`);
-
-      // Verify role count (>=9)
-      const roleCount = Object.keys(manifest.roles).length;
-      assert.ok(roleCount >= 9, `Expected >=9 role hashes, got ${roleCount}`);
-
-      // Verify SHA-256 format (64 hex chars)
-      const firstDelegateHash = Object.values(manifest.templates.delegates)[0];
-      assert.match(firstDelegateHash, /^[a-f0-9]{64}$/, 'hash must be SHA-256 hex');
-    });
-
-    test('update --templates refreshes corrupted delegate', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      // Corrupt a delegate
-      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
-      fs.writeFileSync(delegatePath, 'stale content');
-
-      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
-      assert.strictEqual(result.exitCode, 0);
-      assert.match(result.output, /refreshed delegates\/mapper-tech\.md/);
-
-      // Verify content was restored
-      const restored = fs.readFileSync(delegatePath, 'utf-8');
-      assert.ok(restored.includes('role'), 'Restored delegate must reference role contract');
-      assert.notStrictEqual(restored, 'stale content', 'Delegate must no longer be stale');
-    });
-
-    test('update --templates warns about user-modified files', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      // Modify a delegate (simulates user edit — hash differs from manifest)
-      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
-      fs.writeFileSync(delegatePath, 'user-modified content');
-
-      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
-      assert.match(result.output, /WARN.*mapper-tech\.md/);
-    });
-
-    test('update --dry does not write files', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      // Corrupt a delegate
-      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
-      fs.writeFileSync(delegatePath, 'stale content');
-
-      const result = await runCliAsMain(tmpDir, ['update', '--templates', '--dry']);
-      assert.match(result.output, /would refresh delegates\/mapper-tech\.md/);
-      assert.match(result.output, /Dry run/);
-
-      // File must still be stale
-      const content = fs.readFileSync(delegatePath, 'utf-8');
-      assert.strictEqual(content, 'stale content', 'Dry run must not modify files');
-    });
-
-    test('update --templates refreshes role contracts', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      // Corrupt a role
-      const rolePath = path.join(tmpDir, '.planning', 'templates', 'roles', 'mapper.md');
-      fs.writeFileSync(rolePath, 'stale role');
-
-      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
-      assert.match(result.output, /refreshed roles\/mapper\.md/);
-
-      const restored = fs.readFileSync(rolePath, 'utf-8');
-      assert.ok(restored.includes('Responsibility') || restored.includes('<role>'), 'Restored role must contain role contract content');
-    });
-
-    test('update --templates skips unchanged files', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      // Run update --templates without corrupting anything
-      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
-      assert.ok(!result.output.includes('refreshed delegates/'), 'Should not refresh unchanged delegates');
-      assert.ok(!result.output.includes('refreshed roles/'), 'Should not refresh unchanged roles');
-    });
-
-    test('update without --templates does not touch templates', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      // Corrupt a delegate
-      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
-      fs.writeFileSync(delegatePath, 'stale content');
-
-      const result = await runCliAsMain(tmpDir, ['update']);
-      // No template refresh output
-      assert.ok(!result.output.includes('refreshed delegates/'), 'Plain update must not refresh templates');
-
-      // File must still be stale
-      const content = fs.readFileSync(delegatePath, 'utf-8');
-      assert.strictEqual(content, 'stale content', 'Plain update must not modify templates');
-    });
-
-    test('update without --templates does not rewrite manifest', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
-      const beforeContent = fs.readFileSync(manifestPath, 'utf-8');
-
-      // Modify a delegate so manifest would change if rebuilt
-      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
-      fs.writeFileSync(delegatePath, 'user-modified content');
-
-      const result = await runCliAsMain(tmpDir, ['update']);
-      assert.strictEqual(result.exitCode, 0);
-
-      // Manifest must be unchanged — plain update must not re-baseline
-      const afterContent = fs.readFileSync(manifestPath, 'utf-8');
-      assert.strictEqual(afterContent, beforeContent, 'Plain update must not rewrite manifest');
-    });
-
-    test('dry-run --templates creates no directories in fresh project', async () => {
-      // Do NOT run init — start from a bare temp dir (no .planning/)
-      const planningDir = path.join(tmpDir, '.planning');
-      assert.ok(!fs.existsSync(planningDir), 'Precondition: .planning must not exist');
-
-      const result = await runCliAsMain(tmpDir, ['update', '--templates', '--dry']);
-      assert.match(result.output, /Dry run/);
-
-      // Verify no directories were created
-      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates')),
-        'Dry run must not create .planning/templates/delegates');
-      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles')),
-        'Dry run must not create .planning/templates/roles');
-    });
-
-    test('update --templates removes orphaned root templates', async () => {
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit();
-      } finally {
-        restoreStdin();
-      }
-
-      // Plant a fake root template that does not exist in framework source
-      const orphanPath = path.join(tmpDir, '.planning', 'templates', 'obsolete-template.md');
-      fs.writeFileSync(orphanPath, '# Obsolete');
-
-      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
-      assert.strictEqual(result.exitCode, 0);
-      assert.match(result.output, /removed orphan templates\/obsolete-template\.md/);
-
-      // Orphan must be gone
-      assert.ok(!fs.existsSync(orphanPath), 'Orphaned root template must be removed');
     });
   });
 });
