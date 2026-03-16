@@ -24,6 +24,7 @@
 14. [Headless Mode](#14-headless-mode)
 15. [Model Profile Propagation](#15-model-profile-propagation)
 16. [Template Versioning via Generation Manifest](#16-template-versioning-via-generation-manifest)
+17. [CLI Composition Root Boundary](#17-cli-composition-root-boundary)
 
 ---
 
@@ -743,6 +744,52 @@ independent concerns — config shape can change without template changes and vi
   (angular.dev/cli/update, turbo.build/repo/docs/guides/migrate)
 - Langfuse: generation/prompt versioning with hash-based change detection
   (langfuse.com/docs/prompts/get-started)
+
+---
+
+## 17. CLI Composition Root Boundary
+
+**GSD:** `install.js` and adjacent install/generation logic mix orchestration, runtime-specific conversion,
+template syncing, prompts, and filesystem writes in one large entry surface.
+
+**GSDD before D17 Session 2:** `bin/gsdd.mjs` had already pushed vendor rendering into `bin/adapters/`, but it
+still mixed CLI composition with bootstrap command bodies, template refresh logic, prompt flows, and update
+dispatch in a single file.
+
+**GSDD after D17 Session 2:** `bin/gsdd.mjs` is a thin composition root. It owns:
+- top-level constants (`WORKFLOWS`, `FRAMEWORK_VERSION`, path roots)
+- adapter registry construction
+- command registry wiring
+- `runCli`
+- stable exported command handles for tests
+
+Implementation lives under `bin/lib/`:
+- `cli-utils.mjs` owns flag parsing and JSON output helpers
+- `models.mjs` owns config/model schema and `cmdModels`
+- `phase.mjs` owns phase discovery, verify, and scaffold commands
+- `templates.mjs` owns template/role install and refresh flows
+- `init.mjs` owns `createCmdInit(ctx)`, `createCmdUpdate(ctx)`, help text, and bootstrap/update helper logic
+
+**Boundary rules:**
+- keep `bin/gsdd.mjs` as composition root, not a second implementation module
+- keep config-schema ownership in `models.mjs`; do not duplicate or relocate `buildDefaultConfig` into `init.mjs`
+  just to satisfy an old task list
+- let `init` use the same template-sync module that `update --templates` uses, instead of maintaining separate
+  copy logic
+- enforce the boundary with code-structure guard tests, not by re-auditing the file manually each session
+
+**Why this split:**
+- it reduces the regression surface when bootstrap or template-refresh logic changes
+- it keeps command logic close to the helpers it depends on
+- it preserves a stable import surface for tests while making the main CLI file small enough to inspect quickly
+- it aligns with the existing D9/D15/D16 direction: adapters own runtime-specific behavior; `bin/lib/` owns
+  framework logic; `bin/gsdd.mjs` wires them together
+
+**Evidence:**
+- GSD source: `get-shit-done/install.js` (monolithic install/conversion surface)
+- GSDD implementation: `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/models.mjs`
+- GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`,
+  `tests/gsdd.guards.test.cjs`
 
 ---
 
