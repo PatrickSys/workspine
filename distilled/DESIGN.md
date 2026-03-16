@@ -800,7 +800,7 @@ Implementation lives under `bin/lib/`:
 
 **GSDD (before this decision):** Codex CLI was a skills-first runtime at ~40% parity. It consumed the portable `.agents/skills/gsdd-*/SKILL.md` surface but had no native plan-checker, no orchestration loop, no model control, and no dedicated adapter module. `--tools codex` was deprecated and silently stripped. Every Codex plan ran in silent `reduced_assurance` mode.
 
-**GSDD (after this decision):** Codex CLI is promoted to `native_capable` — same tier as Claude Code and OpenCode. A dedicated `bin/adapters/codex.mjs` generates `.codex/agents/gsdd-plan-checker.toml` (read-only TOML agent with the plan-checker delegate) and overrides the gsdd-plan skill with Codex-native orchestration (fresh-context subagent spawn, max-3 revision loop, typed JSON feedback, escalation). `--tools codex` is reinstated as an active adapter flag.
+**GSDD (after this decision):** Codex CLI is promoted to `native_capable` — same tier as Claude Code and OpenCode. A dedicated `bin/adapters/codex.mjs` generates two native agents: `.codex/agents/gsdd-planner.toml` (workspace-write orchestrator that reads the portable skill at runtime and spawns the checker) and `.codex/agents/gsdd-plan-checker.toml` (read-only TOML agent with the plan-checker delegate). This two-agent pattern matches Claude (native skill + checker agent) and OpenCode (native command + checker agent). The portable skill at `.agents/skills/gsdd-plan/SKILL.md` is never overwritten. `--tools codex` is reinstated as an active adapter flag.
 
 **Why:** Codex CLI v0.115.0 (2026-03-16) stabilized its multi-agent system with `.codex/agents/*.toml` definitions, `spawn_agent` fresh-context invocation, per-agent `model` and `model_reasoning_effort` fields, and `sandbox_mode` access control. This provides structural parity with Claude's `.claude/agents/` and OpenCode's `.opencode/agents/`.
 
@@ -811,16 +811,17 @@ Implementation lives under `bin/lib/`:
 
 **Key design choices:**
 
-1. **TOML agent format** — Codex uses `.codex/agents/<name>.toml` (not markdown). The plan-checker delegate content goes inside `developer_instructions = """..."""`.
-2. **Self-contained plan skill override** — The adapter overwrites `.agents/skills/gsdd-plan/SKILL.md` with a Codex-native version that includes both the portable workflow content and a Codex-specific orchestration section. This works because Codex reads skills from `.agents/skills/` — there is no `.codex/skills/` path.
+1. **TOML agent format** — Codex uses `.codex/agents/<name>.toml` (not markdown). The plan-checker delegate content goes inside `developer_instructions = """..."""`. A TOML escape guard replaces `"""` with `"" "` in delegate content to prevent string termination.
+2. **Two-agent approach** — `gsdd-planner.toml` (workspace-write) orchestrates planning and spawns the checker; `gsdd-plan-checker.toml` (read-only) reviews plans. The planner references the portable skill at runtime (`Read .agents/skills/gsdd-plan/SKILL.md`) instead of embedding workflow content at generation time. This matches Claude (native skill references portable skill) and OpenCode (native command references portable skill), and ensures `--tools all` never pollutes the portable skill with vendor-specific instructions.
 3. **Inherit-by-default model** — Following OpenCode's pattern, no `model` field is set by default (inherits from parent session). An explicit `model = "<id>"` is only written when the user sets `runtimeModelOverrides.codex.plan-checker`.
 4. **Always-high reasoning effort** — `model_reasoning_effort = "high"` is always set for the plan-checker (analysis agent should think carefully).
 5. **Read-only sandbox** — `sandbox_mode = "read-only"` prevents the checker from editing plans, functionally equivalent to OpenCode's `write: false, edit: false, bash: false`.
 
 **Known gaps:**
-- No `hidden: true` equivalent — unlike OpenCode, the checker agent is visible to users (ergonomic gap, not functional)
+- No `hidden: true` equivalent — unlike OpenCode, the checker agent is visible to users (ergonomic gap, not functional; no Codex equivalent exists)
 - No deterministic spawn API — spawning is model-interpreted via natural language, not a programmatic `Task()` call
-- GitHub issues #14719 (re-spawn failure) and #14841 (spawn loops with weaker models) are documented risks; GSDD's simple spawn-wait-respond pattern minimizes exposure
+- GitHub issues #14719 (re-spawn failure) and #14841 (spawn loops with weaker models) are documented risks; GSDD's simple spawn-wait-pattern minimizes exposure, and the max-3 loop has escalation
+- JSON schema duplication — the checker JSON schema is embedded in Claude, OpenCode, and Codex orchestration prompts; tests guard drift across all three
 - Live native validation is deferred — no Codex CLI in CI; documented as manual validation requirement
 
 **Evidence:**

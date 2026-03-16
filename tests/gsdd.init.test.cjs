@@ -458,10 +458,20 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-planner.toml')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'commands', 'gsdd-new-project.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
     assert.doesNotMatch(output, /--tools codex` is deprecated/i);
+
+    // Portable skill must NOT be polluted with Codex-specific content after --tools all
+    const portableSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      'utf-8'
+    );
+    assert.doesNotMatch(portableSkill, /Codex-Native/);
+    assert.doesNotMatch(portableSkill, /spawn_agent/);
+    assert.doesNotMatch(portableSkill, /\.codex\/agents\//);
 
     const claudePlanChecker = fs.readFileSync(
       path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
@@ -502,7 +512,7 @@ describe('gsdd init and update', () => {
     assert.match(codexPlanChecker, /Return JSON only/);
   });
 
-  test('init with --tools codex only generates Codex adapter and skills', async () => {
+  test('init with --tools codex generates both Codex agents and leaves portable skill clean', async () => {
     fs.mkdirSync(path.join(tmpDir, '.claude'), { recursive: true });
 
     const restoreStdin = setNonInteractiveStdin();
@@ -515,15 +525,26 @@ describe('gsdd init and update', () => {
 
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-planner.toml')));
     assert.strictEqual(fs.existsSync(path.join(tmpDir, '.claude', 'skills')), false);
 
-    const codexPlanSkill = fs.readFileSync(
+    // Portable skill must stay clean — no Codex-specific content
+    const portableSkill = fs.readFileSync(
       path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
       'utf-8'
     );
-    assert.match(codexPlanSkill, /Codex-Native Plan Checking/);
-    assert.match(codexPlanSkill, /gsdd-plan-checker/);
-    assert.match(codexPlanSkill, /Maximum 3 checker cycles total/);
+    assert.doesNotMatch(portableSkill, /Codex-Native/);
+    assert.doesNotMatch(portableSkill, /spawn_agent/);
+    assert.doesNotMatch(portableSkill, /\.codex\/agents\//);
+    assert.match(portableSkill, /How Plan Checking Works/);
+
+    // Planner TOML has orchestration loop
+    const codexPlanner = fs.readFileSync(
+      path.join(tmpDir, '.codex', 'agents', 'gsdd-planner.toml'),
+      'utf-8'
+    );
+    assert.match(codexPlanner, /gsdd-plan-checker/);
+    assert.match(codexPlanner, /Maximum 3 checker cycles total/);
   });
 
   test('init is idempotent and upserts the bounded AGENTS block without duplicating it', async () => {
@@ -549,7 +570,7 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(agents, /old block/);
   });
 
-  test('update refreshes previously generated adapters based on detected platforms and leaves codex on the default skill path', async () => {
+  test('update refreshes previously generated adapters based on detected platforms', async () => {
     const restoreStdin = setNonInteractiveStdin();
     let gsdd;
 
@@ -593,14 +614,20 @@ describe('gsdd init and update', () => {
     }
 
     const checkerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml');
+    const plannerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-planner.toml');
     fs.writeFileSync(checkerPath, 'stale checker\n');
+    fs.writeFileSync(plannerPath, 'stale planner\n');
 
     await gsdd.cmdUpdate('--tools', 'codex');
 
-    const updated = fs.readFileSync(checkerPath, 'utf-8');
-    assert.doesNotMatch(updated, /^stale checker$/m);
-    assert.match(updated, /^name = "gsdd-plan-checker"/m);
-    assert.match(updated, /^sandbox_mode = "read-only"/m);
+    const updatedChecker = fs.readFileSync(checkerPath, 'utf-8');
+    assert.doesNotMatch(updatedChecker, /^stale checker$/m);
+    assert.match(updatedChecker, /^name = "gsdd-plan-checker"/m);
+    assert.match(updatedChecker, /^sandbox_mode = "read-only"/m);
+
+    const updatedPlanner = fs.readFileSync(plannerPath, 'utf-8');
+    assert.doesNotMatch(updatedPlanner, /^stale planner$/m);
+    assert.match(updatedPlanner, /^name = "gsdd-planner"/m);
   });
 
   test('cli entrypoint still runs when invoked through an aliased bin path', async () => {

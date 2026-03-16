@@ -101,7 +101,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(opencodePlanChecker, /Return JSON only/);
   });
 
-  test('codex plan skill is Codex-native and includes fresh-context orchestration loop', async () => {
+  test('codex planner TOML is the native entry surface with orchestration loop', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
       const gsdd = await loadGsdd(tmpDir);
@@ -110,21 +110,35 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin();
     }
 
-    const codexPlanSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+    const codexPlanner = fs.readFileSync(
+      path.join(tmpDir, '.codex', 'agents', 'gsdd-planner.toml'),
       'utf-8'
     );
 
-    assert.match(codexPlanSkill, /Codex-Native Plan Checking/);
-    assert.match(codexPlanSkill, /gsdd-plan-checker/);
-    assert.match(codexPlanSkill, /Maximum 3 checker cycles total/);
-    assert.match(codexPlanSkill, /"status": "passed"/);
-    assert.match(codexPlanSkill, /Status must be either "passed" or "issues_found"\./);
-    assert.match(codexPlanSkill, /spawn the `gsdd-plan-checker` subagent/);
-    assert.match(codexPlanSkill, /reduced assurance/);
+    assert.match(codexPlanner, /^name = "gsdd-planner"/m);
+    assert.match(codexPlanner, /^sandbox_mode = "workspace-write"/m);
+    assert.match(codexPlanner, /gsdd-plan-checker/);
+    assert.match(codexPlanner, /Maximum 3 checker cycles total/);
+    assert.match(codexPlanner, /"status": "passed"/);
+    assert.match(codexPlanner, /Status must be either "passed" or "issues_found"\./);
+    assert.match(codexPlanner, /spawn the `gsdd-plan-checker` subagent/);
+    assert.match(codexPlanner, /reduced assurance/);
 
-    // Must also contain the portable plan workflow content (not just the orchestration section)
-    assert.match(codexPlanSkill, /How Plan Checking Works/);
+    // Planner references portable skill at runtime
+    assert.match(codexPlanner, /\.agents\/skills\/gsdd-plan\/SKILL\.md/);
+
+    // Must NOT have a model line by default (inherits from parent session)
+    assert.doesNotMatch(codexPlanner, /^model = /m);
+
+    // Portable skill must NOT contain Codex-specific content
+    const portableSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      'utf-8'
+    );
+    assert.doesNotMatch(portableSkill, /Codex-Native/);
+    assert.doesNotMatch(portableSkill, /spawn_agent/);
+    assert.doesNotMatch(portableSkill, /\.codex\/agents\//);
+    assert.match(portableSkill, /How Plan Checking Works/);
   });
 
   test('codex plan-checker is a read-only TOML agent with delegate content', async () => {
@@ -193,5 +207,29 @@ describe('specialized plan adapter surfaces', () => {
     // DRAFT notice must be removed
     assert.doesNotMatch(claudePlanChecker, /DRAFT PAYLOAD/i, 'claude checker must not have DRAFT notice');
     assert.doesNotMatch(opencodePlanChecker, /DRAFT PAYLOAD/i, 'opencode checker must not have DRAFT notice');
+  });
+
+  test('codex plan-checker escapes triple quotes in delegate content for TOML safety', async () => {
+    // The renderCodexPlanChecker function must escape """ to prevent TOML breakage.
+    // We verify by checking the generated TOML doesn't contain unescaped """ inside developer_instructions.
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'codex');
+    } finally {
+      restoreStdin();
+    }
+
+    const codexPlanChecker = fs.readFileSync(
+      path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+      'utf-8'
+    );
+
+    // Extract content between the opening and closing """ delimiters
+    const matches = codexPlanChecker.match(/developer_instructions = """([\s\S]*?)"""/);
+    assert.ok(matches, 'Must have developer_instructions block');
+    const innerContent = matches[1];
+    // Inner content must not contain """ (which would prematurely terminate the TOML string)
+    assert.doesNotMatch(innerContent, /"""/, 'Inner TOML content must not contain unescaped triple quotes');
   });
 });

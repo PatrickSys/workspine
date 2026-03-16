@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 function renderCodexPlanChecker(delegateContent, modelId = null) {
+  const safe = delegateContent.trim().replaceAll('"""', '"" "');
   const modelLine = modelId ? `model = "${modelId}"\n` : '';
   return `name = "gsdd-plan-checker"
 description = "Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly."
@@ -9,31 +10,33 @@ sandbox_mode = "read-only"
 model_reasoning_effort = "high"
 ${modelLine}
 developer_instructions = """
-${delegateContent.trim()}
+${safe}
 """
 `;
 }
 
-function renderCodexPlanSkill(workflowContent) {
-  return `---
-name: gsdd-plan
-description: Codex-native phase planning with fresh-context plan checking for GSDD
----
+function renderCodexPlanner(modelId = null) {
+  const modelLine = modelId ? `model = "${modelId}"\n` : '';
+  return `name = "gsdd-planner"
+description = "GSDD phase planner with fresh-context plan checking. Reads the portable plan workflow, produces phase plans, and orchestrates the gsdd-plan-checker subagent for adversarial review."
+sandbox_mode = "workspace-write"
+${modelLine}
+developer_instructions = """
+You are the Codex-native GSDD phase planner.
 
-${workflowContent}
+Portable contract:
+- Read \`.agents/skills/gsdd-plan/SKILL.md\` first. That file remains the canonical vendor-agnostic plan contract.
+- Follow its planning steps exactly. Do NOT duplicate or override the portable workflow.
 
-## Codex-Native Plan Checking
+Native Codex adapter rule:
+- This agent is the canonical Codex-native entry surface for GSDD phase planning.
+- Use the native \`gsdd-plan-checker\` subagent for review-only checking via \`spawn_agent\`.
+- Do NOT claim that other runtimes have the same behavior.
 
-This section overrides the portable plan-check description above when running inside Codex CLI.
-
-Codex CLI has a native \`gsdd-plan-checker\` subagent defined in \`.codex/agents/gsdd-plan-checker.toml\`.
-Use Codex's native subagent spawning to invoke it in a fresh context.
-
-### Execution Flow
-
+Execution flow:
 1. Read \`.planning/SPEC.md\`, \`.planning/ROADMAP.md\`, \`.planning/config.json\`, relevant phase research, and any existing phase plan files.
 2. Resolve the target phase. If no phase is provided, choose the first roadmap phase that is not complete.
-3. Produce the initial phase plan according to the portable plan workflow above.
+3. Produce the initial phase plan according to \`.agents/skills/gsdd-plan/SKILL.md\`.
 4. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance.
 5. If \`workflow.planCheck: true\`, spawn the \`gsdd-plan-checker\` subagent with fresh context.
 6. Pass only explicit inputs to the checker:
@@ -63,8 +66,6 @@ Use Codex's native subagent spawning to invoke it in a fresh context.
 9. If the checker returns \`issues_found\`, revise the existing plan files only where needed, then run the checker again.
 10. Maximum 3 checker cycles total. If blockers remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
 
-### Orchestration Summary
-
 Return a concise orchestration summary:
 - target phase
 - whether native plan checking ran
@@ -72,20 +73,17 @@ Return a concise orchestration summary:
 - final result: passed | reduced_assurance | escalated
 
 Never return raw checker JSON without summarizing it.
+"""
 `;
 }
 
 function createCodexAdapter({
   cwd,
-  workflows,
-  renderSkillContent,
-  getWorkflowContent,
   getDelegateContent,
   getRuntimeModelOverride,
   loadProjectModelConfig,
 }) {
   const agentsDir = join(cwd, '.codex', 'agents');
-  const skillsDir = join(cwd, '.agents', 'skills');
 
   return {
     id: 'codex',
@@ -99,24 +97,26 @@ function createCodexAdapter({
     },
     generate() {
       const config = loadProjectModelConfig(cwd);
-      const modelId = getRuntimeModelOverride(config, 'codex', 'plan-checker');
+      const checkerModelId = getRuntimeModelOverride(config, 'codex', 'plan-checker');
 
       mkdirSync(agentsDir, { recursive: true });
+
+      // Checker agent (read-only reviewer)
       writeFileSync(
         join(agentsDir, 'gsdd-plan-checker.toml'),
-        renderCodexPlanChecker(getDelegateContent('plan-checker.md'), modelId)
+        renderCodexPlanChecker(getDelegateContent('plan-checker.md'), checkerModelId)
       );
 
-      const planWorkflowContent = getWorkflowContent('plan.md');
-      const planSkillDir = join(skillsDir, 'gsdd-plan');
-      mkdirSync(planSkillDir, { recursive: true });
+      // Planner agent (orchestrates planning + checker loop)
       writeFileSync(
-        join(planSkillDir, 'SKILL.md'),
-        renderCodexPlanSkill(planWorkflowContent)
+        join(agentsDir, 'gsdd-planner.toml'),
+        renderCodexPlanner()
       );
+
+      // DO NOT overwrite .agents/skills/gsdd-plan/SKILL.md — portable skill stays clean
     },
     summary(action) {
-      return `${action} Codex CLI native agents (.codex/agents/gsdd-*.toml) and overrode gsdd-plan skill with Codex-native orchestration`;
+      return `${action} Codex CLI native agents (.codex/agents/gsdd-planner.toml, gsdd-plan-checker.toml)`;
     },
   };
 }

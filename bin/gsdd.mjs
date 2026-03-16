@@ -13,7 +13,6 @@ import {
   renderSkillContent,
   upsertBoundedBlock,
   getDelegateContent,
-  getWorkflowContent,
 } from './lib/rendering.mjs';
 import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels } from './lib/models.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
@@ -55,7 +54,6 @@ const ADAPTERS = createAdapterRegistry({
   renderSkillContent,
   upsertBoundedBlock,
   getDelegateContent,
-  getWorkflowContent,
   loadProjectModelConfig,
   getRuntimeModelOverride,
   resolveRuntimeAgentModel,
