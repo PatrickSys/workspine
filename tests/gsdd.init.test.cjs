@@ -1596,5 +1596,65 @@ describe('gsdd init and update', () => {
       const content = fs.readFileSync(delegatePath, 'utf-8');
       assert.strictEqual(content, 'stale content', 'Plain update must not modify templates');
     });
+
+    test('update without --templates does not rewrite manifest', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+      const beforeContent = fs.readFileSync(manifestPath, 'utf-8');
+
+      // Modify a delegate so manifest would change if rebuilt
+      const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+      fs.writeFileSync(delegatePath, 'user-modified content');
+
+      const result = await runCliAsMain(tmpDir, ['update']);
+      assert.strictEqual(result.exitCode, 0);
+
+      // Manifest must be unchanged — plain update must not re-baseline
+      const afterContent = fs.readFileSync(manifestPath, 'utf-8');
+      assert.strictEqual(afterContent, beforeContent, 'Plain update must not rewrite manifest');
+    });
+
+    test('dry-run --templates creates no directories in fresh project', async () => {
+      // Do NOT run init — start from a bare temp dir (no .planning/)
+      const planningDir = path.join(tmpDir, '.planning');
+      assert.ok(!fs.existsSync(planningDir), 'Precondition: .planning must not exist');
+
+      const result = await runCliAsMain(tmpDir, ['update', '--templates', '--dry']);
+      assert.match(result.output, /Dry run/);
+
+      // Verify no directories were created
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates')),
+        'Dry run must not create .planning/templates/delegates');
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles')),
+        'Dry run must not create .planning/templates/roles');
+    });
+
+    test('update --templates removes orphaned root templates', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      // Plant a fake root template that does not exist in framework source
+      const orphanPath = path.join(tmpDir, '.planning', 'templates', 'obsolete-template.md');
+      fs.writeFileSync(orphanPath, '# Obsolete');
+
+      const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+      assert.strictEqual(result.exitCode, 0);
+      assert.match(result.output, /removed orphan templates\/obsolete-template\.md/);
+
+      // Orphan must be gone
+      assert.ok(!fs.existsSync(orphanPath), 'Orphaned root template must be removed');
+    });
   });
 });

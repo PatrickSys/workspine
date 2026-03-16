@@ -459,8 +459,8 @@ function cmdUpdate(...updateArgs) {
   } else if (isDry) {
     console.log('\nDry run complete. No files were written.\n');
   } else {
-    // Rebuild manifest after updates
-    if (existsSync(PLANNING_DIR)) {
+    // Only rebuild manifest when templates were actually refreshed
+    if (doTemplates && existsSync(PLANNING_DIR)) {
       const manifest = buildManifest({ planningDir: PLANNING_DIR, frameworkVersion: FRAMEWORK_VERSION });
       writeManifest(PLANNING_DIR, manifest);
       console.log('  - updated generation manifest');
@@ -912,7 +912,7 @@ function refreshTemplates(isDry) {
 
 function refreshCategory({ name, src, dest, manifestKey }, existingManifest, isDry) {
   if (!existsSync(src)) return;
-  if (!existsSync(dest)) {
+  if (!existsSync(dest) && !isDry) {
     mkdirSync(dest, { recursive: true });
   }
 
@@ -989,11 +989,29 @@ function refreshRootTemplates(globalTemplatesDir, localTemplatesDir, existingMan
       console.log(`  - refreshed templates/${file}`);
     }
   }
+
+  // Remove orphans (installed root templates no longer in source)
+  const installedRootFiles = existsSync(localTemplatesDir)
+    ? readdirSync(localTemplatesDir).filter(f => f.endsWith('.md'))
+    : [];
+  for (const file of installedRootFiles) {
+    if (!sourceFiles.includes(file)) {
+      if (isDry) {
+        console.log(`  - would remove orphan templates/${file}`);
+      } else {
+        const orphanPath = join(localTemplatesDir, file);
+        if (existsSync(orphanPath)) {
+          unlinkSync(orphanPath);
+        }
+        console.log(`  - removed orphan templates/${file}`);
+      }
+    }
+  }
 }
 
 function refreshRoles(agentsDir, localRolesDir, existingManifest, isDry) {
   if (!existsSync(agentsDir)) return;
-  if (!existsSync(localRolesDir)) {
+  if (!existsSync(localRolesDir) && !isDry) {
     mkdirSync(localRolesDir, { recursive: true });
   }
 
