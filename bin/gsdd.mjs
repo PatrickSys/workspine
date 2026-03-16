@@ -14,9 +14,8 @@ import {
   upsertBoundedBlock,
   getDelegateContent,
 } from './lib/rendering.mjs';
-import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel } from './lib/models.mjs';
+import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels } from './lib/models.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
-import { cmdModels } from './lib/models.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold } from './lib/phase.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
