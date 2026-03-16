@@ -17,7 +17,7 @@ export const DEFAULT_GIT_PROTOCOL = {
 
 export const VALID_MODEL_PROFILES = ['quality', 'balanced', 'budget'];
 export const PORTABLE_AGENT_IDS = ['plan-checker'];
-export const MODEL_RUNTIME_IDS = ['claude', 'opencode'];
+export const MODEL_RUNTIME_IDS = ['claude', 'opencode', 'codex'];
 
 export function normalizeModelProfile(value) {
   return VALID_MODEL_PROFILES.includes(value) ? value : 'balanced';
@@ -138,6 +138,7 @@ function cmdModelsShow() {
   const config = loadProjectModelConfig(cwd);
   const ocOverride = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
   const ocDetected = detectOpenCodeConfiguredModel(cwd);
+  const codexOverride = getRuntimeModelOverride(config, 'codex', 'plan-checker');
   output({
     modelProfile: normalizeModelProfile(config.modelProfile),
     agentModelProfiles: config.agentModelProfiles || {},
@@ -156,6 +157,12 @@ function cmdModelsShow() {
           mode: ocOverride ? 'override' : 'inherit',
           model: ocOverride,
           runtimeDetectedModel: ocDetected,
+        },
+      },
+      codex: {
+        'plan-checker': {
+          mode: codexOverride ? 'override' : 'inherit',
+          model: codexOverride,
         },
       },
     },

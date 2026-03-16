@@ -15,7 +15,7 @@ export function parseFlagValue(flagArgs, flagName) {
 export function parseToolsFlag(flagArgs) {
   const { value } = parseFlagValue(flagArgs, '--tools');
   if (!value) return [];
-  if (value === 'all') return ['claude', 'opencode', 'agents'];
+  if (value === 'all') return ['claude', 'opencode', 'codex', 'agents'];
   return value.split(',').map((v) => v.trim()).filter(Boolean);
 }
 
