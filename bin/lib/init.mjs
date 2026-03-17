@@ -64,7 +64,6 @@ export function createCmdInit(ctx) {
 
     generateOpenStandardSkills(ctx.cwd, ctx.workflows);
     console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
-    console.log('  - Codex CLI uses these skills directly; no Codex-specific adapter file is generated');
 
     const requestedTools = normalizeRequestedTools(parsedTools);
     const platforms = parsedTools.length > 0 ? requestedTools : detectPlatforms(ctx.adapters);
@@ -161,18 +160,18 @@ Commands:
 Platforms (for --tools):
   claude    Generate Claude Code skills (.claude/skills/gsdd-*), commands (.claude/commands/gsdd-*.md), and native agents (.claude/agents/gsdd-*.md)
   opencode  Generate OpenCode local slash commands (.opencode/commands/gsdd-*.md) + native agents (.opencode/agents/gsdd-*.md)
-  codex     Deprecated compatibility alias. Codex CLI uses the default .agents/skills/gsdd-* skills and generates no extra files
+  codex     Generate Codex CLI native plan-checker agent (.codex/agents/gsdd-plan-checker.toml)
   agents    Generate/Update root AGENTS.md (bounded GSDD block)
   cursor    Same as 'agents'
   copilot   Same as 'agents'
   gemini    Same as 'agents'
-  all       Generate all extra adapters (Claude, OpenCode, AGENTS-based surfaces)
+  all       Generate all adapters (Claude, OpenCode, Codex, AGENTS-based surfaces)
 
 Notes:
-  - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints and the primary Codex CLI surface)
+  - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)
   - --tools claude also generates native commands at .claude/commands/gsdd-*.md and native agents at .claude/agents/gsdd-*.md
   - --tools opencode also generates native agents at .opencode/agents/gsdd-*.md
-  - --tools codex is deprecated and does not generate .codex/AGENTS.md
+  - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents (or all)
 
 Examples:
@@ -206,10 +205,7 @@ function detectPlatforms(adapters) {
 }
 
 function normalizeRequestedTools(requestedTools) {
-  if (!requestedTools.includes('codex')) return requestedTools;
-
-  console.log('  - NOTE: `--tools codex` is deprecated. Codex CLI uses the default `.agents/skills/gsdd-*` skills and no longer generates `.codex/AGENTS.md`.');
-  return requestedTools.filter((tool) => tool !== 'codex');
+  return requestedTools;
 }
 
 function generateOpenStandardSkills(cwd, workflows) {

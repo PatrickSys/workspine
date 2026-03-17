@@ -25,6 +25,7 @@
 15. [Model Profile Propagation](#15-model-profile-propagation)
 16. [Template Versioning via Generation Manifest](#16-template-versioning-via-generation-manifest)
 17. [CLI Composition Root Boundary](#17-cli-composition-root-boundary)
+18. [Codex CLI Native Adapter](#18-codex-cli-native-adapter)
 
 ---
 
@@ -790,6 +791,55 @@ Implementation lives under `bin/lib/`:
 - GSDD implementation: `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/models.mjs`
 - GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`,
   `tests/gsdd.guards.test.cjs`
+
+---
+
+## 18. Codex CLI Native Adapter
+
+**GSD:** No dedicated Codex CLI adapter. GSD was Claude-first.
+
+**GSDD (before this decision):** Codex CLI was a skills-first runtime at ~40% parity. It consumed the portable `.agents/skills/gsdd-*/SKILL.md` surface but had no native plan-checker, no orchestration loop, no model control, and no dedicated adapter module. `--tools codex` was deprecated and silently stripped. Every Codex plan ran in silent `reduced_assurance` mode.
+
+**GSDD (after this decision):** Codex CLI is promoted to `native_capable` — same tier as Claude Code and OpenCode. A dedicated `bin/adapters/codex.mjs` generates `.codex/agents/gsdd-plan-checker.toml` (read-only TOML agent with the plan-checker delegate). Codex's entry surface is the portable skill at `.agents/skills/gsdd-plan/SKILL.md` — Codex auto-discovers it via its `.agents/skills/` skill scanning ([developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)). The portable skill now contains vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation), so when Codex follows it, it spawns the native `gsdd-plan-checker` agent for fresh-context review. `--tools codex` is reinstated as an active adapter flag.
+
+**Why:** Codex CLI v0.115.0 (2026-03-16) stabilized its multi-agent system with `.codex/agents/*.toml` definitions, `spawn_agent` fresh-context invocation, per-agent `model` and `model_reasoning_effort` fields, and `sandbox_mode` access control. This provides structural parity with Claude's `.claude/agents/` and OpenCode's `.opencode/agents/`.
+
+**Why now:** Phase A research confirmed all three prerequisites for native-capable promotion:
+1. A native agent surface exists (`.codex/agents/*.toml` with TOML format)
+2. Fresh-context subagent invocation is confirmed (`spawn_agent` tool, new `ThreadId` per subagent)
+3. Per-agent model control exists (`model` field in agent TOML)
+
+**Key design choices:**
+
+1. **TOML agent format** — Codex uses `.codex/agents/<name>.toml` (not markdown). The plan-checker delegate content goes inside `developer_instructions = """..."""`. A TOML escape guard replaces `"""` with `"" "` in delegate content to prevent string termination. Model IDs are validated at the CLI setter (`MODEL_ID_PATTERN`) and escaped in the TOML renderer as defense-in-depth.
+2. **Portable skill as entry surface** — Unlike Claude (which has a vendor-specific `.claude/skills/gsdd-plan/SKILL.md`) and OpenCode (which has `.opencode/commands/gsdd-plan.md`), Codex reads skills from `.agents/skills/` — the shared portable path. The portable skill is enhanced with vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation, orchestration summary), making it self-sufficient as the Codex entry surface. When Codex auto-selects the `gsdd-plan` skill, the instructions tell it to invoke the `gsdd-plan-checker` agent if available. No separate planner TOML is needed — the portable skill handles orchestration directly.
+3. **Inherit-by-default model** — Following OpenCode's pattern, no `model` field is set by default (inherits from parent session). An explicit `model = "<id>"` is only written when the user sets `runtimeModelOverrides.codex.plan-checker`.
+4. **Always-high reasoning effort** — `model_reasoning_effort = "high"` is always set for the plan-checker (analysis agent should think carefully).
+5. **Read-only sandbox** — `sandbox_mode = "read-only"` prevents the checker from editing plans, functionally equivalent to OpenCode's `write: false, edit: false, bash: false`.
+
+**Known gaps:**
+- No `hidden: true` equivalent — unlike OpenCode, the checker agent is visible to users (ergonomic gap, not functional; no Codex equivalent exists)
+- No deterministic spawn API — spawning is model-interpreted via natural language, not a programmatic `Task()` call
+- GitHub issues #14719 (re-spawn failure) and #14841 (spawn loops with weaker models) are documented risks; GSDD's simple spawn-wait-pattern minimizes exposure, and the max-3 loop has escalation
+- JSON schema duplication — the checker JSON schema is embedded in Claude, OpenCode orchestration prompts and the portable skill; tests guard drift across all surfaces
+- No Codex CLI in CI — future regressions still require disposable-fixture validation even though local live validation now exists
+- Entry surface is shared — Codex uses the portable `.agents/skills/gsdd-plan/SKILL.md` as its entry surface (no vendor-specific skill path exists in Codex). The portable skill's checker invocation is vendor-neutral, but routing depends on Codex's implicit skill selection matching the task description
+
+**Live validation (2026-03-17):**
+- Local runtime: `codex-cli 0.113.0` with `features.multi_agent = true`
+- Happy path fixture: `%TEMP%\\gsdd-codex-pr29-happy-20260317-214241` wrote `.planning/phases/01-foundation/01-PLAN.md` through the portable `gsdd-plan` entry surface while the native checker double returned `CHECKER_HAPPY`
+- Forced revision fixture: `%TEMP%\\gsdd-codex-pr29-revision-20260317-214942` required the checker-driven sentinel `SENTINEL-REVISION-OK` in the plan `Notes` section; the plan was revised and the second checker pass passed
+- Max-3 escalation fixture: `%TEMP%\\gsdd-codex-pr29-max3-noresearch-20260317-220608` set `workflow.research = false` to isolate the checker seam; Codex spawned 3 fresh-context checker agents, each returned `CHECKER_STILL_BLOCKED`, and the final result was `escalated`
+
+**Evidence:**
+- OpenAI Codex CLI docs: [developers.openai.com/codex/subagents](https://developers.openai.com/codex/subagents)
+- Codex CLI config reference: [developers.openai.com/codex/config-reference](https://developers.openai.com/codex/config-reference)
+- Codex CLI v0.115.0 release notes: [github.com/openai/codex/releases/tag/rust-v0.115.0](https://github.com/openai/codex/releases/tag/rust-v0.115.0)
+- Agent Skills standard: [developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)
+- GitHub issues: [#14719](https://github.com/openai/codex/issues/14719), [#14841](https://github.com/openai/codex/issues/14841)
+- GSDD adapter patterns: `bin/adapters/claude.mjs`, `bin/adapters/opencode.mjs`
+- GSDD implementation: `bin/adapters/codex.mjs`, `bin/adapters/index.mjs`, `bin/lib/init.mjs`, `bin/lib/models.mjs`
+- GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`
 
 ---
 

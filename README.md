@@ -31,7 +31,7 @@ GSDD is a distilled fork of GSD. It preserves the high-leverage parts of long-ho
 - **Milestone audit** — cross-phase integration, requirements coverage, E2E flows
 - **Session management** — pause work with checkpoint, resume with context restoration and routing
 
-What it strips: GSD's broader operator surface (35 workflows, 12 agents, discovery modes, sprint ceremony, progress/settings flows). GSDD has 9 workflows and 9 roles.
+What it strips: GSD's broader operator surface (35 workflows, 12 agents, discovery modes, sprint ceremony, progress/settings flows). GSDD has 10 workflows and 9 roles.
 
 **Target user:** Developer or small team that wants a spec-driven long-horizon kernel, not full operator comfort.
 
@@ -46,8 +46,8 @@ npx gsdd init
 This creates:
 
 1. `.planning/` — durable workspace with templates, role contracts, and config
-2. `.agents/skills/gsdd-*` — portable workflow entrypoints (primary Codex CLI surface)
-3. Tool-specific adapters if detected (Claude skills/commands/agents, OpenCode commands/agents)
+2. `.agents/skills/gsdd-*` — portable workflow entrypoints
+3. Tool-specific adapters if detected (Claude skills/commands/agents, OpenCode commands/agents, Codex agents)
 
 Then run the new-project workflow via your tool's skill/command surface to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`.
 
@@ -59,6 +59,7 @@ GSDD generates adapters for whichever tools you use:
 npx gsdd init                    # Auto-detect installed tools
 npx gsdd init --tools claude     # Claude Code: .claude/skills + commands + agents
 npx gsdd init --tools opencode   # OpenCode: .opencode/commands + agents
+npx gsdd init --tools codex      # Codex CLI: portable gsdd-plan skill + .codex/agents checker
 npx gsdd init --tools agents     # Root AGENTS.md (Cursor, Copilot, Gemini)
 npx gsdd init --tools all        # All of the above
 ```
@@ -68,7 +69,7 @@ npx gsdd init --tools all        # All of the above
 | **All** (default) | Open standard | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints |
 | **Claude Code** | Native | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
 | **OpenCode** | Native | `.opencode/commands/`, `.opencode/agents/` |
-| **Codex CLI** | Skills-first | Uses `.agents/skills/` directly, no extra files |
+| **Codex CLI** | Native | portable `.agents/skills/gsdd-plan/` entry + `.codex/agents/gsdd-*.toml` checker |
 | **Cursor / Copilot / Gemini** | Governance | Bounded block in root `AGENTS.md` |
 
 ### Updating
@@ -176,7 +177,7 @@ Use for: bug fixes, small features, config changes, one-off tasks.
 
 ## Workflows
 
-GSDD has 9 workflows, run via generated skills or adapters:
+GSDD has 10 workflows, run via generated skills or adapters:
 
 | Workflow | What it does |
 |----------|--------------|
@@ -189,6 +190,7 @@ GSDD has 9 workflows, run via generated skills or adapters:
 | `gsdd-quick` | Quick task: plan and execute sub-hour work outside the phase cycle |
 | `gsdd-pause` | Pause work: save session context to checkpoint for seamless resumption |
 | `gsdd-resume` | Resume work: restore context from artifacts and route to next action |
+| `gsdd-progress` | Show project status and route to next action |
 
 ## CLI Commands
 
@@ -273,19 +275,20 @@ Optional model-control keys:
 | Setting | What it controls |
 |---------|------------------|
 | `agentModelProfiles.<agent>` | Per-agent semantic override. Current supported agent id: `plan-checker`. |
-| `runtimeModelOverrides.<runtime>.<agent>` | Exact runtime-native model override. Current supported targets: `claude.plan-checker` and `opencode.plan-checker`. |
+| `runtimeModelOverrides.<runtime>.<agent>` | Exact runtime-native model override. Supported targets: `claude.plan-checker`, `opencode.plan-checker`, `codex.plan-checker`. |
 
 Runtime behavior:
 - Claude translates semantic tiers to native aliases for the checker agent.
 - OpenCode inherits its runtime model by default; GSDD only injects an exact OpenCode `model:` when you set an explicit runtime override.
+- Codex inherits its session model by default; GSDD only injects an explicit `model` in the TOML when you set an explicit runtime override.
 
 CLI:
 - `gsdd models show`
 - `gsdd models profile <quality|balanced|budget>`
 - `gsdd models agent-profile --agent plan-checker --profile <quality|balanced|budget>`
 - `gsdd models clear-agent-profile --agent plan-checker`
-- `gsdd models set --runtime <claude|opencode> --agent plan-checker --model <id>`
-- `gsdd models clear --runtime <claude|opencode> --agent plan-checker`
+- `gsdd models set --runtime <claude|opencode|codex> --agent plan-checker --model <id>`
+- `gsdd models clear --runtime <claude|opencode|codex> --agent plan-checker`
 
 ### Workflow Toggles
 
@@ -329,7 +332,7 @@ GSDD includes structural assertions that guard properties PRs repeatedly fixed m
 - **I1:** Delegate-role reference integrity (10 delegates resolve to existing roles)
 - **I2:** Role section structure (9 roles have role def, scope, output format, success criteria)
 - **I3:** Delegate thinness (no leaked role-contract sections in delegates)
-- **I4:** Workflow references (9 workflows, all delegate/role refs resolve)
+- **I4:** Workflow references (10 workflows, all delegate/role refs resolve)
 - **I9:** No deprecated content (no vendor paths, dropped files, legacy tooling)
 - **I5:** Session management workflows (no vendor APIs, no STATE.md, checkpoint contract)
 - **I10:** Mandatory initial-read enforcement on hardened lifecycle roles

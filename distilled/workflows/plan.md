@@ -263,7 +263,7 @@ If the approach is obvious or fully defined by `.planning/SPEC.md`, skip questio
 <plan_check_orchestration>
 ### How Plan Checking Works
 
-After the planner produces a draft plan, an independent checker may review it in fresh context. The checker does not inherit the planner's hidden reasoning; it treats the plan as an untrusted draft.
+After the planner produces a draft plan, an independent checker reviews it in fresh context. The checker does not inherit the planner's hidden reasoning; it treats the plan as an untrusted draft.
 
 ### What The Checker Verifies
 
@@ -275,17 +275,53 @@ After the planner produces a draft plan, an independent checker may review it in
 6. `must_have_quality` - success criteria are specific, observable, and reflected in tasks
 7. `context_compliance` - locked decisions are honored and deferred ideas stay out of scope
 
+### Invoking the Checker
+
+1. If `.planning/config.json` has `workflow.planCheck: false`, skip the independent checker. Perform the planner self-check below and report `reduced_assurance`.
+2. If plan checking is enabled, check if your runtime provides a `gsdd-plan-checker` agent.
+3. If a native checker agent is available, invoke it in a fresh context with only these explicit inputs:
+   - target phase goal and requirement IDs
+   - relevant locked decisions / deferred items from `.planning/SPEC.md`
+   - relevant phase research file(s)
+   - produced `.planning/phases/*-PLAN.md` file(s)
+4. Require the checker to return a single JSON object:
+   ```json
+   {
+     "status": "passed",
+     "summary": "One sentence overall assessment",
+     "issues": [
+       {
+         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance",
+         "severity": "blocker | warning",
+         "description": "What is wrong",
+         "plan": "01-PLAN",
+         "task": "1-02",
+         "fix_hint": "Specific revision instruction"
+       }
+     ]
+   }
+   ```
+   Status must be either "passed" or "issues_found".
+5. If the checker returns `passed`, finish and summarize.
+6. If the checker returns `issues_found`, revise the existing plan files only where needed, then invoke the checker again.
+7. Maximum 3 checker cycles total. If blockers remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
+8. If no native checker agent is available in your runtime, perform the planner self-check below and explicitly report `reduced_assurance` rather than claiming an independent checker ran.
+
+### Orchestration Summary
+
+After plan checking completes, report:
+- target phase
+- whether independent plan checking ran
+- checker cycle count (if applicable)
+- final result: passed | reduced_assurance | escalated
+
 ### How Revision Works
 
 The checker returns structured JSON feedback with specific issues, severities, and fix hints. The planner patches the existing plan where possible instead of replanning from scratch.
 
 ### When To Escalate
 
-If blockers remain after the maximum revision cycles defined by the active runtime, the orchestrator stops and escalates to the user. It does not pretend the plan is ready.
-
-### Reduced-Assurance Fallback
-
-If an independent checker is not available in the current runtime, treat `planCheck` as advisory, run the planner's internal self-check, and explicitly report `reduced_assurance` rather than claiming an independent checker ran.
+If blockers remain after 3 checker cycles, the orchestrator stops and escalates to the user. It does not pretend the plan is ready.
 </plan_check_orchestration>
 
 <plan_self_check>

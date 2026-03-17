@@ -17,7 +17,8 @@ export const DEFAULT_GIT_PROTOCOL = {
 
 export const VALID_MODEL_PROFILES = ['quality', 'balanced', 'budget'];
 export const PORTABLE_AGENT_IDS = ['plan-checker'];
-export const MODEL_RUNTIME_IDS = ['claude', 'opencode'];
+export const MODEL_RUNTIME_IDS = ['claude', 'opencode', 'codex'];
+export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\/:@-]+$/;
 
 export function normalizeModelProfile(value) {
   return VALID_MODEL_PROFILES.includes(value) ? value : 'balanced';
@@ -138,6 +139,7 @@ function cmdModelsShow() {
   const config = loadProjectModelConfig(cwd);
   const ocOverride = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
   const ocDetected = detectOpenCodeConfiguredModel(cwd);
+  const codexOverride = getRuntimeModelOverride(config, 'codex', 'plan-checker');
   output({
     modelProfile: normalizeModelProfile(config.modelProfile),
     agentModelProfiles: config.agentModelProfiles || {},
@@ -156,6 +158,12 @@ function cmdModelsShow() {
           mode: ocOverride ? 'override' : 'inherit',
           model: ocOverride,
           runtimeDetectedModel: ocDetected,
+        },
+      },
+      codex: {
+        'plan-checker': {
+          mode: codexOverride ? 'override' : 'inherit',
+          model: codexOverride,
         },
       },
     },
@@ -242,6 +250,11 @@ function cmdModelsSetRuntimeOverride(args) {
   }
   if (!model) {
     console.error('ERROR: --model requires a value.');
+    process.exitCode = 1;
+    return;
+  }
+  if (!MODEL_ID_PATTERN.test(model.trim())) {
+    console.error('ERROR: Model ID contains invalid characters. Only alphanumeric, dots, hyphens, underscores, forward slashes, colons, and @ are allowed.');
     process.exitCode = 1;
     return;
   }
