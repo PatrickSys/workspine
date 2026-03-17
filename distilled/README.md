@@ -30,7 +30,7 @@ Notes:
 - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`. This is also the primary Codex CLI surface.
 - `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`.
 - `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`.
-- `--tools codex` is deprecated compatibility only and does not generate `.codex/AGENTS.md`.
+- `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path.
 - Root `AGENTS.md` is only written when explicitly requested (`--tools agents` or `--tools all`).
 
 ## The Workflow
@@ -67,7 +67,7 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
-- Codex CLI support is skills-first: use the always-generated `.agents/skills/gsdd-*` surface rather than a Codex-specific `AGENTS.md` file.
+- Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
 - Phase verification and milestone integration audit are treated as separate concerns.
 - Canonical role contracts use bounded sections, typed output examples, and checklist-driven completion where those structures materially improve downstream reliability.

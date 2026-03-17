@@ -12,6 +12,8 @@ const GSDD_PATH = path.join(ROOT, 'bin', 'gsdd.mjs');
 const MANIFEST_MODULE = path.join(ROOT, 'bin', 'lib', 'manifest.mjs');
 const INIT_MODULE = path.join(ROOT, 'bin', 'lib', 'init.mjs');
 const TEMPLATES_MODULE = path.join(ROOT, 'bin', 'lib', 'templates.mjs');
+const README_MD = path.join(ROOT, 'README.md');
+const DISTILLED_README_MD = path.join(ROOT, 'distilled', 'README.md');
 
 function lineCount(filePath) {
   return fs.readFileSync(filePath, 'utf-8').split('\n').length;
@@ -108,5 +110,23 @@ describe('G10 - CLI Module Boundary', () => {
     const lines = lineCount(GSDD_PATH);
     assert.ok(lines <= 140,
       `gsdd.mjs is ${lines} lines (max 140). FIX: Keep the entrypoint as a thin composition root.`);
+  });
+});
+
+describe('G11 - Codex Doc Contract', () => {
+  test('README describes Codex as portable-skill entry plus native checker agent', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.doesNotMatch(readme, /overrides gsdd-plan skill/i,
+      'README.md must not claim that Codex overrides the shared gsdd-plan skill.');
+    assert.match(readme, /portable .*gsdd-plan.*\.codex\/agents/i,
+      'README.md must describe Codex as the portable gsdd-plan entry plus the native checker agent.');
+  });
+
+  test('distilled README no longer describes Codex as deprecated', () => {
+    const readme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
+    assert.doesNotMatch(readme, /deprecated compatibility only/i,
+      'distilled/README.md must not describe --tools codex as deprecated once the native checker adapter exists.');
+    assert.match(readme, /\.codex\/agents\/gsdd-plan-checker\.toml/,
+      'distilled/README.md must document the generated Codex checker agent.');
   });
 });

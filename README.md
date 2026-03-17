@@ -59,7 +59,7 @@ GSDD generates adapters for whichever tools you use:
 npx gsdd init                    # Auto-detect installed tools
 npx gsdd init --tools claude     # Claude Code: .claude/skills + commands + agents
 npx gsdd init --tools opencode   # OpenCode: .opencode/commands + agents
-npx gsdd init --tools codex      # Codex CLI: .codex/agents + overrides gsdd-plan skill
+npx gsdd init --tools codex      # Codex CLI: portable gsdd-plan skill + .codex/agents checker
 npx gsdd init --tools agents     # Root AGENTS.md (Cursor, Copilot, Gemini)
 npx gsdd init --tools all        # All of the above
 ```
@@ -69,7 +69,7 @@ npx gsdd init --tools all        # All of the above
 | **All** (default) | Open standard | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints |
 | **Claude Code** | Native | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
 | **OpenCode** | Native | `.opencode/commands/`, `.opencode/agents/` |
-| **Codex CLI** | Native | `.codex/agents/gsdd-*.toml` + overrides gsdd-plan skill |
+| **Codex CLI** | Native | portable `.agents/skills/gsdd-plan/` entry + `.codex/agents/gsdd-*.toml` checker |
 | **Cursor / Copilot / Gemini** | Governance | Bounded block in root `AGENTS.md` |
 
 ### Updating

@@ -822,8 +822,14 @@ Implementation lives under `bin/lib/`:
 - No deterministic spawn API — spawning is model-interpreted via natural language, not a programmatic `Task()` call
 - GitHub issues #14719 (re-spawn failure) and #14841 (spawn loops with weaker models) are documented risks; GSDD's simple spawn-wait-pattern minimizes exposure, and the max-3 loop has escalation
 - JSON schema duplication — the checker JSON schema is embedded in Claude, OpenCode orchestration prompts and the portable skill; tests guard drift across all surfaces
-- Live native validation is deferred — no Codex CLI in CI; documented as manual validation requirement
+- No Codex CLI in CI — future regressions still require disposable-fixture validation even though local live validation now exists
 - Entry surface is shared — Codex uses the portable `.agents/skills/gsdd-plan/SKILL.md` as its entry surface (no vendor-specific skill path exists in Codex). The portable skill's checker invocation is vendor-neutral, but routing depends on Codex's implicit skill selection matching the task description
+
+**Live validation (2026-03-17):**
+- Local runtime: `codex-cli 0.113.0` with `features.multi_agent = true`
+- Happy path fixture: `%TEMP%\\gsdd-codex-pr29-happy-20260317-214241` wrote `.planning/phases/01-foundation/01-PLAN.md` through the portable `gsdd-plan` entry surface while the native checker double returned `CHECKER_HAPPY`
+- Forced revision fixture: `%TEMP%\\gsdd-codex-pr29-revision-20260317-214942` required the checker-driven sentinel `SENTINEL-REVISION-OK` in the plan `Notes` section; the plan was revised and the second checker pass passed
+- Max-3 escalation fixture: `%TEMP%\\gsdd-codex-pr29-max3-noresearch-20260317-220608` set `workflow.research = false` to isolate the checker seam; Codex spawned 3 fresh-context checker agents, each returned `CHECKER_STILL_BLOCKED`, and the final result was `escalated`
 
 **Evidence:**
 - OpenAI Codex CLI docs: [developers.openai.com/codex/subagents](https://developers.openai.com/codex/subagents)
