@@ -1,3 +1,5 @@
+> **Claude Code only.** This feature uses Claude Code's `statusLine` and `PostToolUse` hook APIs. Other platforms do not support this hook mechanism.
+
 # Context Window Monitor
 
 A PostToolUse hook that warns the agent when context window usage is high.
@@ -19,7 +21,7 @@ The statusline shows context usage to the **user**, but the **agent** has no awa
 |-------|-----------|----------------|
 | Normal | > 35% | No warning |
 | WARNING | <= 35% | Wrap up current task, avoid starting new complex work |
-| CRITICAL | <= 25% | Stop immediately, save state (`/gsd:pause-work`) |
+| CRITICAL | <= 25% | Stop immediately, save state (`gsdd-pause`) |
 
 ## Debounce
 
@@ -54,13 +56,13 @@ The bridge file is a simple JSON object:
 }
 ```
 
-## Integration with GSD
+## Integration with GSDD
 
-GSD's `/gsd:pause-work` command saves execution state. The WARNING message suggests using it. The CRITICAL message instructs immediate state save.
+GSDD's `gsdd-pause` workflow saves execution state to `.planning/.continue-here.md`. The WARNING message suggests using it. The CRITICAL message instructs immediate state save.
 
 ## Setup
 
-Both hooks are automatically registered during `npx get-shit-done-cc` installation:
+Register both hooks manually in your Claude Code settings:
 
 - **Statusline** (writes bridge file): Registered as `statusLine` in settings.json
 - **Context Monitor** (reads bridge file): Registered as `PostToolUse` hook in settings.json

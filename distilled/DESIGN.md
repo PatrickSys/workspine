@@ -363,7 +363,8 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 | Claude Code           | `.claude/skills/gsdd-*/SKILL.md` + `.claude/commands/gsdd-plan.md` (compatibility alias for `plan`) + `.claude/agents/gsdd-plan-checker.md` | `--tools claude`                                                         |
 | Codex CLI             | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Always generated on `gsdd init`; no Codex-specific adapter file required |
 | OpenCode              | `.opencode/commands/gsdd-*.md` + `.opencode/agents/gsdd-plan-checker.md`                                                                    | `--tools opencode`                                                       |
-| Cursor/Copilot/Gemini | Root `AGENTS.md` (bounded block)                                                                                                            | `--tools agents`                                                         |
+| Cursor/Copilot        | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Slash-invoked skills once the runtime is configured with that skills location |
+| Gemini CLI            | `.gemini/commands/*.toml` or root `AGENTS.md` fallback                                                                                     | Custom commands if mirrored; `--tools agents` remains the fallback path       |
 
 Codex is skills-first because the Codex CLI already supports repository skills directly. GSDD should not generate a `.codex/AGENTS.md` file just to simulate a native path that the runtime does not need. Runtime validation status belongs in the internal status docs, not in this design record.
 

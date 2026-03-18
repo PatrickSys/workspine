@@ -8,6 +8,7 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 
 [![npm version](https://img.shields.io/npm/v/gsdd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
+[![Tests](https://img.shields.io/badge/assertions-664_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd init
@@ -25,13 +26,13 @@ GSDD is a distilled fork of GSD. It preserves the high-leverage parts of long-ho
 
 - **Persistent artifacts** — SPEC.md, ROADMAP.md, and config.json as the durable workspace
 - **Codebase mapping** — 4 parallel mappers produce STACK, ARCHITECTURE, CONVENTIONS, CONCERNS
-- **Scoped planning** — research, backward planning, plan-checking with XML task schemas
+- **Scoped planning** — research, backward planning, fresh-context adversarial plan checking
 - **Execution** — wave-based parallel execution with fresh context per plan
 - **Verification** — Exists/Substantive/Wired gate, anti-pattern scan
 - **Milestone audit** — cross-phase integration, requirements coverage, E2E flows
 - **Session management** — pause work with checkpoint, resume with context restoration and routing
 
-What it strips: GSD's broader operator surface (35 workflows, 12 agents, discovery modes, sprint ceremony, progress/settings flows). GSDD has 10 workflows and 9 roles.
+What it strips: GSD's broader operator surface (32 workflows, 11 agents, discovery modes, sprint ceremony, a settings flow, and additional operator ergonomics). GSDD has 10 workflows and 9 roles.
 
 **Target user:** Developer or small team that wants a spec-driven long-horizon kernel, not full operator comfort.
 
@@ -60,7 +61,7 @@ npx gsdd init                    # Auto-detect installed tools
 npx gsdd init --tools claude     # Claude Code: .claude/skills + commands + agents
 npx gsdd init --tools opencode   # OpenCode: .opencode/commands + agents
 npx gsdd init --tools codex      # Codex CLI: portable gsdd-plan skill + .codex/agents checker
-npx gsdd init --tools agents     # Root AGENTS.md (Cursor, Copilot, Gemini)
+npx gsdd init --tools agents     # Root AGENTS.md fallback
 npx gsdd init --tools all        # All of the above
 ```
 
@@ -70,7 +71,8 @@ npx gsdd init --tools all        # All of the above
 | **Claude Code** | Native | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
 | **OpenCode** | Native | `.opencode/commands/`, `.opencode/agents/` |
 | **Codex CLI** | Native | portable `.agents/skills/gsdd-plan/` entry + `.codex/agents/gsdd-*.toml` checker |
-| **Cursor / Copilot / Gemini** | Governance | Bounded block in root `AGENTS.md` |
+| **Cursor / Copilot** | Skill-aware | Slash-invoked skill backed by the portable `.agents/skills/gsdd-*/SKILL.md` surface |
+| **Gemini CLI** | Custom-command aware | Use matching `.gemini/commands/*.toml` entries if you mirror the workflow there; otherwise use the root `AGENTS.md` fallback |
 
 ### Updating
 
@@ -109,9 +111,9 @@ Run `gsdd-plan` for the current phase. The system:
 
 1. **Researches** — investigates how to implement this phase (if `workflow.research` is enabled)
 2. **Plans** — creates atomic task plans with XML structure
-3. **Checks** — verifies plans against requirements (if `workflow.planCheck` is enabled)
+3. **Checks** — a separate agent in a fresh context window reviews the plan against 7 dimensions (requirement coverage, task completeness, dependency correctness, key-link completeness, scope sanity, must-have quality, context compliance). If the plan fails, it revises and re-checks — up to 3 cycles before escalating to the human. Output is typed JSON so orchestration is machine-parseable, not prompt-dependent.
 
-Each plan is small enough to execute in a fresh context window.
+Each plan is small enough to execute in a fresh context window. The checker runs in a separate context from the planner — this is the [ICLR-validated](https://arxiv.org/abs/2310.12397) pattern for catching blind spots the planner inherits from its own reasoning.
 
 **Creates:** Phase plans in `.planning/phases/`
 
@@ -158,16 +160,17 @@ When all phases are done, run `gsdd-audit-milestone` to verify:
 
 ### Quick Mode
 
-```
-gsdd-quick
-```
+- `Claude/OpenCode`: `/gsdd-quick`
+- `Codex`: `$gsdd-quick`
+- `Cursor / Copilot`: `/gsdd-quick` from the slash command menu once the skill is installed
+- `Gemini CLI`: use the matching custom command if you mirror the workflow into `.gemini/commands/*.toml`
 
 For sub-hour tasks that don't need the full phase cycle:
 
-- **Same roles** — planner + executor, conditional verifier
-- **Skips research** — no researcher, no synthesizer
-- **Separate tracking** — lives in `.planning/quick/`, logged in `LOG.md`
-- **Advisory git** — follows repo conventions, no framework-imposed commit format
+- Same roles: planner + executor, conditional verifier
+- Skips research: no researcher, no synthesizer
+- Separate tracking: lives in `.planning/quick/`, logged in `LOG.md`
+- Advisory git: follows repo conventions, no framework-imposed commit format
 
 Use for: bug fixes, small features, config changes, one-off tasks.
 
@@ -191,6 +194,16 @@ GSDD has 10 workflows, run via generated skills or adapters:
 | `gsdd-pause` | Pause work: save session context to checkpoint for seamless resumption |
 | `gsdd-resume` | Resume work: restore context from artifacts and route to next action |
 | `gsdd-progress` | Show project status and route to next action |
+
+Workflows are agent skills or commands, not plain shell utilities. How you invoke them depends on your platform:
+
+| Platform | Invocation | Example |
+|----------|-----------|---------|
+| Claude Code | Slash command | `/gsdd-plan` |
+| OpenCode | Slash command | `/gsdd-plan` |
+| Codex CLI | Skill reference | `$gsdd-plan` |
+| Cursor / Copilot | Slash-invoked skill | `/gsdd-plan` |
+| Gemini CLI | Custom command surface | `/gsdd-plan` if mirrored into `.gemini/commands/*.toml` |
 
 ## CLI Commands
 
@@ -229,6 +242,24 @@ GSDD consolidates GSD's agent surface into 9 roles with durable contracts:
 - **Delegates** (`distilled/templates/delegates/*.md`) — thin wrappers that reference roles and provide task-specific context
 
 10 delegates: 4 mapper, 4 researcher, 1 synthesizer, 1 plan-checker. Workflows use `<delegate>` blocks to dispatch work.
+
+### Adapter Architecture
+
+GSDD generates vendor-specific files from vendor-agnostic markdown — it does not convert from one vendor format to another. This means every adapter gets first-class output shaped to its platform's native capabilities.
+
+| Adapter | Kind | Strategy |
+|---------|------|----------|
+| **Claude Code** | `native_capable` | Skill-primary plan surface (stays in main context to spawn checker subagent), thin command alias, native `gsdd-plan-checker` agent |
+| **OpenCode** | `native_capable` | Specialized `/gsdd-plan` command (`subtask: false`), hidden `gsdd-plan-checker` subagent (`mode: subagent`) |
+| **Codex CLI** | `native_capable` | Portable skill as entry surface, `.codex/agents/gsdd-plan-checker.toml` (read-only, high reasoning effort) |
+| **Cursor / Copilot** | `skill_aware` | Slash-invoked skill backed by the portable `.agents/skills/gsdd-*/SKILL.md` surface |
+| **Gemini CLI** | `custom_command_aware` | Use matching `.gemini/commands/*.toml` entries if you mirror the workflow there; otherwise use the root `AGENTS.md` fallback |
+
+All adapters render the plan-checker from a single source (`distilled/templates/delegates/plan-checker.md`). Each adapter shapes the output to its platform's native mechanics, and the portable skill remains the shared workflow source.
+
+Cursor and Copilot can invoke skills from the slash command menu once the skill location is configured. Gemini CLI uses custom commands rather than skills, so the root `AGENTS.md` fallback remains the conservative path until a Gemini command surface is mirrored.
+
+Model IDs pass through a two-layer injection guard: a regex whitelist (`/^[a-zA-Z0-9._\/:@-]+$/`) at the CLI boundary, plus format-specific escaping (TOML string escaping, triple-quote break prevention) at the adapter layer.
 
 ### Artifacts
 
@@ -314,28 +345,72 @@ Advisory defaults, overridden by repo conventions:
 
 ## Design Decisions
 
-GSDD makes 12 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+GSDD makes 18 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't
-- **Agent consolidation** — 9 roles from GSD's 12, with explicit reduced-assurance mode when independent checking isn't available
+- **Agent consolidation** — 9 roles from GSD's 11, with explicit reduced-assurance mode when independent checking isn't available
 - **Adapter generation over conversion** — generate vendor-specific files from vendor-agnostic markdown instead of converting from Claude-first
 - **Advisory git** — repo conventions over framework defaults
 - **Context isolation** — summaries up, documents to disk
+- **Mechanical invariant enforcement** — structural properties guarded by assertions, not code review
+- **Model profile propagation** — semantic tiers (`quality`/`balanced`/`budget`) translated to native model IDs per runtime
+- **Template versioning** — SHA-256 generation manifest detects user modifications before overwriting
+- **CLI composition root boundary** — 100-line facade delegates to extracted modules
+- **Codex CLI native adapter** — portable skill entry + TOML checker agent, documented platform gaps tracked against upstream issues
 
 ---
 
-## Invariant Tests
+## Testing
 
-GSDD includes structural assertions that guard properties PRs repeatedly fixed manually:
+GSDD has 664 structural assertions across 7 test files — 23 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
 
-- **I1:** Delegate-role reference integrity (10 delegates resolve to existing roles)
-- **I2:** Role section structure (9 roles have role def, scope, output format, success criteria)
-- **I3:** Delegate thinness (no leaked role-contract sections in delegates)
-- **I4:** Workflow references (10 workflows, all delegate/role refs resolve)
-- **I9:** No deprecated content (no vendor paths, dropped files, legacy tooling)
-- **I5:** Session management workflows (no vendor APIs, no STATE.md, checkpoint contract)
-- **I10:** Mandatory initial-read enforcement on hardened lifecycle roles
+### Invariant Suites (I-series)
+
+Structural contracts that prevent drift between roles, delegates, workflows, and artifacts:
+
+| Suite | What it guards |
+|-------|---------------|
+| **I1** | Delegate-role reference integrity — 10 delegates resolve to existing role contracts |
+| **I2** | Role section structure — 9 roles have role def, scope, output format, success criteria |
+| **I3** | Delegate thinness — no leaked role-contract sections in delegates |
+| **I3-gate** | New-project approval gates — required human checkpoints present |
+| **I4** | Workflow references — 10 workflows, all delegate/role refs resolve |
+| **I5** | Session management — no vendor APIs, no STATE.md, checkpoint contract |
+| **I5b** | Session workflow scope boundaries |
+| **I6** | Artifact schema definitions |
+| **I7** | Plan-checker dimension integrity — 7 dimensions present and correctly structured |
+| **I8** | Workflow vendor API cleanliness — no platform-specific calls in portable workflows |
+| **I9** | No deprecated content — no vendor paths, dropped files, legacy tooling |
+| **I10** | Mandatory initial-read enforcement on hardened lifecycle roles |
+| **S13** | STATE.md elimination — D7 compliance verified across all artifacts |
+
+### Guard Suites (G-series)
+
+Mechanical enforcement that catches cross-document inconsistencies:
+
+| Suite | What it guards |
+|-------|---------------|
+| **G1** | Cross-document schema consistency |
+| **G3** | File size guards — role contracts and delegates within bounds |
+| **G4** | XML section well-formedness across all workflows |
+| **G5** | Artifact lifecycle chain — plan → execute → verify → audit linkage |
+| **G6** | DESIGN.md decision registry — ToC matches actual decisions |
+| **G7** | Delegate thinness (mechanical) |
+| **G8** | Auto-mode contract |
+| **G9** | Generation manifest contract |
+| **G10** | CLI module boundary — composition root stays thin |
+| **G11** | Codex doc contract — no deprecated references |
+
+### Functional Test Suites
+
+| Suite | What it covers |
+|-------|---------------|
+| Init & update | Planning structure, config, templates, adapters, idempotency, auto mode |
+| Models | Profile propagation, runtime overrides, CLI commands, injection prevention |
+| Generation manifest | SHA-256 hashing, modification detection, dry-run mode |
+| Plan adapters | Portable skill neutrality, TOML format, triple-quote escaping |
+| Audit milestone | Integration checking contract |
 
 ```bash
 npm run test:gsdd
@@ -349,7 +424,7 @@ GSDD is a distilled fork of [Get Shit Done](https://github.com/gsd-build/get-shi
 
 **What GSDD preserves** (~76% of core method): the long-horizon delivery spine — persistent artifacts, codebase mapping, scoped planning, execution, verification, and milestone auditing.
 
-**What GSDD does not cover** (~44% of full upstream surface): GSD currently exposes 35 workflow files and 12 agent files including discovery modes, progress/settings flows, operator ergonomics, and broader session management. GSDD intentionally does not recreate this full surface.
+**What GSDD does not cover** (~44% of full upstream surface): GSD currently exposes 32 workflow files and 11 agent files including discovery modes, a settings flow, extra operator ergonomics, and broader session-management/control-plane surface area. GSDD intentionally does not recreate this full surface.
 
 **The trade-off:** Fewer moving parts for the human operator. Cleaner role contracts and a simpler artifact model. But reduced operator comfort and limited control-plane features (no telemetry, no artifact linting, no health diagnostics).
 
