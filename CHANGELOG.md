@@ -34,7 +34,7 @@ Initial public release. 27 merged PRs, 664 structural assertions, 18 design deci
 - Claude Code native adapter: skill-primary plan surface (works around subagent nesting constraint), thin command alias, native plan-checker agent
 - OpenCode native adapter: specialized command (`subtask: false`), hidden subagent (`mode: subagent`)
 - Codex CLI native adapter: portable skill as entry surface, `.codex/agents/gsdd-plan-checker.toml` (read-only sandbox, high reasoning effort)
-- Governance adapters: bounded block in root AGENTS.md for Cursor, Copilot, Gemini CLI via idempotent upsert
+- Governance adapters: bounded block in root AGENTS.md for Cursor, Copilot, and Gemini CLI without overwriting existing AGENTS.md content
 - Single-source plan-checker rendering — all three native adapters render from `distilled/templates/delegates/plan-checker.md`
 
 **Model Control**
