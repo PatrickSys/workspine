@@ -1405,3 +1405,106 @@ describe('G8 — Auto-Mode Contract', () => {
     );
   });
 });
+
+// =============================================================================
+// G12: Documentation Accuracy Guards
+//
+// Prevents documentation drift from recurring. Guards cross-document claims
+// against implementation truth (DESIGN.md decision count, workflow count,
+// CLI commands, ghost commands, implemented feature markers).
+// =============================================================================
+
+describe('G12 — Documentation Accuracy Guards', () => {
+  const ROOT_README = path.join(__dirname, '..', 'README.md');
+  const DISTILLED_README = path.join(__dirname, '..', 'distilled', 'README.md');
+  const AGENTS_README = path.join(__dirname, '..', 'agents', 'README.md');
+  const CLI_ENTRY = path.join(__dirname, '..', 'bin', 'gsdd.mjs');
+
+  const rootReadme = fs.readFileSync(ROOT_README, 'utf-8');
+  const distilledReadme = fs.readFileSync(DISTILLED_README, 'utf-8');
+  const agentsReadme = fs.readFileSync(AGENTS_README, 'utf-8');
+  const designContent = fs.readFileSync(DESIGN_MD, 'utf-8');
+  const cliContent = fs.readFileSync(CLI_ENTRY, 'utf-8');
+
+  // G12.1: DESIGN.md actual decision count matches README claims
+  test('DESIGN.md decision count matches root README claim', () => {
+    const actualSections = (designContent.match(/^## \d+\./gm) || []).length;
+    assert.ok(
+      rootReadme.includes(`${actualSections} documented design decisions`),
+      `Root README claims wrong DESIGN.md decision count. Actual: ${actualSections}. FIX: Update root README to say "${actualSections} documented design decisions".`
+    );
+  });
+
+  test('DESIGN.md decision count matches distilled/README claim', () => {
+    const actualSections = (designContent.match(/^## \d+\./gm) || []).length;
+    assert.ok(
+      distilledReadme.includes(`${actualSections} decisions`),
+      `distilled/README claims wrong DESIGN.md decision count. Actual: ${actualSections}. FIX: Update distilled/README DESIGN.md description to say "${actualSections} decisions".`
+    );
+  });
+
+  // G12.2: Workflow count matches WORKFLOWS array length
+  test('root README workflow count matches WORKFLOWS array length', () => {
+    const workflowArrayMatch = cliContent.match(/const WORKFLOWS = \[/);
+    assert.ok(workflowArrayMatch, 'bin/gsdd.mjs must define WORKFLOWS array');
+    // Count workflow entries by counting `{ name:` lines
+    const workflowEntries = (cliContent.match(/\{\s*name:\s*'/g) || []).length;
+    assert.ok(
+      rootReadme.includes(`${workflowEntries} workflows`),
+      `Root README claims wrong workflow count. Actual: ${workflowEntries}. FIX: Update root README to say "${workflowEntries} workflows".`
+    );
+  });
+
+  // G12.3: CLI commands completeness — README table includes all registered commands
+  test('root README CLI commands table includes all registered commands', () => {
+    // Extract command names from COMMANDS object in bin/gsdd.mjs
+    const commandsMatch = cliContent.match(/const COMMANDS = \{([\s\S]*?)\};/);
+    assert.ok(commandsMatch, 'bin/gsdd.mjs must define COMMANDS object');
+    const commandNames = [...commandsMatch[1].matchAll(/'?([a-z-]+)'?\s*:/g)].map(m => m[1]);
+
+    for (const cmd of commandNames) {
+      assert.ok(
+        rootReadme.includes(`gsdd ${cmd}`),
+        `Root README CLI commands table missing "gsdd ${cmd}". FIX: Add "gsdd ${cmd}" row to the CLI Commands table.`
+      );
+    }
+  });
+
+  // G12.4: No ghost commands in distilled/README workflow diagram
+  test('distilled/README workflow diagram has no ghost commands', () => {
+    // Extract workflow diagram section (between "## The Workflow" and next "##")
+    const diagramMatch = distilledReadme.match(/## The Workflow[\s\S]*?```([\s\S]*?)```/);
+    assert.ok(diagramMatch, 'distilled/README must have a workflow diagram code block');
+    const diagram = diagramMatch[1];
+
+    // Extract /gsdd:* references from the diagram
+    const diagramCommands = [...diagram.matchAll(/\/gsdd:([a-z-]+)/g)].map(m => m[1]);
+
+    // Get valid workflow names (strip 'gsdd-' prefix to get the command part)
+    const workflowNames = (cliContent.match(/name:\s*'gsdd-([a-z-]+)'/g) || [])
+      .map(m => m.match(/name:\s*'gsdd-([a-z-]+)'/)[1]);
+
+    for (const cmd of diagramCommands) {
+      assert.ok(
+        workflowNames.includes(cmd),
+        `distilled/README workflow diagram references "/gsdd:${cmd}" which is not in WORKFLOWS array. FIX: Remove ghost command or add the workflow.`
+      );
+    }
+  });
+
+  // G12.5: No "(planned)" for implemented features
+  test('agents/README.md does not say "(planned)" for gsdd update --templates', () => {
+    assert.ok(
+      !agentsReadme.includes('(planned)'),
+      'agents/README.md still says "(planned)" for an implemented feature. FIX: Remove "(planned)" and describe current behavior.'
+    );
+  });
+
+  // G12.6: Update command documentation mentions --templates
+  test('root README update command mentions --templates', () => {
+    assert.ok(
+      rootReadme.includes('--templates'),
+      'Root README update command documentation does not mention --templates. FIX: Add --templates to the update command description.'
+    );
+  });
+});

@@ -8,7 +8,7 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 
 [![npm version](https://img.shields.io/npm/v/gsdd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/assertions-664_passing-brightgreen?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/assertions-671_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd init
@@ -77,8 +77,9 @@ npx gsdd init --tools all        # All of the above
 ### Updating
 
 ```bash
-npx gsdd update                  # Regenerate adapters from latest sources
-npx gsdd update --tools claude   # Update specific platform only
+npx gsdd update                    # Regenerate adapters from latest sources
+npx gsdd update --tools claude     # Update specific platform only
+npx gsdd update --templates        # Refresh .planning/templates/ and role contracts from framework source
 ```
 
 ---
@@ -210,10 +211,11 @@ Workflows are agent skills or commands, not plain shell utilities. How you invok
 | Command | What it does |
 |---------|--------------|
 | `gsdd init [--tools <platform>]` | Set up `.planning/`, generate adapters |
-| `gsdd update [--tools <platform>]` | Regenerate adapters from latest sources |
+| `gsdd update [--tools <platform>] [--templates]` | Regenerate adapters; `--templates` refreshes `.planning/templates/` and role contracts |
 | `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `gsdd verify <N>` | Run artifact checks for phase N |
 | `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
+| `gsdd models [show\|profile\|set\|...]` | Inspect and manage model profile propagation |
 | `gsdd help` | Show all commands |
 
 ---
@@ -363,7 +365,7 @@ Key choices:
 
 ## Testing
 
-GSDD has 664 structural assertions across 7 test files — 23 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
+GSDD has 671 structural assertions across 7 test files — 24 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
 
 ### Invariant Suites (I-series)
 
@@ -401,6 +403,7 @@ Mechanical enforcement that catches cross-document inconsistencies:
 | **G9** | Generation manifest contract |
 | **G10** | CLI module boundary — composition root stays thin |
 | **G11** | Codex doc contract — no deprecated references |
+| **G12** | Documentation accuracy — decision counts, workflow counts, CLI commands, ghost commands |
 
 ### Functional Test Suites
 

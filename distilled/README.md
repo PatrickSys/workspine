@@ -22,6 +22,7 @@ Optional adapters:
 ```bash
 npx gsdd init --tools claude
 npx gsdd init --tools opencode
+npx gsdd init --tools codex
 npx gsdd init --tools agents
 npx gsdd init --tools all
 ```
@@ -42,15 +43,13 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 /gsdd:execute N     -> code changes          (plan execution with quality gates)
 /gsdd:verify N      -> VERIFICATION.md       (goal-backward validation)
   ... repeat plan/execute/verify per phase ...
-/gsdd:complete      -> archive milestone, evolve .planning/SPEC.md
-/gsdd:milestone     -> new .planning/ROADMAP.md for next milestone
 /gsdd:quick         -> .planning/quick/NNN/  (sub-hour task outside phases)
 /gsdd:pause         -> .planning/.continue-here.md  (session checkpoint)
 /gsdd:resume        -> restore context, route to next action
 /gsdd:progress      -> show status, route to next action
 ```
 
-## Current Status (updated 2026-03-14)
+## Current Status (updated 2026-03-18)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
@@ -116,6 +115,8 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-plan-checker.md      # native-capable checker agent generated from the active plan-checker contract
 .opencode/commands/
   gsdd-plan.md              # OpenCode-native specialized planner -> checker command surface
+.codex/agents/
+  gsdd-plan-checker.toml    # Codex-native checker agent (read-only, high reasoning effort)
 .planning/
   quick/              # quick task directories and LOG.md
   .continue-here.md   # session checkpoint (created by pause)
@@ -125,7 +126,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 
 ```
 distilled/
-  DESIGN.md                # design decisions and rationale (10 decisions, evidence-backed)
+  DESIGN.md                # design decisions and rationale (18 decisions, evidence-backed)
   SKILL.md                 # primary entry point (plain markdown)
   workflows/
     new-project.md

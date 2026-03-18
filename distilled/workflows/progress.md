@@ -167,8 +167,8 @@ Condition: `.planning/SPEC.md` exists but `.planning/ROADMAP.md` does not — a 
 
 ```
 Suggested next action:
-  Run /gsdd:milestone to start the next milestone cycle
-  Also available: /gsdd:new-project (start fresh), /gsdd:progress (refresh after milestone setup)
+  Run /gsdd:new-project to start the next milestone cycle (create a new ROADMAP.md)
+  Also available: /gsdd:progress (refresh after milestone setup)
 ```
 
 If none of the above conditions match, report that the project is in a clean state with no obvious next action.

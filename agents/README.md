@@ -42,7 +42,7 @@ Roles define what an agent is. Delegates define what an agent does in a specific
 - **Single source of truth:** `agents/*.md` in this repo. Consumer copies are generated, not edited.
 - **Delegates reference the local copy:** `distilled/templates/delegates/*.md` point to `.planning/templates/roles/<role>.md`, not back to this repo.
 - **Idempotent:** `gsdd init` skips the copy if `.planning/templates/roles/` already exists.
-- **Future updates:** `gsdd update --templates` (planned) will re-copy from latest framework sources.
+- **Updates:** `gsdd update --templates` re-copies from latest framework sources with hash-based modification detection.
 
 Verifier note:
 - `verifier.md` is phase-scoped.
