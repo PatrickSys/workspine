@@ -59,10 +59,16 @@ export function loadProjectModelConfig(cwd = process.cwd()) {
 
 function loadConfigForMutation(cwd = process.cwd()) {
   const configPath = join(cwd, '.planning', 'config.json');
+  let raw;
   try {
-    return { ok: true, config: { ...buildDefaultConfig(), ...JSON.parse(readFileSync(configPath, 'utf-8')) } };
+    raw = readFileSync(configPath, 'utf-8');
   } catch (e) {
-    return { ok: false, error: e.message };
+    return { ok: false, error: `could not read config file (${e.message})` };
+  }
+  try {
+    return { ok: true, config: { ...buildDefaultConfig(), ...JSON.parse(raw) } };
+  } catch (e) {
+    return { ok: false, error: `malformed JSON (${e.message})` };
   }
 }
 

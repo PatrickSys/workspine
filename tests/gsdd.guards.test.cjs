@@ -152,7 +152,7 @@ describe('G13 - Models Pre-Init Safety', () => {
       const fnStart = modelsSource.indexOf(`function ${fn}`);
       assert.notStrictEqual(fnStart, -1, `${fn} must exist in models.mjs`);
       const nextFnStart = modelsSource.indexOf('\nfunction ', fnStart + 1);
-      const fnBody = modelsSource.slice(fnStart, nextFnStart > -1 ? nextFnStart : fnStart + 1500);
+      const fnBody = modelsSource.slice(fnStart, nextFnStart > -1 ? nextFnStart : modelsSource.length);
       assert.match(fnBody, /isProjectInitialized/,
         `${fn} must call isProjectInitialized. FIX: Add pre-init guard to ${fn}.`);
     }
@@ -170,7 +170,7 @@ describe('G13 - Models Pre-Init Safety', () => {
     for (const fn of mutationFunctions) {
       const fnStart = modelsSource.indexOf(`function ${fn}`);
       const nextFnStart = modelsSource.indexOf('\nfunction ', fnStart + 1);
-      const fnBody = modelsSource.slice(fnStart, nextFnStart > -1 ? nextFnStart : fnStart + 1500);
+      const fnBody = modelsSource.slice(fnStart, nextFnStart > -1 ? nextFnStart : modelsSource.length);
       assert.doesNotMatch(fnBody, /ensureProjectConfig/,
         `${fn} must not call ensureProjectConfig. FIX: Use loadConfigForMutation instead.`);
     }
