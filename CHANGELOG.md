@@ -59,6 +59,6 @@ Initial public release. 35 merged PRs, 800+ structural assertions, 25 design dec
 - Functional test suites: init/update, model propagation, generation manifest, plan adapter surfaces, audit-milestone, health diagnostics
 
 **Documentation**
-- 24 evidence-backed design decisions in `distilled/DESIGN.md` (D1-D24), each citing GSD source files and external research
+- 25 evidence-backed design decisions in `distilled/DESIGN.md` (D1-D25), each citing GSD source files and external research
 - Role contract README with canonical role inventory
 - Distillation ledger (`agents/DISTILLATION.md`) documenting GSD-to-GSDD role distillation rationale
