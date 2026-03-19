@@ -8,7 +8,7 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 
 [![npm version](https://img.shields.io/npm/v/gsdd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/assertions-811_passing-brightgreen?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/assertions-825_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd init
@@ -50,7 +50,17 @@ This creates:
 2. `.agents/skills/gsdd-*` — portable workflow entrypoints
 3. Tool-specific adapters if detected (Claude skills/commands/agents, OpenCode commands/agents, Codex agents)
 
-Then run the new-project workflow via your tool's skill/command surface to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`.
+Then run the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`.
+
+### Quickstart (after init)
+
+Your tool determines how you invoke workflows:
+
+- **Claude Code / OpenCode:** Use slash commands directly — `/gsdd-new-project`, `/gsdd-plan`, etc.
+- **Codex CLI:** Use skill references — `$gsdd-new-project`, `$gsdd-plan`, etc.
+- **Cursor / Copilot / Gemini / Others:** Open `.agents/skills/gsdd-<workflow>/SKILL.md` and follow the instructions. The root `AGENTS.md` governance block keeps the agent on track.
+
+First workflow to run: **new-project** — it asks about your goals, audits the codebase (if brownfield), and produces `.planning/SPEC.md` + `.planning/ROADMAP.md`.
 
 ### Platform Adapters
 
@@ -65,14 +75,13 @@ npx gsdd init --tools agents     # Root AGENTS.md fallback
 npx gsdd init --tools all        # All of the above
 ```
 
-| Platform | Kind | What's generated |
+| Platform | Tier | What's generated |
 |----------|------|-----------------|
-| **All** (default) | Open standard | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints |
-| **Claude Code** | Native | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
-| **OpenCode** | Native | `.opencode/commands/`, `.opencode/agents/` |
-| **Codex CLI** | Native | portable `.agents/skills/gsdd-plan/` entry + `.codex/agents/gsdd-*.toml` checker |
-| **Cursor / Copilot** | Skill-aware | Slash-invoked skill backed by the portable `.agents/skills/gsdd-*/SKILL.md` surface |
-| **Gemini CLI** | Custom-command aware | Use matching `.gemini/commands/*.toml` entries if you mirror the workflow there; otherwise use the root `AGENTS.md` fallback |
+| **All** (default) | Open standard | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |
+| **Claude Code** | Native | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — slash commands work immediately |
+| **OpenCode** | Native | `.opencode/commands/`, `.opencode/agents/` — slash commands work immediately |
+| **Codex CLI** | Native | `.codex/agents/gsdd-plan-checker.toml` — skill reference `$gsdd-plan` works immediately |
+| **Cursor / Copilot / Gemini** | Governance | Root `AGENTS.md` block — governs agent behavior; invoke workflows by opening `.agents/skills/gsdd-*/SKILL.md` directly |
 
 ### Updating
 
@@ -161,10 +170,9 @@ When all phases are done, run `gsdd-audit-milestone` to verify:
 
 ### Quick Mode
 
-- `Claude/OpenCode`: `/gsdd-quick`
-- `Codex`: `$gsdd-quick`
-- `Cursor / Copilot`: `/gsdd-quick` from the slash command menu once the skill is installed
-- `Gemini CLI`: use the matching custom command if you mirror the workflow into `.gemini/commands/*.toml`
+- `Claude Code / OpenCode`: `/gsdd-quick`
+- `Codex CLI`: `$gsdd-quick`
+- `Cursor / Copilot / Gemini / Others`: open `.agents/skills/gsdd-quick/SKILL.md`
 
 For sub-hour tasks that don't need the full phase cycle:
 
@@ -198,13 +206,12 @@ GSDD has 10 workflows, run via generated skills or adapters:
 
 Workflows are agent skills or commands, not plain shell utilities. How you invoke them depends on your platform:
 
-| Platform | Invocation | Example |
-|----------|-----------|---------|
-| Claude Code | Slash command | `/gsdd-plan` |
-| OpenCode | Slash command | `/gsdd-plan` |
-| Codex CLI | Skill reference | `$gsdd-plan` |
-| Cursor / Copilot | Slash-invoked skill | `/gsdd-plan` |
-| Gemini CLI | Custom command surface | `/gsdd-plan` if mirrored into `.gemini/commands/*.toml` |
+| Platform | How to invoke workflows |
+|----------|------------------------|
+| Claude Code | `/gsdd-plan` (slash command, works immediately after init) |
+| OpenCode | `/gsdd-plan` (slash command, works immediately after init) |
+| Codex CLI | `$gsdd-plan` (skill reference, works immediately after init) |
+| Cursor / Copilot / Gemini | Open `.agents/skills/gsdd-plan/SKILL.md` and paste or reference its content. The `AGENTS.md` governance block steers agent behavior. |
 
 ## CLI Commands
 
@@ -255,12 +262,11 @@ GSDD generates vendor-specific files from vendor-agnostic markdown — it does n
 | **Claude Code** | `native_capable` | Skill-primary plan surface (stays in main context to spawn checker subagent), thin command alias, native `gsdd-plan-checker` agent |
 | **OpenCode** | `native_capable` | Specialized `/gsdd-plan` command (`subtask: false`), hidden `gsdd-plan-checker` subagent (`mode: subagent`) |
 | **Codex CLI** | `native_capable` | Portable skill as entry surface, `.codex/agents/gsdd-plan-checker.toml` (read-only, high reasoning effort) |
-| **Cursor / Copilot** | `skill_aware` | Slash-invoked skill backed by the portable `.agents/skills/gsdd-*/SKILL.md` surface |
-| **Gemini CLI** | `custom_command_aware` | Use matching `.gemini/commands/*.toml` entries if you mirror the workflow there; otherwise use the root `AGENTS.md` fallback |
+| **Cursor / Copilot / Gemini** | `governance_only` | Root `AGENTS.md` block governs agent behavior; invoke workflows by opening `.agents/skills/gsdd-*/SKILL.md` directly |
 
 All adapters render the plan-checker from a single source (`distilled/templates/delegates/plan-checker.md`). Each adapter shapes the output to its platform's native mechanics, and the portable skill remains the shared workflow source.
 
-Cursor and Copilot can invoke skills from the slash command menu once the skill location is configured. Gemini CLI uses custom commands rather than skills, so the root `AGENTS.md` fallback remains the conservative path until a Gemini command surface is mirrored.
+Cursor, Copilot, and Gemini CLI generate the same root `AGENTS.md` governance block as `--tools agents`. They do not have native adapter surfaces — invoke workflows by opening `.agents/skills/gsdd-*/SKILL.md` directly.
 
 Model IDs pass through a two-layer injection guard: a regex whitelist (`/^[a-zA-Z0-9._\/:@-]+$/`) at the CLI boundary, plus format-specific escaping (TOML string escaping, triple-quote break prevention) at the adapter layer.
 
@@ -348,7 +354,7 @@ Advisory defaults, overridden by repo conventions:
 
 ## Design Decisions
 
-GSDD makes 24 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+GSDD makes 25 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't
@@ -411,6 +417,7 @@ Mechanical enforcement that catches cross-document inconsistencies:
 | **G16** | Distillation ledger — DISTILLATION.md role coverage, merger table, D22 registration |
 | **G17** | Mapper output quantification — template sections, delegate instructions, D23 registration |
 | **G18** | Consumer governance completeness — agents.block.md workflow coverage, CHANGELOG accuracy |
+| **G19** | Consumer first-run accuracy — honest platform tiers, per-platform invocation guidance, Quickstart section |
 
 ### Scenario Suites (S-series)
 

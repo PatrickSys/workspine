@@ -76,9 +76,17 @@ export function createCmdInit(ctx) {
     console.log('  - wrote generation manifest');
 
     console.log('\nSDD initialized.');
-    console.log('Next: run the new-project workflow using your tool:');
-    console.log('  - open `.agents/skills/gsdd-new-project/SKILL.md` (or run the equivalent slash command if your tool supports skills)');
-    console.log('  - then follow the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`\n');
+    console.log('Next: run the new-project workflow to produce SPEC.md and ROADMAP.md:\n');
+
+    if (platforms.includes('claude'))
+      console.log('  Claude Code:  /gsdd-new-project');
+    if (platforms.includes('opencode'))
+      console.log('  OpenCode:     /gsdd-new-project');
+    if (platforms.includes('codex'))
+      console.log('  Codex CLI:    $gsdd-new-project');
+
+    // Always show the portable fallback
+    console.log('  Any tool:     open .agents/skills/gsdd-new-project/SKILL.md\n');
   };
 }
 

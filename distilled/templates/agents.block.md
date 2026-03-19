@@ -79,4 +79,12 @@ If you are not confident about a domain/library/pattern:
   - `.agents/skills/gsdd-resume/SKILL.md` — session context restore and routing
   - `.agents/skills/gsdd-progress/SKILL.md` — read-only status and next-action routing
 
-If your tool does not support skills, you can still follow the same content by opening those files directly.
+### How To Invoke Workflows
+
+How you run these workflows depends on your tool:
+
+- **Claude Code / OpenCode:** Use slash commands — `/gsdd-new-project`, `/gsdd-plan`, `/gsdd-execute`, etc.
+- **Codex CLI:** Use skill references — `$gsdd-new-project`, `$gsdd-plan`, `$gsdd-execute`, etc.
+- **All other tools (Cursor, Copilot, Gemini, any AI agent):** Open the SKILL.md file listed above and follow its instructions. This AGENTS.md governance block keeps the agent aligned with GSDD discipline.
+
+Start with the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`.

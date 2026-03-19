@@ -8,7 +8,7 @@ For the upstream GSD changelog, see [get-shit-done/CHANGELOG.md](https://github.
 
 ## [0.1.0] - 2026-03-19
 
-Initial public release. 35 merged PRs, 800+ structural assertions, 24 design decisions.
+Initial public release. 35 merged PRs, 800+ structural assertions, 25 design decisions.
 
 ### Added
 
@@ -54,11 +54,11 @@ Initial public release. 35 merged PRs, 800+ structural assertions, 24 design dec
 **Testing**
 - 800+ structural assertions across 9 test files, 0 failures
 - 13 invariant suites (I-series): delegate-role integrity, role structure, delegate thinness, workflow references, session management, artifact schemas, plan-checker dimensions, vendor API cleanliness, deprecation guards, initial-read enforcement
-- 17 guard suites (G-series): cross-document schema consistency, file size bounds, XML well-formedness, artifact lifecycle chain, DESIGN.md registry, auto-mode contract, generation manifest, CLI module boundary, Codex doc contract, documentation accuracy, models pre-init safety, health module contract, OWASP authorization matrix, distillation ledger, mapper output quantification, consumer governance completeness
+- 18 guard suites (G-series): cross-document schema consistency, file size bounds, XML well-formedness, artifact lifecycle chain, DESIGN.md registry, auto-mode contract, generation manifest, CLI module boundary, Codex doc contract, documentation accuracy, models pre-init safety, health module contract, OWASP authorization matrix, distillation ledger, mapper output quantification, consumer governance completeness, consumer first-run accuracy
 - 5 scenario suites (S-series): greenfield golden path, brownfield path, quick-task path, native runtime chain, config-to-content propagation
 - Functional test suites: init/update, model propagation, generation manifest, plan adapter surfaces, audit-milestone, health diagnostics
 
 **Documentation**
-- 24 evidence-backed design decisions in `distilled/DESIGN.md` (D1-D24), each citing GSD source files and external research
+- 25 evidence-backed design decisions in `distilled/DESIGN.md` (D1-D25), each citing GSD source files and external research
 - Role contract README with canonical role inventory
 - Distillation ledger (`agents/DISTILLATION.md`) documenting GSD-to-GSDD role distillation rationale

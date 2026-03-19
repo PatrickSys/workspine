@@ -32,6 +32,7 @@
 22. [Delegate Layer Architecture](#22-delegate-layer-architecture)
 23. [Mapper Output Quantification](#23-mapper-output-quantification)
 24. [Consumer Governance Completeness](#24-consumer-governance-completeness)
+25. [Consumer First-Run Experience](#25-consumer-first-run-experience)
 
 ---
 
@@ -1130,6 +1131,29 @@ This is acceptable because:
 - OpenAI, "Harness Engineering" (2026): the harness determines whether agents succeed or fail
 - External audits (2026-03-13, 2026-03-17): both independently flagged documentation accuracy as the top remaining blocker for consumer adoption
 - GSDD implementation: `distilled/templates/agents.block.md`, `CHANGELOG.md`, `README.md`, `tests/gsdd.guards.test.cjs` (G18)
+
+---
+
+## 25. Consumer First-Run Experience
+
+**Problem:** GSDD's internal architecture is complete (24 design decisions, 800+ tests, 10 workflows, 9 roles), but consumer-facing surfaces don't honestly guide first-time users. Two independent audits identified this as the single largest barrier to adoption.
+
+**Decision:** Make all consumer-facing surfaces (README, agents.block.md, post-init CLI output) honestly distinguish between native-capable and governance-only platforms, and provide platform-specific invocation guidance at every consumer touchpoint.
+
+**Key changes:**
+- Platform adapter table uses honest capability tiers (native vs governance) instead of aspirational labels (skill_aware, custom_command_aware)
+- Post-init CLI output shows platform-specific next-step commands
+- AGENTS.md governance block includes per-platform invocation guide
+- Quickstart section provides a guided first-use flow
+
+**Evidence:**
+1. **Anthropic harness engineering** (2025-2026): "honest constraints over vague prompting" — harnesses should clearly communicate what they can and cannot enforce
+2. **OpenAI Codex skills documentation**: Shows clear per-platform invocation patterns with explicit examples, not generic "use the skill" instructions
+3. **GitHub spec-driven development toolkit**: Provides explicit getting-started flows that match the user's specific tool, not one-size-fits-all docs
+4. **Martin Fowler on context engineering**: Emphasizes that "the right information at the right time" applies to human consumers as much as to AI agents
+5. **Both GSDD external audits** (March 13 + 17, 2026): Independently concluded the same gap — "architecture is solid, presentation lags implementation"
+
+**GSDD implementation:** `README.md` (quickstart, honest platform tiers), `distilled/templates/agents.block.md` (per-platform invocation guide), `bin/lib/init.mjs` (platform-aware post-init routing), `tests/gsdd.guards.test.cjs` (G19)
 
 ---
 

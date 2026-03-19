@@ -634,3 +634,97 @@ describe('G18 - Consumer Governance Completeness', () => {
       'DESIGN.md ToC must have D24 entry. FIX: Add ToC entry for D24.');
   });
 });
+
+// ── G19: Consumer First-Run Accuracy ─────────────────────────────────
+describe('G19 - Consumer First-Run Accuracy', () => {
+  const AGENTS_BLOCK = path.join(ROOT, 'distilled', 'templates', 'agents.block.md');
+  const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
+
+  test('README platform table uses only Native or Governance tier labels (no skill_aware)', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.doesNotMatch(readme, /skill_aware/,
+      'README.md must not contain skill_aware. FIX: Replace skill_aware with governance_only in adapter tables.');
+  });
+
+  test('README platform table uses only Native or Governance tier labels (no custom_command_aware)', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.doesNotMatch(readme, /custom_command_aware/,
+      'README.md must not contain custom_command_aware. FIX: Replace custom_command_aware with governance_only in adapter tables.');
+  });
+
+  test('README invocation table includes "open SKILL.md" guidance for non-native platforms', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.match(readme, /Cursor.*Copilot.*Gemini.*Open.*SKILL\.md/i,
+      'README invocation table must tell non-native platforms to open SKILL.md. FIX: Add SKILL.md guidance for governance-only platforms.');
+  });
+
+  test('README contains a Quickstart section', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.match(readme, /### Quickstart/,
+      'README.md must contain a Quickstart section. FIX: Add ### Quickstart section after Getting Started.');
+  });
+
+  test('README quickstart mentions all 3 platform invocation patterns', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const quickstartStart = readme.indexOf('### Quickstart');
+    const quickstartEnd = readme.indexOf('###', quickstartStart + 1);
+    const quickstart = readme.slice(quickstartStart, quickstartEnd > -1 ? quickstartEnd : quickstartStart + 800);
+    assert.match(quickstart, /slash command/i,
+      'Quickstart must mention slash commands. FIX: Add slash command invocation pattern to Quickstart.');
+    assert.match(quickstart, /skill reference/i,
+      'Quickstart must mention skill references. FIX: Add skill reference invocation pattern to Quickstart.');
+    assert.match(quickstart, /SKILL\.md/,
+      'Quickstart must mention opening SKILL.md. FIX: Add SKILL.md invocation pattern to Quickstart.');
+  });
+
+  test('agents.block.md contains "How To Invoke Workflows" section', () => {
+    const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
+    assert.match(content, /### How To Invoke Workflows/,
+      'agents.block.md must have "How To Invoke Workflows" section. FIX: Add ### How To Invoke Workflows section.');
+  });
+
+  test('agents.block.md invocation section mentions Claude/OpenCode slash commands', () => {
+    const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
+    assert.match(content, /Claude Code.*OpenCode.*slash command|slash command.*\/gsdd-/i,
+      'agents.block.md invocation must mention slash commands for Claude/OpenCode. FIX: Add slash command guidance.');
+  });
+
+  test('agents.block.md invocation section mentions Codex skill references', () => {
+    const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
+    assert.match(content, /Codex.*skill reference|\$gsdd-/,
+      'agents.block.md invocation must mention Codex skill references. FIX: Add skill reference guidance for Codex.');
+  });
+
+  test('agents.block.md invocation section mentions opening SKILL.md for other tools', () => {
+    const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
+    assert.match(content, /[Oo]pen the SKILL\.md file/,
+      'agents.block.md invocation must mention opening SKILL.md for other tools. FIX: Add SKILL.md guidance for non-native tools.');
+  });
+
+  test('README adapter architecture table does NOT contain skill_aware', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const archSection = readme.slice(readme.indexOf('### Adapter Architecture'));
+    assert.doesNotMatch(archSection, /`skill_aware`/,
+      'README adapter architecture table must not contain skill_aware. FIX: Replace with governance_only.');
+  });
+
+  test('README adapter architecture table does NOT contain custom_command_aware', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const archSection = readme.slice(readme.indexOf('### Adapter Architecture'));
+    assert.doesNotMatch(archSection, /`custom_command_aware`/,
+      'README adapter architecture table must not contain custom_command_aware. FIX: Replace with governance_only.');
+  });
+
+  test('DESIGN.md contains D25 entry', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /## 25\./,
+      'DESIGN.md must contain section 25. FIX: Add D25 Consumer First-Run Experience.');
+  });
+
+  test('DESIGN.md ToC lists 25 entries', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    const tocEntries = (content.match(/^\d+\. \[/gm) || []);
+    assert.strictEqual(tocEntries.length, 25,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 25. FIX: Update DESIGN.md ToC to list all 25 decisions.`);
+  });
+});
