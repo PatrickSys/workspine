@@ -6,7 +6,8 @@ Edit the source template in the GSDD framework instead.
 ### What This Project Uses
 - Framework: GSDD (Spec-Driven Development)
 - Planning dir: `.planning/` (specs, roadmaps, plans, research, templates)
-- Lifecycle: `bootstrap (gsdd init) -> new-project -> [plan -> execute -> verify] x N` for roadmap work
+- Lifecycle: `bootstrap (gsdd init) -> new-project -> [plan -> execute -> verify] x N -> audit-milestone` for roadmap work
+- Supporting workflows: quick (sub-hour tasks), map-codebase (codebase analysis), pause/resume (session management), progress (status query)
 
 ### Rules You MUST Follow
 
@@ -65,10 +66,17 @@ If you are not confident about a domain/library/pattern:
 - If asked for analysis, answer first; propose changes separately.
 
 ### Where The Workflows Live
-- Primary workflow entrypoints are shipped as skills:
-  - `.agents/skills/gsdd-new-project/SKILL.md`
-  - `.agents/skills/gsdd-plan/SKILL.md`
-  - `.agents/skills/gsdd-execute/SKILL.md`
-  - `.agents/skills/gsdd-verify/SKILL.md`
+- Primary lifecycle:
+  - `.agents/skills/gsdd-new-project/SKILL.md` — project initialization (spec + roadmap)
+  - `.agents/skills/gsdd-plan/SKILL.md` — phase planning with optional independent checking
+  - `.agents/skills/gsdd-execute/SKILL.md` — plan execution with quality gates
+  - `.agents/skills/gsdd-verify/SKILL.md` — phase goal-backward verification
+  - `.agents/skills/gsdd-audit-milestone/SKILL.md` — milestone integration audit
+- Supporting workflows:
+  - `.agents/skills/gsdd-quick/SKILL.md` — sub-hour tasks outside the phase cycle
+  - `.agents/skills/gsdd-map-codebase/SKILL.md` — codebase analysis and refresh
+  - `.agents/skills/gsdd-pause/SKILL.md` — session checkpoint
+  - `.agents/skills/gsdd-resume/SKILL.md` — session context restore and routing
+  - `.agents/skills/gsdd-progress/SKILL.md` — read-only status and next-action routing
 
 If your tool does not support skills, you can still follow the same content by opening those files directly.
