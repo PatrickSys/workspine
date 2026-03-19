@@ -112,6 +112,40 @@ describe('gsdd audit-milestone', () => {
     assert.doesNotMatch(content, /deferred.*milestone.*audit/i, 'verifier must no longer call the audit surface "deferred"');
   });
 
+  test('audit-milestone skill references AUTH_MATRIX.md', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    const skillPath = path.join(tmpDir, '.agents', 'skills', 'gsdd-audit-milestone', 'SKILL.md');
+    const content = fs.readFileSync(skillPath, 'utf-8');
+    assert.match(content, /AUTH_MATRIX\.md/,
+      'audit-milestone skill must reference AUTH_MATRIX.md for matrix-driven auth verification');
+  });
+
+  test('integration-checker role includes matrix-driven verification', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    const rolePath = path.join(tmpDir, '.planning', 'templates', 'roles', 'integration-checker.md');
+    const content = fs.readFileSync(rolePath, 'utf-8');
+    assert.match(content, /Step 4a/,
+      'integration-checker role must include Step 4a matrix-driven verification');
+    assert.match(content, /matrix_coverage/,
+      'integration-checker role must include matrix_coverage output key');
+    assert.match(content, /does not exist.*skip/i,
+      'Step 4a must be backwards compatible with existence guard');
+  });
+
   test('role count is 9', async () => {
     const agentsDir = path.join(__dirname, '..', 'agents');
     const roleFiles = fs.readdirSync(agentsDir).filter(

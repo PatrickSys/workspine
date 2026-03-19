@@ -45,6 +45,7 @@ Optional but useful context:
 
 - expected cross-phase dependencies from the roadmap
 - likely sensitive routes, pages, or flows that should enforce auth
+- `.planning/AUTH_MATRIX.md` (if it exists — enables matrix-driven auth verification in Step 4a)
 
 Rules:
 
@@ -127,6 +128,24 @@ Result: UNPROTECTED
 
 If a route or flow touches account, billing, admin, profile, or user-scoped data without a real auth check, report it as a critical integration finding.
 
+## Step 4a: Matrix-Driven Auth Verification
+
+If `.planning/AUTH_MATRIX.md` does not exist, skip this sub-step. Step 4 narrative checking always runs regardless.
+
+When the matrix exists:
+
+1. Parse the matrix table(s) — each row defines a resource, action, and expected permission per role.
+2. For each cell (resource x role x expected permission), trace enforcement in the codebase:
+   - **ALLOW cells**: Verify the role can reach the resource without an auth gate blocking it.
+   - **DENY cells**: Verify explicit rejection exists — middleware, guard, or policy that denies access for this role. "No route" alone is insufficient; the rejection must be explicit.
+   - **OWN cells**: Verify ownership enforcement — not just authentication, but a check that scopes access to the requesting user's own records.
+3. Report each cell as one of:
+   - **VERIFIED**: Implementation matches the matrix expectation.
+   - **MISMATCH**: Implementation contradicts the matrix (e.g., DENY expected but no guard found, or ALLOW expected but auth gate blocks it).
+   - **UNTESTED**: Cannot determine from static analysis (e.g., dynamic policy evaluation, runtime-only checks).
+
+Add matrix findings to the `auth_protection` section of the output report under `matrix_coverage` and `matrix_mismatches` sub-keys.
+
 ## Step 5: Verify end-to-end flows
 
 Derive milestone flows from milestone goals, summaries, and requirement text. Trace each flow through the codebase from entrypoint to user-visible outcome.
@@ -204,6 +223,16 @@ auth_protection:
   unprotected:
     - surface: "admin metrics page"
       evidence: "Sensitive data renders without auth or role gate"
+  matrix_coverage:       # only present when AUTH_MATRIX.md exists
+    verified: 12
+    mismatched: 1
+    untested: 2
+  matrix_mismatches:     # only present when AUTH_MATRIX.md exists
+    - resource: "/users"
+      action: "DELETE"
+      role: "user"
+      expected: "DENY"
+      actual: "No rejection middleware found"
 
 flows:
   complete:
@@ -278,6 +307,7 @@ The integration checker is milestone-scoped:
 - [ ] Orphaned code or routes identified
 - [ ] Missing connections identified
 - [ ] Requirements Integration Map produced with WIRED / PARTIAL / UNWIRED statuses
+- [ ] AUTH_MATRIX.md parsed and cells verified when matrix exists
 - [ ] Structured report returned to the milestone auditor
 </success_criteria>
 

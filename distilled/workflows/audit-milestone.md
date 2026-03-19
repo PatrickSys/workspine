@@ -10,6 +10,7 @@ Before starting, read these files:
 2. `.planning/SPEC.md` - requirement IDs, descriptions, and checkbox status
 3. All phase VERIFICATION.md files (from `.planning/phases/`)
 4. All phase SUMMARY.md files (from `.planning/phases/`)
+5. `.planning/AUTH_MATRIX.md` (if it exists) — authorization matrix for matrix-driven auth verification
 </load_context>
 
 <process>
@@ -51,6 +52,7 @@ With phase context collected, delegate cross-phase integration checking:
 - Key exports from each phase (extracted from SUMMARYs)
 - API routes and endpoints created
 - Milestone requirement IDs with descriptions and assigned phases
+- `.planning/AUTH_MATRIX.md` path (if it exists)
 
 **Task:** Verify cross-phase wiring, API coverage, auth protection, and E2E user flows. Return structured integration report with wiring summary, API coverage, auth protection, E2E flow status, and Requirements Integration Map.
 

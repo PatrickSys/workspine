@@ -60,6 +60,8 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'auth-matrix.md')),
+      'auth-matrix.md template must be distributed during init');
 
     const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
     assert.strictEqual(config.researchDepth, 'balanced');

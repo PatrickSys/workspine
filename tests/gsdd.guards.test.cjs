@@ -228,3 +228,82 @@ describe('G14 - Health Module Contract', () => {
     assert.ok(pushCount > 0, 'health module must have diagnostic pushes');
   });
 });
+
+// ── G15: OWASP Authorization Matrix ─────────────────────────────────
+describe('G15: OWASP Authorization Matrix', () => {
+  const TEMPLATE_PATH = path.join(ROOT, 'distilled', 'templates', 'auth-matrix.md');
+  const CHECKER_PATH = path.join(ROOT, 'agents', 'integration-checker.md');
+  const AUDIT_PATH = path.join(ROOT, 'distilled', 'workflows', 'audit-milestone.md');
+  const NEW_PROJECT_PATH = path.join(ROOT, 'distilled', 'workflows', 'new-project.md');
+  const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
+
+  test('auth-matrix.md template exists', () => {
+    assert.ok(fs.existsSync(TEMPLATE_PATH),
+      'distilled/templates/auth-matrix.md must exist. FIX: Create the template file.');
+  });
+
+  test('template contains OWASP pivot format markers', () => {
+    const content = fs.readFileSync(TEMPLATE_PATH, 'utf-8');
+    assert.match(content, /Resource.*Action.*anonymous|Resource.*Action.*Role/i,
+      'Template must contain OWASP pivot table headers. FIX: Add Resource/Action/Role table.');
+    assert.match(content, /ALLOW/,
+      'Template must document ALLOW permission. FIX: Add ALLOW to permission values.');
+    assert.match(content, /DENY/,
+      'Template must document DENY permission. FIX: Add DENY to permission values.');
+    assert.match(content, /OWN/,
+      'Template must document OWN permission. FIX: Add OWN to permission values.');
+  });
+
+  test('template references .planning/AUTH_MATRIX.md project artifact path', () => {
+    const content = fs.readFileSync(TEMPLATE_PATH, 'utf-8');
+    assert.match(content, /\.planning\/AUTH_MATRIX\.md/,
+      'Template must reference .planning/AUTH_MATRIX.md as project artifact. FIX: Add file location section.');
+  });
+
+  test('integration-checker.md references AUTH_MATRIX.md', () => {
+    const content = fs.readFileSync(CHECKER_PATH, 'utf-8');
+    assert.match(content, /AUTH_MATRIX\.md/,
+      'integration-checker must reference AUTH_MATRIX.md. FIX: Add AUTH_MATRIX.md to inputs.');
+  });
+
+  test('integration-checker.md describes matrix-driven verification (Step 4a)', () => {
+    const content = fs.readFileSync(CHECKER_PATH, 'utf-8');
+    assert.match(content, /Step 4a/,
+      'integration-checker must have Step 4a. FIX: Add matrix-driven auth verification sub-step.');
+    assert.match(content, /VERIFIED.*MISMATCH.*UNTESTED|MISMATCH.*VERIFIED|matrix_coverage/,
+      'Step 4a must define VERIFIED/MISMATCH/UNTESTED cell statuses. FIX: Add cell status definitions.');
+  });
+
+  test('integration-checker.md matrix check is backwards compatible', () => {
+    const content = fs.readFileSync(CHECKER_PATH, 'utf-8');
+    assert.match(content, /does not exist.*skip/i,
+      'Step 4a must be gated by AUTH_MATRIX.md existence check. FIX: Add existence guard.');
+  });
+
+  test('audit-milestone.md load_context references AUTH_MATRIX.md', () => {
+    const content = fs.readFileSync(AUDIT_PATH, 'utf-8');
+    assert.match(content, /AUTH_MATRIX\.md/,
+      'audit-milestone must reference AUTH_MATRIX.md in load_context. FIX: Add to load_context list.');
+  });
+
+  test('new-project.md mentions auth matrix as optional', () => {
+    const content = fs.readFileSync(NEW_PROJECT_PATH, 'utf-8');
+    assert.match(content, /[Aa]uthorization [Mm]atrix.*optional|optional.*[Aa]uth/i,
+      'new-project must mention auth matrix as optional. FIX: Add optional auth matrix item to spec_creation.');
+  });
+
+  test('DESIGN.md contains D21 with OWASP reference', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /## 21\./,
+      'DESIGN.md must contain section 21. FIX: Add D21 OWASP Authorization Matrix.');
+    assert.match(content, /OWASP/,
+      'D21 must reference OWASP. FIX: Add OWASP evidence to D21.');
+  });
+
+  test('template is reasonably sized', () => {
+    const content = fs.readFileSync(TEMPLATE_PATH, 'utf-8');
+    const lines = content.split('\n').length;
+    assert.ok(lines <= 120,
+      `auth-matrix.md template should be <= 120 lines (got ${lines}). FIX: Trim template.`);
+  });
+});

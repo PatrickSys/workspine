@@ -28,6 +28,7 @@
 18. [Codex CLI Native Adapter](#18-codex-cli-native-adapter)
 19. [Scenario-Based Eval Coverage](#19-scenario-based-eval-coverage)
 20. [Workspace Health Diagnostics](#20-workspace-health-diagnostics)
+21. [OWASP Authorization Matrix](#21-owasp-authorization-matrix)
 
 ---
 
@@ -940,6 +941,52 @@ Implementation lives under `bin/lib/`:
 - External audit (2026-03-17): "You probably do need a minimal health surface, but not GSD's full style"
 - PR #32: pre-init guard bug proved workspace integrity issues are real, not theoretical
 - GSDD implementation: `bin/lib/health.mjs`, `bin/gsdd.mjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.guards.test.cjs` (G14)
+
+---
+
+## 21. OWASP Authorization Matrix
+
+**GSD:** No formal authorization matrix. Auth verification during milestone audits relies on the integration checker's narrative inference — it identifies sensitive surfaces and checks for auth protection, but has no systematic cell-by-cell verification against declared permissions.
+
+**GSDD:** Adds an optional OWASP-style authorization matrix as a project artifact (`.planning/AUTH_MATRIX.md`). When present, the integration checker performs cell-by-cell verification in addition to its existing narrative auth check.
+
+**The matrix uses the OWASP pivot format:**
+
+| Resource | Action | Role A | Role B | Role C |
+|----------|--------|--------|--------|--------|
+| /resource| verb   | ALLOW  | DENY   | OWN    |
+
+Permission values: ALLOW (role can access), DENY (explicit rejection required), OWN (ownership-scoped access), N/A (not applicable).
+
+**Design choices:**
+
+1. **Project artifact, not framework source.** The matrix lives in `.planning/AUTH_MATRIX.md` — a project-specific file created during `new-project` when the project has multiple roles. The template at `distilled/templates/auth-matrix.md` teaches the format but is not consumed at runtime. This follows the same pattern as `SPEC.md` and `ROADMAP.md`: the template instructs, the project artifact governs.
+
+2. **Backwards compatible.** The integration checker's new Step 4a is fully gated by an existence check: `If .planning/AUTH_MATRIX.md does not exist, skip this sub-step.` The narrative auth check (Step 4) always runs regardless. Projects without a matrix see zero behavioral change.
+
+3. **OWASP pivot format.** The resource x role x permission table is the standard format from the OWASP Authorization Testing Automation Cheat Sheet. Using a recognized standard means the matrix is portable — it can be consumed by other tools, reviewed by security auditors, or extended with automated test generation outside GSDD.
+
+4. **No automated test generation.** The matrix is consumed for verification, not for generating test code. Test generation would require framework-specific knowledge (HTTP client, test runner, auth setup) that varies per project. The integration checker reports VERIFIED / MISMATCH / UNTESTED per cell — turning mismatches into tests is the developer's job.
+
+5. **No auto-creation.** The `new-project` workflow mentions the matrix as optional item 8 in `<spec_creation>`. It is not automatically generated because auth requirements vary widely and a wrong matrix is worse than no matrix.
+
+6. **Template portability.** The template is auto-distributed by `installProjectTemplates()` (same `cpSync` path as all templates) and auto-tracked by `buildManifest()`. No code changes to `templates.mjs` or `manifest.mjs` were needed.
+
+**What GSDD does NOT do:**
+
+- Does not generate test code from the matrix
+- Does not auto-create the matrix during project init
+- Does not require the matrix for milestone audits to pass
+- Does not replace the narrative auth check (Step 4 always runs)
+
+**Evidence:**
+
+- OWASP Authorization Testing Automation Cheat Sheet: pivot-format matrix standard
+- OWASP Top 10 for Agentic Applications 2026: A1 Agent Overreach, A4 Insufficient Authorization
+- External audit (2026-03-13): "Upgrade milestone auth from intent to matrix"
+- External audit (2026-03-17): confirmed auth verification gap independently
+- GSD source: `agents/integration-checker.md` (narrative auth check, no matrix support)
+- GSDD implementation: `distilled/templates/auth-matrix.md`, `agents/integration-checker.md` (Step 4a), `distilled/workflows/audit-milestone.md`, `distilled/workflows/new-project.md`, `tests/gsdd.guards.test.cjs` (G15)
 
 ---
 

@@ -308,7 +308,8 @@ After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
 5. **Out of Scope is populated** — includes things the developer explicitly said "not now" AND anti-features found in Research.
 6. **Key Decisions are logged** — any choices made during questioning or dictated by the SOTA research.
 7. **Capability & Security Gates are handled explicitly** — define concrete human-in-the-loop triggers in interactive mode, or add the deferred review placeholder in auto mode so the security decision is visible rather than silently omitted.
-8. **Current State is set** to Phase 1, Status: Not started.
+8. **Authorization Matrix (optional)**: For projects with multiple user roles or protected resources, create `.planning/AUTH_MATRIX.md` using the template at `.planning/templates/auth-matrix.md`. The integration checker will use this matrix for systematic auth verification during milestone audits.
+9. **Current State is set** to Phase 1, Status: Not started.
 
 ### Quality Check Before Presenting
 - [ ] Can I explain the core value in one sentence?
