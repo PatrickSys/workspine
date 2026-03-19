@@ -1065,7 +1065,7 @@ This is acceptable because:
 
 **GSD baseline:** Mapper agents produce qualitative descriptions ("uses constructor injection") without adoption rates, trend signals, or exemplar file identification. No systematic mechanism for ranking concerns by downstream impact.
 
-**GSDD decision:** Four quantification primitives added across codebase map templates and delegates:
+**GSDD decision:** Five quantification primitives added across codebase map templates and delegates:
 
 | Primitive | Where | Format |
 |-----------|-------|--------|

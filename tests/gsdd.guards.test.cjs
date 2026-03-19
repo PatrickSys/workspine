@@ -425,6 +425,18 @@ describe('G17 - Mapper Output Quantification', () => {
       'mapper-tech quality_gate must check must-know packages count. FIX: Add must-know packages quality_gate item.');
   });
 
+  test('mapper-concerns delegate Include list mentions downstream impact ranking', () => {
+    const content = fs.readFileSync(DELEGATE_CONCERNS, 'utf-8');
+    assert.match(content, /[Dd]ownstream impact|impact ranking/,
+      'mapper-concerns delegate must include downstream impact ranking instruction. FIX: Add downstream impact ranking to Include list.');
+  });
+
+  test('mapper-concerns delegate quality_gate has downstream impact ranking check', () => {
+    const content = fs.readFileSync(DELEGATE_CONCERNS, 'utf-8');
+    assert.match(content, /[Dd]ownstream impact.*table|impact.*table|at least.*concerns/,
+      'mapper-concerns quality_gate must check downstream impact ranking table. FIX: Add downstream impact ranking quality_gate item.');
+  });
+
   // C: Role quality guarantees (3 assertions)
   test('mapper.md Quality Guarantees mentions quantification', () => {
     const content = fs.readFileSync(MAPPER_ROLE, 'utf-8');
