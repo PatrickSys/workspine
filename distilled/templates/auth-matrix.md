@@ -53,7 +53,7 @@ The following resource categories MUST have matrix coverage when they exist in y
 - **Destructive actions** (delete, bulk operations, account removal) — require explicit role gates
 - **API keys and credentials** — require DENY for non-owner roles
 
-If a sensitive surface exists in your codebase but is missing from the matrix, the integration checker will flag it.
+If a sensitive surface exists in your codebase but is missing from the matrix, the integration checker's narrative auth check (Step 4) will still flag it — Step 4 runs unconditionally regardless of whether this matrix exists. Step 4a only verifies cells that are already in the matrix.
 
 ## How the Integration Checker Uses This Matrix
 

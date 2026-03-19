@@ -270,8 +270,14 @@ describe('G15: OWASP Authorization Matrix', () => {
     const content = fs.readFileSync(CHECKER_PATH, 'utf-8');
     assert.match(content, /Step 4a/,
       'integration-checker must have Step 4a. FIX: Add matrix-driven auth verification sub-step.');
-    assert.match(content, /VERIFIED.*MISMATCH.*UNTESTED|MISMATCH.*VERIFIED|matrix_coverage/,
-      'Step 4a must define VERIFIED/MISMATCH/UNTESTED cell statuses. FIX: Add cell status definitions.');
+    assert.match(content, /\bVERIFIED\b/,
+      'Step 4a must define VERIFIED cell status. FIX: Add cell status definitions.');
+    assert.match(content, /\bMISMATCH\b/,
+      'Step 4a must define MISMATCH cell status. FIX: Add cell status definitions.');
+    assert.match(content, /\bUNTESTED\b/,
+      'Step 4a must define UNTESTED cell status. FIX: Add cell status definitions.');
+    assert.match(content, /matrix_coverage/,
+      'Step 4a must include matrix_coverage output key. FIX: Add matrix_coverage to output schema.');
   });
 
   test('integration-checker.md matrix check is backwards compatible', () => {
