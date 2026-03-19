@@ -899,9 +899,9 @@ Implementation lives under `bin/lib/`:
 | W2 | WARN | Template files modified locally (hash mismatch vs manifest) |
 | W3 | WARN | Template/role files missing from disk but listed in manifest |
 | W4 | WARN | ROADMAP.md references phases not found in `.planning/phases/` |
-| W5 | WARN | Phase dir has PLAN but no SUMMARY (stale in-progress) |
+| W5 | WARN | Phase artifact set has PLAN but no matching SUMMARY (stale in-progress) |
 | W6 | WARN | No adapter surfaces detected |
-| I1 | INFO | Config `initVersion` differs from current `FRAMEWORK_VERSION` |
+| I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
 | I2 | INFO | Phase completion count from ROADMAP |
 | I3 | INFO | Which adapters are installed |
 

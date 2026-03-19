@@ -72,7 +72,7 @@ const INIT_CONTEXT = {
 
 const cmdInit = createCmdInit(INIT_CONTEXT);
 const cmdUpdate = createCmdUpdate(INIT_CONTEXT);
-const cmdHealth = createCmdHealth({ planningDir: PLANNING_DIR, frameworkVersion: FRAMEWORK_VERSION, adapters: ADAPTERS });
+const cmdHealth = createCmdHealth({ frameworkVersion: FRAMEWORK_VERSION });
 
 const COMMANDS = {
   init: cmdInit,

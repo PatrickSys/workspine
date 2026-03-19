@@ -51,6 +51,7 @@ describe('Health — healthy workspace', () => {
     const result = await runCliAsMain(tmpDir, ['health']);
     assert.strictEqual(result.exitCode, 0);
     assert.match(result.output, /HEALTHY/);
+    assert.doesNotMatch(result.output, /\[I1\]/);
   });
 
   test('clean init → healthy JSON', async () => {
@@ -61,6 +62,7 @@ describe('Health — healthy workspace', () => {
     assert.strictEqual(json.status, 'healthy');
     assert.strictEqual(json.errors.length, 0);
     assert.strictEqual(json.warnings.length, 0);
+    assert.ok(!json.info.some((i) => i.id === 'I1'), 'clean init should not report manifest version drift');
   });
 });
 
@@ -91,13 +93,17 @@ describe('Health — ERROR: missing required config fields', () => {
 });
 
 describe('Health — ERROR: missing templates dir', () => {
-  test('templates/ removed → E3', async () => {
+  test('templates/ removed → E3 without child-template noise', async () => {
     await initWorkspace();
     fs.rmSync(path.join(tmpDir, '.planning', 'templates'), { recursive: true, force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.strictEqual(json.status, 'broken');
     assert.ok(json.errors.some((e) => e.id === 'E3'));
+    assert.ok(!json.errors.some((e) => e.id === 'E4' || e.id === 'E5'),
+      'missing templates root should not duplicate child-template errors');
+    assert.ok(!json.warnings.some((w) => w.id === 'W3'),
+      'missing templates root should not emit manifest-derived missing-file warnings');
   });
 });
 
@@ -184,20 +190,22 @@ describe('Health — WARN: ROADMAP references nonexistent phase', () => {
 });
 
 describe('Health — WARN: phase with PLAN but no SUMMARY', () => {
-  test('PLAN without SUMMARY → W5', async () => {
+  test('nested PLAN without SUMMARY → W5', async () => {
     await initWorkspace();
-    const phasesDir = path.join(tmpDir, '.planning', 'phases');
-    fs.writeFileSync(path.join(phasesDir, '01-PLAN.md'), '# Phase 1 Plan\n');
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Phase 1 Plan\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.warnings.some((w) => w.id === 'W5'), 'should warn about stale in-progress phase');
   });
 
-  test('PLAN with SUMMARY → no W5', async () => {
+  test('nested PLAN with SUMMARY → no W5', async () => {
     await initWorkspace();
-    const phasesDir = path.join(tmpDir, '.planning', 'phases');
-    fs.writeFileSync(path.join(phasesDir, '01-PLAN.md'), '# Phase 1 Plan\n');
-    fs.writeFileSync(path.join(phasesDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), '# Phase 1 Summary\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(!json.warnings.some((w) => w.id === 'W5'), 'should not warn when SUMMARY exists');
@@ -205,12 +213,12 @@ describe('Health — WARN: phase with PLAN but no SUMMARY', () => {
 });
 
 describe('Health — INFO: version drift', () => {
-  test('initVersion older than FRAMEWORK_VERSION → I1', async () => {
+  test('manifest frameworkVersion older than current framework → I1', async () => {
     await initWorkspace();
-    const configPath = path.join(tmpDir, '.planning', 'config.json');
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    config.initVersion = 'v0.1';
-    fs.writeFileSync(configPath, JSON.stringify(config));
+    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.frameworkVersion = 'v0.1';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.info.some((i) => i.id === 'I1'), 'should have I1 info about version drift');

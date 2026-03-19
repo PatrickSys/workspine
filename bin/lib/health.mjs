@@ -10,7 +10,7 @@ import { output } from './cli-utils.mjs';
 
 /**
  * Factory function returning the health command.
- * ctx must provide: { planningDir, frameworkVersion, adapters }
+ * ctx must provide: { frameworkVersion }
  */
 export function createCmdHealth(ctx) {
   return async function cmdHealth(...healthArgs) {
@@ -51,29 +51,33 @@ export function createCmdHealth(ctx) {
 
     // E3: templates/ missing
     const templatesDir = join(planningDir, 'templates');
-    if (!existsSync(templatesDir)) {
-      errors.push({ id: 'E3', severity: 'ERROR', message: '.planning/templates/ missing', fix: 'Run `gsdd update --templates`' });
-    }
-
-    // E4: roles/ missing or empty
+    const hasTemplatesDir = existsSync(templatesDir);
     const rolesDir = join(templatesDir, 'roles');
-    if (!existsSync(rolesDir)) {
-      errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ missing', fix: 'Run `gsdd update --templates`' });
-    } else {
-      const roleFiles = readdirSync(rolesDir).filter((f) => f.endsWith('.md'));
-      if (roleFiles.length === 0) {
-        errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ has 0 role files', fix: 'Run `gsdd update --templates`' });
-      }
-    }
-
-    // E5: delegates/ missing or empty
     const delegatesDir = join(templatesDir, 'delegates');
-    if (!existsSync(delegatesDir)) {
-      errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ missing', fix: 'Run `gsdd update --templates`' });
+    const hasRolesDir = hasTemplatesDir && existsSync(rolesDir);
+    const hasDelegatesDir = hasTemplatesDir && existsSync(delegatesDir);
+
+    if (!hasTemplatesDir) {
+      errors.push({ id: 'E3', severity: 'ERROR', message: '.planning/templates/ missing', fix: 'Run `gsdd update --templates`' });
     } else {
-      const delegateFiles = readdirSync(delegatesDir).filter((f) => f.endsWith('.md'));
-      if (delegateFiles.length === 0) {
-        errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ has 0 delegate files', fix: 'Run `gsdd update --templates`' });
+      // E4: roles/ missing or empty
+      if (!hasRolesDir) {
+        errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ missing', fix: 'Run `gsdd update --templates`' });
+      } else {
+        const roleFiles = readdirSync(rolesDir).filter((f) => f.endsWith('.md'));
+        if (roleFiles.length === 0) {
+          errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ has 0 role files', fix: 'Run `gsdd update --templates`' });
+        }
+      }
+
+      // E5: delegates/ missing or empty
+      if (!hasDelegatesDir) {
+        errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ missing', fix: 'Run `gsdd update --templates`' });
+      } else {
+        const delegateFiles = readdirSync(delegatesDir).filter((f) => f.endsWith('.md'));
+        if (delegateFiles.length === 0) {
+          errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ has 0 delegate files', fix: 'Run `gsdd update --templates`' });
+        }
       }
     }
 
@@ -86,13 +90,13 @@ export function createCmdHealth(ctx) {
     }
 
     // W2 + W3: template/role hash mismatches and missing files
-    if (manifest) {
+    if (manifest && hasTemplatesDir) {
       const allCategories = [
-        { name: 'delegates', dir: join(templatesDir, 'delegates'), hashes: manifest.templates?.delegates },
+        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null },
         { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research },
         { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase },
         { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root },
-        { name: 'roles', dir: rolesDir, hashes: manifest.roles },
+        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null },
       ];
 
       for (const cat of allCategories) {
@@ -110,17 +114,18 @@ export function createCmdHealth(ctx) {
     // W4: ROADMAP.md references phases not found in .planning/phases/
     const roadmapPath = join(planningDir, 'ROADMAP.md');
     const phasesDir = join(planningDir, 'phases');
-    if (existsSync(roadmapPath) && existsSync(phasesDir)) {
-      const roadmap = readFileSync(roadmapPath, 'utf-8');
+    const roadmap = existsSync(roadmapPath) ? readFileSync(roadmapPath, 'utf-8') : null;
+    const phaseArtifacts = existsSync(phasesDir) ? listPhaseArtifacts(phasesDir) : [];
+
+    if (roadmap && existsSync(phasesDir)) {
       const phaseNums = [];
       for (const line of roadmap.split('\n')) {
         const match = line.match(/^\s*[-*]\s*\[[ x-]\]\s*\*\*Phase\s+(\d+)/i);
         if (match) phaseNums.push(parseInt(match[1], 10));
       }
-      const phaseFiles = readdirSync(phasesDir);
       for (const num of phaseNums) {
         const padded = String(num).padStart(2, '0');
-        const hasFile = phaseFiles.some((f) => f.startsWith(`${padded}-`) || f.startsWith(`${num}-`));
+        const hasFile = phaseArtifacts.some((artifact) => artifact.phasePrefix === padded || artifact.phasePrefix === String(num));
         if (!hasFile) {
           warnings.push({ id: 'W4', severity: 'WARN', message: `ROADMAP.md references Phase ${num} but no files found in .planning/phases/`, fix: 'Create missing phase dirs or update ROADMAP' });
         }
@@ -128,14 +133,17 @@ export function createCmdHealth(ctx) {
     }
 
     // W5: Phase dir has PLAN but no SUMMARY (stale in-progress)
-    if (existsSync(phasesDir)) {
-      const allPhaseFiles = readdirSync(phasesDir);
-      const plans = allPhaseFiles.filter((f) => f.includes('PLAN'));
+    if (phaseArtifacts.length > 0) {
+      const plans = phaseArtifacts.filter((artifact) => artifact.name.includes('PLAN'));
       for (const plan of plans) {
-        const prefix = plan.split('-PLAN')[0];
-        const hasSummary = allPhaseFiles.some((f) => f.startsWith(prefix) && f.includes('SUMMARY'));
+        const prefix = plan.name.split('-PLAN')[0];
+        const hasSummary = phaseArtifacts.some((artifact) =>
+          artifact.dir === plan.dir &&
+          artifact.name.startsWith(prefix) &&
+          artifact.name.includes('SUMMARY')
+        );
         if (!hasSummary) {
-          warnings.push({ id: 'W5', severity: 'WARN', message: `${plan} exists but no matching SUMMARY found (stale in-progress?)`, fix: 'Resume or complete the phase' });
+          warnings.push({ id: 'W5', severity: 'WARN', message: `${plan.displayPath} exists but no matching SUMMARY found (stale in-progress?)`, fix: 'Resume or complete the phase' });
         }
       }
     }
@@ -154,14 +162,13 @@ export function createCmdHealth(ctx) {
 
     // --- INFO checks ---
 
-    // I1: initVersion older than FRAMEWORK_VERSION
-    if (config && config.initVersion && config.initVersion !== ctx.frameworkVersion) {
-      info.push({ id: 'I1', severity: 'INFO', message: `Config initVersion (${config.initVersion}) differs from current framework version (${ctx.frameworkVersion})`, fix: 'Run `gsdd update`' });
+    // I1: generation manifest was produced by a different framework version
+    if (manifest && manifest.frameworkVersion && manifest.frameworkVersion !== ctx.frameworkVersion) {
+      info.push({ id: 'I1', severity: 'INFO', message: `Generation manifest frameworkVersion (${manifest.frameworkVersion}) differs from current framework version (${ctx.frameworkVersion})`, fix: 'Run `gsdd update --templates`' });
     }
 
     // I2: Phase completion count
-    if (existsSync(roadmapPath)) {
-      const roadmap = readFileSync(roadmapPath, 'utf-8');
+    if (roadmap) {
       const lines = roadmap.split('\n');
       let total = 0;
       let done = 0;
@@ -210,5 +217,32 @@ export function createCmdHealth(ctx) {
       }
       console.log(`\n  Verdict: ${status.toUpperCase()}\n`);
     }
+  };
+}
+
+function listPhaseArtifacts(phasesDir) {
+  const artifacts = [];
+  for (const entry of readdirSync(phasesDir, { withFileTypes: true })) {
+    const entryPath = join(phasesDir, entry.name);
+    if (entry.isFile()) {
+      artifacts.push(createPhaseArtifact('', entry.name));
+      continue;
+    }
+    if (!entry.isDirectory()) continue;
+    for (const child of readdirSync(entryPath, { withFileTypes: true })) {
+      if (child.isFile()) {
+        artifacts.push(createPhaseArtifact(entry.name, child.name));
+      }
+    }
+  }
+  return artifacts;
+}
+
+function createPhaseArtifact(dir, name) {
+  return {
+    dir,
+    name,
+    displayPath: dir ? `${dir}/${name}` : name,
+    phasePrefix: name.match(/^(\d+(?:\.\d+)?)-/)?.[1] || dir.match(/^(\d+(?:\.\d+)?)-/)?.[1] || null,
   };
 }

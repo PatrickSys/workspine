@@ -210,12 +210,21 @@ describe('G14 - Health Module Contract', () => {
 
   test('health checks include fix instructions (no orphan diagnostics)', () => {
     const healthSource = fs.readFileSync(HEALTH_MODULE, 'utf-8');
-    // Every push to errors/warnings should have a fix field
-    const pushMatches = healthSource.match(/(?:errors|warnings)\.push\(\{[^}]+\}\)/g) || [];
-    assert.ok(pushMatches.length > 0, 'health module must have diagnostic pushes');
-    for (const m of pushMatches) {
-      assert.match(m, /fix:/,
-        `Every error/warning diagnostic must include a fix instruction. FIX: Add fix field. Found: ${m.slice(0, 80)}`);
+    const lines = healthSource.split('\n');
+    const pushLineRe = /^\s*(?:errors|warnings)\.push\(\{/;
+    let pushCount = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (!pushLineRe.test(lines[i])) continue;
+      pushCount++;
+      let block = '';
+      for (let j = i; j < Math.min(i + 12, lines.length); j++) {
+        block += `${lines[j]}\n`;
+        if (lines[j].includes('});')) break;
+      }
+      assert.match(block, /fix:/,
+        `Every error/warning diagnostic must include a fix instruction. FIX: Add fix field. Found: ${block.slice(0, 120)}`);
     }
+    assert.ok(pushCount > 0, 'health module must have diagnostic pushes');
   });
 });
