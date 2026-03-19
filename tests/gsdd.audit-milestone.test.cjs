@@ -149,7 +149,7 @@ describe('gsdd audit-milestone', () => {
   test('role count is 9', async () => {
     const agentsDir = path.join(__dirname, '..', 'agents');
     const roleFiles = fs.readdirSync(agentsDir).filter(
-      f => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('_')
+      f => f.endsWith('.md') && f !== 'README.md' && f !== 'DISTILLATION.md' && !f.startsWith('_')
     );
 
     assert.strictEqual(roleFiles.length, 9, `Expected 9 role files, found ${roleFiles.length}: ${roleFiles.join(', ')}`);

@@ -19,7 +19,7 @@ const DESIGN_MD = path.join(__dirname, '..', 'distilled', 'DESIGN.md');
 
 function getRoleFiles() {
   return fs.readdirSync(AGENTS_DIR)
-    .filter(f => f.endsWith('.md') && f !== 'README.md' && !f.startsWith('_'))
+    .filter(f => f.endsWith('.md') && f !== 'README.md' && f !== 'DISTILLATION.md' && !f.startsWith('_'))
     .sort();
 }
 

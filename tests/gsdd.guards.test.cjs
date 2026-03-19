@@ -313,3 +313,95 @@ describe('G15: OWASP Authorization Matrix', () => {
       `auth-matrix.md template should be <= 120 lines (got ${lines}). FIX: Trim template.`);
   });
 });
+
+// ── G16: Distillation Ledger + Delegate Architecture ─────────────────────────────────
+describe('G16 - Distillation Ledger + Delegate Architecture', () => {
+  const DISTILLATION_PATH = path.join(ROOT, 'agents', 'DISTILLATION.md');
+  const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
+
+  test('agents/DISTILLATION.md exists', () => {
+    assert.ok(fs.existsSync(DISTILLATION_PATH),
+      'agents/DISTILLATION.md must exist. FIX: Create the distillation ledger.');
+  });
+
+  test('DISTILLATION.md contains all 9 canonical role names', () => {
+    const content = fs.readFileSync(DISTILLATION_PATH, 'utf-8');
+    const roles = ['mapper', 'researcher', 'synthesizer', 'planner', 'roadmapper', 'executor', 'verifier', 'integration-checker', 'debugger'];
+    for (const role of roles) {
+      assert.match(content, new RegExp(`## \\d+\\..*${role}`, 'i'),
+        `DISTILLATION.md must document ${role}. FIX: Add section for ${role}.`);
+    }
+  });
+
+  test('DISTILLATION.md has GSD source label for each role', () => {
+    const content = fs.readFileSync(DISTILLATION_PATH, 'utf-8');
+    assert.match(content, /\*\*GSD source/i,
+      'DISTILLATION.md must reference GSD sources. FIX: Add "GSD source" label to each role.');
+  });
+
+  test('DISTILLATION.md has Kept and Stripped sections', () => {
+    const content = fs.readFileSync(DISTILLATION_PATH, 'utf-8');
+    assert.match(content, /\*\*Kept/i,
+      'DISTILLATION.md must document what was kept. FIX: Add "Kept" sections.');
+    assert.match(content, /\*\*Stripped/i,
+      'DISTILLATION.md must document what was stripped. FIX: Add "Stripped" sections.');
+  });
+
+  test('DISTILLATION.md has Merger type classification', () => {
+    const content = fs.readFileSync(DISTILLATION_PATH, 'utf-8');
+    assert.match(content, /\*\*Merger type/i,
+      'DISTILLATION.md must classify merger types. FIX: Add "Merger type" to each role.');
+  });
+
+  test('DISTILLATION.md has summary merger table', () => {
+    const content = fs.readFileSync(DISTILLATION_PATH, 'utf-8');
+    assert.match(content, /Canonical role.*Absorbs from GSD.*Merger criteria/i,
+      'DISTILLATION.md must have merger summary table. FIX: Add merger table.');
+  });
+
+  test('D22 exists in DESIGN.md', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /## 22\./,
+      'DESIGN.md must contain section 22. FIX: Add D22 Delegate Layer Architecture.');
+  });
+
+  test('D22 heading references Delegate', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /22\. [^\n]*[Dd]elegate/,
+      'D22 heading must reference "Delegate". FIX: Update heading to include Delegate.');
+  });
+
+  test('DESIGN.md ToC contains D22 entry', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /22\. \[Delegate Layer Architecture/,
+      'DESIGN.md table of contents must have D22 entry. FIX: Add ToC entry for D22.');
+  });
+
+  test('D22 body references delegate layer pattern and distilled/templates/delegates/', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /distilled\/templates\/delegates\//,
+      'D22 must reference the delegate path. FIX: Add delegate path reference to D22.');
+    assert.match(content, /10 delegates/,
+      'D22 must document delegate count. FIX: Add delegate count to D22.');
+  });
+
+  test('D22 cites multi-agent orchestration literature', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /Anthropic.*multi-agent|OpenAI.*[Hh]arness|arXiv.*2603/,
+      'D22 must cite multi-agent orchestration evidence. FIX: Add evidence citations to D22.');
+  });
+
+  test('D22 delegate table matches actual delegate files on disk', () => {
+    const delegatesDir = path.join(ROOT, 'distilled', 'templates', 'delegates');
+    const actualFiles = fs.readdirSync(delegatesDir)
+      .filter(f => f.endsWith('.md'))
+      .sort();
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    for (const file of actualFiles) {
+      assert.ok(content.includes('`' + file + '`'),
+        `D22 table must list actual delegate file ${file}. FIX: Update D22 table to match distilled/templates/delegates/.`);
+    }
+    assert.strictEqual(actualFiles.length, 10,
+      `Expected 10 delegate files, found ${actualFiles.length}. FIX: Update delegate count.`);
+  });
+});

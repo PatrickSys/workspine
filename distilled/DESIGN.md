@@ -29,6 +29,7 @@
 19. [Scenario-Based Eval Coverage](#19-scenario-based-eval-coverage)
 20. [Workspace Health Diagnostics](#20-workspace-health-diagnostics)
 21. [OWASP Authorization Matrix](#21-owasp-authorization-matrix)
+22. [Delegate Layer Architecture](#22-delegate-layer-architecture)
 
 ---
 
@@ -987,6 +988,75 @@ Permission values: ALLOW (role can access), DENY (explicit rejection required), 
 - External audit (2026-03-17): confirmed auth verification gap independently
 - GSD source: `agents/integration-checker.md` (narrative auth check, no matrix support)
 - GSDD implementation: `distilled/templates/auth-matrix.md`, `agents/integration-checker.md` (Step 4a), `distilled/workflows/audit-milestone.md`, `distilled/workflows/new-project.md`, `tests/gsdd.guards.test.cjs` (G15)
+
+---
+
+## 22. Delegate Layer Architecture
+
+**GSD:** Orchestrator subagent prompts were embedded inline in workflow files or referenced indirectly through agent role contracts. No explicit thin-wrapper layer. Scope and context were implicit in the orchestrator's prompt shaping.
+
+**GSDD:** Extracted 10 delegates as explicit thin-wrapper files in `distilled/templates/delegates/`. A delegate is a sub-agent instruction wrapper scoped to a specific orchestrator task, carrying a bounded input/output contract. Ten delegates cover 3 canonical roles: mapper × 4 focus-scoped variants, researcher × 4 dimension-scoped variants, synthesizer × 1 (via `researcher-synthesizer.md`), plus one fresh-context adversarial reviewer (`plan-checker.md`, new in D9, no GSD equivalent). Executor, verifier, integration-checker, planner, and roadmapper are invoked directly from orchestrator workflows without thin-wrapper delegates.
+
+**Why "delegates":** In multi-agent orchestration literature (Anthropic multi-agent guidance, OpenAI harness engineering, OpenDev terminal-agents paper arXiv 2603.05344), a delegate is a sub-agent invoked by an orchestrator with:
+1. A single, bounded responsibility (not a general-purpose role)
+2. A typed input/output contract
+3. Explicit scope boundaries (what the sub-agent owns vs. doesn't own)
+4. A specific invocation pattern (fresh context, checkpoint, isolation)
+
+GSDD's delegates are exactly this: thin instruction wrappers that route to a canonical role contract, carry a specific scope parameter, enforce context isolation, and return typed structured output. The name is intentional and accurate to multi-agent literature.
+
+**Why extract delegates:**
+
+Orchestrator workflows need to invoke sub-agents with consistent, predictable behavior. The orchestrator's prompt is large and carries session context; the sub-agent should be small, focused, and isolated. GSD embedded sub-agent instructions inline, making workflows hard to read and sub-agent contracts hard to reuse. GSDD extracts delegates into portable files at `distilled/templates/delegates/`, installed to `.planning/templates/delegates/` per project, and referenced by `<delegate>` blocks in orchestrator workflows:
+
+```
+<delegate>
+Instruction: Read .planning/templates/delegates/researcher-stack.md
+Scope: domain tech stack research
+Input: Project domain, tech constraints, research mode
+Output: STACK.md with structured findings and confidence levels
+</delegate>
+```
+
+Benefits:
+1. **Reusable:** The same delegate can be invoked from multiple orchestrator workflows (new-project, plan, milestone audit)
+2. **Testable:** Delegate contracts are explicit and can be verified independently
+3. **Portable:** Delegates are plain markdown; any agent can read them
+4. **Versioned:** The generation manifest tracks delegate content; `gsdd update --templates` refreshes them
+
+**Tradeoffs and close condition:**
+
+The delegate layer is a semantic extraction, not a functional one. It does not change what happens at runtime; it only changes how we describe what happens. The tradeoff is:
+- **Benefit:** Orchestrators are smaller, clearer, and sub-agent contracts are reusable
+- **Cost:** One more layer of indirection; agents must read both the workflow and the delegate to understand the full contract
+
+This is acceptable because:
+1. Agents are fast at reading multiple files
+2. The clarity gain outweighs the reading cost
+3. Delegate independence enables better testing and quality gates
+
+**10 delegates:**
+
+| Delegate | Purpose | Wrapped Role |
+|----------|---------|--------------|
+| `mapper-tech.md` | Map codebase tech stack | mapper (focus: tech) |
+| `mapper-arch.md` | Map codebase architecture | mapper (focus: arch) |
+| `mapper-quality.md` | Map code quality conventions | mapper (focus: quality) |
+| `mapper-concerns.md` | Identify code concerns and debt | mapper (focus: concerns) |
+| `researcher-stack.md` | Research domain tech stack | researcher (dimension: stack) |
+| `researcher-features.md` | Research domain feature landscape | researcher (dimension: features) |
+| `researcher-architecture.md` | Research domain architecture patterns | researcher (dimension: architecture) |
+| `researcher-pitfalls.md` | Research domain pitfalls and risks | researcher (dimension: pitfalls) |
+| `researcher-synthesizer.md` | Synthesize research into roadmap implications | synthesizer |
+| `plan-checker.md` | Fresh-context adversarial plan review | planner (adversarial, new in D9) |
+
+**Evidence:**
+
+- Anthropic multi-agent guidance: orchestration patterns with isolated sub-agents
+- OpenAI Harness Engineering (2026): delegate pattern for consistent, reusable sub-agent behavior
+- OpenDev "Terminal Agents" (arXiv 2603.05344): multi-agent coordination with explicit role contracts
+- GSDD implementation: `distilled/templates/delegates/`, `distilled/workflows/*.md` (with `<delegate>` blocks), `bin/lib/rendering.mjs` (delegate text injection)
+- Tests: `tests/gsdd.scenarios.test.cjs` (S1–S5 verify delegate invocation chains)
 
 ---
 
