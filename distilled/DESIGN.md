@@ -31,6 +31,7 @@
 21. [OWASP Authorization Matrix](#21-owasp-authorization-matrix)
 22. [Delegate Layer Architecture](#22-delegate-layer-architecture)
 23. [Mapper Output Quantification](#23-mapper-output-quantification)
+24. [Consumer Governance Completeness](#24-consumer-governance-completeness)
 
 ---
 
@@ -1103,6 +1104,32 @@ This is acceptable because:
 - Scope: quantification is additive — existing qualitative rules remain; agents can skip the new sections if not needed
 
 **GSDD implementation:** `distilled/templates/codebase/conventions.md`, `distilled/templates/codebase/architecture.md`, `distilled/templates/codebase/stack.md`, `distilled/templates/codebase/concerns.md`, `distilled/templates/delegates/mapper-quality.md`, `distilled/templates/delegates/mapper-arch.md`, `distilled/templates/delegates/mapper-tech.md`, `distilled/templates/delegates/mapper-concerns.md`, `agents/mapper.md`
+
+---
+
+## 24. Consumer Governance Completeness
+
+**Problem:** Consumer governance surfaces (`agents.block.md`) listed only 4 of 10 delivered workflows. When a consumer ran `gsdd init --tools agents`, the generated AGENTS.md told the agent about new-project, plan, execute, and verify -- but audit-milestone, quick, pause, resume, progress, and map-codebase were invisible. AI agents working in consumer projects could not discover 60% of the available workflows.
+
+**GSDD decision:** Consumer governance surfaces must enumerate all delivered capabilities. Governance maps that omit delivered workflows are functionally broken -- agents cannot use what they cannot discover.
+
+**What changed:**
+
+- `agents.block.md` now lists all 10 workflow skills, organized by function (primary lifecycle + supporting workflows)
+- Lifecycle description updated to mention audit-milestone and supporting surfaces
+- G18 guard suite mechanically prevents recurrence: asserts every WORKFLOWS entry appears in `agents.block.md`
+- CHANGELOG and README synced to actual counts (assertions, design decisions, PRs, test suites)
+
+**Why this is high-leverage:** The framework machinery is mechanically sound (800+ assertions, 10 workflows, 9 roles, 3 native adapters, 23 design decisions). But an incomplete AGENTS.md map is functionally broken governance -- agents succeed or fail based on the harness, not the LLM.
+
+**Evidence:**
+
+- Anthropic, "Effective harnesses for long-running agents" (2026): harnesses must provide comprehensive, discoverable context; incomplete maps cause agent failure
+- Agent Skills specification (agentskills.io): progressive disclosure requires a complete top-level map
+- HumanLayer, "Skill Issue" (2026): AGENTS.md should be a short map (~100 lines) that points to all available capabilities
+- OpenAI, "Harness Engineering" (2026): the harness determines whether agents succeed or fail
+- External audits (2026-03-13, 2026-03-17): both independently flagged documentation accuracy as the top remaining blocker for consumer adoption
+- GSDD implementation: `distilled/templates/agents.block.md`, `CHANGELOG.md`, `README.md`, `tests/gsdd.guards.test.cjs` (G18)
 
 ---
 

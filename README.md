@@ -8,7 +8,7 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 
 [![npm version](https://img.shields.io/npm/v/gsdd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/assertions-779_passing-brightgreen?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/assertions-811_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd init
@@ -244,7 +244,7 @@ GSDD consolidates GSD's agent surface into 9 roles with durable contracts:
 - **Role contracts** (`agents/*.md`) — durable, contain the full behavioral specification
 - **Delegates** (`distilled/templates/delegates/*.md`) — thin wrappers that reference roles and provide task-specific context
 
-10 delegates: 4 mapper, 4 researcher, 1 synthesizer, 1 plan-checker. Workflows use `<delegate>` blocks to dispatch work.
+10 delegates: 4 mapper, 4 researcher, 1 synthesizer, 1 plan-checker. Workflows use `<delegate>` blocks to dispatch work. For detailed GSD-to-GSDD role distillation rationale, see [`agents/DISTILLATION.md`](agents/DISTILLATION.md).
 
 ### Adapter Architecture
 
@@ -348,7 +348,7 @@ Advisory defaults, overridden by repo conventions:
 
 ## Design Decisions
 
-GSDD makes 23 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+GSDD makes 24 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't
@@ -366,7 +366,7 @@ Key choices:
 
 ## Testing
 
-GSDD has 753 structural assertions across 9 test files — 26 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
+GSDD has 800+ structural assertions across 9 test files — 41 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
 
 ### Invariant Suites (I-series)
 
@@ -405,7 +405,24 @@ Mechanical enforcement that catches cross-document inconsistencies:
 | **G10** | CLI module boundary — composition root stays thin |
 | **G11** | Codex doc contract — no deprecated references |
 | **G12** | Documentation accuracy — decision counts, workflow counts, CLI commands, ghost commands |
+| **G13** | Models pre-init safety — mutation commands guard uninitialized workspaces |
 | **G14** | Health module contract — export, command wiring, help text, fix instructions |
+| **G15** | OWASP authorization matrix — template format, integration-checker Step 4a, backwards compat |
+| **G16** | Distillation ledger — DISTILLATION.md role coverage, merger table, D22 registration |
+| **G17** | Mapper output quantification — template sections, delegate instructions, D23 registration |
+| **G18** | Consumer governance completeness — agents.block.md workflow coverage, CHANGELOG accuracy |
+
+### Scenario Suites (S-series)
+
+Golden-path eval tests that verify artifact-chain contracts across end-to-end workflows:
+
+| Suite | What it covers |
+|-------|---------------|
+| **S1** | Greenfield golden path — init → new-project → plan → execute → verify → audit-milestone |
+| **S2** | Brownfield path — map-codebase delegates, codebase map references, mapper role |
+| **S3** | Quick-task path — isolation from ROADMAP/research, role references |
+| **S4** | Native runtime chain — Claude + Codex checker completeness, 7 dimensions |
+| **S5** | Config-to-content propagation — default config values reflected in generated artifacts |
 
 ### Functional Test Suites
 

@@ -476,6 +476,73 @@ describe('G17 - Mapper Output Quantification', () => {
   });
 });
 
+// ── G18: Consumer Governance Completeness ─────────────────────────────────
+describe('G18 - Consumer Governance Completeness', () => {
+  const AGENTS_BLOCK = path.join(ROOT, 'distilled', 'templates', 'agents.block.md');
+  const CHANGELOG = path.join(ROOT, 'CHANGELOG.md');
+  const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
+
+  // Read the WORKFLOWS array from bin/gsdd.mjs to get canonical workflow names
+  const gsddSource = fs.readFileSync(GSDD_PATH, 'utf-8');
+  const workflowNames = [...gsddSource.matchAll(/name:\s*'(gsdd-[a-z-]+)'/g)].map(m => m[1]);
+
+  // G18.1: agents.block.md lists all workflow skills
+  test('agents.block.md lists all WORKFLOWS entries as skill paths', () => {
+    const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
+    for (const name of workflowNames) {
+      assert.ok(
+        content.includes(`.agents/skills/${name}/SKILL.md`),
+        `agents.block.md missing skill path for ${name}. FIX: Add ".agents/skills/${name}/SKILL.md" to the "Where The Workflows Live" section.`
+      );
+    }
+  });
+
+  test('agents.block.md workflow skill count matches WORKFLOWS array length', () => {
+    const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
+    // Count only in the "Where The Workflows Live" section
+    const section = content.slice(content.indexOf('Where The Workflows Live'));
+    const skillPaths = [...section.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
+    assert.strictEqual(skillPaths.length, workflowNames.length,
+      `agents.block.md "Where The Workflows Live" has ${skillPaths.length} skill paths but WORKFLOWS has ${workflowNames.length}. FIX: Sync agents.block.md to match WORKFLOWS array.`);
+  });
+
+  // G18.2: CHANGELOG design decision count matches DESIGN.md
+  test('CHANGELOG design decision count matches DESIGN.md', () => {
+    const changelog = fs.readFileSync(CHANGELOG, 'utf-8');
+    const designContent = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    const actualDecisions = (designContent.match(/^## \d+\./gm) || []).length;
+    assert.ok(
+      changelog.includes(`${actualDecisions} design decisions`),
+      `CHANGELOG claims wrong design decision count. Actual: ${actualDecisions}. FIX: Update CHANGELOG to say "${actualDecisions} design decisions".`
+    );
+  });
+
+  // G18.3: CHANGELOG lists all 10 workflow names
+  test('CHANGELOG lists all 10 workflows', () => {
+    const changelog = fs.readFileSync(CHANGELOG, 'utf-8');
+    const expectedWorkflows = ['new-project', 'map-codebase', 'plan', 'execute', 'verify', 'audit-milestone', 'quick', 'pause', 'resume', 'progress'];
+    for (const wf of expectedWorkflows) {
+      assert.ok(
+        changelog.includes(wf),
+        `CHANGELOG missing workflow "${wf}". FIX: Add ${wf} to CHANGELOG workflow list.`
+      );
+    }
+  });
+
+  // G18.4: DESIGN.md has D24 entry
+  test('DESIGN.md has D24 section', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /## 24\./,
+      'DESIGN.md must contain section 24. FIX: Add D24 Consumer Governance Completeness.');
+  });
+
+  test('DESIGN.md ToC has D24 entry', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /24\. \[Consumer Governance Completeness/,
+      'DESIGN.md ToC must have D24 entry. FIX: Add ToC entry for D24.');
+  });
+});
+
 // ── G16: Distillation Ledger + Delegate Architecture ─────────────────────────────────
 describe('G16 - Distillation Ledger + Delegate Architecture', () => {
   const DISTILLATION_PATH = path.join(ROOT, 'agents', 'DISTILLATION.md');
