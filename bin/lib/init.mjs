@@ -151,6 +151,7 @@ Commands:
                               Regenerate adapters from latest framework sources
                               --templates: also refresh .planning/templates/ and roles
                               --dry: preview changes without writing files
+  health [--json]             Check workspace integrity (healthy/degraded/broken)
   models [subcommand]         Inspect or update model profile / runtime overrides
   find-phase [N]              Show phase info as JSON (for agent consumption)
   verify <N>                  Run artifact checks for phase N

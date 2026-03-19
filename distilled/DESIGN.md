@@ -27,6 +27,7 @@
 17. [CLI Composition Root Boundary](#17-cli-composition-root-boundary)
 18. [Codex CLI Native Adapter](#18-codex-cli-native-adapter)
 19. [Scenario-Based Eval Coverage](#19-scenario-based-eval-coverage)
+20. [Workspace Health Diagnostics](#20-workspace-health-diagnostics)
 
 ---
 
@@ -876,6 +877,69 @@ Implementation lives under `bin/lib/`:
 - Block: "Testing Pyramid for AI Agents" (engineering.block.xyz/blog/testing-pyramid-for-ai-agents)
 - GSDD implementation: `tests/gsdd.scenarios.test.cjs` (S1–S5, ~37 assertions)
 - Invariant complement: D13, `tests/gsdd.invariants.test.cjs`, `tests/gsdd.guards.test.cjs`
+
+---
+
+## 20. Workspace Health Diagnostics
+
+**GSD:** `health.md` (157 lines) — calls `gsd-tools.cjs validate health [--repair]`, parses JSON with error codes E001-E005/W001-W007, supports `--repair` flag for createConfig/resetConfig/regenerateState repair actions.
+
+**GSDD:** `gsdd health` CLI command (~150 lines in `bin/lib/health.mjs`). Factory function `createCmdHealth(ctx)` returning an async command. No `--repair` flag — fixes are documented as actionable instructions, not automated mutations. GSDD already has `gsdd init` and `gsdd update --templates` as the repair paths; a separate repair mode would duplicate those commands.
+
+**Check categories:**
+
+| ID | Severity | What it checks |
+|----|----------|----------------|
+| E1 | ERROR | `.planning/config.json` missing or unparseable |
+| E2 | ERROR | config.json missing required fields (`researchDepth`, `modelProfile`, `initVersion`) |
+| E3 | ERROR | `.planning/templates/` missing |
+| E4 | ERROR | `.planning/templates/roles/` missing or empty |
+| E5 | ERROR | `.planning/templates/delegates/` missing or empty |
+| W1 | WARN | `generation-manifest.json` missing |
+| W2 | WARN | Template files modified locally (hash mismatch vs manifest) |
+| W3 | WARN | Template/role files missing from disk but listed in manifest |
+| W4 | WARN | ROADMAP.md references phases not found in `.planning/phases/` |
+| W5 | WARN | Phase artifact set has PLAN but no matching SUMMARY (stale in-progress) |
+| W6 | WARN | No adapter surfaces detected |
+| I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
+| I2 | INFO | Phase completion count from ROADMAP |
+| I3 | INFO | Which adapters are installed |
+
+**Verdict logic:**
+- Any ERROR → `broken` (exit code 1)
+- Any WARN, no ERROR → `degraded` (exit code 0)
+- No ERROR, no WARN → `healthy` (exit code 0)
+
+**Output modes:**
+- Default: human-readable with severity markers and verdict line
+- `--json`: machine-readable `{ status, errors[], warnings[], info[] }`
+
+**Key design choices:**
+
+1. **No `--repair` flag.** GSD's health workflow supported `--repair` with three actions (createConfig, resetConfig, regenerateState). GSDD does not need this because `gsdd init` and `gsdd update --templates` already serve as repair paths. Documenting the fix command in each diagnostic is sufficient — agents can read and execute the instruction directly.
+
+2. **`brew doctor` pattern.** Diagnose, report, suggest — never auto-fix. This matches the D13 principle: error messages ARE the enforcement mechanism. When an agent reads `"E3: .planning/templates/ missing. Fix: Run gsdd update --templates"`, it can act on the instruction.
+
+3. **Pre-init guard.** If `.planning/config.json` doesn't exist, output a one-line message and exit 1. No partial checks — the workspace is simply not initialized.
+
+4. **Reuses existing modules.** `readManifest()` and `detectModifications()` from `manifest.mjs` handle W1-W3. `isProjectInitialized()` pattern from `models.mjs` handles the pre-init guard. No new utility functions.
+
+**What was removed vs GSD:**
+- `--repair` flag and associated repair actions
+- Error codes E001-E005/W001-W007 (replaced with simpler E1-E5/W1-W6/I1-I3)
+- STATE.md checks (GSDD has no STATE.md per D7)
+- PROJECT.md checks (GSDD uses SPEC.md, not checked by health — it's workflow-authored)
+- Phase directory naming format checks (GSDD uses flat numbered files, not NN-name directories)
+
+**Evidence:**
+
+- GSD source: `get-shit-done/workflows/health.md` (157 lines, predecessor)
+- `brew doctor` pattern: diagnose, report, suggest — never auto-fix
+- OpenAI Harness Engineering (Feb 2026): error messages as enforcement mechanism (same principle as D13)
+- External audit (2026-03-13): recommendation #3 "Add just enough: status/resume/progress/health"
+- External audit (2026-03-17): "You probably do need a minimal health surface, but not GSD's full style"
+- PR #32: pre-init guard bug proved workspace integrity issues are real, not theoretical
+- GSDD implementation: `bin/lib/health.mjs`, `bin/gsdd.mjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.guards.test.cjs` (G14)
 
 ---
 

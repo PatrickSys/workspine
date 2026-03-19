@@ -8,7 +8,7 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 
 [![npm version](https://img.shields.io/npm/v/gsdd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/assertions-671_passing-brightgreen?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/assertions-753_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd init
@@ -212,6 +212,7 @@ Workflows are agent skills or commands, not plain shell utilities. How you invok
 |---------|--------------|
 | `gsdd init [--tools <platform>]` | Set up `.planning/`, generate adapters |
 | `gsdd update [--tools <platform>] [--templates]` | Regenerate adapters; `--templates` refreshes `.planning/templates/` and role contracts |
+| `gsdd health [--json]` | Check workspace integrity (healthy/degraded/broken) |
 | `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `gsdd verify <N>` | Run artifact checks for phase N |
 | `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
@@ -347,7 +348,7 @@ Advisory defaults, overridden by repo conventions:
 
 ## Design Decisions
 
-GSDD makes 19 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+GSDD makes 20 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't
@@ -365,7 +366,7 @@ Key choices:
 
 ## Testing
 
-GSDD has 671 structural assertions across 7 test files — 24 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
+GSDD has 753 structural assertions across 9 test files — 26 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
 
 ### Invariant Suites (I-series)
 
@@ -404,6 +405,7 @@ Mechanical enforcement that catches cross-document inconsistencies:
 | **G10** | CLI module boundary — composition root stays thin |
 | **G11** | Codex doc contract — no deprecated references |
 | **G12** | Documentation accuracy — decision counts, workflow counts, CLI commands, ghost commands |
+| **G14** | Health module contract — export, command wiring, help text, fix instructions |
 
 ### Functional Test Suites
 
@@ -414,6 +416,7 @@ Mechanical enforcement that catches cross-document inconsistencies:
 | Generation manifest | SHA-256 hashing, modification detection, dry-run mode |
 | Plan adapters | Portable skill neutrality, TOML format, triple-quote escaping |
 | Audit milestone | Integration checking contract |
+| Health | Pre-init guard, all check categories, verdict logic, JSON/human output |
 
 ```bash
 npm run test:gsdd
@@ -429,7 +432,7 @@ GSDD is a distilled fork of [Get Shit Done](https://github.com/gsd-build/get-shi
 
 **What GSDD does not cover** (~44% of full upstream surface): GSD currently exposes 32 workflow files and 11 agent files including discovery modes, a settings flow, extra operator ergonomics, and broader session-management/control-plane surface area. GSDD intentionally does not recreate this full surface.
 
-**The trade-off:** Fewer moving parts for the human operator. Cleaner role contracts and a simpler artifact model. But reduced operator comfort and limited control-plane features (no telemetry, no artifact linting, no health diagnostics).
+**The trade-off:** Fewer moving parts for the human operator. Cleaner role contracts and a simpler artifact model. But reduced operator comfort and limited control-plane features (no telemetry, no artifact linting). Health diagnostics are available via `gsdd health`.
 
 ---
 

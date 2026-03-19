@@ -11,6 +11,7 @@ const ROOT = path.join(__dirname, '..');
 const GSDD_PATH = path.join(ROOT, 'bin', 'gsdd.mjs');
 const MODELS_MODULE = path.join(ROOT, 'bin', 'lib', 'models.mjs');
 const MANIFEST_MODULE = path.join(ROOT, 'bin', 'lib', 'manifest.mjs');
+const HEALTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health.mjs');
 const INIT_MODULE = path.join(ROOT, 'bin', 'lib', 'init.mjs');
 const TEMPLATES_MODULE = path.join(ROOT, 'bin', 'lib', 'templates.mjs');
 const README_MD = path.join(ROOT, 'README.md');
@@ -174,5 +175,56 @@ describe('G13 - Models Pre-Init Safety', () => {
       assert.doesNotMatch(fnBody, /ensureProjectConfig/,
         `${fn} must not call ensureProjectConfig. FIX: Use loadConfigForMutation instead.`);
     }
+  });
+});
+
+describe('G14 - Health Module Contract', () => {
+  test('bin/lib/health.mjs exists', () => {
+    assert.ok(fs.existsSync(HEALTH_MODULE),
+      'bin/lib/health.mjs must exist. FIX: Create the health module.');
+  });
+
+  test('health module exports createCmdHealth', async () => {
+    const mod = await import(`file://${HEALTH_MODULE.replace(/\\/g, '/')}`);
+    assert.strictEqual(typeof mod.createCmdHealth, 'function',
+      'health.mjs must export createCmdHealth. FIX: Add export for createCmdHealth.');
+  });
+
+  test('gsdd.mjs registers health command', () => {
+    const gsddContent = fs.readFileSync(GSDD_PATH, 'utf-8');
+    assert.ok(gsddContent.includes("health: cmdHealth"),
+      'gsdd.mjs must register health command. FIX: Add health: cmdHealth to COMMANDS.');
+  });
+
+  test('gsdd.mjs exports cmdHealth', () => {
+    const gsddContent = fs.readFileSync(GSDD_PATH, 'utf-8');
+    assert.match(gsddContent, /export.*cmdHealth/,
+      'gsdd.mjs must export cmdHealth. FIX: Add cmdHealth to the export statement.');
+  });
+
+  test('help text mentions health command', () => {
+    const initSource = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init.mjs'), 'utf-8');
+    assert.match(initSource, /health/,
+      'Help text must document the health command. FIX: Add health to cmdHelp output.');
+  });
+
+  test('health checks include fix instructions (no orphan diagnostics)', () => {
+    const healthSource = fs.readFileSync(HEALTH_MODULE, 'utf-8');
+    const lines = healthSource.split('\n');
+    const pushLineRe = /^\s*(?:errors|warnings)\.push\(\{/;
+    let pushCount = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (!pushLineRe.test(lines[i])) continue;
+      pushCount++;
+      let block = '';
+      for (let j = i; j < Math.min(i + 12, lines.length); j++) {
+        block += `${lines[j]}\n`;
+        if (lines[j].includes('});')) break;
+      }
+      assert.match(block, /fix:/,
+        `Every error/warning diagnostic must include a fix instruction. FIX: Add fix field. Found: ${block.slice(0, 120)}`);
+    }
+    assert.ok(pushCount > 0, 'health module must have diagnostic pushes');
   });
 });
