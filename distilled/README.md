@@ -49,7 +49,7 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 /gsdd:progress      -> show status, route to next action
 ```
 
-## Current Status (updated 2026-03-18)
+## Current Status (updated 2026-03-20)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
@@ -126,7 +126,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 
 ```
 distilled/
-  DESIGN.md                # design decisions and rationale (25 decisions, evidence-backed)
+  DESIGN.md                # design decisions and rationale (26 decisions, evidence-backed)
   SKILL.md                 # primary entry point (plain markdown)
   workflows/
     new-project.md

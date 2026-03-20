@@ -8,7 +8,7 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 
 [![npm version](https://img.shields.io/npm/v/gsdd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/assertions-825_passing-brightgreen?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/assertions-849_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd init
@@ -354,7 +354,7 @@ Advisory defaults, overridden by repo conventions:
 
 ## Design Decisions
 
-GSDD makes 25 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+GSDD makes 26 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't
@@ -372,7 +372,7 @@ Key choices:
 
 ## Testing
 
-GSDD has 800+ structural assertions across 9 test files — 41 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
+GSDD has 849 structural assertions across 9 test files — 41 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
 
 ### Invariant Suites (I-series)
 
@@ -418,6 +418,7 @@ Mechanical enforcement that catches cross-document inconsistencies:
 | **G17** | Mapper output quantification — template sections, delegate instructions, D23 registration |
 | **G18** | Consumer governance completeness — agents.block.md workflow coverage, CHANGELOG accuracy |
 | **G19** | Consumer first-run accuracy — honest platform tiers, per-platform invocation guidance, Quickstart section |
+| **G20** | Session continuity contract — pause checkpoint format, resume routing, progress detection, cross-workflow paths |
 
 ### Scenario Suites (S-series)
 

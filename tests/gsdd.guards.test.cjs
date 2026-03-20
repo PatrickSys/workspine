@@ -721,10 +721,243 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'DESIGN.md must contain section 25. FIX: Add D25 Consumer First-Run Experience.');
   });
 
-  test('DESIGN.md ToC lists 25 entries', () => {
+  test('DESIGN.md ToC lists 26 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 25,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 25. FIX: Update DESIGN.md ToC to list all 25 decisions.`);
+    assert.strictEqual(tocEntries.length, 26,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 26. FIX: Update DESIGN.md ToC to list all 26 decisions.`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G20 - Session Continuity Contracts
+// ---------------------------------------------------------------------------
+describe('G20 - Session Continuity Contracts', () => {
+  const WORKFLOWS_DIR = path.join(ROOT, 'distilled', 'workflows');
+  const PAUSE_PATH = path.join(WORKFLOWS_DIR, 'pause.md');
+  const RESUME_PATH = path.join(WORKFLOWS_DIR, 'resume.md');
+  const PROGRESS_PATH = path.join(WORKFLOWS_DIR, 'progress.md');
+  const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
+
+  // ---- A. Pause checkpoint contract ----
+
+  test('pause.md <write_checkpoint> contains frontmatter template with workflow, phase, timestamp', () => {
+    const content = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<write_checkpoint>'), content.indexOf('</write_checkpoint>'));
+    assert.match(section, /workflow:/, 'write_checkpoint must contain workflow frontmatter. FIX: Add workflow field to checkpoint template.');
+    assert.match(section, /phase:/, 'write_checkpoint must contain phase frontmatter. FIX: Add phase field to checkpoint template.');
+    assert.match(section, /timestamp:/, 'write_checkpoint must contain timestamp frontmatter. FIX: Add timestamp field to checkpoint template.');
+  });
+
+  test('pause.md checkpoint template has all 6 XML sections', () => {
+    const content = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<write_checkpoint>'), content.indexOf('</write_checkpoint>'));
+    const required = ['current_state', 'completed_work', 'remaining_work', 'decisions', 'blockers', 'next_action'];
+    for (const tag of required) {
+      assert.match(section, new RegExp(`<${tag}>`),
+        `write_checkpoint must contain <${tag}> section. FIX: Add <${tag}> to checkpoint template.`);
+    }
+  });
+
+  test('pause.md <detect_work> covers 3 work types', () => {
+    const content = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<detect_work>'), content.indexOf('</detect_work>'));
+    assert.match(section, /phase/i, 'detect_work must mention phase work. FIX: Add phase detection to detect_work.');
+    assert.match(section, /quick/i, 'detect_work must mention quick work. FIX: Add quick detection to detect_work.');
+    assert.match(section, /generic/i, 'detect_work must mention generic work. FIX: Add generic detection to detect_work.');
+  });
+
+  test('pause.md <gather_state> covers 6 conversation topics', () => {
+    const content = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<gather_state>'), content.indexOf('</gather_state>'));
+    const topics = ['completed', 'approach', 'remaining', 'decisions', 'blockers', 'resum'];
+    for (const topic of topics) {
+      assert.match(section, new RegExp(topic, 'i'),
+        `gather_state must mention ${topic}. FIX: Add ${topic} to gather_state conversation topics.`);
+    }
+  });
+
+  test('pause.md <advisory_git> exists and references gitProtocol', () => {
+    const content = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    assert.match(content, /<advisory_git>/, 'pause.md must have <advisory_git> section. FIX: Add advisory_git section.');
+    const section = content.slice(content.indexOf('<advisory_git>'), content.indexOf('</advisory_git>'));
+    assert.match(section, /gitProtocol/, 'advisory_git must reference gitProtocol. FIX: Add gitProtocol reference to advisory_git.');
+  });
+
+  test('pause.md <confirm> exists with resume instruction', () => {
+    const content = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    assert.match(content, /<confirm>/, 'pause.md must have <confirm> section. FIX: Add confirm section.');
+    const section = content.slice(content.indexOf('<confirm>'), content.indexOf('</confirm>'));
+    assert.match(section, /resume/, 'confirm must mention resume. FIX: Add resume instruction to confirm section.');
+  });
+
+  // ---- B. Resume routing completeness ----
+
+  test('resume.md <detect_state> has 3 routing conditions', () => {
+    const content = fs.readFileSync(RESUME_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<detect_state>'), content.indexOf('</detect_state>'));
+    assert.match(section, /No `.planning\/`|No.*\.planning/, 'detect_state must check for missing .planning/. FIX: Add .planning/ existence check.');
+    assert.match(section, /partial init|not fully initialized/, 'detect_state must check for partial init. FIX: Add partial init detection.');
+    assert.match(section, /proceed|Both exist/, 'detect_state must have a proceed condition. FIX: Add proceed path to detect_state.');
+  });
+
+  test('resume.md <load_artifacts> references 5 artifact types', () => {
+    const content = fs.readFileSync(RESUME_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<load_artifacts>'), content.indexOf('</load_artifacts>'));
+    assert.match(section, /ROADMAP\.md/, 'load_artifacts must reference ROADMAP.md. FIX: Add ROADMAP.md to load_artifacts.');
+    assert.match(section, /SPEC\.md/, 'load_artifacts must reference SPEC.md. FIX: Add SPEC.md to load_artifacts.');
+    assert.match(section, /\.continue-here\.md|checkpoint/i, 'load_artifacts must reference checkpoint file. FIX: Add .continue-here.md to load_artifacts.');
+    assert.match(section, /phase/i, 'load_artifacts must reference phase directories. FIX: Add phase directory scanning to load_artifacts.');
+    assert.match(section, /LOG\.md|quick/i, 'load_artifacts must reference quick task log. FIX: Add LOG.md to load_artifacts.');
+  });
+
+  test('resume.md <determine_action> has 5 routing branches in priority order', () => {
+    const content = fs.readFileSync(RESUME_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<determine_action>'), content.indexOf('</determine_action>'));
+    assert.match(section, /checkpoint|\.continue-here/i, 'determine_action must have checkpoint routing. FIX: Add checkpoint branch.');
+    assert.match(section, /PLAN.*without.*SUMMARY|Incomplete.*execution/i, 'determine_action must have incomplete execution routing. FIX: Add PLAN-without-SUMMARY branch.');
+    assert.match(section, /\/gsdd:plan|needs planning/i, 'determine_action must route to plan. FIX: Add planning branch.');
+    assert.match(section, /\/gsdd:verify|needs verification/i, 'determine_action must route to verify. FIX: Add verification branch.');
+    assert.match(section, /\/gsdd:audit-milestone|All phases complete/i, 'determine_action must route to audit-milestone. FIX: Add all-phases-complete branch.');
+  });
+
+  test('resume.md <cleanup_checkpoint> references deletion before routing', () => {
+    const content = fs.readFileSync(RESUME_PATH, 'utf-8');
+    assert.match(content, /<cleanup_checkpoint>/, 'resume.md must have <cleanup_checkpoint> section. FIX: Add cleanup_checkpoint section.');
+    const section = content.slice(content.indexOf('<cleanup_checkpoint>'), content.indexOf('</cleanup_checkpoint>'));
+    assert.match(section, /delet/i, 'cleanup_checkpoint must reference deletion. FIX: Add deletion instruction to cleanup_checkpoint.');
+  });
+
+  test('resume.md <present_options> contains quick-resume shortcut', () => {
+    const content = fs.readFileSync(RESUME_PATH, 'utf-8');
+    assert.match(content, /<present_options>/, 'resume.md must have <present_options> section. FIX: Add present_options section.');
+    const section = content.slice(content.indexOf('<present_options>'), content.indexOf('</present_options>'));
+    assert.match(section, /continue|go|resume/i, 'present_options must contain quick-resume shortcut. FIX: Add continue/go/resume shortcut.');
+  });
+
+  // ---- C. Progress routing completeness ----
+
+  test('progress.md <check_existence> has 4-way detection', () => {
+    const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<check_existence>'), content.indexOf('</check_existence>'));
+    assert.match(section, /No `.planning\/`|No.*\.planning/, 'check_existence must check for missing .planning/. FIX: Add .planning/ existence check.');
+    assert.match(section, /No.*ROADMAP.*AND.*no.*SPEC|no artifacts/i, 'check_existence must check for no artifacts. FIX: Add no-artifacts detection.');
+    assert.match(section, /between.milestones|SPEC.*exists.*ROADMAP.*not/i, 'check_existence must detect between-milestones state. FIX: Add between-milestones detection.');
+    assert.match(section, /Both exist|proceed/i, 'check_existence must have proceed path. FIX: Add proceed condition.');
+  });
+
+  test('progress.md <route_action> contains all 6 named branches', () => {
+    const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<route_action>'), content.indexOf('</route_action>'));
+    assert.match(section, /Branch A/i, 'route_action must have Branch A (checkpoint). FIX: Add Branch A.');
+    assert.match(section, /Branch B/i, 'route_action must have Branch B (execute). FIX: Add Branch B.');
+    assert.match(section, /Branch C/i, 'route_action must have Branch C (plan). FIX: Add Branch C.');
+    assert.match(section, /Branch D/i, 'route_action must have Branch D (verify). FIX: Add Branch D.');
+    assert.match(section, /Branch E/i, 'route_action must have Branch E (audit-milestone). FIX: Add Branch E.');
+    assert.match(section, /Branch F/i, 'route_action must have Branch F (between milestones). FIX: Add Branch F.');
+  });
+
+  test('progress.md <edge_cases> section exists and documents compound states', () => {
+    const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    assert.match(content, /<edge_cases>/, 'progress.md must have <edge_cases> section. FIX: Add edge_cases section.');
+    const section = content.slice(content.indexOf('<edge_cases>'), content.indexOf('</edge_cases>'));
+    assert.match(section, /compound|Checkpoint.*unexecuted|multiple/i,
+      'edge_cases must document compound states. FIX: Add compound state handling to edge_cases.');
+  });
+
+  test('progress.md <recent_work> section exists', () => {
+    const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    assert.match(content, /<recent_work>/, 'progress.md must have <recent_work> section. FIX: Add recent_work section.');
+    const section = content.slice(content.indexOf('<recent_work>'), content.indexOf('</recent_work>'));
+    assert.match(section, /SUMMARY\.md/i, 'recent_work must reference SUMMARY.md scanning. FIX: Add SUMMARY.md scanning to recent_work.');
+  });
+
+  test('progress.md branches use named output format with "Also available"', () => {
+    const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<route_action>'), content.indexOf('</route_action>'));
+    assert.match(section, /Also available/i,
+      'route_action branches must include "Also available" alternatives. FIX: Add "Also available" to branch output format.');
+  });
+
+  test('progress.md success_criteria contains "no files created, modified, or deleted"', () => {
+    const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    assert.match(content, /[Nn]o files (are )?created,? modified,? or deleted|read.only/i,
+      'progress.md success_criteria must state no files are created/modified/deleted. FIX: Add read-only assertion to success_criteria.');
+  });
+
+  // ---- D. Cross-workflow session contract ----
+
+  test('pause creates .continue-here.md, resume reads + deletes it, progress only reads it', () => {
+    const pause = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    const resume = fs.readFileSync(RESUME_PATH, 'utf-8');
+    const progress = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    assert.match(pause, /\.continue-here\.md/, 'pause.md must reference .continue-here.md. FIX: Add .continue-here.md to pause.');
+    assert.match(resume, /\.continue-here\.md/, 'resume.md must reference .continue-here.md. FIX: Add .continue-here.md to resume.');
+    assert.match(progress, /\.continue-here\.md/, 'progress.md must reference .continue-here.md. FIX: Add .continue-here.md to progress.');
+    // Resume deletes, progress does not
+    assert.match(resume, /delet.*\.continue-here|\.continue-here.*delet/is,
+      'resume.md must delete .continue-here.md. FIX: Add checkpoint deletion to resume.');
+    assert.match(progress, /[Rr]ead.only|[Nn]o files.*created.*modified.*deleted/,
+      'progress.md must be read-only (not delete checkpoint). FIX: Ensure progress is read-only.');
+  });
+
+  test('all 3 session workflows reference the same checkpoint path', () => {
+    const pause = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    const resume = fs.readFileSync(RESUME_PATH, 'utf-8');
+    const progress = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    const checkpointPath = '.planning/.continue-here.md';
+    assert.ok(pause.includes(checkpointPath),
+      `pause.md must reference ${checkpointPath}. FIX: Use canonical checkpoint path.`);
+    assert.ok(resume.includes(checkpointPath),
+      `resume.md must reference ${checkpointPath}. FIX: Use canonical checkpoint path.`);
+    assert.ok(progress.includes(checkpointPath),
+      `progress.md must reference ${checkpointPath}. FIX: Use canonical checkpoint path.`);
+  });
+
+  test('resume <determine_action> routes to workflows that exist in the 10-workflow set', () => {
+    const content = fs.readFileSync(RESUME_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<determine_action>'), content.indexOf('</determine_action>'));
+    const workflows = section.match(/\/gsdd:[\w-]+/g) || [];
+    const validWorkflows = [
+      '/gsdd:new-project', '/gsdd:plan', '/gsdd:execute', '/gsdd:verify',
+      '/gsdd:audit-milestone', '/gsdd:quick', '/gsdd:pause', '/gsdd:resume',
+      '/gsdd:progress', '/gsdd:map-codebase'
+    ];
+    for (const wf of workflows) {
+      assert.ok(validWorkflows.includes(wf),
+        `resume.md references unknown workflow ${wf}. FIX: Use only valid workflow references.`);
+    }
+    assert.ok(workflows.length >= 3,
+      `resume.md determine_action must route to at least 3 workflows, found ${workflows.length}. FIX: Add routing branches.`);
+  });
+
+  test('progress <route_action> routes to workflows that exist in the 10-workflow set', () => {
+    const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    const section = content.slice(content.indexOf('<route_action>'), content.indexOf('</route_action>'));
+    const workflows = section.match(/\/gsdd:\w[\w-]*/g) || [];
+    const validWorkflows = [
+      '/gsdd:new-project', '/gsdd:plan', '/gsdd:execute', '/gsdd:verify',
+      '/gsdd:audit-milestone', '/gsdd:quick', '/gsdd:pause', '/gsdd:resume',
+      '/gsdd:progress', '/gsdd:map-codebase'
+    ];
+    for (const wf of workflows) {
+      assert.ok(validWorkflows.includes(wf),
+        `progress.md references unknown workflow ${wf}. FIX: Use only valid workflow references.`);
+    }
+    assert.ok(workflows.length >= 5,
+      `progress.md route_action must route to at least 5 workflows, found ${workflows.length}. FIX: Add routing branches.`);
+  });
+
+  test('pause and resume reference config.json for conditional routing', () => {
+    const pause = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    const resume = fs.readFileSync(RESUME_PATH, 'utf-8');
+    assert.match(pause, /config\.json/, 'pause.md must reference config.json. FIX: Add config.json reference to pause.');
+    assert.match(resume, /config\.json/, 'resume.md must reference config.json. FIX: Add config.json reference to resume.');
+  });
+
+  test('DESIGN.md contains D26 entry', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /## 26\./,
+      'DESIGN.md must contain section 26. FIX: Add D26 Session Continuity Contract Hardening.');
   });
 });

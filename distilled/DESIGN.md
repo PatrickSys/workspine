@@ -33,6 +33,7 @@
 23. [Mapper Output Quantification](#23-mapper-output-quantification)
 24. [Consumer Governance Completeness](#24-consumer-governance-completeness)
 25. [Consumer First-Run Experience](#25-consumer-first-run-experience)
+26. [Session Continuity Contract Hardening](#26-session-continuity-contract-hardening)
 
 ---
 
@@ -1154,6 +1155,31 @@ This is acceptable because:
 5. **Both GSDD external audits** (March 13 + 17, 2026): Independently concluded the same gap — "architecture is solid, presentation lags implementation"
 
 **GSDD implementation:** `README.md` (quickstart, honest platform tiers), `distilled/templates/agents.block.md` (per-platform invocation guide), `bin/lib/init.mjs` (platform-aware post-init routing), `tests/gsdd.guards.test.cjs` (G19)
+
+---
+
+## 26. Session Continuity Contract Hardening
+
+**GSD:** No explicit session management contract. State lived in a separate STATE.md file. No pause/resume/progress workflows. Session continuity depended on the user remembering where they left off.
+
+**GSDD:** Three specialized session workflows with artifact-based state derivation:
+- **pause.md:** Writes `.continue-here.md` checkpoint with frontmatter (`workflow`, `phase`, `timestamp`) and 6 XML sections (`current_state`, `completed_work`, `remaining_work`, `decisions`, `blockers`, `next_action`). Detects 3 work types (phase/quick/generic), gathers missing context conversationally, and advises on git commit.
+- **resume.md:** Reads artifacts (ROADMAP.md, SPEC.md, .continue-here.md, phase directories, quick LOG.md), routes to the correct next action with 5-branch priority logic (checkpoint-based routing, incomplete execution, needs planning, needs verification, all phases complete), and cleans up the checkpoint before dispatching.
+- **progress.md:** Read-only reporter with 4-way existence detection, 6 named routing branches (A through F), edge case handling for compound states, and recent-work scanning from SUMMARY.md files. Creates, modifies, or deletes no files.
+
+D12 established the session persistence design. D26 mechanically enforces the routing contracts that D12 introduced with a G20 guard suite.
+
+**Evidence:**
+
+1. Anthropic "Effective harnesses for long-running agents" (2026): artifact-based session handoff (`claude-progress.txt`) is the winning pattern; context compaction alone is "not sufficient" -- explicit progress files bridge sessions
+2. GitHub "How to build reliable AI workflows with agentic primitives" (2026): session splitting as a first-class agentic primitive; distinct sessions for different phases improve accuracy
+3. OpenAI harness engineering (2026): incremental progress tracking (JSON feature lists, progress files) is the key mechanism for multi-session work; "finding a way for agents to quickly understand the state of work when starting with a fresh context window"
+4. OpenDev terminal agents (arXiv 2603.05344): scaffolding-harness separation; runtime state must be derivable from artifacts, not from context window memory
+5. GSDD internal: I5 invariant suite covers basic structure (16 assertions) but not routing completeness; S1-S5 scenarios don't exercise session workflows in isolation; 18+ routing branches untested before D26
+
+**Tradeoff:** More assertions to maintain (~35 new), but prevents routing drift that would break the consumer's primary multi-session interaction pattern. GSDD's 3-workflow session design already aligns with Anthropic's recommendation -- D26 mechanically locks it down.
+
+**GSDD implementation:** `distilled/workflows/pause.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `tests/gsdd.guards.test.cjs` (G20)
 
 ---
 
