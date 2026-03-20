@@ -418,6 +418,7 @@ Mechanical enforcement that catches cross-document inconsistencies:
 | **G17** | Mapper output quantification — template sections, delegate instructions, D23 registration |
 | **G18** | Consumer governance completeness — agents.block.md workflow coverage, CHANGELOG accuracy |
 | **G19** | Consumer first-run accuracy — honest platform tiers, per-platform invocation guidance, Quickstart section |
+| **G20** | Session continuity contract — pause checkpoint format, resume routing, progress detection, cross-workflow paths |
 
 ### Scenario Suites (S-series)
 
