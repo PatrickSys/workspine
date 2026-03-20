@@ -8,7 +8,7 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 
 [![npm version](https://img.shields.io/npm/v/gsdd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/assertions-849_passing-brightgreen?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/assertions-862_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd init
@@ -90,6 +90,26 @@ npx gsdd update                    # Regenerate adapters from latest sources
 npx gsdd update --tools claude     # Update specific platform only
 npx gsdd update --templates        # Refresh .planning/templates/ and role contracts from framework source
 ```
+
+### Headless Mode (CI / Automation)
+
+For non-interactive environments:
+
+```bash
+npx gsdd init --auto --tools claude
+npx gsdd init --auto --tools claude --brief path/to/PRD.md
+```
+
+`--auto` skips interactive prompts, uses smart defaults (`autoAdvance: true` in config). `--brief` copies a project document to `.planning/PROJECT_BRIEF.md` for `new-project` to consume.
+
+### Team Use
+
+- **Shared state:** Set `commitDocs: true` (default) — `.planning/` is tracked in git. Everyone sees the same spec, roadmap, and phase plans.
+- **Onboarding:** After cloning, run `npx gsdd init` to generate tool-specific adapters. `.planning/` is already tracked — no re-initialization needed.
+- **Session handoff:** Use `gsdd-pause` / `gsdd-resume` to hand off work. The checkpoint (`.planning/.continue-here.md`) captures context for the next person.
+- **Adapter isolation:** Each developer runs `gsdd init --tools <their-tool>`. Adapter files don't conflict across tools.
+
+For detailed workflow diagrams, recovery procedures, and extended examples, see the [User Guide](docs/USER-GUIDE.md).
 
 ---
 
@@ -293,6 +313,17 @@ GSDD does not impose commit formats, branch naming, or one-commit-per-task rules
 
 Defaults configurable in `.planning/config.json` under `gitProtocol`.
 
+### What to Track in Git
+
+| Path | Track? | Why |
+|------|--------|-----|
+| `.planning/` | Yes (default) | Shared project state — spec, roadmap, phase plans. Controlled by `commitDocs` in config. |
+| `.agents/skills/` | Yes | Portable workflow entrypoints. Generated, safe to track. |
+| `.claude/`, `.opencode/`, `.codex/` | Yes | Tool-specific adapters. Don't conflict across tools. |
+| `AGENTS.md` (root) | Yes (if generated) | Governance block. Uses bounded upsert — won't overwrite existing content. |
+
+No secrets or credentials are generated. Set `commitDocs: false` for local-only planning state.
+
 ### Context Isolation
 
 Orchestrators stay thin. Delegates write documents to disk and return summaries — the orchestrator never accumulates full research or plan content in its context window. This keeps the main session fast and responsive even during deep phases.
@@ -309,6 +340,13 @@ Orchestrators stay thin. Delegates write documents to disk and return summaries 
 | `parallelization` | `true`, `false` | `true` | Run independent agents simultaneously |
 | `commitDocs` | `true`, `false` | `true` | Track `.planning/` in git |
 | `modelProfile` | `balanced`, `quality`, `budget` | `balanced` | Portable semantic model tier |
+
+**When to use each profile:**
+- **`quality`** — maximize plan-checking rigor. Use for production milestones or security-sensitive work.
+- **`balanced`** (default) — good checking at reasonable cost. Suitable for most development.
+- **`budget`** — minimize cost. Use for prototyping or familiar domains where you'll review plans manually.
+
+The profile only affects the plan-checker agent. Disable `workflow.planCheck` entirely to skip checking.
 
 Optional model-control keys:
 
@@ -352,9 +390,27 @@ Advisory defaults, overridden by repo conventions:
 
 ---
 
+## Troubleshooting
+
+**First step:** Run `gsdd health` — it checks workspace integrity and prints actionable fix instructions.
+
+| Problem | What to do |
+|---------|------------|
+| Workspace feels broken | `gsdd health` — checks errors, warnings, info |
+| Lost track of progress | Run `gsdd-progress` — reads artifacts, shows status |
+| Need context from last session | Run `gsdd-resume` — restores state, routes to next action |
+| Plans seem wrong | Check `workflow.research: true` in config |
+| Execution produces stubs | Re-plan with smaller scope (2-5 tasks per plan) |
+| Templates out of date | `npx gsdd update --templates` — warns before overwriting |
+| Model costs too high | `gsdd models profile budget` + disable `workflow.planCheck` |
+
+For detailed troubleshooting and recovery procedures, see the [User Guide](docs/USER-GUIDE.md#troubleshooting).
+
+---
+
 ## Design Decisions
 
-GSDD makes 26 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+GSDD makes 27 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't
@@ -372,7 +428,7 @@ Key choices:
 
 ## Testing
 
-GSDD has 849 structural assertions across 9 test files — 41 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
+GSDD has 862 structural assertions across 9 test files — 41 named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
 
 ### Invariant Suites (I-series)
 

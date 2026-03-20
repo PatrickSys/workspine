@@ -724,8 +724,8 @@ describe('G19 - Consumer First-Run Accuracy', () => {
   test('DESIGN.md ToC lists 26 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 26,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 26. FIX: Update DESIGN.md ToC to list all 26 decisions.`);
+    assert.strictEqual(tocEntries.length, 27,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 27. FIX: Update DESIGN.md ToC to list all 27 decisions.`);
   });
 });
 
@@ -959,5 +959,105 @@ describe('G20 - Session Continuity Contracts', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     assert.match(content, /## 26\./,
       'DESIGN.md must contain section 26. FIX: Add D26 Session Continuity Contract Hardening.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G21 - Consumer Surface Completeness
+// ---------------------------------------------------------------------------
+describe('G21 - Consumer Surface Completeness', () => {
+  const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
+
+  test('README has Troubleshooting section', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.match(readme, /## Troubleshooting/,
+      'README.md must have a ## Troubleshooting section. FIX: Add ## Troubleshooting section to README.');
+  });
+
+  test('Troubleshooting mentions gsdd health as first step', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const tsStart = readme.indexOf('## Troubleshooting');
+    const tsEnd = readme.indexOf('\n## ', tsStart + 1);
+    const section = readme.slice(tsStart, tsEnd > -1 ? tsEnd : tsStart + 1000);
+    assert.match(section, /gsdd health/,
+      'Troubleshooting must mention gsdd health as first step. FIX: Add gsdd health as first troubleshooting step.');
+  });
+
+  test('Troubleshooting links to User Guide', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const tsStart = readme.indexOf('## Troubleshooting');
+    const tsEnd = readme.indexOf('\n## ', tsStart + 1);
+    const section = readme.slice(tsStart, tsEnd > -1 ? tsEnd : tsStart + 1000);
+    assert.match(section, /USER-GUIDE\.md/,
+      'Troubleshooting must link to docs/USER-GUIDE.md. FIX: Add User Guide link to Troubleshooting.');
+  });
+
+  test('README mentions --auto headless mode in Getting Started', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const gsStart = readme.indexOf('## Getting Started');
+    const gsEnd = readme.indexOf('\n## ', gsStart + 1);
+    const section = readme.slice(gsStart, gsEnd > -1 ? gsEnd : gsStart + 3000);
+    assert.match(section, /--auto/,
+      'Getting Started must mention --auto flag. FIX: Add Headless Mode section with --auto to Getting Started.');
+  });
+
+  test('README mentions --brief in Getting Started', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const gsStart = readme.indexOf('## Getting Started');
+    const gsEnd = readme.indexOf('\n## ', gsStart + 1);
+    const section = readme.slice(gsStart, gsEnd > -1 ? gsEnd : gsStart + 3000);
+    assert.match(section, /--brief/,
+      'Getting Started must mention --brief flag. FIX: Add --brief to Headless Mode section.');
+  });
+
+  test('README has Team Use section', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.match(readme, /### Team Use/,
+      'README.md must have a ### Team Use section. FIX: Add ### Team Use section to Getting Started.');
+  });
+
+  test('Team Use references commitDocs', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const tuStart = readme.indexOf('### Team Use');
+    const tuEnd = readme.indexOf('\n### ', tuStart + 1);
+    const section = readme.slice(tuStart, tuEnd > -1 ? tuEnd : tuStart + 800);
+    assert.match(section, /commitDocs/,
+      'Team Use must reference commitDocs setting. FIX: Mention commitDocs in Team Use section.');
+  });
+
+  test('README links to docs/USER-GUIDE.md', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.match(readme, /\[User Guide\]\(docs\/USER-GUIDE\.md\)/,
+      'README must link to docs/USER-GUIDE.md. FIX: Add [User Guide](docs/USER-GUIDE.md) link.');
+  });
+
+  test('README Configuration explains model profile strategy (quality/balanced/budget guidance)', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const cfgStart = readme.indexOf('## Configuration');
+    const cfgEnd = readme.indexOf('\n## ', cfgStart + 1);
+    const section = readme.slice(cfgStart, cfgEnd > -1 ? cfgEnd : cfgStart + 3000);
+    assert.match(section, /quality.*maximize|maximize.*rigor/i,
+      'Configuration must explain quality profile. FIX: Add model profile guidance to Configuration.');
+    assert.match(section, /budget.*minimize|minimize.*cost/i,
+      'Configuration must explain budget profile. FIX: Add model profile guidance to Configuration.');
+  });
+
+  test('README has What to Track in Git section', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.match(readme, /### What to Track in Git/,
+      'README.md must have a ### What to Track in Git section. FIX: Add ### What to Track in Git section.');
+  });
+
+  test('DESIGN.md contains D27 entry', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /## 27\./,
+      'DESIGN.md must contain section 27. FIX: Add D27 Consumer-Ready Surface Completion.');
+  });
+
+  test('DESIGN.md ToC has 27 entries', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    const tocEntries = (content.match(/^\d+\. \[/gm) || []);
+    assert.strictEqual(tocEntries.length, 27,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 27. FIX: Update DESIGN.md ToC to list all 27 decisions.`);
   });
 });

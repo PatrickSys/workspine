@@ -8,7 +8,7 @@ For the upstream GSD changelog, see [get-shit-done/CHANGELOG.md](https://github.
 
 ## [0.1.0] - 2026-03-19
 
-Initial public release. 35 merged PRs, 849 structural assertions, 26 design decisions.
+Initial public release. 35 merged PRs, 862 structural assertions, 27 design decisions.
 
 ### Added
 
@@ -52,13 +52,13 @@ Initial public release. 35 merged PRs, 849 structural assertions, 26 design deci
 - Composition root boundary — `bin/gsdd.mjs` is a 100-line facade delegating to extracted modules
 
 **Testing**
-- 849 structural assertions across 9 test files, 0 failures
+- 862 structural assertions across 9 test files, 0 failures
 - 13 invariant suites (I-series): delegate-role integrity, role structure, delegate thinness, workflow references, session management, artifact schemas, plan-checker dimensions, vendor API cleanliness, deprecation guards, initial-read enforcement
-- 19 guard suites (G-series): cross-document schema consistency, file size bounds, XML well-formedness, artifact lifecycle chain, DESIGN.md registry, auto-mode contract, generation manifest, CLI module boundary, Codex doc contract, documentation accuracy, models pre-init safety, health module contract, OWASP authorization matrix, distillation ledger, mapper output quantification, consumer governance completeness, consumer first-run accuracy, session continuity contracts
+- 20 guard suites (G-series): cross-document schema consistency, file size bounds, XML well-formedness, artifact lifecycle chain, DESIGN.md registry, auto-mode contract, generation manifest, CLI module boundary, Codex doc contract, documentation accuracy, models pre-init safety, health module contract, OWASP authorization matrix, distillation ledger, mapper output quantification, consumer governance completeness, consumer first-run accuracy, session continuity contracts, consumer surface completeness
 - 5 scenario suites (S-series): greenfield golden path, brownfield path, quick-task path, native runtime chain, config-to-content propagation
 - Functional test suites: init/update, model propagation, generation manifest, plan adapter surfaces, audit-milestone, health diagnostics
 
 **Documentation**
-- 26 evidence-backed design decisions in `distilled/DESIGN.md` (D1-D26), each citing GSD source files and external research
+- 27 evidence-backed design decisions in `distilled/DESIGN.md` (D1-D27), each citing GSD source files and external research
 - Role contract README with canonical role inventory
 - Distillation ledger (`agents/DISTILLATION.md`) documenting GSD-to-GSDD role distillation rationale

@@ -34,6 +34,7 @@
 24. [Consumer Governance Completeness](#24-consumer-governance-completeness)
 25. [Consumer First-Run Experience](#25-consumer-first-run-experience)
 26. [Session Continuity Contract Hardening](#26-session-continuity-contract-hardening)
+27. [Consumer-Ready Surface Completion](#27-consumer-ready-surface-completion)
 
 ---
 
@@ -1180,6 +1181,26 @@ D12 established the session persistence design. D26 mechanically enforces the ro
 **Tradeoff:** More assertions to maintain (~35 new), but prevents routing drift that would break the consumer's primary multi-session interaction pattern. GSDD's 3-workflow session design already aligns with Anthropic's recommendation -- D26 mechanically locks it down.
 
 **GSDD implementation:** `distilled/workflows/pause.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `tests/gsdd.guards.test.cjs` (G20)
+
+---
+
+## 27. Consumer-Ready Surface Completion
+
+**Problem:** Three independent external audits (March 13, 17, 18 2026) converged: GSDD's architecture is complete but consumer-facing documentation has gaps blocking self-service adoption. Specifically: auto-mode not in README, no troubleshooting section, no git tracking guidance, model strategy unexplained, health not positioned as diagnostic entry point, team onboarding absent, and docs/USER-GUIDE.md not linked from README.
+
+**Decision:** Close consumer journey gaps with compact README sections cross-referencing the existing User Guide. Do not bloat the README.
+
+**Changes:** 6 new README subsections (Headless Mode, Team Use, User Guide link, Model Strategy, What to Track, Troubleshooting). G21 guard suite enforces section presence.
+
+**Evidence:**
+1. External audit (2026-03-13): "architecture is solid, presentation lags implementation"
+2. External audit (2026-03-17): "close scope around the kernel" — consumer surface identified as #1 bottleneck
+3. External audit (2026-03-18): "docs should close the consumer journey"
+4. OpenAI harness engineering (2026): documentation is part of the harness environment
+5. Anthropic context engineering (2026): progressive disclosure for onboarding
+6. Agent Skills standard (agentskills.io, 30+ tools): skills need clear discovery documentation
+
+**GSDD implementation:** `README.md`, `docs/USER-GUIDE.md` (already exists, now cross-referenced), `tests/gsdd.guards.test.cjs` (G21)
 
 ---
 
