@@ -104,3 +104,18 @@ Report to the user:
 - [ ] Advisory git suggestion presented (not mandated)
 - [ ] User informed of checkpoint location and resume instructions
 </success_criteria>
+
+<completion>
+Report to the user what was accomplished, then present the next step:
+
+---
+**Completed:** Session paused — created `.planning/.continue-here.md` (checkpoint file).
+
+**Next step (next session):** `/gsdd:resume` — restore context and continue where you left off
+
+Also available:
+- `/gsdd:progress` — check project status without restoring checkpoint context
+
+Consider clearing context before starting the next workflow for best results.
+---
+</completion>

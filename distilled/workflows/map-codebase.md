@@ -220,26 +220,19 @@ Files: `.planning/codebase/*.md`
 </commit>
 
 <completion>
-### 7. Summary and Next Steps
+Report to the user what was accomplished, then present the next step:
 
-Present the mapping results:
+---
+**Completed:** Codebase mapping — 4 documents written to `.planning/codebase/` (STACK.md, ARCHITECTURE.md, CONVENTIONS.md, CONCERNS.md).
 
-```
-Codebase mapping complete.
+**Next step:** `/gsdd:new-project` — initialize the project with spec and roadmap
 
-Created .planning/codebase/:
-  - STACK.md         - Technologies and dependencies
-  - ARCHITECTURE.md  - System design and patterns
-  - CONVENTIONS.md   - Code style and conventions
-  - CONCERNS.md      - Technical debt and issues
+Also available:
+- `/gsdd:map-codebase` — re-map if results need refinement
+- Review specific file: read `.planning/codebase/STACK.md`
 
-Next steps:
-  - Start project planning:  /gsdd:new-project
-  - Re-map codebase:         /gsdd:map-codebase
-  - Review specific file:    Read .planning/codebase/STACK.md
-```
-
-End workflow.
+Consider clearing context before starting the next workflow for best results.
+---
 </completion>
 
 <success_criteria>

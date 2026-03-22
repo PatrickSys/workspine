@@ -256,6 +256,16 @@ Present a focused recommendation:
 - do not convert human-needed status into passed until those checks are acknowledged
 </next_steps>
 
+<persistence>
+MANDATORY: Write the verification report to disk.
+
+File: `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md`
+
+This is non-negotiable. Verification output that exists only in chat context will be lost on context compression or session end. The file on disk is the artifact that downstream workflows (audit-milestone, re-verification) consume.
+
+If you cannot write the file (permissions, path issue), STOP and report the blocker to the user. Do NOT silently skip the write.
+</persistence>
+
 <success_criteria>
 Verification is done when all of these are true:
 
@@ -272,3 +282,26 @@ Verification is done when all of these are true:
 - [ ] Related failures grouped by concern, not returned as a flat symptom list
 - [ ] Requirements coverage chain completed (collect, restate, map, report, check orphans)
 </success_criteria>
+
+<completion>
+Report the verification result to the user, then present the next step:
+
+---
+**Completed:** Phase verification — created `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md`.
+
+If status is `passed`:
+**Next step:** `/gsdd:progress` — check status and route to the next phase or milestone audit
+
+If status is `gaps_found`:
+**Next step:** `/gsdd:plan` — re-plan to close the identified gaps
+
+If status is `human_needed`:
+**Next step:** Complete the manual checks listed above, then run `/gsdd:verify` again
+
+Also available:
+- `/gsdd:execute` — fix gaps inline without re-planning (small fixes only)
+- `/gsdd:pause` — save context for later if stopping work
+
+Consider clearing context before starting the next workflow for best results.
+---
+</completion>

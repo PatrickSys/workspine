@@ -176,6 +176,8 @@ YOU: "So two views: today and someday. What happens to completed tasks — archi
 ```
 </questioning>
 
+**STOP. You have finished gathering requirements. Do NOT write any application code. Proceed to the research phase below. Code comes AFTER SPEC.md and ROADMAP.md are approved by the user.**
+
 <research>
 MANDATORY STEP. After the goal is clarified but BEFORE writing any specs.
 
@@ -276,6 +278,8 @@ Display key findings before moving to spec creation.
 
 **Commit**: `docs: add domain research`
 </research>
+
+**STOP. Research is complete. Do NOT write any application code. Proceed to spec creation below. Your job now is to produce SPEC.md and ROADMAP.md — not to build the project.**
 
 <data_schema_definition>
 **(SOTA Insight: Derived from GitHub Blog - "Multi-agent workflows often fail")**
@@ -394,3 +398,21 @@ Init is DONE when ALL of these are true:
 - [ ] If `autoAdvance: true`: brief document was read and requirements were extracted from it
 - [ ] If `autoAdvance: true`: approval gates were skipped (not failed — skipped by contract)
 </success_criteria>
+
+<completion>
+Report to the user what was accomplished, then present the next step:
+
+---
+**Completed:** Project initialization — created:
+- `.planning/SPEC.md` — living specification (requirements, constraints, decisions)
+- `.planning/ROADMAP.md` — phased execution plan with success criteria
+
+**Next step:** `/gsdd:plan` — create a detailed plan for Phase 1
+
+Also available:
+- `/gsdd:progress` — check overall project status
+- `/gsdd:map-codebase` — map existing codebase (if not already done)
+
+Consider clearing context before starting the next workflow for best results.
+---
+</completion>

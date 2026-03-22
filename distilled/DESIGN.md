@@ -35,6 +35,7 @@
 25. [Consumer First-Run Experience](#25-consumer-first-run-experience)
 26. [Session Continuity Contract Hardening](#26-session-continuity-contract-hardening)
 27. [Consumer-Ready Surface Completion](#27-consumer-ready-surface-completion)
+28. [Workflow Completion Routing](#28-workflow-completion-routing)
 
 ---
 
@@ -1201,6 +1202,76 @@ D12 established the session persistence design. D26 mechanically enforces the ro
 6. Agent Skills standard (agentskills.io, 30+ tools): skills need clear discovery documentation
 
 **GSDD implementation:** `README.md`, `docs/USER-GUIDE.md` (already exists, now cross-referenced), `tests/gsdd.guards.test.cjs` (G21)
+
+---
+
+## 28. Workflow Completion Routing
+
+**Problem:** Consumer testing (2026-03-21) revealed that AI agents completing a GSDD workflow go silent — the user must manually figure out which `/gsdd:*` command to run next. The lifecycle contract (`new-project → plan → execute → verify → [next phase]`) was correct in design but invisible in practice at each step boundary. GSD original solved this with explicit "Next Up" sections at the end of every workflow; GSDD lost this pattern during distillation.
+
+**Decision:** Add `<completion>` sections after `<success_criteria>` in all 9 terminal workflows. Add positional discipline gates (STOP instructions at exact deviation points) and mandatory persistence enforcement for critical artifacts.
+
+**Changes:**
+
+| Fix | Scope | Files |
+|-----|-------|-------|
+| `<completion>` sections | 9 workflows (all except `progress.md` which already has routing) | `new-project.md`, `plan.md`, `execute.md`, `verify.md`, `audit-milestone.md`, `quick.md`, `pause.md`, `resume.md`, `map-codebase.md` |
+| Positional STOP gates | 2 transition points in `new-project.md` (questioning→research, research→spec) | `new-project.md` |
+| SUMMARY.md persistence gate | MANDATORY write enforcement in `<state_updates>` | `execute.md` |
+| VERIFICATION.md persistence | Dedicated `<persistence>` section with STOP-on-failure | `verify.md` |
+| G22 guard suite | ~30 assertions preventing regression | `tests/gsdd.guards.test.cjs` |
+
+**Completion section pattern (consistent across all 9 workflows):**
+```markdown
+<completion>
+Report to the user what was accomplished, then present the next step:
+
+---
+**Completed:** [what finished]
+
+**Next step:** `/gsdd:[command]` — [description]
+
+Also available:
+- `/gsdd:[alt]` — [description]
+
+Consider clearing context before starting the next workflow for best results.
+---
+</completion>
+```
+
+**Routing map (acyclic, complete):**
+- `new-project` → `/gsdd:plan`
+- `plan` → `/gsdd:execute`
+- `execute` → `/gsdd:verify` (if verifier enabled) or `/gsdd:progress`
+- `verify` → `/gsdd:progress` (passed), `/gsdd:plan` (gaps), `/gsdd:verify` (human_needed)
+- `audit-milestone` → `/gsdd:complete-milestone` (passed), `/gsdd:plan` (gaps/debt)
+- `quick` → `/gsdd:progress`
+- `pause` → `/gsdd:resume` (next session)
+- `resume` → dispatches to selected workflow
+- `map-codebase` → `/gsdd:new-project`
+
+**GSD comparison:**
+
+| Aspect | GSD | GSDD |
+|--------|-----|------|
+| End-of-workflow routing | `## ▶ Next Up` with emoji, separators, backticked commands | `<completion>` section with bold routing, consistent format |
+| Context clearing | Explicit: `<sub>/clear first → fresh context window</sub>` | Vendor-agnostic: "Consider clearing context before starting the next workflow" |
+| Persistence enforcement | No explicit gates | MANDATORY gates on SUMMARY.md and VERIFICATION.md |
+| Positional discipline | Rules at top of file only | STOP gates at exact deviation transition points |
+
+GSDD's `<completion>` pattern is vendor-agnostic (GSD's `/clear` is Claude-specific) and adds persistence enforcement that GSD lacked.
+
+**Evidence:**
+
+1. Consumer audit (2026-03-21): "Agent never proactively suggested the next GSDD command... the user becomes the workflow engine"
+2. GSD source: `get-shit-done/workflows/progress.md` — every routing branch ends with formatted "Next Up" block showing exact command and alternatives
+3. Anthropic "Building effective agents" (2025): workflows should make handoff points explicit with clear next actions
+4. Consumer audit issue #6: "verification not persisted to disk" — VERIFICATION.md existed only in chat context, lost on context compression
+5. Positional discipline research (Anthropic long-context, 2024): instructions at decision points are followed more reliably than instructions at document start
+
+**Tradeoff:** ~30 new guard assertions to maintain, but prevents the highest-impact consumer UX failure (routing dead ends at every workflow boundary). Persistence gates add 2-3 lines per workflow but prevent artifact loss that breaks downstream audit.
+
+**GSDD implementation:** `distilled/workflows/*.md` (9 files), `tests/gsdd.guards.test.cjs` (G22)
 
 ---
 

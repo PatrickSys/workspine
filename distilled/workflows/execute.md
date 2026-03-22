@@ -184,6 +184,8 @@ Create `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md` with:
 
 Do not invent an inline PLAN task-state mutation scheme if the plan does not define one.
 Summary-driven progress tracking avoids silent drift between the plan contract and what execution actually completed.
+
+**MANDATORY: You MUST write SUMMARY.md to disk at `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md`. Output to conversation alone is NOT sufficient. If this file is not written to disk, execution is NOT complete.**
 </state_updates>
 
 <checkpoint_protocol>
@@ -246,3 +248,23 @@ Execution is done when all of these are true:
 - [ ] Self-check passed
 - [ ] Any git actions honor repo or user conventions and `.planning/config.json`
 </success_criteria>
+
+<completion>
+Report to the user what was accomplished, then present the next step:
+
+---
+**Completed:** Plan execution — created `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md`.
+
+**Next step:** `/gsdd:verify` — verify that the phase goal was achieved (if `workflow.verifier` is enabled in config.json)
+
+If verifier is disabled or verification already passed:
+**Next step:** `/gsdd:progress` — check status and route to the next phase
+
+Also available:
+- `/gsdd:plan` — plan the next wave (if more plans remain in this phase)
+- `/gsdd:quick` — handle a sub-hour task outside the phase cycle
+- `/gsdd:pause` — save context for later if stopping work
+
+Consider clearing context before starting the next workflow for best results.
+---
+</completion>
