@@ -9,6 +9,14 @@
   "scripts": {
     "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.models.test.cjs && node tests/gsdd.manifest.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs && node tests/gsdd.guards.test.cjs && node tests/gsdd.health.test.cjs && node tests/gsdd.scenarios.test.cjs"
   },
+  "devDependencies": {
+    "semantic-release": "^24.2.3",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "files": [
     "bin/adapters/",
     "bin/lib/",
