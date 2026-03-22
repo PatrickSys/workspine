@@ -282,34 +282,8 @@ The conversation with the user runs inline in the main context. For each technic
 
 2. Identify 3-4 domain-specific gray areas. Classify each as **taste** (preference, no research needed), **technical** (trade-offs, research first), or **hybrid** (both).
 
-3. For each **technical or hybrid** gray area, spawn a read-only research subagent:
-
-   ```
-   Research approaches for: [gray area name]
-   Phase context: [phase goal, 1-2 sentences]
-
-   Read these files for existing patterns:
-   - [relevant codebase files]
-
-   Search documentation and web for current best practices.
-
-   Return a structured summary (under 600 tokens):
-   For each of 2-3 viable approaches:
-   - Name
-   - Pro (specific to this project)
-   - Con (specific to this project)
-   - Source (codebase file, doc URL, or search result)
-
-   If only one viable approach exists, say so. Do not invent alternatives.
-
-   Example output format:
-   1. Recharts — Pro: React-native, SSR-friendly, matches existing patterns.
-      Con: Limited customization for complex visualizations.
-      Source: existing Chart component in src/components/Chart.tsx
-   2. D3 + custom — Pro: Full control over rendering.
-      Con: 3-5x more code for standard charts, no React integration.
-      Source: d3js.org docs, community benchmarks
-   ```
+3. For each **technical or hybrid** gray area, spawn a read-only research subagent.
+   Use the prompt template from `.planning/templates/roles/approach-explorer.md` (`<research_subagent_prompt>` section), substituting the gray area name, classification, phase context, and relevant codebase files. Each subagent returns a structured summary under 1000 tokens.
 
 4. Present each gray area to the user individually:
    - For taste areas: ask directly

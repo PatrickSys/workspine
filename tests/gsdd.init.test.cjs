@@ -74,7 +74,7 @@ describe('gsdd init and update', () => {
     });
     assert.deepStrictEqual(config.workflow, {
       research: true,
-      discuss: true,
+      discuss: false,
       planCheck: true,
       verifier: true,
     });
@@ -649,7 +649,7 @@ describe('gsdd init and update', () => {
       assert.strictEqual(config.autoAdvance, true);
       assert.strictEqual(config.researchDepth, 'balanced');
       assert.strictEqual(config.parallelization, true);
-      assert.deepStrictEqual(config.workflow, { research: true, discuss: true, planCheck: true, verifier: true });
+      assert.deepStrictEqual(config.workflow, { research: true, discuss: false, planCheck: true, verifier: true });
     });
 
     test('--auto without --tools sets exitCode 1', async () => {

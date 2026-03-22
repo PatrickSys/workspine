@@ -317,6 +317,9 @@ async function promptForConfig(cwd) {
     let researchInput = await askQuestion('  Research before planning each phase? [yes/no] (default: yes): ');
     const workflowResearch = researchInput.trim().toLowerCase() !== 'no';
 
+    let discussInput = await askQuestion('  Explore approaches with user before planning? [yes/no] (default: no): ');
+    const workflowDiscuss = discussInput.trim().toLowerCase() === 'yes';
+
     let planCheckInput = await askQuestion('  Verify plans achieve their goals before executing? [yes/no] (default: yes): ');
     const workflowPlanCheck = planCheckInput.trim().toLowerCase() !== 'no';
 
@@ -346,6 +349,7 @@ async function promptForConfig(cwd) {
       modelProfile,
       workflow: {
         research: workflowResearch,
+        discuss: workflowDiscuss,
         planCheck: workflowPlanCheck,
         verifier: workflowVerifier,
       },

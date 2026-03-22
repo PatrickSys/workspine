@@ -1,6 +1,6 @@
 # GSDD Role Distillation Ledger
 
-Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with keep/strip/why rationale. This ledger documents why each role exists in its current form and what GSD content was distilled or merged.
+Evidence map from each of the 10 canonical GSDD roles to their GSD sources, with keep/strip/why rationale. This ledger documents why each role exists in its current form and what GSD content was distilled or merged.
 
 ---
 
@@ -54,7 +54,7 @@ Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with 
 - Explicit "Scope" table showing scope × trigger × focus × output location
 - Clear statement: "Same algorithm, different scope. The scope is a context input, not a different role."
 
-**Rationale:** The GSD original had two roles (project and phase researcher) that followed the identical algorithm but with a scope parameter. GSDD merged them into one canonical role taking scope as input, reducing the role count from 11 to 9 while preserving all leverage. This is the clean merger mentioned in D2.
+**Rationale:** The GSD original had two roles (project and phase researcher) that followed the identical algorithm but with a scope parameter. GSDD merged them into one canonical role taking scope as input, reducing the role count from 11 to 9 (later 10 with approach-explorer in D29) while preserving all leverage. This is the clean merger mentioned in D2.
 
 ---
 
@@ -264,13 +264,13 @@ Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with 
 
 ---
 
-## 10. Approach Explorer
+## 10. Approach-Explorer
 
 **Canonical role:** `agents/approach-explorer.md`
 
 **GSD sources:** `workflows/discuss-phase.md` + `workflows/list-phase-assumptions.md` + `workflows/discovery-phase.md` (merged into new role)
 
-**Merger type:** New role from 3 GSD sources
+**Merger type:** New role from 2 GSD sources (discuss-phase + list-phase-assumptions) with thematic input from discovery-phase
 
 **Kept from GSD:**
 - Gray area identification with 5 domain types (SEE/CALL/RUN/READ/ORGANIZED) from discuss-phase
@@ -278,6 +278,8 @@ Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with 
 - 5-dimension assumption surfacing (technical approach, implementation order, scope boundaries, risks, dependencies) with confidence levels from list-phase-assumptions
 - Deferred ideas capture from discuss-phase
 - Adaptive area-by-area deep questioning from discuss-phase (GSD used 4-question batches; GSDD uses adaptive convergence)
+
+Note: `discovery-phase.md` contributed the concept of pre-planning research but the mechanism is entirely different — GSD used 3-level depth workflows (Quick/Standard/Deep) as a separate invocation; GSDD uses per-gray-area research subagents embedded in the plan workflow. This is thematic inspiration, not a structural merger.
 
 **Stripped from GSD:**
 - `gsd-tools.cjs` dependencies and STATE.md updates
@@ -358,7 +360,7 @@ Cross-source best practices applied to GSDD role contracts, audited against 6 ex
 
 | Principle | What It Means | Source | GSDD Implementation |
 |-----------|--------------|--------|---------------------|
-| **Context isolation** | Research and heavy reads go in subagents; only compressed summaries enter the main context | Anthropic CE: "sub-agents perform deep technical work, returning condensed summaries" | Approach explorer research subagents return ~400-token summaries; plan-checker runs in fresh context |
+| **Context isolation** | Research and heavy reads go in subagents; only compressed summaries enter the main context | Anthropic CE: "sub-agents perform deep technical work, returning condensed summaries" | Approach explorer research subagents return ~1000-token summaries; plan-checker runs in fresh context |
 | **JIT context loading** | Never say "read everything." Specify what to extract from each file | Anthropic CE: "maintain lightweight identifiers and use these references to dynamically load data into context at runtime" | `<input_contract>` with extraction guidance: "From SPEC.md read ONLY locked decisions" |
 | **Intermediate persistence** | For long interactions, write confirmed state to disk incrementally | Anthropic CE: "Agent regularly writes notes persisted to memory outside of the context window" | Approach explorer writes decisions to disk as they're confirmed during conversation |
 | **Progressive disclosure** | Don't front-load all context; let agents discover incrementally | Anthropic CE: "agents can assemble understanding layer by layer" | Gray areas presented individually; research loaded per area on demand |

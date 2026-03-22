@@ -486,9 +486,9 @@ describe('G16 - Distillation Ledger + Delegate Architecture', () => {
       'agents/DISTILLATION.md must exist. FIX: Create the distillation ledger.');
   });
 
-  test('DISTILLATION.md contains all 9 canonical role names', () => {
+  test('DISTILLATION.md contains all 10 canonical role names', () => {
     const content = fs.readFileSync(DISTILLATION_PATH, 'utf-8');
-    const roles = ['mapper', 'researcher', 'synthesizer', 'planner', 'roadmapper', 'executor', 'verifier', 'integration-checker', 'debugger'];
+    const roles = ['mapper', 'researcher', 'synthesizer', 'planner', 'roadmapper', 'executor', 'verifier', 'integration-checker', 'debugger', 'approach-explorer'];
     for (const role of roles) {
       assert.match(content, new RegExp(`## \\d+\\..*${role}`, 'i'),
         `DISTILLATION.md must document ${role}. FIX: Add section for ${role}.`);
@@ -1225,8 +1225,8 @@ describe('G23 - Approach Explorer Quality', () => {
   // G23.2: At least 2 conversation examples
   test('approach-explorer role has at least 2 example blocks', () => {
     const exampleBlocks = (roleContent.match(/<example[\s>]/g) || []).length;
-    assert.ok(exampleBlocks >= 2,
-      `approach-explorer.md has ${exampleBlocks} <example> blocks (need >= 2). FIX: Add conversation flow examples.`);
+    assert.ok(exampleBlocks >= 3,
+      `approach-explorer.md has ${exampleBlocks} <example> blocks (need >= 3). FIX: Add conversation flow examples per Anthropic 3-5 recommendation.`);
   });
 
   // G23.3: Self-check quality gate exists in algorithm

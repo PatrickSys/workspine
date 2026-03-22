@@ -30,7 +30,7 @@ export function buildDefaultConfig({ autoAdvance = false } = {}) {
     parallelization: true,
     commitDocs: true,
     modelProfile: 'balanced',
-    workflow: { research: true, discuss: true, planCheck: true, verifier: true },
+    workflow: { research: true, discuss: false, planCheck: true, verifier: true },
     gitProtocol: { ...DEFAULT_GIT_PROTOCOL },
     initVersion: 'v1.1',
   };
@@ -207,7 +207,7 @@ function cmdModelsShow() {
     detectedRuntimeModels: {
       opencode: ocDetected,
     },
-    hints: !ocCheckerOverride ? {
+    hints: (!ocCheckerOverride || !ocExplorerOverride) ? {
       opencode: 'OpenCode currently inherits its runtime model unless you set an explicit override. Use gsdd models set --runtime opencode --agent <agent-id> --model <provider/model-id> to inject an explicit agent model.',
     } : undefined,
   });

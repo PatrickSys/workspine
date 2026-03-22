@@ -9,7 +9,7 @@
 ## Table of Contents
 
 1. [4-File Codebase Standard](#1-4-file-codebase-standard)
-2. [Agent Consolidation: 11 to 9](#2-agent-consolidation-11-to-9)
+2. [Agent Consolidation: 11 to 10](#2-agent-consolidation-11-to-10)
 3. [Two-Layer Architecture: Roles and Delegates](#3-two-layer-architecture-roles-and-delegates)
 4. [Zero-Hop Security Propagation](#4-zero-hop-security-propagation)
 5. [Conditional Synthesizer](#5-conditional-synthesizer)
@@ -65,11 +65,11 @@
 
 ---
 
-## 2. Agent Consolidation: 11 to 9
+## 2. Agent Consolidation: 11 to 10
 
 **GSD:** 11 specialized agent files, each scoped to a single concern.
 
-**GSDD:** 9 canonical roles. 3 mergers and 1 extraction.
+**GSDD:** 10 canonical roles. 2 mergers, 1 extraction, 1 addition (approach-explorer, D29).
 
 **Merger table:**
 
@@ -1126,7 +1126,7 @@ This is acceptable because:
 - G18 guard suite mechanically prevents recurrence: asserts every WORKFLOWS entry appears in `agents.block.md`
 - CHANGELOG and README synced to actual counts (assertions, design decisions, PRs, test suites)
 
-**Why this is high-leverage:** The framework machinery is mechanically sound (800+ assertions, 10 workflows, 9 roles, 3 native adapters, 23 design decisions). But an incomplete AGENTS.md map is functionally broken governance -- agents succeed or fail based on the harness, not the LLM.
+**Why this is high-leverage:** The framework machinery is mechanically sound (800+ assertions, 10 workflows, 10 roles, 3 native adapters, 23 design decisions). But an incomplete AGENTS.md map is functionally broken governance -- agents succeed or fail based on the harness, not the LLM.
 
 **Evidence:**
 
@@ -1141,7 +1141,7 @@ This is acceptable because:
 
 ## 25. Consumer First-Run Experience
 
-**Problem:** GSDD's internal architecture is complete (24 design decisions, 800+ tests, 10 workflows, 9 roles), but consumer-facing surfaces don't honestly guide first-time users. Two independent audits identified this as the single largest barrier to adoption.
+**Problem:** GSDD's internal architecture is complete (24 design decisions, 800+ tests, 10 workflows, 10 roles), but consumer-facing surfaces don't honestly guide first-time users. Two independent audits identified this as the single largest barrier to adoption.
 
 **Decision:** Make all consumer-facing surfaces (README, agents.block.md, post-init CLI output) honestly distinguish between native-capable and governance-only platforms, and provide platform-specific invocation guidance at every consumer touchpoint.
 
@@ -1293,7 +1293,7 @@ Combined, these three workflows provided genuine leverage: the planner could not
 
 **GSDD decision:** Recover the discuss-phase leverage as a single role (`agents/approach-explorer.md`) embedded in the plan workflow, with a hybrid interaction architecture:
 
-1. **Primary path (inline + research subagents):** Conversation runs in the plan workflow's main context (required for user interactivity). For each technical gray area, a read-only research subagent spawns, reads codebase/docs, and returns a compressed ~400-token structured summary. Only summaries enter the conversation context, not raw file reads.
+1. **Primary path (inline + research subagents):** Conversation runs in the plan workflow's main context (required for user interactivity). For each technical gray area, a read-only research subagent spawns, reads codebase/docs, and returns a compressed ~1000-token structured summary. Only summaries enter the conversation context, not raw file reads.
 
 2. **Native agent optimization:** Runtimes with interactive subagent support (Claude Code with `AskUserQuestion`, Codex interactive agents, OpenCode `mode: agent`) can run the full exploration as a native agent. Falls back to the inline primary path if unavailable.
 
@@ -1315,7 +1315,7 @@ Both paths produce identical output: `{padded_phase}-APPROACH.md` in the phase d
 **Role contract design:** Ground-up rewrite applying prompt engineering best practices:
 
 - XML semantic structure (`<role>`, `<algorithm>`, `<examples>`, `<anti_patterns>`, `<quality_guarantees>`) matching the planner role pattern
-- 2 few-shot conversation examples (one taste decision, one technical decision with researched approaches)
+- 3 few-shot conversation examples (taste decision, technical decision with research, hybrid with delegation)
 - Vendor-neutral throughout — no tool-specific references in the role contract
 - Anti-patterns placed early for high attention weight
 
@@ -1325,7 +1325,7 @@ The approach explorer needs two capabilities with opposite context requirements:
 - **Conversation** needs the main context (for user interaction)
 - **Research** generates thousands of tokens of raw content the conversation doesn't need
 
-Isolating research in subagents and returning compressed summaries follows the Compress and Isolate patterns from context engineering literature. The main context budget stays manageable: ~1000 tokens orchestration + ~2400 tokens research summaries (4 areas × ~600) + ~4000 tokens conversation + ~500 tokens APPROACH.md = ~7900 tokens. The 600-token budget gives research subagents room for the structured format (Name/Pro/Con/Source) plus recommendation reasoning and enough project-specific context that the main agent can handle follow-up questions without re-querying the subagent.
+Isolating research in subagents and returning compressed summaries follows the Compress and Isolate patterns from context engineering literature. The research subagent prompt template lives in the role contract (`<research_subagent_prompt>` section of `agents/approach-explorer.md`) — co-located with the algorithm it serves, and referenced by the portable workflow rather than inlined. The main context budget stays manageable: ~1000 tokens orchestration + ~4000 tokens research summaries (4 areas × ~1000) + ~4000 tokens conversation + ~500 tokens APPROACH.md = ~9500 tokens. The 1000-token budget (matching Anthropic CE's recommended floor) gives research subagents room for the structured format (Name/Pro/Con/Source) plus recommendation reasoning, source verification, and enough project-specific context that the main agent can handle follow-up questions without re-querying the subagent.
 
 **Evidence:**
 
@@ -1342,7 +1342,7 @@ Isolating research in subagents and returning compressed summaries follows the C
 
 - Benefit: planner receives locked user decisions instead of guessing approaches; plan-checker can verify approach alignment; context stays lean via research isolation
 - Cost: adds one interactive step before planning (~5-15 minutes of user time per phase); hybrid architecture is more complex than a single monolithic workflow
-- Mitigation: `workflow.discuss: true|false` toggle in `.planning/config.json` allows skipping with explicit `reduced_alignment` reporting; taste areas skip research entirely
+- Mitigation: `workflow.discuss: true|false` toggle in `.planning/config.json` allows skipping with explicit `reduced_alignment` reporting; taste areas skip research entirely. Default is `false` (opt-in) to stay consistent with GSDD's stripped-down identity; users enable it explicitly
 
 **GSDD implementation:** `agents/approach-explorer.md` (role contract), `distilled/templates/delegates/approach-explorer.md` (thin delegate), `distilled/templates/approach.md` (output template), `distilled/workflows/plan.md` (`<approach_exploration>` section), `agents/planner.md` (`<approach_decisions>` section), `distilled/templates/delegates/plan-checker.md` (`approach_alignment` dimension), `bin/adapters/claude.mjs` + `bin/adapters/opencode.mjs` + `bin/adapters/codex.mjs` (native agent rendering)
 
