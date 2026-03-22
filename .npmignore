@@ -1,0 +1,8 @@
+# Legacy GSD installer surface - not part of GSDD's CLI
+bin/install.js
+
+# Old CJS entrypoint - bin field points to gsdd.mjs
+bin/gsdd
+
+# GSD original agents kept for reference only - consumers don't need them
+agents/_archive/

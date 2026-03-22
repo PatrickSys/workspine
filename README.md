@@ -6,12 +6,12 @@
 
 Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same long-horizon delivery spine — fewer moving parts.
 
-[![npm version](https://img.shields.io/npm/v/gsdd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd)
+[![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 [![Tests](https://img.shields.io/badge/assertions-862_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
-npx gsdd init
+npx gsdd-cli init
 ```
 
 **Works with Claude Code, OpenCode, Codex CLI, Cursor, Copilot, and Gemini CLI.**
@@ -41,7 +41,7 @@ What it strips: GSD's broader operator surface (32 workflows, 11 agents, discove
 ## Getting Started
 
 ```bash
-npx gsdd init
+npx gsdd-cli init
 ```
 
 This creates:
@@ -67,12 +67,12 @@ First workflow to run: **new-project** — it asks about your goals, audits the 
 GSDD generates adapters for whichever tools you use:
 
 ```bash
-npx gsdd init                    # Auto-detect installed tools
-npx gsdd init --tools claude     # Claude Code: .claude/skills + commands + agents
-npx gsdd init --tools opencode   # OpenCode: .opencode/commands + agents
-npx gsdd init --tools codex      # Codex CLI: portable gsdd-plan skill + .codex/agents checker
-npx gsdd init --tools agents     # Root AGENTS.md fallback
-npx gsdd init --tools all        # All of the above
+npx gsdd-cli init                    # Auto-detect installed tools
+npx gsdd-cli init --tools claude     # Claude Code: .claude/skills + commands + agents
+npx gsdd-cli init --tools opencode   # OpenCode: .opencode/commands + agents
+npx gsdd-cli init --tools codex      # Codex CLI: portable gsdd-plan skill + .codex/agents checker
+npx gsdd-cli init --tools agents     # Root AGENTS.md fallback
+npx gsdd-cli init --tools all        # All of the above
 ```
 
 | Platform | Tier | What's generated |
@@ -86,9 +86,9 @@ npx gsdd init --tools all        # All of the above
 ### Updating
 
 ```bash
-npx gsdd update                    # Regenerate adapters from latest sources
-npx gsdd update --tools claude     # Update specific platform only
-npx gsdd update --templates        # Refresh .planning/templates/ and role contracts from framework source
+npx gsdd-cli update                    # Regenerate adapters from latest sources
+npx gsdd-cli update --tools claude     # Update specific platform only
+npx gsdd-cli update --templates        # Refresh .planning/templates/ and role contracts from framework source
 ```
 
 ### Headless Mode (CI / Automation)
@@ -96,8 +96,8 @@ npx gsdd update --templates        # Refresh .planning/templates/ and role contr
 For non-interactive environments:
 
 ```bash
-npx gsdd init --auto --tools claude
-npx gsdd init --auto --tools claude --brief path/to/PRD.md
+npx gsdd-cli init --auto --tools claude
+npx gsdd-cli init --auto --tools claude --brief path/to/PRD.md
 ```
 
 `--auto` skips interactive prompts, uses smart defaults (`autoAdvance: true` in config). `--brief` copies a project document to `.planning/PROJECT_BRIEF.md` for `new-project` to consume.
@@ -105,7 +105,7 @@ npx gsdd init --auto --tools claude --brief path/to/PRD.md
 ### Team Use
 
 - **Shared state:** Set `commitDocs: true` (default) — `.planning/` is tracked in git. Everyone sees the same spec, roadmap, and phase plans.
-- **Onboarding:** After cloning, run `npx gsdd init` to generate tool-specific adapters. `.planning/` is already tracked — no re-initialization needed.
+- **Onboarding:** After cloning, run `npx gsdd-cli init` to generate tool-specific adapters. `.planning/` is already tracked — no re-initialization needed.
 - **Session handoff:** Use `gsdd-pause` / `gsdd-resume` to hand off work. The checkpoint (`.planning/.continue-here.md`) captures context for the next person.
 - **Adapter isolation:** Each developer runs `gsdd init --tools <their-tool>`. Adapter files don't conflict across tools.
 
@@ -401,7 +401,7 @@ Advisory defaults, overridden by repo conventions:
 | Need context from last session | Run `gsdd-resume` — restores state, routes to next action |
 | Plans seem wrong | Check `workflow.research: true` in config |
 | Execution produces stubs | Re-plan with smaller scope (2-5 tasks per plan) |
-| Templates out of date | `npx gsdd update --templates` — warns before overwriting |
+| Templates out of date | `npx gsdd-cli update --templates` — warns before overwriting |
 | Model costs too high | `gsdd models profile budget` + disable `workflow.planCheck` |
 
 For detailed troubleshooting and recovery procedures, see the [User Guide](docs/USER-GUIDE.md#troubleshooting).

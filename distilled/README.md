@@ -15,16 +15,16 @@ GSDD is a small set of workflow sources plus a CLI (`gsdd`) that:
 
 Run in your project root:
 ```bash
-npx gsdd init
+npx gsdd-cli init
 ```
 
 Optional adapters:
 ```bash
-npx gsdd init --tools claude
-npx gsdd init --tools opencode
-npx gsdd init --tools codex
-npx gsdd init --tools agents
-npx gsdd init --tools all
+npx gsdd-cli init --tools claude
+npx gsdd-cli init --tools opencode
+npx gsdd-cli init --tools codex
+npx gsdd-cli init --tools agents
+npx gsdd-cli init --tools all
 ```
 
 Notes:

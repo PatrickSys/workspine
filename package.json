@@ -1,7 +1,7 @@
 {
-  "name": "gsdd",
+  "name": "gsdd-cli",
   "version": "0.1.0",
-  "description": "A meta-prompting, lightweight context engineering and spec-driven development system for AI coding agents. Works with any agent.",
+  "description": "GSDD — a portable, spec-driven development kernel for AI coding agents. Works with Claude Code, Codex CLI, OpenCode, Cursor, Copilot, and Gemini CLI.",
   "type": "module",
   "bin": {
     "gsdd": "./bin/gsdd.mjs"
@@ -10,11 +10,16 @@
     "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.models.test.cjs && node tests/gsdd.manifest.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs && node tests/gsdd.guards.test.cjs && node tests/gsdd.health.test.cjs && node tests/gsdd.scenarios.test.cjs"
   },
   "files": [
-    "bin/",
+    "bin/adapters/",
+    "bin/lib/",
+    "bin/gsdd.mjs",
     "distilled/",
-    "agents/"
+    "agents/*.md",
+    "agents/README.md"
   ],
   "keywords": [
+    "gsdd",
+    "gsd-distilled",
     "claude",
     "claude-code",
     "ai",
@@ -27,7 +32,9 @@
     "gemini",
     "gemini-cli",
     "cursor",
-    "codex"
+    "codex",
+    "opencode",
+    "copilot"
   ],
   "author": "PatrickSys",
   "license": "MIT",

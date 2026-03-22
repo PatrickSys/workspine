@@ -266,7 +266,7 @@ GSDD does not impose commit formats, branch naming, or one-commit-per-task rules
 
 ### New Project (Full Cycle)
 
-`npx gsdd init`
+`npx gsdd-cli init`
 
 - `Claude/OpenCode`: `/gsdd-new-project -> /gsdd-plan -> /gsdd-execute -> /gsdd-verify -> /gsdd-audit-milestone`
 - `Codex`: `$gsdd-new-project -> $gsdd-plan -> $gsdd-execute -> $gsdd-verify -> $gsdd-audit-milestone`
@@ -275,7 +275,7 @@ GSDD does not impose commit formats, branch naming, or one-commit-per-task rules
 
 ### Existing Codebase
 
-`npx gsdd init`
+`npx gsdd-cli init`
 
 - `Claude/OpenCode`: `/gsdd-map-codebase -> /gsdd-new-project`
 - `Codex`: `$gsdd-map-codebase -> $gsdd-new-project`
@@ -314,8 +314,8 @@ GSDD does not impose commit formats, branch naming, or one-commit-per-task rules
 ### Headless Init (CI / Automation)
 
 ```bash
-npx gsdd init --auto --tools claude           # Non-interactive, default config
-npx gsdd init --auto --tools claude --brief path/to/PRD.md  # Seed from existing document
+npx gsdd-cli init --auto --tools claude           # Non-interactive, default config
+npx gsdd-cli init --auto --tools claude --brief path/to/PRD.md  # Seed from existing document
 ```
 
 ---
@@ -345,7 +345,7 @@ Do not re-run `gsdd-execute`. Use `gsdd-quick` for targeted fixes, or `gsdd-veri
 ### Template Refresh After Update
 
 ```bash
-npx gsdd update --templates       # Refreshes role contracts and delegates
+npx gsdd-cli update --templates       # Refreshes role contracts and delegates
 ```
 
 If you've modified any templates, the generation manifest detects this and warns you before overwriting. The SHA-256 hash of each generated file is tracked in `.planning/generation-manifest.json`.
@@ -365,8 +365,8 @@ Switch to budget profile: `gsdd models profile budget`. Disable research and pla
 | Quick targeted fix | `gsdd-quick` |
 | Something broke | Use the debugger role for systematic debugging |
 | Costs running high | `gsdd models profile budget`, disable workflow toggles |
-| Templates out of date | `npx gsdd update --templates` |
-| Adapters out of date | `npx gsdd update` |
+| Templates out of date | `npx gsdd-cli update --templates` |
+| Adapters out of date | `npx gsdd-cli update` |
 
 ---
 

@@ -58,9 +58,9 @@ GSDD uses `.planning/` as the durable workspace:
 Recommended: generate adapters with `gsdd`:
 
 ```bash
-npx gsdd init
-npx gsdd init --tools claude
-npx gsdd init --tools agents
+npx gsdd-cli init
+npx gsdd-cli init --tools claude
+npx gsdd-cli init --tools agents
 ```
 
 Behavior:
