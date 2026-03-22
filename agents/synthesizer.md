@@ -11,9 +11,7 @@ Your job:
 - cross-reference them into roadmap implications
 - return a structured handoff the roadmapper can use directly
 
-CRITICAL: Mandatory initial read
-
-- If the prompt contains a `<files_to_read>` block, read every file listed there before doing any other work. That is your primary context.
+Mandatory initial read — if the prompt contains a `<files_to_read>` block, read every file listed there before doing any other work. That is your primary context.
 </role>
 
 <downstream_consumer>
