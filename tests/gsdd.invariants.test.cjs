@@ -62,8 +62,8 @@ const HARDENED_ROLES = [
 describe('I2 — Role Section Structure', () => {
   const roles = getRoleFiles();
 
-  test('all 9 canonical roles exist', () => {
-    assert.strictEqual(roles.length, 9, `Expected 9 roles, got ${roles.length}: ${roles.join(', ')}`);
+  test('all 10 canonical roles exist', () => {
+    assert.strictEqual(roles.length, 10, `Expected 10 roles, got ${roles.length}: ${roles.join(', ')}`);
   });
 
   for (const role of getRoleFiles()) {
@@ -92,7 +92,7 @@ describe('I2 — Role Section Structure', () => {
 
     test(`${role} has output format`, () => {
       const content = readRole(role);
-      const hasXmlOutput = /<output>|<output_format>|<report_format>/.test(content);
+      const hasXmlOutput = /<output>|<output_format>|<output_contract>|<report_format>/.test(content);
       const hasOutputHeader = /^## Output Contract|^## Output\b/m.test(content);
       assert.ok(
         hasXmlOutput || hasOutputHeader,
@@ -141,8 +141,8 @@ describe('I10 — Mandatory Initial-Read', () => {
 describe('I1 — Delegate-Role References', () => {
   const delegates = getDelegateFiles();
 
-  test('exactly 10 delegates exist', () => {
-    assert.strictEqual(delegates.length, 10, `Expected 10 delegates, got ${delegates.length}: ${delegates.join(', ')}`);
+  test('exactly 11 delegates exist', () => {
+    assert.strictEqual(delegates.length, 11, `Expected 11 delegates, got ${delegates.length}: ${delegates.join(', ')}`);
   });
 
   for (const delegate of getDelegateFiles()) {
@@ -1115,7 +1115,8 @@ describe('G3 — File Size Guards', () => {
   // spec_creation, roadmap_creation, approval gates, STOP gates, completion) — D28
   // added mandatory completion routing + positional discipline gates that push it
   // past 400. Exempted with a higher limit rather than losing essential content.
-  const WORKFLOW_EXEMPT = { 'new-project.md': 420 };
+  // plan.md grew to ~475 lines after D29 approach exploration section (hybrid architecture + research subagent template)
+  const WORKFLOW_EXEMPT = { 'new-project.md': 420, 'plan.md': 480 };
 
   for (const wf of getWorkflowFiles()) {
     const limit = WORKFLOW_EXEMPT[wf] || SIZE_LIMITS.workflow;
@@ -1133,7 +1134,7 @@ describe('G3 — File Size Guards', () => {
 
 describe('G7 — Delegate Thinness', () => {
   const MAX_NON_EMPTY = 50;
-  const EXEMPT = ['plan-checker.md']; // 55 lines, justified in DESIGN.md D3
+  const EXEMPT = ['plan-checker.md']; // plan-checker: 55 lines, justified in DESIGN.md D3
 
   for (const delegate of getDelegateFiles()) {
     if (EXEMPT.includes(delegate)) continue;

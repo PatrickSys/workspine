@@ -264,6 +264,48 @@ Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with 
 
 ---
 
+## 10. Approach Explorer
+
+**Canonical role:** `agents/approach-explorer.md`
+
+**GSD sources:** `workflows/discuss-phase.md` + `workflows/list-phase-assumptions.md` + `workflows/discovery-phase.md` (merged into new role)
+
+**Merger type:** New role from 3 GSD sources
+
+**Kept from GSD:**
+- Gray area identification with 5 domain types (SEE/CALL/RUN/READ/ORGANIZED) from discuss-phase
+- Scope guardrail: phase boundary is fixed, deferred ideas captured not acted on
+- 5-dimension assumption surfacing (technical approach, implementation order, scope boundaries, risks, dependencies) with confidence levels from list-phase-assumptions
+- Deferred ideas capture from discuss-phase
+- Adaptive area-by-area deep questioning from discuss-phase (GSD used 4-question batches; GSDD uses adaptive convergence)
+
+**Stripped from GSD:**
+- `gsd-tools.cjs` dependencies and STATE.md updates
+- Vendor-specific commit steps, path conventions, and "Claude" references
+- CONTEXT.md output format (replaced with structured APPROACH.md)
+- Separate workflow invocation (absorbed into plan workflow as inline + research subagent hybrid)
+- Rigid 4-question batched loop (replaced with adaptive questioning until decision converges)
+
+**Gained in GSDD:**
+- XML semantic structure matching planner pattern (`<role>`, `<algorithm>`, `<examples>`, etc.)
+- 2 few-shot conversation examples (taste decision + technical decision)
+- Gray area classification: taste (ask directly), technical (research first), hybrid (both)
+- Pre-question research per gray area via isolated research subagents returning compressed summaries
+- Self-check quality gate before writing APPROACH.md
+- Intermediate decision persistence (protect against context limits)
+- JIT context loading with extraction guidance (read ONLY locked decisions from SPEC, ONLY phase goal from ROADMAP)
+- Structured approach comparison with trade-offs
+- File persistence to `{padded_phase}-APPROACH.md` using dedicated template
+- Plan-checker integration via new `approach_alignment` verification dimension
+- Config toggle (`workflow.discuss: true|false`) for optional skip
+- Downstream consumer contract: planner reads locked decisions, plan-checker verifies alignment
+- "Agent's Discretion" explicit marking for areas where user delegates choice (vendor-neutral)
+- Hybrid architecture: conversation inline (main context) + research in subagents. Native agent kept as optimization.
+
+**Rationale:** GSDD's initial distillation dropped GSD's discuss-phase and list-phase-assumptions entirely, removing genuine leverage: the planner converges on a single approach without user input, explores no alternatives, and surfaces no assumptions. The approach explorer recovers this phase-level user alignment by combining GSD's discuss-phase interaction pattern with comparative research. Ground-up rewrite (D29) applied 5 external resources on context engineering, meta-prompting, and agent skill design to produce a prompt-engineered role contract with proper XML structure, examples, adaptive conversation, and hybrid research isolation.
+
+---
+
 ## Summary: Merger Table (from D2)
 
 | Canonical role | Absorbs from GSD | Merger criteria |
@@ -277,8 +319,9 @@ Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with 
 | `verifier.md` | `gsd-verifier.md` | Kept-as-is; cross-phase audit extracted to integration-checker |
 | `integration-checker.md` | `gsd-integration-checker.md` | Extracted as standalone; recovered in PR #12, hardened in PR #15 |
 | `debugger.md` | `gsd-debugger.md` | Kept-as-is; no changes |
+| `approach-explorer.md` | `discuss-phase.md` + `list-phase-assumptions.md` + `discovery-phase.md` | New role from 3 GSD workflow sources |
 
-**Result:** 11 GSD roles → 9 GSDD canonical roles (2 mergers: researcher, planner). 1 extraction: integration-checker moved from embedded to standalone. Total leverage preserved, role count reduced.
+**Result:** 11 GSD roles → 10 GSDD canonical roles (2 mergers: researcher, planner). 1 extraction: integration-checker moved from embedded to standalone. 1 addition: approach-explorer recovers discuss-phase leverage with research enhancement. Total leverage preserved and extended.
 
 ---
 

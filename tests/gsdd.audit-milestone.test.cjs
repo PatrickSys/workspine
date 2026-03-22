@@ -146,13 +146,14 @@ describe('gsdd audit-milestone', () => {
       'Step 4a must be backwards compatible with existence guard');
   });
 
-  test('role count is 9', async () => {
+  test('role count is 10', async () => {
     const agentsDir = path.join(__dirname, '..', 'agents');
     const roleFiles = fs.readdirSync(agentsDir).filter(
       f => f.endsWith('.md') && f !== 'README.md' && f !== 'DISTILLATION.md' && !f.startsWith('_')
     );
 
-    assert.strictEqual(roleFiles.length, 9, `Expected 9 role files, found ${roleFiles.length}: ${roleFiles.join(', ')}`);
+    assert.strictEqual(roleFiles.length, 10, `Expected 10 role files, found ${roleFiles.length}: ${roleFiles.join(', ')}`);
     assert.ok(roleFiles.includes('integration-checker.md'), 'integration-checker.md must exist in agents/');
+    assert.ok(roleFiles.includes('approach-explorer.md'), 'approach-explorer.md must exist in agents/');
   });
 });

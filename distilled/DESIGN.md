@@ -36,6 +36,7 @@
 26. [Session Continuity Contract Hardening](#26-session-continuity-contract-hardening)
 27. [Consumer-Ready Surface Completion](#27-consumer-ready-surface-completion)
 28. [Workflow Completion Routing](#28-workflow-completion-routing)
+29. [Approach Exploration](#29-approach-exploration)
 
 ---
 
@@ -1001,7 +1002,7 @@ Permission values: ALLOW (role can access), DENY (explicit rejection required), 
 
 **GSD:** Orchestrator subagent prompts were embedded inline in workflow files or referenced indirectly through agent role contracts. No explicit thin-wrapper layer. Scope and context were implicit in the orchestrator's prompt shaping.
 
-**GSDD:** Extracted 10 delegates as explicit thin-wrapper files in `distilled/templates/delegates/`. A delegate is a sub-agent instruction wrapper scoped to a specific orchestrator task, carrying a bounded input/output contract. Ten delegates cover 3 canonical roles: mapper × 4 focus-scoped variants, researcher × 4 dimension-scoped variants, synthesizer × 1 (via `researcher-synthesizer.md`), plus one fresh-context adversarial reviewer (`plan-checker.md`, new in D9, no GSD equivalent). Executor, verifier, integration-checker, planner, and roadmapper are invoked directly from orchestrator workflows without thin-wrapper delegates.
+**GSDD:** Extracted 11 delegates as explicit thin-wrapper files in `distilled/templates/delegates/`. A delegate is a sub-agent instruction wrapper scoped to a specific orchestrator task, carrying a bounded input/output contract. Eleven delegates cover 4 canonical roles: mapper × 4 focus-scoped variants, researcher × 4 dimension-scoped variants, synthesizer × 1 (via `researcher-synthesizer.md`), one fresh-context adversarial reviewer (`plan-checker.md`, new in D9, no GSD equivalent), and one interactive approach explorer (`approach-explorer.md`, recovers GSD discuss-phase leverage with research enhancement). Executor, verifier, integration-checker, planner, and roadmapper are invoked directly from orchestrator workflows without thin-wrapper delegates.
 
 **Why "delegates":** In multi-agent orchestration literature (Anthropic multi-agent guidance, OpenAI harness engineering, OpenDev terminal-agents paper arXiv 2603.05344), a delegate is a sub-agent invoked by an orchestrator with:
 1. A single, bounded responsibility (not a general-purpose role)
@@ -1041,7 +1042,7 @@ This is acceptable because:
 2. The clarity gain outweighs the reading cost
 3. Delegate independence enables better testing and quality gates
 
-**10 delegates:**
+**11 delegates:**
 
 | Delegate | Purpose | Wrapped Role |
 |----------|---------|--------------|
@@ -1055,6 +1056,7 @@ This is acceptable because:
 | `researcher-pitfalls.md` | Research domain pitfalls and risks | researcher (dimension: pitfalls) |
 | `researcher-synthesizer.md` | Synthesize research into roadmap implications | synthesizer |
 | `plan-checker.md` | Fresh-context adversarial plan review | planner (adversarial, new in D9) |
+| `approach-explorer.md` | Interactive approach exploration and user alignment | approach-explorer (interactive, recovers GSD discuss-phase) |
 
 **Evidence:**
 
@@ -1272,6 +1274,77 @@ GSDD's `<completion>` pattern is vendor-agnostic (GSD's `/clear` is Claude-speci
 **Tradeoff:** ~30 new guard assertions to maintain, but prevents the highest-impact consumer UX failure (routing dead ends at every workflow boundary). Persistence gates add 2-3 lines per workflow but prevent artifact loss that breaks downstream audit.
 
 **GSDD implementation:** `distilled/workflows/*.md` (9 files), `tests/gsdd.guards.test.cjs` (G22)
+
+---
+
+## 29. Approach Exploration
+
+**GSD baseline:** Three separate workflows handle pre-planning user alignment:
+
+| GSD workflow | Purpose | Output |
+|---|---|---|
+| `discuss-phase.md` (541 lines) | Gray area identification, 4-question batched loops per area, deferred ideas capture | `CONTEXT.md` |
+| `list-phase-assumptions.md` (179 lines) | 5-dimension assumption surfacing (technical approach, implementation order, scope boundaries, risks, dependencies) | Conversational only (no file output) |
+| `discovery-phase.md` | 3-level research (Quick/Standard/Deep) with domain exploration | `DISCOVERY.md` |
+
+Combined, these three workflows provided genuine leverage: the planner could not silently converge on a single approach without user input. GSD's initial GSDD distillation dropped all three, removing this alignment step entirely. The planner was left to infer approaches without user validation.
+
+**Problem:** Without approach exploration, the planner explores no alternatives, surfaces no assumptions, and captures no user decisions. The user's first chance to disagree with approach choices is after implementation — too late for efficient correction.
+
+**GSDD decision:** Recover the discuss-phase leverage as a single role (`agents/approach-explorer.md`) embedded in the plan workflow, with a hybrid interaction architecture:
+
+1. **Primary path (inline + research subagents):** Conversation runs in the plan workflow's main context (required for user interactivity). For each technical gray area, a read-only research subagent spawns, reads codebase/docs, and returns a compressed ~400-token structured summary. Only summaries enter the conversation context, not raw file reads.
+
+2. **Native agent optimization:** Runtimes with interactive subagent support (Claude Code with `AskUserQuestion`, Codex interactive agents, OpenCode `mode: agent`) can run the full exploration as a native agent. Falls back to the inline primary path if unavailable.
+
+Both paths produce identical output: `{padded_phase}-APPROACH.md` in the phase directory.
+
+**Key enhancements over GSD:**
+
+| Enhancement | GSD pattern | GSDD pattern | Why |
+|---|---|---|---|
+| Gray area classification | All areas treated identically | Taste / technical / hybrid classification | Taste decisions need no research; technical ones do. Asking "what color?" the same way as "JWT vs sessions?" wastes context and user time |
+| Questioning style | Rigid 4-question batched loop | Adaptive convergence (2-6 questions depending on complexity) | Fixed batch sizes don't match decision complexity. Some areas resolve in 2 questions, others need 6 |
+| Pre-question research | No research before asking | Research subagent per technical area returns structured summary before asking | Users make better decisions when presented with researched options and trade-offs |
+| Quality gate | None | Self-check before writing APPROACH.md (concrete decisions, no vague language, source backing, scope compliance) | Prevents weak outputs that force re-asking during planning |
+| Intermediate persistence | No persistence until final output | Confirmed decisions written to disk incrementally | Protects against context limits in long conversations |
+| Context loading | "Read everything" | JIT extraction guidance (e.g., "From SPEC.md read ONLY locked decisions") | Prevents context pollution with irrelevant content |
+| Plan-checker integration | None | New `approach_alignment` dimension in plan-checker | Verifies plans honor approach decisions, not just requirements |
+| Delegation option | Not available | "Agent's Discretion" — user can explicitly delegate choices to the agent | Reduces user fatigue on areas where they have no strong preference |
+
+**Role contract design:** Ground-up rewrite applying prompt engineering best practices:
+
+- XML semantic structure (`<role>`, `<algorithm>`, `<examples>`, `<anti_patterns>`, `<quality_guarantees>`) matching the planner role pattern
+- 2 few-shot conversation examples (one taste decision, one technical decision with researched approaches)
+- Vendor-neutral throughout — no tool-specific references in the role contract
+- Anti-patterns placed early for high attention weight
+
+**Architecture rationale — why hybrid:**
+
+The approach explorer needs two capabilities with opposite context requirements:
+- **Conversation** needs the main context (for user interaction)
+- **Research** generates thousands of tokens of raw content the conversation doesn't need
+
+Isolating research in subagents and returning compressed summaries follows the Compress and Isolate patterns from context engineering literature. The main context budget stays manageable: ~1000 tokens orchestration + ~1600 tokens research summaries (4 areas × ~400) + ~4000 tokens conversation + ~500 tokens APPROACH.md = ~7100 tokens.
+
+**Evidence:**
+
+1. Anthropic "Building effective agents" (2025): sub-agents perform deep technical work, returning condensed summaries to the orchestrator — "find the smallest set of high-signal tokens"
+2. Anthropic prompting best practices (2025): XML tags for semantic structure, role preamble, few-shot examples, adaptive thinking
+3. LangChain "Context Engineering for Agents" (2025): Write/Select/Compress/Isolate patterns — "isolate: split context across separate processes", "compress: summarize at agent-agent boundaries"
+4. Agent Skills specification (agentskills.io): progressive disclosure, SKILL.md format with metadata-first structure
+5. OpenAI meta-prompting (2025): LLM-as-judge evaluation, specification-based output quality verification
+6. GSD source: `get-shit-done/workflows/discuss-phase.md` (gray area identification, AskUserQuestion interaction, deferred ideas)
+7. GSD source: `get-shit-done/workflows/list-phase-assumptions.md` (5-dimension assumption surfacing with confidence levels)
+8. GSD source: `get-shit-done/workflows/discovery-phase.md` (3-level research workflow)
+
+**Trade-offs:**
+
+- Benefit: planner receives locked user decisions instead of guessing approaches; plan-checker can verify approach alignment; context stays lean via research isolation
+- Cost: adds one interactive step before planning (~5-15 minutes of user time per phase); hybrid architecture is more complex than a single monolithic workflow
+- Mitigation: `workflow.discuss: true|false` toggle in `.planning/config.json` allows skipping with explicit `reduced_alignment` reporting; taste areas skip research entirely
+
+**GSDD implementation:** `agents/approach-explorer.md` (role contract), `distilled/templates/delegates/approach-explorer.md` (thin delegate), `distilled/templates/approach.md` (output template), `distilled/workflows/plan.md` (`<approach_exploration>` section), `agents/planner.md` (`<approach_decisions>` section), `distilled/templates/delegates/plan-checker.md` (`approach_alignment` dimension), `bin/adapters/claude.mjs` + `bin/adapters/opencode.mjs` + `bin/adapters/codex.mjs` (native agent rendering)
 
 ---
 

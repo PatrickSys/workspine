@@ -10,8 +10,9 @@ Before starting, read these files:
 1. `.planning/SPEC.md` - requirements, constraints, key decisions, current state
 2. `.planning/ROADMAP.md` - find the target phase, its goal, requirements, and success criteria
 3. `.planning/research/*.md` - if research exists and is relevant to this phase
-4. `.planning/phases/*-PLAN.md` - any previous plans that affect this phase
-5. Relevant source code - if this phase builds on existing code, read the key files
+4. `.planning/phases/*-APPROACH.md` - approach decisions from user discussion (if exists)
+5. `.planning/phases/*-PLAN.md` - any previous plans that affect this phase
+6. Relevant source code - if this phase builds on existing code, read the key files
 
 Identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>
@@ -20,8 +21,9 @@ Identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMA
 Before planning, acknowledge what is locked:
 
 - Decisions in `.planning/SPEC.md` "Key Decisions" - do not revisit them.
+- Decisions in APPROACH.md "Implementation Decisions" - these are user-validated choices. Implement the chosen approaches, not alternatives. "Agent's Discretion" items give you flexibility.
 - Patterns from previous phases - match existing conventions. Do not introduce new patterns without cause.
-- Deferred items - items marked v2, nice-to-have, or out of scope. Do not plan for them.
+- Deferred items - items marked v2, nice-to-have, or out of scope in SPEC.md or APPROACH.md. Do not plan for them.
 
 If you need to challenge a locked decision: stop, ask the developer, and document the new decision explicitly.
 </context_fidelity>
@@ -250,15 +252,105 @@ must_haves:
 ```
 </plan_structure>
 
-<clarify_approach>
-If there is ambiguity in how to implement:
+<approach_exploration>
+### When This Runs
 
-1. Ask the developer about preferences when the choice materially changes the design.
-2. Surface your assumptions explicitly.
-3. Present trade-offs when multiple approaches are valid.
+Check `.planning/config.json` for `workflow.discuss`:
+- If `workflow.discuss: false` (or key missing): skip this section, go to `<goal_backward_planning>`. Note `reduced_alignment` in the orchestration summary.
+- If `workflow.discuss: true`: mandatory before planning.
 
-If the approach is obvious or fully defined by `.planning/SPEC.md`, skip questions and proceed.
-</clarify_approach>
+### Check for Existing APPROACH.md
+
+Check if `{phase_dir}/{padded_phase}-APPROACH.md` exists.
+
+**If exists:**
+Offer the user a choice:
+- "Use existing" — load decisions from APPROACH.md, skip to `<goal_backward_planning>`
+- "Update it" — run the approach explorer to revise decisions
+- "View it" — display APPROACH.md contents, then offer "Use existing" / "Update"
+
+**If does not exist (or user chose "Update"):**
+Run the approach explorer.
+
+### Running the Approach Explorer
+
+**Primary path — inline conversation with research subagents:**
+
+The conversation with the user runs inline in the main context. For each technical gray area, a read-only research subagent is spawned to isolate heavy codebase and documentation reads, returning only compressed summaries.
+
+1. Load context: read ONLY locked decisions from `.planning/SPEC.md` and the target phase goal/requirements from `.planning/ROADMAP.md`.
+
+2. Identify 3-4 domain-specific gray areas. Classify each as **taste** (preference, no research needed), **technical** (trade-offs, research first), or **hybrid** (both).
+
+3. For each **technical or hybrid** gray area, spawn a read-only research subagent:
+
+   ```
+   Research approaches for: [gray area name]
+   Phase context: [phase goal, 1-2 sentences]
+
+   Read these files for existing patterns:
+   - [relevant codebase files]
+
+   Search documentation and web for current best practices.
+
+   Return a structured summary (under 400 tokens):
+   For each of 2-3 viable approaches:
+   - Name
+   - Pro (specific to this project)
+   - Con (specific to this project)
+   - Source (codebase file, doc URL, or search result)
+
+   If only one viable approach exists, say so. Do not invent alternatives.
+
+   Example output format:
+   1. Recharts — Pro: React-native, SSR-friendly, matches existing patterns.
+      Con: Limited customization for complex visualizations.
+      Source: existing Chart component in src/components/Chart.tsx
+   2. D3 + custom — Pro: Full control over rendering.
+      Con: 3-5x more code for standard charts, no React integration.
+      Source: d3js.org docs, community benchmarks
+   ```
+
+4. Present each gray area to the user individually:
+   - For taste areas: ask directly
+   - For technical/hybrid: present the research summary, lead with recommendation
+   - Ask: "Discuss this, or should I use my judgment?"
+
+5. For each area the user chose to discuss, ask adaptive questions until the decision converges. Persist each confirmed decision to disk incrementally.
+
+6. Surface assumptions across 5 dimensions with confidence levels. Wait for corrections.
+
+7. Self-check: verify every decision is concrete enough for the planner before writing.
+
+8. Write `{padded_phase}-APPROACH.md` to the phase directory.
+
+**Native agent optimization:**
+
+If your runtime provides an interactive `gsdd-approach-explorer` agent:
+- Invoke it with: target phase goal, requirement IDs, locked decisions, phase research (if exists), relevant codebase files
+- The native agent runs the full exploration in its own context window
+- This is an optimization — the output (APPROACH.md) is identical to the primary path
+
+**Inline fallback (reduced alignment):**
+
+If neither the primary path nor native agent is available (e.g., the runtime cannot spawn research subagents):
+- Read the phase goal and identify 2-3 obvious gray areas
+- Present them to the user with your best assessment
+- Capture any decisions the user provides
+- Explicitly report `reduced_alignment` — the user did not get full research-backed exploration
+
+### Using APPROACH.md Decisions
+
+After approach exploration completes (or existing APPROACH.md is loaded):
+- Treat decisions from APPROACH.md as locked constraints, same priority as `.planning/SPEC.md` decisions
+- "Agent's Discretion" items from APPROACH.md give the planner flexibility — do not treat them as locked
+- Thread the APPROACH.md file path to both the planner prompt and the plan-checker prompt
+- Deferred ideas from APPROACH.md must not appear in the plan
+
+### Role Contract
+
+The approach explorer's full role contract is at `.planning/templates/roles/approach-explorer.md`. The portable workflow describes the orchestration; the role contract describes the agent's behavior.
+</approach_exploration>
 
 <plan_check_orchestration>
 ### How Plan Checking Works
@@ -274,6 +366,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 5. `scope_sanity` - plans are sized so an executor can complete them without context collapse
 6. `must_have_quality` - success criteria are specific, observable, and reflected in tasks
 7. `context_compliance` - locked decisions are honored and deferred ideas stay out of scope
+8. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. Skipped when no APPROACH.md is provided.
 
 ### Invoking the Checker
 
@@ -282,6 +375,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 3. If a native checker agent is available, invoke it in a fresh context with only these explicit inputs:
    - target phase goal and requirement IDs
    - relevant locked decisions / deferred items from `.planning/SPEC.md`
+   - approach decisions from `.planning/phases/*-APPROACH.md` (if exists)
    - relevant phase research file(s)
    - produced `.planning/phases/*-PLAN.md` file(s)
 4. Require the checker to return a single JSON object:
@@ -291,7 +385,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
      "summary": "One sentence overall assessment",
      "issues": [
        {
-         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance",
+         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | approach_alignment",
          "severity": "blocker | warning",
          "description": "What is wrong",
          "plan": "01-PLAN",
@@ -354,6 +448,8 @@ For each task:
 Planning is done when all of these are true:
 
 - [ ] Target phase identified from `ROADMAP.md`
+- [ ] Approach exploration completed or explicitly skipped with `reduced_alignment` reported
+- [ ] When `workflow.discuss: true`: user alignment confirmed via APPROACH.md before planning
 - [ ] Research check completed where needed
 - [ ] Plan self-check passed
 - [ ] Success criteria from `ROADMAP.md` are represented as must-haves
@@ -362,7 +458,7 @@ Planning is done when all of these are true:
 - [ ] Every task has XML structure with `id`, `type`, `files`, `action`, `verify`, and `done`
 - [ ] Every task has at least one runnable verify command
 - [ ] Plan sizing stays within 2-5 tasks, preferring 2-3
-- [ ] Locked decisions from `.planning/SPEC.md` are honored
+- [ ] Locked decisions from `.planning/SPEC.md` and APPROACH.md are honored
 - [ ] Any git guidance stays repo-native and follows `.planning/config.json`
 </success_criteria>
 

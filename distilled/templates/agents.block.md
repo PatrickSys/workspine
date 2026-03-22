@@ -6,7 +6,7 @@ Edit the source template in the GSDD framework instead.
 ### What This Project Uses
 - Framework: GSDD (Spec-Driven Development)
 - Planning dir: `.planning/` (specs, roadmaps, plans, research, templates)
-- Lifecycle: `bootstrap (gsdd init) -> new-project -> [plan -> execute -> verify] x N -> audit-milestone` for roadmap work
+- Lifecycle: `bootstrap (gsdd init) -> new-project -> [discuss-approach -> plan -> execute -> verify] x N -> audit-milestone` for roadmap work
 - Supporting workflows: quick (sub-hour tasks), map-codebase (codebase analysis), pause/resume (session management), progress (status query)
 
 ### Rules You MUST Follow

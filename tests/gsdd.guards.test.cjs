@@ -543,7 +543,7 @@ describe('G16 - Distillation Ledger + Delegate Architecture', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     assert.match(content, /distilled\/templates\/delegates\//,
       'D22 must reference the delegate path. FIX: Add delegate path reference to D22.');
-    assert.match(content, /10 delegates/,
+    assert.match(content, /11 delegates/,
       'D22 must document delegate count. FIX: Add delegate count to D22.');
   });
 
@@ -563,8 +563,8 @@ describe('G16 - Distillation Ledger + Delegate Architecture', () => {
       assert.ok(content.includes('`' + file + '`'),
         `D22 table must list actual delegate file ${file}. FIX: Update D22 table to match distilled/templates/delegates/.`);
     }
-    assert.strictEqual(actualFiles.length, 10,
-      `Expected 10 delegate files, found ${actualFiles.length}. FIX: Update delegate count.`);
+    assert.strictEqual(actualFiles.length, 11,
+      `Expected 11 delegate files, found ${actualFiles.length}. FIX: Update delegate count.`);
   });
 });
 
@@ -721,11 +721,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'DESIGN.md must contain section 25. FIX: Add D25 Consumer First-Run Experience.');
   });
 
-  test('DESIGN.md ToC lists 28 entries', () => {
+  test('DESIGN.md ToC lists 29 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 28,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 28. FIX: Update DESIGN.md ToC to list all 28 decisions.`);
+    assert.strictEqual(tocEntries.length, 29,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 29. FIX: Update DESIGN.md ToC to list all 29 decisions.`);
   });
 });
 
@@ -1194,5 +1194,115 @@ describe('G22 - Workflow Completion Routing', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     assert.match(content, /## 28\./,
       'DESIGN.md must contain section 28. FIX: Add D28 Workflow Completion Routing.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G23 - Approach Explorer Quality
+// ---------------------------------------------------------------------------
+describe('G23 - Approach Explorer Quality', () => {
+  const ROLE_PATH = path.join(ROOT, 'agents', 'approach-explorer.md');
+  const DELEGATE_PATH = path.join(ROOT, 'distilled', 'templates', 'delegates', 'approach-explorer.md');
+  const TEMPLATE_PATH = path.join(ROOT, 'distilled', 'templates', 'approach.md');
+  const WORKFLOW_PATH = path.join(ROOT, 'distilled', 'workflows', 'plan.md');
+  const PLANNER_PATH = path.join(ROOT, 'agents', 'planner.md');
+  const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
+
+  const roleContent = fs.readFileSync(ROLE_PATH, 'utf-8');
+  const delegateContent = fs.readFileSync(DELEGATE_PATH, 'utf-8');
+  const workflowContent = fs.readFileSync(WORKFLOW_PATH, 'utf-8');
+  const plannerContent = fs.readFileSync(PLANNER_PATH, 'utf-8');
+
+  // G23.1: Role uses XML semantic structure
+  test('approach-explorer role uses XML semantic tags', () => {
+    const requiredTags = ['<role>', '<algorithm>', '<examples>', '<anti_patterns>', '<quality_guarantees>'];
+    for (const tag of requiredTags) {
+      assert.ok(roleContent.includes(tag),
+        `approach-explorer.md missing ${tag}. FIX: Add ${tag} section to role contract.`);
+    }
+  });
+
+  // G23.2: At least 2 conversation examples
+  test('approach-explorer role has at least 2 example blocks', () => {
+    const exampleBlocks = (roleContent.match(/<example[\s>]/g) || []).length;
+    assert.ok(exampleBlocks >= 2,
+      `approach-explorer.md has ${exampleBlocks} <example> blocks (need >= 2). FIX: Add conversation flow examples.`);
+  });
+
+  // G23.3: Self-check quality gate exists in algorithm
+  test('approach-explorer role has self-check quality gate', () => {
+    assert.match(roleContent, /self.check|quality.gate/i,
+      'approach-explorer.md must have a self-check quality gate. FIX: Add quality gate step before writing APPROACH.md.');
+  });
+
+  // G23.4: Taste/technical classification exists
+  test('approach-explorer role has taste/technical classification', () => {
+    assert.match(roleContent, /taste/i,
+      'approach-explorer.md must classify gray areas as taste/technical. FIX: Add gray area classification.');
+    assert.match(roleContent, /technical/i,
+      'approach-explorer.md must classify gray areas as taste/technical. FIX: Add gray area classification.');
+  });
+
+  // G23.5: No fixed question count prescription (e.g., "ask exactly 4 questions")
+  test('approach-explorer role does not prescribe fixed question count', () => {
+    assert.doesNotMatch(roleContent, /\bask (exactly )?\d+ questions?\b/i,
+      'approach-explorer.md must NOT prescribe a fixed question count. FIX: Use adaptive convergence instead of fixed count.');
+  });
+
+  // G23.6: Vendor-neutral — no "Claude" in role contract
+  test('approach-explorer role is vendor-neutral', () => {
+    // Allow "Claude" only inside comments or vendor hints at the bottom
+    const beforeVendorHints = roleContent.split(/## Vendor Hints/)[0];
+    assert.doesNotMatch(beforeVendorHints, /\bClaude\b/,
+      'approach-explorer.md must be vendor-neutral (no "Claude" before Vendor Hints). FIX: Replace with vendor-agnostic language.');
+  });
+
+  // G23.7: No "Claude's Discretion" anywhere outside _archive
+  test('no "Claude\'s Discretion" outside _archive', () => {
+    const filesToCheck = [ROLE_PATH, DELEGATE_PATH, TEMPLATE_PATH, WORKFLOW_PATH, PLANNER_PATH];
+    for (const fp of filesToCheck) {
+      const content = fs.readFileSync(fp, 'utf-8');
+      assert.doesNotMatch(content, /Claude's Discretion/,
+        `${path.basename(fp)} contains "Claude's Discretion". FIX: Replace with "Agent's Discretion".`);
+    }
+  });
+
+  // G23.8: Delegate is thin (< 40 non-empty lines)
+  test('approach-explorer delegate is under 40 non-empty lines', () => {
+    const nonEmpty = delegateContent.split('\n').filter(l => /\S/.test(l)).length;
+    assert.ok(nonEmpty < 40,
+      `approach-explorer delegate has ${nonEmpty} non-empty lines (max 39). FIX: Move content to role contract.`);
+  });
+
+  // G23.9: Plan workflow has hybrid architecture description
+  test('plan workflow describes hybrid approach exploration', () => {
+    assert.match(workflowContent, /research.*subagent|subagent.*research/i,
+      'plan.md must describe research subagent pattern. FIX: Add research subagent description to <approach_exploration>.');
+  });
+
+  // G23.10: Planner uses "Agent's Discretion"
+  test('planner uses Agent\'s Discretion not Claude\'s Discretion', () => {
+    assert.match(plannerContent, /Agent's Discretion/,
+      'planner.md must use "Agent\'s Discretion". FIX: Replace "Claude\'s Discretion" with "Agent\'s Discretion".');
+  });
+
+  // G23.11: DESIGN.md has D29 entry
+  test('DESIGN.md contains D29 entry', () => {
+    const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
+    assert.match(content, /## 29\./,
+      'DESIGN.md must contain section 29. FIX: Add D29 Approach Exploration.');
+  });
+
+  // G23.12: Claude adapter approach-explorer has interactive tool
+  test('Claude adapter approach-explorer includes AskUserQuestion', () => {
+    const adapterPath = path.join(ROOT, 'bin', 'adapters', 'claude.mjs');
+    const adapterContent = fs.readFileSync(adapterPath, 'utf-8');
+    // Find the renderClaudeApproachExplorer function and check its tools line
+    const explorerFn = adapterContent.slice(
+      adapterContent.indexOf('renderClaudeApproachExplorer'),
+      adapterContent.indexOf('renderClaudePlanChecker')
+    );
+    assert.match(explorerFn, /AskUserQuestion/,
+      'Claude adapter approach-explorer must include AskUserQuestion tool. FIX: Add AskUserQuestion to tools list.');
   });
 });
