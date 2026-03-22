@@ -388,10 +388,10 @@ describe('gsdd models and model propagation', () => {
       assert.ok(payload.hints.opencode);
     });
 
-    test('models show omits hints when OpenCode runtime override exists', async () => {
+    test('models show omits hints when all OpenCode runtime overrides exist', async () => {
       writePlanningConfig(tmpDir, {
         modelProfile: 'balanced',
-        runtimeModelOverrides: { opencode: { 'plan-checker': 'anthropic/claude-opus-4-6' } },
+        runtimeModelOverrides: { opencode: { 'plan-checker': 'anthropic/claude-opus-4-6', 'approach-explorer': 'anthropic/claude-opus-4-6' } },
       });
 
       const result = await runCliAsMain(tmpDir, ['models', 'show']);
