@@ -365,3 +365,19 @@ Planning is done when all of these are true:
 - [ ] Locked decisions from `.planning/SPEC.md` are honored
 - [ ] Any git guidance stays repo-native and follows `.planning/config.json`
 </success_criteria>
+
+<completion>
+Report to the user what was accomplished, then present the next step:
+
+---
+**Completed:** Phase planning — created `.planning/phases/{phase_dir}/{plan_id}-PLAN.md`.
+
+**Next step:** `/gsdd:execute` — execute the plan
+
+Also available:
+- `/gsdd:plan` — create additional plans for the same phase (if multi-wave)
+- `/gsdd:progress` — check overall project status
+
+Consider clearing context before starting the next workflow for best results.
+---
+</completion>

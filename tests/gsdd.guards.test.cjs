@@ -721,11 +721,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'DESIGN.md must contain section 25. FIX: Add D25 Consumer First-Run Experience.');
   });
 
-  test('DESIGN.md ToC lists 26 entries', () => {
+  test('DESIGN.md ToC lists 28 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 27,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 27. FIX: Update DESIGN.md ToC to list all 27 decisions.`);
+    assert.strictEqual(tocEntries.length, 28,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 28. FIX: Update DESIGN.md ToC to list all 28 decisions.`);
   });
 });
 
@@ -1054,10 +1054,145 @@ describe('G21 - Consumer Surface Completeness', () => {
       'DESIGN.md must contain section 27. FIX: Add D27 Consumer-Ready Surface Completion.');
   });
 
-  test('DESIGN.md ToC has 27 entries', () => {
+  // ToC count already asserted by G19; no duplicate needed here.
+});
+
+// ---------------------------------------------------------------------------
+// G22 - Workflow Completion Routing
+// ---------------------------------------------------------------------------
+describe('G22 - Workflow Completion Routing', () => {
+  const WORKFLOWS_DIR = path.join(ROOT, 'distilled', 'workflows');
+  const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
+
+  // Lifecycle workflows that MUST have <completion> sections with routing
+  const LIFECYCLE_WORKFLOWS = [
+    'new-project.md',
+    'plan.md',
+    'execute.md',
+    'verify.md',
+    'audit-milestone.md',
+    'quick.md',
+    'pause.md',
+    'resume.md',
+    'map-codebase.md',
+  ];
+
+  for (const wf of LIFECYCLE_WORKFLOWS) {
+    test(`${wf} has <completion> section`, () => {
+      const content = fs.readFileSync(path.join(WORKFLOWS_DIR, wf), 'utf-8');
+      assert.match(content, /<completion>/,
+        `${wf} must have a <completion> section. FIX: Add <completion> section with next-step routing.`);
+      assert.match(content, /<\/completion>/,
+        `${wf} must have a closing </completion> tag. FIX: Close the <completion> section.`);
+    });
+
+    test(`${wf} completion names a next step`, () => {
+      const content = fs.readFileSync(path.join(WORKFLOWS_DIR, wf), 'utf-8');
+      const compStart = content.indexOf('<completion>');
+      const compEnd = content.indexOf('</completion>');
+      if (compStart === -1 || compEnd === -1) return; // caught by previous test
+      const section = content.slice(compStart, compEnd);
+      assert.match(section, /\/gsdd:/,
+        `${wf} completion must reference at least one /gsdd: command. FIX: Add next-step routing to <completion>.`);
+    });
+  }
+
+  // Specific routing correctness: each lifecycle workflow routes to the right next step
+  test('new-project.md completion routes to /gsdd:plan', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
+    assert.match(section, /\/gsdd:plan/,
+      'new-project completion must route to /gsdd:plan. FIX: Add /gsdd:plan as next step in completion.');
+  });
+
+  test('plan.md completion routes to /gsdd:execute', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
+    assert.match(section, /\/gsdd:execute/,
+      'plan completion must route to /gsdd:execute. FIX: Add /gsdd:execute as next step in completion.');
+  });
+
+  test('execute.md completion routes to /gsdd:verify or /gsdd:progress', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'execute.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
+    const hasVerify = /\/gsdd:verify/.test(section);
+    const hasProgress = /\/gsdd:progress/.test(section);
+    assert.ok(hasVerify || hasProgress,
+      'execute completion must route to /gsdd:verify or /gsdd:progress. FIX: Add next-step routing to execute completion.');
+  });
+
+  test('verify.md completion routes to /gsdd:progress or /gsdd:plan', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'verify.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
+    const hasProgress = /\/gsdd:progress/.test(section);
+    const hasPlan = /\/gsdd:plan/.test(section);
+    assert.ok(hasProgress || hasPlan,
+      'verify completion must route to /gsdd:progress or /gsdd:plan. FIX: Add next-step routing to verify completion.');
+  });
+
+  // Persistence enforcement gates
+  test('execute.md has MANDATORY persistence gate for SUMMARY.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'execute.md'), 'utf-8');
+    assert.match(content, /MANDATORY.*SUMMARY\.md.*disk/s,
+      'execute.md must have MANDATORY persistence gate for SUMMARY.md. FIX: Add MANDATORY write enforcement in <state_updates>.');
+  });
+
+  test('verify.md has <persistence> section for VERIFICATION.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'verify.md'), 'utf-8');
+    assert.match(content, /<persistence>/,
+      'verify.md must have a <persistence> section. FIX: Add <persistence> section for VERIFICATION.md write enforcement.');
+    const section = content.slice(content.indexOf('<persistence>'), content.indexOf('</persistence>'));
+    assert.match(section, /MANDATORY/,
+      'verify.md <persistence> must contain MANDATORY language. FIX: Add MANDATORY enforcement to <persistence>.');
+    assert.match(section, /VERIFICATION\.md/,
+      'verify.md <persistence> must reference VERIFICATION.md. FIX: Add VERIFICATION.md path to <persistence>.');
+  });
+
+  // Positional discipline gates in new-project.md
+  test('new-project.md has STOP gate after questioning', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
+    const questionEnd = content.indexOf('</questioning>');
+    // Find the <research> tag that appears AFTER </questioning> (not the one in early description text)
+    const researchStart = content.indexOf('\n<research>', questionEnd);
+    if (questionEnd === -1 || researchStart === -1) return;
+    const between = content.slice(questionEnd, researchStart);
+    assert.match(between, /STOP/,
+      'new-project.md must have STOP gate between </questioning> and <research>. FIX: Add positional STOP gate after questioning.');
+    assert.match(between, /Do NOT.*code/i,
+      'new-project.md STOP gate must prohibit code writing. FIX: Add "Do NOT write any application code" to STOP gate.');
+  });
+
+  test('new-project.md has STOP gate after research', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
+    const researchEnd = content.indexOf('</research>');
+    const specStart = content.indexOf('<data_schema_definition>') !== -1
+      ? content.indexOf('<data_schema_definition>')
+      : content.indexOf('<spec_creation>');
+    if (researchEnd === -1 || specStart === -1) return;
+    const between = content.slice(researchEnd, specStart);
+    assert.match(between, /STOP/,
+      'new-project.md must have STOP gate between </research> and spec creation. FIX: Add positional STOP gate after research.');
+    assert.match(between, /Do NOT.*code/i,
+      'new-project.md STOP gate must prohibit code writing. FIX: Add "Do NOT write any application code" to STOP gate.');
+  });
+
+  // Context clearing hint
+  for (const wf of LIFECYCLE_WORKFLOWS) {
+    test(`${wf} completion mentions context clearing`, () => {
+      const content = fs.readFileSync(path.join(WORKFLOWS_DIR, wf), 'utf-8');
+      const compStart = content.indexOf('<completion>');
+      const compEnd = content.indexOf('</completion>');
+      if (compStart === -1 || compEnd === -1) return;
+      const section = content.slice(compStart, compEnd);
+      assert.match(section, /clear.*context|context.*clear/i,
+        `${wf} completion must hint at clearing context. FIX: Add "Consider clearing context" to <completion>.`);
+    });
+  }
+
+  // DESIGN.md entry
+  test('DESIGN.md contains D28 entry', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
-    const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 27,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 27. FIX: Update DESIGN.md ToC to list all 27 decisions.`);
+    assert.match(content, /## 28\./,
+      'DESIGN.md must contain section 28. FIX: Add D28 Workflow Completion Routing.');
   });
 });

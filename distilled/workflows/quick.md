@@ -162,3 +162,26 @@ Report to the user:
 - [ ] `LOG.md` updated with task row
 - [ ] User informed of completion status
 </success_criteria>
+
+<completion>
+Report to the user what was accomplished, then present the next step:
+
+---
+**Completed:** Quick task #{next_num} — {description}
+
+Created:
+- `.planning/quick/{next_num}-{slug}/{next_num}-PLAN.md`
+- `.planning/quick/{next_num}-{slug}/{next_num}-SUMMARY.md`
+- `.planning/quick/{next_num}-{slug}/{next_num}-VERIFICATION.md` (if verifier enabled)
+- Updated `.planning/quick/LOG.md`
+
+**Next step:** `/gsdd:progress` — check project status and continue phase work
+
+Also available:
+- `/gsdd:quick` — run another quick task
+- `/gsdd:plan` — plan the next phase
+- `/gsdd:pause` — save context for later if stopping work
+
+Consider clearing context before starting the next workflow for best results.
+---
+</completion>

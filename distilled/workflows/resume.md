@@ -136,3 +136,17 @@ Deleting before routing ensures a failed or interrupted workflow does not leave 
 - [ ] Options presented and user selection waited for
 - [ ] Checkpoint cleaned up after successful routing
 </success_criteria>
+
+<completion>
+After the user selects their action and the checkpoint is cleaned up, hand off to the selected workflow.
+
+Present to the user before dispatching:
+
+---
+**Resuming:** [selected action description]
+
+Consider clearing context before starting the next workflow for best results.
+---
+
+Then dispatch to the selected `/gsdd:*` workflow.
+</completion>
