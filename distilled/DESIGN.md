@@ -1325,7 +1325,7 @@ The approach explorer needs two capabilities with opposite context requirements:
 - **Conversation** needs the main context (for user interaction)
 - **Research** generates thousands of tokens of raw content the conversation doesn't need
 
-Isolating research in subagents and returning compressed summaries follows the Compress and Isolate patterns from context engineering literature. The main context budget stays manageable: ~1000 tokens orchestration + ~1600 tokens research summaries (4 areas × ~400) + ~4000 tokens conversation + ~500 tokens APPROACH.md = ~7100 tokens.
+Isolating research in subagents and returning compressed summaries follows the Compress and Isolate patterns from context engineering literature. The main context budget stays manageable: ~1000 tokens orchestration + ~2400 tokens research summaries (4 areas × ~600) + ~4000 tokens conversation + ~500 tokens APPROACH.md = ~7900 tokens. The 600-token budget gives research subagents room for the structured format (Name/Pro/Con/Source) plus recommendation reasoning and enough project-specific context that the main agent can handle follow-up questions without re-querying the subagent.
 
 **Evidence:**
 

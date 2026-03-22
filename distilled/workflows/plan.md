@@ -293,7 +293,7 @@ The conversation with the user runs inline in the main context. For each technic
 
    Search documentation and web for current best practices.
 
-   Return a structured summary (under 400 tokens):
+   Return a structured summary (under 600 tokens):
    For each of 2-3 viable approaches:
    - Name
    - Pro (specific to this project)
