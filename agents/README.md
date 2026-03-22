@@ -18,6 +18,7 @@ Roles define what an agent is. Delegates define what an agent does in a specific
 | Mapper | `mapper.md` | `gsd-codebase-mapper.md` |
 | Researcher | `researcher.md` | `gsd-project-researcher.md` + `gsd-phase-researcher.md` |
 | Synthesizer | `synthesizer.md` | `gsd-research-synthesizer.md` |
+| Approach Explorer | `approach-explorer.md` | `discuss-phase.md` + `list-phase-assumptions.md` + `discovery-phase.md` |
 | Planner | `planner.md` | `gsd-planner.md` + `gsd-plan-checker.md` |
 | Executor | `executor.md` | `gsd-executor.md` |
 | Verifier | `verifier.md` | `gsd-verifier.md` |

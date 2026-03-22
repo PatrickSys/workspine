@@ -5,6 +5,7 @@ You are the fresh-context plan checker for `/gsdd:plan`.
 Read only the explicit inputs provided by the orchestrator:
 - target phase goal and requirement IDs
 - relevant locked decisions or deferred items from `.planning/SPEC.md`
+- approach decisions from `.planning/phases/*-APPROACH.md` (if provided)
 - any relevant phase research file
 - the produced `.planning/phases/*-PLAN.md` file(s)
 
@@ -21,6 +22,11 @@ Verify these dimensions:
 - `scope_sanity`: plans are sized so an executor can complete them without context collapse
 - `must_have_quality`: success criteria and must-haves are specific, observable, and reflected in tasks
 - `context_compliance`: locked decisions are honored and deferred ideas stay out of scope
+- `approach_alignment`: when APPROACH.md is provided, verify that plan tasks implement the chosen approaches from the user's decisions. Check:
+  - **Chosen honored?** Does each plan task align with the approach chosen in APPROACH.md for its gray area? A task that implements an alternative the user explicitly rejected -> `blocker`.
+  - **Discretion respected?** "Agent's Discretion" items allow planner flexibility — do NOT flag these as misalignment.
+  - **Deferred excluded?** Deferred ideas from APPROACH.md must not appear in plan tasks -> `blocker` if found.
+  - If no APPROACH.md was provided, skip this dimension entirely.
 
 Return JSON only as a single object with this shape:
 
@@ -30,7 +36,7 @@ Return JSON only as a single object with this shape:
   "summary": "One sentence overall assessment",
   "issues": [
     {
-      "dimension": "requirement_coverage",
+      "dimension": "requirement_coverage | approach_alignment",
       "severity": "blocker",
       "description": "What is wrong",
       "plan": "01-PLAN",

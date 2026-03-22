@@ -1,6 +1,6 @@
 # GSDD Role Distillation Ledger
 
-Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with keep/strip/why rationale. This ledger documents why each role exists in its current form and what GSD content was distilled or merged.
+Evidence map from each of the 10 canonical GSDD roles to their GSD sources, with keep/strip/why rationale. This ledger documents why each role exists in its current form and what GSD content was distilled or merged.
 
 ---
 
@@ -54,7 +54,7 @@ Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with 
 - Explicit "Scope" table showing scope × trigger × focus × output location
 - Clear statement: "Same algorithm, different scope. The scope is a context input, not a different role."
 
-**Rationale:** The GSD original had two roles (project and phase researcher) that followed the identical algorithm but with a scope parameter. GSDD merged them into one canonical role taking scope as input, reducing the role count from 11 to 9 while preserving all leverage. This is the clean merger mentioned in D2.
+**Rationale:** The GSD original had two roles (project and phase researcher) that followed the identical algorithm but with a scope parameter. GSDD merged them into one canonical role taking scope as input, reducing the role count from 11 to 9 (later 10 with approach-explorer in D29) while preserving all leverage. This is the clean merger mentioned in D2.
 
 ---
 
@@ -264,6 +264,50 @@ Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with 
 
 ---
 
+## 10. Approach-Explorer
+
+**Canonical role:** `agents/approach-explorer.md`
+
+**GSD sources:** `workflows/discuss-phase.md` + `workflows/list-phase-assumptions.md` + `workflows/discovery-phase.md` (merged into new role)
+
+**Merger type:** New role from 2 GSD sources (discuss-phase + list-phase-assumptions) with thematic input from discovery-phase
+
+**Kept from GSD:**
+- Gray area identification with 5 domain types (SEE/CALL/RUN/READ/ORGANIZED) from discuss-phase
+- Scope guardrail: phase boundary is fixed, deferred ideas captured not acted on
+- 5-dimension assumption surfacing (technical approach, implementation order, scope boundaries, risks, dependencies) with confidence levels from list-phase-assumptions
+- Deferred ideas capture from discuss-phase
+- Adaptive area-by-area deep questioning from discuss-phase (GSD used 4-question batches; GSDD uses adaptive convergence)
+
+Note: `discovery-phase.md` contributed the concept of pre-planning research but the mechanism is entirely different — GSD used 3-level depth workflows (Quick/Standard/Deep) as a separate invocation; GSDD uses per-gray-area research subagents embedded in the plan workflow. This is thematic inspiration, not a structural merger.
+
+**Stripped from GSD:**
+- `gsd-tools.cjs` dependencies and STATE.md updates
+- Vendor-specific commit steps, path conventions, and "Claude" references
+- CONTEXT.md output format (replaced with structured APPROACH.md)
+- Separate workflow invocation (absorbed into plan workflow as inline + research subagent hybrid)
+- Rigid 4-question batched loop (replaced with adaptive questioning until decision converges)
+
+**Gained in GSDD:**
+- XML semantic structure matching planner pattern (`<role>`, `<algorithm>`, `<examples>`, etc.)
+- 3 few-shot conversation examples (taste decision, technical decision, hybrid + delegation)
+- Gray area classification: taste (ask directly), technical (research first), hybrid (both)
+- Pre-question research per gray area via isolated research subagents returning compressed summaries
+- Self-check quality gate before writing APPROACH.md
+- Intermediate decision persistence (protect against context limits)
+- JIT context loading with extraction guidance (read ONLY locked decisions from SPEC, ONLY phase goal from ROADMAP)
+- Structured approach comparison with trade-offs
+- File persistence to `{padded_phase}-APPROACH.md` using dedicated template
+- Plan-checker integration via new `approach_alignment` verification dimension
+- Config toggle (`workflow.discuss: true|false`) for optional skip
+- Downstream consumer contract: planner reads locked decisions, plan-checker verifies alignment
+- "Agent's Discretion" explicit marking for areas where user delegates choice (vendor-neutral)
+- Hybrid architecture: conversation inline (main context) + research in subagents. Native agent kept as optimization.
+
+**Rationale:** GSDD's initial distillation dropped GSD's discuss-phase and list-phase-assumptions entirely, removing genuine leverage: the planner converges on a single approach without user input, explores no alternatives, and surfaces no assumptions. The approach explorer recovers this phase-level user alignment by combining GSD's discuss-phase interaction pattern with comparative research. Ground-up rewrite (D29) applied 5 external resources on context engineering, meta-prompting, and agent skill design to produce a prompt-engineered role contract with proper XML structure, examples, adaptive conversation, and hybrid research isolation.
+
+---
+
 ## Summary: Merger Table (from D2)
 
 | Canonical role | Absorbs from GSD | Merger criteria |
@@ -277,8 +321,9 @@ Evidence map from each of the 9 canonical GSDD roles to their GSD sources, with 
 | `verifier.md` | `gsd-verifier.md` | Kept-as-is; cross-phase audit extracted to integration-checker |
 | `integration-checker.md` | `gsd-integration-checker.md` | Extracted as standalone; recovered in PR #12, hardened in PR #15 |
 | `debugger.md` | `gsd-debugger.md` | Kept-as-is; no changes |
+| `approach-explorer.md` | `discuss-phase.md` + `list-phase-assumptions.md` + `discovery-phase.md` | New role from 3 GSD workflow sources |
 
-**Result:** 11 GSD roles → 9 GSDD canonical roles (2 mergers: researcher, planner). 1 extraction: integration-checker moved from embedded to standalone. Total leverage preserved, role count reduced.
+**Result:** 11 GSD roles → 10 GSDD canonical roles (2 mergers: researcher, planner). 1 extraction: integration-checker moved from embedded to standalone. 1 addition: approach-explorer recovers discuss-phase leverage with research enhancement. Total leverage preserved and extended.
 
 ---
 
@@ -304,3 +349,71 @@ This ledger is updated when:
 3. New evidence surfaces that changes the distillation rationale (update with citation)
 
 Do not add speculative content. Every entry must reference actual source files and PRs that contain evidence.
+
+---
+
+## Role Contract Design Principles
+
+Cross-source best practices applied to GSDD role contracts, audited against 6 external resources. These principles govern how role contracts should be written and revised. Ranked by impact.
+
+### Architecture-Level (highest leverage)
+
+| Principle | What It Means | Source | GSDD Implementation |
+|-----------|--------------|--------|---------------------|
+| **Context isolation** | Research and heavy reads go in subagents; only compressed summaries enter the main context | Anthropic CE: "sub-agents perform deep technical work, returning condensed summaries" | Approach explorer research subagents return ~1000-token summaries; plan-checker runs in fresh context |
+| **JIT context loading** | Never say "read everything." Specify what to extract from each file | Anthropic CE: "maintain lightweight identifiers and use these references to dynamically load data into context at runtime" | `<input_contract>` with extraction guidance: "From SPEC.md read ONLY locked decisions" |
+| **Intermediate persistence** | For long interactions, write confirmed state to disk incrementally | Anthropic CE: "Agent regularly writes notes persisted to memory outside of the context window" | Approach explorer writes decisions to disk as they're confirmed during conversation |
+| **Progressive disclosure** | Don't front-load all context; let agents discover incrementally | Anthropic CE: "agents can assemble understanding layer by layer" | Gray areas presented individually; research loaded per area on demand |
+
+### Prompt Structure (medium leverage)
+
+| Principle | What It Means | Source | GSDD Implementation |
+|-----------|--------------|--------|---------------------|
+| **XML semantic structure** | Use XML tags to separate role, instructions, examples, inputs, outputs, anti-patterns | Anthropic Claude: "XML tags help Claude parse complex prompts unambiguously" | All roles use `<role>`, most use `<quality_guarantees>`, `<anti_patterns>`. Approach-explorer adds `<algorithm>`, `<examples>`, `<scope_guardrail>` |
+| **Anti-patterns early** | Place "don't do this" instructions near the top, after role definition | Anthropic CE: critical information at the beginning gets more attention. NeoLab: early placement for high attention weight | `<anti_patterns>` placed immediately after `<role>` in all roles that have them |
+| **Few-shot examples** | Show the pattern of interaction, not just output format | Anthropic Claude: "3-5 examples for best results." Examples in `<example>` tags | Approach-explorer: 3 examples. Other roles use inline format examples within algorithm sections |
+| **Self-check before output** | Run an explicit checklist before producing the final artifact | OpenAI: "verification loops." Anthropic Claude: "Ask Claude to self-check" | Approach-explorer step 7; planner `<plan_self_check>`; executor completion verification |
+| **Scope boundaries with heuristics** | Don't just list in/out of scope — give the agent a judgment rule | Novel, validated in approach-explorer | "Does this clarify implementation within the phase, or does it add a capability that could be its own phase?" |
+
+### Language & Tone (lower leverage, still matters)
+
+| Principle | What It Means | Source | GSDD Implementation |
+|-----------|--------------|--------|---------------------|
+| **Authority language: intentional leverage** | Anthropic Claude 4.6 warns "CRITICAL:" can overtrigger on newer models. NeoLab persuasion research found imperative language doubled compliance (33%→72%). GSDD decision: **keep CRITICAL: for mandatory initial-read** — this is a genuine compliance-critical instruction where skipping it causes cascading failures. Use normal language for non-critical instructions. | Anthropic Claude 4.6 vs. NeoLab persuasion research (direct conflict). GSDD sides with NeoLab for this specific use case | `CRITICAL: Mandatory initial read` kept in all 7 roles. `NEVER` kept for security (mapper secret protection). Normal language used for algorithm steps, scope guidance, and quality rules |
+| **Tell what to do, not just what not to do** | Anti-patterns alone are insufficient; pair with positive instructions | Anthropic Claude: "Tell Claude what to do instead of what not to do" | Every role has both `<anti_patterns>` AND positive algorithm/process sections |
+| **Context for instructions** | Explain WHY a rule exists so the agent can generalize | Anthropic Claude: "Providing context or motivation behind your instructions helps Claude better understand your goals" | Research quality rules explain WHY: "Training data is a hypothesis. Verify before asserting." |
+
+### Novel Patterns (not from any source)
+
+These patterns emerged from GSDD's specific needs and were validated through implementation:
+
+| Pattern | What It Does | Where Used |
+|---------|-------------|------------|
+| **Taste/Technical/Hybrid classification** | Adapts research depth to decision type; taste needs no research, technical does | Approach-explorer step 2 |
+| **Research quality rules** | "One viable option is valid" / "Don't manufacture trade-offs" | Approach-explorer step 3 |
+| **5-dimension assumption surfacing** | Forces transparency about inferences vs. confirmed facts, with confidence levels | Approach-explorer step 6 |
+| **Agent's Discretion delegation** | User can explicitly say "you decide" — reduces fatigue on low-stakes choices | Approach-explorer step 4, planner `<approach_decisions>` |
+| **Domain classification table** | SEE/CALL/RUN/READ/ORGANIZED determines gray area focus per phase type | Approach-explorer step 2 |
+| **Degrees of freedom mapping** | Taste=high freedom, technical=low freedom (research-constrained). Maps to NeoLab's concept | Approach-explorer classification system |
+
+### Source Ranking
+
+Sources are ranked by soundness for agent prompt design. Higher-ranked sources take precedence when sources disagree.
+
+1. **Anthropic — Effective Context Engineering for AI Agents** — Architecture-level patterns with real production evidence (Claude Code, Pokémon). Most authoritative for context window management, sub-agent design, and information flow.
+2. **Anthropic — Claude Prompting Best Practices (Claude 4.6)** — Model-specific, up-to-date. Critical for behavioral warnings (overtriggering, subagent overuse). Supersedes general guidance for Claude-targeted agents.
+3. **OpenAI — Prompt Guidance (GPT-5.4)** — Deepest general-purpose reference. Novel concepts: completeness contracts, verification loops, tool persistence rules, empty result recovery. Model-specific but patterns transfer.
+4. **NeoLab Context Engineering Kit** — Good synthesis. "Degrees of Freedom" concept is useful. Persuasion research contradicts Anthropic on authority language (trust Anthropic for Claude).
+5. **OpenAI Cookbook — Meta-Prompting** — Narrow scope: LLM-as-judge evaluation, iterative prompt refinement. Useful technique, not a framework.
+6. **JBurlison/MetaPrompts** — Structural skeleton (agent/skill/prompt/instruction hierarchy). Minimal actual guidance on prompt quality.
+
+### Key Discrepancy Resolution
+
+When sources conflict, these resolutions apply:
+
+| Conflict | Resolution | Why |
+|----------|------------|-----|
+| Authority language ("YOU MUST" vs. normal) | Keep CRITICAL: for mandatory initial-read (compliance-critical). Use normal language elsewhere | NeoLab's doubled-compliance research applies to instructions where skipping causes cascading failures. Anthropic's overtriggering concern applies to general guidance, not load-bearing context gates |
+| Example count (2 vs. 3-5) | Target 3+ for conversational agents; inline format examples are sufficient for structured output agents | Anthropic's 3-5 recommendation is general; interactive roles benefit more than output-only roles |
+| Subagent return size (200 vs. 1000-2000 tokens) | Use 300-500 tokens | Anthropic's 1000-2000 is upper bound; 200 was too tight for structured approach summaries with trade-offs |
+| "Don't invent alternatives" vs. "try fallback strategies" | Keep "don't invent" for approach research; use fallbacks for information retrieval | These solve different problems: manufacturing fake options is worse than acknowledging one viable path |

@@ -391,10 +391,10 @@ Switch to budget profile: `gsdd models profile budget`. Disable research and pla
       PLAN.md               # Quick task plan
       SUMMARY.md            # Quick task outcome
   templates/
-    delegates/              # 10 delegate instruction files
+    delegates/              # 11 delegate instruction files
   LOG.md                    # Quick task log
 
-agents/                     # 9 canonical role contracts
+agents/                     # 10 canonical role contracts
 .agents/skills/gsdd-*/      # Portable workflow entrypoints (open standard)
 ```
 

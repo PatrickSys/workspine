@@ -32,7 +32,7 @@ GSDD is a distilled fork of GSD. It preserves the high-leverage parts of long-ho
 - **Milestone audit** — cross-phase integration, requirements coverage, E2E flows
 - **Session management** — pause work with checkpoint, resume with context restoration and routing
 
-What it strips: GSD's broader operator surface (32 workflows, 11 agents, discovery modes, sprint ceremony, a settings flow, and additional operator ergonomics). GSDD has 10 workflows and 9 roles.
+What it strips: GSD's broader operator surface (32 workflows, 11 agents, discovery modes, sprint ceremony, a settings flow, and additional operator ergonomics). GSDD has 10 workflows and 10 roles.
 
 **Target user:** Developer or small team that wants a spec-driven long-horizon kernel, not full operator comfort.
 
@@ -250,9 +250,9 @@ Workflows are agent skills or commands, not plain shell utilities. How you invok
 
 ## Architecture
 
-### Roles (9 canonical)
+### Roles (10 canonical)
 
-GSDD consolidates GSD's agent surface into 9 roles with durable contracts:
+GSDD consolidates GSD's agent surface into 10 roles with durable contracts:
 
 | Role | Responsibility |
 |------|---------------|
@@ -271,7 +271,7 @@ GSDD consolidates GSD's agent surface into 9 roles with durable contracts:
 - **Role contracts** (`agents/*.md`) — durable, contain the full behavioral specification
 - **Delegates** (`distilled/templates/delegates/*.md`) — thin wrappers that reference roles and provide task-specific context
 
-10 delegates: 4 mapper, 4 researcher, 1 synthesizer, 1 plan-checker. Workflows use `<delegate>` blocks to dispatch work. For detailed GSD-to-GSDD role distillation rationale, see [`agents/DISTILLATION.md`](agents/DISTILLATION.md).
+11 delegates: 4 mapper, 4 researcher, 1 synthesizer, 1 plan-checker, 1 approach-explorer. Workflows use `<delegate>` blocks to dispatch work. For detailed GSD-to-GSDD role distillation rationale, see [`agents/DISTILLATION.md`](agents/DISTILLATION.md).
 
 ### Adapter Architecture
 
@@ -410,11 +410,11 @@ For detailed troubleshooting and recovery procedures, see the [User Guide](docs/
 
 ## Design Decisions
 
-GSDD makes 28 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+GSDD makes 29 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't
-- **Agent consolidation** — 9 roles from GSD's 11, with explicit reduced-assurance mode when independent checking isn't available
+- **Agent consolidation** — 10 roles from GSD's 11, with explicit reduced-assurance mode when independent checking isn't available
 - **Adapter generation over conversion** — generate vendor-specific files from vendor-agnostic markdown instead of converting from Claude-first
 - **Advisory git** — repo conventions over framework defaults
 - **Context isolation** — summaries up, documents to disk
@@ -436,8 +436,8 @@ Structural contracts that prevent drift between roles, delegates, workflows, and
 
 | Suite | What it guards |
 |-------|---------------|
-| **I1** | Delegate-role reference integrity — 10 delegates resolve to existing role contracts |
-| **I2** | Role section structure — 9 roles have role def, scope, output format, success criteria |
+| **I1** | Delegate-role reference integrity — 11 delegates resolve to existing role contracts |
+| **I2** | Role section structure — 10 roles have role def, scope, output format, success criteria |
 | **I3** | Delegate thinness — no leaked role-contract sections in delegates |
 | **I3-gate** | New-project approval gates — required human checkpoints present |
 | **I4** | Workflow references — 10 workflows, all delegate/role refs resolve |

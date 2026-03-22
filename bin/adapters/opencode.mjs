@@ -111,6 +111,19 @@ function detectOpenCodeConfiguredModel(cwd) {
   return configuredModel;
 }
 
+function renderOpenCodeApproachExplorer(delegateContent, modelId = null) {
+  const modelLine = modelId ? `model: ${modelId}\n` : '';
+  return `---
+description: Explores implementation approaches for a phase and aligns with the user through structured questioning before planning begins.
+mode: agent
+${modelLine}tools:
+  bash: false
+---
+
+${delegateContent.trim()}
+`;
+}
+
 function renderOpenCodePlanChecker(delegateContent, modelId = null) {
   const modelLine = modelId ? `model: ${modelId}\n` : '';
   return `---
@@ -149,21 +162,28 @@ Native OpenCode adapter rule:
 Execution flow:
 1. Read \`.planning/SPEC.md\`, \`.planning/ROADMAP.md\`, \`.planning/config.json\`, relevant phase research, and any existing phase plan files.
 2. Resolve the target phase from the command arguments. If no phase is provided, choose the first roadmap phase that is not complete.
-3. Produce the initial phase plan according to \`.agents/skills/gsdd-plan/SKILL.md\`.
-4. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance.
-5. If \`workflow.planCheck: true\`, invoke the hidden \`gsdd-plan-checker\` subagent with fresh context.
-6. Pass only explicit inputs to the checker:
+3. **Approach exploration** (before planning):
+   a. Check \`.planning/config.json\` for \`workflow.discuss\`. If \`false\` or missing, skip to step 4 and report \`reduced_alignment\` in the summary.
+   b. Check if \`{phase_dir}/{padded_phase}-APPROACH.md\` exists. If it does, offer the user: "Use existing" / "Update it" / "View it". If "Use existing", load decisions and skip to step 4.
+   c. If no APPROACH.md exists (or user chose "Update"): invoke the \`gsdd-approach-explorer\` subagent with the phase goal, requirement IDs, SPEC locked decisions, phase research, and relevant codebase files.
+   d. The explorer runs a GSD-style interactive conversation with the user (gray areas, research, deep-dive questions, assumptions) and writes APPROACH.md.
+   e. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
+4. Produce the initial phase plan according to \`.agents/skills/gsdd-plan/SKILL.md\`. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
+5. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance.
+6. If \`workflow.planCheck: true\`, invoke the hidden \`gsdd-plan-checker\` subagent with fresh context.
+7. Pass only explicit inputs to the checker:
    - target phase goal and requirement IDs
    - relevant locked decisions / deferred items from \`.planning/SPEC.md\`
+   - approach decisions from \`.planning/phases/*-APPROACH.md\` (if exists)
    - relevant phase research file(s)
    - produced \`.planning/phases/*-PLAN.md\` file(s)
-7. Require the checker to return a single JSON object with this shape:
+8. Require the checker to return a single JSON object with this shape:
    {
      "status": "passed",
      "summary": "One sentence overall assessment",
      "issues": [
        {
-         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance",
+         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | approach_alignment",
          "severity": "blocker | warning",
          "description": "What is wrong",
          "plan": "01-PLAN",
@@ -173,12 +193,13 @@ Execution flow:
      ]
    }
    Status must be either "passed" or "issues_found".
-8. If the checker returns \`passed\`, finish and summarize.
-9. If the checker returns \`issues_found\`, revise the existing plan files only where needed, then run the checker again.
-10. Maximum 3 checker cycles total. If blockers remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
+9. If the checker returns \`passed\`, finish and summarize.
+10. If the checker returns \`issues_found\`, revise the existing plan files only where needed, then run the checker again.
+11. Maximum 3 checker cycles total. If blockers remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
 
 Return a concise orchestration summary:
 - target phase
+- whether approach exploration ran (and alignment level: full | reduced_alignment | skipped)
 - whether native plan checking ran
 - checker cycle count
 - final result: passed | reduced_assurance | escalated
@@ -210,7 +231,8 @@ function createOpenCodeAdapter({
     },
     generate() {
       const config = loadProjectModelConfig(cwd);
-      const modelId = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
+      const checkerModelId = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
+      const explorerModelId = getRuntimeModelOverride(config, 'opencode', 'approach-explorer');
       mkdirSync(commandsDir, { recursive: true });
       for (const workflow of workflows) {
         const content = workflow.name === 'gsdd-plan'
@@ -225,7 +247,11 @@ function createOpenCodeAdapter({
       mkdirSync(agentsDir, { recursive: true });
       writeFileSync(
         join(agentsDir, 'gsdd-plan-checker.md'),
-        renderOpenCodePlanChecker(getDelegateContent('plan-checker.md'), modelId)
+        renderOpenCodePlanChecker(getDelegateContent('plan-checker.md'), checkerModelId)
+      );
+      writeFileSync(
+        join(agentsDir, 'gsdd-approach-explorer.md'),
+        renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId)
       );
     },
     summary(action) {

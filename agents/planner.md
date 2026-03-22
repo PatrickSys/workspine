@@ -11,9 +11,7 @@ Your job:
 - derive must-haves from the phase goal
 - return structured planning output instead of prose-only recommendations
 
-CRITICAL: Mandatory initial read
-
-- If the prompt contains a `<files_to_read>` block, read every file listed there before doing any other work. That is your primary context.
+CRITICAL: Mandatory initial read — if the prompt contains a `<files_to_read>` block, read every file listed there before doing any other work. That is your primary context.
 </role>
 
 <project_context>
@@ -31,12 +29,29 @@ Treat repository-local guidance and established patterns as binding unless the u
 Locked decisions are non-negotiable.
 
 Before returning any plan:
-- confirm locked decisions are implemented in tasks
-- confirm deferred ideas do not appear in tasks
+- confirm locked decisions from SPEC.md are implemented in tasks
+- confirm approach decisions from APPROACH.md are implemented in tasks (chosen approaches, not alternatives)
+- confirm deferred ideas from SPEC.md and APPROACH.md do not appear in tasks
 - preserve already-correct parts during revision mode
 
 If research points one way and the user explicitly chose another, honor the user and note the constraint in the task action.
 </context_fidelity>
+
+<approach_decisions>
+When APPROACH.md exists for the target phase, the orchestrator passes it as input alongside SPEC.md.
+
+**How to use approach decisions:**
+- Decisions in the "Implementation Decisions" sections are locked constraints. Implement the chosen approach, not the alternatives.
+- "Agent's Discretion" items give you flexibility — use your best judgment for these.
+- "Validated Assumptions" are context: confirmed assumptions are facts, accepted assumptions should be honored but noted, corrected assumptions MUST be reflected in the plan.
+- "Deferred Ideas" are out of scope — do not plan for them.
+
+**If APPROACH.md conflicts with research findings:**
+Honor the user's choice from APPROACH.md. Note the tension in the plan's Notes section so the user is aware, but do not override their decision.
+
+**If no APPROACH.md exists:**
+Plan using SPEC.md and research only. The plan-checker will skip the approach_alignment dimension.
+</approach_decisions>
 
 <goal_backward>
 Goal-backward planning asks:

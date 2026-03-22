@@ -16,7 +16,7 @@ export const DEFAULT_GIT_PROTOCOL = {
 };
 
 export const VALID_MODEL_PROFILES = ['quality', 'balanced', 'budget'];
-export const PORTABLE_AGENT_IDS = ['plan-checker'];
+export const PORTABLE_AGENT_IDS = ['plan-checker', 'approach-explorer'];
 export const MODEL_RUNTIME_IDS = ['claude', 'opencode', 'codex'];
 export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\/:@-]+$/;
 
@@ -30,7 +30,7 @@ export function buildDefaultConfig({ autoAdvance = false } = {}) {
     parallelization: true,
     commitDocs: true,
     modelProfile: 'balanced',
-    workflow: { research: true, planCheck: true, verifier: true },
+    workflow: { research: true, discuss: false, planCheck: true, verifier: true },
     gitProtocol: { ...DEFAULT_GIT_PROTOCOL },
     initVersion: 'v1.1',
   };
@@ -157,9 +157,11 @@ export function cmdModels(...modelArgs) {
 function cmdModelsShow() {
   const cwd = process.cwd();
   const config = loadProjectModelConfig(cwd);
-  const ocOverride = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
+  const ocCheckerOverride = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
+  const ocExplorerOverride = getRuntimeModelOverride(config, 'opencode', 'approach-explorer');
   const ocDetected = detectOpenCodeConfiguredModel(cwd);
-  const codexOverride = getRuntimeModelOverride(config, 'codex', 'plan-checker');
+  const codexCheckerOverride = getRuntimeModelOverride(config, 'codex', 'plan-checker');
+  const codexExplorerOverride = getRuntimeModelOverride(config, 'codex', 'approach-explorer');
   output({
     modelProfile: normalizeModelProfile(config.modelProfile),
     agentModelProfiles: config.agentModelProfiles || {},
@@ -172,26 +174,41 @@ function cmdModelsShow() {
           agentId: 'plan-checker',
           profileMap: CLAUDE_MODEL_PROFILES,
         }),
+        'approach-explorer': getRuntimeAgentModelState({
+          config,
+          runtime: 'claude',
+          agentId: 'approach-explorer',
+          profileMap: CLAUDE_MODEL_PROFILES,
+        }),
       },
       opencode: {
         'plan-checker': {
-          mode: ocOverride ? 'override' : 'inherit',
-          model: ocOverride,
+          mode: ocCheckerOverride ? 'override' : 'inherit',
+          model: ocCheckerOverride,
+          runtimeDetectedModel: ocDetected,
+        },
+        'approach-explorer': {
+          mode: ocExplorerOverride ? 'override' : 'inherit',
+          model: ocExplorerOverride,
           runtimeDetectedModel: ocDetected,
         },
       },
       codex: {
         'plan-checker': {
-          mode: codexOverride ? 'override' : 'inherit',
-          model: codexOverride,
+          mode: codexCheckerOverride ? 'override' : 'inherit',
+          model: codexCheckerOverride,
+        },
+        'approach-explorer': {
+          mode: codexExplorerOverride ? 'override' : 'inherit',
+          model: codexExplorerOverride,
         },
       },
     },
     detectedRuntimeModels: {
       opencode: ocDetected,
     },
-    hints: !ocOverride ? {
-      opencode: 'OpenCode currently inherits its runtime model unless you set an explicit override. Use gsdd models set --runtime opencode --agent plan-checker --model <provider/model-id> to inject an explicit checker model.',
+    hints: (!ocCheckerOverride || !ocExplorerOverride) ? {
+      opencode: 'OpenCode currently inherits its runtime model unless you set an explicit override. Use gsdd models set --runtime opencode --agent <agent-id> --model <provider/model-id> to inject an explicit agent model.',
     } : undefined,
   });
 }
