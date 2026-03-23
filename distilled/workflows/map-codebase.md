@@ -160,12 +160,17 @@ These 4 documents are consumed by downstream GSDD workflows:
 
 After all mappers complete, verify:
 
-- [ ] All 4 documents exist in `.planning/codebase/`
-- [ ] No document is empty or trivially short (each should have substantive content)
-- [ ] Each document contains actual file path references (backtick-formatted)
+- [ ] All 4 documents exist in `.planning/codebase/` (L1: exists)
+- [ ] No document is empty or trivially short — each must exceed 20 non-empty lines (L2: substantive)
+- [ ] Each document contains actual file path references in backtick format — not generic advice (L2: specificity)
+- [ ] STACK.md names at least 2 concrete technologies with version information (L2: specificity)
+- [ ] ARCHITECTURE.md references at least 1 specific directory or module path (L2: specificity)
+- [ ] No document is a carbon copy of another — each covers a distinct dimension (L2: non-duplicate)
 
-If any mapper failed, note the failure and inform the user which documents need manual completion.
+If any check fails, note the specific failure and inform the user which documents need re-mapping or manual completion.
 </validation>
+
+**MANDATORY: All 4 codebase documents must exist on disk before proceeding to security scan or commit. If any document is missing, STOP and report which mapper(s) failed. Do NOT proceed to `<secrets_scan>` with incomplete output.**
 
 <secrets_scan>
 ### 5. Security Scan (Mandatory Before Commit)

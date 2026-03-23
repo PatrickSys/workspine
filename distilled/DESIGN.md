@@ -37,6 +37,8 @@
 27. [Consumer-Ready Surface Completion](#27-consumer-ready-surface-completion)
 28. [Workflow Completion Routing](#28-workflow-completion-routing)
 29. [Approach Exploration](#29-approach-exploration)
+30. [Hardening Propagation](#30-hardening-propagation)
+31. [Outcome Dimension for Plan-Checker](#31-outcome-dimension-for-plan-checker)
 
 ---
 
@@ -1345,6 +1347,66 @@ Isolating research in subagents and returning compressed summaries follows the C
 - Mitigation: `workflow.discuss: true|false` toggle in `.planning/config.json` allows skipping with explicit `reduced_alignment` reporting; taste areas skip research entirely. Default is `false` (opt-in) to stay consistent with GSDD's stripped-down identity; users enable it explicitly
 
 **GSDD implementation:** `agents/approach-explorer.md` (role contract), `distilled/templates/delegates/approach-explorer.md` (thin delegate), `distilled/templates/approach.md` (output template), `distilled/workflows/plan.md` (`<approach_exploration>` section), `agents/planner.md` (`<approach_decisions>` section), `distilled/templates/delegates/plan-checker.md` (`approach_alignment` dimension), `bin/adapters/claude.mjs` + `bin/adapters/opencode.mjs` + `bin/adapters/codex.mjs` (native agent rendering)
+
+---
+
+## 30. Hardening Propagation
+
+**Problem:** D28 introduced three hardening patterns (positional STOP gates, mandatory persistence with STOP-on-failure, guard-backed regression prevention) but applied them selectively: STOP gates only in `new-project.md`, persistence gates only in `execute.md` and `verify.md`. Three medium-tier workflows (`quick.md`, `map-codebase.md`, `new-project.md`) and two consistency targets (`audit-milestone.md`, `pause.md`) produce equally critical artifacts but lacked these protections.
+
+**Decision:** Propagate D28 patterns to all workflows that produce durable artifacts, organized into three tiers. Intentionally exclude read-only workflows (`progress.md`) and workflows with adequate existing coverage (`resume.md`).
+
+| Tier | ID | Workflow | Hardening | Pattern Source |
+|------|-----|----------|-----------|----------------|
+| 1 | H1 | `quick.md` | MANDATORY persistence gates for SUMMARY.md and VERIFICATION.md | `execute.md` SUMMARY gate |
+| 1 | H2 | `quick.md` | Positional STOP gate between plan and execute | `new-project.md` STOP gates |
+| 1 | H3 | `map-codebase.md` | Semantic quality check on mapper outputs (L2 substantiveness) | `verify.md` L1/L2/L3 checking |
+| 1 | H4 | `map-codebase.md` | MANDATORY persistence gate for 4 codebase documents | `execute.md` SUMMARY gate |
+| 1 | H5 | `new-project.md` | `<persistence>` section for SPEC.md and ROADMAP.md | `verify.md` `<persistence>` |
+| 1 | H6 | `quick.md` | Reduced-assurance plan self-check with `reduced_assurance` label | `plan.md` self-check fallback |
+| 2 | H7 | `audit-milestone.md` | MANDATORY persistence gate for MILESTONE-AUDIT.md | `execute.md` SUMMARY gate |
+| 2 | H8 | `pause.md` | MANDATORY persistence gate for `.continue-here.md` | `execute.md` SUMMARY gate |
+| 2 | H9 | `new-project.md` | Positional STOP gate between spec approval and roadmap creation | `new-project.md` STOP gates |
+
+**Intentional non-propagation:**
+- `progress.md`: read-only by contract — writes zero files, modifies zero state. Nothing to gate.
+- `resume.md`: state detection already validates artifact existence before routing. No gap.
+
+**Evidence:**
+
+1. D28 consumer audit (2026-03-21): persistence failures and routing dead ends at every workflow boundary — patterns proven effective, scope was incomplete
+2. Huang et al. "Large Language Models Cannot Self-Correct Reasoning Yet" (ICLR 2024): LLMs cannot reliably self-correct without external feedback — validates fresh-context checking and explicit STOP gates over implicit behavioral expectations
+3. Kamoi et al. "When Can LLMs Actually Correct Their Own Mistakes?" (TACL 2024): self-correction works ONLY with reliable external feedback — validates MANDATORY gates as the external enforcement mechanism
+4. Anthropic long-context research (2024): instructions at decision points are followed more reliably than instructions at document start — validates positional STOP placement at exact deviation points
+5. D13 consistency argument: mechanical invariant enforcement prevents regression. The same structural pattern should be enforced everywhere it applies, not selectively.
+
+**Tradeoff:** 18 new guard assertions (G24) to maintain, but prevents artifact loss across 5 additional workflows. Each persistence gate adds 1-2 lines to its workflow. Positional STOP gates add 1 line each. The cost is minimal relative to the failure modes prevented (lost SPEC.md, lost checkpoint, empty codebase maps poisoning downstream planning).
+
+**GSDD implementation:** `distilled/workflows/quick.md`, `distilled/workflows/map-codebase.md`, `distilled/workflows/new-project.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/pause.md`, `tests/gsdd.guards.test.cjs` (G24)
+
+---
+
+## 31. Outcome Dimension for Plan-Checker
+
+**Problem:** GSDD's plan-checker verifies 7 structural dimensions (requirement coverage, task completeness, dependency correctness, key link completeness, scope sanity, must-have quality, context compliance). All 7 are process supervision — they check whether the plan is well-formed, not whether it achieves the phase goal. A plan can pass all 7 dimensions while producing only scaffolding artifacts that don't deliver the stated outcome.
+
+**Decision:** Add an 8th dimension `goal_achievement` that performs outcome-level verification:
+
+- **Goal addressed?** Do the plan's collective task outputs deliver the phase goal? Tasks that only set up infrastructure without delivering the stated user-facing outcome → `blocker`.
+- **Success criteria reachable?** Are ROADMAP.md success criteria traceable to task verify outputs? Each criterion should map to at least one task → `blocker` if unreachable.
+- **Outcome observable?** Could a human or automated check confirm the goal was met after execution? Plans producing only internal artifacts with no testable outcome → `warning`.
+
+This creates a hybrid process+outcome verification architecture: 7 structural dimensions (process) + 1 outcome dimension.
+
+**Evidence:**
+
+1. Yu et al. "Outcome-Refining Process Supervision for Code Generation" (ICML 2025): hybrid process+outcome supervision achieves +26.9% correctness over either alone — the strongest evidence for adding outcome-level checks alongside process checks
+2. Rajan "Multi-Agent Code Verification via Information Theory" (2025): diminishing returns plateau around 4-7 specialized dimensions. 8 dimensions is within the efficient range; each additional dimension beyond 4 adds +11-15pp detection improvement
+3. Lightman et al. "Let's Verify Step by Step" (ICLR 2024): process supervision (per-step feedback) significantly outperforms outcome-only supervision — validates keeping the existing 7 process dimensions while adding outcome as complement, not replacement
+
+**Tradeoff:** One additional dimension for the checker to evaluate per plan. Minimal cost: the goal and success criteria are already available as checker inputs (phase goal from ROADMAP.md, success criteria from ROADMAP.md phase section). No new inputs required.
+
+**GSDD implementation:** `distilled/templates/delegates/plan-checker.md` (`goal_achievement` dimension), `tests/gsdd.guards.test.cjs` (G24 assertions)
 
 ---
 

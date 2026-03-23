@@ -160,6 +160,8 @@ Plus full markdown report body with tables for requirements, phases, integration
 - `gaps_found` - critical blockers exist (unsatisfied requirements, unprotected sensitive flows, broken flows, or missing verifications)
 - `tech_debt` - no blockers but accumulated deferred items need review
 
+**MANDATORY: The milestone audit report must exist at `.planning/v{version}-MILESTONE-AUDIT.md` on disk before presenting results. If the file was not written, STOP and report the write failure. Do NOT present audit results from conversation context alone — this is the highest-cost artifact to regenerate.**
+
 ## 7. Present Results
 
 Route by audit status:

@@ -340,7 +340,8 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 5. `scope_sanity` - plans are sized so an executor can complete them without context collapse
 6. `must_have_quality` - success criteria are specific, observable, and reflected in tasks
 7. `context_compliance` - locked decisions are honored and deferred ideas stay out of scope
-8. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. Skipped when no APPROACH.md is provided.
+8. `goal_achievement` - the plan, if executed perfectly, actually achieves the stated phase goal: goal addressed (tasks deliver the goal), success criteria reachable (each criterion traceable to a task verify output), and outcome observable (a human or automated check can confirm the goal was met)
+9. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. Skipped when no APPROACH.md is provided.
 
 ### Invoking the Checker
 
@@ -359,7 +360,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
      "summary": "One sentence overall assessment",
      "issues": [
        {
-         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | approach_alignment",
+         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
          "severity": "blocker | warning",
          "description": "What is wrong",
          "plan": "01-PLAN",

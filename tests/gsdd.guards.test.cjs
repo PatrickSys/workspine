@@ -721,11 +721,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'DESIGN.md must contain section 25. FIX: Add D25 Consumer First-Run Experience.');
   });
 
-  test('DESIGN.md ToC lists 29 entries', () => {
+  test('DESIGN.md ToC lists 31 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 29,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 29. FIX: Update DESIGN.md ToC to list all 29 decisions.`);
+    assert.strictEqual(tocEntries.length, 31,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 31. FIX: Update DESIGN.md ToC to list all 31 decisions.`);
   });
 });
 
@@ -1304,5 +1304,167 @@ describe('G23 - Approach Explorer Quality', () => {
     );
     assert.match(explorerFn, /AskUserQuestion/,
       'Claude adapter approach-explorer must include AskUserQuestion tool. FIX: Add AskUserQuestion to tools list.');
+  });
+});
+
+describe('G24 - Hardening Propagation', () => {
+  const WORKFLOWS_DIR = path.join(ROOT, 'distilled', 'workflows');
+  const PLAN_CHECKER_PATH = path.join(ROOT, 'distilled', 'templates', 'delegates', 'plan-checker.md');
+
+  // --- quick.md (H1, H2, H6) ---
+
+  test('quick.md has MANDATORY persistence gate for SUMMARY.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    assert.match(content, /MANDATORY.*SUMMARY.*disk|MANDATORY.*SUMMARY.*exist/s,
+      'quick.md must have MANDATORY persistence gate for SUMMARY.md after executor delegate. FIX: Add MANDATORY write enforcement after Step 4.');
+  });
+
+  test('quick.md has MANDATORY persistence gate for VERIFICATION.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    assert.match(content, /MANDATORY.*VERIFICATION.*disk|MANDATORY.*VERIFICATION.*exist/s,
+      'quick.md must have MANDATORY persistence gate for VERIFICATION.md after verifier delegate. FIX: Add MANDATORY write enforcement after Step 5.');
+  });
+
+  test('quick.md has STOP gate between plan and execute', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    const planDelegateEnd = content.indexOf('</delegate>', content.indexOf('## Step 3'));
+    const executeStep = content.indexOf('## Step 4');
+    assert.ok(planDelegateEnd > -1 && executeStep > -1,
+      'quick.md must have Step 3 (plan) and Step 4 (execute). FIX: Check workflow structure.');
+    const between = content.slice(planDelegateEnd, executeStep);
+    assert.match(between, /\bSTOP\b/,
+      'quick.md must have STOP gate between plan delegate and execute step. FIX: Add positional STOP gate after Step 3 plan delegate.');
+  });
+
+  test('quick.md has reduced_assurance plan self-check', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    assert.match(content, /reduced_assurance/,
+      'quick.md must label self-check as reduced_assurance. FIX: Add reduced_assurance plan self-check after STOP gate.');
+  });
+
+  // --- map-codebase.md (H3, H4) ---
+
+  test('map-codebase.md validation checks file path references', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'map-codebase.md'), 'utf-8');
+    const validationStart = content.indexOf('<validation>');
+    const validationEnd = content.indexOf('</validation>');
+    assert.ok(validationStart > -1 && validationEnd > -1,
+      'map-codebase.md must have <validation> section. FIX: Add validation section.');
+    const section = content.slice(validationStart, validationEnd);
+    assert.match(section, /backtick|file path ref/i,
+      'map-codebase.md validation must check for backtick-formatted file path references. FIX: Add file path substantiveness check.');
+  });
+
+  test('map-codebase.md validation checks minimum substantiveness', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'map-codebase.md'), 'utf-8');
+    const validationStart = content.indexOf('<validation>');
+    const validationEnd = content.indexOf('</validation>');
+    assert.ok(validationStart > -1 && validationEnd > -1,
+      'map-codebase.md must have <validation> section. FIX: Add validation section.');
+    const section = content.slice(validationStart, validationEnd);
+    assert.match(section, /20 non-empty lines|minimum.*lines|exceeds.*\d+.*lines/i,
+      'map-codebase.md validation must check for minimum document substantiveness. FIX: Add minimum content requirement (e.g., 20 non-empty lines).');
+  });
+
+  test('map-codebase.md has MANDATORY persistence gate before secrets_scan', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'map-codebase.md'), 'utf-8');
+    const validationEnd = content.indexOf('</validation>');
+    const secretsScan = content.indexOf('<secrets_scan>');
+    assert.ok(validationEnd > -1 && secretsScan > -1,
+      'map-codebase.md must have </validation> and <secrets_scan>. FIX: Check workflow structure.');
+    const between = content.slice(validationEnd, secretsScan);
+    assert.match(between, /MANDATORY/,
+      'map-codebase.md must have MANDATORY persistence gate between validation and secrets_scan. FIX: Add MANDATORY gate requiring all 4 codebase documents exist on disk.');
+  });
+
+  // --- new-project.md (H5, H9) ---
+
+  test('new-project.md has <persistence> section referencing SPEC.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
+    assert.match(content, /<persistence>/,
+      'new-project.md must have a <persistence> section. FIX: Add <persistence> section before <success_criteria>.');
+    const persistenceStart = content.indexOf('<persistence>');
+    const persistenceEnd = content.indexOf('</persistence>');
+    const section = content.slice(persistenceStart, persistenceEnd);
+    assert.match(section, /SPEC\.md/,
+      'new-project.md <persistence> must reference SPEC.md. FIX: Add MANDATORY check for SPEC.md on disk.');
+  });
+
+  test('new-project.md <persistence> section references ROADMAP.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
+    const persistenceStart = content.indexOf('<persistence>');
+    const persistenceEnd = content.indexOf('</persistence>');
+    if (persistenceStart === -1 || persistenceEnd === -1) return; // caught by previous test
+    const section = content.slice(persistenceStart, persistenceEnd);
+    assert.match(section, /ROADMAP\.md/,
+      'new-project.md <persistence> must reference ROADMAP.md. FIX: Add MANDATORY check for ROADMAP.md on disk.');
+  });
+
+  test('new-project.md has STOP gate between spec approval and roadmap creation', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
+    const specCreationEnd = content.indexOf('</spec_creation>');
+    assert.ok(specCreationEnd > -1,
+      'new-project.md must have </spec_creation>. FIX: Check workflow structure.');
+    // Search for <roadmap_creation> AFTER </spec_creation> to skip inline references
+    const roadmapCreation = content.indexOf('<roadmap_creation>', specCreationEnd);
+    assert.ok(roadmapCreation > -1,
+      'new-project.md must have <roadmap_creation> after </spec_creation>. FIX: Check workflow structure.');
+    const between = content.slice(specCreationEnd, roadmapCreation);
+    assert.match(between, /\bSTOP\b/,
+      'new-project.md must have STOP gate between spec creation and roadmap creation. FIX: Add positional STOP verifying SPEC.md on disk before creating ROADMAP.md.');
+  });
+
+  // --- audit-milestone.md (H7) ---
+
+  test('audit-milestone.md has MANDATORY persistence gate for MILESTONE-AUDIT.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'audit-milestone.md'), 'utf-8');
+    assert.match(content, /MANDATORY.*MILESTONE-AUDIT|MANDATORY.*milestone.*audit.*disk/si,
+      'audit-milestone.md must have MANDATORY persistence gate for MILESTONE-AUDIT.md. FIX: Add MANDATORY write enforcement after Step 6.');
+  });
+
+  // --- pause.md (H8) ---
+
+  test('pause.md has MANDATORY persistence gate for .continue-here.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'pause.md'), 'utf-8');
+    assert.match(content, /MANDATORY.*\.continue-here\.md|MANDATORY.*checkpoint.*disk/si,
+      'pause.md must have MANDATORY persistence gate for .continue-here.md. FIX: Add MANDATORY write enforcement after </write_checkpoint>.');
+  });
+
+  // --- plan-checker.md (D31) ---
+
+  test('plan-checker has goal_achievement dimension', () => {
+    const content = fs.readFileSync(PLAN_CHECKER_PATH, 'utf-8');
+    assert.match(content, /goal_achievement/,
+      'plan-checker.md must include goal_achievement dimension. FIX: Add 8th dimension for outcome-level verification.');
+  });
+
+  test('plan-checker has goal_addressed sub-check', () => {
+    const content = fs.readFileSync(PLAN_CHECKER_PATH, 'utf-8');
+    assert.match(content, /[Gg]oal addressed/,
+      'plan-checker.md goal_achievement must include goal_addressed check. FIX: Add goal_addressed sub-check.');
+  });
+
+  test('plan-checker has success criteria reachable sub-check', () => {
+    const content = fs.readFileSync(PLAN_CHECKER_PATH, 'utf-8');
+    assert.match(content, /[Ss]uccess criteria.*reachable|[Ss]uccess.*criteria.*traceable/i,
+      'plan-checker.md goal_achievement must include success criteria reachable check. FIX: Add success criteria traceability check.');
+  });
+
+  test('plan.md dimension list includes goal_achievement', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
+    assert.match(content, /goal_achievement/,
+      'plan.md checker dimension list must include goal_achievement. FIX: Add goal_achievement dimension to "What The Checker Verifies" section and JSON schema hint.');
+  });
+
+  test('claude adapter dimension hint includes goal_achievement', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'bin', 'adapters', 'claude.mjs'), 'utf-8');
+    assert.match(content, /goal_achievement/,
+      'claude.mjs plan-checker schema hint must include goal_achievement. FIX: Add goal_achievement to the dimension enum in the checker invocation JSON schema.');
+  });
+
+  test('opencode adapter dimension hint includes goal_achievement', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'bin', 'adapters', 'opencode.mjs'), 'utf-8');
+    assert.match(content, /goal_achievement/,
+      'opencode.mjs plan-checker schema hint must include goal_achievement. FIX: Add goal_achievement to the dimension enum in the checker invocation JSON schema.');
   });
 });

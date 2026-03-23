@@ -331,6 +331,8 @@ Do NOT proceed to roadmap creation until the developer explicitly approves.
 **Commit**: `docs: initialize project spec`
 </spec_creation>
 
+**STOP. Spec creation is complete. Verify that `.planning/SPEC.md` exists on disk with the approved content before creating the roadmap. Do NOT create ROADMAP.md from memory — read the persisted SPEC.md as input.**
+
 <roadmap_creation>
 After `SPEC.md` is approved, you must create `ROADMAP.md`.
 Since you are an Orchestrator with fresh context, you DO NOT need to spawn a subagent for this—write it yourself directly, retaining full thoroughness.
@@ -381,6 +383,14 @@ Do NOT proceed to planning until the developer explicitly approves.
 
 **Commit**: `docs: create project roadmap`
 </roadmap_creation>
+
+<persistence>
+MANDATORY: Both `.planning/SPEC.md` and `.planning/ROADMAP.md` must exist on disk before reporting completion.
+
+If either file was not written (permissions issue, path problem), STOP and report the blocker to the user. Do NOT report success without persisted artifacts.
+
+These files are consumed by every downstream workflow. Artifacts that exist only in chat context will be lost on context compression, leaving the project in an unrecoverable state.
+</persistence>
 
 <success_criteria>
 Init is DONE when ALL of these are true:

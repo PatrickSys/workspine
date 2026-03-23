@@ -80,6 +80,8 @@ timestamp: $ISO_8601_TIMESTAMP
 The checkpoint is project-scoped (lives at `.planning/.continue-here.md`, not inside a phase directory) so resume always knows where to look.
 </write_checkpoint>
 
+**MANDATORY: `.planning/.continue-here.md` must exist on disk after writing. If the file was not created, STOP and report the failure. The entire purpose of this workflow is to persist context — a failed write means the pause did nothing.**
+
 <advisory_git>
 Read `.planning/config.json` for the `gitProtocol` section. If config.json cannot be read, skip git advice.
 

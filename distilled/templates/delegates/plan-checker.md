@@ -22,6 +22,10 @@ Verify these dimensions:
 - `scope_sanity`: plans are sized so an executor can complete them without context collapse
 - `must_have_quality`: success criteria and must-haves are specific, observable, and reflected in tasks
 - `context_compliance`: locked decisions are honored and deferred ideas stay out of scope
+- `goal_achievement`: does the plan, if executed perfectly, actually achieve the stated phase goal? Check:
+  - **Goal addressed?** Compare the phase goal statement to the plan's collective task outputs. Would successful completion of all tasks deliver the goal? If the goal says "users can authenticate" but tasks only set up database schema → `blocker`.
+  - **Success criteria reachable?** Are the phase success criteria from ROADMAP.md achievable through the planned tasks? Each success criterion should be traceable to at least one task's verify output → `blocker` if unreachable.
+  - **Outcome observable?** After execution, could a human or automated check confirm the goal was met? Plans that produce only internal artifacts with no user-visible or testable outcome → `warning`.
 - `approach_alignment`: when APPROACH.md is provided, verify that plan tasks implement the chosen approaches from the user's decisions. Check:
   - **Chosen honored?** Does each plan task align with the approach chosen in APPROACH.md for its gray area? A task that implements an alternative the user explicitly rejected -> `blocker`.
   - **Discretion respected?** "Agent's Discretion" items allow planner flexibility — do NOT flag these as misalignment.
@@ -36,7 +40,7 @@ Return JSON only as a single object with this shape:
   "summary": "One sentence overall assessment",
   "issues": [
     {
-      "dimension": "requirement_coverage | approach_alignment",
+      "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
       "severity": "blocker",
       "description": "What is wrong",
       "plan": "01-PLAN",

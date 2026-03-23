@@ -1116,7 +1116,7 @@ describe('G3 — File Size Guards', () => {
   // added mandatory completion routing + positional discipline gates that push it
   // past 400. Exempted with a higher limit rather than losing essential content.
   // plan.md ~453 lines after D29 approach exploration (research subagent prompt extracted to role contract)
-  const WORKFLOW_EXEMPT = { 'new-project.md': 420, 'plan.md': 460 };
+  const WORKFLOW_EXEMPT = { 'new-project.md': 430, 'plan.md': 460 };
 
   for (const wf of getWorkflowFiles()) {
     const limit = WORKFLOW_EXEMPT[wf] || SIZE_LIMITS.workflow;

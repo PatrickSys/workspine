@@ -66,8 +66,17 @@ Delegate to the planner role in quick mode.
 </delegate>
 
 After the planner returns:
-1. Verify the plan file exists.
-2. If not found, report the error and stop.
+
+**STOP. Verify that `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md` exists on disk before proceeding to execution. If the file does not exist, report the error to the user and do NOT proceed. A plan that exists only in conversation context will be lost.**
+
+### Quick Plan Self-Check
+
+Before proceeding to execution, verify the plan meets minimum quality:
+- [ ] Plan has at least 1 task with `<action>` and `<verify>` sections
+- [ ] Each task's `<verify>` has at least one runnable command
+- [ ] Plan tasks do not exceed 3 (quick scope constraint)
+
+This is a self-check, not an independent plan-check. Failures are noted but do NOT block execution — report `reduced_assurance` in the completion summary.
 
 ---
 
@@ -96,8 +105,8 @@ Delegate to the executor role.
 </delegate>
 
 After the executor returns:
-1. Verify the summary file exists.
-2. If not found, report the error and stop.
+
+**MANDATORY: Verify the SUMMARY file exists at `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md` on disk. If it does not exist, STOP and report the write failure. Do NOT proceed to verification or LOG.md update without a persisted summary.**
 
 ---
 
@@ -124,6 +133,8 @@ Read `.planning/config.json`.
 **Output:** `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-VERIFICATION.md`
 **Return:** Verification status (passed | gaps_found | human_needed).
 </delegate>
+
+**MANDATORY: Verify the VERIFICATION file exists at `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-VERIFICATION.md` on disk (when verifier ran). If it does not exist, STOP and report the write failure. Do NOT proceed to LOG.md update without a persisted verification report.**
 
 ---
 
