@@ -10,6 +10,20 @@
 
 * approach exploration with hybrid architecture (D29) ([1fd8fd8](https://github.com/PatrickSys/get-shit-done-distilled/commit/1fd8fd81c610e1d096cee99270842b97967361e8))
 * hardening propagation + outcome dimension (D30, D31) ([#44](https://github.com/PatrickSys/get-shit-done-distilled/issues/44)) ([25dde9d](https://github.com/PatrickSys/get-shit-done-distilled/commit/25dde9d3cb982514921db783473a6014c407ca1c))
+* quick workflow alignment hardening + context engineering (D32, D33, D34) ([#45](https://github.com/PatrickSys/get-shit-done-distilled/issues/45)) ([ecccd5c](https://github.com/PatrickSys/get-shit-done-distilled/commit/ecccd5c6080244d4997c37993a53bf9f8208b829))
+
+# [0.2.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.1.0...v0.2.0) (2026-03-24)
+
+
+### Bug Fixes
+
+* update models hint test for both-override suppression logic ([3d962e0](https://github.com/PatrickSys/get-shit-done-distilled/commit/3d962e07d2576dc629460c9362d5e658e0d263af))
+
+
+### Features
+
+* approach exploration with hybrid architecture (D29) ([1fd8fd8](https://github.com/PatrickSys/get-shit-done-distilled/commit/1fd8fd81c610e1d096cee99270842b97967361e8))
+* hardening propagation + outcome dimension (D30, D31) ([#44](https://github.com/PatrickSys/get-shit-done-distilled/issues/44)) ([25dde9d](https://github.com/PatrickSys/get-shit-done-distilled/commit/25dde9d3cb982514921db783473a6014c407ca1c))
 
 # Changelog
 
