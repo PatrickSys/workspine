@@ -216,8 +216,8 @@ Present options (default-yes — pressing Enter proceeds):
 
 Handle response:
 - **Enter (or "yes"):** proceed to Step 4.
-- **"edit description":** return to Step 1, pre-filling `$DESCRIPTION` as starting point.
-- **"switch to /gsdd:plan":** stop quick workflow, report: "Use `/gsdd:plan` for full ceremony with approach exploration. Task description: {$DESCRIPTION}"
+- **"edit description":** clean up the task directory, then return to Step 1 with `$DESCRIPTION` pre-filled as the starting point.
+- **"switch to /gsdd:plan":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd:plan` for full ceremony with approach exploration. Task description: {$DESCRIPTION}"
 - **"abort":** clean up the task directory, report cancellation, stop.
 
 ---

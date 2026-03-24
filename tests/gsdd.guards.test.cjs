@@ -1369,6 +1369,26 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md plan preview must have default-yes (Enter to proceed) confirmation (D32). FIX: Add default-yes prompt to plan preview.');
   });
 
+  test('quick.md preview edit branch cleans up provisional task directory', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    const previewStart = content.indexOf('## Step 3.7');
+    assert.ok(previewStart > -1,
+      'quick.md must have ## Step 3.7 plan preview section. FIX: Add Step 3.7 plan preview.');
+    const previewSection = content.slice(previewStart, previewStart + 2200);
+    assert.match(previewSection, /edit description.*clean up the task directory/i,
+      'quick.md must clean up the provisional quick-task directory before returning to Step 1 from the plan preview. FIX: Add cleanup to the "edit description" branch.');
+  });
+
+  test('quick.md preview /gsdd:plan branch cleans up provisional task directory', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    const previewStart = content.indexOf('## Step 3.7');
+    assert.ok(previewStart > -1,
+      'quick.md must have ## Step 3.7 plan preview section. FIX: Add Step 3.7 plan preview.');
+    const previewSection = content.slice(previewStart, previewStart + 2200);
+    assert.match(previewSection, /switch to \/gsdd:plan.*clean up the task directory/i,
+      'quick.md must clean up the provisional quick-task directory before switching to /gsdd:plan from the plan preview. FIX: Add cleanup to the "switch to /gsdd:plan" branch.');
+  });
+
   test('quick.md has scope signal evaluation', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     assert.match(content, /[Ss]cope [Ss]ignal/,

@@ -1496,7 +1496,7 @@ Output is inline `$APPROACH_CONTEXT` (e.g., "User confirmed: use in-memory LRU c
 
 **Tradeoff:** ~15-30 seconds overhead when triggered (1-2 questions). Skipped entirely when no ambiguity detected, even with toggle on. Adds ~40 lines to quick.md. No new files, no new delegates, no new config keys — reuses existing `workflow.discuss` toggle.
 
-**GSDD implementation:** `distilled/workflows/quick.md` (Step 2.5), `distilled/DESIGN.md` (this section), `tests/gsdd.guards.test.cjs` (G25 assertions for approach clarification, ambiguity signals, recommendation-first format)
+**GSDD implementation:** `distilled/workflows/quick.md` (Step 2.5), `distilled/DESIGN.md` (this section), `tests/gsdd.guards.test.cjs` (G24 assertions for approach clarification, ambiguity signals, recommendation-first format)
 
 ---
 
