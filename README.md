@@ -48,9 +48,17 @@ This creates:
 
 1. `.planning/` — durable workspace with templates, role contracts, and config
 2. `.agents/skills/gsdd-*` — portable workflow entrypoints
-3. Tool-specific adapters if detected (Claude skills/commands/agents, OpenCode commands/agents, Codex agents)
+3. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)
 
 Then run the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`.
+
+In a terminal, `gsdd init` now opens a guided install wizard:
+
+- Step 1: select the runtimes/vendors you want to support
+- Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing
+- Step 3: configure planning defaults in the same guided flow
+
+Portable `.agents/skills/gsdd-*` skills are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline.
 
 ### Quickstart (after init)
 
@@ -69,11 +77,12 @@ First workflow to run: **new-project** — it asks about your goals, audits the 
 GSDD generates adapters for whichever tools you use:
 
 ```bash
-npx gsdd-cli init                    # Auto-detect installed tools
+npx gsdd-cli init                    # Guided install wizard (detected runtimes preselected)
 npx gsdd-cli init --tools claude     # Claude Code: .claude/skills + commands + agents
 npx gsdd-cli init --tools opencode   # OpenCode: .opencode/commands + agents
 npx gsdd-cli init --tools codex      # Codex CLI: portable gsdd-plan skill + .codex/agents checker
 npx gsdd-cli init --tools agents     # Root AGENTS.md fallback
+npx gsdd-cli init --tools cursor     # Backward-compatible AGENTS.md governance alias
 npx gsdd-cli init --tools all        # All of the above
 ```
 
@@ -105,10 +114,13 @@ npx gsdd-cli init --auto --tools claude --brief path/to/PRD.md
 
 `--auto` skips interactive prompts, uses smart defaults (`autoAdvance: true` in config). `--brief` copies a project document to `.planning/PROJECT_BRIEF.md` for `new-project` to consume.
 
+If you already know exactly what to generate, `--tools ...` remains the manual path. The wizard is the primary onboarding UX; flags remain the advanced/headless contract.
+
 ### Team Use
 
 - **Shared state:** Set `commitDocs: true` (default) — `.planning/` is tracked in git. Everyone sees the same spec, roadmap, and phase plans.
 - **Onboarding:** After cloning, run `npx gsdd-cli init` to generate tool-specific adapters. `.planning/` is already tracked — no re-initialization needed.
+- **Governance is explicit:** The wizard asks separately whether to install repo-wide `AGENTS.md` rules, and explains why you may care before writing to the repo root.
 - **Session handoff:** Use `gsdd-pause` / `gsdd-resume` to hand off work. The checkpoint (`.planning/.continue-here.md`) captures context for the next person.
 - **Adapter isolation:** Each developer runs `gsdd init --tools <their-tool>`. Adapter files don't conflict across tools.
 
@@ -416,7 +428,7 @@ For detailed troubleshooting and recovery procedures, see the [User Guide](docs/
 
 ## Design Decisions
 
-GSDD makes 35 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+GSDD makes 36 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't

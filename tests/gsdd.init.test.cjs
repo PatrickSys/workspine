@@ -6,6 +6,8 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { EventEmitter } = require('events');
+const { pathToFileURL } = require('url');
 const {
   cleanup,
   createTempProject,
@@ -32,6 +34,66 @@ function extractExampleTask(content) {
 
 function collectTestPaths(content) {
   return [...content.matchAll(/tests\/[\w.-]+\.test\.[\w]+/g)].map((match) => match[0]);
+}
+
+async function importModule(filePath) {
+  return import(`${pathToFileURL(filePath).href}?t=${Date.now()}-${Math.random()}`);
+}
+
+function createPromptStreams() {
+  class FakeInput extends EventEmitter {
+    constructor() {
+      super();
+      this.isTTY = true;
+      this.isRaw = false;
+      this.resumeCalls = 0;
+    }
+
+    setRawMode(value) {
+      this.isRaw = value;
+    }
+
+    resume() {
+      this.resumeCalls += 1;
+    }
+
+    pause() {}
+  }
+
+  class FakeOutput {
+    constructor() {
+      this.buffer = '';
+      this.columns = 120;
+      this.rows = 40;
+      this.isTTY = true;
+    }
+
+    write(chunk) {
+      this.buffer += String(chunk);
+      return true;
+    }
+  }
+
+  return {
+    input: new FakeInput(),
+    output: new FakeOutput(),
+  };
+}
+
+function setInteractiveStdin() {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+  Object.defineProperty(process.stdin, 'isTTY', {
+    configurable: true,
+    value: true,
+  });
+
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(process.stdin, 'isTTY', descriptor);
+    } else {
+      delete process.stdin.isTTY;
+    }
+  };
 }
 
 describe('gsdd init and update', () => {
@@ -548,6 +610,196 @@ describe('gsdd init and update', () => {
     assert.match(portableSkill, /Maximum 3 checker cycles total/);
   });
 
+  test('choice list redraws in place on arrow navigation', async () => {
+    const { promptChoiceList } = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+    const { input, output } = createPromptStreams();
+
+    const selectionPromise = promptChoiceList({
+      input,
+      output,
+      title: 'Select runtimes',
+      hint: 'Space toggles, Enter confirms.',
+      multi: true,
+      choices: [
+        { id: 'claude', label: 'Claude', description: 'Native', selected: true, detected: true },
+        { id: 'cursor', label: 'Cursor', description: 'Skills-native', selected: false, detected: false },
+      ],
+    });
+
+    setImmediate(() => {
+      input.emit('keypress', '', { name: 'down' });
+      input.emit('keypress', '', { name: 'return' });
+    });
+
+    const selected = await selectionPromise;
+    assert.deepStrictEqual(selected, ['claude']);
+    assert.match(output.buffer, /\x1b\[\d+A/, 'rerender should move the cursor back up before repainting');
+  });
+
+  test('choice list resumes stdin before waiting for keypresses', async () => {
+    const { promptChoiceList } = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+    const { input, output } = createPromptStreams();
+
+    const selectionPromise = promptChoiceList({
+      input,
+      output,
+      title: 'Select runtimes',
+      multi: false,
+      choices: [
+        { value: 'claude', label: 'Claude', description: 'Native', selected: true, detected: false },
+        { value: 'cursor', label: 'Cursor', description: 'Skills-native', selected: false, detected: false },
+      ],
+    });
+
+    setImmediate(() => {
+      input.emit('keypress', '', { name: 'return' });
+    });
+
+    const selected = await selectionPromise;
+    assert.deepStrictEqual(selected, ['claude']);
+    assert.ok(input.resumeCalls >= 1, 'selector should resume stdin before listening for keypresses');
+  });
+
+  test('single-select confirms the highlighted option on Enter', async () => {
+    const { promptChoiceList } = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+    const { input, output } = createPromptStreams();
+
+    const selectionPromise = promptChoiceList({
+      input,
+      output,
+      title: 'Research depth',
+      multi: false,
+      choices: [
+        { value: 'balanced', label: 'balanced', description: 'Recommended', selected: true, detected: false },
+        { value: 'fast', label: 'fast', description: 'Faster', selected: false, detected: false },
+      ],
+    });
+
+    setImmediate(() => {
+      input.emit('keypress', '', { name: 'down' });
+      input.emit('keypress', '', { name: 'return' });
+    });
+
+    const selected = await selectionPromise;
+    assert.deepStrictEqual(selected, ['fast']);
+  });
+
+  test('choice list accounts for wrapped descriptions when rerendering', async () => {
+    const { promptChoiceList } = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+    const { input, output } = createPromptStreams();
+    output.columns = 24;
+
+    const selectionPromise = promptChoiceList({
+      input,
+      output,
+      title: 'Planning docs in git',
+      multi: false,
+      choices: [
+        { value: true, label: 'yes', description: 'Track .planning/ in git for history and team recovery.', selected: true, detected: false },
+        { value: false, label: 'no', description: 'Keep planning docs local only and out of version control.', selected: false, detected: false },
+      ],
+    });
+
+    setImmediate(() => {
+      input.emit('keypress', '', { name: 'down' });
+      input.emit('keypress', '', { name: 'return' });
+    });
+
+    const selected = await selectionPromise;
+    assert.deepStrictEqual(selected, [false]);
+    assert.match(output.buffer, /\x1b\[(1[0-9]|[2-9])A/, 'rerender should move up by the wrapped visual height, not a fixed small count');
+  });
+
+  test('interactive wizard can select skills-native runtimes without forcing AGENTS.md', async () => {
+    const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+    const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
+    const ctx = gsddMod.createCliContext(tmpDir);
+    ctx.initPromptApi = {
+      async runInitWizard() {
+        return {
+          selectedRuntimes: ['cursor', 'codex'],
+          adapterTargets: ['codex'],
+          config: {
+            researchDepth: 'balanced',
+            parallelization: true,
+            commitDocs: true,
+            modelProfile: 'balanced',
+            workflow: { research: true, discuss: false, planCheck: true, verifier: true },
+            gitProtocol: {
+              branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
+              commit: 'Group changes logically and follow the existing repo conventions. Do not mention phase, plan, or task IDs unless explicitly requested.',
+              pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
+            },
+            initVersion: 'v1.1',
+          },
+        };
+      },
+      async promptForConfig() {
+        throw new Error('promptForConfig should not run when wizard already returned config');
+      },
+    };
+
+    let output = '';
+    const previousLog = console.log;
+    const restoreStdin = setInteractiveStdin();
+    console.log = (...parts) => { output += `${parts.join(' ')}\n`; };
+    try {
+      const cmdInit = initMod.createCmdInit(ctx);
+      await cmdInit();
+    } finally {
+      console.log = previousLog;
+      restoreStdin();
+    }
+
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+    assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')),
+      'Wizard runtime selection must not write AGENTS.md unless governance was explicitly enabled.');
+    assert.match(output, /Cursor:\s+\/gsdd-new-project/);
+    assert.match(output, /Codex CLI:\s+\$gsdd-new-project/);
+  });
+
+  test('interactive wizard governance opt-in writes AGENTS.md separately from runtime choice', async () => {
+    const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+    const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
+    const ctx = gsddMod.createCliContext(tmpDir);
+    ctx.initPromptApi = {
+      async runInitWizard() {
+        return {
+          selectedRuntimes: ['cursor'],
+          adapterTargets: ['agents'],
+          config: {
+            researchDepth: 'balanced',
+            parallelization: true,
+            commitDocs: true,
+            modelProfile: 'balanced',
+            workflow: { research: true, discuss: false, planCheck: true, verifier: true },
+            gitProtocol: {
+              branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
+              commit: 'Group changes logically and follow the existing repo conventions. Do not mention phase, plan, or task IDs unless explicitly requested.',
+              pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
+            },
+            initVersion: 'v1.1',
+          },
+        };
+      },
+      async promptForConfig() {
+        throw new Error('promptForConfig should not run when wizard already returned config');
+      },
+    };
+
+    const restoreStdin = setInteractiveStdin();
+    try {
+      const cmdInit = initMod.createCmdInit(ctx);
+      await cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.codex')),
+      'Selecting governance without Codex must not generate unrelated native adapters.');
+  });
+
   test('init is idempotent and upserts the bounded AGENTS block without duplicating it', async () => {
     const agentsPath = path.join(tmpDir, 'AGENTS.md');
     fs.writeFileSync(
@@ -569,6 +821,20 @@ describe('gsdd init and update', () => {
     assert.strictEqual((agents.match(/<!-- END GSDD -->/g) || []).length, 1);
     assert.match(agents, /# Local Rules/);
     assert.doesNotMatch(agents, /old block/);
+  });
+
+  test('legacy --tools cursor still writes AGENTS.md for backward compatibility', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'cursor');
+    } finally {
+      restoreStdin();
+    }
+
+    assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.codex')));
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.claude')));
   });
 
   test('update refreshes previously generated adapters based on detected platforms', async () => {

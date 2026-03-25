@@ -43,6 +43,7 @@
 33. [Quick Approach Clarification](#33-quick-approach-clarification)
 34. [Context Engineering Applied to Quick Workflow](#34-context-engineering-applied-to-quick-workflow)
 35. [Skills-Native Runtimes vs Governance Adapters](#35-skills-native-runtimes-vs-governance-adapters)
+36. [Interactive Init Wizard](#36-interactive-init-wizard)
 
 ---
 
@@ -1565,6 +1566,39 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 4. This resolution matches the repo rule that skills, adapters, and governance surfaces must not be conflated.
 
 **GSDD implementation:** `README.md`, `distilled/templates/agents.block.md`, `bin/lib/init.mjs`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`, `tests/gsdd.guards.test.cjs`
+
+---
+
+## 36. Interactive Init Wizard
+
+**Problem:** `gsdd init` had two mismatched onboarding models at once. The public story was moving toward skills-native runtimes and optional governance, but the actual CLI still made users memorize `--tools ...` values as the primary install experience. The only interactive part was the config questionnaire, which started after filesystem writes and did not help the user decide which runtime surfaces or governance overlays to install.
+
+**Decision:** Make `gsdd init` a guided install wizard in TTY environments, while preserving `--tools` and `--auto` as the manual/headless contract.
+
+- Step 1: choose runtimes/vendors with a simple checkbox-style selector (space toggles, enter confirms).
+- Step 2: ask separately whether to install repo-wide `AGENTS.md` governance, with explicit explanation of why it helps and why it may feel invasive.
+- Step 3: collect the existing planning defaults in the same guided flow instead of dropping back to free-form line prompts.
+- Portable `.agents/skills/gsdd-*` skills remain the always-generated baseline.
+- Legacy values such as `--tools cursor`, `--tools copilot`, and `--tools gemini` remain valid for backward compatibility.
+
+**Key architectural rule:** runtime selection and adapter generation are separate concerns.
+
+- In the wizard, choosing Cursor/Copilot/Gemini affects post-init routing and user-facing install intent, but does **not** silently write root `AGENTS.md`.
+- Root `AGENTS.md` is generated only when the user explicitly opts into governance (wizard) or explicitly requests a governance-writing flag path (`--tools agents`, `--tools all`, or legacy runtime aliases).
+- This keeps D35's capability split honest instead of re-conflating skills-native runtime choice with governance-file generation.
+
+**Why this fits the codebase:** The adapter registry and `init.mjs` already own the right boundary. The high-leverage change was to add a decision layer in front of writes, not to invent a new adapter model or a new config schema. This keeps the CLI lightweight, preserves backward compatibility, and makes the default install path match the product story.
+
+**Evidence:**
+
+1. Existing repo truth: `gsdd init` always generates `.agents/skills/` and already has a central adapter-selection seam in `bin/lib/init.mjs`.
+2. Local research on the adjacent `prompty` repo: portable skills are the primary install surface, while native command surfaces are optional additions.
+3. Common CLI onboarding pattern: modern project bootstrap tools use interactive setup by default and flags for headless/manual flows; GSDD now matches that expectation without dropping its automation path.
+4. Repo lesson LL-INSTALL-DX-BEFORE-ALIAS-CLEANUP already recorded that install ergonomics should be fixed before alias-policy cleanup.
+
+**GSD comparison:** GSD's install surface is more operator-heavy and framework-specific. GSDD keeps the deterministic bootstrap principle but shifts the user-facing choice surface into a lightweight guided CLI instead of requiring users to know adapter values in advance.
+
+**GSDD implementation:** `bin/lib/init.mjs`, `bin/gsdd.mjs`, `README.md`, `distilled/README.md`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`, `tests/gsdd.init.test.cjs`, `tests/gsdd.guards.test.cjs`
 
 ---
 
