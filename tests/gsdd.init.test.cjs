@@ -660,6 +660,29 @@ describe('gsdd init and update', () => {
     assert.ok(input.resumeCalls >= 1, 'selector should resume stdin before listening for keypresses');
   });
 
+  test('choice list restores raw mode and rejects on Ctrl+C', async () => {
+    const { promptChoiceList } = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+    const { input, output } = createPromptStreams();
+
+    const selectionPromise = promptChoiceList({
+      input,
+      output,
+      title: 'Select runtimes',
+      multi: true,
+      choices: [
+        { value: 'claude', label: 'Claude', description: 'Native', selected: true, detected: false },
+        { value: 'cursor', label: 'Cursor', description: 'Skills-native', selected: false, detected: false },
+      ],
+    });
+
+    setImmediate(() => {
+      input.emit('keypress', '\u0003', { ctrl: true, name: 'c' });
+    });
+
+    await assert.rejects(selectionPromise, /Prompt cancelled by user/);
+    assert.strictEqual(input.isRaw, false, 'Ctrl+C should restore raw mode before rejecting');
+  });
+
   test('single-select confirms the highlighted option on Enter', async () => {
     const { promptChoiceList } = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
     const { input, output } = createPromptStreams();

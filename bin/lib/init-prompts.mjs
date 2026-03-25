@@ -211,7 +211,6 @@ export async function promptChoiceList({ input, output, title, hint = 'Use arrow
   if (typeof input.setRawMode === 'function') input.setRawMode(true);
 
   let cursor = Math.max(0, choices.findIndex((choice) => choice.selected));
-  if (cursor === -1) cursor = 0;
   let renderedLines = 0;
 
   const selectCursor = () => {
@@ -235,34 +234,39 @@ export async function promptChoiceList({ input, output, title, hint = 'Use arrow
     }
     readline.cursorTo(output, 0);
     readline.clearScreenDown(output);
-    output.write(`${ANSI.bold}${title}${ANSI.reset}\n`);
-    if (hint) output.write(`${ANSI.dim}${hint}${ANSI.reset}\n`);
-    output.write('\n');
+    const lines = [`${ANSI.bold}${title}${ANSI.reset}`];
+    if (hint) lines.push(`${ANSI.dim}${hint}${ANSI.reset}`);
+    lines.push('');
     for (let i = 0; i < choices.length; i++) {
       const choice = choices[i];
       const pointer = i === cursor ? `${ANSI.green}>${ANSI.reset}` : ' ';
       const mark = choice.selected ? `${ANSI.green}[x]${ANSI.reset}` : '[ ]';
       const detected = choice.detected ? ` ${ANSI.dim}(detected)${ANSI.reset}` : '';
-      const labelLine = `${pointer} ${mark} ${choice.label}${detected}`;
-      const descriptionLine = `    ${ANSI.dim}${choice.description}${ANSI.reset}`;
-      output.write(`${labelLine}\n`);
-      output.write(`${descriptionLine}\n`);
+      lines.push(`${pointer} ${mark} ${choice.label}${detected}`);
+      lines.push(`    ${ANSI.dim}${choice.description}${ANSI.reset}`);
     }
-    renderedLines = measureLines(title) + (hint ? measureLines(hint) : 0) + 1;
-    for (let i = 0; i < choices.length; i++) {
-      const choice = choices[i];
-      const pointer = i === cursor ? `${ANSI.green}>${ANSI.reset}` : ' ';
-      const mark = choice.selected ? `${ANSI.green}[x]${ANSI.reset}` : '[ ]';
-      const detected = choice.detected ? ` ${ANSI.dim}(detected)${ANSI.reset}` : '';
-      renderedLines += measureLines(`${pointer} ${mark} ${choice.label}${detected}`);
-      renderedLines += measureLines(`    ${choice.description}`);
+
+    renderedLines = 0;
+    for (const line of lines) {
+      output.write(`${line}\n`);
+      renderedLines += measureLines(line);
     }
   };
 
   render();
 
-  const values = await new Promise((resolve) => {
+  const values = await new Promise((resolve, reject) => {
+    const cleanup = () => {
+      input.off('keypress', onKeypress);
+      if (typeof input.setRawMode === 'function') input.setRawMode(previousRawMode);
+    };
+
     const onKeypress = (_, key = {}) => {
+      if (key.ctrl && key.name === 'c') {
+        cleanup();
+        reject(new Error('Prompt cancelled by user'));
+        return;
+      }
       if (key.name === 'up') {
         cursor = cursor === 0 ? choices.length - 1 : cursor - 1;
         selectCursor();
@@ -287,7 +291,7 @@ export async function promptChoiceList({ input, output, title, hint = 'Use arrow
       }
       if (key.name === 'return') {
         selectCursor();
-        input.off('keypress', onKeypress);
+        cleanup();
         resolve(choices.filter((choice) => choice.selected).map((choice) => choice.value ?? choice.id));
       }
     };
@@ -296,7 +300,6 @@ export async function promptChoiceList({ input, output, title, hint = 'Use arrow
   });
 
   output.write('\n');
-  if (typeof input.setRawMode === 'function') input.setRawMode(previousRawMode);
   return values;
 }
 
