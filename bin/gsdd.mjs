@@ -24,7 +24,6 @@ const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', 'distilled');
 const AGENTS_DIR = join(__dirname, '..', 'agents');
 const CWD = process.cwd();
-const PLANNING_DIR = join(CWD, '.planning');
 const IS_MAIN = process.argv[1]
   ? realpathSync(process.argv[1]) === realpathSync(__filename)
   : false;
@@ -46,29 +45,31 @@ const WORKFLOWS = [
 
 const FRAMEWORK_VERSION = 'v1.2';
 
-const ADAPTERS = createAdapterRegistry({
-  cwd: CWD,
-  workflows: WORKFLOWS,
-  renderAgentsBoundedBlock,
-  renderAgentsFileContent,
-  renderOpenCodeCommandContent,
-  renderSkillContent,
-  upsertBoundedBlock,
-  getDelegateContent,
-  loadProjectModelConfig,
-  getRuntimeModelOverride,
-  resolveRuntimeAgentModel,
-});
+function createCliContext(cwd = process.cwd()) {
+  return {
+    cwd,
+    planningDir: join(cwd, '.planning'),
+    distilledDir: DISTILLED_DIR,
+    agentsDir: AGENTS_DIR,
+    workflows: WORKFLOWS,
+    frameworkVersion: FRAMEWORK_VERSION,
+    adapters: createAdapterRegistry({
+      cwd,
+      workflows: WORKFLOWS,
+      renderAgentsBoundedBlock,
+      renderAgentsFileContent,
+      renderOpenCodeCommandContent,
+      renderSkillContent,
+      upsertBoundedBlock,
+      getDelegateContent,
+      loadProjectModelConfig,
+      getRuntimeModelOverride,
+      resolveRuntimeAgentModel,
+    }),
+  };
+}
 
-const INIT_CONTEXT = {
-  cwd: CWD,
-  planningDir: PLANNING_DIR,
-  distilledDir: DISTILLED_DIR,
-  agentsDir: AGENTS_DIR,
-  workflows: WORKFLOWS,
-  frameworkVersion: FRAMEWORK_VERSION,
-  adapters: ADAPTERS,
-};
+const INIT_CONTEXT = createCliContext(CWD);
 
 const cmdInit = createCmdInit(INIT_CONTEXT);
 const cmdUpdate = createCmdUpdate(INIT_CONTEXT);
@@ -99,4 +100,4 @@ if (IS_MAIN) {
   await runCli();
 }
 
-export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFindPhase, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION };
+export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFindPhase, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

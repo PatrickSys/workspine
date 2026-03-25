@@ -18,21 +18,25 @@ Run in your project root:
 npx gsdd-cli init
 ```
 
+In a TTY, `gsdd init` now opens a guided install wizard: choose runtimes first, then decide separately whether repo-wide `AGENTS.md` governance is worth installing.
+
 Optional adapters:
 ```bash
 npx gsdd-cli init --tools claude
 npx gsdd-cli init --tools opencode
 npx gsdd-cli init --tools codex
 npx gsdd-cli init --tools agents
+npx gsdd-cli init --tools cursor
 npx gsdd-cli init --tools all
 ```
 
 Notes:
 - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`. This is also the primary Codex CLI surface.
+- `--tools ...` remains the manual/headless path; legacy runtime aliases such as `cursor`, `copilot`, and `gemini` are still supported for backward compatibility.
 - `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`.
 - `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`.
 - `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path.
-- Root `AGENTS.md` is only written when explicitly requested (`--tools agents` or `--tools all`).
+- Root `AGENTS.md` is only written when explicitly requested (`--tools agents`, `--tools all`, legacy runtime aliases, or the wizard governance opt-in).
 
 ## The Workflow
 
@@ -126,7 +130,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 
 ```
 distilled/
-  DESIGN.md                # design decisions and rationale (35 decisions, evidence-backed)
+  DESIGN.md                # design decisions and rationale (36 decisions, evidence-backed)
   SKILL.md                 # primary entry point (plain markdown)
   workflows/
     new-project.md

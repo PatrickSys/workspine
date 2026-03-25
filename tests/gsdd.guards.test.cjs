@@ -13,6 +13,7 @@ const MODELS_MODULE = path.join(ROOT, 'bin', 'lib', 'models.mjs');
 const MANIFEST_MODULE = path.join(ROOT, 'bin', 'lib', 'manifest.mjs');
 const HEALTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health.mjs');
 const INIT_MODULE = path.join(ROOT, 'bin', 'lib', 'init.mjs');
+const INIT_RUNTIME_MODULE = path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs');
 const TEMPLATES_MODULE = path.join(ROOT, 'bin', 'lib', 'templates.mjs');
 const README_MD = path.join(ROOT, 'README.md');
 const DISTILLED_README_MD = path.join(ROOT, 'distilled', 'README.md');
@@ -202,9 +203,17 @@ describe('G14 - Health Module Contract', () => {
       'gsdd.mjs must export cmdHealth. FIX: Add cmdHealth to the export statement.');
   });
 
-  test('help text mentions health command', () => {
-    const initSource = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init.mjs'), 'utf-8');
-    assert.match(initSource, /health/,
+  test('help text mentions health command', async () => {
+    const mod = await import(`file://${INIT_MODULE.replace(/\\/g, '/')}`);
+    const previousLog = console.log;
+    let output = '';
+    console.log = (...parts) => { output += `${parts.join(' ')}\n`; };
+    try {
+      mod.cmdHelp();
+    } finally {
+      console.log = previousLog;
+    }
+    assert.match(output, /health/,
       'Help text must document the health command. FIX: Add health to cmdHelp output.');
   });
 
@@ -639,7 +648,7 @@ describe('G18 - Consumer Governance Completeness', () => {
 describe('G19 - Consumer First-Run Accuracy', () => {
   const AGENTS_BLOCK = path.join(ROOT, 'distilled', 'templates', 'agents.block.md');
   const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
-  const INIT_HELP = path.join(ROOT, 'bin', 'lib', 'init.mjs');
+  const INIT_HELP = path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs');
 
   test('README platform table uses only Native or Governance tier labels (no skill_aware)', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
@@ -663,6 +672,12 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     assert.match(readme, /### Quickstart/,
       'README.md must contain a Quickstart section. FIX: Add ### Quickstart section after Getting Started.');
+  });
+
+  test('README describes gsdd init as a guided install wizard', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.match(readme, /guided install wizard/i,
+      'README.md must describe plain gsdd init as a guided install wizard. FIX: Update the Platform Adapters or Getting Started section.');
   });
 
   test('README quickstart mentions all 3 platform invocation patterns', () => {
@@ -747,8 +762,16 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       "init help must describe gemini as governance augmentation on top of native skill discovery. FIX: Replace 'Same as agents' with native-discovery wording.");
   });
 
-  test('post-init routing includes slash-command guidance for Cursor/Copilot/Gemini', () => {
+  test('init help describes separate governance decision in the wizard', () => {
     const content = fs.readFileSync(INIT_HELP, 'utf-8');
+    assert.match(content, /separately decide whether repo-wide AGENTS\.md governance is worth installing/i,
+      'init help must describe governance as a separate wizard decision. FIX: Add wizard governance wording to help text.');
+  });
+
+  test('post-init routing includes slash-command guidance for Cursor/Copilot/Gemini', async () => {
+    const mod = await import(`file://${INIT_RUNTIME_MODULE.replace(/\\/g, '/')}`);
+    const lines = mod.getPostInitRoutingLines(['cursor', 'copilot', 'gemini']);
+    const content = lines.join('\n');
     assert.match(content, /Cursor:\s+\/gsdd-new-project/,
       'post-init routing must show Cursor slash-command guidance. FIX: Add Cursor /gsdd-new-project to init output.');
     assert.match(content, /Copilot:\s+\/gsdd-new-project/,
@@ -757,11 +780,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'post-init routing must show Gemini slash-command guidance. FIX: Add Gemini /gsdd-new-project to init output.');
   });
 
-  test('DESIGN.md ToC lists 35 entries', () => {
+  test('DESIGN.md ToC lists 36 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 35,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 35. FIX: Update DESIGN.md ToC to list all 35 decisions.`);
+    assert.strictEqual(tocEntries.length, 36,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 36. FIX: Update DESIGN.md ToC to list all 36 decisions.`);
   });
 });
 
