@@ -780,11 +780,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'post-init routing must show Gemini slash-command guidance. FIX: Add Gemini /gsdd-new-project to init output.');
   });
 
-  test('DESIGN.md ToC lists 36 entries', () => {
+  test('DESIGN.md ToC lists 37 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 36,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 36. FIX: Update DESIGN.md ToC to list all 36 decisions.`);
+    assert.strictEqual(tocEntries.length, 37,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 37. FIX: Update DESIGN.md ToC to list all 37 decisions.`);
   });
 });
 
@@ -1737,5 +1737,47 @@ describe('G26 - Context Engineering: Quick Workflow', () => {
       assert.match(content, new RegExp(`<${tag}>`),
         `quick.md must have <${tag}> XML section (D34). FIX: Add <${tag}> section.`);
     }
+  });
+});
+
+describe('G27 - Workflow Mutability Classification', () => {
+  test('artifact-writing workflows are emitted as Code/edit surfaces', async () => {
+    const mod = await import(`file://${GSDD_PATH.replace(/\\/g, '/')}`);
+    const workflows = mod.createCliContext(ROOT).workflows;
+    const mutating = new Map([
+      ['gsdd-new-project', 'writes SPEC.md and ROADMAP.md'],
+      ['gsdd-map-codebase', 'writes codebase map documents'],
+      ['gsdd-plan', 'writes PLAN.md and planning artifacts'],
+      ['gsdd-execute', 'writes SUMMARY.md'],
+      ['gsdd-verify', 'writes VERIFICATION.md'],
+      ['gsdd-audit-milestone', 'writes MILESTONE-AUDIT.md'],
+      ['gsdd-quick', 'writes quick-task artifacts'],
+      ['gsdd-pause', 'writes .continue-here.md'],
+      ['gsdd-resume', 'deletes .continue-here.md before dispatch'],
+    ]);
+
+    for (const [name, reason] of mutating) {
+      const workflow = workflows.find((entry) => entry.name === name);
+      assert.ok(workflow, `${name} must exist in WORKFLOWS. FIX: Keep workflow registry entry.`);
+      assert.strictEqual(workflow.mutatesArtifacts, true,
+        `${name} must set mutatesArtifacts: true because it ${reason}. FIX: Keep mutability explicit in the workflow registry.`);
+      assert.strictEqual(workflow.agent, 'Code',
+        `${name} must use agent: Code because it ${reason}. FIX: Mark artifact-writing workflows as Code.`);
+      assert.strictEqual(workflow.opencodeType, 'edit',
+        `${name} must use opencodeType: edit because it ${reason}. FIX: Mark artifact-writing workflows as edit.`);
+    }
+  });
+
+  test('progress remains the only read-only workflow classification', async () => {
+    const mod = await import(`file://${GSDD_PATH.replace(/\\/g, '/')}`);
+    const workflows = mod.createCliContext(ROOT).workflows;
+    const readOnly = workflows.filter((workflow) => workflow.mutatesArtifacts === false);
+
+    assert.deepStrictEqual(readOnly.map((workflow) => workflow.name), ['gsdd-progress'],
+      'Only gsdd-progress should remain read-only. FIX: Do not classify artifact-writing workflows as read-only.');
+    assert.strictEqual(readOnly[0].agent, 'Plan',
+      'gsdd-progress must remain agent: Plan. FIX: Keep read-only status reporting in the Plan lane.');
+    assert.strictEqual(readOnly[0].opencodeType, 'plan',
+      'gsdd-progress must remain opencodeType: plan. FIX: Keep read-only status reporting in the plan lane.');
   });
 });

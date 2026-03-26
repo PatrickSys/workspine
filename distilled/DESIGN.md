@@ -44,6 +44,7 @@
 34. [Context Engineering Applied to Quick Workflow](#34-context-engineering-applied-to-quick-workflow)
 35. [Skills-Native Runtimes vs Governance Adapters](#35-skills-native-runtimes-vs-governance-adapters)
 36. [Interactive Init Wizard](#36-interactive-init-wizard)
+37. [Mutability-Driven Workflow Classification](#37-mutability-driven-workflow-classification)
 
 ---
 
@@ -1599,6 +1600,37 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 **GSD comparison:** GSD's install surface is more operator-heavy and framework-specific. GSDD keeps the deterministic bootstrap principle but shifts the user-facing choice surface into a lightweight guided CLI instead of requiring users to know adapter values in advance.
 
 **GSDD implementation:** `bin/lib/init.mjs`, `bin/gsdd.mjs`, `README.md`, `distilled/README.md`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`, `tests/gsdd.init.test.cjs`, `tests/gsdd.guards.test.cjs`
+
+---
+
+## 37. Mutability-Driven Workflow Classification
+
+**Problem:** GSDD had started treating several artifact-writing workflows as planning-class surfaces in the workflow registry. That looked semantically neat (`new-project`, `plan`, `verify`, `audit-milestone`, `pause`, `resume` all sound like "thinking" work), but it created a runtime contradiction: the workflow contract required disk persistence while the generated surface could be interpreted as a read-only planning lane.
+
+**Decision:** Classify workflow surfaces by mutability, not by whether the workflow feels like planning.
+
+- Any workflow that writes or deletes durable artifacts emits `agent: Code` and `opencodeType: edit`.
+- Only truly read-only workflows emit `agent: Plan` and `opencodeType: plan`.
+- `progress` remains the only read-only workflow in the current lifecycle.
+- The registry now records this explicitly via `mutatesArtifacts` so future changes have an inspectable invariant instead of relying on naming intuition.
+
+**Why this fits the codebase:** GSDD's real leverage depends on docs-to-disk persistence. `new-project`, `plan`, `verify`, `audit-milestone`, `pause`, and `resume` are orchestration-heavy, but they are still state-changing workflows. Treating them as read-only breaks the artifact chain that downstream workflows consume.
+
+**Kept / stripped / gained relative to the previous state:**
+
+- **Kept:** the existing portable workflow content, native plan-checker surfaces, and the distinction between read-only reporting (`progress`) and artifact-producing lifecycle work.
+- **Stripped:** the informal assumption that "planning-like" workflows should all share the `Plan` lane.
+- **Gained:** an explicit mutability invariant, generated-surface tests, and safer behavior in runtimes that enforce planning/read-only execution semantics.
+
+**Evidence:**
+
+1. `distilled/workflows/verify.md`, `new-project.md`, `audit-milestone.md`, `pause.md`, and `resume.md` all require artifact writes or deletions as part of completion.
+2. `distilled/workflows/progress.md` is the only workflow that explicitly declares itself read-only.
+3. Consumer audit evidence already showed verification reports being lost when persistence was skipped; this decision closes the registry seam that could recreate the same class of failure.
+
+**GSD comparison:** GSD's leverage also depends on persisted workflow artifacts. GSDD's portable/runtime split adds a new failure mode GSD did not have in the same form: a generated adapter can misclassify a mutating workflow even when the markdown contract is correct. This decision makes the adapter/runtime layer honor the artifact contract instead of undermining it.
+
+**GSDD implementation:** `bin/gsdd.mjs`, `bin/lib/rendering.mjs`, `tests/gsdd.init.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`, `tests/gsdd.guards.test.cjs`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`
 
 ---
 

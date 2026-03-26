@@ -470,6 +470,30 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(verifySkill, /Ã¢|Ã°Å¸|Ã¢Å“|Ã¢â€ /);
   });
 
+  test('generated workflow frontmatter matches mutability', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    const verifySkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-verify', 'SKILL.md'),
+      'utf-8'
+    );
+    const progressSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-progress', 'SKILL.md'),
+      'utf-8'
+    );
+
+    assert.match(verifySkill, /^agent: Code$/m,
+      'verify must generate as agent: Code because it writes VERIFICATION.md');
+    assert.match(progressSkill, /^agent: Plan$/m,
+      'progress must remain agent: Plan because it is the read-only workflow');
+  });
+
   test('delegates reference canonical role contracts', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
