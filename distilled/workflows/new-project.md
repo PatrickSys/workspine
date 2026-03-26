@@ -282,25 +282,8 @@ Display key findings before moving to spec creation.
 **STOP. Research is complete. Do NOT write any application code. Proceed to spec creation below. Your job now is to produce SPEC.md and ROADMAP.md — not to build the project.**
 
 <data_schema_definition>
-**(SOTA Insight: Derived from GitHub Blog - "Multi-agent workflows often fail")**
-Multi-agent systems require Typed Schemas to pass reliable state. Natural language instructions fail across agent handoffs.
-Before writing the final SPEC.md, explicitly define the core Data Models/Typed Schemas the project will use (e.g., `type UserProfile = { id: number; plan: 'free' | 'pro' }`).
-These strict schemas MUST be included in the `SPEC.md` to prevent agent hallucination during the implementation phases.
-6. **Typed Data Schemas**: Add the strict data models defined earlier.
-7. **Done-When Verification Chain (SOTA Insight from Cyanluna)**: For EVERY single requirement in the "Must Have (v1)" section, you MUST define a clear, verifiable `[Done-When: ...]` criteria. Vague requirements like "User can log in" must become "User can log in [Done-When: Login form submits, JWT is received, and User is redirected to Dashboard]". No exceptions.
-
-*DO NOT include implementation tasks here. SPEC.md defines WHAT, not HOW.*
+Before writing SPEC.md, define core Data Models/Typed Schemas *(SOTA: GitHub Blog — "Multi-agent workflows often fail")*. Multi-agent systems require typed schemas to pass reliable state. These schemas MUST be included in SPEC.md (see item 7 in `<spec_creation>` below). Also define Done-When verification criteria for every requirement (see item 8). *SPEC.md defines WHAT, not HOW — do not include implementation tasks.*
 </data_schema_definition>
-
-<capability_gates>
-**(SOTA Insight: Derived from OpenFang - "16 Security Systems & Capability Gates")**
-Before finishing SPEC.md, explicitly define what the agents are NOT allowed to do automatically without human approval.
-If `autoAdvance: true`, skip this question. Add a deferred placeholder to SPEC.md:
-"## Capability & Security Gates\n_Deferred — auto mode cannot elicit gate preferences; requires explicit review before production deployment._"
-Otherwise:
-Ask the user: "Are there any destructive actions, purchases, or external API calls that should require mandatory human approval (Capability Gates)?"
-Add these into the new `## Capability & Security Gates` section of the SPEC.md.
-</capability_gates>
 
 <spec_creation>
 After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
@@ -311,9 +294,20 @@ After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
 4. **Requirements are ordered** by priority within each category
 5. **Out of Scope is populated** — includes things the developer explicitly said "not now" AND anti-features found in Research.
 6. **Key Decisions are logged** — any choices made during questioning or dictated by the SOTA research.
-7. **Capability & Security Gates are handled explicitly** — define concrete human-in-the-loop triggers in interactive mode, or add the deferred review placeholder in auto mode so the security decision is visible rather than silently omitted.
-8. **Authorization Matrix (optional)**: For projects with multiple user roles or protected resources, create `.planning/AUTH_MATRIX.md` using the template at `.planning/templates/auth-matrix.md`. The integration checker will use this matrix for systematic auth verification during milestone audits.
-9. **Current State is set** to Phase 1, Status: Not started.
+7. **Typed Data Schemas** *(SOTA: GitHub Blog — "Multi-agent workflows often fail")*: explicitly define the core Data Models/Typed Schemas the project will use (e.g., `type UserProfile = { id: number; plan: 'free' | 'pro' }`). Multi-agent systems require typed schemas to pass reliable state; natural language instructions fail across agent handoffs. *SPEC.md defines WHAT, not HOW — do not include implementation tasks.*
+8. **Done-When Verification Chain** *(SOTA: Cyanluna)*: For EVERY requirement in the "Must Have (v1)" section, define a clear, verifiable `[Done-When: ...]` criterion. "User can log in" must become "User can log in [Done-When: Login form submits, JWT is received, and User is redirected to Dashboard]". No exceptions.
+9. **Capability & Security Gates**: Handle per the `<capability_gates>` section at the end of this `<spec_creation>` block.
+10. **Authorization Matrix (optional)**: For projects with multiple user roles or protected resources, create `.planning/AUTH_MATRIX.md` using the template at `.planning/templates/auth-matrix.md`. The integration checker will use this matrix for systematic auth verification during milestone audits.
+11. **Current State is set** to Phase 1, Status: Not started.
+
+<capability_gates>
+**(SOTA Insight: Derived from OpenFang - "16 Security Systems & Capability Gates")**
+Before finishing SPEC.md, explicitly define what the agents are NOT allowed to do automatically without human approval.
+If `autoAdvance: true`, skip this question. Add a deferred placeholder to SPEC.md:
+"## Capability & Security Gates\n_Deferred — auto mode cannot elicit gate preferences; requires explicit review before production deployment._"
+Otherwise:
+Add these into the new `## Capability & Security Gates` section of the SPEC.md.
+</capability_gates>
 
 ### Quality Check Before Presenting
 - [ ] Can I explain the core value in one sentence?
