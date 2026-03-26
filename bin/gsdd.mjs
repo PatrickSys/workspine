@@ -30,17 +30,26 @@ const IS_MAIN = process.argv[1]
 
 const [,, command, ...args] = process.argv;
 
+function defineWorkflow({ mutatesArtifacts = true, ...workflow }) {
+  return {
+    ...workflow,
+    mutatesArtifacts,
+    agent: mutatesArtifacts ? 'Code' : 'Plan',
+    opencodeType: mutatesArtifacts ? 'edit' : 'plan',
+  };
+}
+
 const WORKFLOWS = [
-  { name: 'gsdd-new-project', workflow: 'new-project.md', description: 'New project - questioning, codebase audit, research, spec, roadmap', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-map-codebase', workflow: 'map-codebase.md', description: 'Map or refresh codebase - 4 parallel mappers, staleness check, secrets scan', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-plan', workflow: 'plan.md', description: 'Plan a phase - research check, backward planning, task creation', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, verify changes, follow repo git conventions', agent: 'Code', opencodeType: 'edit' },
-  { name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-audit-milestone', workflow: 'audit-milestone.md', description: 'Audit a completed milestone - cross-phase integration, requirements coverage, E2E flows', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-quick', workflow: 'quick.md', description: 'Quick task - plan and execute a sub-hour task outside the phase cycle', agent: 'Code', opencodeType: 'edit' },
-  { name: 'gsdd-pause', workflow: 'pause.md', description: 'Pause work - save session context for seamless resumption', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-resume', workflow: 'resume.md', description: 'Resume work - restore context and route to next action', agent: 'Plan', opencodeType: 'plan' },
-  { name: 'gsdd-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', agent: 'Plan', opencodeType: 'plan' },
+  defineWorkflow({ name: 'gsdd-new-project', workflow: 'new-project.md', description: 'New project - questioning, codebase audit, research, spec, roadmap' }),
+  defineWorkflow({ name: 'gsdd-map-codebase', workflow: 'map-codebase.md', description: 'Map or refresh codebase - 4 parallel mappers, staleness check, secrets scan' }),
+  defineWorkflow({ name: 'gsdd-plan', workflow: 'plan.md', description: 'Plan a phase - research check, backward planning, task creation' }),
+  defineWorkflow({ name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, verify changes, follow repo git conventions' }),
+  defineWorkflow({ name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan' }),
+  defineWorkflow({ name: 'gsdd-audit-milestone', workflow: 'audit-milestone.md', description: 'Audit a completed milestone - cross-phase integration, requirements coverage, E2E flows' }),
+  defineWorkflow({ name: 'gsdd-quick', workflow: 'quick.md', description: 'Quick task - plan and execute a sub-hour task outside the phase cycle' }),
+  defineWorkflow({ name: 'gsdd-pause', workflow: 'pause.md', description: 'Pause work - save session context for seamless resumption' }),
+  defineWorkflow({ name: 'gsdd-resume', workflow: 'resume.md', description: 'Resume work - restore context and route to next action' }),
+  defineWorkflow({ name: 'gsdd-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', mutatesArtifacts: false }),
 ];
 
 const FRAMEWORK_VERSION = 'v1.2';

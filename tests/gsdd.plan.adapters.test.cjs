@@ -57,7 +57,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.doesNotMatch(claudePlanSkill, /^agent:/m);
 
     assert.match(claudeNewProjectSkill, /^context: fork$/m);
-    assert.match(claudeNewProjectSkill, /^agent: Plan$/m);
+    assert.match(claudeNewProjectSkill, /^agent: Code$/m);
 
     assert.match(claudePlanCommand, /Compatibility alias/);
     assert.match(claudePlanCommand, /\.claude\/skills\/gsdd-plan\/SKILL\.md/);
