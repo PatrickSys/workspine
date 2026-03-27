@@ -4,7 +4,7 @@
   "description": "GSDD — a portable, spec-driven development kernel for AI coding agents. Works with Claude Code, Codex CLI, OpenCode, Cursor, Copilot, and Gemini CLI.",
   "type": "module",
   "bin": {
-    "gsdd": "./bin/gsdd.mjs"
+    "gsdd": "bin/gsdd.mjs"
   },
   "scripts": {
     "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.models.test.cjs && node tests/gsdd.manifest.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs && node tests/gsdd.guards.test.cjs && node tests/gsdd.health.test.cjs && node tests/gsdd.scenarios.test.cjs"
@@ -48,6 +48,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/PatrickSys/get-shit-done-distilled"
+    "url": "git+https://github.com/PatrickSys/get-shit-done-distilled.git"
   }
 }

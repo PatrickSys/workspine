@@ -24,6 +24,7 @@ Before planning, acknowledge what is locked:
 - Decisions in APPROACH.md "Implementation Decisions" - these are user-validated choices. Implement the chosen approaches, not alternatives. "Agent's Discretion" items give you flexibility.
 - Patterns from previous phases - match existing conventions. Do not introduce new patterns without cause.
 - Deferred items - items marked v2, nice-to-have, or out of scope in SPEC.md or APPROACH.md. Do not plan for them.
+- Cross-check: if SPEC.md and APPROACH.md disagree on whether an item is must-have or deferred, stop and ask the user before planning. Do not silently adopt one classification over the other.
 
 If you need to challenge a locked decision: stop, ask the developer, and document the new decision explicitly.
 </context_fidelity>
@@ -58,8 +59,29 @@ Write to `.planning/research/{phase_number}-RESEARCH.md` with sections:
 - Research for this phase already exists and is still fresh
 - The phase uses only technologies already established in previous phases
 
-Quality gate: do not proceed to goal-backward planning if you have unresolved uncertainties about the implementation approach.
+Quality gate: do not proceed to goal-backward planning if you have unresolved uncertainties about the implementation approach. If research was skipped (skip conditions above apply), document the skip reason in the plan Notes section so the plan checker can verify the skip was justified.
 </research_check>
+
+<spec_quality_check>
+### When This Runs
+After research_check, before goal_backward_planning.
+
+### Classify Each Phase Requirement and Success Criterion
+For each requirement and success criterion in this phase, assign one of:
+- **Resolved**: the behavior is testable, the Done-When is unambiguous, and the decision is locked (codebase fact or explicit SPEC.md/APPROACH.md decision). Proceed.
+- **Open**: the requirement depends on a product or UX decision that has not been made. Cannot proceed.
+- **Ambiguous**: there are two or more reasonable interpretations of what "done" means. Cannot proceed.
+
+Trigger questions per item:
+- Is the Done-When criterion specific enough to write a verify command for?
+- Does this require a product or UX decision that is absent from SPEC.md, APPROACH.md, or ROADMAP.md?
+- Would two different developers reasonably implement this differently based only on the requirement text?
+
+### Quality Gate
+- If all items are **Resolved**: proceed to goal_backward_planning.
+- If any item is **Open** or **Ambiguous**: STOP. Report each item with the specific question that would resolve it. Do not produce an execution-ready plan until the user resolves these items.
+- Exception — **minor technical ambiguity** (e.g., exact error message wording, logging format) that does not change user-facing behavior: note it as a warning in the plan Notes section and proceed. Do not use this exception for behavioral or acceptance-criteria ambiguity.
+</spec_quality_check>
 
 <goal_backward_planning>
 Plan backward from success criteria.
@@ -250,6 +272,8 @@ must_haves:
 ## Notes
 [Gotchas, implementation notes, or explicit assumptions]
 ```
+
+**MANDATORY: You MUST write PLAN.md to disk at `.planning/phases/{phase_dir}/{plan_id}-PLAN.md`. Output to conversation alone is NOT sufficient. If this file is not written to disk, planning is NOT complete.**
 </plan_structure>
 
 <approach_exploration>

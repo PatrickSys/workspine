@@ -28,3 +28,13 @@ backups/
 .internal-research/
 .claude-octopus/
 
+# Vendor-generated adapter output
+.codex/
+.opencode/
+
+# Third-party skills install
+.agents/
+skills-lock.json
+
+# Codebase indexer cache
+.codebase-context/

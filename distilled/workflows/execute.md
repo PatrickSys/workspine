@@ -255,10 +255,9 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** Plan execution — created `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md`.
 
-**Next step:** `/gsdd:verify` — verify that the phase goal was achieved (if `workflow.verifier` is enabled in config.json)
-
-If verifier is disabled or verification already passed:
-**Next step:** `/gsdd:progress` — check status and route to the next phase
+**Next step:** Check `.planning/config.json` → `workflow.verifier`:
+- If `true`: run `/gsdd:verify` — verify that the phase goal was achieved
+- If `false` (or key missing): run `/gsdd:progress` — check status and route to the next phase
 
 Also available:
 - `/gsdd:plan` — plan the next wave (if more plans remain in this phase)

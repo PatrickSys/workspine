@@ -238,6 +238,8 @@ Before returning, self-check against the checker dimensions:
 5. scope sanity
 6. must-have quality
 7. context compliance
+8. goal achievement
+9. approach alignment (when APPROACH.md exists)
 
 Task completeness rules:
 - every task has files, action, verify, and done

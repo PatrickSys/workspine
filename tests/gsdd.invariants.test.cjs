@@ -832,6 +832,8 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     'scope_sanity',
     'must_have_quality',
     'context_compliance',
+    'goal_achievement',
+    'approach_alignment',
   ];
 
   const planCheckerContent = fs.readFileSync(
@@ -844,7 +846,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     path.join(AGENTS_DIR, 'planner.md'), 'utf-8'
   );
 
-  describe('plan-checker.md documents all 7 dimensions', () => {
+  describe('plan-checker.md documents all 9 dimensions', () => {
     for (const dim of PLAN_CHECKER_DIMENSIONS) {
       test(`plan-checker.md documents dimension: ${dim}`, () => {
         assert.ok(
@@ -855,7 +857,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     }
   });
 
-  describe('plan.md documents all 7 checker dimensions', () => {
+  describe('plan.md documents all 9 checker dimensions', () => {
     for (const dim of PLAN_CHECKER_DIMENSIONS) {
       test(`plan.md documents checker dimension: ${dim}`, () => {
         assert.ok(
@@ -866,7 +868,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     }
   });
 
-  describe('planner.md references all 7 checker dimensions', () => {
+  describe('planner.md references all 9 checker dimensions', () => {
     // planner.md uses natural language labels (e.g. "requirement coverage") not underscored JSON keys
     const PLANNER_DIMENSION_LABELS = [
       'requirement coverage',
@@ -876,6 +878,8 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
       'scope sanity',
       'must-have quality',
       'context compliance',
+      'goal achievement',
+      'approach alignment',
     ];
 
     for (const label of PLANNER_DIMENSION_LABELS) {
@@ -1116,7 +1120,8 @@ describe('G3 — File Size Guards', () => {
   // added mandatory completion routing + positional discipline gates that push it
   // past 400. Exempted with a higher limit rather than losing essential content.
   // plan.md ~453 lines after D29 approach exploration (research subagent prompt extracted to role contract)
-  const WORKFLOW_EXEMPT = { 'new-project.md': 430, 'plan.md': 460 };
+  // plan.md ~478 lines after Phase 2 spec_quality_check section addition (D1 ambiguity gate)
+  const WORKFLOW_EXEMPT = { 'new-project.md': 430, 'plan.md': 480 };
 
   for (const wf of getWorkflowFiles()) {
     const limit = WORKFLOW_EXEMPT[wf] || SIZE_LIMITS.workflow;

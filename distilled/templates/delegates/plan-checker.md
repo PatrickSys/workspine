@@ -21,7 +21,10 @@ Verify these dimensions:
 - `key_link_completeness`: important wiring/integration links are planned, not just isolated artifacts
 - `scope_sanity`: plans are sized so an executor can complete them without context collapse
 - `must_have_quality`: success criteria and must-haves are specific, observable, and reflected in tasks
-- `context_compliance`: locked decisions are honored and deferred ideas stay out of scope
+- `context_compliance`: locked decisions are honored and deferred ideas stay out of scope. Additionally check scope consistency:
+  - **Must-have coverage?** Every must-have requirement mapped to this phase in SPEC.md must appear in at least one plan task. A must-have that silently disappears from the plan is a `blocker`.
+  - **Deferred exclusion?** Items marked "Nice to Have", "Deferred", or "Out of Scope" in SPEC.md must not appear as plan tasks. Present → `blocker`.
+  - **Cross-surface consistency?** If SPEC.md marks an item as must-have but APPROACH.md marks it as deferred (or vice versa), surface the contradiction → `blocker`. Include a `fix_hint` asking the planner to resolve the conflict with the user before proceeding.
 - `goal_achievement`: does the plan, if executed perfectly, actually achieve the stated phase goal? Check:
   - **Goal addressed?** Compare the phase goal statement to the plan's collective task outputs. Would successful completion of all tasks deliver the goal? If the goal says "users can authenticate" but tasks only set up database schema → `blocker`.
   - **Success criteria reachable?** Are the phase success criteria from ROADMAP.md achievable through the planned tasks? Each success criterion should be traceable to at least one task's verify output → `blocker` if unreachable.

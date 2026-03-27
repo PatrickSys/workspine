@@ -1740,6 +1740,56 @@ describe('G26 - Context Engineering: Quick Workflow', () => {
   });
 });
 
+describe('G28 - Spec Quality Check and Contradiction Detection', () => {
+  const planWorkflow = fs.readFileSync(
+    path.join(__dirname, '..', 'distilled', 'workflows', 'plan.md'), 'utf-8'
+  );
+  const planCheckerDelegate = fs.readFileSync(
+    path.join(__dirname, '..', 'distilled', 'templates', 'delegates', 'plan-checker.md'), 'utf-8'
+  );
+
+  test('plan.md has <spec_quality_check> section', () => {
+    assert.match(planWorkflow, /<spec_quality_check>/,
+      'plan.md must have <spec_quality_check> section for SC1/SC2. FIX: Add <spec_quality_check> between </research_check> and <goal_backward_planning>.');
+  });
+
+  test('plan.md spec_quality_check has Resolved/Open/Ambiguous classification', () => {
+    assert.ok(
+      planWorkflow.includes('Resolved') && planWorkflow.includes('Open') && planWorkflow.includes('Ambiguous'),
+      'plan.md spec_quality_check must classify items as Resolved, Open, or Ambiguous. FIX: Add three-way classification taxonomy to <spec_quality_check>.');
+  });
+
+  test('plan.md spec_quality_check has quality gate preventing planning with Open items', () => {
+    assert.ok(
+      planWorkflow.includes('STOP') && planWorkflow.includes('spec_quality_check'),
+      'plan.md must have a STOP gate in spec_quality_check for Open/Ambiguous items. FIX: Add "STOP" quality gate instruction to <spec_quality_check>.');
+  });
+
+  test('plan.md context_fidelity has SPEC.md vs APPROACH.md cross-check', () => {
+    assert.ok(
+      planWorkflow.includes('Cross-check'),
+      'plan.md context_fidelity must cross-check SPEC.md vs APPROACH.md deferral conflicts. FIX: Add Cross-check line to <context_fidelity>.');
+  });
+
+  test('plan-checker.md context_compliance has must-have coverage sub-check', () => {
+    assert.ok(
+      planCheckerDelegate.includes('Must-have coverage'),
+      'plan-checker.md context_compliance must check that phase must-haves appear in plan tasks. FIX: Add "Must-have coverage?" sub-check to context_compliance.');
+  });
+
+  test('plan-checker.md context_compliance has deferred exclusion sub-check', () => {
+    assert.ok(
+      planCheckerDelegate.includes('Deferred exclusion'),
+      'plan-checker.md context_compliance must check that deferred/out-of-scope items are absent from plan tasks. FIX: Add "Deferred exclusion?" sub-check to context_compliance.');
+  });
+
+  test('plan-checker.md context_compliance has cross-surface consistency sub-check', () => {
+    assert.ok(
+      planCheckerDelegate.includes('Cross-surface consistency'),
+      'plan-checker.md context_compliance must check for SPEC.md vs APPROACH.md must-have/deferred contradictions. FIX: Add "Cross-surface consistency?" sub-check to context_compliance.');
+  });
+});
+
 describe('G27 - Workflow Mutability Classification', () => {
   test('artifact-writing workflows are emitted as Code/edit surfaces', async () => {
     const mod = await import(`file://${GSDD_PATH.replace(/\\/g, '/')}`);
