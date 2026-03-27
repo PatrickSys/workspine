@@ -1831,3 +1831,66 @@ describe('G27 - Workflow Mutability Classification', () => {
       'gsdd-progress must remain opencodeType: plan. FIX: Keep read-only status reporting in the plan lane.');
   });
 });
+
+describe('G29 - Outcome-Based Verification Contracts', () => {
+  const verifyWorkflow = fs.readFileSync(
+    path.join(__dirname, '..', 'distilled', 'workflows', 'verify.md'), 'utf-8'
+  );
+
+  test('verify.md has <proof_contract> section', () => {
+    assert.match(verifyWorkflow, /<proof_contract>/,
+      'verify.md must have <proof_contract> section (GA1/VERIFY-01). FIX: Add <proof_contract> between </must_haves> and <verification_levels>.');
+  });
+
+  test('verify.md proof_contract is positioned between must_haves and verification_levels', () => {
+    const mustHavesEnd = verifyWorkflow.indexOf('</must_haves>');
+    const proofContractStart = verifyWorkflow.indexOf('<proof_contract>');
+    const verificationLevelsStart = verifyWorkflow.indexOf('<verification_levels>');
+    assert.ok(mustHavesEnd > -1 && proofContractStart > -1 && verificationLevelsStart > -1,
+      'verify.md must have </must_haves>, <proof_contract>, and <verification_levels>. FIX: Check section structure.');
+    assert.ok(
+      proofContractStart > mustHavesEnd && proofContractStart < verificationLevelsStart,
+      'verify.md <proof_contract> must be after </must_haves> and before <verification_levels> (GA1). FIX: Reorder sections.');
+  });
+
+  test('verify.md proof_contract names all four SPEC.md proof types', () => {
+    const pcStart = verifyWorkflow.indexOf('<proof_contract>');
+    const pcEnd = verifyWorkflow.indexOf('</proof_contract>');
+    const section = verifyWorkflow.slice(pcStart, pcEnd);
+    for (const proofType of ['repo-test', 'code-evidence', 'runtime-check', 'user-confirmation']) {
+      assert.ok(
+        section.includes(proofType),
+        `verify.md <proof_contract> must name proof type "${proofType}" (GA1/VERIFY-01). FIX: Add all four VerificationEvidence proofType values.`);
+    }
+  });
+
+  test('verify.md must_haves contains risk: high self-classification', () => {
+    const mhStart = verifyWorkflow.indexOf('<must_haves>');
+    const mhEnd = verifyWorkflow.indexOf('</must_haves>');
+    const section = verifyWorkflow.slice(mhStart, mhEnd);
+    assert.ok(
+      section.includes('risk: high') || section.includes('risk:high'),
+      'verify.md <must_haves> must include risk: high classification step (GA2/VERIFY-02). FIX: Add risk self-classification at end of <must_haves>.');
+  });
+
+  test('verify.md must_haves risk classification references behavioral or UX changes', () => {
+    const mhStart = verifyWorkflow.indexOf('<must_haves>');
+    const mhEnd = verifyWorkflow.indexOf('</must_haves>');
+    const section = verifyWorkflow.slice(mhStart, mhEnd);
+    assert.ok(
+      section.includes('behavioral') || section.includes('UX change') || section.includes('user-visible'),
+      'verify.md <must_haves> risk classification must reference behavioral/UX changes as the trigger (GA2). FIX: Add trigger language.');
+  });
+
+  test('verify.md report_format gaps schema includes proof_type and severity fields', () => {
+    const rfStart = verifyWorkflow.indexOf('<report_format>');
+    const rfEnd = verifyWorkflow.indexOf('</report_format>');
+    const section = verifyWorkflow.slice(rfStart, rfEnd);
+    assert.ok(
+      section.includes('proof_type'),
+      'verify.md <report_format> gaps schema must include proof_type field (GA4/VERIFY-01). FIX: Add proof_type to gaps frontmatter example.');
+    assert.ok(
+      section.includes('severity'),
+      'verify.md <report_format> gaps schema must include severity field (GA4). FIX: Add severity to gaps frontmatter example.');
+  });
+});
