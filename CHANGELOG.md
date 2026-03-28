@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.4.1...v0.5.0) (2026-03-28)
+
+
+### Features
+
+* adapter constants, subagentFiles contract, kind enforcement, 9-dimension coverage ([#52](https://github.com/PatrickSys/get-shit-done-distilled/issues/52)) ([c4f5e2e](https://github.com/PatrickSys/get-shit-done-distilled/commit/c4f5e2ec8ca1bd2744f983cd38463ff911af916f))
+
 ## [0.4.1](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.4.0...v0.4.1) (2026-03-28)
 
 
