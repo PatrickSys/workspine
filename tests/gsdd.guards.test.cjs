@@ -1894,3 +1894,36 @@ describe('G29 - Outcome-Based Verification Contracts', () => {
       'verify.md <report_format> gaps schema must include severity field (GA4). FIX: Add severity to gaps frontmatter example.');
   });
 });
+
+describe('G30 - Verify ROADMAP Closure On Pass', () => {
+  const verifyWorkflow = fs.readFileSync(
+    path.join(__dirname, '..', 'distilled', 'workflows', 'verify.md'), 'utf-8'
+  );
+
+  test('verify.md persistence section mandates ROADMAP update on passed status', () => {
+    const persStart = verifyWorkflow.indexOf('<persistence>');
+    const persEnd = verifyWorkflow.indexOf('</persistence>');
+    const section = verifyWorkflow.slice(persStart, persEnd);
+    assert.ok(
+      section.includes('ROADMAP'),
+      'verify.md <persistence> must instruct updating ROADMAP.md on pass (I27 fix). FIX: Add ROADMAP [x] update step after writing VERIFICATION.md.');
+  });
+
+  test('verify.md persistence ROADMAP update is conditional on passed status', () => {
+    const persStart = verifyWorkflow.indexOf('<persistence>');
+    const persEnd = verifyWorkflow.indexOf('</persistence>');
+    const section = verifyWorkflow.slice(persStart, persEnd);
+    assert.ok(
+      section.includes('if') && section.includes('passed') && section.includes('ROADMAP'),
+      'verify.md <persistence> ROADMAP update must be conditional on status: passed (I27 fix). FIX: Add "if status: passed" guard to ROADMAP update.');
+  });
+
+  test('verify.md success_criteria includes ROADMAP [x] check', () => {
+    const scStart = verifyWorkflow.indexOf('<success_criteria>');
+    const scEnd = verifyWorkflow.indexOf('</success_criteria>');
+    const section = verifyWorkflow.slice(scStart, scEnd);
+    assert.ok(
+      section.includes('ROADMAP') && section.includes('passed'),
+      'verify.md <success_criteria> must include a ROADMAP [x] check for passed status (I27 fix). FIX: Add ROADMAP checkbox to success_criteria list.');
+  });
+});
