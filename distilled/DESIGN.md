@@ -3,6 +3,9 @@
 > Rationale for every structural choice GSDD makes relative to GSD.
 > Each decision cites GSD source files, GSDD implementation, and external research.
 > Updated as decisions are revised or new ones land.
+>
+> **Evidence index:** `distilled/EVIDENCE-INDEX.md` — one-line-per-source mapping for all decisions.
+> **Open gaps:** `.internal-research/gaps.md` — live blockers, contradictions, and deferred decisions.
 
 ---
 
@@ -45,6 +48,7 @@
 35. [Skills-Native Runtimes vs Governance Adapters](#35-skills-native-runtimes-vs-governance-adapters)
 36. [Interactive Init Wizard](#36-interactive-init-wizard)
 37. [Mutability-Driven Workflow Classification](#37-mutability-driven-workflow-classification)
+38. [Retroactive Artifact Enforcement](#38-retroactive-artifact-enforcement)
 
 ---
 
@@ -1631,6 +1635,46 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 **GSD comparison:** GSD's leverage also depends on persisted workflow artifacts. GSDD's portable/runtime split adds a new failure mode GSD did not have in the same form: a generated adapter can misclassify a mutating workflow even when the markdown contract is correct. This decision makes the adapter/runtime layer honor the artifact contract instead of undermining it.
 
 **GSDD implementation:** `bin/gsdd.mjs`, `bin/lib/rendering.mjs`, `tests/gsdd.init.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`, `tests/gsdd.guards.test.cjs`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`
+
+---
+
+## 38. Retroactive Artifact Enforcement
+
+**Problem:** ROADMAP.md phase `[x]` can be marked complete without the required artifacts (PLAN.md, SUMMARY.md, VERIFICATION.md) existing on disk. No mechanical gate prevents phase advancement without artifacts. This gap (I27) recurred twice in the v1 milestone:
+
+- Sub-gap (a): early session termination drops final bookkeeping — ROADMAP marked `[x]` with no VERIFICATION.md.
+- Sub-gap (b): `verify.md` structural omission — even on full lifecycle success, ROADMAP stayed stale because only `execute.md` updated it.
+
+Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-gap (a) requires either a preventive CLI gate or an explicit accept-by-design decision.
+
+**Decision:** Accept milestone-audit as the retroactive enforcement layer for sub-gap (a). Do not add a preventive CLI gate.
+
+**Rationale:**
+
+1. **Artifact mandates already exist.** D28 added `<persistence>` sections with MANDATORY language to `execute.md` and `verify.md`. D30 propagated them to `quick.md`, `map-codebase.md`, `audit-milestone.md`, and `pause.md`. The specification-level enforcement is in place across all artifact-producing workflows.
+
+2. **Kernel simplicity.** Adding a preventive gate (e.g., `gsdd verify` checking artifact existence before allowing ROADMAP updates) would require every workflow to call a CLI guard before its state update. This creates a new coupling between the CLI layer and the workflow layer — complexity the kernel explicitly avoids. See `.internal-research/strategy.md` section on policy depth vs kernel purity.
+
+3. **Retroactive audit is sufficient.** The milestone audit (`audit-milestone.md`, `agents/integration-checker.md`) checks artifact completeness across all phases as its first step. Violations surface as structured gaps, not silent passes. The audit cost is bounded and predictable.
+
+4. **Gap already has guard coverage.** G30 mechanically enforces that `verify.md` closes ROADMAP on passed status. The sub-gap (b) failure mode is now guarded. Sub-gap (a) (session interruption) is a behavioral failure by the agent, not a structural gap in the spec — no guard can prevent a session from crashing mid-workflow.
+
+5. **GSD comparison.** GSD has no preventive artifact gate either. GSD's enforcement relies on its mandatory commit steps and `gsd-tools.cjs` CLI calls. GSDD's design choice strips mandatory commits (D8) and CLI-gated workflow steps (D9), trading off some enforcement depth for portability. Milestone audit is the equivalent retroactive layer.
+
+**What this decision closes:** I27 sub-gap (a) is accepted by design. The full I27 gap is now CLOSED: sub-gap (b) by D28/G30, sub-gap (a) by this decision.
+
+**Evidence:**
+
+- `.internal-research/gaps.md` I27 entry (two occurrences, root-cause analysis, close conditions)
+- D28 mandate language in `distilled/workflows/execute.md` and `distilled/workflows/verify.md`
+- D30 propagation to all artifact-producing workflows
+- G30 guard in `tests/gsdd.guards.test.cjs` (verify.md ROADMAP closure)
+- `.internal-research/strategy.md` (kernel simplicity vs policy depth trade-off)
+- `distilled/workflows/audit-milestone.md` (retroactive artifact completeness check)
+
+**GSD comparison:** GSD's `gsd-tools.cjs` CLI enforces workflow progression gates directly. GSDD replaces those with specification-level MANDATORY language (D9). This is a deliberate portability trade-off, not an oversight.
+
+**GSDD implementation:** `distilled/workflows/execute.md` (SUMMARY.md persistence gate), `distilled/workflows/verify.md` (VERIFICATION.md persistence gate + ROADMAP closure), `distilled/workflows/audit-milestone.md` (retroactive artifact check), `tests/gsdd.guards.test.cjs` (G30), `distilled/EVIDENCE-INDEX.md` (D38 entry)
 
 ---
 

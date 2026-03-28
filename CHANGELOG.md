@@ -46,7 +46,7 @@
 * hardening propagation + outcome dimension (D30, D31) ([#44](https://github.com/PatrickSys/get-shit-done-distilled/issues/44)) ([25dde9d](https://github.com/PatrickSys/get-shit-done-distilled/commit/25dde9d3cb982514921db783473a6014c407ca1c))
 * quick workflow alignment hardening + context engineering (D32, D33, D34) ([#45](https://github.com/PatrickSys/get-shit-done-distilled/issues/45)) ([ecccd5c](https://github.com/PatrickSys/get-shit-done-distilled/commit/ecccd5c6080244d4997c37993a53bf9f8208b829))
 
-Current framework state: 37 design decisions documented in `distilled/DESIGN.md`.
+Current framework state: 38 design decisions documented in `distilled/DESIGN.md`.
 
 # [0.2.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.1.0...v0.2.0) (2026-03-24)
 

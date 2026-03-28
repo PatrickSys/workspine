@@ -780,11 +780,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'post-init routing must show Gemini slash-command guidance. FIX: Add Gemini /gsdd-new-project to init output.');
   });
 
-  test('DESIGN.md ToC lists 37 entries', () => {
+  test('DESIGN.md ToC lists 38 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 37,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 37. FIX: Update DESIGN.md ToC to list all 37 decisions.`);
+    assert.strictEqual(tocEntries.length, 38,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 38. FIX: Update DESIGN.md ToC to list all 38 decisions.`);
   });
 });
 
@@ -1935,5 +1935,172 @@ describe('G30 - Verify ROADMAP Closure On Pass', () => {
     assert.ok(
       section.includes('ROADMAP') && section.includes('passed'),
       'verify.md <success_criteria> must include a ROADMAP [x] check for passed status (I27 fix). FIX: Add ROADMAP checkbox to success_criteria list.');
+  });
+});
+
+describe('G31 - Evidence Index Completeness', () => {
+  const designContent = fs.readFileSync(
+    path.join(__dirname, '..', 'distilled', 'DESIGN.md'), 'utf-8'
+  );
+  const evidenceContent = fs.readFileSync(
+    path.join(__dirname, '..', 'distilled', 'EVIDENCE-INDEX.md'), 'utf-8'
+  );
+
+  // Count numbered decisions in ToC: lines matching "N. [Title]"
+  const tocDecisions = (designContent.match(/^\d+\. \[/gm) || []).length;
+
+  // Count D-entries in EVIDENCE-INDEX.md: lines matching "## DN —"
+  const evidenceEntries = (evidenceContent.match(/^## D\d+ —/gm) || []).length;
+
+  test('distilled/EVIDENCE-INDEX.md exists', () => {
+    assert.ok(
+      fs.existsSync(path.join(__dirname, '..', 'distilled', 'EVIDENCE-INDEX.md')),
+      'distilled/EVIDENCE-INDEX.md must exist (Phase 5 SC-3). FIX: Create the evidence index file.');
+  });
+
+  test('EVIDENCE-INDEX.md entry count matches DESIGN.md ToC decision count', () => {
+    assert.ok(
+      evidenceEntries > 0,
+      'EVIDENCE-INDEX.md must have at least one D-entry. FIX: Add ## DN — entries.');
+    assert.strictEqual(
+      evidenceEntries,
+      tocDecisions,
+      `EVIDENCE-INDEX.md has ${evidenceEntries} entries but DESIGN.md ToC has ${tocDecisions} decisions. FIX: Add missing entries or remove extras.`
+    );
+  });
+
+  test('every EVIDENCE-INDEX.md entry has at least one source line', () => {
+    // Split into per-entry blocks and verify each has a bullet
+    const entries = evidenceContent.split(/^## D\d+ —/m).slice(1);
+    const entriesWithoutSources = entries.filter(block => !block.includes('\n- '));
+    assert.strictEqual(
+      entriesWithoutSources.length,
+      0,
+      `${entriesWithoutSources.length} EVIDENCE-INDEX.md entries have no source lines. FIX: Add at least one "- source" bullet per entry.`
+    );
+  });
+
+  test('DESIGN.md preamble references gaps.md', () => {
+    const preambleEnd = designContent.indexOf('## Table of Contents');
+    const preamble = designContent.slice(0, preambleEnd);
+    assert.ok(
+      preamble.includes('gaps.md'),
+      'DESIGN.md preamble must reference gaps.md (Phase 5 SC-3). FIX: Add gaps.md pointer to the preamble blockquote.');
+  });
+});
+
+describe('G32 - Open Gaps Structure', () => {
+  const gapsPath = path.join(__dirname, '..', '.internal-research', 'gaps.md');
+  const gapsContent = fs.existsSync(gapsPath)
+    ? fs.readFileSync(gapsPath, 'utf-8')
+    : '';
+
+  test('.internal-research/gaps.md exists and is non-empty', () => {
+    assert.ok(
+      fs.existsSync(gapsPath),
+      '.internal-research/gaps.md must exist (Phase 5 SC-3). FIX: Create the gaps tracking file.');
+    assert.ok(
+      gapsContent.length > 100,
+      '.internal-research/gaps.md must not be empty. FIX: Add gap entries.');
+  });
+
+  test('every gaps.md gap entry has a Status line', () => {
+    // Find all "### Gap" sections and check each has a Status line within the next 5 lines
+    const gapBlocks = gapsContent.split(/^### Gap/m).slice(1);
+    const missingStatus = gapBlocks.filter(block => {
+      const firstLines = block.split('\n').slice(0, 8).join('\n');
+      return !firstLines.includes('- Status:');
+    });
+    assert.strictEqual(
+      missingStatus.length,
+      0,
+      `${missingStatus.length} gaps.md entries are missing a "- Status:" line. FIX: Add "- Status: NOW|LATER|CLOSED" to each gap entry.`
+    );
+  });
+
+  test('gaps.md has a Carry-over Priority Snapshot section', () => {
+    assert.ok(
+      gapsContent.includes('Carry-over Priority Snapshot'),
+      'gaps.md must include a "Carry-over Priority Snapshot" section (Phase 5 SC-3). FIX: Add the summary section at the bottom.');
+  });
+});
+
+describe('G33 - Phase 5 Success Criteria', () => {
+  const pkgJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
+  const gsmdjsContent = fs.readFileSync(path.join(__dirname, '..', 'bin', 'gsdd.mjs'), 'utf-8');
+
+  test('SC-1: package.json has no mandatory runtime dependencies', () => {
+    const deps = pkgJson.dependencies;
+    assert.ok(
+      deps === undefined || Object.keys(deps).length === 0,
+      'package.json must have no mandatory dependencies (SC-1: no vendor lock-in). FIX: Remove mandatory runtime deps or move to devDependencies.');
+  });
+
+  test('SC-1: bin/gsdd.mjs has no dashboard or MCP imports', () => {
+    assert.ok(
+      !gsmdjsContent.includes('dashboard') && !gsmdjsContent.includes('@modelcontextprotocol'),
+      'bin/gsdd.mjs must not import dashboard or MCP packages (SC-1: no hidden services). FIX: Remove the import.');
+  });
+
+  test('SC-2: all 8 CLI commands are registered', () => {
+    // Commands appear as keys in the command registry object, e.g.: init: cmdInit, 'find-phase': cmdFindPhase
+    const commandPatterns = [
+      /\binit\s*:/,
+      /\bupdate\s*:/,
+      /\bhealth\s*:/,
+      /\bverify\s*:/,
+      /\bscaffold\s*:/,
+      /'find-phase'\s*:/,
+      /\bmodels\s*:/,
+      /\bhelp\s*:/,
+    ];
+    for (const pattern of commandPatterns) {
+      assert.ok(
+        pattern.test(gsmdjsContent),
+        `bin/gsdd.mjs must register the '${pattern.source}' command (SC-2: deterministic mechanics). FIX: Add the command to the registry.`
+      );
+    }
+  });
+
+  test('SC-2: bin/lib/manifest.mjs exports generation manifest functions', () => {
+    const manifestContent = fs.readFileSync(path.join(__dirname, '..', 'bin', 'lib', 'manifest.mjs'), 'utf-8');
+    assert.ok(
+      manifestContent.includes('buildManifest'),
+      'bin/lib/manifest.mjs must export buildManifest (SC-2). FIX: Add the export.');
+    assert.ok(
+      manifestContent.includes('writeManifest'),
+      'bin/lib/manifest.mjs must export writeManifest (SC-2). FIX: Add the export.');
+  });
+
+  test('SC-2: bin/lib/phase.mjs exports artifact verification functions', () => {
+    const phaseContent = fs.readFileSync(path.join(__dirname, '..', 'bin', 'lib', 'phase.mjs'), 'utf-8');
+    assert.ok(
+      phaseContent.includes('cmdVerify') || phaseContent.includes('createCmdVerify'),
+      'bin/lib/phase.mjs must export a verify command (SC-2). FIX: Add the export.');
+    assert.ok(
+      phaseContent.includes('cmdScaffold') || phaseContent.includes('createCmdScaffold'),
+      'bin/lib/phase.mjs must export a scaffold command (SC-2). FIX: Add the export.');
+  });
+
+  test('SC-3: distilled/EVIDENCE-INDEX.md exists with entries', () => {
+    assert.ok(
+      fs.existsSync(path.join(__dirname, '..', 'distilled', 'EVIDENCE-INDEX.md')),
+      'distilled/EVIDENCE-INDEX.md must exist (SC-3: evidence discipline). FIX: Create the evidence index.');
+    const content = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'EVIDENCE-INDEX.md'), 'utf-8');
+    const entryCount = (content.match(/^## D\d+ —/gm) || []).length;
+    assert.ok(
+      entryCount >= 37,
+      `distilled/EVIDENCE-INDEX.md must have at least 37 entries (SC-3), found ${entryCount}. FIX: Add missing entries.`);
+  });
+
+  test('SC-3: .internal-research/gaps.md exists with structured gap entries', () => {
+    const gapsPath = path.join(__dirname, '..', '.internal-research', 'gaps.md');
+    assert.ok(
+      fs.existsSync(gapsPath),
+      '.internal-research/gaps.md must exist (SC-3: open gaps explicit). FIX: Create the gaps file.');
+    const content = fs.readFileSync(gapsPath, 'utf-8');
+    assert.ok(
+      content.includes('### Gap') && content.includes('- Status:'),
+      '.internal-research/gaps.md must have structured gap entries with Status lines (SC-3). FIX: Add gap entries with "- Status:" fields.');
   });
 });
