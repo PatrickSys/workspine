@@ -47,6 +47,7 @@ Ask the user what the next milestone should focus on. Explore:
 - Any constraints (deadline, team size, dependencies)?
 
 If a `.planning/MILESTONE-BRIEF.md` exists, use it as the input instead of asking. Note any assumptions inferred from the brief.
+(MILESTONE-BRIEF.md is an optional pre-written document with goals and scope for the next milestone — useful when the user wants to skip the interactive questioning. Create it manually in `.planning/` before running this workflow.)
 
 ## 3. Determine Version
 

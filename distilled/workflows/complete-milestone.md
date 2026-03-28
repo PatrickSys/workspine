@@ -9,7 +9,7 @@ Scope boundary: you archive the current milestone. You do not start the next one
 <prerequisites>
 `.planning/ROADMAP.md` must exist with phases.
 `.planning/SPEC.md` must exist.
-`.planning/MILESTONES.md` must exist.
+If `.planning/MILESTONES.md` does not exist, create it now (this is the first milestone completion — Step 8 will write the first entry).
 
 If `.planning/milestones/` does not exist, create it before writing archive files.
 </prerequisites>
@@ -19,7 +19,7 @@ Before starting, read these files:
 
 1. `.planning/ROADMAP.md` — phase statuses, milestone name, phase range
 2. `.planning/SPEC.md` — requirements, validated capabilities, current state section
-3. `.planning/MILESTONES.md` — previous milestone entries (for format reference)
+3. `.planning/MILESTONES.md` — previous milestone entries (for format reference); if this is the first milestone, skip — no previous entries exist yet
 4. `.planning/config.json` — `gitProtocol`, `mode` (for STOP gate behavior)
 5. All phase SUMMARY.md files in `.planning/phases/` — accomplishments, task counts
 6. Most recent `.planning/v*-MILESTONE-AUDIT.md` — audit status (passed / gaps_found)

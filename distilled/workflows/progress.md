@@ -174,9 +174,10 @@ Suggested next action (subsequent milestone):
   Run /gsdd:new-milestone to start the next milestone cycle (gather goals, define requirements, create ROADMAP.md)
   Also available: /gsdd:progress (refresh after milestone setup)
 
-Suggested next action (first-time setup):
-  Run /gsdd:new-project to initialize the project (create SPEC.md + ROADMAP.md)
-  Also available: /gsdd:progress (refresh after setup)
+Suggested next action (incomplete milestone state — SPEC.md exists but no milestone archived yet):
+  Inspect .planning/ manually — a milestone is likely still in progress.
+  If a ROADMAP.md was deleted prematurely, re-run /gsdd:new-milestone to restore it.
+  Do NOT run /gsdd:new-project — SPEC.md already exists and re-running would overwrite it.
 ```
 
 If none of the above conditions match, report that the project is in a clean state with no obvious next action.
