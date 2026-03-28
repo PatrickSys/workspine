@@ -1914,7 +1914,7 @@ describe('G30 - Verify ROADMAP Closure On Pass', () => {
     const persEnd = verifyWorkflow.indexOf('</persistence>');
     const section = verifyWorkflow.slice(persStart, persEnd);
     assert.ok(
-      section.includes('passed') && section.includes('ROADMAP'),
+      section.includes('if') && section.includes('passed') && section.includes('ROADMAP'),
       'verify.md <persistence> ROADMAP update must be conditional on status: passed (I27 fix). FIX: Add "if status: passed" guard to ROADMAP update.');
   });
 
