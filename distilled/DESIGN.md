@@ -72,8 +72,8 @@
 
 - GSD source: `agents/_archive/gsd-codebase-mapper.md` lines 72-79 (original 7-file model)
 - GSDD implementation: `agents/mapper.md` input/output contracts (4 files only)
-- External: LeanSpec "Context Economy" principle; Aider tree-sitter dynamic repomaps (2026 SOTA)
 - `.planning/SPEC.md` "Lean Context Decision" section
+- External: Liu et al. "Lost in the Middle: How Language Models Use Long Contexts" (NeurIPS 2023) — position in context significantly affects recall; middle content is underweighted, supporting minimal stable file sets; Levy et al. "Same Task, More Tokens: Impact of Input Length on the Reasoning Performance of LLMs" (EMNLP 2024) — longer inputs degrade reasoning performance; Aider tree-sitter dynamic repo maps (aider.chat) — on-demand structural mapping as an alternative to static context files
 
 ---
 
@@ -163,6 +163,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 - GSD originals preserved in `agents/_archive/` (11 files, git history intact via `git mv`)
 - GSDD canonicals in `agents/` (9 files + README.md)
 - `agents/README.md` lifecycle table maps each canonical role to its GSD sources
+- External: CrewAI role-based team patterns, Microsoft AutoGen hierarchical agents, LangGraph multi-agent subgraphs — all validate role specialization over monolithic agents; specific count of 10 is engineering judgment shaped by GSD source lineage, not an externally prescribed number
 
 ---
 
@@ -209,6 +210,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 - `bin/gsdd.mjs` lines 84-102 (role copy step with existsSync guard)
 - `tests/gsdd.init.test.cjs` (validates role file existence and delegate-role references)
 - All 10 delegate files (each starts with a role contract reference on line 1)
+- External: Principal-agent theory (Jensen & Meckling, Journal of Financial Economics 1976) — the foundational model of delegation contracts where principals define behavioral constraints and agents execute within them; GoF Strategy Pattern (Gamma et al. "Design Patterns" 1994) — separating algorithm definition (role) from its usage context (delegate); LangGraph multi-agent subgraphs and Microsoft AutoGen hierarchical agent patterns validate role/orchestration separation in production AI systems
 
 ---
 
@@ -249,6 +251,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 - PR 2 intermediate state (one-hop via SKILL.md cross-reference)
 - PR 4 final state (zero-hop, role contains all rules)
 - `package.json` `files` array includes `agents/` (npm distribution fix)
+- External: OWASP Top 10 for LLM Applications v2.0 (2025) — LLM01 (Prompt Injection) and LLM07 (System Prompt Leakage) directly support embedding security rules at the role contract level; Greshake et al. "Not What You've Signed Up For: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection" (IEEE S&P 2023) — validates defense-in-depth at the agent-contract layer; Saltzer & Schroeder "The Protection of Information in Computer Systems" (1975) — complete mediation principle: every access must be checked against the access control policy
 
 ---
 
@@ -272,6 +275,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 - GSDD: `distilled/templates/delegates/researcher-synthesizer.md` (active delegate, references `synthesizer.md`)
 - `agents/synthesizer.md` canonical contract (cross-reference algorithm)
 - Config contract: `.planning/config.json` `researchDepth` field
+- External: LangGraph conditional edges — adaptive agent invocation based on workflow state is a core LangGraph pattern; Asai et al. "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection" (ICLR 2024) — validates conditional retrieval/synthesis based on whether additional context is needed; Anthropic "Building effective agents" (Dec 2024) — routing workflows match task complexity to agent selection
 
 ---
 
@@ -301,6 +305,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 - GSD source: `get-shit-done/workflows/new-project.md` lines 61-80 (brownfield offer delegates to map-codebase)
 - GSDD: `distilled/workflows/map-codebase.md` (standalone, re-runnable)
 - GSDD: `distilled/workflows/new-project.md` (auto-invoke for brownfield via skill reference)
+- External: Aider (aider.chat) uses dynamic tree-sitter-based repo maps generated on-demand rather than persistent cached indices — validates the freshness-over-cache approach; Cursor uses continuous background indexing (cached approach) showing both on-demand and cached are production-valid; on-demand is one defensible point on the freshness-vs-staleness-cost spectrum
 
 ---
 
@@ -330,6 +335,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 - GSD source: `get-shit-done/workflows/new-milestone.md` lines 101-173 (milestone-aware researchers), line 269 (phase numbering continuation)
 - GSDD: `distilled/README.md` lifecycle diagram
 - `.planning/SPEC.md` "Long-Term Lifecycle" section
+- External: Hierarchical Task Network (HTN) planning (Erol, Hendler & Nau 1994; Nau et al. JAIR 2003) — foundational AI planning literature establishing milestone→phase→task decomposition as the standard approach for complex goal hierarchies; PMI PMBOK Work Breakdown Structure (WBS) standard — industry-standard phase/task hierarchy for project planning; Khot et al. "Decomposed Prompting: A Modular Approach for Solving Complex Tasks" (ICLR 2023) — task decomposition improves LLM performance on multi-step work by reducing scope per subproblem
 
 ---
 
@@ -359,6 +365,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 - GSD source: `agents/_archive/gsd-executor.md` (mandatory commit in algorithm, TDD flow)
 - GSDD: `agents/executor.md` lines 57-64 (Git Guidance -- repo-native, advisory)
 - PR 5 (merged as PR #7): removed rigid git naming from workflows, adapters, generated governance
+- External: Industry consensus — Aider, GitHub Copilot, Cursor, Codex CLI, and OpenCode all treat git operations as user-controlled or advisory, not as enforced framework requirements; no major AI coding tool mandates a specific commit-per-task or branch-naming convention
 
 ---
 
@@ -474,6 +481,7 @@ Codex is skills-first because the Codex CLI already supports repository skills d
 - D7 (milestone hierarchy): STATE.md replaced by ROADMAP.md inline status
 - D8 (advisory git): repo conventions over framework defaults
 - D10 (context isolation): summaries up, documents to disk
+- External: Crystal Clear (Cockburn 2004) — ceremony scales with team size and criticality; lightweight methods are prescribed for small, co-located, low-criticality work; Kanban class-of-service (Anderson 2010) — routing tasks by size/urgency to appropriate workflow lanes; Anthropic "Building effective agents" (Dec 2024) — match workflow complexity to actual task complexity rather than applying uniform ceremony
 
 ---
 
@@ -819,6 +827,7 @@ Implementation lives under `bin/lib/`:
 - GSDD implementation: `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/models.mjs`
 - GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`,
   `tests/gsdd.guards.test.cjs`
+- External: Seemann "Dependency Injection in .NET" (Manning 2011) — coined "Composition Root" as the named pattern for the single location where the entire application is assembled; Martin "Clean Architecture" (2017) — the main component as the outermost, dirtiest layer that owns all wiring; standard practice in oclif, Commander.js, yargs, and Cobra CLI frameworks
 
 ---
 
@@ -1598,7 +1607,7 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 
 1. Existing repo truth: `gsdd init` always generates `.agents/skills/` and already has a central adapter-selection seam in `bin/lib/init.mjs`.
 2. Local research on the adjacent `prompty` repo: portable skills are the primary install surface, while native command surfaces are optional additions.
-3. Common CLI onboarding pattern: modern project bootstrap tools use interactive setup by default and flags for headless/manual flows; GSDD now matches that expectation without dropping its automation path.
+3. External: npm init (Node.js), Vite `create-vite`, Next.js `create-next-app`, Angular CLI `ng new`, and Astro `create astro` all implement the same pattern — TTY-interactive wizard by default, `--yes`/`--defaults` for headless; this is the de facto standard for modern project scaffolding tools.
 4. Repo lesson LL-INSTALL-DX-BEFORE-ALIAS-CLEANUP already recorded that install ergonomics should be fixed before alias-policy cleanup.
 
 **GSD comparison:** GSD's install surface is more operator-heavy and framework-specific. GSDD keeps the deterministic bootstrap principle but shifts the user-facing choice surface into a lightweight guided CLI instead of requiring users to know adapter values in advance.
@@ -1631,6 +1640,7 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 1. `distilled/workflows/verify.md`, `new-project.md`, `audit-milestone.md`, `pause.md`, and `resume.md` all require artifact writes or deletions as part of completion.
 2. `distilled/workflows/progress.md` is the only workflow that explicitly declares itself read-only.
 3. Consumer audit evidence already showed verification reports being lost when persistence was skipped; this decision closes the registry seam that could recreate the same class of failure.
+4. External: Meyer's Command-Query Separation (CQS, "Object-Oriented Software Construction" 1988) — the foundational principle that operations should be classified by whether they modify state, not by what they conceptually represent; Greg Young's CQRS (2010) — CQS applied at the architectural level; Unix rwx permission model and AWS IAM/Kubernetes RBAC all classify operations by mutation semantics rather than by semantic category name
 
 **GSD comparison:** GSD's leverage also depends on persisted workflow artifacts. GSDD's portable/runtime split adds a new failure mode GSD did not have in the same form: a generated adapter can misclassify a mutating workflow even when the markdown contract is correct. This decision makes the adapter/runtime layer honor the artifact contract instead of undermining it.
 
@@ -1671,6 +1681,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - G30 guard in `tests/gsdd.guards.test.cjs` (verify.md ROADMAP closure)
 - `.internal-research/strategy.md` (kernel simplicity vs policy depth trade-off)
 - `distilled/workflows/audit-milestone.md` (retroactive artifact completeness check)
+- External: NIST SP 800-53 Rev. 5 (2020) — distinguishes detective controls (post-event detection) from preventive controls (pre-event blocking) as equally valid risk-management strategies; ISO 27001 risk treatment options — the choice of detective vs preventive control depends on cost/complexity tradeoff, not on which is inherently superior; Reason's Swiss Cheese model (1990) — layered defense-in-depth where retroactive audit layers catch what preventive layers miss; session interruption is a distributed systems failure mode (analogous to the Two Generals problem) that cannot be fully eliminated by local gates
 
 **GSD comparison:** GSD's `gsd-tools.cjs` CLI enforces workflow progression gates directly. GSDD replaces those with specification-level MANDATORY language (D9). This is a deliberate portability trade-off, not an oversight.
 
