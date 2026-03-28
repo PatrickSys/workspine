@@ -72,6 +72,10 @@ If you are not confident about a domain/library/pattern:
   - `.agents/skills/gsdd-execute/SKILL.md` — plan execution with quality gates
   - `.agents/skills/gsdd-verify/SKILL.md` — phase goal-backward verification
   - `.agents/skills/gsdd-audit-milestone/SKILL.md` — milestone integration audit
+- Milestone lifecycle:
+  - `.agents/skills/gsdd-complete-milestone/SKILL.md` — archive shipped milestone, evolve spec, collapse roadmap
+  - `.agents/skills/gsdd-new-milestone/SKILL.md` — start next milestone cycle (goals, requirements, roadmap phases)
+  - `.agents/skills/gsdd-plan-milestone-gaps/SKILL.md` — create gap-closure phases from audit results
 - Supporting workflows:
   - `.agents/skills/gsdd-quick/SKILL.md` — sub-hour tasks outside the phase cycle
   - `.agents/skills/gsdd-map-codebase/SKILL.md` — codebase analysis and refresh

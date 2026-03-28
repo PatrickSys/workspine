@@ -255,18 +255,21 @@ describe('I3 — Delegate Thinness', () => {
 describe('I4 — Workflow References', () => {
   const workflows = getWorkflowFiles();
 
-  test('exactly 10 workflows exist', () => {
-    assert.strictEqual(workflows.length, 10, `Expected 10 workflows, got ${workflows.length}: ${workflows.join(', ')}`);
+  test('exactly 13 workflows exist', () => {
+    assert.strictEqual(workflows.length, 13, `Expected 13 workflows, got ${workflows.length}: ${workflows.join(', ')}`);
   });
 
-  test('all 10 workflows exist by name', () => {
+  test('all 13 workflows exist by name', () => {
     const expected = [
       'audit-milestone.md',
+      'complete-milestone.md',
       'execute.md',
       'map-codebase.md',
+      'new-milestone.md',
       'new-project.md',
       'pause.md',
       'plan.md',
+      'plan-milestone-gaps.md',
       'progress.md',
       'quick.md',
       'resume.md',

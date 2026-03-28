@@ -208,7 +208,7 @@ If status is `passed`:
 **Next step:** `/gsdd:complete-milestone` — archive the milestone and prepare for the next
 
 If status is `gaps_found`:
-**Next step:** `/gsdd:plan` — plan gap-closure phases for the unsatisfied requirements
+**Next step:** `/gsdd:plan-milestone-gaps` — create gap-closure phases for the unsatisfied requirements
 
 If status is `tech_debt`:
 **Next step:** Either `/gsdd:complete-milestone` (accept debt) or `/gsdd:plan` (cleanup phase)

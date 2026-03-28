@@ -990,13 +990,14 @@ describe('G20 - Session Continuity Contracts', () => {
       `resume.md determine_action must route to at least 3 workflows, found ${workflows.length}. FIX: Add routing branches.`);
   });
 
-  test('progress <route_action> routes to workflows that exist in the 10-workflow set', () => {
+  test('progress <route_action> routes to workflows that exist in the 13-workflow set', () => {
     const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
     const section = content.slice(content.indexOf('<route_action>'), content.indexOf('</route_action>'));
     const workflows = section.match(/\/gsdd:\w[\w-]*/g) || [];
     const validWorkflows = [
       '/gsdd:new-project', '/gsdd:plan', '/gsdd:execute', '/gsdd:verify',
-      '/gsdd:audit-milestone', '/gsdd:quick', '/gsdd:pause', '/gsdd:resume',
+      '/gsdd:audit-milestone', '/gsdd:complete-milestone', '/gsdd:new-milestone',
+      '/gsdd:plan-milestone-gaps', '/gsdd:quick', '/gsdd:pause', '/gsdd:resume',
       '/gsdd:progress', '/gsdd:map-codebase'
     ];
     for (const wf of workflows) {
@@ -1130,6 +1131,9 @@ describe('G22 - Workflow Completion Routing', () => {
     'execute.md',
     'verify.md',
     'audit-milestone.md',
+    'complete-milestone.md',
+    'new-milestone.md',
+    'plan-milestone-gaps.md',
     'quick.md',
     'pause.md',
     'resume.md',
@@ -2102,5 +2106,98 @@ describe('G33 - Phase 5 Success Criteria', () => {
     assert.ok(
       content.includes('### Gap') && content.includes('- Status:'),
       '.internal-research/gaps.md must have structured gap entries with Status lines (SC-3). FIX: Add gap entries with "- Status:" fields.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G35 - Milestone Lifecycle Workflows
+// ---------------------------------------------------------------------------
+describe('G35 - Milestone Lifecycle Workflows', () => {
+  const WORKFLOWS_DIR = path.join(ROOT, 'distilled', 'workflows');
+  const MILESTONE_WORKFLOWS = [
+    'new-milestone.md',
+    'complete-milestone.md',
+    'plan-milestone-gaps.md',
+  ];
+
+  // Structural invariant: each file uses standard GSDD workflow sections
+  for (const wf of MILESTONE_WORKFLOWS) {
+    test(`${wf} uses standard GSDD workflow sections`, () => {
+      const content = fs.readFileSync(path.join(WORKFLOWS_DIR, wf), 'utf-8');
+      assert.match(content, /<role>/,
+        `${wf} must have a <role> section. FIX: Add <role> section defining the workflow identity.`);
+      assert.match(content, /<\/role>/,
+        `${wf} must close the <role> section. FIX: Close the <role> section.`);
+      assert.match(content, /<process>/,
+        `${wf} must have a <process> section. FIX: Add <process> section with workflow steps.`);
+      assert.match(content, /<\/process>/,
+        `${wf} must close the <process> section. FIX: Close the <process> section.`);
+      assert.match(content, /<success_criteria>/,
+        `${wf} must have a <success_criteria> section. FIX: Add <success_criteria> checklist.`);
+      assert.match(content, /<completion>/,
+        `${wf} must have a <completion> section. FIX: Add <completion> section with next-step routing.`);
+    });
+
+    test(`${wf} uses no vendor-specific APIs`, () => {
+      const content = fs.readFileSync(path.join(WORKFLOWS_DIR, wf), 'utf-8');
+      assert.doesNotMatch(content, /AskUserQuestion\(/,
+        `${wf} must not use AskUserQuestion (vendor API). FIX: Replace with plain text questions.`);
+      assert.doesNotMatch(content, /\bTask\(/,
+        `${wf} must not use Task() (vendor API). FIX: Replace with <delegate> blocks.`);
+      assert.doesNotMatch(content, /gsd-tools\.cjs/,
+        `${wf} must not use gsd-tools.cjs (GSD dependency). FIX: Replace with direct file operations.`);
+    });
+  }
+
+  // Routing correctness: each workflow routes to the right next step
+  test('new-milestone.md completion routes to /gsdd:plan', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-milestone.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
+    assert.match(section, /\/gsdd:plan/,
+      'new-milestone completion must route to /gsdd:plan. FIX: Add /gsdd:plan as next step in completion.');
+  });
+
+  test('complete-milestone.md completion routes to /gsdd:new-milestone', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'complete-milestone.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
+    assert.match(section, /\/gsdd:new-milestone/,
+      'complete-milestone completion must route to /gsdd:new-milestone. FIX: Add /gsdd:new-milestone as next step in completion.');
+  });
+
+  test('plan-milestone-gaps.md completion routes to /gsdd:plan', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
+    assert.match(section, /\/gsdd:plan/,
+      'plan-milestone-gaps completion must route to /gsdd:plan. FIX: Add /gsdd:plan as next step in completion.');
+  });
+
+  // Context references: each workflow reads the right source files
+  test('new-milestone.md load_context references SPEC.md and MILESTONES.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-milestone.md'), 'utf-8');
+    const ctx = content.slice(content.indexOf('<load_context>'), content.indexOf('</load_context>'));
+    assert.match(ctx, /SPEC\.md/,
+      'new-milestone load_context must reference SPEC.md. FIX: Add SPEC.md to load_context.');
+    assert.match(ctx, /MILESTONES\.md/,
+      'new-milestone load_context must reference MILESTONES.md. FIX: Add MILESTONES.md to load_context.');
+  });
+
+  test('complete-milestone.md load_context references MILESTONE-AUDIT.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'complete-milestone.md'), 'utf-8');
+    const ctx = content.slice(content.indexOf('<load_context>'), content.indexOf('</load_context>'));
+    assert.match(ctx, /MILESTONE-AUDIT\.md/,
+      'complete-milestone load_context must reference MILESTONE-AUDIT.md. FIX: Add MILESTONE-AUDIT.md to load_context.');
+  });
+
+  test('plan-milestone-gaps.md references MILESTONE-AUDIT.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
+    assert.match(content, /MILESTONE-AUDIT\.md/,
+      'plan-milestone-gaps must reference MILESTONE-AUDIT.md. FIX: Add MILESTONE-AUDIT.md reference.');
+  });
+
+  test('plan-milestone-gaps.md completion routes to /gsdd:audit-milestone after gap closure', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
+    assert.match(section, /\/gsdd:audit-milestone/,
+      'plan-milestone-gaps completion must mention /gsdd:audit-milestone for re-audit. FIX: Add re-audit hint to completion.');
   });
 });

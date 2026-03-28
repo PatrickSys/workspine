@@ -41,16 +41,20 @@ Notes:
 ## The Workflow
 
 ```
-gsdd init           -> bootstrap (create .planning/, copy templates, generate skills/adapters)
-/gsdd:new-project   -> .planning/SPEC.md + .planning/ROADMAP.md  (questioning + codebase audit + research)
-/gsdd:plan N        -> phases/N/PLAN.md      (task breakdown + research)
-/gsdd:execute N     -> code changes          (plan execution with quality gates)
-/gsdd:verify N      -> VERIFICATION.md       (goal-backward validation)
+gsdd init                  -> bootstrap (create .planning/, copy templates, generate skills/adapters)
+/gsdd:new-project          -> .planning/SPEC.md + .planning/ROADMAP.md  (questioning + codebase audit + research)
+/gsdd:plan N               -> phases/N/PLAN.md      (task breakdown + research)
+/gsdd:execute N            -> code changes           (plan execution with quality gates)
+/gsdd:verify N             -> VERIFICATION.md        (goal-backward validation)
   ... repeat plan/execute/verify per phase ...
-/gsdd:quick         -> .planning/quick/NNN/  (sub-hour task outside phases)
-/gsdd:pause         -> .planning/.continue-here.md  (session checkpoint)
-/gsdd:resume        -> restore context, route to next action
-/gsdd:progress      -> show status, route to next action
+/gsdd:audit-milestone      -> MILESTONE-AUDIT.md     (cross-phase integration + requirements coverage)
+/gsdd:complete-milestone   -> milestones/vX.Y-*      (archive, evolve spec, collapse roadmap)
+/gsdd:new-milestone        -> updated SPEC.md + ROADMAP.md  (next milestone goals + phases)
+/gsdd:plan-milestone-gaps  -> gap closure phases in ROADMAP.md  (from audit results)
+/gsdd:quick                -> .planning/quick/NNN/   (sub-hour task outside phases)
+/gsdd:pause                -> .planning/.continue-here.md  (session checkpoint)
+/gsdd:resume               -> restore context, route to next action
+/gsdd:progress             -> show status, route to next action
 ```
 
 ## Current Status (updated 2026-03-20)
@@ -62,6 +66,9 @@ gsdd init           -> bootstrap (create .planning/, copy templates, generate sk
 | `execute.md` | [OK] Source-audited | Mandatory read enforcement, auth-gate routing, deviation-rule examples, and substantive summary quality gate |
 | `verify.md` | [OK] Source-audited | 5 gap closures against hardened verifier role contract: grouped-gap guidance, orphan detection, frontmatter enforcement, verification basis emphasis, requirements coverage chain |
 | `audit-milestone.md` | [OK] Defined, source-audited | Aggregates phase verification, cross-phase integration audit, auth protection checks, requirement reconciliation, and orphan detection into `MILESTONE-AUDIT.md` |
+| `complete-milestone.md` | [OK] Defined | Archives milestone, evolves SPEC.md, collapses ROADMAP.md — no gsd-tools.cjs dependency |
+| `new-milestone.md` | [OK] Defined | Brownfield milestone continuation: goals, SPEC.md requirements, ROADMAP.md phases |
+| `plan-milestone-gaps.md` | [OK] Defined | Gap closure phases from MILESTONE-AUDIT.md results |
 | `quick.md` | [OK] | Quick-work lane for sub-hour tasks outside the phase cycle (D11) |
 | `pause.md` | [OK] Source-audited | Session checkpoint writer with conversational handoff (D12) |
 | `resume.md` | [OK] Source-audited | Session context restorer with priority-ordered routing (D12) |

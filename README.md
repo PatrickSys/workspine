@@ -32,7 +32,7 @@ GSDD is a distilled fork of GSD. It preserves the high-leverage parts of long-ho
 - **Milestone audit** — cross-phase integration, requirements coverage, E2E flows
 - **Session management** — pause work with checkpoint, resume with context restoration and routing
 
-What it strips: GSD's broader operator surface (32 workflows, 11 agents, discovery modes, sprint ceremony, a settings flow, and additional operator ergonomics). GSDD has 10 workflows and 10 roles.
+What it strips: GSD's broader operator surface (32 workflows, 11 agents, discovery modes, sprint ceremony, a settings flow, and additional operator ergonomics). GSDD has 13 workflows and 10 roles.
 
 **Target user:** Developer or small team that wants a spec-driven long-horizon kernel, not full operator comfort.
 
@@ -225,7 +225,7 @@ Use for: bug fixes, small features, config changes, one-off tasks.
 
 ## Workflows
 
-GSDD has 10 workflows, run via generated skills or adapters:
+GSDD has 13 workflows, run via generated skills or adapters:
 
 | Workflow | What it does |
 |----------|--------------|
@@ -235,6 +235,9 @@ GSDD has 10 workflows, run via generated skills or adapters:
 | `gsdd-execute` | Execute phase plan: implement tasks, verify changes |
 | `gsdd-verify` | Verify completed phase: 3-level checks, anti-pattern scan |
 | `gsdd-audit-milestone` | Audit milestone: cross-phase integration, requirements coverage, E2E flows |
+| `gsdd-complete-milestone` | Archive shipped milestone, evolve spec, collapse roadmap |
+| `gsdd-new-milestone` | Start next milestone: gather goals, define requirements, create roadmap phases |
+| `gsdd-plan-milestone-gaps` | Create gap-closure phases from audit results |
 | `gsdd-quick` | Quick task: plan and execute sub-hour work outside the phase cycle |
 | `gsdd-pause` | Pause work: save session context to checkpoint for seamless resumption |
 | `gsdd-resume` | Resume work: restore context from artifacts and route to next action |
@@ -458,7 +461,7 @@ Structural contracts that prevent drift between roles, delegates, workflows, and
 | **I2** | Role section structure — 10 roles have role def, scope, output format, success criteria |
 | **I3** | Delegate thinness — no leaked role-contract sections in delegates |
 | **I3-gate** | New-project approval gates — required human checkpoints present |
-| **I4** | Workflow references — 10 workflows, all delegate/role refs resolve |
+| **I4** | Workflow references — 13 workflows, all delegate/role refs resolve |
 | **I5** | Session management — no vendor APIs, no STATE.md, checkpoint contract |
 | **I5b** | Session workflow scope boundaries |
 | **I6** | Artifact schema definitions |

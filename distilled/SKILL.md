@@ -28,6 +28,10 @@ Read only the file for the phase you are in:
 - plan: `workflows/plan.md`
 - execute: `workflows/execute.md`
 - verify: `workflows/verify.md`
+- audit-milestone: `workflows/audit-milestone.md`
+- complete-milestone: `workflows/complete-milestone.md`
+- new-milestone: `workflows/new-milestone.md`
+- plan-milestone-gaps: `workflows/plan-milestone-gaps.md`
 - quick: `workflows/quick.md`
 </workflow>
 

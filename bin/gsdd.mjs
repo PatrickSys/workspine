@@ -46,13 +46,16 @@ const WORKFLOWS = [
   defineWorkflow({ name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, verify changes, follow repo git conventions' }),
   defineWorkflow({ name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan' }),
   defineWorkflow({ name: 'gsdd-audit-milestone', workflow: 'audit-milestone.md', description: 'Audit a completed milestone - cross-phase integration, requirements coverage, E2E flows' }),
+  defineWorkflow({ name: 'gsdd-complete-milestone', workflow: 'complete-milestone.md', description: 'Complete milestone - archive, evolve spec, collapse roadmap' }),
+  defineWorkflow({ name: 'gsdd-new-milestone', workflow: 'new-milestone.md', description: 'New milestone - gather goals, define requirements, create roadmap phases' }),
+  defineWorkflow({ name: 'gsdd-plan-milestone-gaps', workflow: 'plan-milestone-gaps.md', description: 'Plan gap closure phases from audit results' }),
   defineWorkflow({ name: 'gsdd-quick', workflow: 'quick.md', description: 'Quick task - plan and execute a sub-hour task outside the phase cycle' }),
   defineWorkflow({ name: 'gsdd-pause', workflow: 'pause.md', description: 'Pause work - save session context for seamless resumption' }),
   defineWorkflow({ name: 'gsdd-resume', workflow: 'resume.md', description: 'Resume work - restore context and route to next action' }),
   defineWorkflow({ name: 'gsdd-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', mutatesArtifacts: false }),
 ];
 
-const FRAMEWORK_VERSION = 'v1.2';
+const FRAMEWORK_VERSION = 'v1.3';
 
 function createCliContext(cwd = process.cwd()) {
   return {
