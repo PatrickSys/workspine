@@ -44,6 +44,10 @@ function createCodexAdapter({
     id: 'codex',
     name: 'codex',
     kind: 'native_capable',
+    subagentFiles: [
+      '.codex/agents/gsdd-plan-checker.toml',
+      '.codex/agents/gsdd-approach-explorer.toml',
+    ],
     detect() {
       return existsSync(join(cwd, '.codex'));
     },

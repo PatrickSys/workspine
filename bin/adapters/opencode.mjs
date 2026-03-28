@@ -1,6 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import os from 'os';
 import { join } from 'path';
+import {
+  PLAN_CHECK_DIMENSIONS,
+  MAX_CHECKER_CYCLES,
+  CHECKER_STATUSES,
+} from '../lib/plan-constants.mjs';
 
 function expandHome(filePath) {
   if (!filePath) return filePath;
@@ -183,7 +188,7 @@ Execution flow:
      "summary": "One sentence overall assessment",
      "issues": [
        {
-         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
+         "dimension": "${PLAN_CHECK_DIMENSIONS.join(' | ')}",
          "severity": "blocker | warning",
          "description": "What is wrong",
          "plan": "01-PLAN",
@@ -192,10 +197,10 @@ Execution flow:
        }
      ]
    }
-   Status must be either "passed" or "issues_found".
+   Status must be either "${CHECKER_STATUSES[0]}" or "${CHECKER_STATUSES[1]}".
 9. If the checker returns \`passed\`, finish and summarize.
 10. If the checker returns \`issues_found\`, revise the existing plan files only where needed, then run the checker again.
-11. Maximum 3 checker cycles total. If blockers remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
+11. Maximum ${MAX_CHECKER_CYCLES} checker cycles total. If blockers remain after cycle ${MAX_CHECKER_CYCLES}, stop and escalate to the user instead of pretending the plan is ready.
 
 Return a concise orchestration summary:
 - target phase
@@ -223,6 +228,10 @@ function createOpenCodeAdapter({
     id: 'opencode',
     name: 'opencode',
     kind: 'native_capable',
+    subagentFiles: [
+      '.opencode/agents/gsdd-plan-checker.md',
+      '.opencode/agents/gsdd-approach-explorer.md',
+    ],
     detect() {
       return existsSync(join(cwd, '.opencode'));
     },

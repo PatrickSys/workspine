@@ -6,6 +6,7 @@ function createRootAgentsAdapter({ cwd, renderAgentsBoundedBlock, renderAgentsFi
     id: 'agents',
     name,
     kind: 'governance_only',
+    subagentFiles: [],
     detect() {
       return false;
     },

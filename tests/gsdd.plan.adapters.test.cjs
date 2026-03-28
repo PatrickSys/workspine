@@ -229,4 +229,186 @@ describe('specialized plan adapter surfaces', () => {
     // Inner content must not contain """ (which would prematurely terminate the TOML string)
     assert.doesNotMatch(innerContent, /"""/, 'Inner TOML content must not contain unescaped triple quotes');
   });
+
+  test('claude approach-explorer agent exists and has correct frontmatter', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'claude');
+    } finally {
+      restoreStdin();
+    }
+
+    const explorerPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-approach-explorer.md');
+    assert.ok(fs.existsSync(explorerPath), 'Claude approach-explorer agent must exist');
+
+    const content = fs.readFileSync(explorerPath, 'utf-8');
+    assert.match(content, /^name: gsdd-approach-explorer/m, 'must have name: gsdd-approach-explorer');
+    assert.match(content, /AskUserQuestion/, 'must include AskUserQuestion in tools');
+    assert.ok(content.length > 100, 'content must be non-trivial (> 100 chars)');
+  });
+
+  test('opencode approach-explorer agent exists and is not hidden', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'opencode');
+    } finally {
+      restoreStdin();
+    }
+
+    const explorerPath = path.join(tmpDir, '.opencode', 'agents', 'gsdd-approach-explorer.md');
+    assert.ok(fs.existsSync(explorerPath), 'OpenCode approach-explorer agent must exist');
+
+    const content = fs.readFileSync(explorerPath, 'utf-8');
+    assert.doesNotMatch(content, /^hidden: true$/m, 'approach-explorer must NOT be hidden (interactive, unlike plan-checker)');
+  });
+
+  test('codex approach-explorer TOML agent exists with high reasoning', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'codex');
+    } finally {
+      restoreStdin();
+    }
+
+    const explorerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-approach-explorer.toml');
+    assert.ok(fs.existsSync(explorerPath), 'Codex approach-explorer TOML agent must exist');
+
+    const content = fs.readFileSync(explorerPath, 'utf-8');
+    assert.match(content, /^name = "gsdd-approach-explorer"/m, 'must have correct name');
+    assert.match(content, /^model_reasoning_effort = "high"/m, 'must have high reasoning effort');
+    assert.doesNotMatch(content, /^sandbox_mode = "read-only"/m, 'approach-explorer must NOT be read-only (needs write access unlike checker)');
+  });
+
+  test('all native plan surfaces contain the same 9 dimension names', async () => {
+    const allDimensions = [
+      'requirement_coverage',
+      'task_completeness',
+      'dependency_correctness',
+      'key_link_completeness',
+      'scope_sanity',
+      'must_have_quality',
+      'context_compliance',
+      'goal_achievement',
+      'approach_alignment',
+    ];
+
+    // Init claude
+    const claudeTmpDir = createTempProject();
+    const restoreStdin1 = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(claudeTmpDir);
+      await gsdd.cmdInit('--tools', 'claude');
+    } finally {
+      restoreStdin1();
+    }
+    const claudeSkill = fs.readFileSync(
+      path.join(claudeTmpDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'),
+      'utf-8'
+    );
+    cleanup(claudeTmpDir);
+
+    // Init opencode
+    const opencodeTmpDir = createTempProject();
+    const restoreStdin2 = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(opencodeTmpDir);
+      await gsdd.cmdInit('--tools', 'opencode');
+    } finally {
+      restoreStdin2();
+    }
+    const opencodeCommand = fs.readFileSync(
+      path.join(opencodeTmpDir, '.opencode', 'commands', 'gsdd-plan.md'),
+      'utf-8'
+    );
+    cleanup(opencodeTmpDir);
+
+    // Init a third dir to get the portable skill (any adapter generates it)
+    const portableTmpDir = createTempProject();
+    const restoreStdin3 = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(portableTmpDir);
+      await gsdd.cmdInit('--tools', 'agents');
+    } finally {
+      restoreStdin3();
+    }
+    const portableSkill = fs.readFileSync(
+      path.join(portableTmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      'utf-8'
+    );
+    cleanup(portableTmpDir);
+
+    const surfaces = [
+      ['claude skill', claudeSkill],
+      ['opencode command', opencodeCommand],
+      ['portable skill', portableSkill],
+    ];
+
+    for (const [label, content] of surfaces) {
+      for (const dim of allDimensions) {
+        assert.ok(content.includes(dim), `${label} must contain dimension: ${dim}`);
+      }
+    }
+  });
+
+  test('delegate content appears in all native checker surfaces', async () => {
+    // Read the delegate source
+    const delegatePath = path.join(__dirname, '..', 'distilled', 'templates', 'delegates', 'plan-checker.md');
+    const delegateContent = fs.readFileSync(delegatePath, 'utf-8');
+    // Pick a key phrase that must survive into all native checker surfaces
+    const keyPhrase = 'Return JSON only';
+
+    // Init claude
+    const claudeTmpDir = createTempProject();
+    const restoreStdin1 = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(claudeTmpDir);
+      await gsdd.cmdInit('--tools', 'claude');
+    } finally {
+      restoreStdin1();
+    }
+    const claudeChecker = fs.readFileSync(
+      path.join(claudeTmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
+      'utf-8'
+    );
+    cleanup(claudeTmpDir);
+
+    // Init opencode
+    const opencodeTmpDir = createTempProject();
+    const restoreStdin2 = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(opencodeTmpDir);
+      await gsdd.cmdInit('--tools', 'opencode');
+    } finally {
+      restoreStdin2();
+    }
+    const opencodeChecker = fs.readFileSync(
+      path.join(opencodeTmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
+      'utf-8'
+    );
+    cleanup(opencodeTmpDir);
+
+    // Init codex
+    const codexTmpDir = createTempProject();
+    const restoreStdin3 = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(codexTmpDir);
+      await gsdd.cmdInit('--tools', 'codex');
+    } finally {
+      restoreStdin3();
+    }
+    const codexChecker = fs.readFileSync(
+      path.join(codexTmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+      'utf-8'
+    );
+    cleanup(codexTmpDir);
+
+    // Verify delegate content appears in all native checker surfaces
+    assert.ok(delegateContent.includes(keyPhrase), `delegate source must contain key phrase: ${keyPhrase}`);
+    for (const [label, content] of [['claude', claudeChecker], ['opencode', opencodeChecker], ['codex', codexChecker]]) {
+      assert.ok(content.includes(keyPhrase), `${label} checker must contain delegate key phrase: ${keyPhrase}`);
+    }
+  });
 });

@@ -1665,16 +1665,26 @@ describe('G24 - Hardening Propagation', () => {
       'plan.md checker dimension list must include goal_achievement. FIX: Add goal_achievement dimension to "What The Checker Verifies" section and JSON schema hint.');
   });
 
-  test('claude adapter dimension hint includes goal_achievement', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'bin', 'adapters', 'claude.mjs'), 'utf-8');
+  test('plan-constants.mjs includes goal_achievement in PLAN_CHECK_DIMENSIONS', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'plan-constants.mjs'), 'utf-8');
     assert.match(content, /goal_achievement/,
-      'claude.mjs plan-checker schema hint must include goal_achievement. FIX: Add goal_achievement to the dimension enum in the checker invocation JSON schema.');
+      'plan-constants.mjs must include goal_achievement in PLAN_CHECK_DIMENSIONS. FIX: Add goal_achievement to the PLAN_CHECK_DIMENSIONS array.');
   });
 
-  test('opencode adapter dimension hint includes goal_achievement', () => {
+  test('claude adapter imports from plan-constants and interpolates dimensions', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'bin', 'adapters', 'claude.mjs'), 'utf-8');
+    assert.match(content, /plan-constants\.mjs/,
+      'claude.mjs must import from plan-constants.mjs. FIX: Add import of PLAN_CHECK_DIMENSIONS from plan-constants.mjs.');
+    assert.match(content, /PLAN_CHECK_DIMENSIONS\.join/,
+      'claude.mjs must interpolate PLAN_CHECK_DIMENSIONS via .join(). FIX: Replace hardcoded dimension string with PLAN_CHECK_DIMENSIONS.join() interpolation.');
+  });
+
+  test('opencode adapter imports from plan-constants and interpolates dimensions', () => {
     const content = fs.readFileSync(path.join(ROOT, 'bin', 'adapters', 'opencode.mjs'), 'utf-8');
-    assert.match(content, /goal_achievement/,
-      'opencode.mjs plan-checker schema hint must include goal_achievement. FIX: Add goal_achievement to the dimension enum in the checker invocation JSON schema.');
+    assert.match(content, /plan-constants\.mjs/,
+      'opencode.mjs must import from plan-constants.mjs. FIX: Add import of PLAN_CHECK_DIMENSIONS from plan-constants.mjs.');
+    assert.match(content, /PLAN_CHECK_DIMENSIONS\.join/,
+      'opencode.mjs must interpolate PLAN_CHECK_DIMENSIONS via .join(). FIX: Replace hardcoded dimension string with PLAN_CHECK_DIMENSIONS.join() interpolation.');
   });
 });
 

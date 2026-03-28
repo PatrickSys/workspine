@@ -382,7 +382,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       );
     });
 
-    test('checker content includes the 7 plan-check dimension names', () => {
+    test('checker content includes all 9 plan-check dimension names', () => {
       const content = fs.readFileSync(
         path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
         'utf-8'
@@ -395,10 +395,19 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         'scope_sanity',
         'must_have_quality',
         'context_compliance',
+        'goal_achievement',
+        'approach_alignment',
       ];
       for (const dim of dimensions) {
         assert.ok(content.includes(dim), `checker must include dimension: ${dim}`);
       }
+    });
+
+    test('native approach-explorer exists at .claude/agents/gsdd-approach-explorer.md', () => {
+      assert.ok(
+        fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-approach-explorer.md')),
+        'Claude approach-explorer agent must exist'
+      );
     });
 
     test('Claude command exists at .claude/commands/gsdd-plan.md', () => {
@@ -419,7 +428,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       );
     });
 
-    test('plan-checker delegate has same 7 dimensions as native checker', () => {
+    test('plan-checker delegate has same 9 dimensions as native checker', () => {
       const delegate = fs.readFileSync(
         path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md'),
         'utf-8'
@@ -432,6 +441,8 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         'scope_sanity',
         'must_have_quality',
         'context_compliance',
+        'goal_achievement',
+        'approach_alignment',
       ];
       for (const dim of dimensions) {
         assert.ok(delegate.includes(dim), `delegate must include dimension: ${dim}`);
@@ -452,7 +463,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       );
     });
 
-    test('Codex checker contains 7 dimension names', () => {
+    test('Codex checker contains all 9 dimension names', () => {
       const content = fs.readFileSync(
         path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
         'utf-8'
@@ -465,10 +476,19 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         'scope_sanity',
         'must_have_quality',
         'context_compliance',
+        'goal_achievement',
+        'approach_alignment',
       ];
       for (const dim of dimensions) {
         assert.ok(content.includes(dim), `Codex checker must include dimension: ${dim}`);
       }
+    });
+
+    test('native approach-explorer exists at .codex/agents/gsdd-approach-explorer.toml', () => {
+      assert.ok(
+        fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-approach-explorer.toml')),
+        'Codex approach-explorer TOML must exist'
+      );
     });
 
     test('Codex checker has sandbox_mode = "read-only"', () => {
@@ -479,6 +499,50 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       assert.ok(
         content.includes('sandbox_mode = "read-only"'),
         'Codex checker must have read-only sandbox'
+      );
+    });
+  });
+
+  describe('S4 — kind structural contract', () => {
+    let kindTmpDir;
+
+    beforeEach(async () => {
+      kindTmpDir = createTempProject();
+      await initProject(kindTmpDir, '--auto', '--tools', 'claude,opencode,codex,agents');
+    });
+
+    afterEach(() => { cleanup(kindTmpDir); });
+
+    test('claude (native_capable) generated agent files in .claude/agents/', () => {
+      assert.ok(
+        fs.existsSync(path.join(kindTmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')),
+        'claude must generate at least one agent file'
+      );
+    });
+
+    test('opencode (native_capable) generated agent files in .opencode/agents/', () => {
+      assert.ok(
+        fs.existsSync(path.join(kindTmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')),
+        'opencode must generate at least one agent file'
+      );
+    });
+
+    test('codex (native_capable) generated agent files in .codex/agents/', () => {
+      assert.ok(
+        fs.existsSync(path.join(kindTmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')),
+        'codex must generate at least one agent file'
+      );
+    });
+
+    test('agents (governance_only) wrote AGENTS.md but no agent subdirectory', () => {
+      // The agents adapter is governance_only — it writes AGENTS.md but no agent dirs
+      assert.ok(
+        fs.existsSync(path.join(kindTmpDir, 'AGENTS.md')),
+        'governance_only agents adapter must write AGENTS.md'
+      );
+      assert.ok(
+        !fs.existsSync(path.join(kindTmpDir, '.agents', 'agents')),
+        'governance_only agents adapter must not create an agent subdir'
       );
     });
   });
