@@ -1,3 +1,10 @@
+## [0.4.1](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.4.0...v0.4.1) (2026-03-28)
+
+
+### Bug Fixes
+
+* verify.md updates ROADMAP [x] on pass (I27 sub-gap b) ([#51](https://github.com/PatrickSys/get-shit-done-distilled/issues/51)) ([1487522](https://github.com/PatrickSys/get-shit-done-distilled/commit/1487522609941ddda5cbdd4b61deb5884c1d590b))
+
 # [0.4.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.3.1...v0.4.0) (2026-03-27)
 
 
