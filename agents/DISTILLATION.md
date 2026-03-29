@@ -356,21 +356,23 @@ Do not add speculative content. Every entry must reference actual source files a
 
 Cross-source best practices applied to GSDD role contracts, audited against 6 external resources. These principles govern how role contracts should be written and revised. Ranked by impact.
 
+> **Source note:** "Anthropic CE" in this section refers to Anthropic's "Building effective agents" (Dec 2024) for orchestration and sub-agent patterns, and LangChain's "Context Engineering for Agents" (2025) for Write/Select/Compress/Isolate context management patterns. They are cited separately where attribution is precise.
+
 ### Architecture-Level (highest leverage)
 
 | Principle | What It Means | Source | GSDD Implementation |
 |-----------|--------------|--------|---------------------|
-| **Context isolation** | Research and heavy reads go in subagents; only compressed summaries enter the main context | Anthropic CE: "sub-agents perform deep technical work, returning condensed summaries" | Approach explorer research subagents return ~1000-token summaries; plan-checker runs in fresh context |
-| **JIT context loading** | Never say "read everything." Specify what to extract from each file | Anthropic CE: "maintain lightweight identifiers and use these references to dynamically load data into context at runtime" | `<input_contract>` with extraction guidance: "From SPEC.md read ONLY locked decisions" |
-| **Intermediate persistence** | For long interactions, write confirmed state to disk incrementally | Anthropic CE: "Agent regularly writes notes persisted to memory outside of the context window" | Approach explorer writes decisions to disk as they're confirmed during conversation |
-| **Progressive disclosure** | Don't front-load all context; let agents discover incrementally | Anthropic CE: "agents can assemble understanding layer by layer" | Gray areas presented individually; research loaded per area on demand |
+| **Context isolation** | Research and heavy reads go in subagents; only compressed summaries enter the main context | Anthropic "Building effective agents" (Dec 2024): orchestrator-worker pattern — sub-agents do deep technical work and return condensed summaries | Approach explorer research subagents return ~1000-token summaries; plan-checker runs in fresh context |
+| **JIT context loading** | Never say "read everything." Specify what to extract from each file | LangChain "Context Engineering for Agents" (2025): Select step of Write/Select/Compress/Isolate — load only the specific content needed, not full files | `<input_contract>` with extraction guidance: "From SPEC.md read ONLY locked decisions" |
+| **Intermediate persistence** | For long interactions, write confirmed state to disk incrementally | Anthropic BEA: agent memory outside context window. LangChain CE: Write pattern — confirmed state persisted to disk | Approach explorer writes decisions to disk as they're confirmed during conversation |
+| **Progressive disclosure** | Don't front-load all context; let agents discover incrementally | LangChain CE: Compress/Isolate patterns — agents assemble understanding incrementally rather than loading everything upfront | Gray areas presented individually; research loaded per area on demand |
 
 ### Prompt Structure (medium leverage)
 
 | Principle | What It Means | Source | GSDD Implementation |
 |-----------|--------------|--------|---------------------|
 | **XML semantic structure** | Use XML tags to separate role, instructions, examples, inputs, outputs, anti-patterns | Anthropic Claude: "XML tags help Claude parse complex prompts unambiguously" | All roles use `<role>`, most use `<quality_guarantees>`, `<anti_patterns>`. Approach-explorer adds `<algorithm>`, `<examples>`, `<scope_guardrail>` |
-| **Anti-patterns early** | Place "don't do this" instructions near the top, after role definition | Anthropic CE: critical information at the beginning gets more attention. NeoLab: early placement for high attention weight | `<anti_patterns>` placed immediately after `<role>` in all roles that have them |
+| **Anti-patterns early** | Place "don't do this" instructions near the top, after role definition | Anthropic Claude prompting docs: critical information at the beginning receives more attention (primacy effect in long-context prompts) | `<anti_patterns>` placed immediately after `<role>` in all roles that have them |
 | **Few-shot examples** | Show the pattern of interaction, not just output format | Anthropic Claude: "3-5 examples for best results." Examples in `<example>` tags | Approach-explorer: 3 examples. Other roles use inline format examples within algorithm sections |
 | **Self-check before output** | Run an explicit checklist before producing the final artifact | OpenAI: "verification loops." Anthropic Claude: "Ask Claude to self-check" | Approach-explorer step 7; planner `<plan_self_check>`; executor completion verification |
 | **Scope boundaries with heuristics** | Don't just list in/out of scope — give the agent a judgment rule | Novel, validated in approach-explorer | "Does this clarify implementation within the phase, or does it add a capability that could be its own phase?" |
@@ -379,7 +381,7 @@ Cross-source best practices applied to GSDD role contracts, audited against 6 ex
 
 | Principle | What It Means | Source | GSDD Implementation |
 |-----------|--------------|--------|---------------------|
-| **Authority language: intentional leverage** | Anthropic Claude 4.6 warns "CRITICAL:" can overtrigger on newer models. NeoLab persuasion research found imperative language doubled compliance (33%→72%). GSDD decision: **keep CRITICAL: for mandatory initial-read** — this is a genuine compliance-critical instruction where skipping it causes cascading failures. Use normal language for non-critical instructions. | Anthropic Claude 4.6 vs. NeoLab persuasion research (direct conflict). GSDD sides with NeoLab for this specific use case | `CRITICAL: Mandatory initial read` kept in all 7 roles. `NEVER` kept for security (mapper secret protection). Normal language used for algorithm steps, scope guidance, and quality rules |
+| **Authority language: intentional leverage** | Anthropic Claude warns "CRITICAL:" can overtrigger on newer models. GSDD decision: **keep CRITICAL: for mandatory initial-read** — a genuine compliance-critical instruction where skipping causes cascading failures. Emphasis markers work when rare and specific (signal-to-noise principle: one CRITICAL: in a role contract is a load-bearing gate; ten would be noise). Use normal language for algorithm steps, scope guidance, and quality rules. | Anthropic Claude prompting docs (overtriggering caution) + technical writing signal-to-noise principle. GSDD applies the caution selectively: only compliance-critical context gates use CRITICAL: | `CRITICAL: Mandatory initial read` kept in all 7 roles. `NEVER` kept for security (mapper secret protection). Normal language used for algorithm steps, scope guidance, and quality rules |
 | **Tell what to do, not just what not to do** | Anti-patterns alone are insufficient; pair with positive instructions | Anthropic Claude: "Tell Claude what to do instead of what not to do" | Every role has both `<anti_patterns>` AND positive algorithm/process sections |
 | **Context for instructions** | Explain WHY a rule exists so the agent can generalize | Anthropic Claude: "Providing context or motivation behind your instructions helps Claude better understand your goals" | Research quality rules explain WHY: "Training data is a hypothesis. Verify before asserting." |
 
@@ -394,17 +396,17 @@ These patterns emerged from GSDD's specific needs and were validated through imp
 | **5-dimension assumption surfacing** | Forces transparency about inferences vs. confirmed facts, with confidence levels | Approach-explorer step 6 |
 | **Agent's Discretion delegation** | User can explicitly say "you decide" — reduces fatigue on low-stakes choices | Approach-explorer step 4, planner `<approach_decisions>` |
 | **Domain classification table** | SEE/CALL/RUN/READ/ORGANIZED determines gray area focus per phase type | Approach-explorer step 2 |
-| **Degrees of freedom mapping** | Taste=high freedom, technical=low freedom (research-constrained). Maps to NeoLab's concept | Approach-explorer classification system |
+| **Degrees of freedom mapping** | Taste=high freedom, technical=low freedom (research-constrained). GSDD-originated: applies statistical degrees-of-freedom concept to prompt design scope | Approach-explorer classification system |
 
 ### Source Ranking
 
 Sources are ranked by soundness for agent prompt design. Higher-ranked sources take precedence when sources disagree.
 
-1. **Anthropic — Effective Context Engineering for AI Agents** — Architecture-level patterns with real production evidence (Claude Code, Pokémon). Most authoritative for context window management, sub-agent design, and information flow.
-2. **Anthropic — Claude Prompting Best Practices (Claude 4.6)** — Model-specific, up-to-date. Critical for behavioral warnings (overtriggering, subagent overuse). Supersedes general guidance for Claude-targeted agents.
-3. **OpenAI — Prompt Guidance (GPT-5.4)** — Deepest general-purpose reference. Novel concepts: completeness contracts, verification loops, tool persistence rules, empty result recovery. Model-specific but patterns transfer.
-4. **NeoLab Context Engineering Kit** — Good synthesis. "Degrees of Freedom" concept is useful. Persuasion research contradicts Anthropic on authority language (trust Anthropic for Claude).
-5. **OpenAI Cookbook — Meta-Prompting** — Narrow scope: LLM-as-judge evaluation, iterative prompt refinement. Useful technique, not a framework.
+1. **Anthropic — "Building effective agents" (Dec 2024)** — Agent architecture patterns with production evidence (Claude Code). Most authoritative for orchestrator-worker design, sub-agent fresh context, and task decomposition.
+2. **LangChain — "Context Engineering for Agents" (2025)** — Write/Select/Compress/Isolate framework. Most authoritative for context window management, JIT loading, and information flow patterns.
+3. **Anthropic — Claude Prompting Best Practices (Claude 4.6)** — Model-specific, up-to-date. Critical for behavioral warnings (overtriggering, subagent overuse). Supersedes general guidance for Claude-targeted agents.
+4. **OpenAI — Prompt Guidance (GPT-5.4)** — Deepest general-purpose reference. Novel concepts: completeness contracts, verification loops, tool persistence rules, empty result recovery. Model-specific but patterns transfer.
+5. **OpenAI Cookbook — Meta-Prompting** — Narrow scope: LLM-as-judge evaluation, iterative prompt refinement. Useful technique, not a framework. See also: Suzgun & Kalai "Meta-Prompting" (2024, arXiv 2401.12954).
 6. **JBurlison/MetaPrompts** — Structural skeleton (agent/skill/prompt/instruction hierarchy). Minimal actual guidance on prompt quality.
 
 ### Key Discrepancy Resolution
@@ -413,7 +415,7 @@ When sources conflict, these resolutions apply:
 
 | Conflict | Resolution | Why |
 |----------|------------|-----|
-| Authority language ("YOU MUST" vs. normal) | Keep CRITICAL: for mandatory initial-read (compliance-critical). Use normal language elsewhere | NeoLab's doubled-compliance research applies to instructions where skipping causes cascading failures. Anthropic's overtriggering concern applies to general guidance, not load-bearing context gates |
+| Authority language ("YOU MUST" vs. normal) | Keep CRITICAL: for mandatory initial-read (compliance-critical). Use normal language elsewhere | Emphasis markers work when rare and specific (signal-to-noise). Anthropic's overtriggering concern applies to general guidance; a single CRITICAL: for a mandatory context gate is a load-bearing instruction, not noise |
 | Example count (2 vs. 3-5) | Target 3+ for conversational agents; inline format examples are sufficient for structured output agents | Anthropic's 3-5 recommendation is general; interactive roles benefit more than output-only roles |
 | Subagent return size (200 vs. 1000-2000 tokens) | Use 300-500 tokens | Anthropic's 1000-2000 is upper bound; 200 was too tight for structured approach summaries with trade-offs |
 | "Don't invent alternatives" vs. "try fallback strategies" | Keep "don't invent" for approach research; use fallbacks for information retrieval | These solve different problems: manufacturing fake options is worse than acknowledging one viable path |

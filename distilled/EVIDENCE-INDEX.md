@@ -10,48 +10,65 @@
 ## D1 — 4-File Codebase Standard
 - `agents/_archive/gsd-codebase-mapper.md` lines 72-79 (GSD 7-file model)
 - `agents/mapper.md` (GSDD 4-file standard)
-- LeanSpec "Context Economy" principle
-- Aider tree-sitter dynamic repomaps (2026 SOTA)
 - `.planning/SPEC.md` "Lean Context Decision" section
+- Liu et al. "Lost in the Middle: How Language Models Use Long Contexts" (NeurIPS 2023) — position-dependent recall supports minimal stable context footprint
+- Levy et al. "Same Task, More Tokens: Impact of Input Length on the Reasoning Performance of LLMs" (EMNLP 2024) — longer inputs degrade reasoning performance
+- Aider tree-sitter dynamic repo maps (aider.chat) — on-demand structural mapping as an alternative to static context files
 
 ## D2 — Agent Consolidation: 11 to 10
 - `agents/_archive/` (11 original GSD files, git history via `git mv`)
 - `agents/` + `agents/README.md` (10 canonicals, lifecycle table)
 - `agents/README.md` lifecycle table (canonical-to-GSD source mapping)
+- CrewAI role-based team patterns, Microsoft AutoGen hierarchical agents, LangGraph multi-agent subgraphs (validate role specialization; specific count of 10 is engineering judgment)
 
 ## D3 — Two-Layer Architecture: Roles and Delegates
 - `agents/README.md` (Two-Layer Architecture and Runtime Distribution sections)
 - `bin/gsdd.mjs` lines 84-102 (role copy step with existsSync guard)
 - `tests/gsdd.init.test.cjs` (role file existence and delegate-role reference validation)
 - All 10 delegate files in `distilled/templates/delegates/`
+- Jensen & Meckling "Theory of the Firm" (Journal of Financial Economics 1976) — principal-agent delegation contracts
+- Gamma et al. GoF Strategy Pattern ("Design Patterns" 1994) — separating algorithm definition from usage context
+- LangGraph multi-agent subgraphs + Microsoft AutoGen hierarchical agents (production validation of two-layer separation)
 
 ## D4 — Zero-Hop Security Propagation
 - `agents/mapper.md` lines 66-90 (Forbidden Files section + Hard stop)
 - `agents/_archive/gsd-codebase-mapper.md` lines 66-97 (original narrower rules)
 - PR 2 intermediate state (one-hop via SKILL.md cross-reference)
 - PR 4 final state (zero-hop, role contains all rules)
+- OWASP Top 10 for LLM Applications v2.0 (2025) — LLM01 (Prompt Injection) + LLM07 (System Prompt Leakage) support embedding security rules at the role-contract level
+- Greshake et al. "Not What You've Signed Up For" (IEEE S&P 2023) — indirect prompt injection validates defense-in-depth at the agent-contract layer
+- Saltzer & Schroeder "Protection of Information in Computer Systems" (1975) — complete mediation principle
 
 ## D5 — Conditional Synthesizer
 - `get-shit-done/workflows/new-project.md` lines 708-729 (GSD always-spawn synthesizer)
 - `distilled/templates/delegates/researcher-synthesizer.md`
 - `agents/synthesizer.md` (cross-reference algorithm)
 - `.planning/config.json` `researchDepth` field contract
+- LangGraph conditional edges — adaptive agent invocation based on workflow state
+- Asai et al. "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection" (ICLR 2024) — conditional retrieval/synthesis based on need
+- Anthropic "Building effective agents" (Dec 2024) — routing workflows match task complexity to agent selection
 
 ## D6 — Mapper Staleness: Standalone Workflow
 - `get-shit-done/workflows/map-codebase.md` lines 35-62 (GSD staleness check with 3 options)
 - `get-shit-done/workflows/new-project.md` lines 61-80 (brownfield offer delegates to map-codebase)
 - `distilled/workflows/map-codebase.md` (standalone, re-runnable)
 - `distilled/workflows/new-project.md` (auto-invoke for brownfield via skill reference)
+- Aider (aider.chat) — dynamic tree-sitter-based repo maps generated on-demand (validates freshness-over-cache approach)
+- Cursor — continuous background indexing (cached approach; shows both are production-valid tradeoffs)
 
 ## D7 — Milestone Hierarchy and Phase Continuation
 - `get-shit-done/workflows/new-milestone.md` lines 101-173 (milestone-aware researchers)
 - `get-shit-done/workflows/new-milestone.md` line 269 (phase numbering continuation)
 - `distilled/README.md` lifecycle diagram
 - `.planning/SPEC.md` "Long-Term Lifecycle" section
+- Erol, Hendler & Nau / Nau et al. Hierarchical Task Networks (JAIR 2003) — foundational milestone→phase→task decomposition in AI planning
+- PMI PMBOK Work Breakdown Structure (WBS) standard — industry-standard phase/task hierarchy
+- Khot et al. "Decomposed Prompting" (ICLR 2023) — task decomposition improves LLM performance on multi-step work
 
 ## D8 — Advisory Git Protocol
 - `agents/_archive/gsd-executor.md` (mandatory commit in algorithm, TDD flow)
 - `agents/executor.md` lines 57-64 (Git Guidance — repo-native, advisory)
+- Industry consensus: Aider, GitHub Copilot, Cursor, Codex CLI, OpenCode — all treat git as advisory/user-configured; no major AI coding tool enforces a specific commit or branch convention
 
 ## D9 — Adapter Generation Over Conversion
 - `get-shit-done/install.js` (GSD converter with per-runtime conversion logic)
@@ -72,6 +89,9 @@
 ## D11 — Quick-Work Lane
 - `get-shit-done/workflows/quick.md` (454 lines, two modes, STATE.md tracking)
 - `distilled/workflows/quick.md` (~120 lines, single mode, LOG.md tracking)
+- Crystal Clear (Cockburn 2004) — ceremony scales with team size and criticality; lightweight methods prescribed for small/low-criticality work
+- Kanban class-of-service (Anderson 2010) — routing tasks by size/urgency to appropriate workflow lanes
+- Anthropic "Building effective agents" (Dec 2024) — match workflow complexity to task complexity
 
 ## D12 — Session Persistence Without State File
 - `get-shit-done/workflows/pause-work.md` (123 lines, phase-scoped checkpoint)
@@ -109,6 +129,9 @@
 - `get-shit-done/install.js` (GSD monolithic install/conversion surface)
 - `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/models.mjs`
 - `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`
+- Seemann "Dependency Injection in .NET" (Manning 2011) — named "Composition Root" pattern
+- Martin "Clean Architecture" (2017) — main component as the outermost wiring layer
+- Standard pattern in oclif, Commander.js, yargs, Cobra CLIs
 
 ## D18 — Codex CLI Native Adapter
 - OpenAI Codex CLI docs: developers.openai.com/codex/subagents
@@ -232,15 +255,18 @@
 ## D36 — Interactive Init Wizard
 - `bin/lib/init.mjs` existing adapter-selection seam
 - Local research on adjacent `prompty` repo: portable skills as primary install surface
-- Common CLI onboarding pattern: modern bootstrap tools use interactive setup by default
 - Repo lesson LL-INSTALL-DX-BEFORE-ALIAS-CLEANUP (lessons-learned.md)
 - `bin/lib/init.mjs`, `bin/gsdd.mjs`, `tests/gsdd.init.test.cjs`
+- npm init, Vite `create-vite`, Next.js `create-next-app`, Angular CLI `ng new`, Astro `create astro` — all use TTY-interactive wizard with headless flags (industry standard for project scaffolding)
 
 ## D37 — Mutability-Driven Workflow Classification
 - `distilled/workflows/verify.md`, `new-project.md`, `audit-milestone.md`, `pause.md`, `resume.md` (all require artifact writes)
 - `distilled/workflows/progress.md` (only read-only workflow)
 - Consumer audit: verification reports lost when persistence skipped
 - `bin/gsdd.mjs`, `bin/lib/rendering.mjs`, `tests/gsdd.guards.test.cjs` (G27)
+- Meyer's Command-Query Separation (CQS, "Object-Oriented Software Construction" 1988) — classify operations by mutation behavior, not semantic category
+- Greg Young's CQRS (2010) — CQS applied at the architectural level
+- Unix rwx model + AWS IAM / Kubernetes RBAC — classify by mutation semantics as industry norm
 
 ## D38 — Retroactive Artifact Enforcement
 - `.internal-research/gaps.md` I27 entry (two occurrences, root-cause analysis, close conditions)
@@ -249,6 +275,9 @@
 - `distilled/workflows/audit-milestone.md` (retroactive artifact completeness check)
 - `.internal-research/strategy.md` (kernel simplicity vs policy depth trade-off)
 - `tests/gsdd.guards.test.cjs` (G30 guard for ROADMAP closure on pass)
+- NIST SP 800-53 Rev. 5 (2020) — detective vs preventive controls as equally valid risk-management strategies
+- ISO 27001 risk treatment — choice of detective vs preventive depends on cost/complexity tradeoff
+- Reason's Swiss Cheese model (1990) — layered defense where retroactive audit catches what preventive layers miss
 
 ---
 
