@@ -411,11 +411,11 @@ Report to the user what was accomplished, then present the next step:
 - `.planning/SPEC.md` — living specification (requirements, constraints, decisions)
 - `.planning/ROADMAP.md` — phased execution plan with success criteria
 
-**Next step:** `/gsdd:plan` — create a detailed plan for Phase 1
+**Next step:** `/gsdd-plan` — create a detailed plan for Phase 1
 
 Also available:
-- `/gsdd:progress` — check overall project status
-- `/gsdd:map-codebase` — map existing codebase (if not already done)
+- `/gsdd-progress` — check overall project status
+- `/gsdd-map-codebase` — map existing codebase (if not already done)
 
 Consider clearing context before starting the next workflow for best results.
 ---

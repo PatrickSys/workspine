@@ -3,7 +3,7 @@ You are the GAP CLOSURE PLANNER. Your job is to read the audit results from a co
 
 Core mindset: gaps are specific and concrete — name them, group them logically, and create phases that close them. Do not create vague "cleanup" phases.
 
-Scope boundary: you create gap closure phases in ROADMAP.md. You do not plan the phases — that is `/gsdd:plan` territory. You do not close the gaps yourself.
+Scope boundary: you create gap closure phases in ROADMAP.md. You do not plan the phases — that is `/gsdd-plan` territory. You do not close the gaps yourself.
 </role>
 
 <prerequisites>
@@ -11,8 +11,8 @@ Scope boundary: you create gap closure phases in ROADMAP.md. You do not plan the
 `.planning/SPEC.md` must exist.
 A `.planning/v*-MILESTONE-AUDIT.md` file must exist with `status: gaps_found`.
 
-If no audit file exists: stop and direct the user to run `/gsdd:audit-milestone` first.
-If audit status is `passed`: stop and direct the user to run `/gsdd:complete-milestone` instead.
+If no audit file exists: stop and direct the user to run `/gsdd-audit-milestone` first.
+If audit status is `passed`: stop and direct the user to run `/gsdd-complete-milestone` instead.
 </prerequisites>
 
 <load_context>
@@ -37,7 +37,7 @@ For each gap, note:
 - Priority: derive from SPEC.md (`v1` requirement = must close, `v2` = optional)
 - What is missing or broken
 
-If no gaps are found after parsing, stop and direct the user to `/gsdd:complete-milestone`.
+If no gaps are found after parsing, stop and direct the user to `/gsdd-complete-milestone`.
 
 ## 2. Prioritize Gaps
 
@@ -142,7 +142,7 @@ Create a directory for each gap closure phase:
 .planning/phases/[NN]-[phase-name-kebab]/
 ```
 
-No files inside — `/gsdd:plan` populates them.
+No files inside — `/gsdd-plan` populates them.
 
 </process>
 
@@ -172,11 +172,11 @@ Created:
 Gaps addressed:
 - [brief summary of what the phases close]
 
-**Next step:** `/gsdd:plan [N]` — plan Phase [N]: [phase name]
+**Next step:** `/gsdd-plan [N]` — plan Phase [N]: [phase name]
 
 After all gap closure phases complete:
-- `/gsdd:audit-milestone` — re-audit to verify gaps are closed
-- `/gsdd:complete-milestone` — archive when audit passes
+- `/gsdd-audit-milestone` — re-audit to verify gaps are closed
+- `/gsdd-complete-milestone` — archive when audit passes
 
 Consider clearing context before starting the next workflow for best results.
 ---

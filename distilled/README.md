@@ -42,19 +42,19 @@ Notes:
 
 ```
 gsdd init                  -> bootstrap (create .planning/, copy templates, generate skills/adapters)
-/gsdd:new-project          -> .planning/SPEC.md + .planning/ROADMAP.md  (questioning + codebase audit + research)
-/gsdd:plan N               -> phases/N/PLAN.md      (task breakdown + research)
-/gsdd:execute N            -> code changes           (plan execution with quality gates)
-/gsdd:verify N             -> VERIFICATION.md        (goal-backward validation)
+/gsdd-new-project          -> .planning/SPEC.md + .planning/ROADMAP.md  (questioning + codebase audit + research)
+/gsdd-plan N               -> phases/N/PLAN.md      (task breakdown + research)
+/gsdd-execute N            -> code changes           (plan execution with quality gates)
+/gsdd-verify N             -> VERIFICATION.md        (goal-backward validation)
   ... repeat plan/execute/verify per phase ...
-/gsdd:audit-milestone      -> MILESTONE-AUDIT.md     (cross-phase integration + requirements coverage)
-/gsdd:complete-milestone   -> milestones/vX.Y-*      (archive, evolve spec, collapse roadmap)
-/gsdd:new-milestone        -> updated SPEC.md + ROADMAP.md  (next milestone goals + phases)
-/gsdd:plan-milestone-gaps  -> gap closure phases in ROADMAP.md  (from audit results)
-/gsdd:quick                -> .planning/quick/NNN/   (sub-hour task outside phases)
-/gsdd:pause                -> .planning/.continue-here.md  (session checkpoint)
-/gsdd:resume               -> restore context, route to next action
-/gsdd:progress             -> show status, route to next action
+/gsdd-audit-milestone      -> MILESTONE-AUDIT.md     (cross-phase integration + requirements coverage)
+/gsdd-complete-milestone   -> milestones/vX.Y-*      (archive, evolve spec, collapse roadmap)
+/gsdd-new-milestone        -> updated SPEC.md + ROADMAP.md  (next milestone goals + phases)
+/gsdd-plan-milestone-gaps  -> gap closure phases in ROADMAP.md  (from audit results)
+/gsdd-quick                -> .planning/quick/NNN/   (sub-hour task outside phases)
+/gsdd-pause                -> .planning/.continue-here.md  (session checkpoint)
+/gsdd-resume               -> restore context, route to next action
+/gsdd-progress             -> show status, route to next action
 ```
 
 ## Current Status (updated 2026-03-20)

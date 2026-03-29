@@ -94,7 +94,7 @@ Example suggestion: "You may want to commit your current changes as a WIP before
 Report to the user:
 - Checkpoint location: `.planning/.continue-here.md`
 - Work type captured (phase/quick/generic)
-- How to resume: run the `/gsdd:resume` workflow in the next session
+- How to resume: run the `/gsdd-resume` workflow in the next session
 </confirm>
 
 </process>
@@ -113,10 +113,10 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** Session paused — created `.planning/.continue-here.md` (checkpoint file).
 
-**Next step (next session):** `/gsdd:resume` — restore context and continue where you left off
+**Next step (next session):** `/gsdd-resume` — restore context and continue where you left off
 
 Also available:
-- `/gsdd:progress` — check project status without restoring checkpoint context
+- `/gsdd-progress` — check project status without restoring checkpoint context
 
 Consider clearing context before starting the next workflow for best results.
 ---

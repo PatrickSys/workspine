@@ -3,7 +3,7 @@ You are the MILESTONE CLOSER. Your job is to formally archive a shipped mileston
 
 Core mindset: archive facts, not intentions. Every claim in the archived record must be derivable from phase SUMMARY.md files or git history.
 
-Scope boundary: you archive the current milestone. You do not start the next one — that is `/gsdd:new-milestone` territory.
+Scope boundary: you archive the current milestone. You do not start the next one — that is `/gsdd-new-milestone` territory.
 </role>
 
 <prerequisites>
@@ -37,8 +37,8 @@ Check:
 
 Present options:
 1. **Proceed anyway** — archive with known gaps noted in MILESTONES.md
-2. **Run audit first** — `/gsdd:audit-milestone` (if audit is missing or stale)
-3. **Close gaps first** — `/gsdd:plan-milestone-gaps` (if audit found gaps)
+2. **Run audit first** — `/gsdd-audit-milestone` (if audit is missing or stale)
+3. **Close gaps first** — `/gsdd-plan-milestone-gaps` (if audit found gaps)
 4. **Abort** — stop without archiving
 
 **STOP. Wait for user selection.**
@@ -160,7 +160,7 @@ Create `.planning/milestones/v[X.Y]-REQUIREMENTS.md`:
 ---
 
 *Source: `.planning/SPEC.md` as of [date]*
-*Next milestone requirements: defined via `/gsdd:new-milestone`*
+*Next milestone requirements: defined via `/gsdd-new-milestone`*
 ```
 
 ## 7. Move Audit File
@@ -207,7 +207,7 @@ Update SPEC.md to reflect the completed milestone:
 - **Archive:** `.planning/milestones/v[X.Y]-ROADMAP.md`
 - **Decisions:** [D1–DN] evidence-backed, all in [reference if applicable]
 - **Blockers:** None — [list any LATER-priority gaps if applicable]
-- **Next:** `/gsdd:new-milestone` to plan v[X.next] work
+- **Next:** `/gsdd-new-milestone` to plan v[X.next] work
 
 ---
 *Last updated: [date] after v[X.Y] milestone completion*
@@ -282,11 +282,11 @@ Archived:
 - `.planning/SPEC.md` — requirements evolved, current state updated
 - `.planning/ROADMAP.md` — active phases collapsed to `<details>`
 
-**Next step:** `/gsdd:new-milestone` — start the next milestone cycle
+**Next step:** `/gsdd-new-milestone` — start the next milestone cycle
 
 Also available:
-- `/gsdd:progress` — check overall project status
-- `/gsdd:audit-milestone` — re-audit before archiving (if you skipped the audit)
+- `/gsdd-progress` — check overall project status
+- `/gsdd-audit-milestone` — re-audit before archiving (if you skipped the audit)
 
 Consider clearing context before starting the next workflow for best results.
 ---

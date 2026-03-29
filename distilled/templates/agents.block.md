@@ -71,6 +71,7 @@ If you are not confident about a domain/library/pattern:
   - `.agents/skills/gsdd-plan/SKILL.md` — phase planning with optional independent checking
   - `.agents/skills/gsdd-execute/SKILL.md` — plan execution with quality gates
   - `.agents/skills/gsdd-verify/SKILL.md` — phase goal-backward verification
+  - `.agents/skills/gsdd-verify-work/SKILL.md` — conversational UAT testing with structured gap tracking
   - `.agents/skills/gsdd-audit-milestone/SKILL.md` — milestone integration audit
 - Milestone lifecycle:
   - `.agents/skills/gsdd-complete-milestone/SKILL.md` — archive shipped milestone, evolve spec, collapse roadmap

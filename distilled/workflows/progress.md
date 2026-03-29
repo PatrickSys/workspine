@@ -18,7 +18,7 @@ This is a read-only workflow. No files are created, modified, or deleted. If `.p
 Check for project artifacts in order:
 
 1. **No `.planning/` directory** — tell the user to run `gsdd init`. Stop.
-2. **No `.planning/ROADMAP.md` AND no `.planning/SPEC.md`** — project has no artifacts. Suggest running the `/gsdd:new-project` workflow. Stop.
+2. **No `.planning/ROADMAP.md` AND no `.planning/SPEC.md`** — project has no artifacts. Suggest running the `/gsdd-new-project` workflow. Stop.
 3. **No `.planning/ROADMAP.md` BUT `.planning/SPEC.md` exists** — this is a between-milestones state (milestone was completed and archived). Go to Branch F.
 4. **Both exist** — proceed to derive status.
 </check_existence>
@@ -78,7 +78,7 @@ Recent Work:
 - Phase [Y]: [one-liner from SUMMARY.md]
 
 [If .continue-here.md exists:]
-Checkpoint: paused work found — run /gsdd:resume to restore context
+Checkpoint: paused work found — run /gsdd-resume to restore context
 
 [If PLAN without SUMMARY found:]
 Incomplete execution: Phase [N] has PLAN but no SUMMARY
@@ -107,8 +107,8 @@ Recent Work:
 Incomplete execution: Phase 3 has PLAN but no SUMMARY
 
 Suggested next action:
-  Run /gsdd:execute to continue Phase 3 execution
-  Also available: /gsdd:plan (re-plan), /gsdd:progress (refresh status)
+  Run /gsdd-execute to continue Phase 3 execution
+  Also available: /gsdd-plan (re-plan), /gsdd-progress (refresh status)
 ```
 
 No ASCII art, no progress bars. Keep it scannable.
@@ -122,8 +122,8 @@ Condition: `.continue-here.md` exists.
 
 ```
 Suggested next action:
-  Run /gsdd:resume to restore paused session context
-  Also available: /gsdd:execute (ignore checkpoint, continue current phase), /gsdd:progress (refresh)
+  Run /gsdd-resume to restore paused session context
+  Also available: /gsdd-execute (ignore checkpoint, continue current phase), /gsdd-progress (refresh)
 ```
 
 **Branch B: Execute (PLAN without SUMMARY in current phase)**
@@ -131,8 +131,8 @@ Condition: Current phase has a PLAN file but no matching SUMMARY.
 
 ```
 Suggested next action:
-  Run /gsdd:execute to continue Phase [N] execution
-  Also available: /gsdd:plan (re-plan current phase), /gsdd:verify (if prior phase needs verification)
+  Run /gsdd-execute to continue Phase [N] execution
+  Also available: /gsdd-plan (re-plan current phase), /gsdd-verify (if prior phase needs verification)
 ```
 
 **Branch C: Plan (no PLAN for current phase)**
@@ -140,8 +140,8 @@ Condition: Current phase has no PLAN files.
 
 ```
 Suggested next action:
-  Run /gsdd:plan to create a plan for Phase [N]: [phase name]
-  Also available: /gsdd:quick (sub-hour task outside phases), /gsdd:map-codebase (refresh codebase maps)
+  Run /gsdd-plan to create a plan for Phase [N]: [phase name]
+  Also available: /gsdd-quick (sub-hour task outside phases), /gsdd-map-codebase (refresh codebase maps)
 ```
 
 **Branch D: Verify (SUMMARY without VERIFICATION)**
@@ -149,8 +149,8 @@ Condition: Current phase has SUMMARY but no VERIFICATION file (verifier enabled)
 
 ```
 Suggested next action:
-  Run /gsdd:verify to validate Phase [N]
-  Also available: /gsdd:execute (continue to next phase), /gsdd:plan (plan next phase)
+  Run /gsdd-verify to validate Phase [N]
+  Also available: /gsdd-execute (continue to next phase), /gsdd-plan (plan next phase)
 ```
 
 **Branch E: Audit milestone (all phases [x])**
@@ -158,8 +158,8 @@ Condition: All phases in ROADMAP.md are marked `[x]`.
 
 ```
 Suggested next action:
-  Run /gsdd:audit-milestone to audit the completed milestone
-  Also available: /gsdd:verify (re-verify a specific phase), /gsdd:quick (sub-hour task)
+  Run /gsdd-audit-milestone to audit the completed milestone
+  Also available: /gsdd-verify (re-verify a specific phase), /gsdd-quick (sub-hour task)
 ```
 
 **Branch F: Between milestones (SPEC.md exists, ROADMAP.md absent)**
@@ -171,13 +171,13 @@ Check `.planning/MILESTONES.md`:
 
 ```
 Suggested next action (subsequent milestone):
-  Run /gsdd:new-milestone to start the next milestone cycle (gather goals, define requirements, create ROADMAP.md)
-  Also available: /gsdd:progress (refresh after milestone setup)
+  Run /gsdd-new-milestone to start the next milestone cycle (gather goals, define requirements, create ROADMAP.md)
+  Also available: /gsdd-progress (refresh after milestone setup)
 
 Suggested next action (incomplete milestone state — SPEC.md exists but no milestone archived yet):
   Inspect .planning/ manually — a milestone is likely still in progress.
-  If a ROADMAP.md was deleted prematurely, re-run /gsdd:new-milestone to restore it.
-  Do NOT run /gsdd:new-project — SPEC.md already exists and re-running would overwrite it.
+  If a ROADMAP.md was deleted prematurely, re-run /gsdd-new-milestone to restore it.
+  Do NOT run /gsdd-new-project — SPEC.md already exists and re-running would overwrite it.
 ```
 
 If none of the above conditions match, report that the project is in a clean state with no obvious next action.
@@ -187,7 +187,7 @@ If none of the above conditions match, report that the project is in a clean sta
 Handle compound states:
 
 - **Checkpoint + unexecuted plan:** Both `.continue-here.md` exists and a PLAN lacks a SUMMARY. Prioritize checkpoint (Branch A) but mention the unexecuted plan in the status block.
-- **All phases complete + checkpoint:** All phases `[x]` but a checkpoint exists. Mention both — suggest clearing the stale checkpoint via `/gsdd:resume`, then routing to milestone audit.
+- **All phases complete + checkpoint:** All phases `[x]` but a checkpoint exists. Mention both — suggest clearing the stale checkpoint via `/gsdd-resume`, then routing to milestone audit.
 - **Phase done but next unplanned:** Current phase has both PLAN and SUMMARY, but the next phase has no PLAN. Show the current phase as complete and suggest planning the next phase (Branch C targeting the next phase).
 - **No matching condition:** If the project state does not match any branch, report it clearly and suggest the user inspect `.planning/` manually.
 </edge_cases>
@@ -202,7 +202,7 @@ Handle compound states:
 - [ ] Routing suggestion is specific (includes phase number and branch-specific output block)
 - [ ] Named branch output format used with "Also available" alternatives
 - [ ] No files created, modified, or deleted (read-only workflow)
-- [ ] All workflow references use portable `/gsdd:*` command format
+- [ ] All workflow references use portable `/gsdd-*` command format
 - [ ] No interactive menus, no numbered option lists, no waiting for user selection
 - [ ] Edge cases handled for compound states
 </success_criteria>

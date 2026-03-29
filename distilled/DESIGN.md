@@ -287,7 +287,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 1. **On first brownfield init:** `new-project.md` detects source files, offers codebase mapping. If accepted, invokes `map-codebase` via the portable skill surface (`.agents/skills/gsdd-map-codebase/SKILL.md`).
 
-2. **On subsequent runs:** If `.planning/codebase/` already exists, mappers are skipped during init. User runs `/gsdd:map-codebase` directly to trigger the Refresh/Update/Skip flow.
+2. **On subsequent runs:** If `.planning/codebase/` already exists, mappers are skipped during init. User runs `/gsdd-map-codebase` directly to trigger the Refresh/Update/Skip flow.
 
 **Why standalone:** Codebase maps become stale after major refactors. Users need to refresh maps independently of project initialization. Embedding mapping inside init would force a full re-init to refresh maps.
 
@@ -1230,7 +1230,7 @@ D12 established the session persistence design. D26 mechanically enforces the ro
 
 ## 28. Workflow Completion Routing
 
-**Problem:** Consumer testing (2026-03-21) revealed that AI agents completing a GSDD workflow go silent — the user must manually figure out which `/gsdd:*` command to run next. The lifecycle contract (`new-project → plan → execute → verify → [next phase]`) was correct in design but invisible in practice at each step boundary. GSD original solved this with explicit "Next Up" sections at the end of every workflow; GSDD lost this pattern during distillation.
+**Problem:** Consumer testing (2026-03-21) revealed that AI agents completing a GSDD workflow go silent — the user must manually figure out which `/gsdd-*` command to run next. The lifecycle contract (`new-project → plan → execute → verify → [next phase]`) was correct in design but invisible in practice at each step boundary. GSD original solved this with explicit "Next Up" sections at the end of every workflow; GSDD lost this pattern during distillation.
 
 **Decision:** Add `<completion>` sections after `<success_criteria>` in all 9 terminal workflows. Add positional discipline gates (STOP instructions at exact deviation points) and mandatory persistence enforcement for critical artifacts.
 
@@ -1252,10 +1252,10 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** [what finished]
 
-**Next step:** `/gsdd:[command]` — [description]
+**Next step:** `/gsdd-[command]` — [description]
 
 Also available:
-- `/gsdd:[alt]` — [description]
+- `/gsdd-[alt]` — [description]
 
 Consider clearing context before starting the next workflow for best results.
 ---
@@ -1263,15 +1263,15 @@ Consider clearing context before starting the next workflow for best results.
 ```
 
 **Routing map (acyclic, complete):**
-- `new-project` → `/gsdd:plan`
-- `plan` → `/gsdd:execute`
-- `execute` → `/gsdd:verify` (if verifier enabled) or `/gsdd:progress`
-- `verify` → `/gsdd:progress` (passed), `/gsdd:plan` (gaps), `/gsdd:verify` (human_needed)
-- `audit-milestone` → `/gsdd:complete-milestone` (passed), `/gsdd:plan` (gaps/debt)
-- `quick` → `/gsdd:progress`
-- `pause` → `/gsdd:resume` (next session)
+- `new-project` → `/gsdd-plan`
+- `plan` → `/gsdd-execute`
+- `execute` → `/gsdd-verify` (if verifier enabled) or `/gsdd-progress`
+- `verify` → `/gsdd-progress` (passed), `/gsdd-plan` (gaps), `/gsdd-verify` (human_needed)
+- `audit-milestone` → `/gsdd-complete-milestone` (passed), `/gsdd-plan` (gaps/debt)
+- `quick` → `/gsdd-progress`
+- `pause` → `/gsdd-resume` (next session)
 - `resume` → dispatches to selected workflow
-- `map-codebase` → `/gsdd:new-project`
+- `map-codebase` → `/gsdd-new-project`
 
 **GSD comparison:**
 
@@ -1439,7 +1439,7 @@ GSD's approach was a `--full` flag that added plan-checking + verification to qu
 
 1. **Plan Preview Gate (mandatory, default-yes):** After the planner returns and the STOP gate verifies the plan exists, present a structured summary (task count, files to touch, 1-sentence approach) and wait for the user. Default-yes: pressing Enter proceeds. Options include edit, abort, and (when scope signal fires) switch to full ceremony. This is the core fix — the user sees agent intent before code changes happen.
 
-2. **Scope Signal with Escalation (advisory, always-on):** Inline orchestrator evaluation checks the plan against quick-scope boundaries: >8 files modified, architecture keywords in description (`refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database`), new public APIs. If any signal fires, the advisory appears in the plan preview with a recommendation to use `/gsdd:plan` for approach exploration. Advisory only — the user decides. Keyword heuristics have false positives; blocking would train users to ignore the signal.
+2. **Scope Signal with Escalation (advisory, always-on):** Inline orchestrator evaluation checks the plan against quick-scope boundaries: >8 files modified, architecture keywords in description (`refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database`), new public APIs. If any signal fires, the advisory appears in the plan preview with a recommendation to use `/gsdd-plan` for approach exploration. Advisory only — the user decides. Keyword heuristics have false positives; blocking would train users to ignore the signal.
 
 3. **Config-Gated Independent Plan Check (optional):** When `workflow.planCheck: true` in config.json, the existing plan-checker delegate runs against the quick task plan with 5 of 9 dimensions: `requirement_coverage`, `task_completeness`, `dependency_correctness`, `scope_sanity`, `must_have_quality`. Maximum 1 revision cycle (not 3 — diminishing returns for 1-3 task plans). If blockers remain, they surface in the plan preview for user decision. No new delegate or config key — reuses existing infrastructure.
 
@@ -1484,7 +1484,7 @@ The step has a **dual gate** — even with `workflow.discuss: true`, it evaluate
 | Vague scope | Contains: `improve`, `fix`, `update`, `refactor`, `clean up`, `optimize` without specifying target | "improve error handling" |
 | Trade-off present | Implies competing goals | "make it faster" (algorithmic? caching? denormalization?) |
 
-If no signals fire, the step skips silently — no questions asked, even with toggle on. When signals fire, the orchestrator identifies 1-2 grey areas and asks targeted questions in **recommendation-first format**: "I'd approach this with X because Y. Want me to proceed, or do you prefer Z?" Maximum 2 questions — if a task has 3+ grey areas, the scope signal (D32) should already be recommending `/gsdd:plan`.
+If no signals fire, the step skips silently — no questions asked, even with toggle on. When signals fire, the orchestrator identifies 1-2 grey areas and asks targeted questions in **recommendation-first format**: "I'd approach this with X because Y. Want me to proceed, or do you prefer Z?" Maximum 2 questions — if a task has 3+ grey areas, the scope signal (D32) should already be recommending `/gsdd-plan`.
 
 Output is inline `$APPROACH_CONTEXT` (e.g., "User confirmed: use in-memory LRU cache, not Redis") passed to the planner as locked constraints. No APPROACH.md file — file artifacts add overhead with no return for sub-hour work.
 

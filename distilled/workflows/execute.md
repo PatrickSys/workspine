@@ -15,6 +15,50 @@ CRITICAL: Read every file below before performing any other actions. This is you
 5. Relevant source files listed in the plan's `<files>` sections
 </load_context>
 
+<multi_plan_orchestration>
+A phase often contains multiple plans. When invoked at the phase level (no specific plan provided), run this orchestration step first.
+
+### Discover Plans and Group by Wave
+
+1. Scan `.planning/phases/{phase_dir}/` for all `*-PLAN.md` files.
+2. For each plan, read its frontmatter `wave` field (default: `wave: 1` if absent).
+3. Group plans by wave number. Collect the set of distinct wave numbers and sort them ascending.
+4. Check for `*-SUMMARY.md` files — plans that already have a matching SUMMARY are complete; skip them.
+
+Present to the user:
+```
+Phase {N} — {Name}
+Plans to execute:
+  Wave 1: {plan-01-NAME.md}, {plan-02-NAME.md}
+  Wave 2: {plan-03-NAME.md}
+Plans already complete (have SUMMARY): {list}
+```
+
+Confirm with the user before proceeding if any existing SUMMARYs look stale or incomplete.
+
+### Execute Wave by Wave
+
+For each wave in ascending order:
+1. Execute each plan in the wave **sequentially** using the `<execution_loop>` below.
+2. After each plan: verify `{plan_id}-SUMMARY.md` exists on disk.
+3. If a plan produces a SUMMARY, log: `Wave {W} / Plan {NN}: ✓ complete`.
+4. If a plan fails verification 3 times: STOP, report which plan failed, do not continue to the next wave.
+5. After all plans in a wave are complete, advance to the next wave.
+
+### Aggregate Summary
+
+After all waves complete, produce a brief aggregate report:
+```
+Phase {N} complete.
+Plans executed: {count}
+Waves: {W} total
+Key deliverables: [bullet list of what was built, one line per plan]
+Next step: /gsdd-verify {N} — verify the phase goal was achieved
+```
+
+If only a single plan was provided (the common case), skip this section entirely and go straight to the `<execution_loop>`.
+</multi_plan_orchestration>
+
 <execution_loop>
 For each task in the plan, follow this loop:
 
@@ -28,8 +72,8 @@ For each task in the plan, follow this loop:
 
 ### Frontmatter And Task Semantics
 
-The executor consumes the plan schema defined by `/gsdd:plan`:
-- frontmatter keys: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `must_haves`
+The executor consumes the plan schema defined by `/gsdd-plan`:
+- frontmatter keys: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `must_haves`, `tdd`
 - task types:
   - `type="auto"` - proceed without pausing
   - `type="checkpoint:user"` - stop for a required user decision or human-only step
@@ -61,6 +105,27 @@ Before modifying any existing behavior, run a ripple check:
    When removing an import, function, or variable, grep for all usages before deleting it.
    This catches dead references before they turn into broken execution paths.
 
+### TDD Execution
+
+If a task frontmatter includes `tdd: true`, switch to RED-GREEN-REFACTOR cycle for that task:
+
+**RED — Write the failing test first**
+1. Write the test that describes the intended behavior.
+2. Run the test. Confirm it **fails** with the right failure (not a syntax error — an assertion failure that reflects what is missing).
+3. Do not proceed until you see the expected red failure.
+
+**GREEN — Minimal implementation**
+1. Write the smallest amount of code that makes the test pass.
+2. Run the test. Confirm it passes.
+3. Do not over-engineer at this stage — add only what the test requires.
+
+**REFACTOR — Clean up**
+1. Improve structure, naming, and clarity without changing behavior.
+2. Run the tests again. Confirm they still pass.
+3. Log the RED→GREEN→REFACTOR cycle in SUMMARY.md under the task entry.
+
+Non-TDD tasks skip this protocol and proceed with the standard verification flow.
+
 ### Local Verification
 Before reporting a task complete:
 - run the task's `<verify>` checks
@@ -72,16 +137,30 @@ Before reporting a task complete:
 ### Git Guidance
 
 ```bash
-# Stage only the files you intend to include.
+# Stage individual files — never "git add ." or "git add -A"
 git add src/routes/users.ts src/app/users/page.tsx tests/users.route.test.ts
 
-# Commit only when it matches the repo or user workflow.
+# Commit message — conventional type prefix
 git commit -m "feat: wire users page to real route"
 ```
 
+**Conventional commit type reference** (advisory — repo/user conventions override):
+
+| Type | Use when |
+|------|----------|
+| `feat` | New user-facing feature |
+| `fix` | Bug fix |
+| `test` | Adding or updating tests only |
+| `refactor` | Code restructure with no behavior change |
+| `perf` | Performance improvement |
+| `docs` | Documentation only |
+| `style` | Formatting, whitespace, no logic change |
+| `chore` | Build, tooling, dependencies |
+
 Git rules:
-- Repo and user conventions win first.
+- **Repo and user conventions win first.** This table is a reference, not a mandate.
 - `.planning/config.json -> gitProtocol` is advisory only.
+- **Stage individually, never `git add .`** — accidental inclusion of `.env` files, build artifacts, or binary files is harder to undo than it looks.
 - Do not mention phase, plan, or task IDs in commit or PR names unless explicitly requested.
 - Do not force one commit per task unless the repo or user asked for that.
 </execution_loop>
@@ -256,13 +335,13 @@ Report to the user what was accomplished, then present the next step:
 **Completed:** Plan execution — created `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md`.
 
 **Next step:** Check `.planning/config.json` → `workflow.verifier`:
-- If `true`: run `/gsdd:verify` — verify that the phase goal was achieved
-- If `false` (or key missing): run `/gsdd:progress` — check status and route to the next phase
+- If `true`: run `/gsdd-verify` — verify that the phase goal was achieved
+- If `false` (or key missing): run `/gsdd-progress` — check status and route to the next phase
 
 Also available:
-- `/gsdd:plan` — plan the next wave (if more plans remain in this phase)
-- `/gsdd:quick` — handle a sub-hour task outside the phase cycle
-- `/gsdd:pause` — save context for later if stopping work
+- `/gsdd-plan` — plan the next wave (if more plans remain in this phase)
+- `/gsdd-quick` — handle a sub-hour task outside the phase cycle
+- `/gsdd-pause` — save context for later if stopping work
 
 Consider clearing context before starting the next workflow for best results.
 ---

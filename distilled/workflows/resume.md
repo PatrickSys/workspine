@@ -16,7 +16,7 @@ Scope boundary: unlike progress.md, you have side effects — checkpoint cleanup
 Check for project artifacts in order:
 
 1. **No `.planning/` directory** — route user to run `gsdd init`. Stop.
-2. **No `.planning/SPEC.md` or no `.planning/ROADMAP.md`** — `.planning/` exists but the project is not fully initialized (partial init). Route user to run the `/gsdd:new-project` workflow. Stop.
+2. **No `.planning/SPEC.md` or no `.planning/ROADMAP.md`** — `.planning/` exists but the project is not fully initialized (partial init). Route user to run the `/gsdd-new-project` workflow. Stop.
 3. **Both exist** — proceed to load state.
 </detect_state>
 
@@ -83,21 +83,21 @@ Evaluate in priority order and present the primary recommendation:
 
 **Checkpoint exists (`.continue-here.md`):**
 Route based on the `workflow` frontmatter:
-- `phase` — route to `/gsdd:execute` (or `/gsdd:plan`/`/gsdd:verify` based on checkpoint context)
-- `quick` — route to `/gsdd:quick` to complete the task
+- `phase` — route to `/gsdd-execute` (or `/gsdd-plan`/`/gsdd-verify` based on checkpoint context)
+- `quick` — route to `/gsdd-quick` to complete the task
 - `generic` — present the next_action and let the user decide
 
 **Incomplete plan execution (PLAN without SUMMARY):**
-Route to `/gsdd:execute` for that phase.
+Route to `/gsdd-execute` for that phase.
 
 **Phase needs planning (next `[ ]` phase, no PLAN file exists):**
-Route to `/gsdd:plan` for that phase.
+Route to `/gsdd-plan` for that phase.
 
 **Phase needs verification (SUMMARY exists but no VERIFICATION):**
-Route to `/gsdd:verify` for that phase (only if `workflow.verifier` is enabled in config.json; if config.json cannot be read, assume verifier is disabled).
+Route to `/gsdd-verify` for that phase (only if `workflow.verifier` is enabled in config.json; if config.json cannot be read, assume verifier is disabled).
 
 **All phases complete (all `[x]`):**
-Route to `/gsdd:audit-milestone`.
+Route to `/gsdd-audit-milestone`.
 </determine_action>
 
 <present_options>
@@ -148,5 +148,5 @@ Present to the user before dispatching:
 Consider clearing context before starting the next workflow for best results.
 ---
 
-Then dispatch to the selected `/gsdd:*` workflow.
+Then dispatch to the selected `/gsdd-*` workflow.
 </completion>

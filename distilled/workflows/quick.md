@@ -8,7 +8,7 @@ They reuse the same planner, executor, and verifier roles but skip research and 
 <anti_patterns>
 - Do not execute before the user sees the plan preview (Step 3.7 must complete before Step 4)
 - Do not proceed past file verification gates if the expected file does not exist on disk — a plan that exists only in conversation context will be lost on compaction
-- Do not ask more than 2 approach clarification questions — if 3+ grey areas exist, recommend /gsdd:plan instead
+- Do not ask more than 2 approach clarification questions — if 3+ grey areas exist, recommend /gsdd-plan instead
 - Do not create APPROACH.md for quick tasks — use inline $APPROACH_CONTEXT only
 - Do not update ROADMAP.md or SPEC.md from quick tasks — these are phase-level artifacts
 - Do not skip config.json reads — workflow toggles (discuss, planCheck, verifier) control flow
@@ -171,9 +171,9 @@ Evaluate the plan against quick-scope boundaries. Read the plan file and check:
 
 | Signal | Threshold | `$SCOPE_WARNING` text |
 |--------|-----------|----------------------|
-| Files modified | >8 distinct files in plan | "This task touches {N} files — consider `/gsdd:plan` for full ceremony." |
-| Architecture keywords in `$DESCRIPTION` | contains: `refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database` | "This looks like architectural work — consider `/gsdd:plan` for approach exploration." |
-| New public APIs | Plan tasks create new route files, API endpoints, or exported interfaces | "New public surface area detected — consider `/gsdd:plan` for approach exploration." |
+| Files modified | >8 distinct files in plan | "This task touches {N} files — consider `/gsdd-plan` for full ceremony." |
+| Architecture keywords in `$DESCRIPTION` | contains: `refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database` | "This looks like architectural work — consider `/gsdd-plan` for approach exploration." |
+| New public APIs | Plan tasks create new route files, API endpoints, or exported interfaces | "New public surface area detected — consider `/gsdd-plan` for approach exploration." |
 
 If any signal fires, set `$SCOPE_WARNING` to the first matching advisory text. Multiple signals concatenate.
 If no signals fire, `$SCOPE_WARNING` is empty.
@@ -212,12 +212,12 @@ Plan check issues: {$CHECKER_ISSUES}
 
 Present options (default-yes — pressing Enter proceeds):
 - If `$SCOPE_WARNING` is empty: `[Enter to proceed / edit description / abort]`
-- If `$SCOPE_WARNING` is non-empty: `[Enter to proceed / switch to /gsdd:plan / edit description / abort]`
+- If `$SCOPE_WARNING` is non-empty: `[Enter to proceed / switch to /gsdd-plan / edit description / abort]`
 
 Handle response:
 - **Enter (or "yes"):** proceed to Step 4.
 - **"edit description":** clean up the task directory, then return to Step 1 with `$DESCRIPTION` pre-filled as the starting point.
-- **"switch to /gsdd:plan":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd:plan` for full ceremony with approach exploration. Task description: {$DESCRIPTION}"
+- **"switch to /gsdd-plan":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd-plan` for full ceremony with approach exploration. Task description: {$DESCRIPTION}"
 - **"abort":** clean up the task directory, report cancellation, stop.
 
 ---
@@ -334,12 +334,12 @@ Created:
 - `.planning/quick/{next_num}-{slug}/{next_num}-VERIFICATION.md` (if verifier enabled)
 - Updated `.planning/quick/LOG.md`
 
-**Next step:** `/gsdd:progress` — check project status and continue phase work
+**Next step:** `/gsdd-progress` — check project status and continue phase work
 
 Also available:
-- `/gsdd:quick` — run another quick task
-- `/gsdd:plan` — plan the next phase
-- `/gsdd:pause` — save context for later if stopping work
+- `/gsdd-quick` — run another quick task
+- `/gsdd-plan` — plan the next phase
+- `/gsdd-pause` — save context for later if stopping work
 
 Consider clearing context before starting the next workflow for best results.
 ---

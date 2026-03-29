@@ -205,17 +205,17 @@ Report the audit result to the user, then present the next step:
 **Completed:** Milestone audit — created `.planning/v{version}-MILESTONE-AUDIT.md`.
 
 If status is `passed`:
-**Next step:** `/gsdd:complete-milestone` — archive the milestone and prepare for the next
+**Next step:** `/gsdd-complete-milestone` — archive the milestone and prepare for the next
 
 If status is `gaps_found`:
-**Next step:** `/gsdd:plan-milestone-gaps` — create gap-closure phases for the unsatisfied requirements
+**Next step:** `/gsdd-plan-milestone-gaps` — create gap-closure phases for the unsatisfied requirements
 
 If status is `tech_debt`:
-**Next step:** Either `/gsdd:complete-milestone` (accept debt) or `/gsdd:plan` (cleanup phase)
+**Next step:** Either `/gsdd-complete-milestone` (accept debt) or `/gsdd-plan` (cleanup phase)
 
 Also available:
-- `/gsdd:verify` — re-verify a specific phase before re-auditing
-- `/gsdd:progress` — check overall project status
+- `/gsdd-verify` — re-verify a specific phase before re-auditing
+- `/gsdd-progress` — check overall project status
 
 Consider clearing context before starting the next workflow for best results.
 ---

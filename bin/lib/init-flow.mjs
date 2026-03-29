@@ -42,7 +42,7 @@ function validateKindContract(adapter, cwd) {
 
 export function createCmdInit(ctx) {
   return async function cmdInit(...initArgs) {
-    console.log('gsdd init - setting up SDD workflow\n');
+    console.log('gsdd init - setting up GSDD workflow\n');
 
     const isAuto = parseAutoFlag(initArgs);
     const toolsFlag = parseFlagValue(initArgs, '--tools');
@@ -119,7 +119,7 @@ export function createCmdInit(ctx) {
     writeManifest(ctx.planningDir, manifest);
     console.log('  - wrote generation manifest');
 
-    console.log('\nSDD initialized.');
+    console.log('\nGSDD initialized.');
     console.log('Next: run the new-project workflow to produce SPEC.md and ROADMAP.md:\n');
     printPostInitRouting(interactiveSession.selectedRuntimes);
   };

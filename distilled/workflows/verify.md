@@ -344,18 +344,19 @@ Report the verification result to the user, then present the next step:
 **Completed:** Phase verification — created `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md`.
 
 If status is `passed`:
-**Next step:** `/gsdd:progress` — check status and route to the next phase or milestone audit
+**Next step:** `/gsdd-progress` — check status and route to the next phase or milestone audit
 
 If status is `gaps_found`:
-**Next step:** `/gsdd:plan` — re-plan to close the identified gaps
+**Next step:** `/gsdd-plan` — re-plan to close the identified gaps
 
 If status is `human_needed`:
-**Next step:** Complete the manual checks listed above, then run `/gsdd:verify` again
+**Next step:** `/gsdd-verify-work` — run conversational UAT to test items interactively and capture results in UAT.md
+- After UAT is complete, run `/gsdd-verify` again with the UAT results as additional context
 
 Also available:
 
-- `/gsdd:execute` — fix gaps inline without re-planning (small fixes only)
-- `/gsdd:pause` — save context for later if stopping work
+- `/gsdd-execute` — fix gaps inline without re-planning (small fixes only)
+- `/gsdd-pause` — save context for later if stopping work
 
 Consider clearing context before starting the next workflow for best results.
 

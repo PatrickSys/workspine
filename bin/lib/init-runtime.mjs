@@ -189,7 +189,7 @@ Platforms (for --tools):
   cursor    Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
   copilot   Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
   gemini    Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
-  all       Generate all adapters (Claude, OpenCode, Codex, AGENTS-based surfaces)
+  all       Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)
 
 Notes:
   - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)

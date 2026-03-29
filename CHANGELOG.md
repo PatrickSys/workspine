@@ -92,7 +92,7 @@ Initial public release. 35 merged PRs, 862 structural assertions, 35 design deci
 **Core Framework**
 - 9 canonical role contracts distilled from GSD's 11 (mapper, researcher, synthesizer, planner, executor, verifier, roadmapper, integration-checker, debugger)
 - 10 delegate instructions (4 mapper, 4 researcher, 1 synthesizer, 1 plan-checker) with two-layer architecture separating durable role contracts from thin task-specific wrappers
-- 13 workflows: new-project, map-codebase, plan, execute, verify, audit-milestone, complete-milestone, new-milestone, plan-milestone-gaps, quick, pause, resume, progress
+- 14 workflows: new-project, map-codebase, plan, execute, verify, verify-work, audit-milestone, complete-milestone, new-milestone, plan-milestone-gaps, quick, pause, resume, progress
 - Living specification model (SPEC.md replaces GSD's separate PROJECT.md + REQUIREMENTS.md)
 - Phased delivery plan with inline status (ROADMAP.md replaces STATE.md)
 - 4-file codebase standard (STACK, ARCHITECTURE, CONVENTIONS, CONCERNS) — drops state that rots

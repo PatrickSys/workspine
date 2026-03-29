@@ -255,11 +255,11 @@ describe('I3 — Delegate Thinness', () => {
 describe('I4 — Workflow References', () => {
   const workflows = getWorkflowFiles();
 
-  test('exactly 13 workflows exist', () => {
-    assert.strictEqual(workflows.length, 13, `Expected 13 workflows, got ${workflows.length}: ${workflows.join(', ')}`);
+  test('exactly 14 workflows exist', () => {
+    assert.strictEqual(workflows.length, 14, `Expected 14 workflows, got ${workflows.length}: ${workflows.join(', ')}`);
   });
 
-  test('all 13 workflows exist by name', () => {
+  test('all 14 workflows exist by name', () => {
     const expected = [
       'audit-milestone.md',
       'complete-milestone.md',
@@ -274,6 +274,7 @@ describe('I4 — Workflow References', () => {
       'quick.md',
       'resume.md',
       'verify.md',
+      'verify-work.md',
     ];
     for (const wf of expected) {
       assert.ok(
@@ -1493,8 +1494,8 @@ describe('G12 — Documentation Accuracy Guards', () => {
     assert.ok(diagramMatch, 'distilled/README must have a workflow diagram code block');
     const diagram = diagramMatch[1];
 
-    // Extract /gsdd:* references from the diagram
-    const diagramCommands = [...diagram.matchAll(/\/gsdd:([a-z-]+)/g)].map(m => m[1]);
+    // Extract /gsdd-* references from the diagram (canonical hyphen form)
+    const diagramCommands = [...diagram.matchAll(/\/gsdd-([a-z-]+)/g)].map(m => m[1]);
 
     // Get valid workflow names (strip 'gsdd-' prefix to get the command part)
     const workflowNames = (cliContent.match(/name:\s*'gsdd-([a-z-]+)'/g) || [])
@@ -1503,7 +1504,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
     for (const cmd of diagramCommands) {
       assert.ok(
         workflowNames.includes(cmd),
-        `distilled/README workflow diagram references "/gsdd:${cmd}" which is not in WORKFLOWS array. FIX: Remove ghost command or add the workflow.`
+        `distilled/README workflow diagram references "/gsdd-${cmd}" which is not in WORKFLOWS array. FIX: Remove ghost command or add the workflow.`
       );
     }
   });
@@ -1522,5 +1523,79 @@ describe('G12 — Documentation Accuracy Guards', () => {
       rootReadme.includes('--templates'),
       'Root README update command documentation does not mention --templates. FIX: Add --templates to the update command description.'
     );
+  });
+});
+
+// G35b - Role and Delegate Reference Integrity
+describe('G35b - Role and Delegate Reference Integrity', () => {
+  const workflowFiles = fs.readdirSync(WORKFLOWS_DIR).filter(f => f.endsWith('.md'));
+
+  // G35b.1: Every .planning/templates/roles/*.md reference has a matching source in agents/
+  test('all roles/ references in workflow files resolve to agents/ source files', () => {
+    const roleRefs = new Set();
+    for (const file of workflowFiles) {
+      const content = fs.readFileSync(path.join(WORKFLOWS_DIR, file), 'utf-8');
+      const matches = [...content.matchAll(/templates\/roles\/([a-z-]+\.md)/g)].map(m => m[1]);
+      for (const m of matches) roleRefs.add(m);
+    }
+    for (const ref of roleRefs) {
+      assert.ok(
+        fs.existsSync(path.join(AGENTS_DIR, ref)),
+        `Workflow references templates/roles/${ref} but agents/${ref} does not exist. FIX: Add the role contract file to agents/.`
+      );
+    }
+  });
+
+  // G35b.2: Every templates/delegates/*.md reference has a matching source in distilled/templates/delegates/
+  test('all delegates/ references in workflow files resolve to distilled/templates/delegates/ source files', () => {
+    const delegateRefs = new Set();
+    for (const file of workflowFiles) {
+      const content = fs.readFileSync(path.join(WORKFLOWS_DIR, file), 'utf-8');
+      const matches = [...content.matchAll(/templates\/delegates\/([a-z-]+\.md)/g)].map(m => m[1]);
+      for (const m of matches) delegateRefs.add(m);
+    }
+    for (const ref of delegateRefs) {
+      assert.ok(
+        fs.existsSync(path.join(DELEGATES_DIR, ref)),
+        `Workflow references templates/delegates/${ref} but distilled/templates/delegates/${ref} does not exist. FIX: Add the delegate file.`
+      );
+    }
+  });
+});
+
+// G34 - Command Naming Invariants
+describe('G34 - Command Naming Invariants', () => {
+  const workflowFiles = fs.readdirSync(WORKFLOWS_DIR).filter(f => f.endsWith('.md'));
+
+  // G34.1: No colon-separated /gsdd: in workflow files (canonical form is /gsdd-)
+  for (const file of workflowFiles) {
+    test(`${file} uses hyphen-separated /gsdd- syntax (not /gsdd:)`, () => {
+      const content = fs.readFileSync(path.join(WORKFLOWS_DIR, file), 'utf-8');
+      const colonMatches = [...content.matchAll(/\/gsdd:[a-z-]+/g)].map(m => m[0]);
+      assert.strictEqual(
+        colonMatches.length,
+        0,
+        `${file} contains colon-separated command refs: ${colonMatches.join(', ')}. FIX: Replace /gsdd: with /gsdd- throughout.`
+      );
+    });
+  }
+
+  // G34.2: Legacy commands/gsd/ directory must not exist
+  test('commands/gsd/ legacy directory does not exist', () => {
+    const legacyDir = path.join(__dirname, '..', 'commands', 'gsd');
+    assert.ok(
+      !fs.existsSync(legacyDir),
+      'commands/gsd/ legacy directory exists. FIX: Delete it — these are dead GSD upstream commands that reference non-existent GSDD artifacts.'
+    );
+  });
+
+  // G34.3: --tools all includes all 7 runtimes
+  test('parseToolsFlag("all") returns all 7 runtime adapters', () => {
+    const { parseToolsFlag } = require('../bin/lib/cli-utils.mjs');
+    const result = parseToolsFlag(['--tools', 'all']);
+    const expected = ['claude', 'opencode', 'codex', 'agents', 'cursor', 'copilot', 'gemini'];
+    for (const runtime of expected) {
+      assert.ok(result.includes(runtime), `parseToolsFlag("all") missing "${runtime}". FIX: Add "${runtime}" to the "all" expansion in cli-utils.mjs.`);
+    }
   });
 });

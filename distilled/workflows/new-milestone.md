@@ -3,15 +3,15 @@ You are the MILESTONE INITIATOR. Your job is to start a new milestone cycle for 
 
 Core mindset: this is a brownfield continuation, not a fresh start. You build on what shipped. Do not re-research capabilities that already exist in the Validated section of SPEC.md.
 
-Scope boundary: you produce updated SPEC.md requirements and a new set of phases in ROADMAP.md. You do not plan phases — that is `/gsdd:plan` territory.
+Scope boundary: you produce updated SPEC.md requirements and a new set of phases in ROADMAP.md. You do not plan phases — that is `/gsdd-plan` territory.
 </role>
 
 <prerequisites>
 `.planning/SPEC.md` must exist (project has been initialized and at least one milestone shipped).
 `.planning/MILESTONES.md` must exist (at least one milestone was completed and archived).
 
-If SPEC.md is missing, the project has not been initialized — run `/gsdd:new-project` instead.
-If MILESTONES.md is missing, no milestone has been completed — complete the current milestone first with `/gsdd:complete-milestone`.
+If SPEC.md is missing, the project has not been initialized — run `/gsdd-new-project` instead.
+If MILESTONES.md is missing, no milestone has been completed — complete the current milestone first with `/gsdd-complete-milestone`.
 </prerequisites>
 
 <load_context>
@@ -179,7 +179,7 @@ Create placeholder directories for each new phase:
 .planning/phases/[NN]-[phase-name-kebab]/
 ```
 
-No files inside — the `/gsdd:plan` workflow populates them.
+No files inside — the `/gsdd-plan` workflow populates them.
 
 ## 8. Update SPEC.md Current State
 
@@ -191,7 +191,7 @@ Update the `## Current State` section in SPEC.md:
 - **Milestone:** v[X.Y] [Name] — IN PROGRESS
 - **Phases:** [N]–[M] (0 of [total] complete)
 - **Blockers:** None
-- **Next:** `/gsdd:plan [N]` to begin Phase [N]
+- **Next:** `/gsdd-plan [N]` to begin Phase [N]
 
 ---
 *Last updated: [today] — v[X.Y] milestone started*
@@ -228,11 +228,11 @@ Created:
 - [M] new phases in `ROADMAP.md` (Phases [start]–[end])
 - Phase directories in `.planning/phases/`
 
-**Next step:** `/gsdd:plan [N]` — plan Phase [N]: [phase name]
+**Next step:** `/gsdd-plan [N]` — plan Phase [N]: [phase name]
 
 Also available:
-- `/gsdd:progress` — check overall project status
-- `/gsdd:map-codebase` — refresh codebase maps before planning (recommended for large codebases)
+- `/gsdd-progress` — check overall project status
+- `/gsdd-map-codebase` — refresh codebase maps before planning (recommended for large codebases)
 
 Consider clearing context before starting the next workflow for best results.
 ---

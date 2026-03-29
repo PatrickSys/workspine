@@ -142,7 +142,7 @@ These 4 documents are consumed by downstream GSDD workflows:
 
 | Workflow | Documents Used |
 |----------|---------------|
-| `/gsdd:new-project` | All 4 -- infers Validated requirements from existing capabilities |
+| `/gsdd-new-project` | All 4 -- infers Validated requirements from existing capabilities |
 | `plan` (future) | ARCHITECTURE + CONVENTIONS for implementation planning |
 | `execute` (future) | CONVENTIONS for code style, ARCHITECTURE for file placement |
 | `verify` (future) | CONCERNS for regression awareness |
@@ -230,10 +230,10 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** Codebase mapping — 4 documents written to `.planning/codebase/` (STACK.md, ARCHITECTURE.md, CONVENTIONS.md, CONCERNS.md).
 
-**Next step:** `/gsdd:new-project` — initialize the project with spec and roadmap
+**Next step:** `/gsdd-new-project` — initialize the project with spec and roadmap
 
 Also available:
-- `/gsdd:map-codebase` — re-map if results need refinement
+- `/gsdd-map-codebase` — re-map if results need refinement
 - Review specific file: read `.planning/codebase/STACK.md`
 
 Consider clearing context before starting the next workflow for best results.

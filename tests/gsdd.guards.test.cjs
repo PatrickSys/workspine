@@ -875,9 +875,9 @@ describe('G20 - Session Continuity Contracts', () => {
     const section = content.slice(content.indexOf('<determine_action>'), content.indexOf('</determine_action>'));
     assert.match(section, /checkpoint|\.continue-here/i, 'determine_action must have checkpoint routing. FIX: Add checkpoint branch.');
     assert.match(section, /PLAN.*without.*SUMMARY|Incomplete.*execution/i, 'determine_action must have incomplete execution routing. FIX: Add PLAN-without-SUMMARY branch.');
-    assert.match(section, /\/gsdd:plan|needs planning/i, 'determine_action must route to plan. FIX: Add planning branch.');
-    assert.match(section, /\/gsdd:verify|needs verification/i, 'determine_action must route to verify. FIX: Add verification branch.');
-    assert.match(section, /\/gsdd:audit-milestone|All phases complete/i, 'determine_action must route to audit-milestone. FIX: Add all-phases-complete branch.');
+    assert.match(section, /\/gsdd-plan|needs planning/i, 'determine_action must route to plan. FIX: Add planning branch.');
+    assert.match(section, /\/gsdd-verify|needs verification/i, 'determine_action must route to verify. FIX: Add verification branch.');
+    assert.match(section, /\/gsdd-audit-milestone|All phases complete/i, 'determine_action must route to audit-milestone. FIX: Add all-phases-complete branch.');
   });
 
   test('resume.md <cleanup_checkpoint> references deletion before routing', () => {
@@ -976,11 +976,11 @@ describe('G20 - Session Continuity Contracts', () => {
   test('resume <determine_action> routes to workflows that exist in the 10-workflow set', () => {
     const content = fs.readFileSync(RESUME_PATH, 'utf-8');
     const section = content.slice(content.indexOf('<determine_action>'), content.indexOf('</determine_action>'));
-    const workflows = section.match(/\/gsdd:[\w-]+/g) || [];
+    const workflows = section.match(/\/gsdd-[\w-]+/g) || [];
     const validWorkflows = [
-      '/gsdd:new-project', '/gsdd:plan', '/gsdd:execute', '/gsdd:verify',
-      '/gsdd:audit-milestone', '/gsdd:quick', '/gsdd:pause', '/gsdd:resume',
-      '/gsdd:progress', '/gsdd:map-codebase'
+      '/gsdd-new-project', '/gsdd-plan', '/gsdd-execute', '/gsdd-verify',
+      '/gsdd-audit-milestone', '/gsdd-quick', '/gsdd-pause', '/gsdd-resume',
+      '/gsdd-progress', '/gsdd-map-codebase'
     ];
     for (const wf of workflows) {
       assert.ok(validWorkflows.includes(wf),
@@ -990,15 +990,15 @@ describe('G20 - Session Continuity Contracts', () => {
       `resume.md determine_action must route to at least 3 workflows, found ${workflows.length}. FIX: Add routing branches.`);
   });
 
-  test('progress <route_action> routes to workflows that exist in the 13-workflow set', () => {
+  test('progress <route_action> routes to workflows that exist in the 14-workflow set', () => {
     const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
     const section = content.slice(content.indexOf('<route_action>'), content.indexOf('</route_action>'));
-    const workflows = section.match(/\/gsdd:\w[\w-]*/g) || [];
+    const workflows = section.match(/\/gsdd-\w[\w-]*/g) || [];
     const validWorkflows = [
-      '/gsdd:new-project', '/gsdd:plan', '/gsdd:execute', '/gsdd:verify',
-      '/gsdd:audit-milestone', '/gsdd:complete-milestone', '/gsdd:new-milestone',
-      '/gsdd:plan-milestone-gaps', '/gsdd:quick', '/gsdd:pause', '/gsdd:resume',
-      '/gsdd:progress', '/gsdd:map-codebase'
+      '/gsdd-new-project', '/gsdd-plan', '/gsdd-execute', '/gsdd-verify',
+      '/gsdd-audit-milestone', '/gsdd-complete-milestone', '/gsdd-new-milestone',
+      '/gsdd-plan-milestone-gaps', '/gsdd-quick', '/gsdd-pause', '/gsdd-resume',
+      '/gsdd-progress', '/gsdd-map-codebase'
     ];
     for (const wf of workflows) {
       assert.ok(validWorkflows.includes(wf),
@@ -1155,42 +1155,42 @@ describe('G22 - Workflow Completion Routing', () => {
       const compEnd = content.indexOf('</completion>');
       if (compStart === -1 || compEnd === -1) return; // caught by previous test
       const section = content.slice(compStart, compEnd);
-      assert.match(section, /\/gsdd:/,
-        `${wf} completion must reference at least one /gsdd: command. FIX: Add next-step routing to <completion>.`);
+      assert.match(section, /\/gsdd-/,
+        `${wf} completion must reference at least one /gsdd- command. FIX: Add next-step routing to <completion>.`);
     });
   }
 
   // Specific routing correctness: each lifecycle workflow routes to the right next step
-  test('new-project.md completion routes to /gsdd:plan', () => {
+  test('new-project.md completion routes to /gsdd-plan', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd:plan/,
-      'new-project completion must route to /gsdd:plan. FIX: Add /gsdd:plan as next step in completion.');
+    assert.match(section, /\/gsdd-plan/,
+      'new-project completion must route to /gsdd-plan. FIX: Add /gsdd-plan as next step in completion.');
   });
 
-  test('plan.md completion routes to /gsdd:execute', () => {
+  test('plan.md completion routes to /gsdd-execute', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd:execute/,
-      'plan completion must route to /gsdd:execute. FIX: Add /gsdd:execute as next step in completion.');
+    assert.match(section, /\/gsdd-execute/,
+      'plan completion must route to /gsdd-execute. FIX: Add /gsdd-execute as next step in completion.');
   });
 
-  test('execute.md completion routes to /gsdd:verify or /gsdd:progress', () => {
+  test('execute.md completion routes to /gsdd-verify or /gsdd-progress', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'execute.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    const hasVerify = /\/gsdd:verify/.test(section);
-    const hasProgress = /\/gsdd:progress/.test(section);
+    const hasVerify = /\/gsdd-verify/.test(section);
+    const hasProgress = /\/gsdd-progress/.test(section);
     assert.ok(hasVerify || hasProgress,
-      'execute completion must route to /gsdd:verify or /gsdd:progress. FIX: Add next-step routing to execute completion.');
+      'execute completion must route to /gsdd-verify or /gsdd-progress. FIX: Add next-step routing to execute completion.');
   });
 
-  test('verify.md completion routes to /gsdd:progress or /gsdd:plan', () => {
+  test('verify.md completion routes to /gsdd-progress or /gsdd-plan', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'verify.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    const hasProgress = /\/gsdd:progress/.test(section);
-    const hasPlan = /\/gsdd:plan/.test(section);
+    const hasProgress = /\/gsdd-progress/.test(section);
+    const hasPlan = /\/gsdd-plan/.test(section);
     assert.ok(hasProgress || hasPlan,
-      'verify completion must route to /gsdd:progress or /gsdd:plan. FIX: Add next-step routing to verify completion.');
+      'verify completion must route to /gsdd-progress or /gsdd-plan. FIX: Add next-step routing to verify completion.');
   });
 
   // Persistence enforcement gates
@@ -1442,14 +1442,14 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md must clean up the provisional quick-task directory before returning to Step 1 from the plan preview. FIX: Add cleanup to the "edit description" branch.');
   });
 
-  test('quick.md preview /gsdd:plan branch cleans up provisional task directory', () => {
+  test('quick.md preview /gsdd-plan branch cleans up provisional task directory', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     const previewStart = content.indexOf('## Step 3.7');
     assert.ok(previewStart > -1,
       'quick.md must have ## Step 3.7 plan preview section. FIX: Add Step 3.7 plan preview.');
     const previewSection = content.slice(previewStart, previewStart + 2200);
-    assert.match(previewSection, /switch to \/gsdd:plan.*clean up the task directory/i,
-      'quick.md must clean up the provisional quick-task directory before switching to /gsdd:plan from the plan preview. FIX: Add cleanup to the "switch to /gsdd:plan" branch.');
+    assert.match(previewSection, /switch to \/gsdd-plan.*clean up the task directory/i,
+      'quick.md must clean up the provisional quick-task directory before switching to /gsdd-plan from the plan preview. FIX: Add cleanup to the "switch to /gsdd-plan" branch.');
   });
 
   test('quick.md has scope signal evaluation', () => {
@@ -1460,15 +1460,15 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md scope signal must check file count or architecture keywords. FIX: Add scope heuristics (file count >8, architecture keywords).');
   });
 
-  test('quick.md scope signal recommends /gsdd:plan for escalation', () => {
+  test('quick.md scope signal recommends /gsdd-plan for escalation', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     // Find the actual ## Step 3.6 heading (not anti_patterns mention of Step 3.6)
     const scopeStart = content.indexOf('## Step 3.6');
     assert.ok(scopeStart > -1,
       'quick.md must have ## Step 3.6 scope signal section. FIX: Add Step 3.6 scope signal evaluation.');
     const afterScope = content.slice(scopeStart, scopeStart + 1500);
-    assert.match(afterScope, /gsdd:plan/,
-      'quick.md scope signal must recommend /gsdd:plan for escalation (D32). FIX: Add /gsdd:plan recommendation in scope signal.');
+    assert.match(afterScope, /gsdd-plan/,
+      'quick.md scope signal must recommend /gsdd-plan for escalation (D32). FIX: Add /gsdd-plan recommendation in scope signal.');
   });
 
   test('quick.md has conditional plan-checker referencing plan-checker.md', () => {
@@ -2150,25 +2150,25 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
   }
 
   // Routing correctness: each workflow routes to the right next step
-  test('new-milestone.md completion routes to /gsdd:plan', () => {
+  test('new-milestone.md completion routes to /gsdd-plan', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-milestone.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd:plan/,
-      'new-milestone completion must route to /gsdd:plan. FIX: Add /gsdd:plan as next step in completion.');
+    assert.match(section, /\/gsdd-plan/,
+      'new-milestone completion must route to /gsdd-plan. FIX: Add /gsdd-plan as next step in completion.');
   });
 
-  test('complete-milestone.md completion routes to /gsdd:new-milestone', () => {
+  test('complete-milestone.md completion routes to /gsdd-new-milestone', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'complete-milestone.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd:new-milestone/,
-      'complete-milestone completion must route to /gsdd:new-milestone. FIX: Add /gsdd:new-milestone as next step in completion.');
+    assert.match(section, /\/gsdd-new-milestone/,
+      'complete-milestone completion must route to /gsdd-new-milestone. FIX: Add /gsdd-new-milestone as next step in completion.');
   });
 
-  test('plan-milestone-gaps.md completion routes to /gsdd:plan', () => {
+  test('plan-milestone-gaps.md completion routes to /gsdd-plan', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd:plan/,
-      'plan-milestone-gaps completion must route to /gsdd:plan. FIX: Add /gsdd:plan as next step in completion.');
+    assert.match(section, /\/gsdd-plan/,
+      'plan-milestone-gaps completion must route to /gsdd-plan. FIX: Add /gsdd-plan as next step in completion.');
   });
 
   // Context references: each workflow reads the right source files
@@ -2194,10 +2194,10 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
       'plan-milestone-gaps must reference MILESTONE-AUDIT.md. FIX: Add MILESTONE-AUDIT.md reference.');
   });
 
-  test('plan-milestone-gaps.md completion routes to /gsdd:audit-milestone after gap closure', () => {
+  test('plan-milestone-gaps.md completion routes to /gsdd-audit-milestone after gap closure', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd:audit-milestone/,
-      'plan-milestone-gaps completion must mention /gsdd:audit-milestone for re-audit. FIX: Add re-audit hint to completion.');
+    assert.match(section, /\/gsdd-audit-milestone/,
+      'plan-milestone-gaps completion must mention /gsdd-audit-milestone for re-audit. FIX: Add re-audit hint to completion.');
   });
 });
