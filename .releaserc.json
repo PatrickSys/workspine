@@ -23,8 +23,13 @@
     ],
     "@semantic-release/release-notes-generator",
     ["@semantic-release/changelog", { "changelogFile": "CHANGELOG.md" }],
-    ["@semantic-release/npm", { "npmPublish": false }],
-    ["@semantic-release/exec", { "publishCmd": "npm publish --provenance" }],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "npm version ${nextRelease.version} --no-git-tag-version",
+        "publishCmd": "npm publish --provenance"
+      }
+    ],
     [
       "@semantic-release/git",
       {
