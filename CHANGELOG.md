@@ -1,3 +1,10 @@
+## [0.6.3](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.6.2...v0.6.3) (2026-03-29)
+
+
+### Bug Fixes
+
+* explicit OIDC exchange step for npm trusted publisher auth ([0f34c38](https://github.com/PatrickSys/get-shit-done-distilled/commit/0f34c388b13c4a3b15bbaaceb7bc5abc6bf7f256))
+
 ## [0.6.2](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.6.1...v0.6.2) (2026-03-29)
 
 

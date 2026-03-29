@@ -1,6 +1,6 @@
 {
   "name": "gsdd-cli",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "GSDD — a portable, spec-driven development kernel for AI coding agents. Works with Claude Code, Codex CLI, OpenCode, Cursor, Copilot, and Gemini CLI.",
   "type": "module",
   "bin": {
