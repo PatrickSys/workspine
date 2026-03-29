@@ -29,6 +29,21 @@ jobs:
       - name: Run tests
         run: npm run test:gsdd
 
+      - name: Authenticate to npm via OIDC trusted publisher
+        run: |
+          OIDC_TOKEN=$(curl -fsSL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm" \
+            | jq -r '.value')
+          NPM_TOKEN=$(curl -fsSL \
+            -X POST "https://registry.npmjs.org/-/npm/v1/loginoauth" \
+            -H "Content-Type: application/json" \
+            -d "{\"oidcToken\": \"${OIDC_TOKEN}\"}" \
+            | jq -r '.token')
+          echo "::add-mask::${NPM_TOKEN}"
+          npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}"
+          echo "NPM_TOKEN=${NPM_TOKEN}" >> "${GITHUB_ENV}"
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
