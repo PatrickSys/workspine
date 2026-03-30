@@ -1548,9 +1548,13 @@ describe('G24 - Hardening Propagation', () => {
 
   test('quick.md planner receives codebase context when codebase maps exist', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
-    assert.match(content, /\.planning\/codebase\/.*ARCHITECTURE\.md|ARCHITECTURE\.md/,
+    const step2Start = content.indexOf('## Step 2:');
+    const step25Start = content.indexOf('## Step 2.5:');
+    assert.ok(step2Start > -1 && step25Start > -1, 'quick.md must have Step 2 and Step 2.5.');
+    const step2Section = content.slice(step2Start, step25Start);
+    assert.match(step2Section, /\.planning\/codebase\/.*ARCHITECTURE\.md|ARCHITECTURE\.md/,
       'quick.md must read ARCHITECTURE.md when codebase maps exist. FIX: Add codebase-context read in Step 2.');
-    assert.match(content, /\.planning\/codebase\/.*STACK\.md|STACK\.md/,
+    assert.match(step2Section, /\.planning\/codebase\/.*STACK\.md|STACK\.md/,
       'quick.md must read STACK.md when codebase maps exist. FIX: Add codebase-context read in Step 2.');
     const step3Start = content.indexOf('## Step 3:');
     const step35Start = content.indexOf('## Step 3.5:');
