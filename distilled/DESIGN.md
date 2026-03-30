@@ -1717,6 +1717,36 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ---
 
+## D40 - Three-Layer Continuity Boundary
+
+**Decision (2026-03-30):** GSDD adopts an explicit three-layer continuity boundary so cold-start recovery, resume behavior, and future continuity work do not blur durable truth, live workflow state, and the still-missing compressed judgment layer.
+
+**Context:**
+- Gap S6 showed that cold-start continuity was stronger on artifact and state recovery than on decision-quality recovery. The repo could reconstruct what was built, but not always the smallest why/why-not layer needed for equally strong planning after a restart.
+- Phase 7 requirement JUDGE-01 required the continuity model to be named and adopted explicitly instead of being inferred from scattered docs.
+- Lesson `LL-ARTIFACT-PERSISTENCE-IS-NOT-ENOUGH` already established the core failure mode: artifacts preserve what was built, but not the minimum judgment layer needed to continue with the same decision posture.
+
+**Decision text:**
+- **Durable Truth**: files that survive across milestones and cold starts and define product or framework truth. This layer includes `SPEC.md`, `distilled/DESIGN.md`, `MILESTONES.md`, milestone archives, `config.json`, codebase maps, research artifacts, role contracts, and workflow definitions.
+- **Live Workflow State**: files that describe current progress, active execution position, or resumable session state. This layer includes `ROADMAP.md`, phase `PLAN`/`APPROACH`/`SUMMARY`/`VERIFICATION` artifacts, `.continue-here.md`, quick task logs, and `generation-manifest.json`.
+- **Compressed Judgment**: the smallest persistence surface for active constraints, unresolved uncertainty, decision posture, and anti-regression rules. This layer is recognized as necessary but not yet fully designed; its persistence surface is deferred to Phase 8.
+- Workflow changes must classify artifacts against this boundary. Readers must not infer durable truth from live-state artifacts alone, and writers must not collapse multiple layers into a new catch-all state file.
+
+**Evidence:**
+- Phase 7 exploration reviewed all 14 current workflow files and mapped which artifacts they read, write, or treat as primary truth. The review found durable artifacts and live-state artifacts in use, but no explicit three-layer model naming compressed judgment as its own continuity concern.
+- D12 established the "artifact-derived state, no `STATE.md`" direction, which kept GSDD repo-native and file-backed, but did not define a distinct compressed judgment layer.
+- D26 hardened routing and session continuity contracts, but likewise operated on artifacts and checkpoints without naming the broader continuity boundary.
+- The three-layer boundary therefore emerged from Phase 7 as a missing architectural definition rather than a reversal of prior decisions.
+
+**Consequences:**
+- Phase 8 must define the compressed-judgment persistence surface and workflow-consumption rules needed to satisfy JUDGE-02 and JUDGE-03.
+- Future workflow and artifact changes should explicitly classify any touched file as durable truth, live workflow state, or compressed judgment before changing its contract.
+- `distilled/workflows/resume.md` is the first workflow to adopt this boundary directly by validating live checkpoint state against durable roadmap truth without inventing a new project-scoped state file.
+
+**GSDD implementation:** `.planning/SPEC.md` (Continuity Layers constraint, Key Decisions row), `distilled/DESIGN.md` (this decision), `distilled/workflows/resume.md` (first workflow adoption)
+
+---
+
 ## Maintenance
 
 This document is updated when:
