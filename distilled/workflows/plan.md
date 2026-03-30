@@ -13,6 +13,7 @@ Before starting, read these files:
 4. `.planning/phases/*-APPROACH.md` - approach decisions from user discussion (if exists)
 5. `.planning/phases/*-PLAN.md` - any previous plans that affect this phase
 6. Relevant source code - if this phase builds on existing code, read the key files
+7. `.planning/phases/*-SUMMARY.md` for the prior completed phase - if a `<judgment>` section is present, read all four sub-sections. The `<judgment>` carries forward active constraints, unresolved uncertainty, decision posture, and anti-regression rules from the prior phase. Honor these as input context alongside SPEC.md decisions and APPROACH.md choices.
 
 Identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>

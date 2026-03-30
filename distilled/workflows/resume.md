@@ -45,6 +45,7 @@ Check if `.planning/.continue-here.md` exists. If yes, read it and extract:
 - `workflow` frontmatter (phase/quick/generic)
 - `phase` frontmatter
 - All 6 sections: current_state, completed_work, remaining_work, decisions, blockers, next_action
+- `<judgment>` if present, including `<active_constraints>`, `<unresolved_uncertainty>`, `<decision_posture>`, and `<anti_regression>`
 
 **Phase directories:**
 Scan `.planning/phases/` for:
@@ -100,6 +101,13 @@ Completed: [N] phases done
 Checkpoint found: [workflow type] — [phase name or task description]
   Last paused: [timestamp from frontmatter]
   Next action: [next_action section content]
+
+[If <judgment> was present in checkpoint:]
+  Judgment context:
+    Constraints: [count from <active_constraints>] active
+    Uncertainty: [count from <unresolved_uncertainty>] open items
+    Posture: [first sentence of <decision_posture>]
+    Anti-regression: [count from <anti_regression>] rules
 
 [If incomplete phase execution found:]
 Incomplete execution: Phase [N] has a PLAN but no SUMMARY

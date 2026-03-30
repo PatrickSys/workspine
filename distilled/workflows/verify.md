@@ -14,7 +14,8 @@ Before starting, read these files:
 2. `.planning/phases/{plan_id}-PLAN.md` - what was planned
 3. `.planning/phases/{plan_id}-SUMMARY.md` - what execution claims was built
 4. `.planning/SPEC.md` - requirements and constraints for the phase
-5. The relevant codebase files - the code that was actually built
+5. The current phase SUMMARY.md `<judgment>` section (if present) - read `<anti_regression>` rules as additional verification targets: confirm that invariants listed there were not broken by execution. Read `<active_constraints>` to calibrate verification scope.
+6. The relevant codebase files - the code that was actually built
 
 Establish your verification basis (must-have sources, requirement scope, previous report status) before beginning code inspection. Do not jump to loose file reading until this basis is explicit.
 

@@ -35,6 +35,7 @@ Ask the user conversationally to fill in the gaps the artifacts cannot answer:
 4. **Key decisions** — any decisions made and their rationale
 5. **Blockers** — anything stuck or waiting on external input
 6. **What to do first** when resuming
+7. **Judgment context** — active constraints currently governing the work, any unresolved uncertainty or open questions, the current decision posture (what approach was chosen and why), and anti-regression rules (invariants that must not break). Pre-fill from SPEC.md constraints and APPROACH.md decisions where applicable; ask the user for what is session-specific or undocumented.
 
 Read the relevant artifacts to pre-fill what you can:
 - For phase work: read the PLAN file and any partial SUMMARY — use these to pre-fill remaining_work and decisions where possible; only ask the user for gaps
@@ -75,6 +76,21 @@ timestamp: $ISO_8601_TIMESTAMP
 <next_action>
 [The specific first thing to do when resuming — concrete enough for a fresh session to act on immediately]
 </next_action>
+
+<judgment>
+<active_constraints>
+[Constraints currently governing the work — from SPEC.md, APPROACH.md, or discovered during execution. Include constraint source.]
+</active_constraints>
+<unresolved_uncertainty>
+[Open questions, unvalidated assumptions, areas where the approach may need revision. Include why each matters.]
+</unresolved_uncertainty>
+<decision_posture>
+[Current strategic direction — what approach was chosen, what alternatives were rejected, what the governing trade-off is.]
+</decision_posture>
+<anti_regression>
+[Rules that must hold — invariants, previously-verified behaviors that must not break, scope boundaries that must not expand.]
+</anti_regression>
+</judgment>
 ```
 
 The checkpoint is project-scoped (lives at `.planning/.continue-here.md`, not inside a phase directory) so resume always knows where to look.
@@ -102,7 +118,7 @@ Report to the user:
 <success_criteria>
 - [ ] Active work context detected (phase, quick, or generic)
 - [ ] User provided missing context via conversation
-- [ ] `.planning/.continue-here.md` created with frontmatter and all 6 sections
+- [ ] `.planning/.continue-here.md` created with frontmatter, all 6 sections, and <judgment> block
 - [ ] Advisory git suggestion presented (not mandated)
 - [ ] User informed of checkpoint location and resume instructions
 </success_criteria>
