@@ -104,10 +104,14 @@ Checkpoint found: [workflow type] — [phase name or task description]
 
 [If <judgment> was present in checkpoint:]
   Judgment context:
-    Constraints: [count from <active_constraints>] active
-    Uncertainty: [count from <unresolved_uncertainty>] open items
-    Posture: [first sentence of <decision_posture>]
-    Anti-regression: [count from <anti_regression>] rules
+    Constraints:
+[Full content of <active_constraints>]
+    Uncertainty:
+[Full content of <unresolved_uncertainty>]
+    Posture:
+[Full content of <decision_posture>]
+    Anti-regression:
+[Full content of <anti_regression>]
 
 [If incomplete phase execution found:]
 Incomplete execution: Phase [N] has a PLAN but no SUMMARY

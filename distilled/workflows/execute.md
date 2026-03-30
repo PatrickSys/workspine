@@ -11,7 +11,7 @@ CRITICAL: Read every file below before performing any other actions. This is you
 1. `.planning/phases/{plan_id}-PLAN.md` or the target plan file provided by the orchestrator
 2. `.planning/SPEC.md` - requirements, constraints, and current state
 3. `.planning/ROADMAP.md` - phase goal and success criteria
-4. Previous phase summaries if they are genuinely relevant
+4. Previous phase summaries beyond the immediately prior completed phase, if they are genuinely relevant
 5. Relevant source files listed in the plan's `<files>` sections
 6. `.planning/phases/*-SUMMARY.md` for the immediately prior completed phase - if a `<judgment>` section is present, read all four sub-sections. Honor `<anti_regression>` rules as execution constraints. Use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions.
 </load_context>
