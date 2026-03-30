@@ -37,7 +37,7 @@ Store the response as `$DESCRIPTION`. If empty, re-prompt.
 2. Scan `.planning/quick/` for existing task directories. Calculate `$NEXT_NUM` as the next 3-digit number (001, 002, ...).
 3. Generate `$SLUG` from `$DESCRIPTION` (lowercase, hyphens, max 40 chars).
 4. Create `.planning/quick/$NEXT_NUM-$SLUG/`.
-5. If `.planning/codebase/` exists, read `ARCHITECTURE.md` and `STACK.md`. Summarize key findings in <=500 words as `$CODEBASE_CONTEXT`. If `.planning/codebase/` does not exist, set `$CODEBASE_CONTEXT` to empty.
+5. If `.planning/codebase/` exists, read `.planning/codebase/ARCHITECTURE.md` and `.planning/codebase/STACK.md`. Summarize key findings in <=500 words as `$CODEBASE_CONTEXT`. If `.planning/codebase/` does not exist, set `$CODEBASE_CONTEXT` to empty.
 
 If `.planning/quick/` does not exist, create it along with an empty `LOG.md`:
 
