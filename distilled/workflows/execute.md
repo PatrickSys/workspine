@@ -11,8 +11,9 @@ CRITICAL: Read every file below before performing any other actions. This is you
 1. `.planning/phases/{plan_id}-PLAN.md` or the target plan file provided by the orchestrator
 2. `.planning/SPEC.md` - requirements, constraints, and current state
 3. `.planning/ROADMAP.md` - phase goal and success criteria
-4. Previous phase summaries if they are genuinely relevant
+4. Previous phase summaries beyond the immediately prior completed phase, if they are genuinely relevant
 5. Relevant source files listed in the plan's `<files>` sections
+6. `.planning/phases/*-SUMMARY.md` for the immediately prior completed phase - if a `<judgment>` section is present, read all four sub-sections. Honor `<anti_regression>` rules as execution constraints. Use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions.
 </load_context>
 
 <multi_plan_orchestration>
@@ -257,6 +258,21 @@ Create `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md` with:
 **Decisions Made**: {new decisions, if any}
 **Notes for Verification**: {anything the verifier should know}
 **Notes for Next Work**: {anything the next planner should know}
+
+<judgment>
+<active_constraints>
+[Constraints that governed this phase and carry forward to future work]
+</active_constraints>
+<unresolved_uncertainty>
+[Open questions or unvalidated assumptions the next phase should be aware of]
+</unresolved_uncertainty>
+<decision_posture>
+[The strategic direction and key trade-offs - what was chosen, what was deferred, what the governing approach is]
+</decision_posture>
+<anti_regression>
+[Invariants established by this phase that must not be broken by future work]
+</anti_regression>
+</judgment>
 ```
 
 **Summary quality gate:** One-liner must be substantive (e.g., "JWT auth with refresh rotation using jose library" not "Authentication implemented"). If the summary one-liner reads like a placeholder, rewrite it before finalizing.

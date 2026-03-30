@@ -1747,6 +1747,41 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ---
 
+## D41 - Compressed Judgment Persistence Surface
+
+**Decision (2026-03-30):** GSDD persists compressed judgment as a bounded `<judgment>` XML block with four sections in two existing surfaces: the checkpoint for mid-phase cold restarts and the phase SUMMARY for phase-to-phase handoffs.
+
+**Context:**
+- Phase 7 defined the three-layer continuity boundary in D40, but explicitly left the compressed judgment persistence surface undefined as a Phase 8 target.
+- JUDGE-02 requires the judgment layer to use existing primary or checkpoint artifacts rather than inventing a new project-scoped state file.
+- JUDGE-03 requires planning, execution, verification, and resume to recover judgment at entry without relying on chat memory.
+- Gap S6 showed that artifact persistence alone preserves what was built, not the smallest why/why-not layer needed to continue with the same decision posture.
+- Lesson `LL-ARTIFACT-PERSISTENCE-IS-NOT-ENOUGH` established that the continuity problem is not solved by durable artifacts alone.
+
+**Decision text:**
+- Persist compressed judgment as a bounded `<judgment>` XML block with four sections: `<active_constraints>`, `<unresolved_uncertainty>`, `<decision_posture>`, and `<anti_regression>`.
+- Embed the exact same shape in two existing surfaces:
+  - the checkpoint (`.continue-here.md`), written by `pause.md` at session pause and read by `resume.md` for mid-phase cold restarts
+  - the phase `SUMMARY.md`, written by `execute.md` at phase completion and read by `plan.md`, `execute.md`, and `verify.md` for phase-to-phase handoffs
+- The shape must remain identical in both locations so the judgment layer is consistent across lifecycle entry points.
+- No new project-scoped state file is introduced.
+
+**Evidence:**
+- Phase 8 reviewed the four workflow entry points that need judgment recovery: `plan.md`, `execute.md`, `verify.md`, and `resume.md`.
+- The review mapped each workflow's current `<load_context>` or artifact read path and confirmed that checkpoint and SUMMARY are already in the natural read/write flow of these workflows.
+- `SUMMARY.md` already carries "Notes for Next Work", but that section is unstructured prose and is not consumed by any workflow's `<load_context>`.
+- The checkpoint already stores session-local state and decisions, but it does not capture a cumulative, bounded judgment layer with the four facets needed for continuity.
+- The dual-surface approach covers both required handoff scenarios without inventing a new persistence path: checkpoint for mid-phase restart, SUMMARY for phase-to-phase continuation.
+
+**Consequences:**
+- Future workflow changes must maintain judgment read/write integration at these designated points rather than creating ad hoc persistence surfaces.
+- The judgment shape is intentionally bounded to four sections and must not expand into an unbounded session log.
+- Phase 9 remains responsible for runtime metadata and portability concerns (ADAPT-02); judgment portability across runtimes is not broadened here.
+
+**GSDD implementation:** `.planning/SPEC.md` (Key Decisions row), `distilled/workflows/pause.md` (checkpoint write), `distilled/workflows/execute.md` (SUMMARY write and prior-summary read), `distilled/workflows/plan.md` (prior-summary read), `distilled/workflows/verify.md` (summary judgment verification input), `distilled/workflows/resume.md` (checkpoint read and surfacing)
+
+---
+
 ## Maintenance
 
 This document is updated when:
