@@ -232,6 +232,12 @@ describe('S2 — Brownfield Path (init → map-codebase → new-project brownfie
     }
   });
 
+  test('map-codebase completion offers quick as the brownfield lane', () => {
+    const content = readSkill(tmpDir, 'gsdd-map-codebase');
+    assert.ok(content.includes('/gsdd-quick'), 'map-codebase must offer /gsdd-quick as a next step');
+    assert.ok(/brownfield/i.test(content), 'map-codebase must describe the quick path as brownfield feature work');
+  });
+
   test('each mapper delegate exists in .planning/templates/delegates/', () => {
     const mapperDelegates = ['mapper-tech.md', 'mapper-arch.md', 'mapper-quality.md', 'mapper-concerns.md'];
     for (const delegate of mapperDelegates) {
@@ -328,6 +334,14 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
       content.includes('no ROADMAP requirements') || content.includes('No research phase'),
       'quick must explicitly exclude ROADMAP requirement extraction'
     );
+  });
+
+  test('quick can consume codebase-map context when available', () => {
+    const content = readSkill(tmpDir, 'gsdd-quick');
+    assert.ok(content.includes('ARCHITECTURE.md'), 'quick must reference ARCHITECTURE.md for codebase context');
+    assert.ok(content.includes('STACK.md'), 'quick must reference STACK.md for codebase context');
+    assert.ok(content.includes('$CODEBASE_CONTEXT') || /codebase context/i.test(content),
+      'quick planner delegate must receive codebase context');
   });
 });
 

@@ -279,6 +279,13 @@
 - ISO 27001 risk treatment — choice of detective vs preventive depends on cost/complexity tradeoff
 - Reason's Swiss Cheese model (1990) — layered defense where retroactive audit catches what preventive layers miss
 
+## D39 — Brownfield Entry Wiring
+- User brownfield audit finding (2026-03-20): map-codebase was useful but not presented as the start of a lightweight feature-work lane
+- Existing quick-workflow hardening decisions D32-D34: quick already had alignment and scope controls, so the open gap was routing/context, not quick quality
+- `distilled/workflows/quick.md` (Step 2 codebase-context read, planner delegate context)
+- `distilled/workflows/map-codebase.md` (completion offers `/gsdd-quick` as the brownfield lane)
+- `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
 ---
 
 ## Maintenance

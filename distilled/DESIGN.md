@@ -49,6 +49,7 @@
 36. [Interactive Init Wizard](#36-interactive-init-wizard)
 37. [Mutability-Driven Workflow Classification](#37-mutability-driven-workflow-classification)
 38. [Retroactive Artifact Enforcement](#38-retroactive-artifact-enforcement)
+39. [Brownfield Entry Wiring](#39-brownfield-entry-wiring)
 
 ---
 
@@ -1686,6 +1687,33 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **GSD comparison:** GSD's `gsd-tools.cjs` CLI enforces workflow progression gates directly. GSDD replaces those with specification-level MANDATORY language (D9). This is a deliberate portability trade-off, not an oversight.
 
 **GSDD implementation:** `distilled/workflows/execute.md` (SUMMARY.md persistence gate), `distilled/workflows/verify.md` (VERIFICATION.md persistence gate + ROADMAP closure), `distilled/workflows/audit-milestone.md` (retroactive artifact check), `tests/gsdd.guards.test.cjs` (G30), `distilled/EVIDENCE-INDEX.md` (D38 entry)
+
+---
+
+## 39. Brownfield Entry Wiring
+
+**Problem:** The brownfield path was structurally incomplete. `map-codebase` generated useful orientation artifacts, but it routed users only toward full project initialization. `quick` remained blind to those same codebase maps, so brownfield users who wanted disciplined feature work without full roadmap ceremony had no first-class lane.
+
+**Decision:** Wire the existing brownfield lane instead of adding a new workflow.
+
+- `map-codebase` completion now offers two explicit next steps: `/gsdd-new-project` for full lifecycle setup and `/gsdd-quick` for brownfield feature work.
+- `quick` now reads `.planning/codebase/ARCHITECTURE.md` and `.planning/codebase/STACK.md` when they exist and passes a summarized `$CODEBASE_CONTEXT` into the planner delegate.
+
+**Why this shape:** The missing leverage was routing and context reuse, not another onboarding surface. Reusing the existing codebase map artifacts preserves the current workflow set, keeps quick mode lightweight, and gives brownfield users immediate architecture awareness without forcing full milestone ceremony.
+
+**Tradeoff:** This gives `quick` orientation, not full brownfield inference. It deliberately avoids turning quick mode into a lite `new-project`; the planner receives only a bounded summary from the codebase maps, not a new research phase.
+
+**GSD comparison:** GSD's brownfield posture is centered on the full project-initialization flow after mapping. GSDD keeps the full path available, but adds an explicit lighter-weight branch for feature-by-feature brownfield work.
+
+**GSDD implementation:** `distilled/workflows/quick.md` (Step 2 codebase context, planner context), `distilled/workflows/map-codebase.md` (completion routing), `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
+**Evidence:**
+
+- User brownfield audit finding (2026-03-20): mapping was useful, but the lighter-weight feature-work lane was not explicit
+- D32-D34 quick-workflow hardening: alignment and scope controls already existed, so the remaining gap was routing plus codebase-context reuse
+- `distilled/workflows/quick.md` (Step 2 codebase-context read, planner delegate context)
+- `distilled/workflows/map-codebase.md` (completion offers `/gsdd-quick` as the brownfield lane)
+- `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
 

@@ -37,6 +37,7 @@ Store the response as `$DESCRIPTION`. If empty, re-prompt.
 2. Scan `.planning/quick/` for existing task directories. Calculate `$NEXT_NUM` as the next 3-digit number (001, 002, ...).
 3. Generate `$SLUG` from `$DESCRIPTION` (lowercase, hyphens, max 40 chars).
 4. Create `.planning/quick/$NEXT_NUM-$SLUG/`.
+5. If `.planning/codebase/` exists, read `.planning/codebase/ARCHITECTURE.md` and `.planning/codebase/STACK.md`. Summarize key findings in <=500 words as `$CODEBASE_CONTEXT`. If `.planning/codebase/` does not exist, set `$CODEBASE_CONTEXT` to empty.
 
 If `.planning/quick/` does not exist, create it along with an empty `LOG.md`:
 
@@ -98,6 +99,7 @@ Delegate to the planner role in quick mode.
 **Context to provide:**
 - Task description: `$DESCRIPTION`
 - Approach context: `$APPROACH_CONTEXT` (user-confirmed decisions from Step 2.5 — treat as locked constraints, do not revisit)
+- Codebase context: `$CODEBASE_CONTEXT` (existing architecture and stack — use for orientation, not as constraints; empty if no codebase map exists)
 - Mode: quick (single plan, 1-3 tasks, no research phase)
 - Output path: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
 
