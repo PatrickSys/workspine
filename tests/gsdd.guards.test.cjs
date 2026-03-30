@@ -780,11 +780,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'post-init routing must show Gemini slash-command guidance. FIX: Add Gemini /gsdd-new-project to init output.');
   });
 
-  test('DESIGN.md ToC lists 38 entries', () => {
+  test('DESIGN.md ToC lists 39 entries', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 38,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 38. FIX: Update DESIGN.md ToC to list all 38 decisions.`);
+    assert.strictEqual(tocEntries.length, 39,
+      `DESIGN.md ToC has ${tocEntries.length} entries, expected 39. FIX: Update DESIGN.md ToC to list all 39 decisions.`);
   });
 });
 
@@ -1546,6 +1546,21 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md Step 3 planner delegate must receive approach context from Step 2.5 (D33). FIX: Add $APPROACH_CONTEXT to planner context.');
   });
 
+  test('quick.md planner receives codebase context when codebase maps exist', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    assert.match(content, /\.planning\/codebase\/.*ARCHITECTURE\.md|ARCHITECTURE\.md/,
+      'quick.md must read ARCHITECTURE.md when codebase maps exist. FIX: Add codebase-context read in Step 2.');
+    assert.match(content, /\.planning\/codebase\/.*STACK\.md|STACK\.md/,
+      'quick.md must read STACK.md when codebase maps exist. FIX: Add codebase-context read in Step 2.');
+    const step3Start = content.indexOf('## Step 3:');
+    const step35Start = content.indexOf('## Step 3.5:');
+    assert.ok(step3Start > -1 && step35Start > -1,
+      'quick.md must have Step 3 and Step 3.5.');
+    const plannerSection = content.slice(step3Start, step35Start);
+    assert.match(plannerSection, /\$CODEBASE_CONTEXT|[Cc]odebase context/i,
+      'quick.md Step 3 planner delegate must receive $CODEBASE_CONTEXT. FIX: Pass codebase context to planner delegate.');
+  });
+
   test('quick.md approach clarification limits to max 2 questions', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     const step25Start = content.indexOf('Step 2.5');
@@ -1588,6 +1603,19 @@ describe('G24 - Hardening Propagation', () => {
     const between = content.slice(validationEnd, secretsScan);
     assert.match(between, /MANDATORY/,
       'map-codebase.md must have MANDATORY persistence gate between validation and secrets_scan. FIX: Add MANDATORY gate requiring all 4 codebase documents exist on disk.');
+  });
+
+  test('map-codebase.md completion offers /gsdd-quick as a brownfield next step', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'map-codebase.md'), 'utf-8');
+    const completionStart = content.indexOf('<completion>');
+    const completionEnd = content.indexOf('</completion>');
+    assert.ok(completionStart > -1 && completionEnd > -1,
+      'map-codebase.md must have <completion> section. FIX: Add completion section.');
+    const section = content.slice(completionStart, completionEnd);
+    assert.match(section, /\/gsdd-quick/,
+      'map-codebase completion must offer /gsdd-quick as a brownfield next step. FIX: Add quick-routing to completion.');
+    assert.match(section, /brownfield/i,
+      'map-codebase completion must describe the quick path as brownfield feature work. FIX: Label /gsdd-quick as brownfield feature work.');
   });
 
   // --- new-project.md (H5, H9) ---

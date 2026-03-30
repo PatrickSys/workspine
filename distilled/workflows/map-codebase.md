@@ -230,7 +230,9 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** Codebase mapping — 4 documents written to `.planning/codebase/` (STACK.md, ARCHITECTURE.md, CONVENTIONS.md, CONCERNS.md).
 
-**Next step:** `/gsdd-new-project` — initialize the project with spec and roadmap
+**Next step:** Choose based on what you need:
+- `/gsdd-new-project` — full project initialization (spec, roadmap, phased delivery)
+- `/gsdd-quick` — brownfield feature work without full ceremony (bug fixes, small features, one-off tasks)
 
 Also available:
 - `/gsdd-map-codebase` — re-map if results need refinement
