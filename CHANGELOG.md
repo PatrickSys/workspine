@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.6.3...v0.7.0) (2026-03-30)
+
+
+### Features
+
+* harden resume continuity boundaries ([#58](https://github.com/PatrickSys/get-shit-done-distilled/issues/58)) ([df7e789](https://github.com/PatrickSys/get-shit-done-distilled/commit/df7e7893aa3d411f4166549cdb190fae0a015ec7))
+
 ## [0.6.3](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.6.2...v0.6.3) (2026-03-29)
 
 
