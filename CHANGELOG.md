@@ -1,3 +1,10 @@
+# [0.9.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.8.0...v0.9.0) (2026-03-31)
+
+
+### Features
+
+* simplify phase 9 cross-runtime contract ([#60](https://github.com/PatrickSys/get-shit-done-distilled/issues/60)) ([043063e](https://github.com/PatrickSys/get-shit-done-distilled/commit/043063e68d696983037aa832fbfa09bb63470a13))
+
 # [0.8.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.7.0...v0.8.0) (2026-03-30)
 
 
