@@ -1005,6 +1005,14 @@ describe('I6c — Pause/Resume Runtime Provenance', () => {
       'resume.md must surface "Paused by:" runtime in present_status'
     );
   });
+
+  test('resume.md present_status surfaces Resuming in runtime', () => {
+    const content = readWorkflow('resume.md');
+    assert.ok(
+      content.includes('Resuming in:'),
+      'resume.md must surface "Resuming in:" runtime in present_status'
+    );
+  });
 });
 
 // --- I8: Workflow Vendor API Cleanliness ---
