@@ -175,7 +175,7 @@ git commit -m "feat: wire users page to real route"
 Git rules:
 - **Repo and user conventions win first.** This table is a reference, not a mandate.
 - `.planning/config.json -> gitProtocol` is advisory only.
-- **Stage individually, never `git add .`** — accidental inclusion of `.env` files, build artifacts, or binary files is harder to undo than it looks.
+- **Stage only files listed in the plan's `files-modified` frontmatter.** Never use `git add .` or `git add -A`. If you need to stage a file not in `files-modified`, record it as a deviation.
 - Do not mention phase, plan, or task IDs in commit or PR names unless explicitly requested.
 - Do not force one commit per task unless the repo or user asked for that.
 </execution_loop>

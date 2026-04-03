@@ -974,6 +974,51 @@ describe('I6b — Cross-runtime artifact contract', () => {
   });
 });
 
+describe('I6c — Pause/Resume Runtime Provenance', () => {
+  test('pause.md has <runtime_contract> block', () => {
+    const content = readWorkflow('pause.md');
+    assert.ok(content.includes('<runtime_contract>'), 'pause.md must have <runtime_contract> block');
+  });
+
+  test('pause.md checkpoint template has runtime: field', () => {
+    const content = readWorkflow('pause.md');
+    assert.ok(content.includes('runtime:'), 'pause.md checkpoint template must include runtime: field');
+  });
+
+  test('resume.md has <runtime_contract> block', () => {
+    const content = readWorkflow('resume.md');
+    assert.ok(content.includes('<runtime_contract>'), 'resume.md must have <runtime_contract> block');
+  });
+
+  test('resume.md load_artifacts references checkpoint runtime field', () => {
+    const content = readWorkflow('resume.md');
+    const loadArtifactsBlock = content.slice(
+      content.indexOf('<load_artifacts>'),
+      content.indexOf('</load_artifacts>') + '</load_artifacts>'.length
+    );
+    assert.ok(
+      loadArtifactsBlock.includes('runtime'),
+      'resume.md must reference runtime field extraction in <load_artifacts>'
+    );
+  });
+
+  test('resume.md present_status surfaces Paused by runtime', () => {
+    const content = readWorkflow('resume.md');
+    assert.ok(
+      content.includes('Paused by:'),
+      'resume.md must surface "Paused by:" runtime in present_status'
+    );
+  });
+
+  test('resume.md present_status surfaces Resuming in runtime', () => {
+    const content = readWorkflow('resume.md');
+    assert.ok(
+      content.includes('Resuming in:'),
+      'resume.md must surface "Resuming in:" runtime in present_status'
+    );
+  });
+});
+
 // --- I8: Workflow Vendor API Cleanliness ---
 
 describe('I8 — Workflow Vendor API Cleanliness', () => {
