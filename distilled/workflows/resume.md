@@ -10,6 +10,12 @@ Scope boundary: unlike progress.md, you have side effects — checkpoint cleanup
 `.planning/` should exist. If it does not, route the user to `gsdd init`.
 </prerequisites>
 
+<runtime_contract>
+Use the `Runtime` type from `.planning/SPEC.md`.
+Infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
+When a checkpoint's `runtime` differs from the inferred current runtime, surface it as an informational note in `<present_status>` — it is context, not a gate.
+</runtime_contract>
+
 <process>
 
 <detect_state>
@@ -44,6 +50,7 @@ Read `.planning/SPEC.md`. Extract:
 Check if `.planning/.continue-here.md` exists. If yes, read it and extract:
 - `workflow` frontmatter (phase/quick/generic)
 - `phase` frontmatter
+- `runtime` frontmatter (the runtime that wrote the checkpoint; use `unknown` if field absent)
 - All 6 sections: current_state, completed_work, remaining_work, decisions, blockers, next_action
 - `<judgment>` if present, including `<active_constraints>`, `<unresolved_uncertainty>`, `<decision_posture>`, and `<anti_regression>`
 
@@ -100,6 +107,8 @@ Completed: [N] phases done
 
 Checkpoint found: [workflow type] — [phase name or task description]
   Last paused: [timestamp from frontmatter]
+  Paused by: [runtime from checkpoint, or unknown if field absent]
+  Resuming in: [inferred current runtime]
   Next action: [next_action section content]
 
 [If <judgment> was present in checkpoint:]

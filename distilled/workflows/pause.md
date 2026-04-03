@@ -12,6 +12,12 @@ Scope boundary: you write a checkpoint file. You do not route, present status, o
 If `.planning/` does not exist, stop and tell the user to run `gsdd init` first.
 </prerequisites>
 
+<runtime_contract>
+Use the `Runtime` type from `.planning/SPEC.md`.
+Infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
+Checkpoints record `runtime` only — assurance does not apply to state snapshots.
+</runtime_contract>
+
 <process>
 
 <detect_work>
@@ -51,6 +57,7 @@ Write `.planning/.continue-here.md` with the following structure:
 workflow: $WORK_TYPE
 phase: $PHASE_NAME_OR_NULL
 timestamp: $ISO_8601_TIMESTAMP
+runtime: $INFERRED_RUNTIME
 ---
 
 <current_state>
