@@ -175,7 +175,9 @@ git commit -m "feat: wire users page to real route"
 Git rules:
 - **Repo and user conventions win first.** This table is a reference, not a mandate.
 - `.planning/config.json -> gitProtocol` is advisory only.
-- **Stage individually, never `git add .`** — accidental inclusion of `.env` files, build artifacts, or binary files is harder to undo than it looks.
+- **Create a branch before committing.** Never commit directly to `main` or `master`. Branch name convention: `feat/phase-{N}-{short-description}` or `fix/...`.
+- **Open a PR when the plan is complete** — do not push to the base branch directly. One PR per plan is the default.
+- **Stage only files listed in the plan's `files-modified` frontmatter.** Never use `git add .` or `git add -A` — accidental inclusion of `.env` files, gitignored files, or build artifacts is hard to undo. If a file you need to stage is not in `files-modified`, that is a deviation — record it.
 - Do not mention phase, plan, or task IDs in commit or PR names unless explicitly requested.
 - Do not force one commit per task unless the repo or user asked for that.
 </execution_loop>
@@ -430,7 +432,5 @@ Also available:
 - `/gsdd-plan` — plan the next wave (if more plans remain in this phase)
 - `/gsdd-quick` — handle a sub-hour task outside the phase cycle
 - `/gsdd-pause` — save context for later if stopping work
-
-Consider clearing context before starting the next workflow for best results.
 ---
 </completion>
