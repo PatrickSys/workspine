@@ -992,8 +992,12 @@ describe('I6c — Pause/Resume Runtime Provenance', () => {
 
   test('resume.md load_artifacts references checkpoint runtime field', () => {
     const content = readWorkflow('resume.md');
+    const loadArtifactsBlock = content.slice(
+      content.indexOf('<load_artifacts>'),
+      content.indexOf('</load_artifacts>') + '</load_artifacts>'.length
+    );
     assert.ok(
-      content.includes('<load_artifacts>') && content.includes('runtime'),
+      loadArtifactsBlock.includes('runtime'),
       'resume.md must reference runtime field extraction in <load_artifacts>'
     );
   });
