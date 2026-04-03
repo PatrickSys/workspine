@@ -973,6 +973,15 @@ describe('G20 - Session Continuity Contracts', () => {
       `progress.md must reference ${checkpointPath}. FIX: Use canonical checkpoint path.`);
   });
 
+  test('pause.md and resume.md both reference .continue-here.bak for backup safety (I29)', () => {
+    const pause = fs.readFileSync(PAUSE_PATH, 'utf-8');
+    const resume = fs.readFileSync(RESUME_PATH, 'utf-8');
+    assert.match(pause, /\.continue-here\.bak/,
+      'pause.md must reference .continue-here.bak. FIX: Add .bak cleanup to <write_checkpoint>.');
+    assert.match(resume, /\.continue-here\.bak/,
+      'resume.md must reference .continue-here.bak. FIX: Add .bak copy+delete to <cleanup_checkpoint> and <completion>.');
+  });
+
   test('resume <determine_action> routes to workflows that exist in the 10-workflow set', () => {
     const content = fs.readFileSync(RESUME_PATH, 'utf-8');
     const section = content.slice(content.indexOf('<determine_action>'), content.indexOf('</determine_action>'));

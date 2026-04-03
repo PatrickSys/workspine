@@ -177,10 +177,12 @@ Wait for user selection.
 
 <cleanup_checkpoint>
 Immediately after the user confirms their action selection (before routing to the target workflow):
-- If the user chose to resume from `.continue-here.md`, delete it now — before dispatching to the target workflow.
+- If the user chose to resume from `.continue-here.md`:
+  1. Copy `.continue-here.md` to `.continue-here.bak` (overwrite silently if `.continue-here.bak` already exists).
+  2. Delete `.continue-here.md`.
 - If the user chose a different action (not based on the checkpoint), leave `.continue-here.md` in place for a future resume.
 
-Deleting before routing ensures a failed or interrupted workflow does not leave a stale checkpoint that would mislead the next resume invocation.
+Copying before deleting ensures the checkpoint survives a session crash between deletion and dispatch. `.continue-here.bak` is cleaned up before the dispatch call below.
 </cleanup_checkpoint>
 
 </process>
@@ -205,6 +207,8 @@ Present to the user before dispatching:
 
 Consider clearing context before starting the next workflow for best results.
 ---
+
+Delete `.continue-here.bak` if it exists.
 
 Then dispatch to the selected `/gsdd-*` workflow.
 </completion>
