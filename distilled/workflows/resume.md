@@ -208,7 +208,7 @@ Present to the user before dispatching:
 Consider clearing context before starting the next workflow for best results.
 ---
 
-Delete `.continue-here.bak` if it exists.
+Delete `.planning/.continue-here.bak` if it exists.
 
 Then dispatch to the selected `/gsdd-*` workflow.
 </completion>
