@@ -38,6 +38,7 @@ Store the response as `$DESCRIPTION`. If empty, re-prompt.
 3. Generate `$SLUG` from `$DESCRIPTION` (lowercase, hyphens, max 40 chars).
 4. Create `.planning/quick/$NEXT_NUM-$SLUG/`.
 5. If `.planning/codebase/` exists, read `.planning/codebase/ARCHITECTURE.md` and `.planning/codebase/STACK.md`. Summarize key findings in <=500 words as `$CODEBASE_CONTEXT`. If `.planning/codebase/` does not exist, set `$CODEBASE_CONTEXT` to empty.
+6. **Session-boundary fallback:** If `.planning/.continue-here.bak` exists, read its `<judgment>` section. Use `<active_constraints>` and `<anti_regression>` rules as task-scoping context (do not violate active constraints; do not regress on listed invariants). After reading, delete `.planning/.continue-here.bak` (auto-clean).
 
 If `.planning/quick/` does not exist, create it along with an empty `LOG.md`:
 

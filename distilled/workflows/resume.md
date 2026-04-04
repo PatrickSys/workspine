@@ -182,7 +182,7 @@ Immediately after the user confirms their action selection (before routing to th
   2. Delete `.planning/.continue-here.md`.
 - If the user chose a different action (not based on the checkpoint), leave `.continue-here.md` in place for a future resume.
 
-Copying before deleting ensures the checkpoint survives a session crash between deletion and dispatch. `.continue-here.bak` is cleaned up before the dispatch call below.
+Copying before deleting ensures the checkpoint survives a session crash between deletion and dispatch. `.continue-here.bak` is cleaned up by the downstream workflow after absorbing the judgment, or by the next `pause.md` run.
 </cleanup_checkpoint>
 
 </process>
@@ -207,8 +207,6 @@ Present to the user before dispatching:
 
 Consider clearing context before starting the next workflow for best results.
 ---
-
-Delete `.planning/.continue-here.bak` if it exists.
 
 Then dispatch to the selected `/gsdd-*` workflow.
 </completion>

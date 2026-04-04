@@ -14,6 +14,7 @@ Before starting, read these files:
 5. `.planning/phases/*-PLAN.md` - any previous plans that affect this phase
 6. Relevant source code - if this phase builds on existing code, read the key files
 7. `.planning/phases/*-SUMMARY.md` for the prior completed phase - if a `<judgment>` section is present, read all four sub-sections. The `<judgment>` carries forward active constraints, unresolved uncertainty, decision posture, and anti-regression rules from the prior phase. Honor these as input context alongside SPEC.md decisions and APPROACH.md choices.
+8. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 7, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section and honor the same four sub-sections as input context. After reading, delete `.planning/.continue-here.bak` (auto-clean: the judgment has been absorbed into this session's context).
 
 Identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>
