@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.11.0...v0.12.0) (2026-04-05)
+
+
+### Features
+
+* session-boundary safety via .bak fallback judgment (D42) ([#65](https://github.com/PatrickSys/get-shit-done-distilled/issues/65)) ([86cb2f7](https://github.com/PatrickSys/get-shit-done-distilled/commit/86cb2f71032b5238cb1c78a383253ebe46351f1b))
+
 # [0.11.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.10.0...v0.11.0) (2026-04-03)
 
 
