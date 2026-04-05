@@ -1816,6 +1816,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `.bak` now has a defined lifecycle: created by `resume.md` `<cleanup_checkpoint>`, consumed-and-deleted by the next downstream workflow, or cleaned by the next `pause.md` run.
 - Future workflows added as resume dispatch targets must include the `.bak` fallback read pattern if they consume judgment.
 - The judgment shape remains bounded to four sections (D41 constraint). `.bak` is a fallback read path, not a new persistence surface.
+- `quick.md` reads `.bak` unconditionally (no SUMMARY.md check) because quick tasks have no phase lifecycle and no prior SUMMARY.md to consult. The other three workflows (`plan.md`, `execute.md`, `verify.md`) read `.bak` conditionally — only when no prior SUMMARY.md `<judgment>` section exists.
 
 **GSDD implementation:** `distilled/workflows/resume.md` (`.bak` deletion removed from `<completion>`), `distilled/workflows/plan.md` (fallback read item 8), `distilled/workflows/execute.md` (fallback read item 7), `distilled/workflows/verify.md` (fallback read item 7), `distilled/workflows/quick.md` (fallback read in Step 2), `distilled/DESIGN.md` (this decision), `tests/gsdd.guards.test.cjs` (negative and positive invariant tests)
 

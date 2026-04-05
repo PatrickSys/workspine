@@ -987,7 +987,7 @@ describe('G20 - Session Continuity Contracts', () => {
     const compStart = content.indexOf('<completion>');
     const compEnd = content.indexOf('</completion>');
     const completion = content.slice(compStart, compEnd);
-    const deletesBAK = completion.includes('Delete') && completion.includes('.continue-here.bak');
+    const deletesBAK = /delete/i.test(completion) && completion.includes('.continue-here.bak');
     assert.ok(!deletesBAK,
       'resume.md <completion> must not delete .continue-here.bak. FIX: Remove .bak deletion from <completion>; downstream workflows auto-clean after absorbing judgment (D42).');
   });
@@ -2259,5 +2259,11 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
     assert.match(section, /\/gsdd-audit-milestone/,
       'plan-milestone-gaps completion must mention /gsdd-audit-milestone for re-audit. FIX: Add re-audit hint to completion.');
+  });
+
+  test('MILESTONES.md must be listed in .gitignore (internal-only, not public)', () => {
+    const gitignore = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf-8');
+    assert.match(gitignore, /MILESTONES\.md/,
+      'MILESTONES.md must be in .gitignore — it is an internal-only milestone tracker and must not appear on the public surface. FIX: Add MILESTONES.md to .gitignore.');
   });
 });
