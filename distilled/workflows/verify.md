@@ -16,6 +16,7 @@ Before starting, read these files:
 4. `.planning/SPEC.md` - requirements and constraints for the phase
 5. From the SUMMARY.md loaded in step 3, if a `<judgment>` section is present - read `<anti_regression>` rules as additional verification targets: confirm that invariants listed there were not broken by execution. Read `<active_constraints>` to calibrate verification scope.
 6. The relevant codebase files - the code that was actually built
+7. **Session-boundary fallback:** If the SUMMARY.md loaded in step 3 has no `<judgment>` section, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Treat `<anti_regression>` rules as additional verification targets and `<active_constraints>` to calibrate verification scope (same usage as step 5). After reading, delete `.planning/.continue-here.bak` (auto-clean).
 
 Establish your verification basis (must-have sources, requirement scope, previous report status) before beginning code inspection. Do not jump to loose file reading until this basis is explicit.
 

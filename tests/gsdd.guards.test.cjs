@@ -979,7 +979,31 @@ describe('G20 - Session Continuity Contracts', () => {
     assert.match(pause, /\.continue-here\.bak/,
       'pause.md must reference .continue-here.bak. FIX: Add .bak cleanup to <write_checkpoint>.');
     assert.match(resume, /\.continue-here\.bak/,
-      'resume.md must reference .continue-here.bak. FIX: Add .bak copy+delete to <cleanup_checkpoint> and <completion>.');
+      'resume.md must reference .continue-here.bak. FIX: Add .bak copy to <cleanup_checkpoint>.');
+  });
+
+  test('resume.md <completion> must NOT delete .continue-here.bak (session-boundary safety, D42)', () => {
+    const content = fs.readFileSync(RESUME_PATH, 'utf-8');
+    const compStart = content.indexOf('<completion>');
+    const compEnd = content.indexOf('</completion>');
+    const completion = content.slice(compStart, compEnd);
+    const deletesBAK = /delete/i.test(completion) && completion.includes('.continue-here.bak');
+    assert.ok(!deletesBAK,
+      'resume.md <completion> must not delete .continue-here.bak. FIX: Remove .bak deletion from <completion>; downstream workflows auto-clean after absorbing judgment (D42).');
+  });
+
+  test('plan.md, execute.md, verify.md, quick.md reference .continue-here.bak as fallback judgment source (D42)', () => {
+    const targets = [
+      ['plan.md', path.join(WORKFLOWS_DIR, 'plan.md')],
+      ['execute.md', path.join(WORKFLOWS_DIR, 'execute.md')],
+      ['verify.md', path.join(WORKFLOWS_DIR, 'verify.md')],
+      ['quick.md', path.join(WORKFLOWS_DIR, 'quick.md')],
+    ];
+    for (const [name, filePath] of targets) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      assert.match(content, /\.continue-here\.bak/,
+        `${name} must reference .continue-here.bak as session-boundary fallback judgment source. FIX: Add fallback read to <load_context> or Step 2 (D42).`);
+    }
   });
 
   test('resume <determine_action> routes to workflows that exist in the 10-workflow set', () => {
@@ -2235,5 +2259,11 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
     assert.match(section, /\/gsdd-audit-milestone/,
       'plan-milestone-gaps completion must mention /gsdd-audit-milestone for re-audit. FIX: Add re-audit hint to completion.');
+  });
+
+  test('MILESTONES.md must be listed in .gitignore (internal-only, not public)', () => {
+    const gitignore = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf-8');
+    assert.match(gitignore, /MILESTONES\.md/,
+      'MILESTONES.md must be in .gitignore — it is an internal-only milestone tracker and must not appear on the public surface. FIX: Add MILESTONES.md to .gitignore.');
   });
 });

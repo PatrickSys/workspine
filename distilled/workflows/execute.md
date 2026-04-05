@@ -14,6 +14,7 @@ CRITICAL: Read every file below before performing any other actions. This is you
 4. Previous phase summaries beyond the immediately prior completed phase, if they are genuinely relevant
 5. Relevant source files listed in the plan's `<files>` sections
 6. `.planning/phases/*-SUMMARY.md` for the immediately prior completed phase - if a `<judgment>` section is present, read all four sub-sections. Honor `<anti_regression>` rules as execution constraints. Use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions.
+7. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 6, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Honor `<anti_regression>` rules as execution constraints and use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions. After reading, delete `.planning/.continue-here.bak` (auto-clean).
 </load_context>
 
 <runtime_contract>

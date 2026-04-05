@@ -36,5 +36,8 @@ backups/
 .agents/
 skills-lock.json
 
+# Milestone tracker (internal-only, not public)
+MILESTONES.md
+
 # Codebase indexer cache
 .codebase-context/

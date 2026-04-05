@@ -1782,6 +1782,46 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ---
 
+## D42 - Session-Boundary Safety
+
+**Decision (2026-04-04):** `.continue-here.bak` survives `resume.md` dispatch so downstream workflows can read it as a fallback judgment source when no prior SUMMARY.md `<judgment>` section is available. The downstream workflow auto-cleans `.bak` after absorbing the judgment.
+
+**Context:**
+- D41 established two judgment persistence surfaces: checkpoint (`.continue-here.md`) and phase SUMMARY.md.
+- `resume.md` copies `.continue-here.md` to `.continue-here.bak` during `<cleanup_checkpoint>` (crash safety), then previously deleted `.bak` in `<completion>` before dispatching.
+- When a user clears context between resume and the dispatched workflow, session-specific judgment is permanently lost: `.continue-here.md` already deleted, `.bak` already deleted, and the prior SUMMARY.md only carries the *prior completed phase's* judgment — not the interrupted session's `<active_constraints>`, `<decision_posture>`, or `<anti_regression>` rules.
+- `pause.md` line 53 already deletes stale `.bak` files from prior crashed resumes — this crash-cleanup path remains unchanged.
+
+**Decision:**
+- `resume.md` `<completion>` no longer deletes `.planning/.continue-here.bak`.
+- `plan.md`, `execute.md`, `verify.md`, and `quick.md` read `.planning/.continue-here.bak` as a fallback judgment source if no prior SUMMARY.md `<judgment>` section is available, then auto-clean it.
+- `pause.md` `.bak` cleanup (crash-recovery path, line 53) remains unchanged.
+
+**Transition safety table:**
+
+| Transition | Judgment source | `.bak` state after | Risk |
+|---|---|---|---|
+| pause → resume (same session) | `.continue-here.md` live in context | `.bak` created by `<cleanup_checkpoint>` | None: judgment in context |
+| resume → workflow (same session, no context clear) | Judgment in context from resume | `.bak` on disk, ignored | None: judgment in context |
+| resume → [context clear] → workflow | `.bak` fallback read | Deleted by workflow after read (auto-clean) | **Solved by this change** |
+| resume → [context clear] → workflow (SUMMARY.md judgment exists) | Prior SUMMARY.md `<judgment>` | `.bak` on disk, not read | `.bak` orphaned; cleaned by next `pause.md` run (line 53) |
+| Crash during resume (before dispatch) | `.continue-here.md` still exists | `.bak` may exist | Next resume reads `.md`; stale `.bak` cleaned by next `pause.md` |
+
+**Evidence:**
+- Gap identified by tracing judgment lifecycle through pause → resume → [context clear] → downstream workflow.
+- `pause.md` line 53 already handles crash-orphaned `.bak` files — no new general cleanup path needed.
+- The conditional read (only when no SUMMARY.md judgment exists) prevents double-sourcing judgment from both `.bak` and SUMMARY.md.
+
+**Consequences:**
+- `.bak` now has a defined lifecycle: created by `resume.md` `<cleanup_checkpoint>`, consumed-and-deleted by the next downstream workflow, or cleaned by the next `pause.md` run.
+- Future workflows added as resume dispatch targets must include the `.bak` fallback read pattern if they consume judgment.
+- The judgment shape remains bounded to four sections (D41 constraint). `.bak` is a fallback read path, not a new persistence surface.
+- `quick.md` reads `.bak` unconditionally (no SUMMARY.md check) because quick tasks have no phase lifecycle and no prior SUMMARY.md to consult. The other three workflows (`plan.md`, `execute.md`, `verify.md`) read `.bak` conditionally — only when no prior SUMMARY.md `<judgment>` section exists.
+
+**GSDD implementation:** `distilled/workflows/resume.md` (`.bak` deletion removed from `<completion>`), `distilled/workflows/plan.md` (fallback read item 8), `distilled/workflows/execute.md` (fallback read item 7), `distilled/workflows/verify.md` (fallback read item 7), `distilled/workflows/quick.md` (fallback read in Step 2), `distilled/DESIGN.md` (this decision), `tests/gsdd.guards.test.cjs` (negative and positive invariant tests)
+
+---
+
 ## Maintenance
 
 This document is updated when:
