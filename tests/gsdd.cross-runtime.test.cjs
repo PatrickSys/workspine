@@ -234,13 +234,13 @@ describe('S6 — Fixture Chain Validation (cross-runtime golden-path artifacts)'
       }
     });
 
-    test('VERIFICATION fixtures in both chains have PLAN.md plan_check section', () => {
+    test('PLAN fixtures in both chains have plan_check section', () => {
       // PLANs should have plan_check sections (structural completeness)
       const chainAPlan = readFixture('chain-a', '01-PLAN.md');
       const chainBPlan = readFixture('chain-b', '01-PLAN.md');
-      assert.ok(extractXmlSection(chainAPlan, 'plan_check').length > 0 || chainAPlan.includes('plan_check'),
+      assert.ok(extractXmlSection(chainAPlan, 'plan_check').length > 0,
         'Chain A PLAN must have plan_check section');
-      assert.ok(extractXmlSection(chainBPlan, 'plan_check').length > 0 || chainBPlan.includes('plan_check'),
+      assert.ok(extractXmlSection(chainBPlan, 'plan_check').length > 0,
         'Chain B PLAN must have plan_check section');
     });
   });
@@ -317,34 +317,6 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
     });
   });
 
-  // --- Portable skill runtime_contract blocks ---
-
-  describe('Portable workflow runtime_contract blocks', () => {
-    const WORKFLOW_FILES = ['plan.md', 'execute.md', 'verify.md'];
-    const WORKFLOW_DIR = path.join(__dirname, '..', 'distilled', 'workflows');
-
-    test('each core workflow has a runtime_contract block', () => {
-      for (const wf of WORKFLOW_FILES) {
-        const content = fs.readFileSync(path.join(WORKFLOW_DIR, wf), 'utf-8');
-        const rtContract = content.match(/<runtime_contract>[\s\S]*?<\/runtime_contract>/);
-        assert.ok(rtContract, wf + ' must have <runtime_contract> block');
-      }
-    });
-
-    test('runtime_contract blocks reference all 3 native runtimes', () => {
-      const NATIVE_RUNTIMES = ['claude-code', 'codex-cli', 'opencode'];
-      for (const wf of WORKFLOW_FILES) {
-        const content = fs.readFileSync(path.join(WORKFLOW_DIR, wf), 'utf-8');
-        const rtMatch = content.match(/<runtime_contract>[\s\S]*?<\/runtime_contract>/);
-        assert.ok(rtMatch, wf + ' must have <runtime_contract>');
-        const rtBlock = rtMatch[0];
-        for (const rt of NATIVE_RUNTIMES) {
-          assert.ok(rtBlock.includes(rt), wf + ' runtime_contract must reference ' + rt);
-        }
-      }
-    });
-  });
-
   // --- Approach-explorer parity ---
 
   describe('Approach-explorer parity across runtimes', () => {
@@ -385,5 +357,35 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
         );
       }
     });
+  });
+});
+
+// ============================================================
+// Portable workflow runtime_contract blocks (source file checks — no project setup needed)
+// ============================================================
+
+describe('Portable workflow runtime_contract blocks', () => {
+  const WORKFLOW_FILES = ['plan.md', 'execute.md', 'verify.md'];
+  const WORKFLOW_DIR = path.join(__dirname, '..', 'distilled', 'workflows');
+
+  test('each core workflow has a runtime_contract block', () => {
+    for (const wf of WORKFLOW_FILES) {
+      const content = fs.readFileSync(path.join(WORKFLOW_DIR, wf), 'utf-8');
+      const rtContract = content.match(/<runtime_contract>[\s\S]*?<\/runtime_contract>/);
+      assert.ok(rtContract, wf + ' must have <runtime_contract> block');
+    }
+  });
+
+  test('runtime_contract blocks reference all 3 native runtimes', () => {
+    const NATIVE_RUNTIMES = ['claude-code', 'codex-cli', 'opencode'];
+    for (const wf of WORKFLOW_FILES) {
+      const content = fs.readFileSync(path.join(WORKFLOW_DIR, wf), 'utf-8');
+      const rtMatch = content.match(/<runtime_contract>[\s\S]*?<\/runtime_contract>/);
+      assert.ok(rtMatch, wf + ' must have <runtime_contract>');
+      const rtBlock = rtMatch[0];
+      for (const rt of NATIVE_RUNTIMES) {
+        assert.ok(rtBlock.includes(rt), wf + ' runtime_contract must reference ' + rt);
+      }
+    }
   });
 });
