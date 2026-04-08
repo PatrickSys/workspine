@@ -587,24 +587,25 @@ describe('G18 - Consumer Governance Completeness', () => {
   const gsddSource = fs.readFileSync(GSDD_PATH, 'utf-8');
   const workflowNames = [...gsddSource.matchAll(/name:\s*'(gsdd-[a-z-]+)'/g)].map(m => m[1]);
 
-  // G18.1: agents.block.md lists all workflow skills
-  test('agents.block.md lists all WORKFLOWS entries as skill paths', () => {
+  // G18.1: agents.block.md points to the portable workflow directory instead of
+  // front-loading every workflow path into the AGENTS surface.
+  test('agents.block.md points to the portable workflow directory', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    for (const name of workflowNames) {
-      assert.ok(
-        content.includes(`.agents/skills/${name}/SKILL.md`),
-        `agents.block.md missing skill path for ${name}. FIX: Add ".agents/skills/${name}/SKILL.md" to the "Where The Workflows Live" section.`
-      );
-    }
+    assert.match(content, /\.agents\/skills\/gsdd-\*\/SKILL\.md/,
+      'agents.block.md must point to the portable workflow directory. FIX: Add a .agents/skills/gsdd-*/SKILL.md pointer.');
   });
 
-  test('agents.block.md workflow skill count matches WORKFLOWS array length', () => {
+  test('agents.block.md keeps only a compact set of anchor workflow names', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    // Count only in the "Where The Workflows Live" section
     const section = content.slice(content.indexOf('Where The Workflows Live'));
-    const skillPaths = [...section.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
-    assert.strictEqual(skillPaths.length, workflowNames.length,
-      `agents.block.md "Where The Workflows Live" has ${skillPaths.length} skill paths but WORKFLOWS has ${workflowNames.length}. FIX: Sync agents.block.md to match WORKFLOWS array.`);
+    for (const anchor of ['gsdd-new-project', 'gsdd-plan', 'gsdd-execute', 'gsdd-verify', 'gsdd-progress']) {
+      assert.match(section, new RegExp(anchor),
+        `agents.block.md must keep ${anchor} as an anchor workflow. FIX: Add ${anchor} to the compact workflow list.`);
+    }
+
+    const explicitSkillPaths = [...section.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
+    assert.ok(explicitSkillPaths.length === 0,
+      `agents.block.md should not enumerate every workflow path. Found ${explicitSkillPaths.length} explicit paths. FIX: Keep only the wildcard directory pointer.`);
   });
 
   // G18.2: CHANGELOG design decision count matches DESIGN.md

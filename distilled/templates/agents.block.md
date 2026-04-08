@@ -4,10 +4,8 @@ This block is managed by `gsdd`. Do not edit inside the block directly.
 Edit the source template in the GSDD framework instead.
 
 ### What This Project Uses
-- Framework: GSDD (Spec-Driven Development)
-- Planning dir: `.planning/` (specs, roadmaps, plans, research, templates)
-- Lifecycle: `bootstrap (gsdd init) -> new-project -> [discuss-approach -> plan -> execute -> verify] x N -> audit-milestone` for roadmap work
-- Supporting workflows: quick (sub-hour tasks), map-codebase (codebase analysis), pause/resume (session management), progress (status query)
+- GSDD portable workflows live in `.agents/skills/`; planning state lives in `.planning/`.
+- Use the standard lifecycle for roadmap work: `new-project -> plan -> execute -> verify -> audit-milestone`.
 
 ### Rules You MUST Follow
 
@@ -66,32 +64,18 @@ If you are not confident about a domain/library/pattern:
 - If asked for analysis, answer first; propose changes separately.
 
 ### Where The Workflows Live
-- Primary lifecycle:
-  - `.agents/skills/gsdd-new-project/SKILL.md` — project initialization (spec + roadmap)
-  - `.agents/skills/gsdd-plan/SKILL.md` — phase planning with optional independent checking
-  - `.agents/skills/gsdd-execute/SKILL.md` — plan execution with quality gates
-  - `.agents/skills/gsdd-verify/SKILL.md` — phase goal-backward verification
-  - `.agents/skills/gsdd-verify-work/SKILL.md` — conversational UAT testing with structured gap tracking
-  - `.agents/skills/gsdd-audit-milestone/SKILL.md` — milestone integration audit
-- Milestone lifecycle:
-  - `.agents/skills/gsdd-complete-milestone/SKILL.md` — archive shipped milestone, evolve spec, collapse roadmap
-  - `.agents/skills/gsdd-new-milestone/SKILL.md` — start next milestone cycle (goals, requirements, roadmap phases)
-  - `.agents/skills/gsdd-plan-milestone-gaps/SKILL.md` — create gap-closure phases from audit results
-- Supporting workflows:
-  - `.agents/skills/gsdd-quick/SKILL.md` — sub-hour tasks outside the phase cycle
-  - `.agents/skills/gsdd-map-codebase/SKILL.md` — codebase analysis and refresh
-  - `.agents/skills/gsdd-pause/SKILL.md` — session checkpoint
-  - `.agents/skills/gsdd-resume/SKILL.md` — session context restore and routing
-  - `.agents/skills/gsdd-progress/SKILL.md` — read-only status and next-action routing
+- Portable workflow core: `.agents/skills/gsdd-*/SKILL.md`
+- Start with these anchors:
+  - `gsdd-new-project` — initialize spec and roadmap
+  - `gsdd-plan` — plan the next phase
+  - `gsdd-execute` — implement the approved plan
+  - `gsdd-verify` — verify outcomes against the plan
+  - `gsdd-progress` — recover the next deterministic step
+- Use the same directory for milestone, quick, map-codebase, pause/resume, and support workflows as needed.
 
 ### How To Invoke Workflows
+- **Claude Code / OpenCode / Cursor / Copilot / Gemini:** use slash commands such as `/gsdd-plan`.
+- **Codex CLI:** use skill references such as `$gsdd-plan`.
+- **Other AI tools:** Open the SKILL.md file for the relevant workflow under `.agents/skills/gsdd-*/SKILL.md`.
 
-How you run these workflows depends on your tool:
-
-- **Claude Code / OpenCode / Cursor / Copilot / Gemini:** Use slash commands — `/gsdd-new-project`, `/gsdd-plan`, `/gsdd-execute`, etc.
-- **Codex CLI:** Use skill references — `$gsdd-new-project`, `$gsdd-plan`, `$gsdd-execute`, etc.
-- **Other AI tools:** Open the SKILL.md file listed above and follow its instructions.
-
-If this root `AGENTS.md` block is present in a Cursor, Copilot, or Gemini project, treat it as behavioral governance on top of the runtime's native slash-command discovery. Do not treat this file as the mechanism that makes the workflows discoverable.
-
-Start with the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`.
+If this root `AGENTS.md` block is present in a Cursor, Copilot, or Gemini project, treat it as governance layered on top of native workflow discovery. Do not treat this file as the mechanism that makes the workflows discoverable.
