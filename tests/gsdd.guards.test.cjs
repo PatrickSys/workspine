@@ -604,7 +604,7 @@ describe('G18 - Consumer Governance Completeness', () => {
     }
 
     const explicitSkillPaths = [...section.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
-    assert.ok(explicitSkillPaths.length <= 1,
+    assert.ok(explicitSkillPaths.length === 0,
       `agents.block.md should not enumerate every workflow path. Found ${explicitSkillPaths.length} explicit paths. FIX: Keep only the wildcard directory pointer.`);
   });
 
