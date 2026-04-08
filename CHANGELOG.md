@@ -1,3 +1,10 @@
+## [0.13.1](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.13.0...v0.13.1) (2026-04-08)
+
+
+### Bug Fixes
+
+* normalize CRLF in parseFrontmatter to fix Windows checkout regression ([#68](https://github.com/PatrickSys/get-shit-done-distilled/issues/68)) ([023d27a](https://github.com/PatrickSys/get-shit-done-distilled/commit/023d27a554cc599a5f92ac8cc14c9a5027f43739))
+
 # [0.13.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.12.0...v0.13.0) (2026-04-06)
 
 
