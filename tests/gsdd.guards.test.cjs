@@ -733,14 +733,12 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'agents.block.md must distinguish AGENTS governance from workflow discovery for Cursor/Copilot/Gemini. FIX: Add explicit governance-vs-discovery wording.');
   });
 
-  test('agents.block.md carries the same proof-split support wording as the public docs', () => {
+  test('agents.block.md stays focused on governance and discovery, not launch proof posture', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /directly validated runtime story.*Claude Code.*Codex CLI.*OpenCode/i,
-      'agents.block.md must describe the directly validated runtime story. FIX: Add public-support wording for Claude/Codex/OpenCode.');
-    assert.match(content, /Cursor.*Copilot.*Gemini.*qualified support/i,
-      'agents.block.md must describe Cursor/Copilot/Gemini as qualified support. FIX: Add qualified-support wording.');
-    assert.match(content, /repo-native workflow kernel/i,
-      'agents.block.md must describe GSDD as a repo-native workflow kernel. FIX: Add the positioning sentence.');
+    assert.doesNotMatch(content, /### Public Support Wording/i,
+      'agents.block.md must not carry a public support wording section. FIX: Keep launch proof posture in public docs/help, not consumer governance.');
+    assert.doesNotMatch(content, /directly validated runtime story|directly validated today|qualified support/i,
+      'agents.block.md must not restate launch proof posture. FIX: Keep the generated governance block focused on invocation and behavior rules.');
   });
 
   test('README adapter architecture table does NOT contain skill_aware', () => {
@@ -2460,5 +2458,44 @@ describe('G36 - Git Branch Safety', () => {
       'PR #91 regression fixture must preserve the leaked phase label. FIX: Keep the exact incident title in the test fixture.');
     assert.match(pr91Title, /DISC-01|SAFE-01/,
       'PR #91 regression fixture must preserve the leaked requirement labels. FIX: Keep the exact incident title in the test fixture.');
+  });
+});
+
+describe('G37 - Launch Surface Consistency', () => {
+  test('README and distilled README use repo-native workflow kernel framing', () => {
+    const rootReadme = fs.readFileSync(README_MD, 'utf-8');
+    const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
+    assert.match(rootReadme, /repo-native workflow kernel/i,
+      'README.md must describe GSDD as a repo-native workflow kernel. FIX: Use the kernel framing in the public intro.');
+    assert.match(distilledReadme, /repo-native workflow kernel/i,
+      'distilled/README.md must describe GSDD as a repo-native workflow kernel. FIX: Align the distilled intro with the launch framing.');
+  });
+
+  test('README install command and package metadata stay aligned', () => {
+    const rootReadme = fs.readFileSync(README_MD, 'utf-8');
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+    assert.match(rootReadme, /npx gsdd-cli init/,
+      'README.md must document the published package entrypoint. FIX: Keep npx gsdd-cli init in the install examples.');
+    assert.strictEqual(pkg.name, 'gsdd-cli',
+      'package.json name must remain gsdd-cli. FIX: Keep the package name aligned with README install commands.');
+    assert.strictEqual(pkg.bin.gsdd, 'bin/gsdd.mjs',
+      'package.json bin.gsdd must remain bin/gsdd.mjs. FIX: Keep the gsdd command aligned with README guidance.');
+  });
+
+  test('agents.block keeps launch proof posture out of consumer governance text', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'agents.block.md'), 'utf-8');
+    assert.doesNotMatch(content, /### Public Support Wording/i,
+      'agents.block.md must not define launch proof posture. FIX: Remove the public support wording section from consumer governance.');
+    assert.doesNotMatch(content, /qualified support|directly validated/i,
+      'agents.block.md must not duplicate public launch evidence language. FIX: Keep launch proof posture in README/package/help surfaces instead.');
+  });
+
+  test('init runtime help text preserves the proof split', async () => {
+    const mod = await import(`file://${INIT_RUNTIME_MODULE.replace(/\\/g, '/')}`);
+    const helpText = mod.getHelpText();
+    assert.match(helpText, /directly validated launch surfaces.*Claude Code.*OpenCode.*Codex CLI/i,
+      'init-runtime help text must name only the directly validated runtimes. FIX: Keep the help text aligned with launch proof.');
+    assert.match(helpText, /qualified support.*shared \.agents\/skills\/ surface plus optional governance/i,
+      'init-runtime help text must distinguish qualified support from directly validated native runtimes. FIX: Keep the proof split explicit in the notes.');
   });
 });

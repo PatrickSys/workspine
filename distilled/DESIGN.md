@@ -1165,12 +1165,12 @@ This is acceptable because:
 
 **Problem:** GSDD's internal architecture is complete (24 design decisions, 800+ tests, 10 workflows, 10 roles), but consumer-facing surfaces don't honestly guide first-time users. Two independent audits identified this as the single largest barrier to adoption.
 
-**Decision:** Make all consumer-facing surfaces (README, agents.block.md, post-init CLI output) honestly distinguish between native-capable and governance-only platforms, and provide platform-specific invocation guidance at every consumer touchpoint.
+**Decision:** Keep launch-proof posture in public docs and install/help surfaces, while keeping consumer governance surfaces focused on invocation guidance and the governance-vs-discovery boundary.
 
 **Key changes:**
 - Platform adapter table uses honest capability tiers (native vs governance) instead of aspirational labels (skill_aware, custom_command_aware)
-- Post-init CLI output shows platform-specific next-step commands
-- AGENTS.md governance block includes per-platform invocation guide
+- Post-init CLI output shows platform-specific next-step commands and the launch proof split for install guidance
+- AGENTS.md governance block includes per-platform invocation guide and the governance-vs-discovery boundary, but does not carry launch-proof copy
 - Quickstart section provides a guided first-use flow
 
 **Evidence:**
@@ -1180,7 +1180,7 @@ This is acceptable because:
 4. **Martin Fowler on context engineering**: Emphasizes that "the right information at the right time" applies to human consumers as much as to AI agents
 5. **Both GSDD external audits** (March 13 + 17, 2026): Independently concluded the same gap — "architecture is solid, presentation lags implementation"
 
-**GSDD implementation:** `README.md` (quickstart, honest platform tiers), `distilled/templates/agents.block.md` (per-platform invocation guide), `bin/lib/init.mjs` (platform-aware post-init routing), `tests/gsdd.guards.test.cjs` (G19)
+**GSDD implementation:** `README.md` (quickstart, honest platform tiers), `distilled/templates/agents.block.md` (per-platform invocation guide plus governance/discovery boundary), `bin/lib/init.mjs` (platform-aware post-init routing), `tests/gsdd.guards.test.cjs` (G19)
 
 ---
 

@@ -1,6 +1,6 @@
 # GSDD (Get Shit Done Distilled)
 
-Lightweight, repo-native Spec-Driven Development (SDD) for AI-assisted engineering.
+Lightweight, repo-native workflow kernel for AI-assisted engineering.
 
 Distilled from GSD (Get Shit Done): keep rigor and leverage, drop ceremony.
 

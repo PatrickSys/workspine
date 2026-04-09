@@ -1737,3 +1737,22 @@ describe('G34b - Branch Safety Invariants', () => {
       'PR #91 fixture must retain the leaked requirement-style IDs. FIX: Keep the exact leaked title as a regression case.');
   });
 });
+
+describe('G34c - Launch Surface Invariants', () => {
+  test('distilled README and package description share repo-native workflow kernel framing', () => {
+    const distilledReadme = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'README.md'), 'utf-8');
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
+    assert.match(distilledReadme, /repo-native workflow kernel/i,
+      'distilled/README.md must keep the repo-native workflow kernel framing. FIX: Align the distilled intro to the launch story.');
+    assert.match(pkg.description, /repo-native workflow kernel/i,
+      'package.json description must keep the repo-native workflow kernel framing. FIX: Keep package metadata aligned with the launch story.');
+  });
+
+  test('agents block does not carry launch proof posture', () => {
+    const agentsBlock = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'templates', 'agents.block.md'), 'utf-8');
+    assert.doesNotMatch(agentsBlock, /### Public Support Wording/i,
+      'agents.block.md must not carry a launch-proof section. FIX: Keep generated governance focused on repo behavior and discovery guidance.');
+    assert.doesNotMatch(agentsBlock, /qualified support|directly validated/i,
+      'agents.block.md must not duplicate launch proof posture. FIX: Keep runtime evidence wording in docs/help/package metadata instead.');
+  });
+});

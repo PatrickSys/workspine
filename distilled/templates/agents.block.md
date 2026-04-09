@@ -80,7 +80,3 @@ If you are not confident about a domain/library/pattern:
 
 If this root `AGENTS.md` block is present in a Cursor, Copilot, or Gemini project, treat it as governance layered on top of native workflow discovery. Do not treat this file as the mechanism that makes the workflows discoverable.
 
-### Public Support Wording
-- The directly validated runtime story for public documentation in this repo is **Claude Code**, **Codex CLI**, and **OpenCode**.
-- Treat **Cursor**, **Copilot**, and **Gemini** as qualified support that relies on the shared `.agents/skills/` surface plus optional governance, unless you have separate validation proving more.
-- Do not describe GSDD as a dashboard or control-plane product. It is a repo-native workflow kernel.
