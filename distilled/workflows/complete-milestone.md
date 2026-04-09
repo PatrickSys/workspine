@@ -32,7 +32,7 @@ Before starting, read these files:
 Check:
 - **Phase completion**: Are all ROADMAP.md phases for this milestone marked `[x]`? List any that are not.
 - **Audit status**: Does a MILESTONE-AUDIT.md exist and have status `passed`? If it has status `gaps_found`, the milestone has open gaps.
-- **Spent-branch guard**: Run `git branch --merged origin/main` and verify HEAD is not a spent/already-merged branch. If the current branch already backs a merged PR, STOP - do not instruct any commit or tag operations. Prompt the user to check out a fresh active branch before continuing.
+- **Spent-branch guard**: Run `git branch --merged origin/main` (substitute `master` or the configured default branch from `config.json → gitProtocol.branch` if different) and verify HEAD is not a spent/already-merged branch. If the current branch already backs a merged PR, STOP - do not instruct any commit or tag operations. Prompt the user to check out a fresh active branch before continuing.
 
 **If phases incomplete or audit not passed:**
 
