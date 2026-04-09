@@ -1,12 +1,13 @@
 {
   "name": "gsdd-cli",
-  "version": "0.13.1",
-  "description": "GSDD — a portable, spec-driven development kernel for AI coding agents. Works with Claude Code, Codex CLI, OpenCode, Cursor, Copilot, and Gemini CLI.",
+  "version": "0.13.0",
+  "description": "GSDD — a repo-native workflow kernel for AI coding agents, with directly validated support for Claude Code, Codex CLI, and OpenCode.",
   "type": "module",
   "bin": {
     "gsdd": "bin/gsdd.mjs"
   },
   "scripts": {
+    "test": "npm run test:gsdd",
     "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.models.test.cjs && node tests/gsdd.manifest.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs && node tests/gsdd.guards.test.cjs && node tests/gsdd.health.test.cjs && node tests/gsdd.scenarios.test.cjs && node tests/gsdd.cross-runtime.test.cjs"
   },
   "devDependencies": {

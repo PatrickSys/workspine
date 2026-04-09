@@ -2,37 +2,37 @@ const RUNTIME_OPTIONS = [
   {
     id: 'claude',
     label: 'Claude Code',
-    description: 'Native skills, commands, and agents',
+    description: 'Directly validated native skills, commands, and agents',
     kind: 'native',
   },
   {
     id: 'opencode',
     label: 'OpenCode',
-    description: 'Native slash commands and agents',
+    description: 'Directly validated native slash commands and agents',
     kind: 'native',
   },
   {
     id: 'codex',
     label: 'Codex CLI',
-    description: 'Portable skills plus native checker agents',
+    description: 'Directly validated portable skills plus native checker agents',
     kind: 'native',
   },
   {
     id: 'cursor',
     label: 'Cursor',
-    description: 'Skills-native slash commands from .agents/skills/',
+    description: 'Qualified support via skills-native slash commands from .agents/skills/',
     kind: 'skills_native',
   },
   {
     id: 'copilot',
     label: 'GitHub Copilot',
-    description: 'Skills-native slash commands from .agents/skills/',
+    description: 'Qualified support via skills-native slash commands from .agents/skills/',
     kind: 'skills_native',
   },
   {
     id: 'gemini',
     label: 'Gemini CLI',
-    description: 'Skills-native slash commands from .agents/skills/',
+    description: 'Qualified support via skills-native slash commands from .agents/skills/',
     kind: 'skills_native',
   },
 ];
@@ -195,6 +195,8 @@ Notes:
   - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)
   - running plain \`gsdd init\` in a terminal opens the guided runtime-selection wizard
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
+  - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
+  - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in

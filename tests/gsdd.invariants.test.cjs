@@ -1513,12 +1513,14 @@ describe('G12 — Documentation Accuracy Guards', () => {
   const DISTILLED_README = path.join(__dirname, '..', 'distilled', 'README.md');
   const AGENTS_README = path.join(__dirname, '..', 'agents', 'README.md');
   const CLI_ENTRY = path.join(__dirname, '..', 'bin', 'gsdd.mjs');
+  const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
 
   const rootReadme = fs.readFileSync(ROOT_README, 'utf-8');
   const distilledReadme = fs.readFileSync(DISTILLED_README, 'utf-8');
   const agentsReadme = fs.readFileSync(AGENTS_README, 'utf-8');
   const designContent = fs.readFileSync(DESIGN_MD, 'utf-8');
   const cliContent = fs.readFileSync(CLI_ENTRY, 'utf-8');
+  const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf-8'));
 
   // G12.1: DESIGN.md actual decision count matches README claims
   test('DESIGN.md decision count matches root README claim', () => {
@@ -1600,6 +1602,18 @@ describe('G12 — Documentation Accuracy Guards', () => {
       rootReadme.includes('--templates'),
       'Root README update command documentation does not mention --templates. FIX: Add --templates to the update command description.'
     );
+  });
+
+  test('package.json description matches the repo-native kernel launch framing', () => {
+    assert.match(pkg.description, /repo-native workflow kernel/i,
+      'package.json description must use the repo-native workflow kernel framing. FIX: Update the package description.');
+    assert.match(pkg.description, /Claude Code.*Codex CLI.*OpenCode/i,
+      'package.json description must name only the directly validated runtimes. FIX: Limit the description to the current proof set.');
+  });
+
+  test('package.json exposes npm test alias for README test command', () => {
+    assert.strictEqual(pkg.scripts.test, 'npm run test:gsdd',
+      'package.json must expose "npm test" as an alias to test:gsdd. FIX: Add a test script alias.');
   });
 });
 

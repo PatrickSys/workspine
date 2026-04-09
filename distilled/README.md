@@ -1,6 +1,6 @@
 # GSDD (Get Shit Done Distilled)
 
-Lightweight Spec-Driven Development (SDD) for AI-assisted engineering.
+Lightweight, repo-native Spec-Driven Development (SDD) for AI-assisted engineering.
 
 Distilled from GSD (Get Shit Done): keep rigor and leverage, drop ceremony.
 
@@ -10,6 +10,10 @@ GSDD is a small set of workflow sources plus a CLI (`gsdd`) that:
 - scaffolds a project planning workspace (`.planning/`)
 - generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)
 - optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)
+
+Launch proof posture:
+- Directly validated in repo truth: Claude Code, Codex CLI, OpenCode
+- Qualified support only: Cursor, Copilot, Gemini CLI via the shared `.agents/skills/` surface plus optional governance
 
 ## Quick Start
 
@@ -57,7 +61,7 @@ gsdd init                  -> bootstrap (create .planning/, copy templates, gene
 /gsdd-progress             -> show status, route to next action
 ```
 
-## Current Status (updated 2026-03-20)
+## Current Status (updated 2026-04-09)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
@@ -81,6 +85,7 @@ Architecture notes:
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
 - Phase verification and milestone integration audit are treated as separate concerns.
 - Canonical role contracts use bounded sections, typed output examples, and checklist-driven completion where those structures materially improve downstream reliability.
+- Public launch wording is conservative by design: direct proof is claimed only for runtimes with recorded lifecycle evidence in `.planning/research/09-RESEARCH.md`.
 
 ## Init Workflow Agent Count (by config)
 
