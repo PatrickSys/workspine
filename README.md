@@ -2,7 +2,7 @@
 
 # GSD Distilled
 
-**A portable, spec-driven development kernel for AI coding agents.**
+**A repo-native workflow kernel for AI coding agents.**
 
 Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same long-horizon delivery spine — fewer moving parts.
 
@@ -14,7 +14,8 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 npx gsdd-cli init
 ```
 
-**Works with Claude Code, OpenCode, Codex CLI, Cursor, Copilot, and Gemini CLI.**
+**Directly validated today:** Claude Code, Codex CLI, and OpenCode.  
+**Qualified support:** Cursor, Copilot, and Gemini CLI use the same portable skill surfaces, but this launch does not present them as parity-validated runtimes.
 
 </div>
 
@@ -34,7 +35,7 @@ GSDD is a distilled fork of GSD. It preserves the high-leverage parts of long-ho
 
 What it strips: GSD's broader operator surface (32 workflows, 11 agents, discovery modes, sprint ceremony, a settings flow, and additional operator ergonomics). GSDD has 14 workflows and 10 roles.
 
-**Target user:** Developer or small team that wants a spec-driven long-horizon kernel, not full operator comfort.
+**Target user:** Developer or small team that wants a repo-native, spec-driven delivery kernel, not a dashboard or orchestration control plane.
 
 ---
 
@@ -59,6 +60,11 @@ In a terminal, `gsdd init` now opens a guided install wizard:
 - Step 3: configure planning defaults in the same guided flow
 
 Portable `.agents/skills/gsdd-*` skills are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline.
+
+### Launch Proof Status
+
+- **Directly validated in this repo:** Claude Code, Codex CLI, and OpenCode have recorded `plan -> execute -> verify` evidence for the core lifecycle.
+- **Qualified support:** Cursor, Copilot, and Gemini CLI use the shared `.agents/skills/` surface plus optional governance, but this launch does not describe them as equally proven native runtimes.
 
 ### Quickstart (after init)
 
@@ -86,14 +92,14 @@ npx gsdd-cli init --tools cursor     # Backward-compatible AGENTS.md governance 
 npx gsdd-cli init --tools all        # All of the above
 ```
 
-| Platform | Tier | What's generated |
-|----------|------|-----------------|
-| **All** (default) | Open standard | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |
-| **Claude Code** | Native | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — slash commands work immediately |
-| **OpenCode** | Native | `.opencode/commands/`, `.opencode/agents/` — slash commands work immediately |
-| **Codex CLI** | Native | `.codex/agents/gsdd-plan-checker.toml` — skill reference `$gsdd-plan` works immediately |
-| **Cursor / Copilot / Gemini** | Skills-native runtime + optional governance | Native slash-command discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance |
-| **Other AI tools** | Open standard fallback | Open `.agents/skills/gsdd-*/SKILL.md` directly |
+| Platform | Public claim | What's generated |
+|----------|--------------|-----------------|
+| **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |
+| **Claude Code** | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — native workflow surfaces |
+| **OpenCode** | Directly validated | `.opencode/commands/`, `.opencode/agents/` — native workflow surfaces |
+| **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml` |
+| **Cursor / Copilot / Gemini** | Qualified support | Skills-native discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance |
+| **Other AI tools** | Fallback only | Open `.agents/skills/gsdd-*/SKILL.md` directly |
 
 ### Updating
 
@@ -298,13 +304,13 @@ GSDD consolidates GSD's agent surface into 10 roles with durable contracts:
 
 GSDD generates vendor-specific files from vendor-agnostic markdown — it does not convert from one vendor format to another. This means every adapter gets first-class output shaped to its platform's native capabilities.
 
-| Adapter | Kind | Strategy |
-|---------|------|----------|
-| **Claude Code** | `native_capable` adapter + skills-native runtime | Skill-primary plan surface (stays in main context to spawn checker subagent), thin command alias, native `gsdd-plan-checker` agent |
-| **OpenCode** | `native_capable` adapter + skills-native runtime | Specialized `/gsdd-plan` command (`subtask: false`), hidden `gsdd-plan-checker` subagent (`mode: subagent`) |
-| **Codex CLI** | `native_capable` adapter + skills-native runtime | Portable skill as entry surface, `.codex/agents/gsdd-plan-checker.toml` (read-only, high reasoning effort) |
-| **Cursor / Copilot / Gemini** | skills-native runtime + `governance_only` adapter | Runtime discovers `.agents/skills/` natively; optional root `AGENTS.md` block adds behavioral governance only |
-| **agents** (`--tools agents`) | `governance_only` adapter | Root `AGENTS.md` block for tools that benefit from governance or need open-standard fallback guidance |
+| Adapter | Evidence posture | Strategy |
+|---------|------------------|----------|
+| **Claude Code** | Directly validated | Skill-primary plan surface, thin command alias, native `gsdd-plan-checker` agent |
+| **OpenCode** | Directly validated | Specialized `/gsdd-plan` command (`subtask: false`), hidden `gsdd-plan-checker` subagent (`mode: subagent`) |
+| **Codex CLI** | Directly validated | Portable skill as entry surface, `.codex/agents/gsdd-plan-checker.toml` (read-only, high reasoning effort) |
+| **Cursor / Copilot / Gemini** | Qualified support | Runtime discovers `.agents/skills/` natively; optional root `AGENTS.md` block adds behavioral governance only |
+| **agents** (`--tools agents`) | Governance-only helper | Root `AGENTS.md` block for tools that benefit from governance or need open-standard fallback guidance |
 
 All adapters render the plan-checker from a single source (`distilled/templates/delegates/plan-checker.md`). Each adapter shapes the output to its platform's native mechanics, and the portable skill remains the shared workflow source.
 
@@ -522,7 +528,7 @@ Golden-path eval tests that verify artifact-chain contracts across end-to-end wo
 | Health | Pre-init guard, all check categories, verdict logic, JSON/human output |
 
 ```bash
-npm run test:gsdd
+npm test
 ```
 
 ---
@@ -533,7 +539,7 @@ GSDD is a distilled fork of [Get Shit Done](https://github.com/gsd-build/get-shi
 
 **What GSDD preserves** (~76% of core method): the long-horizon delivery spine — persistent artifacts, codebase mapping, scoped planning, execution, verification, and milestone auditing.
 
-**What GSDD does not cover** (~44% of full upstream surface): GSD currently exposes 32 workflow files and 11 agent files including discovery modes, a settings flow, extra operator ergonomics, and broader session-management/control-plane surface area. GSDD intentionally does not recreate this full surface.
+**What GSDD does not cover** (~44% of full upstream surface): GSD currently exposes 32 workflow files and 11 agent files including discovery modes, a settings flow, extra operator ergonomics, and broader session-management surface area. GSDD intentionally does not recreate this full surface.
 
 **The trade-off:** Fewer moving parts for the human operator. Cleaner role contracts and a simpler artifact model. But reduced operator comfort and limited control-plane features (no telemetry, no artifact linting). Health diagnostics are available via `gsdd health`.
 

@@ -733,6 +733,16 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'agents.block.md must distinguish AGENTS governance from workflow discovery for Cursor/Copilot/Gemini. FIX: Add explicit governance-vs-discovery wording.');
   });
 
+  test('agents.block.md carries the same proof-split support wording as the public docs', () => {
+    const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
+    assert.match(content, /directly validated runtime story.*Claude Code.*Codex CLI.*OpenCode/i,
+      'agents.block.md must describe the directly validated runtime story. FIX: Add public-support wording for Claude/Codex/OpenCode.');
+    assert.match(content, /Cursor.*Copilot.*Gemini.*qualified support/i,
+      'agents.block.md must describe Cursor/Copilot/Gemini as qualified support. FIX: Add qualified-support wording.');
+    assert.match(content, /repo-native workflow kernel/i,
+      'agents.block.md must describe GSDD as a repo-native workflow kernel. FIX: Add the positioning sentence.');
+  });
+
   test('README adapter architecture table does NOT contain skill_aware', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     const archSection = readme.slice(readme.indexOf('### Adapter Architecture'));
@@ -767,6 +777,14 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const content = fs.readFileSync(INIT_HELP, 'utf-8');
     assert.match(content, /separately decide whether repo-wide AGENTS\.md governance is worth installing/i,
       'init help must describe governance as a separate wizard decision. FIX: Add wizard governance wording to help text.');
+  });
+
+  test('init help text carries the same proof-split public support wording', () => {
+    const content = fs.readFileSync(INIT_HELP, 'utf-8');
+    assert.match(content, /directly validated launch surfaces.*Claude Code.*OpenCode.*Codex CLI/i,
+      'init help must state which runtimes are directly validated. FIX: Add a direct-proof note in the help text.');
+    assert.match(content, /Cursor, Copilot, and Gemini are qualified support/i,
+      'init help must describe Cursor/Copilot/Gemini as qualified support. FIX: Add the qualified-support note in the help text.');
   });
 
   test('post-init routing includes slash-command guidance for Cursor/Copilot/Gemini', async () => {
@@ -1972,6 +1990,34 @@ describe('G29 - Outcome-Based Verification Contracts', () => {
     assert.ok(
       section.includes('severity'),
       'verify.md <report_format> gaps schema must include severity field (GA4). FIX: Add severity to gaps frontmatter example.');
+  });
+
+});
+
+describe('G11b - Launch Claim Hardening', () => {
+  test('README uses proof-split wording instead of broad all-runtime parity copy', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.doesNotMatch(readme, /\*\*Works with Claude Code, OpenCode, Codex CLI, Cursor, Copilot, and Gemini CLI\.\*\*/i,
+      'README.md must not use the old broad all-runtime top-line claim. FIX: Replace it with proof-split wording.');
+    assert.match(readme, /Directly validated today:.*Claude Code.*Codex CLI.*OpenCode/i,
+      'README.md must name the directly validated runtimes. FIX: Add plain proof-split wording near the top.');
+    assert.match(readme, /Qualified support:.*Cursor.*Copilot.*Gemini/i,
+      'README.md must distinguish qualified support runtimes. FIX: Add the qualified-support line near the top.');
+  });
+
+  test('README adapter tables avoid internal runtime taxonomy jargon', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    assert.doesNotMatch(readme, /native_capable|governance_only/i,
+      'README.md must not expose internal runtime taxonomy jargon in public tables. FIX: Use plain public wording such as "Directly validated" or "Qualified support".');
+  });
+
+  test('README and distilled README stay benchmark-free for the public launch surface', () => {
+    const rootReadme = fs.readFileSync(README_MD, 'utf-8');
+    const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
+    assert.doesNotMatch(rootReadme, /benchmark|CodeGraphContext/i,
+      'README.md must stay benchmark-free in Phase 13. FIX: Remove benchmark/comparison launch copy.');
+    assert.doesNotMatch(distilledReadme, /benchmark|CodeGraphContext/i,
+      'distilled/README.md must stay benchmark-free in Phase 13. FIX: Remove benchmark/comparison launch copy.');
   });
 });
 
