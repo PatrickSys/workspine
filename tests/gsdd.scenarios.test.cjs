@@ -642,3 +642,39 @@ describe('S5 — Config-to-Content Propagation', () => {
     );
   });
 });
+
+describe('S6 — Branch Safety Propagation', () => {
+  let tmpDir;
+  const pr67Title = 'chore: simplify agents.block.md to wildcard pointer + update G18 guards';
+  const pr68Body = 'This branch also initializes the v1.0.0 Public Launch milestone locally';
+  const pr91Title = 'feat: tighten search contract (Phase 8 - DISC-01 + SAFE-01)';
+
+  beforeEach(async () => {
+    tmpDir = createTempProject();
+    await initProject(tmpDir, '--auto', '--tools', 'claude');
+  });
+
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('execute skill contains wrong-branch safety check', () => {
+    const content = readSkill(tmpDir, 'gsdd-execute');
+    assert.match(content, /main.*master|master.*main/i,
+      'generated execute skill must name main and master in the wrong-branch check.');
+    assert.match(content, /STOP|hard-warn/i,
+      'generated execute skill must preserve the stop/hard-warn branch safety wording.');
+  });
+
+  test('execute skill preserves naming-hygiene guidance for the recorded PR incidents', () => {
+    const content = readSkill(tmpDir, 'gsdd-execute');
+    assert.match(content, /requirement/i,
+      'generated execute skill must preserve requirement-ID naming hygiene.');
+    assert.match(content, /milestone/i,
+      'generated execute skill must preserve milestone-label naming hygiene.');
+    assert.match(pr67Title, /\bG18\b/,
+      'PR #67 regression fixture must preserve the leaked internal tracker token.');
+    assert.match(pr68Body, /Public Launch milestone locally/i,
+      'PR #68 regression fixture must preserve the leaked local milestone phrasing.');
+    assert.match(pr91Title, /Phase 8 - DISC-01 \+ SAFE-01/,
+      'PR #91 regression fixture must preserve the leaked phase and requirement labels.');
+  });
+});

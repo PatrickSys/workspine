@@ -2397,3 +2397,68 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
       'MILESTONES.md must be in .gitignore — it is an internal-only milestone tracker and must not appear on the public surface. FIX: Add MILESTONES.md to .gitignore.');
   });
 });
+
+describe('G36 - Git Branch Safety', () => {
+  const executeWorkflow = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'execute.md'), 'utf-8');
+  const completeMilestoneWorkflow = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'complete-milestone.md'), 'utf-8');
+  const gitRulesStart = executeWorkflow.indexOf('Git rules:');
+  const gitRulesSection = gitRulesStart !== -1
+    ? executeWorkflow.slice(gitRulesStart, executeWorkflow.indexOf('</execution_loop>'))
+    : '';
+  const pr67Title = 'chore: simplify agents.block.md to wildcard pointer + update G18 guards';
+  const pr68Body = 'This branch also initializes the v1.0.0 Public Launch milestone locally';
+  const pr91Title = 'feat: tighten search contract (Phase 8 - DISC-01 + SAFE-01)';
+
+  test('execute.md has a "Git rules:" section', () => {
+    assert.ok(gitRulesStart !== -1, 'execute.md must contain a "Git rules:" section — section marker not found.');
+  });
+
+  test('execute.md warns before implementing on main or master', () => {
+    assert.match(gitRulesSection, /main.*master|master.*main/i,
+      'execute.md must explicitly warn about main/master execution. FIX: Add a wrong-branch rule naming both branches.');
+    assert.match(gitRulesSection, /STOP|hard-warn/i,
+      'execute.md wrong-branch rule must hard-warn or stop. FIX: Add STOP or hard-warn wording.');
+  });
+
+  test('execute.md wrong-branch check names both main and master explicitly', () => {
+    assert.match(gitRulesSection, /main/,
+      'execute.md wrong-branch rule must name main explicitly. FIX: Add main to the git rules warning.');
+    assert.match(gitRulesSection, /master/,
+      'execute.md wrong-branch rule must name master explicitly. FIX: Add master to the git rules warning.');
+  });
+
+  test('complete-milestone.md has spent-branch guard in Step 1', () => {
+    const readinessSection = completeMilestoneWorkflow.slice(
+      completeMilestoneWorkflow.indexOf('## 1. Verify Readiness'),
+      completeMilestoneWorkflow.indexOf('## 2. Determine Version')
+    );
+    assert.match(readinessSection, /spent.branch|already.merged|merged.*branch/i,
+      'complete-milestone.md must guard against spent or already-merged branches during readiness checks. FIX: Add the spent-branch guard to Step 1.');
+  });
+
+  test('complete-milestone.md spent-branch guard mentions git branch --merged', () => {
+    assert.match(completeMilestoneWorkflow, /git branch --merged/,
+      'complete-milestone.md spent-branch guard must mention git branch --merged. FIX: Add the explicit command to the readiness check.');
+  });
+
+  test('execute.md naming rule covers requirement IDs', () => {
+    assert.match(gitRulesSection, /requirement.*ID|requirement IDs/i,
+      'execute.md naming hygiene must cover requirement IDs. FIX: Extend the naming rule beyond phase/plan/task IDs.');
+  });
+
+  test('execute.md naming rule covers milestone labels', () => {
+    assert.match(gitRulesSection, /milestone.*label|internal.*milestone/i,
+      'execute.md naming hygiene must cover internal milestone labels. FIX: Extend the naming rule to milestone labels.');
+  });
+
+  test('recorded PR incidents remain explicit regression fixtures for public naming hygiene', () => {
+    assert.match(pr67Title, /\bG18\b/,
+      'PR #67 regression fixture must preserve the leaked internal tracker label. FIX: Keep the exact incident title in the test fixture.');
+    assert.match(pr68Body, /v1\.0\.0 Public Launch milestone locally/i,
+      'PR #68 regression fixture must preserve the leaked local milestone framing. FIX: Keep the exact incident body text in the test fixture.');
+    assert.match(pr91Title, /Phase 8/i,
+      'PR #91 regression fixture must preserve the leaked phase label. FIX: Keep the exact incident title in the test fixture.');
+    assert.match(pr91Title, /DISC-01|SAFE-01/,
+      'PR #91 regression fixture must preserve the leaked requirement labels. FIX: Keep the exact incident title in the test fixture.');
+  });
+});

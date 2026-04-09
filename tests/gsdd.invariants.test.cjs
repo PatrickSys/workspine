@@ -1690,3 +1690,50 @@ describe('G34 - Command Naming Invariants', () => {
     }
   });
 });
+
+describe('G34b - Branch Safety Invariants', () => {
+  const executeWorkflow = readWorkflow('execute.md');
+  const completeMilestoneWorkflow = readWorkflow('complete-milestone.md');
+  const pr67Title = 'chore: simplify agents.block.md to wildcard pointer + update G18 guards';
+  const pr68Body = 'This branch also initializes the v1.0.0 Public Launch milestone locally';
+  const pr91Title = 'feat: tighten search contract (Phase 8 - DISC-01 + SAFE-01)';
+
+  test('execute.md wrong-branch check appears in git guidance section', () => {
+    const gitGuidanceStart = executeWorkflow.indexOf('### Git Guidance');
+    assert.ok(gitGuidanceStart !== -1, 'execute.md must contain a "### Git Guidance" section — section marker not found.');
+    const gitGuidance = executeWorkflow.slice(gitGuidanceStart, executeWorkflow.indexOf('</execution_loop>'));
+    assert.match(gitGuidance, /main/,
+      'execute.md git guidance must name main in the wrong-branch check. FIX: Add main to the git guidance rule.');
+    assert.match(gitGuidance, /master/,
+      'execute.md git guidance must name master in the wrong-branch check. FIX: Add master to the git guidance rule.');
+  });
+
+  test('complete-milestone.md advisory git guidance uses public-facing language only', () => {
+    const advisoryStart = completeMilestoneWorkflow.indexOf('## 11. Advisory: Git Tag');
+    assert.ok(advisoryStart !== -1, 'complete-milestone.md must contain a "## 11. Advisory: Git Tag" section — section marker not found.');
+    const advisorySection = completeMilestoneWorkflow.slice(advisoryStart, completeMilestoneWorkflow.indexOf('</process>'));
+    assert.doesNotMatch(advisorySection, /phase-\d+|REQ-\d+|GIT-\d+|LAUNCH-\d+/,
+      'complete-milestone.md advisory git guidance must avoid internal IDs. FIX: Use public-facing wording only in the Step 11 advisory.');
+  });
+
+  test('execute.md naming rule extends beyond phase/plan/task to requirement IDs and milestone labels', () => {
+    const gitRulesStart = executeWorkflow.indexOf('Git rules:');
+    assert.ok(gitRulesStart !== -1, 'execute.md must contain a "Git rules:" section — section marker not found.');
+    const gitGuidance = executeWorkflow.slice(gitRulesStart, executeWorkflow.indexOf('</execution_loop>'));
+    assert.match(gitGuidance, /requirement/,
+      'execute.md naming rule must mention requirement IDs. FIX: Extend the naming rule to requirements.');
+    assert.match(gitGuidance, /milestone/,
+      'execute.md naming rule must mention milestone labels. FIX: Extend the naming rule to milestone labels.');
+  });
+
+  test('recorded git incidents stay encoded as concrete naming-boundary examples', () => {
+    assert.match(pr67Title, /\bG\d+\b/,
+      'PR #67 fixture must retain the internal tracker-style token. FIX: Keep the exact leaked title as a regression case.');
+    assert.match(pr68Body, /Public Launch milestone locally/i,
+      'PR #68 fixture must retain the leaked local milestone phrasing. FIX: Keep the exact leaked body text as a regression case.');
+    assert.match(pr91Title, /Phase \d+/i,
+      'PR #91 fixture must retain the leaked phase label. FIX: Keep the exact leaked title as a regression case.');
+    assert.match(pr91Title, /[A-Z]+-\d+/,
+      'PR #91 fixture must retain the leaked requirement-style IDs. FIX: Keep the exact leaked title as a regression case.');
+  });
+});
