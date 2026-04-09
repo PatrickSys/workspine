@@ -177,7 +177,8 @@ Git rules:
 - **Repo and user conventions win first.** This table is a reference, not a mandate.
 - `.planning/config.json -> gitProtocol` is advisory only.
 - **Stage only files listed in the plan's `files-modified` frontmatter.** Never use `git add .` or `git add -A`. If you need to stage a file not in `files-modified`, record it as a deviation.
-- Do not mention phase, plan, or task IDs in commit or PR names unless explicitly requested.
+- **Wrong-branch check:** Before significant implementation begins, verify HEAD is not `main` or `master` if repo convention expects a feature branch; if it is, STOP and hard-warn the user before proceeding.
+- Do not mention phase, plan, task, or requirement IDs, or internal milestone labels, in commit messages, PR titles, or PR bodies unless explicitly requested.
 - Do not force one commit per task unless the repo or user asked for that.
 </execution_loop>
 
