@@ -2054,6 +2054,89 @@ describe('G30 - Verify ROADMAP Closure On Pass', () => {
   });
 });
 
+describe('G34 - Git Delivery Visibility', () => {
+  const verifyWorkflow = fs.readFileSync(
+    path.join(__dirname, '..', 'distilled', 'workflows', 'verify.md'), 'utf-8'
+  );
+  const progressWorkflow = fs.readFileSync(
+    path.join(__dirname, '..', 'distilled', 'workflows', 'progress.md'), 'utf-8'
+  );
+
+  test('verify.md has git delivery collection step before report_format', () => {
+    const sectionStart = verifyWorkflow.indexOf('<git_delivery_collection>');
+    const sectionEnd = verifyWorkflow.indexOf('</git_delivery_collection>');
+    const reportFormatStart = verifyWorkflow.indexOf('<report_format>');
+    assert.ok(
+      sectionStart > -1 && sectionEnd > -1,
+      'verify.md must have a <git_delivery_collection> section. FIX: Add a dedicated delivery-metadata collection step before report_format.'
+    );
+    assert.ok(
+      sectionStart < reportFormatStart,
+      'verify.md <git_delivery_collection> must appear before <report_format>. FIX: Collect delivery metadata before defining the output artifact.'
+    );
+  });
+
+  test('verify.md git delivery collection names required commands', () => {
+    const section = verifyWorkflow.slice(
+      verifyWorkflow.indexOf('<git_delivery_collection>'),
+      verifyWorkflow.indexOf('</git_delivery_collection>')
+    );
+    for (const required of [
+      'git rev-parse --abbrev-ref HEAD',
+      'git rev-list --count "main..HEAD"',
+      'gh pr list --head',
+      'git status --short',
+    ]) {
+      assert.ok(
+        section.includes(required),
+        `verify.md <git_delivery_collection> must reference \`${required}\`. FIX: Add the command to the collection step.`
+      );
+    }
+  });
+
+  test('verify.md git delivery check stays non-blocking', () => {
+    const section = verifyWorkflow.slice(
+      verifyWorkflow.indexOf('<git_delivery_collection>'),
+      verifyWorkflow.indexOf('</git_delivery_collection>')
+    );
+    assert.ok(
+      /do \*\*not\*\* downgrade|do not downgrade|delivery warnings only/i.test(section),
+      'verify.md <git_delivery_collection> must say delivery findings are warning-level by default. FIX: Keep missing PR/unmerged commits/non-clean worktree non-blocking.'
+    );
+  });
+
+  test('verify.md report_format includes git_delivery_check block with required fields', () => {
+    const rfStart = verifyWorkflow.indexOf('<report_format>');
+    const rfEnd = verifyWorkflow.indexOf('</report_format>');
+    const section = verifyWorkflow.slice(rfStart, rfEnd);
+    assert.ok(
+      section.includes('<git_delivery_check>') && section.includes('</git_delivery_check>'),
+      'verify.md <report_format> must include a <git_delivery_check> block. FIX: Keep the frontmatter output block in the report template.'
+    );
+    for (const field of ['branch', 'commits_ahead_of_main', 'pr_state']) {
+      assert.ok(
+        section.includes(field),
+        `verify.md <report_format> git_delivery_check block must include field \`${field}\`. FIX: Restore the required frontmatter field.`
+      );
+    }
+  });
+
+  test('progress.md retains unmerged commit check and conditional warning', () => {
+    assert.ok(
+      progressWorkflow.includes('<unmerged_commits_check>') && progressWorkflow.includes('</unmerged_commits_check>'),
+      'progress.md must keep the <unmerged_commits_check> block. FIX: Restore the derive_status subsection.'
+    );
+    assert.ok(
+      progressWorkflow.includes('Unmerged commits: [N] commit(s) on this branch not yet merged to main'),
+      'progress.md must keep the conditional unmerged-commit warning text. FIX: Restore the present_status warning block.'
+    );
+    assert.ok(
+      progressWorkflow.includes('silent when empty'),
+      'progress.md must preserve the silent-when-empty contract. FIX: Keep the success_criteria bullet and derive_status wording.'
+    );
+  });
+});
+
 describe('G31 - Evidence Index Completeness', () => {
   const designContent = fs.readFileSync(
     path.join(__dirname, '..', 'distilled', 'DESIGN.md'), 'utf-8'

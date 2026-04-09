@@ -207,6 +207,26 @@ Requirements coverage is not optional bookkeeping. For each phase requirement:
 Orphaned requirements must be reported even if the overall phase otherwise looks strong.
 </requirements_coverage>
 
+<git_delivery_collection>
+Before writing the verification report, collect delivery metadata for the current branch and emit it in frontmatter.
+
+Run these checks:
+
+- `git rev-parse --abbrev-ref HEAD` -> current branch name for `branch`
+- `git rev-list --count "main..HEAD"` -> commit count for `commits_ahead_of_main`
+- `gh pr list --head "<branch>" --state all --json state,number,title,url --limit 1` -> PR state for `pr_state`
+- `git status --short` -> detect uncommitted local changes that should be mentioned as a delivery warning
+
+Recording rules:
+
+- Always write a `<git_delivery_check>` block in frontmatter with real observed values for `branch`, `commits_ahead_of_main`, and `pr_state`.
+- If `main` does not exist or the count command fails, set `commits_ahead_of_main: unknown` and note the failure in the report body.
+- If no PR matches the current branch, set `pr_state: none`.
+- If `gh` is unavailable or the PR query fails, set `pr_state: unknown` and note the failure in the report body.
+- Missing PR, unmerged commits, or a dirty worktree are delivery warnings only. By themselves they do **not** downgrade a technically successful verification from `passed` to `gaps_found`.
+- If the phase already has substantive implementation gaps, keep those gaps primary and include delivery observations as warning-level supporting context.
+</git_delivery_collection>
+
 <report_format>
 Write `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md` with structured frontmatter first:
 
@@ -237,6 +257,11 @@ gaps:
         issue: "POST handler returns static object"
     missing:
       - "Persist submitted data before returning it"
+<git_delivery_check>
+  branch: "feature/branch-name"
+  commits_ahead_of_main: 0
+  pr_state: "open"
+</git_delivery_check>
 human_verification:
   - test: "Open the users page and submit the form"
     expected: "The new user appears in the rendered list"
@@ -306,6 +331,7 @@ Frontmatter guidance:
 - `phase`, `runtime`, `assurance`, `verified`, `status`, and `score` are the minimal report fields
 - when gaps or human checks exist, keep them machine-readable in frontmatter — do not collapse them into prose-only body text
 - keep `re_verification`, `gaps`, and `human_verification` structured when they materially help re-verification, gap closure, or explicit human handoff
+- keep `<git_delivery_check>` in frontmatter with the observed `branch`, `commits_ahead_of_main`, and `pr_state` values from the delivery checks above
 - use `severity: warning` in gaps when an artifact is missing but proof exists through other means; use `severity: blocker` only when the required proof type (`runtime-check`, `repo-test`, or `user-confirmation` where mandated) could not be satisfied by any available evidence
 - if verification runs in the same runtime/vendor as execution, cap frontmatter `assurance` at `self_checked`
 - if verification runs in a different runtime/vendor than execution, set frontmatter `assurance: cross_runtime_checked`
@@ -358,6 +384,7 @@ Verification is done when all of these are true:
 - [ ] Anti-pattern scan was run
 - [ ] `VERIFICATION.md` was written with structured frontmatter and a full report
 - [ ] `VERIFICATION.md` frontmatter records `runtime` and `assurance`
+- [ ] `VERIFICATION.md` frontmatter records git delivery metadata for the current branch
 - [ ] Verification explicitly reviewed SUMMARY `<handoff>` and `<deltas>` content
 - [ ] Status is one of `passed`, `gaps_found`, or `human_needed`
 - [ ] If status is `passed`, ROADMAP.md phase entry is `[x]`

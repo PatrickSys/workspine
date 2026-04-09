@@ -51,6 +51,14 @@ Scan `.planning/phases/` for:
 
 **Quick task log:**
 If `.planning/quick/LOG.md` exists, check the last entry for a non-terminal status.
+
+<unmerged_commits_check>
+Run `git log main..HEAD --oneline` to detect commits on the current branch that have not been merged to `main`.
+
+- If the command exits non-zero or `main` does not exist, skip silently — do not surface an error or any output.
+- If the output is empty, record nothing — the silent path; no status line is added.
+- If the output is non-empty, record the commit lines and count them. This will be surfaced in the status block.
+</unmerged_commits_check>
 </derive_status>
 
 <recent_work>
@@ -88,6 +96,11 @@ Unverified: Phase [N] has SUMMARY but no VERIFICATION
 
 [If incomplete quick task found:]
 Incomplete quick task: [description]
+
+[If unmerged commits found (git log main..HEAD --oneline returned output):]
+Unmerged commits: [N] commit(s) on this branch not yet merged to main
+  → Merge or push this branch before closing the milestone, or verify
+    these commits are intentional working-branch state.
 
 [If all phases [x]:]
 All phases complete — ready for milestone audit
@@ -205,4 +218,5 @@ Handle compound states:
 - [ ] All workflow references use portable `/gsdd-*` command format
 - [ ] No interactive menus, no numbered option lists, no waiting for user selection
 - [ ] Edge cases handled for compound states
+- [ ] Unmerged-commit warning only appears when `git log main..HEAD --oneline` returns output; silent when empty
 </success_criteria>

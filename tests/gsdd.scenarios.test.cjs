@@ -161,6 +161,19 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     assert.ok(referencesPath(content, 'VERIFICATION.md'), 'verify must reference VERIFICATION.md (for re-verification)');
   });
 
+  test('verify skill preserves git delivery metadata contract', () => {
+    const content = readSkill(tmpDir, 'gsdd-verify');
+    assert.ok(content.includes('<git_delivery_collection>'), 'verify skill must preserve the git delivery collection step');
+    assert.ok(content.includes('<git_delivery_check>'), 'verify skill must preserve the git delivery frontmatter block');
+    assert.ok(content.includes('commits_ahead_of_main'), 'verify skill must preserve commits_ahead_of_main in the frontmatter contract');
+  });
+
+  test('progress skill preserves unmerged commit visibility contract', () => {
+    const content = readSkill(tmpDir, 'gsdd-progress');
+    assert.ok(content.includes('<unmerged_commits_check>'), 'progress skill must preserve the unmerged commit check');
+    assert.ok(content.includes('Unmerged commits: [N] commit(s) on this branch not yet merged to main'), 'progress skill must preserve the conditional warning text');
+  });
+
   // --- verify → audit-milestone chain ---
 
   test('audit-milestone load_context references verify outputs (VERIFICATION.md, SUMMARY.md)', () => {
