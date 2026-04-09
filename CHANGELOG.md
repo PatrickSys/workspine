@@ -1,3 +1,10 @@
+## [0.13.2](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.13.1...v0.13.2) (2026-04-09)
+
+
+### Bug Fixes
+
+* add git delivery visibility checks ([#70](https://github.com/PatrickSys/get-shit-done-distilled/issues/70)) ([d6e6b6e](https://github.com/PatrickSys/get-shit-done-distilled/commit/d6e6b6e62c3c9d997ed2c41ac6aa75f3cdaf4548))
+
 ## [0.13.1](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.13.0...v0.13.1) (2026-04-08)
 
 
