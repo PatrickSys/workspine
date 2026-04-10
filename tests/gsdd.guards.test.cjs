@@ -2461,6 +2461,17 @@ describe('G36 - Git Branch Safety', () => {
   });
 });
 
+describe('G38 - I38 Approach-Exploration Hard Gate', () => {
+  test('plan-checker.md fails closed when discuss=true and no APPROACH.md', () => {
+    const checkerPath = path.join(__dirname, '..', 'distilled', 'templates', 'delegates', 'plan-checker.md');
+    const content = fs.readFileSync(checkerPath, 'utf-8');
+    assert.match(content, /workflow\.discuss.*true.*blocker|blocker.*workflow\.discuss.*true/is,
+      'plan-checker.md approach_alignment must emit a blocker when workflow.discuss=true and no APPROACH.md is provided. FIX: Add discuss-config-aware fail-closed language to the approach_alignment dimension.');
+    assert.match(content, /fix_hint/,
+      'plan-checker.md approach_alignment blocker must include a fix_hint directing the planner to run approach exploration. FIX: Add fix_hint to the discuss=true blocker case.');
+  });
+});
+
 describe('G37 - Launch Surface Consistency', () => {
   test('README and distilled README use repo-native workflow kernel framing', () => {
     const rootReadme = fs.readFileSync(README_MD, 'utf-8');

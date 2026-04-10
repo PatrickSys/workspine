@@ -33,7 +33,7 @@ Verify these dimensions:
   - **Chosen honored?** Does each plan task align with the approach chosen in APPROACH.md for its gray area? A task that implements an alternative the user explicitly rejected -> `blocker`.
   - **Discretion respected?** "Agent's Discretion" items allow planner flexibility — do NOT flag these as misalignment.
   - **Deferred excluded?** Deferred ideas from APPROACH.md must not appear in plan tasks -> `blocker` if found.
-  - If no APPROACH.md was provided, skip this dimension entirely.
+  - If `workflow.discuss` is `true` in the project config and no APPROACH.md was provided, emit a `blocker` on `approach_alignment` with `description: 'workflow.discuss is true but no APPROACH.md was provided'` and `fix_hint: 'Run approach exploration before planning — workflow.discuss=true requires an approved APPROACH.md before a plan can be emitted.'` If `workflow.discuss` is `false` or the key is absent and no APPROACH.md was provided, skip this dimension entirely.
 
 Return JSON only as a single object with this shape:
 

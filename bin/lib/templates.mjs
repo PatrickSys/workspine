@@ -12,6 +12,18 @@ export function installProjectTemplates({ planningDir, distilledDir, agentsDir }
     if (existsSync(globalTemplatesDir)) {
       cpSync(globalTemplatesDir, localTemplatesDir, { recursive: true });
       console.log('  - copied templates to .planning/templates/');
+      const expectedSubdirs = ['delegates', 'research', 'codebase'];
+      for (const subdir of expectedSubdirs) {
+        if (!existsSync(join(localTemplatesDir, subdir))) {
+          console.log(`  - WARN: missing expected template subdir: ${subdir}/`);
+        }
+      }
+      const expectedRootFiles = ['spec.md', 'roadmap.md', 'auth-matrix.md'];
+      for (const file of expectedRootFiles) {
+        if (!existsSync(join(localTemplatesDir, file))) {
+          console.log(`  - WARN: missing expected root template file: ${file}`);
+        }
+      }
     } else {
       console.log('  - WARN: missing distilled/templates/; cannot copy templates');
     }

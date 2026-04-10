@@ -56,6 +56,39 @@ describe('generation manifest', () => {
     assert.match(Object.values(manifest.templates.delegates)[0], /^[a-f0-9]{64}$/);
   });
 
+  test('init produces non-empty research, codebase, and root manifest groups', async () => {
+    await initProject();
+    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifest = readJson(manifestPath);
+    assert.ok(Object.keys(manifest.templates.research).length > 0,
+      'templates.research must have at least one file hash after init (empty group = scaffold failure)');
+    assert.ok(Object.keys(manifest.templates.codebase).length > 0,
+      'templates.codebase must have at least one file hash after init (empty group = scaffold failure)');
+    assert.ok(Object.keys(manifest.templates.root).length > 0,
+      'templates.root must have at least one file hash after init (spec.md, roadmap.md, auth-matrix.md must be present)');
+  });
+
+  test('init creates research and codebase template subdirs with .md files', async () => {
+    await initProject();
+    const researchDir = path.join(tmpDir, '.planning', 'templates', 'research');
+    const codebaseDir = path.join(tmpDir, '.planning', 'templates', 'codebase');
+    assert.ok(fs.existsSync(researchDir), '.planning/templates/research/ must exist after init');
+    assert.ok(fs.existsSync(codebaseDir), '.planning/templates/codebase/ must exist after init');
+    const researchFiles = fs.readdirSync(researchDir).filter(f => f.endsWith('.md'));
+    const codebaseFiles = fs.readdirSync(codebaseDir).filter(f => f.endsWith('.md'));
+    assert.ok(researchFiles.length > 0, '.planning/templates/research/ must have .md files after init');
+    assert.ok(codebaseFiles.length > 0, '.planning/templates/codebase/ must have .md files after init');
+  });
+
+  test('init copies critical root template files (spec.md, roadmap.md, auth-matrix.md)', async () => {
+    await initProject();
+    const templatesDir = path.join(tmpDir, '.planning', 'templates');
+    for (const file of ['spec.md', 'roadmap.md', 'auth-matrix.md']) {
+      assert.ok(fs.existsSync(path.join(templatesDir, file)),
+        `.planning/templates/${file} must exist after init (SC7 template family)`);
+    }
+  });
+
   test('update --templates refreshes corrupted delegate', async () => {
     await initProject();
 
