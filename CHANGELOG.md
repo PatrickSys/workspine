@@ -1,3 +1,12 @@
+## [0.13.4](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.13.3...v0.13.4) (2026-04-10)
+
+
+### Bug Fixes
+
+* close plan-checker discuss gate and scaffold regression checks ([18a3287](https://github.com/PatrickSys/get-shit-done-distilled/commit/18a32875fac56f8dd5ad0e3fd4a3042ac70fee8f))
+* close plan-checker discuss gate, scaffold regression, and v1.0.0 milestone ([#73](https://github.com/PatrickSys/get-shit-done-distilled/issues/73)) ([6a10b05](https://github.com/PatrickSys/get-shit-done-distilled/commit/6a10b05738a384eca4acfc39ae9a952f79853b0e))
+* require PR creation in executor git rules ([f63bf68](https://github.com/PatrickSys/get-shit-done-distilled/commit/f63bf68e4353e6924d95914ab7a990f3f46f386f))
+
 ## [0.13.3](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.13.2...v0.13.3) (2026-04-10)
 
 

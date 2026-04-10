@@ -1,6 +1,6 @@
 {
   "name": "gsdd-cli",
-  "version": "0.13.3",
+  "version": "0.13.4",
   "description": "GSDD — a repo-native workflow kernel for AI coding agents, with directly validated support for Claude Code, Codex CLI, and OpenCode.",
   "type": "module",
   "bin": {
