@@ -8,7 +8,7 @@ Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same
 
 [![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/assertions-1227_passing-brightgreen?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/assertions-1228_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd-cli init
@@ -456,7 +456,7 @@ Key choices:
 
 ## Testing
 
-GSDD has 1227 structural assertions across 10 test files — named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
+GSDD has 1228 structural assertions across 10 test files — named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
 
 ### Invariant Suites (I-series)
 
