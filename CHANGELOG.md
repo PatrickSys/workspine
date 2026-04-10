@@ -1,3 +1,10 @@
+## [0.13.5](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.13.4...v0.13.5) (2026-04-10)
+
+
+### Bug Fixes
+
+* **opencode:** use subagent mode for gsdd-approach-explorer ([3c5e993](https://github.com/PatrickSys/get-shit-done-distilled/commit/3c5e993d1912b0e06b60606342591ec85bbad4a2))
+
 ## [0.13.4](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.13.3...v0.13.4) (2026-04-10)
 
 
