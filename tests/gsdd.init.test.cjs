@@ -614,6 +614,13 @@ describe('gsdd init and update', () => {
     assert.match(opencodePlanChecker, /^\s+bash: false/m);
     assert.doesNotMatch(opencodePlanChecker, /DRAFT PAYLOAD ONLY/);
 
+    const opencodeApproachExplorer = fs.readFileSync(
+      path.join(tmpDir, '.opencode', 'agents', 'gsdd-approach-explorer.md'),
+      'utf-8'
+    );
+    assert.match(opencodeApproachExplorer, /^mode: subagent/m);
+    assert.doesNotMatch(opencodeApproachExplorer, /^mode: agent/m);
+
     const codexPlanChecker = fs.readFileSync(
       path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
       'utf-8'
