@@ -79,6 +79,35 @@ export function createCmdHealth(ctx) {
           errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ has 0 delegate files', fix: 'Run `gsdd update --templates`' });
         }
       }
+
+      // E6: research/ missing or empty
+      const researchDir = join(templatesDir, 'research');
+      if (!existsSync(researchDir)) {
+        errors.push({ id: 'E6', severity: 'ERROR', message: '.planning/templates/research/ missing', fix: 'Run `gsdd update --templates`' });
+      } else {
+        const researchFiles = readdirSync(researchDir).filter((f) => f.endsWith('.md'));
+        if (researchFiles.length === 0) {
+          errors.push({ id: 'E6', severity: 'ERROR', message: '.planning/templates/research/ has 0 template files', fix: 'Run `gsdd update --templates`' });
+        }
+      }
+
+      // E7: codebase/ missing or empty
+      const codebaseDir = join(templatesDir, 'codebase');
+      if (!existsSync(codebaseDir)) {
+        errors.push({ id: 'E7', severity: 'ERROR', message: '.planning/templates/codebase/ missing', fix: 'Run `gsdd update --templates`' });
+      } else {
+        const codebaseFiles = readdirSync(codebaseDir).filter((f) => f.endsWith('.md'));
+        if (codebaseFiles.length === 0) {
+          errors.push({ id: 'E7', severity: 'ERROR', message: '.planning/templates/codebase/ has 0 template files', fix: 'Run `gsdd update --templates`' });
+        }
+      }
+
+      // E8: critical root template files missing
+      const requiredRootFiles = ['spec.md', 'roadmap.md', 'auth-matrix.md'];
+      const missingRoot = requiredRootFiles.filter((f) => !existsSync(join(templatesDir, f)));
+      if (missingRoot.length > 0) {
+        errors.push({ id: 'E8', severity: 'ERROR', message: `.planning/templates/ missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `gsdd update --templates`' });
+      }
     }
 
     // --- WARNING checks ---

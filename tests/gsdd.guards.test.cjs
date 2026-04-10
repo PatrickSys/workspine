@@ -2449,6 +2449,11 @@ describe('G36 - Git Branch Safety', () => {
       'execute.md naming hygiene must cover internal milestone labels. FIX: Extend the naming rule to milestone labels.');
   });
 
+  test('execute.md git rules require PR creation after committing on a feature branch', () => {
+    assert.match(gitRulesSection, /PR creation|create a PR/i,
+      'execute.md must instruct the executor to create a PR after committing on a feature branch. FIX: Add a PR creation rule to the git rules section.');
+  });
+
   test('recorded PR incidents remain explicit regression fixtures for public naming hygiene', () => {
     assert.match(pr67Title, /\bG18\b/,
       'PR #67 regression fixture must preserve the leaked internal tracker label. FIX: Keep the exact incident title in the test fixture.');
@@ -2497,5 +2502,16 @@ describe('G37 - Launch Surface Consistency', () => {
       'init-runtime help text must name only the directly validated runtimes. FIX: Keep the help text aligned with launch proof.');
     assert.match(helpText, /qualified support.*shared \.agents\/skills\/ surface plus optional governance/i,
       'init-runtime help text must distinguish qualified support from directly validated native runtimes. FIX: Keep the proof split explicit in the notes.');
+  });
+});
+
+describe('G38 - I38 Approach-Exploration Hard Gate', () => {
+  test('plan-checker.md fails closed when discuss=true and no APPROACH.md', () => {
+    const checkerPath = path.join(__dirname, '..', 'distilled', 'templates', 'delegates', 'plan-checker.md');
+    const content = fs.readFileSync(checkerPath, 'utf-8');
+    assert.match(content, /workflow\.discuss.*true.*blocker|blocker.*workflow\.discuss.*true/is,
+      'plan-checker.md approach_alignment must emit a blocker when workflow.discuss=true and no APPROACH.md is provided. FIX: Add discuss-config-aware fail-closed language to the approach_alignment dimension.');
+    assert.match(content, /fix_hint/,
+      'plan-checker.md approach_alignment blocker must include a fix_hint directing the planner to run approach exploration. FIX: Add fix_hint to the discuss=true blocker case.');
   });
 });
