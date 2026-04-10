@@ -120,7 +120,7 @@ function renderOpenCodeApproachExplorer(delegateContent, modelId = null) {
   const modelLine = modelId ? `model: ${modelId}\n` : '';
   return `---
 description: Explores implementation approaches for a phase and aligns with the user through structured questioning before planning begins.
-mode: agent
+mode: subagent
 ${modelLine}tools:
   bash: false
 ---
