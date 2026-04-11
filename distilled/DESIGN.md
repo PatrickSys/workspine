@@ -915,7 +915,7 @@ Implementation lives under `bin/lib/`:
 
 **GSD:** `health.md` (157 lines) — calls `gsd-tools.cjs validate health [--repair]`, parses JSON with error codes E001-E005/W001-W007, supports `--repair` flag for createConfig/resetConfig/regenerateState repair actions.
 
-**GSDD:** `gsdd health` CLI command (~150 lines in `bin/lib/health.mjs`). Factory function `createCmdHealth(ctx)` returning an async command. No `--repair` flag — fixes are documented as actionable instructions, not automated mutations. GSDD already has `gsdd init` and `gsdd update --templates` as the repair paths; a separate repair mode would duplicate those commands.
+**GSDD:** `gsdd health` CLI command (`bin/lib/health.mjs` + `bin/lib/health-truth.mjs`). Factory function `createCmdHealth(ctx)` returning an async command. No `--repair` flag — fixes are documented as actionable instructions, not automated mutations. GSDD already has `gsdd init` and `gsdd update --templates` as the repair paths; a separate repair mode would duplicate those commands.
 
 **Check categories:**
 
@@ -926,12 +926,19 @@ Implementation lives under `bin/lib/`:
 | E3 | ERROR | `.planning/templates/` missing |
 | E4 | ERROR | `.planning/templates/roles/` missing or empty |
 | E5 | ERROR | `.planning/templates/delegates/` missing or empty |
+| E6 | ERROR | `.planning/templates/research/` missing or empty |
+| E7 | ERROR | `.planning/templates/codebase/` missing or empty |
+| E8 | ERROR | `.planning/templates/` missing critical root files (`spec.md`, `roadmap.md`, `auth-matrix.md`) |
 | W1 | WARN | `generation-manifest.json` missing |
 | W2 | WARN | Template files modified locally (hash mismatch vs manifest) |
 | W3 | WARN | Template/role files missing from disk but listed in manifest |
-| W4 | WARN | ROADMAP.md references phases not found in `.planning/phases/` |
+| W4 | WARN | Active non-archived phases marked in progress/done are missing from `.planning/phases/` |
 | W5 | WARN | Phase artifact set has PLAN but no matching SUMMARY (stale in-progress) |
 | W6 | WARN | No adapter surfaces detected |
+| W7 | WARN | `distilled/DESIGN.md` health check table differs from implemented check IDs |
+| W8 | WARN | `distilled/README.md` workflow inventory differs from `distilled/workflows/` |
+| W9 | WARN | `.internal-research/gaps.md` references missing repo-local paths |
+| W10 | WARN | `.planning/ROADMAP.md` phase status differs from `.planning/SPEC.md` requirement checkboxes |
 | I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
 | I2 | INFO | Phase completion count from ROADMAP |
 | I3 | INFO | Which adapters are installed |
@@ -953,11 +960,15 @@ Implementation lives under `bin/lib/`:
 
 3. **Pre-init guard.** If `.planning/config.json` doesn't exist, output a one-line message and exit 1. No partial checks — the workspace is simply not initialized.
 
-4. **Reuses existing modules.** `readManifest()` and `detectModifications()` from `manifest.mjs` handle W1-W3. `isProjectInitialized()` pattern from `models.mjs` handles the pre-init guard. No new utility functions.
+4. **Split structural vs truth checks.** `bin/lib/health.mjs` keeps the structural workspace checks. `bin/lib/health-truth.mjs` holds the always-on cross-file truth checks (W7-W10) so the health surface can grow without turning the main command into one monolith.
+
+5. **Reuses existing modules.** `readManifest()` and `detectModifications()` from `manifest.mjs` handle W1-W3. `isProjectInitialized()` pattern from `models.mjs` handles the pre-init guard. Truth checks stay read-only and operate on repo-local artifacts only when those framework files exist.
+
+6. **Framework-source mode skips installed-project template checks.** Inside the GSDD framework repo itself, `distilled/templates/` is the source of truth and `.planning/templates/` is intentionally absent. `gsdd health` therefore skips the installed-project template/manifest checks (E3-E8, W1-W3) in framework-source mode instead of producing false positives during self-health runs.
 
 **What was removed vs GSD:**
 - `--repair` flag and associated repair actions
-- Error codes E001-E005/W001-W007 (replaced with simpler E1-E5/W1-W6/I1-I3)
+- Error codes E001-E005/W001-W007 (replaced with simpler E1-E8/W1-W10/I1-I3)
 - STATE.md checks (GSDD has no STATE.md per D7)
 - PROJECT.md checks (GSDD uses SPEC.md, not checked by health — it's workflow-authored)
 - Phase directory naming format checks (GSDD uses flat numbered files, not NN-name directories)
@@ -970,7 +981,7 @@ Implementation lives under `bin/lib/`:
 - External audit (2026-03-13): recommendation #3 "Add just enough: status/resume/progress/health"
 - External audit (2026-03-17): "You probably do need a minimal health surface, but not GSD's full style"
 - PR #32: pre-init guard bug proved workspace integrity issues are real, not theoretical
-- GSDD implementation: `bin/lib/health.mjs`, `bin/gsdd.mjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.guards.test.cjs` (G14)
+- GSDD implementation: `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`, `bin/gsdd.mjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.guards.test.cjs` (G14)
 
 ---
 

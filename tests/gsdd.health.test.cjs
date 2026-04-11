@@ -27,6 +27,69 @@ async function initWorkspace() {
   assert.strictEqual(result.exitCode, 0, `init failed: ${result.output}`);
 }
 
+function writeFile(relativePath, content) {
+  const fullPath = path.join(tmpDir, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, content);
+}
+
+function writeAlignedTruthFixtures() {
+  writeFile('distilled/DESIGN.md', `## 20. Workspace Health Diagnostics
+
+| ID | Severity | What it checks |
+|----|----------|----------------|
+| E1 | ERROR | x |
+| E2 | ERROR | x |
+| E3 | ERROR | x |
+| E4 | ERROR | x |
+| E5 | ERROR | x |
+| E6 | ERROR | x |
+| E7 | ERROR | x |
+| E8 | ERROR | x |
+| W1 | WARN | x |
+| W2 | WARN | x |
+| W3 | WARN | x |
+| W4 | WARN | x |
+| W5 | WARN | x |
+| W6 | WARN | x |
+| W7 | WARN | x |
+| W8 | WARN | x |
+| W9 | WARN | x |
+| W10 | WARN | x |
+| I1 | INFO | x |
+| I2 | INFO | x |
+| I3 | INFO | x |
+
+**Verdict logic:**
+`);
+  writeFile('distilled/README.md', [
+    '## Current Status (updated 2026-04-10)',
+    '',
+    '| Workflow | Status | Notes |',
+    '|----------|--------|-------|',
+    '| `alpha.md` | [OK] | x |',
+    '| `beta.md` | [OK] | x |',
+    '',
+    'Architecture notes:',
+    '',
+    '## Files In This Framework',
+    '',
+    '```',
+    'distilled/',
+    '  workflows/',
+    '    alpha.md',
+    '    beta.md',
+    '  templates/',
+    '```',
+    '',
+  ].join('\n'));
+  writeFile('distilled/workflows/alpha.md', '# alpha\n');
+  writeFile('distilled/workflows/beta.md', '# beta\n');
+  writeFile('.internal-research/gaps.md', 'See `.planning/SPEC.md` and `.planning/ROADMAP.md`.\n');
+  writeFile('.planning/SPEC.md', '- [ ] **[LAUNCH-07]**: Health\n');
+  writeFile('.planning/ROADMAP.md', '- [ ] **Phase 16: Framework Health & Truth Reconciliation** — [LAUNCH-07]\n');
+}
+
 describe('Health — pre-init guard', () => {
   test('no .planning/ → pre-init error with exit code 1', async () => {
     const result = await runCliAsMain(tmpDir, ['health']);
@@ -138,6 +201,32 @@ describe('Health — ERROR: missing delegates dir', () => {
   });
 });
 
+describe('Health — ERROR: missing research/codebase/root templates', () => {
+  test('research/ removed → E6', async () => {
+    await initWorkspace();
+    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'research'), { recursive: true, force: true });
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.errors.some((e) => e.id === 'E6'));
+  });
+
+  test('codebase/ removed → E7', async () => {
+    await initWorkspace();
+    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'codebase'), { recursive: true, force: true });
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.errors.some((e) => e.id === 'E7'));
+  });
+
+  test('critical root template file removed → E8', async () => {
+    await initWorkspace();
+    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'spec.md'), { force: true });
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.errors.some((e) => e.id === 'E8' && e.message.includes('spec.md')));
+  });
+});
+
 describe('Health — WARN: missing manifest', () => {
   test('manifest deleted → W1', async () => {
     await initWorkspace();
@@ -179,13 +268,22 @@ describe('Health — WARN: deleted template file (in manifest, not on disk)', ()
 });
 
 describe('Health — WARN: ROADMAP references nonexistent phase', () => {
-  test('ROADMAP with phase 1 but no phase files → W4', async () => {
+  test('ROADMAP with active in-progress phase but no phase files → W4', async () => {
+    await initWorkspace();
+    const roadmapContent = `# Roadmap\n\n- [-] **Phase 1: Foundation**\n- [ ] **Phase 2: API**\n`;
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmapContent);
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.warnings.some((w) => w.id === 'W4'), 'should warn about missing phase dirs');
+  });
+
+  test('ROADMAP planned future phases without artifacts → no W4', async () => {
     await initWorkspace();
     const roadmapContent = `# Roadmap\n\n- [ ] **Phase 1: Foundation**\n- [ ] **Phase 2: API**\n`;
     fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmapContent);
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.warnings.some((w) => w.id === 'W4'), 'should warn about missing phase dirs');
+    assert.ok(!json.warnings.some((w) => w.id === 'W4'), 'should ignore future planned phases');
   });
 });
 
@@ -212,6 +310,98 @@ describe('Health — WARN: phase with PLAN but no SUMMARY', () => {
   });
 });
 
+describe('Health — WARN: adapter and truth drift detection', () => {
+  test('no adapter surfaces detected → W6', async () => {
+    await initWorkspace();
+    for (const rel of ['.agents', '.claude', '.opencode', '.codex']) {
+      fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
+    }
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.warnings.some((w) => w.id === 'W6'));
+  });
+
+  test('DESIGN.md health table drift → W7', async () => {
+    await initWorkspace();
+    writeFile('distilled/DESIGN.md', `## 20. Workspace Health Diagnostics
+
+| ID | Severity | What it checks |
+|----|----------|----------------|
+| E1 | ERROR | x |
+| E2 | ERROR | x |
+| E3 | ERROR | x |
+
+**Verdict logic:**
+`);
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.warnings.some((w) => w.id === 'W7'));
+  });
+
+  test('README workflow inventory drift → W8', async () => {
+    await initWorkspace();
+    writeFile('distilled/README.md', [
+      '## Current Status (updated 2026-04-10)',
+      '',
+      '| Workflow | Status | Notes |',
+      '|----------|--------|-------|',
+      '| `alpha.md` | [OK] | x |',
+      '',
+      'Architecture notes:',
+      '',
+      '## Files In This Framework',
+      '',
+      '```',
+      'distilled/',
+      '  workflows/',
+      '    alpha.md',
+      '  templates/',
+      '```',
+      '',
+    ].join('\n'));
+    writeFile('distilled/workflows/alpha.md', '# alpha\n');
+    writeFile('distilled/workflows/beta.md', '# beta\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.warnings.some((w) => w.id === 'W8'));
+  });
+
+  test('gaps.md stale repo-local path reference → W9', async () => {
+    await initWorkspace();
+    writeFile('.internal-research/gaps.md', 'Missing file: `distilled/missing.md`\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.warnings.some((w) => w.id === 'W9'));
+  });
+
+  test('gaps.md command and branch references do not trigger W9', async () => {
+    await initWorkspace();
+    writeFile('.internal-research/gaps.md', 'Use `/gsdd-verify` on `feat/example-branch` after reviewing `.planning/config.json`.\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(!json.warnings.some((w) => w.id === 'W9'));
+  });
+
+  test('ROADMAP/SPEC requirement mismatch → W10', async () => {
+    await initWorkspace();
+    writeFile('.planning/SPEC.md', '- [x] **[LAUNCH-07]**: Health\n');
+    writeFile('.planning/ROADMAP.md', '- [ ] **Phase 16: Framework Health & Truth Reconciliation** — [LAUNCH-07]\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.warnings.some((w) => w.id === 'W10'));
+  });
+
+  test('aligned framework truth files → no W7-W10', async () => {
+    await initWorkspace();
+    writeAlignedTruthFixtures();
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    for (const id of ['W7', 'W8', 'W9', 'W10']) {
+      assert.ok(!json.warnings.some((w) => w.id === id), `${id} should not be present when truth files align`);
+    }
+  });
+});
+
 describe('Health — INFO: version drift', () => {
   test('manifest frameworkVersion older than current framework → I1', async () => {
     await initWorkspace();
@@ -231,6 +421,22 @@ describe('Health — INFO: adapter detection', () => {
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.info.some((i) => i.id === 'I3'), 'should report installed adapters');
+  });
+});
+
+describe('Health — INFO: phase completion count', () => {
+  test('ROADMAP phases counted → I2', async () => {
+    await initWorkspace();
+    writeFile('.planning/ROADMAP.md', `# Roadmap
+
+- [x] **Phase 1: Foundation**
+- [ ] **Phase 2: API**
+`);
+    writeFile('.planning/phases/01-foundation/01-SUMMARY.md', '# done\n');
+    writeFile('.planning/phases/02-api/02-SUMMARY.md', '# pending artifact\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.info.some((i) => i.id === 'I2' && i.message.includes('1/2')));
   });
 });
 

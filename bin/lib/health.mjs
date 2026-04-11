@@ -7,6 +7,7 @@ import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { readManifest, detectModifications } from './manifest.mjs';
 import { output } from './cli-utils.mjs';
+import { runTruthChecks, TRUTH_CHECK_IDS } from './health-truth.mjs';
 
 /**
  * Factory function returning the health command.
@@ -17,6 +18,8 @@ export function createCmdHealth(ctx) {
     const jsonMode = healthArgs.includes('--json');
     const cwd = process.cwd();
     const planningDir = join(cwd, '.planning');
+    const frameworkSourceMode = isFrameworkSourceRepo(cwd);
+    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
 
     // Pre-init guard
     if (!existsSync(join(planningDir, 'config.json'))) {
@@ -56,10 +59,11 @@ export function createCmdHealth(ctx) {
     const delegatesDir = join(templatesDir, 'delegates');
     const hasRolesDir = hasTemplatesDir && existsSync(rolesDir);
     const hasDelegatesDir = hasTemplatesDir && existsSync(delegatesDir);
+    const skipInstalledTemplateChecks = !hasTemplatesDir && frameworkSourceMode;
 
-    if (!hasTemplatesDir) {
+    if (!hasTemplatesDir && !skipInstalledTemplateChecks) {
       errors.push({ id: 'E3', severity: 'ERROR', message: '.planning/templates/ missing', fix: 'Run `gsdd update --templates`' });
-    } else {
+    } else if (hasTemplatesDir) {
       // E4: roles/ missing or empty
       if (!hasRolesDir) {
         errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ missing', fix: 'Run `gsdd update --templates`' });
@@ -113,8 +117,8 @@ export function createCmdHealth(ctx) {
     // --- WARNING checks ---
 
     // W1: generation-manifest.json missing
-    const manifest = readManifest(planningDir);
-    if (!manifest) {
+    const manifest = skipInstalledTemplateChecks ? null : readManifest(planningDir);
+    if (!manifest && !skipInstalledTemplateChecks) {
       warnings.push({ id: 'W1', severity: 'WARN', message: 'generation-manifest.json missing', fix: 'Run `gsdd update --templates` to create' });
     }
 
@@ -147,16 +151,25 @@ export function createCmdHealth(ctx) {
     const phaseArtifacts = existsSync(phasesDir) ? listPhaseArtifacts(phasesDir) : [];
 
     if (roadmap && existsSync(phasesDir)) {
-      const phaseNums = [];
+      const phaseLabels = [];
+      let inDetails = false;
       for (const line of roadmap.split('\n')) {
-        const match = line.match(/^\s*[-*]\s*\[[ x-]\]\s*\*\*Phase\s+(\d+)/i);
-        if (match) phaseNums.push(parseInt(match[1], 10));
+        if (line.includes('<details>') && !line.includes('</details>')) {
+          inDetails = true;
+          continue;
+        }
+        if (line.includes('</details>')) {
+          inDetails = false;
+          continue;
+        }
+        if (inDetails) continue;
+        const match = line.match(/^\s*[-*]\s*\[([x-])\]\s*\*\*Phase\s+(\d+[a-z]?)/i);
+        if (match) phaseLabels.push(normalizePhaseLabel(match[2]));
       }
-      for (const num of phaseNums) {
-        const padded = String(num).padStart(2, '0');
-        const hasFile = phaseArtifacts.some((artifact) => artifact.phasePrefix === padded || artifact.phasePrefix === String(num));
+      for (const label of phaseLabels) {
+        const hasFile = phaseArtifacts.some((artifact) => normalizePhaseLabel(artifact.phasePrefix) === label);
         if (!hasFile) {
-          warnings.push({ id: 'W4', severity: 'WARN', message: `ROADMAP.md references Phase ${num} but no files found in .planning/phases/`, fix: 'Create missing phase dirs or update ROADMAP' });
+          warnings.push({ id: 'W4', severity: 'WARN', message: `ROADMAP.md references active Phase ${label} but no files found in .planning/phases/`, fix: 'Create missing phase dirs or update ROADMAP' });
         }
       }
     }
@@ -188,6 +201,8 @@ export function createCmdHealth(ctx) {
     if (!hasAnyAdapter) {
       warnings.push({ id: 'W6', severity: 'WARN', message: 'No adapter surfaces detected', fix: 'Run `gsdd init --tools <platform>`' });
     }
+
+    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds));
 
     // --- INFO checks ---
 
@@ -249,6 +264,15 @@ export function createCmdHealth(ctx) {
   };
 }
 
+function isFrameworkSourceRepo(cwd) {
+  return existsSync(join(cwd, 'distilled', 'templates')) && existsSync(join(cwd, 'distilled', 'workflows'));
+}
+
+function normalizePhaseLabel(value) {
+  if (!value) return null;
+  return value.toLowerCase().replace(/^0+(\d)/, '$1');
+}
+
 function listPhaseArtifacts(phasesDir) {
   const artifacts = [];
   for (const entry of readdirSync(phasesDir, { withFileTypes: true })) {
@@ -272,6 +296,6 @@ function createPhaseArtifact(dir, name) {
     dir,
     name,
     displayPath: dir ? `${dir}/${name}` : name,
-    phasePrefix: name.match(/^(\d+(?:\.\d+)?)-/)?.[1] || dir.match(/^(\d+(?:\.\d+)?)-/)?.[1] || null,
+    phasePrefix: name.match(/^(\d+[a-z]?(?:\.\d+)?)-/i)?.[1] || dir.match(/^(\d+[a-z]?(?:\.\d+)?)-/i)?.[1] || null,
   };
 }

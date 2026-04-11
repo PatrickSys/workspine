@@ -61,7 +61,7 @@ gsdd init                  -> bootstrap (create .planning/, copy templates, gene
 /gsdd-progress             -> show status, route to next action
 ```
 
-## Current Status (updated 2026-04-09)
+## Current Status (updated 2026-04-10)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
@@ -72,12 +72,13 @@ gsdd init                  -> bootstrap (create .planning/, copy templates, gene
 | `audit-milestone.md` | [OK] Defined, source-audited | Aggregates phase verification, cross-phase integration audit, auth protection checks, requirement reconciliation, and orphan detection into `MILESTONE-AUDIT.md` |
 | `complete-milestone.md` | [OK] Defined | Archives milestone, evolves SPEC.md, collapses ROADMAP.md — no gsd-tools.cjs dependency |
 | `new-milestone.md` | [OK] Defined | Brownfield milestone continuation: goals, SPEC.md requirements, ROADMAP.md phases |
-| `plan-milestone-gaps.md` | [OK] Defined | Gap closure phases from MILESTONE-AUDIT.md results |
+| `plan-milestone-gaps.md` | [OK] Defined (unvalidated) | Gap closure phases from MILESTONE-AUDIT.md results |
 | `quick.md` | [OK] | Quick-work lane for sub-hour tasks outside the phase cycle (D11) |
 | `pause.md` | [OK] Source-audited | Session checkpoint writer with conversational handoff (D12) |
 | `resume.md` | [OK] Source-audited | Session context restorer with priority-ordered routing (D12) |
 | `progress.md` | [OK] Source-audited | Read-only status reporter with 6 named route branches, recent work, between-milestones detection (D12) |
 | `map-codebase.md` | [OK] Defined, source-audited | Standalone codebase mapping/refresh |
+| `verify-work.md` | [OK] Defined | Conversational UAT validation with structured gap tracking |
 
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
@@ -112,10 +113,14 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   research/            # optional research outputs
 .agents/skills/
   gsdd-new-project/SKILL.md
+  gsdd-new-milestone/SKILL.md
   gsdd-plan/SKILL.md
+  gsdd-plan-milestone-gaps/SKILL.md
   gsdd-execute/SKILL.md
   gsdd-verify/SKILL.md
+  gsdd-verify-work/SKILL.md
   gsdd-audit-milestone/SKILL.md
+  gsdd-complete-milestone/SKILL.md
   gsdd-quick/SKILL.md
   gsdd-pause/SKILL.md
   gsdd-resume/SKILL.md
@@ -143,18 +148,23 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 ```
 distilled/
   DESIGN.md                # design decisions and rationale (39 decisions, evidence-backed)
+  EVIDENCE-INDEX.md        # source-to-decision index for durable research-backed claims
   SKILL.md                 # primary entry point (plain markdown)
   workflows/
-    new-project.md
-    map-codebase.md
-    plan.md
-    progress.md
-    execute.md
-    verify.md
     audit-milestone.md
-    quick.md
+    complete-milestone.md
+    execute.md
+    map-codebase.md
+    new-project.md
+    new-milestone.md
     pause.md
+    plan.md
+    plan-milestone-gaps.md
+    progress.md
+    quick.md
     resume.md
+    verify-work.md
+    verify.md
   templates/
     spec.md
     roadmap.md
