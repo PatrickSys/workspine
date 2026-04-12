@@ -113,14 +113,22 @@ function cmdRegexSub(cwd, args) {
   }
 
   const source = readFileSync(target, 'utf-8');
-  const matches = source.match(regex);
-  if (!matches || matches.length === 0) {
+  let replacementCount = 0;
+  if (regex.global) {
+    const matches = source.match(regex);
+    replacementCount = matches ? matches.length : 0;
+  } else {
+    replacementCount = regex.test(source) ? 1 : 0;
+  }
+
+  if (replacementCount === 0) {
     fail(`Pattern did not match any text in ${targetArg}`);
   }
 
   const updated = source.replace(regex, replacement);
+  const changed = updated !== source;
   writeFileSync(target, updated);
-  output({ operation: 'regex-sub', target: targetArg, changed: true, replacements: matches.length });
+  output({ operation: 'regex-sub', target: targetArg, changed, replacements: replacementCount });
 }
 
 export function cmdFileOp(...args) {
