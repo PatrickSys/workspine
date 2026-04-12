@@ -14,7 +14,7 @@ CRITICAL: Read every file below before performing any other actions. This is you
 4. Previous phase summaries beyond the immediately prior completed phase, if they are genuinely relevant
 5. Relevant source files listed in the plan's `<files>` sections
 6. `.planning/phases/*-SUMMARY.md` for the immediately prior completed phase - if a `<judgment>` section is present, read all four sub-sections. Honor `<anti_regression>` rules as execution constraints. Use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions.
-7. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 6, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Honor `<anti_regression>` rules as execution constraints and use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions. After reading, delete `.planning/.continue-here.bak` (auto-clean).
+7. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 6, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Honor `<anti_regression>` rules as execution constraints and use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions. After reading, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 </load_context>
 
 <runtime_contract>
@@ -270,13 +270,12 @@ Keep the update factual and compact:
 ```
 
 ### 2. Update ROADMAP.md Phase Status
-Use the roadmap template's status grammar:
+Do not hand-edit the ROADMAP checkbox line. Use the status-aware helper instead:
 
-```markdown
-- [x] **Phase {N}: {Name}** - {Goal}
-```
+- Run `gsdd phase-status {N} done` when this plan completes the phase.
+- Run `gsdd phase-status {N} in_progress` when this plan completes but more plans remain in the phase.
 
-If the phase is partially complete and more plans remain, use `[-]` instead of `[x]`.
+The helper owns the `[ ]` / `[-]` / `[x]` mutation for `.planning/ROADMAP.md`.
 
 ### 3. Write Phase Summary
 Create `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md` with:

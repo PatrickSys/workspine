@@ -25,23 +25,36 @@ async function runCliAsMain(cwd, args, entryPath = CLI_PATH) {
   const previousCwd = process.cwd();
   const previousArgv = process.argv.slice();
   const previousExitCode = process.exitCode;
+  const previousExit = process.exit;
   const previousLog = console.log;
   const previousError = console.error;
   const lines = [];
+  const exitSignal = Symbol('cli-exit');
 
   process.chdir(cwd);
   process.argv = [process.execPath, entryPath, ...args];
   process.exitCode = undefined;
   console.log = (...parts) => lines.push(parts.join(' '));
   console.error = (...parts) => lines.push(parts.join(' '));
+  process.exit = (code) => {
+    process.exitCode = code ?? 0;
+    const error = new Error(`CLI exited with code ${process.exitCode}`);
+    error[exitSignal] = true;
+    throw error;
+  };
 
   try {
-    await import(`${pathToFileURL(CLI_PATH).href}?t=${Date.now()}-${Math.random()}`);
+    try {
+      await import(`${pathToFileURL(CLI_PATH).href}?t=${Date.now()}-${Math.random()}`);
+    } catch (error) {
+      if (!error || !error[exitSignal]) throw error;
+    }
     return {
       exitCode: process.exitCode ?? 0,
       output: lines.join('\n'),
     };
   } finally {
+    process.exit = previousExit;
     console.log = previousLog;
     console.error = previousError;
     process.argv = previousArgv;

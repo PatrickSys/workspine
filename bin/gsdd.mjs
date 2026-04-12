@@ -16,7 +16,8 @@ import {
 } from './lib/rendering.mjs';
 import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels } from './lib/models.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
-import { cmdFindPhase, cmdVerify, cmdScaffold } from './lib/phase.mjs';
+import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
+import { cmdFileOp } from './lib/file-ops.mjs';
 import { createCmdHealth } from './lib/health.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -93,7 +94,9 @@ const COMMANDS = {
   update: cmdUpdate,
   models: cmdModels,
   health: cmdHealth,
+  'file-op': cmdFileOp,
   'find-phase': cmdFindPhase,
+  'phase-status': cmdPhaseStatus,
   verify: cmdVerify,
   scaffold: cmdScaffold,
   help: cmdHelp,
@@ -113,4 +116,4 @@ if (IS_MAIN) {
   await runCli();
 }
 
-export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFindPhase, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFileOp, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

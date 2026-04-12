@@ -410,6 +410,50 @@ describe('I5 — Session Management Workflows', () => {
   });
 });
 
+describe('Phase 18 deterministic mechanics invariants', () => {
+  test('checkpoint-cleanup workflows use gsdd file-op for deterministic copy/delete mechanics', () => {
+    const expectations = new Map([
+      ['pause.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['resume.md', ['gsdd file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'gsdd file-op delete .planning/.continue-here.md']],
+      ['plan.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['execute.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['verify.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['quick.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+    ]);
+
+    for (const [workflow, snippets] of expectations.entries()) {
+      const content = readWorkflow(workflow);
+      for (const snippet of snippets) {
+        assert.ok(content.includes(snippet), `${workflow} must include ${snippet}`);
+      }
+    }
+  });
+
+  test('manual checkpoint copy/delete prose no longer coexists with helper commands', () => {
+    const resume = readWorkflow('resume.md');
+    const pause = readWorkflow('pause.md');
+    assert.ok(!/(^|\n)\s*\d+\.\s*Copy `?\.planning\/\.continue-here\.md`? to `?\.planning\/\.continue-here\.bak`?/i.test(resume),
+      'resume.md must not keep manual checkpoint copy prose once gsdd file-op exists.');
+    assert.ok(!/(^|\n)\s*\d+\.\s*Delete `?\.planning\/\.continue-here\.md`?/i.test(resume),
+      'resume.md must not keep manual checkpoint delete prose once gsdd file-op exists.');
+    assert.ok(!/(^|\n)\s*Delete `?\.planning\/\.continue-here\.bak`? if it exists/i.test(pause),
+      'pause.md must not keep manual backup cleanup prose once gsdd file-op exists.');
+  });
+
+  test('execute.md and verify.md use gsdd phase-status for roadmap status transitions', () => {
+    for (const workflow of ['execute.md', 'verify.md']) {
+      const content = readWorkflow(workflow);
+      assert.ok(content.includes('gsdd phase-status'), `${workflow} must reference gsdd phase-status.`);
+    }
+  });
+
+  test('execute.md no longer instructs hand-editing roadmap checkbox lines', () => {
+    const execute = readWorkflow('execute.md');
+    assert.ok(!execute.includes('- [x] **Phase {N}: {Name}** - {Goal}'),
+      'execute.md must not keep the old raw ROADMAP checkbox example once gsdd phase-status exists.');
+  });
+});
+
 // --- I5b: Session Workflow Scope Boundaries ---
 
 describe('I5b — Session Workflow Scope Boundaries', () => {

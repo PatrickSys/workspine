@@ -50,7 +50,7 @@ Read the relevant artifacts to pre-fill what you can:
 </gather_state>
 
 <write_checkpoint>
-Delete `.planning/.continue-here.bak` if it exists (cleanup from prior session backup).
+Before writing the new checkpoint, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` to clear the prior session backup. This is cleanup-only and should no-op safely if the backup is absent.
 
 Write `.planning/.continue-here.md` with the following structure:
 

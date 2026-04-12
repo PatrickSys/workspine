@@ -267,7 +267,9 @@ Workflows are agent skills or commands, not plain shell utilities. How you invok
 | `gsdd init [--tools <platform>]` | Set up `.planning/`, generate adapters |
 | `gsdd update [--tools <platform>] [--templates]` | Regenerate adapters; `--templates` refreshes `.planning/templates/` and role contracts |
 | `gsdd health [--json]` | Check workspace integrity (healthy/degraded/broken) |
+| `gsdd file-op <copy\|delete\|regex-sub>` | Run deterministic workspace-confined file copy, delete, and regex substitution |
 | `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
+| `gsdd phase-status <N> <status>` | Update a single ROADMAP phase status through the status-aware helper |
 | `gsdd verify <N>` | Run artifact checks for phase N |
 | `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
 | `gsdd models [show\|profile\|set\|...]` | Inspect and manage model profile propagation |

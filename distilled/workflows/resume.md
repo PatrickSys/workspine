@@ -178,8 +178,8 @@ Wait for user selection.
 <cleanup_checkpoint>
 Immediately after the user confirms their action selection (before routing to the target workflow):
 - If the user chose to resume from `.continue-here.md`:
-  1. Copy `.planning/.continue-here.md` to `.planning/.continue-here.bak` (overwrite silently if `.planning/.continue-here.bak` already exists).
-  2. Delete `.planning/.continue-here.md`.
+  1. Run `gsdd file-op copy .planning/.continue-here.md .planning/.continue-here.bak`.
+  2. After the copy succeeds, run `gsdd file-op delete .planning/.continue-here.md`.
 - If the user chose a different action (not based on the checkpoint), leave `.continue-here.md` in place for a future resume.
 
 Copying before deleting ensures the checkpoint survives a session crash between deletion and dispatch. `.continue-here.bak` is cleaned up by the downstream workflow after absorbing the judgment, or by the next `pause.md` run.

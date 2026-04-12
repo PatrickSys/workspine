@@ -803,13 +803,16 @@ dispatch in a single file.
 
 Implementation lives under `bin/lib/`:
 - `cli-utils.mjs` owns flag parsing and JSON output helpers
+- `file-ops.mjs` owns workspace-confined deterministic file copy, delete, and regex-sub mechanics
 - `models.mjs` owns config/model schema and `cmdModels`
-- `phase.mjs` owns phase discovery, verify, and scaffold commands
+- `phase.mjs` owns phase discovery, verify, scaffold, and the status-aware ROADMAP phase helper
 - `templates.mjs` owns template/role install and refresh flows
 - `init.mjs` owns `createCmdInit(ctx)`, `createCmdUpdate(ctx)`, help text, and bootstrap/update helper logic
 
 **Boundary rules:**
 - keep `bin/gsdd.mjs` as composition root, not a second implementation module
+- route deterministic copy/delete/text-mutation mechanics through CLI helpers instead of leaving manual file edits in workflow prose
+- keep ROADMAP phase checkbox transitions in a status-aware helper; broader roadmap rewrites stay outside this helper boundary
 - keep config-schema ownership in `models.mjs`; do not duplicate or relocate `buildDefaultConfig` into `init.mjs`
   just to satisfy an old task list
 - let `init` use the same template-sync module that `update --templates` uses, instead of maintaining separate
@@ -825,9 +828,9 @@ Implementation lives under `bin/lib/`:
 
 **Evidence:**
 - GSD source: `get-shit-done/install.js` (monolithic install/conversion surface)
-- GSDD implementation: `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/models.mjs`
+- GSDD implementation: `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/models.mjs`, `bin/lib/file-ops.mjs`, `bin/lib/phase.mjs`
 - GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`,
-  `tests/gsdd.guards.test.cjs`
+  `tests/gsdd.guards.test.cjs`, `tests/phase.test.cjs`, `tests/gsdd.invariants.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - External: Seemann "Dependency Injection in .NET" (Manning 2011) — coined "Composition Root" as the named pattern for the single location where the entire application is assembled; Martin "Clean Architecture" (2017) — the main component as the outermost, dirtiest layer that owns all wiring; standard practice in oclif, Commander.js, yargs, and Cobra CLI frameworks
 
 ---

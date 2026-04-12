@@ -7,6 +7,24 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 
 import { join, basename } from 'path';
 import { output } from './cli-utils.mjs';
 
+const PHASE_STATUS_MARKERS = {
+  not_started: '[ ]',
+  todo: '[ ]',
+  in_progress: '[-]',
+  done: '[x]',
+};
+
+const PHASE_MARKER_RE = '(\\[[ x]\\]|\\[-\\]|â¬œ|ðŸ"„|âœ…|⬜|🔄|✅)';
+const PHASE_TOKEN_RE = '(\\d+(?:\\.\\d+)*[a-z]?)';
+const PHASE_LINE_RE = new RegExp(
+  `^[-*]\\s*${PHASE_MARKER_RE}\\s*\\*\\*Phase\\s+${PHASE_TOKEN_RE}:\\s*(.+?)\\*\\*`,
+  'i'
+);
+const ROADMAP_PHASE_STATUS_RE = new RegExp(
+  `^(\\s*[-*]\\s*)${PHASE_MARKER_RE}(\\s*\\*\\*Phase\\s+${PHASE_TOKEN_RE}:.*)$`,
+  'i'
+);
+
 function findFiles(dir, prefix) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((f) => f.startsWith(prefix) || f.startsWith(prefix.replace(/^0+/, '')));
@@ -20,13 +38,7 @@ function parsePhaseStatuses(roadmap) {
   const phases = [];
   const lines = roadmap.split('\n');
   for (const line of lines) {
-    // Supports:
-    // - checkbox statuses: [ ] / [x]
-    // - legacy emoji markers in ROADMAP templates: not started / in progress / done
-    // - mojibake-encoded variants that exist in some files
-    const match = line.match(
-      /^[-*]\s*(\[[ x]\]|\[-\]|â¬œ|ðŸ"„|âœ…|⬜|🔄|✅)\s*\*\*Phase\s+(\d+):\s*(.+?)\*\*/i
-    );
+    const match = line.match(PHASE_LINE_RE);
     if (match) {
       const rawStatus = match[1].toLowerCase();
       let status = 'not_started';
@@ -34,13 +46,85 @@ function parsePhaseStatuses(roadmap) {
       else if (rawStatus === '[-]') status = 'in_progress';
       else if (rawStatus === 'ðÿ"„' || rawStatus === '🔄') status = 'in_progress';
       phases.push({
-        number: parseInt(match[2], 10),
+        number: match[2],
         name: match[3].replace(/\*\*/g, '').split('-')[0].trim(),
         status,
       });
     }
   }
   return phases;
+}
+
+function normalizePhaseToken(value) {
+  const raw = String(value).trim().toLowerCase();
+  const match = raw.match(/^(\d+(?:\.\d+)*)([a-z]?)$/i);
+  if (!match) return raw;
+
+  const numericSegments = match[1]
+    .split('.')
+    .map((segment) => String(parseInt(segment, 10)));
+  return `${numericSegments.join('.')}${match[2] || ''}`;
+}
+
+export function updateRoadmapPhaseStatus(roadmap, phaseNumber, status) {
+  const marker = PHASE_STATUS_MARKERS[status];
+  if (!marker) {
+    throw new Error(`Unsupported phase status: ${status}`);
+  }
+
+  const normalizedTarget = normalizePhaseToken(phaseNumber);
+  let matchCount = 0;
+
+  const updated = roadmap
+    .split('\n')
+    .map((line) => {
+      const match = line.match(ROADMAP_PHASE_STATUS_RE);
+      if (!match) return line;
+      if (normalizePhaseToken(match[4]) !== normalizedTarget) return line;
+      matchCount += 1;
+      return `${match[1]}${marker}${match[3]}`;
+    })
+    .join('\n');
+
+  if (matchCount === 0) {
+    throw new Error(`Phase ${phaseNumber} was not found in ROADMAP.md`);
+  }
+
+  if (matchCount > 1) {
+    throw new Error(`Phase ${phaseNumber} matched multiple ROADMAP.md entries`);
+  }
+
+  return updated;
+}
+
+export function cmdPhaseStatus(...args) {
+  const cwd = process.cwd();
+  const planningDir = join(cwd, '.planning');
+  const roadmapPath = join(planningDir, 'ROADMAP.md');
+  const [phaseNumber, status] = args;
+
+  if (!phaseNumber || !status) {
+    console.error('Usage: gsdd phase-status <phase-number> <not_started|todo|in_progress|done>');
+    process.exit(1);
+  }
+
+  if (!existsSync(roadmapPath)) {
+    console.error('No ROADMAP.md found. Run the new-project workflow first.');
+    process.exit(1);
+  }
+
+  try {
+    const roadmap = readFileSync(roadmapPath, 'utf-8');
+    const updated = updateRoadmapPhaseStatus(roadmap, phaseNumber, status);
+    const changed = updated !== roadmap;
+    if (changed) {
+      writeFileSync(roadmapPath, updated);
+    }
+    output({ phase: phaseNumber, status, roadmap: '.planning/ROADMAP.md', changed });
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
 }
 
 export function cmdFindPhase(...args) {
@@ -67,7 +151,7 @@ export function cmdFindPhase(...args) {
     const summaries = findFiles(phasesDir, `${padPhase(phaseNum)}-SUMMARY`);
 
     output({
-      phase: parseInt(phaseNum, 10),
+      phase: normalizePhaseToken(phaseNum),
       directory: phasesDir,
       plans,
       summaries,

@@ -13,7 +13,7 @@ Before starting, read these files:
 4. `.planning/SPEC.md` - requirements and constraints for the phase
 5. From the SUMMARY.md loaded in step 3, if a `<judgment>` section is present - read `<anti_regression>` rules as additional verification targets: confirm that invariants listed there were not broken by execution. Read `<active_constraints>` to calibrate verification scope.
 6. The relevant codebase files - the code that was actually built
-7. **Session-boundary fallback:** If the SUMMARY.md loaded in step 3 has no `<judgment>` section, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Treat `<anti_regression>` rules as additional verification targets and `<active_constraints>` to calibrate verification scope (same usage as step 5). After reading, delete `.planning/.continue-here.bak` (auto-clean).
+7. **Session-boundary fallback:** If the SUMMARY.md loaded in step 3 has no `<judgment>` section, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Treat `<anti_regression>` rules as additional verification targets and `<active_constraints>` to calibrate verification scope (same usage as step 5). After reading, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 
 Establish your verification basis (must-have sources, requirement scope, previous report status) before beginning code inspection. Do not jump to loose file reading until this basis is explicit.
 
@@ -344,7 +344,7 @@ This is non-negotiable. Verification output that exists only in chat context wil
 
 If you cannot write the file (permissions, path issue), STOP and report the blocker to the user. Do NOT silently skip the write.
 
-After writing VERIFICATION.md, if `status: passed`, also update the phase entry in `.planning/ROADMAP.md` to `[x]` if it is not already `[x]`. Execute is the primary owner of ROADMAP status, but execute can be interrupted before its state_updates run. Verify is the terminal workflow and must close the ROADMAP entry when it confirms the phase is complete. If ROADMAP.md cannot be updated (path issue, file missing), STOP and report the blocker — do NOT complete verification without updating it.
+After writing VERIFICATION.md, if `status: passed`, run `gsdd phase-status {phase_num} done` to close the phase entry in `.planning/ROADMAP.md`. Execute is the primary owner of ROADMAP status, but execute can be interrupted before its state_updates run. Verify is the terminal workflow and must close the ROADMAP entry when it confirms the phase is complete. If the helper cannot update ROADMAP.md (path issue, missing phase, invalid state), STOP and report the blocker — do NOT complete verification without closing the phase.
 </persistence>
 
 <success_criteria>
@@ -362,7 +362,7 @@ Verification is done when all of these are true:
 - [ ] `VERIFICATION.md` frontmatter records git delivery metadata for the current branch
 - [ ] Verification explicitly reviewed SUMMARY `<handoff>` and `<deltas>` content
 - [ ] Status is one of `passed`, `gaps_found`, or `human_needed`
-- [ ] If status is `passed`, ROADMAP.md phase entry is `[x]`
+- [ ] If status is `passed`, ROADMAP.md phase entry is `[x]` via `gsdd phase-status`
 - [ ] The developer was informed of the result and recommended next step
 - [ ] Related failures grouped by concern, not returned as a flat symptom list
 - [ ] Requirements coverage chain completed (collect, restate, map, report, check orphans)

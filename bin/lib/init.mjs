@@ -5,7 +5,11 @@ import { createInitPromptApi, promptChoiceList } from './init-prompts.mjs';
 import { buildRuntimeChoices, detectPlatforms, getHelpText, normalizeRequestedTools } from './init-runtime.mjs';
 
 function cmdHelp() {
-  console.log(getHelpText());
+  console.log(`${getHelpText().trimEnd()}
+  file-op <copy|delete|regex-sub>
+                              Run deterministic workspace-confined file copy/delete/text mutation
+  phase-status <N> <status>   Update ROADMAP.md phase status ([ ] / [-] / [x])
+`);
 }
 
 export {

@@ -575,6 +575,50 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
   });
 });
 
+describe('S18 — Deterministic mechanics workflow surface', () => {
+  let tmpDir;
+
+  beforeEach(async () => {
+    tmpDir = createTempProject();
+    await initProject(tmpDir, '--auto', '--tools', 'claude');
+  });
+
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('affected portable skills route checkpoint cleanup through gsdd file-op', () => {
+    const expectations = new Map([
+      ['gsdd-pause', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-resume', ['gsdd file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'gsdd file-op delete .planning/.continue-here.md']],
+      ['gsdd-plan', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-execute', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-verify', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-quick', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+    ]);
+
+    for (const [skillName, snippets] of expectations.entries()) {
+      const content = readSkill(tmpDir, skillName);
+      for (const snippet of snippets) {
+        assert.ok(content.includes(snippet), `${skillName} must include ${snippet}`);
+      }
+    }
+  });
+
+  test('resume portable skill no longer carries manual checkpoint copy/delete prose', () => {
+    const content = readSkill(tmpDir, 'gsdd-resume');
+    assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Copy `?\.planning\/\.continue-here\.md`? to `?\.planning\/\.continue-here\.bak`?/i,
+      'gsdd-resume must not keep the old manual checkpoint copy prose.');
+    assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Delete `?\.planning\/\.continue-here\.md`?/i,
+      'gsdd-resume must not keep the old manual checkpoint delete prose.');
+  });
+
+  test('execute and verify portable skills route roadmap transitions through gsdd phase-status', () => {
+    for (const skillName of ['gsdd-execute', 'gsdd-verify']) {
+      const content = readSkill(tmpDir, skillName);
+      assert.ok(content.includes('gsdd phase-status'), `${skillName} must reference gsdd phase-status.`);
+    }
+  });
+});
+
 // ============================================================
 // S5 — Config-to-Content Propagation
 // ============================================================

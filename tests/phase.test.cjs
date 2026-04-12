@@ -7,6 +7,10 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const {
+  createTempProject: createGsddTempProject,
+  runCliAsMain,
+} = require('./gsdd.helpers.cjs');
 
 describe('phases list command', () => {
   let tmpDir;
@@ -1004,6 +1008,151 @@ describe('phase complete command', () => {
 
     const result = runGsdTools('phase complete 1', tmpDir);
     assert.ok(result.success, `Command should succeed even without REQUIREMENTS.md: ${result.error}`);
+  });
+});
+
+describe('Phase 18 deterministic CLI mechanics', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('file-op copy writes a checkpoint backup inside the workspace', async () => {
+    const source = path.join(tmpDir, '.planning', '.continue-here.md');
+    const backup = path.join(tmpDir, '.planning', '.continue-here.bak');
+    fs.writeFileSync(source, '# checkpoint\n');
+
+    const result = await runCliAsMain(tmpDir, ['file-op', 'copy', '.planning/.continue-here.md', '.planning/.continue-here.bak']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.operation, 'copy');
+    assert.strictEqual(output.changed, true);
+    assert.strictEqual(fs.readFileSync(backup, 'utf-8'), '# checkpoint\n');
+  });
+
+  test('file-op delete supports cleanup no-op semantics for missing files', async () => {
+    const result = await runCliAsMain(tmpDir, ['file-op', 'delete', '.planning/.continue-here.bak', '--missing', 'ok']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.operation, 'delete');
+    assert.strictEqual(output.changed, false);
+    assert.strictEqual(output.reason, 'missing_target');
+  });
+
+  test('file-op regex-sub performs deterministic text mutation', async () => {
+    const target = path.join(tmpDir, '.planning', 'note.txt');
+    fs.writeFileSync(target, 'manual checkpoint cleanup\nmanual checkpoint cleanup\n');
+
+    const result = await runCliAsMain(tmpDir, ['file-op', 'regex-sub', '.planning/note.txt', 'manual checkpoint cleanup', 'gsdd file-op delete --missing ok']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.operation, 'regex-sub');
+    assert.strictEqual(output.replacements, 2);
+    assert.match(fs.readFileSync(target, 'utf-8'), /gsdd file-op delete --missing ok/);
+  });
+
+  test('file-op regex-sub reports one replacement when flags are non-global', async () => {
+    const target = path.join(tmpDir, '.planning', 'single.txt');
+    fs.writeFileSync(target, 'phase 18\nphase 18\n');
+
+    const result = await runCliAsMain(tmpDir, ['file-op', 'regex-sub', '.planning/single.txt', 'phase', 'step', '--flags', 'i']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.operation, 'regex-sub');
+    assert.strictEqual(output.replacements, 1);
+    assert.strictEqual(output.changed, true);
+    assert.strictEqual(fs.readFileSync(target, 'utf-8'), 'step 18\nphase 18\n');
+  });
+
+  test('file-op delete fails loudly when a contract-significant file is missing', async () => {
+    const result = await runCliAsMain(tmpDir, ['file-op', 'delete', '.planning/.continue-here.md']);
+    assert.notStrictEqual(result.exitCode, 0, 'missing delete should fail');
+    assert.match(result.output, /does not exist/i);
+  });
+
+  test('phase-status updates ROADMAP phase status markers through the helper', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n- [ ] **Phase 19: Workflow UX & Provenance** - goal\n'
+    );
+
+    let result = await runCliAsMain(tmpDir, ['phase-status', '18', 'in_progress']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[-\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
+
+    result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[x\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
+  });
+
+  test('phase-status supports letter-suffixed phase identifiers already used in roadmap truth', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      '# Roadmap\n\n- [ ] **Phase 9a: Truth Reconciliation** - goal\n- [ ] **Phase 10: Next Phase** - goal\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '9a', 'in_progress']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase, '9a');
+    assert.strictEqual(output.changed, true);
+    assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[-\] \*\*Phase 9a: Truth Reconciliation\*\*/);
+  });
+
+  test('phase-status supports star-bullet roadmap entries', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      '# Roadmap\n\n* [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /\* \[x\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
+  });
+
+  test('phase-status reports changed false when target phase already has requested status', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const original = '# Roadmap\n\n- [x] **Phase 18: Deterministic CLI Mechanics** - goal\n';
+    fs.writeFileSync(roadmapPath, original);
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.changed, false);
+    assert.strictEqual(fs.readFileSync(roadmapPath, 'utf-8'), original);
+  });
+
+  test('phase-status fails loudly for invalid status values', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'complete']);
+    assert.notStrictEqual(result.exitCode, 0, 'invalid phase status should fail');
+    assert.match(result.output, /unsupported phase status/i);
+  });
+
+  test('help text documents file-op and phase-status commands', async () => {
+    const result = await runCliAsMain(tmpDir, ['help']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /file-op <copy\|delete\|regex-sub>/);
+    assert.match(result.output, /phase-status <N> <status>/);
   });
 });
 
