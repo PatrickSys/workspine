@@ -15,6 +15,21 @@ export const DEFAULT_GIT_PROTOCOL = {
   pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
 };
 
+export const RIGOR_PROFILES = {
+  quick:    { researchDepth: 'fast',     workflow: { research: false, discuss: false, planCheck: false, verifier: true } },
+  balanced: { researchDepth: 'balanced', workflow: { research: true,  discuss: false, planCheck: true,  verifier: true } },
+  thorough: { researchDepth: 'deep',     workflow: { research: true,  discuss: true,  planCheck: true,  verifier: true } },
+};
+
+export const COST_PROFILES = {
+  budget:   { modelProfile: 'budget',   parallelization: false },
+  balanced: { modelProfile: 'balanced', parallelization: true  },
+  quality:  { modelProfile: 'quality',  parallelization: true  },
+};
+
+export function resolveRigor(id) { return RIGOR_PROFILES[id] ?? RIGOR_PROFILES.balanced; }
+export function resolveCost(id)  { return COST_PROFILES[id]  ?? COST_PROFILES.balanced;  }
+
 export const VALID_MODEL_PROFILES = ['quality', 'balanced', 'budget'];
 export const PORTABLE_AGENT_IDS = ['plan-checker', 'approach-explorer'];
 export const MODEL_RUNTIME_IDS = ['claude', 'opencode', 'codex'];
@@ -25,12 +40,12 @@ export function normalizeModelProfile(value) {
 }
 
 export function buildDefaultConfig({ autoAdvance = false } = {}) {
+  const rigor = resolveRigor('balanced');
+  const cost = resolveCost('balanced');
   const config = {
-    researchDepth: 'balanced',
-    parallelization: true,
+    ...rigor,
+    ...cost,
     commitDocs: true,
-    modelProfile: 'balanced',
-    workflow: { research: true, discuss: false, planCheck: true, verifier: true },
     gitProtocol: { ...DEFAULT_GIT_PROTOCOL },
     initVersion: 'v1.1',
   };

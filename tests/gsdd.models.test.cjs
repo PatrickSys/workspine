@@ -626,4 +626,55 @@ describe('gsdd models and model propagation', () => {
       assert.match(result.output, /WARNING.*malformed/i);
     });
   });
+
+  describe('rigor and cost resolvers', () => {
+    test('RIGOR_PROFILES has exactly keys quick, balanced, thorough', async () => {
+      const models = await import('../bin/lib/models.mjs');
+      assert.deepStrictEqual(Object.keys(models.RIGOR_PROFILES), ['quick', 'balanced', 'thorough']);
+    });
+
+    test('COST_PROFILES has exactly keys budget, balanced, quality', async () => {
+      const models = await import('../bin/lib/models.mjs');
+      assert.deepStrictEqual(Object.keys(models.COST_PROFILES), ['budget', 'balanced', 'quality']);
+    });
+
+    test('resolveRigor unknown returns balanced profile', async () => {
+      const models = await import('../bin/lib/models.mjs');
+      const result = models.resolveRigor('unknown');
+      assert.strictEqual(result.researchDepth, 'balanced');
+      assert.strictEqual(result.workflow.research, true);
+      assert.strictEqual(result.workflow.verifier, true);
+    });
+
+    test('resolveCost unknown returns balanced profile', async () => {
+      const models = await import('../bin/lib/models.mjs');
+      const result = models.resolveCost('unknown');
+      assert.strictEqual(result.modelProfile, 'balanced');
+      assert.strictEqual(result.parallelization, true);
+    });
+
+    test('every RIGOR_PROFILES entry has workflow.verifier === true', async () => {
+      const models = await import('../bin/lib/models.mjs');
+      for (const [key, profile] of Object.entries(models.RIGOR_PROFILES)) {
+        assert.strictEqual(profile.workflow.verifier, true, `${key} has verifier=true`);
+      }
+    });
+
+    test('buildDefaultConfig output schema has all legacy keys', async () => {
+      const models = await import('../bin/lib/models.mjs');
+      const config = models.buildDefaultConfig();
+      assert.ok('researchDepth' in config);
+      assert.ok('parallelization' in config);
+      assert.ok('commitDocs' in config);
+      assert.ok('modelProfile' in config);
+      assert.ok('workflow' in config);
+      assert.ok('research' in config.workflow);
+      assert.ok('discuss' in config.workflow);
+      assert.ok('planCheck' in config.workflow);
+      assert.ok('verifier' in config.workflow);
+      assert.ok('gitProtocol' in config);
+      assert.ok('initVersion' in config);
+      assert.strictEqual(config.workflow.verifier, true);
+    });
+  });
 });
