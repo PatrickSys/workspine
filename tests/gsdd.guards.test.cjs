@@ -597,13 +597,12 @@ describe('G18 - Consumer Governance Completeness', () => {
 
   test('agents.block.md keeps only a compact set of anchor workflow names', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    const section = content.slice(content.indexOf('Where The Workflows Live'));
     for (const anchor of ['gsdd-new-project', 'gsdd-plan', 'gsdd-execute', 'gsdd-verify', 'gsdd-progress']) {
-      assert.match(section, new RegExp(anchor),
+      assert.match(content, new RegExp(anchor),
         `agents.block.md must keep ${anchor} as an anchor workflow. FIX: Add ${anchor} to the compact workflow list.`);
     }
 
-    const explicitSkillPaths = [...section.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
+    const explicitSkillPaths = [...content.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
     assert.ok(explicitSkillPaths.length === 0,
       `agents.block.md should not enumerate every workflow path. Found ${explicitSkillPaths.length} explicit paths. FIX: Keep only the wildcard directory pointer.`);
   });
@@ -703,16 +702,16 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'Quickstart must not group Cursor/Copilot/Gemini under direct SKILL.md opening. FIX: Keep them under slash-command guidance and reserve SKILL.md for fallback tools.');
   });
 
-  test('agents.block.md contains "How To Invoke Workflows" section', () => {
+  test('agents.block.md uses compact invoke guidance', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /### How To Invoke Workflows/,
-      'agents.block.md must have "How To Invoke Workflows" section. FIX: Add ### How To Invoke Workflows section.');
+    assert.match(content, /^Invoke:/m,
+      'agents.block.md must keep a compact Invoke line. FIX: Add a single-line Invoke section.');
   });
 
-  test('agents.block.md invocation section mentions slash commands for skills-native runtimes', () => {
+  test('agents.block.md invocation line mentions slash commands for supported runtimes', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /Claude Code.*OpenCode.*Cursor.*Copilot.*Gemini.*slash commands|slash commands.*\/gsdd-/i,
-      'agents.block.md invocation must mention slash commands for skills-native runtimes. FIX: Include Cursor/Copilot/Gemini in slash-command guidance.');
+    assert.match(content, /\/gsdd-plan.*Claude.*OpenCode.*Cursor.*Copilot.*Gemini/i,
+      'agents.block.md invocation must mention slash-command guidance for supported runtimes. FIX: Include the slash-command runtime list in the compact Invoke line.');
   });
 
   test('agents.block.md invocation section mentions Codex skill references', () => {
@@ -721,16 +720,18 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'agents.block.md invocation must mention Codex skill references. FIX: Add skill reference guidance for Codex.');
   });
 
-  test('agents.block.md invocation section mentions opening SKILL.md for fallback tools', () => {
+  test('agents.block.md invocation line mentions opening SKILL.md for fallback tools', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /Other AI tools.*Open the SKILL\.md file/i,
-      'agents.block.md invocation must mention opening SKILL.md for fallback tools. FIX: Add explicit SKILL.md guidance for other AI tools.');
+    assert.match(content, /open SKILL\.md directly elsewhere/i,
+      'agents.block.md invocation must mention opening SKILL.md for fallback tools. FIX: Add compact SKILL.md fallback guidance to the Invoke line.');
   });
 
-  test('agents.block.md says AGENTS governance is not workflow discovery for Cursor/Copilot/Gemini', () => {
+  test('agents.block.md stays focused on compact governance rules', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /Do not treat this file as the mechanism that makes the workflows discoverable/i,
-      'agents.block.md must distinguish AGENTS governance from workflow discovery for Cursor/Copilot/Gemini. FIX: Add explicit governance-vs-discovery wording.');
+    assert.match(content, /^Rules:/m,
+      'agents.block.md must keep a compact Rules section. FIX: Preserve the short governance rules list.');
+    assert.doesNotMatch(content, /### How To Invoke Workflows|### Where The Workflows Live/i,
+      'agents.block.md should stay compact and avoid the old verbose section layout. FIX: Keep invocation/workflow guidance condensed.');
   });
 
   test('agents.block.md stays focused on governance and discovery, not launch proof posture', () => {
@@ -2135,6 +2136,78 @@ describe('G34 - Git Delivery Visibility', () => {
   });
 });
 
+describe('Phase 18 deterministic CLI guards', () => {
+  const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
+
+  test('bin/gsdd.mjs registers file-op and phase-status commands', () => {
+    const gsddContent = fs.readFileSync(GSDD_PATH, 'utf-8');
+    assert.match(gsddContent, /'file-op'\s*:/,
+      'bin/gsdd.mjs must register the file-op command. FIX: Add file-op to COMMANDS.');
+    assert.match(gsddContent, /'phase-status'\s*:/,
+      'bin/gsdd.mjs must register the phase-status command. FIX: Add phase-status to COMMANDS.');
+  });
+
+  test('bin/lib/file-ops.mjs exists and exports cmdFileOp', async () => {
+    const fileOpsPath = path.join(ROOT, 'bin', 'lib', 'file-ops.mjs');
+    assert.ok(fs.existsSync(fileOpsPath),
+      'bin/lib/file-ops.mjs must exist. FIX: Add the deterministic file-op helper module.');
+    const mod = await import(`file://${fileOpsPath.replace(/\\/g, '/')}`);
+    assert.strictEqual(typeof mod.cmdFileOp, 'function',
+      'bin/lib/file-ops.mjs must export cmdFileOp. FIX: Export the file-op command handler.');
+  });
+
+  test('init help text documents file-op and phase-status', async () => {
+    const mod = await import(`file://${INIT_MODULE.replace(/\\/g, '/')}`);
+    const previousLog = console.log;
+    let output = '';
+    console.log = (...parts) => { output += `${parts.join(' ')}\n`; };
+    try {
+      mod.cmdHelp();
+    } finally {
+      console.log = previousLog;
+    }
+
+    assert.match(output, /file-op <copy\|delete\|regex-sub>/,
+      'Help text must document file-op. FIX: Add file-op command to cmdHelp output.');
+    assert.match(output, /phase-status <N> <status>/,
+      'Help text must document phase-status. FIX: Add phase-status command to cmdHelp output.');
+  });
+
+  test('affected workflows route checkpoint file ops through gsdd file-op', () => {
+    const expectations = [
+      ['pause.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['resume.md', /gsdd file-op copy \.planning\/\.continue-here\.md \.planning\/\.continue-here\.bak/],
+      ['resume.md', /gsdd file-op delete \.planning\/\.continue-here\.md/],
+      ['plan.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['execute.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['verify.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['quick.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+    ];
+
+    for (const [name, pattern] of expectations) {
+      const content = fs.readFileSync(path.join(workflowsDir, name), 'utf-8');
+      assert.match(content, pattern,
+        `${name} must route deterministic checkpoint file ops through gsdd file-op. FIX: Replace manual copy/delete instructions with gsdd file-op.`);
+    }
+  });
+
+  test('resume.md no longer describes manual checkpoint copy/delete prose', () => {
+    const content = fs.readFileSync(path.join(workflowsDir, 'resume.md'), 'utf-8');
+    assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Copy `?\.planning\/\.continue-here\.md`? to `?\.planning\/\.continue-here\.bak`?/i,
+      'resume.md must not keep the old manual copy wording. FIX: Reference gsdd file-op copy only.');
+    assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Delete `?\.planning\/\.continue-here\.md`?/i,
+      'resume.md must not keep the old manual delete wording. FIX: Reference gsdd file-op delete only.');
+  });
+
+  test('execute.md and verify.md route roadmap status changes through gsdd phase-status', () => {
+    for (const name of ['execute.md', 'verify.md']) {
+      const content = fs.readFileSync(path.join(workflowsDir, name), 'utf-8');
+      assert.match(content, /gsdd phase-status/,
+        `${name} must route ROADMAP phase status updates through gsdd phase-status. FIX: Replace manual checkbox mutation text.`);
+    }
+  });
+});
+
 describe('G31 - Evidence Index Completeness', () => {
   const designContent = fs.readFileSync(
     path.join(__dirname, '..', 'distilled', 'DESIGN.md'), 'utf-8'
@@ -2233,7 +2306,7 @@ describe('G33 - Phase 5 Success Criteria', () => {
       'bin/gsdd.mjs must not import dashboard or MCP packages (SC-1: no hidden services). FIX: Remove the import.');
   });
 
-  test('SC-2: all 8 CLI commands are registered', () => {
+  test('SC-2: all 10 CLI commands are registered', () => {
     // Commands appear as keys in the command registry object, e.g.: init: cmdInit, 'find-phase': cmdFindPhase
     const commandPatterns = [
       /\binit\s*:/,
@@ -2241,7 +2314,9 @@ describe('G33 - Phase 5 Success Criteria', () => {
       /\bhealth\s*:/,
       /\bverify\s*:/,
       /\bscaffold\s*:/,
+      /'file-op'\s*:/,
       /'find-phase'\s*:/,
+      /'phase-status'\s*:/,
       /\bmodels\s*:/,
       /\bhelp\s*:/,
     ];
@@ -2263,7 +2338,7 @@ describe('G33 - Phase 5 Success Criteria', () => {
       'bin/lib/manifest.mjs must export writeManifest (SC-2). FIX: Add the export.');
   });
 
-  test('SC-2: bin/lib/phase.mjs exports artifact verification functions', () => {
+  test('SC-2: bin/lib/phase.mjs exports artifact verification and roadmap-status functions', () => {
     const phaseContent = fs.readFileSync(path.join(__dirname, '..', 'bin', 'lib', 'phase.mjs'), 'utf-8');
     assert.ok(
       phaseContent.includes('cmdVerify') || phaseContent.includes('createCmdVerify'),
@@ -2271,6 +2346,9 @@ describe('G33 - Phase 5 Success Criteria', () => {
     assert.ok(
       phaseContent.includes('cmdScaffold') || phaseContent.includes('createCmdScaffold'),
       'bin/lib/phase.mjs must export a scaffold command (SC-2). FIX: Add the export.');
+    assert.ok(
+      phaseContent.includes('cmdPhaseStatus'),
+      'bin/lib/phase.mjs must export cmdPhaseStatus (SC-2). FIX: Add the roadmap phase-status helper export.');
   });
 
   test('SC-3: distilled/EVIDENCE-INDEX.md exists with entries', () => {
@@ -2513,5 +2591,67 @@ describe('G38 - I38 Approach-Exploration Hard Gate', () => {
       'plan-checker.md approach_alignment must emit a blocker when workflow.discuss=true and no APPROACH.md is provided. FIX: Add discuss-config-aware fail-closed language to the approach_alignment dimension.');
     assert.match(content, /fix_hint/,
       'plan-checker.md approach_alignment blocker must include a fix_hint directing the planner to run approach exploration. FIX: Add fix_hint to the discuss=true blocker case.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G39 - Health Check ID Consistency
+// Prevents silent W7 drift: if a developer adds a new check to health.mjs or
+// health-truth.mjs and forgets to update healthCheckIds / TRUTH_CHECK_IDS,
+// W7 silently skips the new ID when comparing against DESIGN.md.
+// ---------------------------------------------------------------------------
+describe('G39 - Health Check ID Consistency', () => {
+  const HEALTH_TRUTH_MODULE_PATH = path.join(ROOT, 'bin', 'lib', 'health-truth.mjs');
+
+  test('healthCheckIds array in health.mjs matches all implemented diagnostic IDs', () => {
+    const healthSource = fs.readFileSync(HEALTH_MODULE, 'utf-8');
+    const healthTruthSource = fs.readFileSync(HEALTH_TRUTH_MODULE_PATH, 'utf-8');
+
+    // Extract TRUTH_CHECK_IDS literal from health-truth.mjs
+    const truthMatch = healthTruthSource.match(/export const TRUTH_CHECK_IDS\s*=\s*\[([\s\S]*?)\]/);
+    assert.ok(truthMatch,
+      'health-truth.mjs must export TRUTH_CHECK_IDS as an array literal. FIX: Check export declaration.');
+    const truthIds = [...truthMatch[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+
+    // Extract declared healthCheckIds from health.mjs, expanding the ...TRUTH_CHECK_IDS spread
+    const declaredMatch = healthSource.match(/const healthCheckIds\s*=\s*\[([\s\S]*?)\]/);
+    assert.ok(declaredMatch,
+      'health.mjs must declare healthCheckIds as an array literal. FIX: Check healthCheckIds declaration.');
+    const rawDeclared = declaredMatch[1].replace('...TRUTH_CHECK_IDS', truthIds.map(id => `'${id}'`).join(', '));
+    const declaredIds = new Set([...rawDeclared.matchAll(/'([^']+)'/g)].map(m => m[1]));
+
+    // Extract all implemented diagnostic IDs from id: literals in both source files
+    const implementedIds = new Set();
+    for (const m of healthSource.matchAll(/\bid:\s*'([EWI]\d+)'/g)) implementedIds.add(m[1]);
+    for (const m of healthTruthSource.matchAll(/\bid:\s*'([EWI]\d+)'/g)) implementedIds.add(m[1]);
+
+    const missingFromDeclared = [...implementedIds].filter(id => !declaredIds.has(id));
+    const extraInDeclared = [...declaredIds].filter(id => !implementedIds.has(id));
+
+    assert.deepStrictEqual(missingFromDeclared, [],
+      `healthCheckIds is missing IDs implemented in source: ${missingFromDeclared.join(', ')}. FIX: Add the missing IDs to the healthCheckIds array in health.mjs.`);
+    assert.deepStrictEqual(extraInDeclared, [],
+      `healthCheckIds declares IDs with no matching diagnostic push: ${extraInDeclared.join(', ')}. FIX: Remove the extra IDs or add the missing push call.`);
+  });
+
+  test('TRUTH_CHECK_IDS matches the diagnostic IDs implemented in health-truth.mjs', () => {
+    const healthTruthSource = fs.readFileSync(HEALTH_TRUTH_MODULE_PATH, 'utf-8');
+
+    const truthMatch = healthTruthSource.match(/export const TRUTH_CHECK_IDS\s*=\s*\[([\s\S]*?)\]/);
+    assert.ok(truthMatch,
+      'health-truth.mjs must export TRUTH_CHECK_IDS as an array literal. FIX: Check export declaration.');
+    const declaredTruthIds = new Set([...truthMatch[1].matchAll(/'([^']+)'/g)].map(m => m[1]));
+
+    const implementedTruthIds = new Set(
+      [...healthTruthSource.matchAll(/\bid:\s*'([EWI]\d+)'/g)].map(m => m[1])
+    );
+
+    const missing = [...implementedTruthIds].filter(id => !declaredTruthIds.has(id));
+    const extra = [...declaredTruthIds].filter(id => !implementedTruthIds.has(id));
+
+    assert.deepStrictEqual(missing, [],
+      `TRUTH_CHECK_IDS is missing IDs implemented in health-truth.mjs: ${missing.join(', ')}. FIX: Add the missing IDs to the TRUTH_CHECK_IDS export in health-truth.mjs.`);
+    assert.deepStrictEqual(extra, [],
+      `TRUTH_CHECK_IDS declares IDs with no matching warning push in health-truth.mjs: ${extra.join(', ')}. FIX: Remove the extra IDs or add the missing push call.`);
   });
 });

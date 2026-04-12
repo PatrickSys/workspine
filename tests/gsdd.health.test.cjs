@@ -501,3 +501,50 @@ describe('Health — human-readable output', () => {
     assert.match(result.output, /BROKEN/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Framework source mode (isFrameworkSourceRepo)
+// Regression test: health must suppress E3-E8 and W1-W3 when run from the
+// framework repo itself, where distilled/templates/ is the source of truth
+// rather than an installed consumer copy.
+// Skipped in CI because .planning/ is gitignored and won't be present there.
+// ---------------------------------------------------------------------------
+const FRAMEWORK_ROOT = path.join(__dirname, '..');
+const planningConfigPath = path.join(FRAMEWORK_ROOT, '.planning', 'config.json');
+const skipFrameworkSourceMode = !fs.existsSync(planningConfigPath)
+  ? '.planning/ is gitignored and local-only — skip in CI'
+  : false;
+
+function extractJsonPayload(output) {
+  const text = String(output).trim();
+  const start = text.indexOf('{');
+  if (start !== -1) {
+    return JSON.parse(text.slice(start));
+  }
+  throw new Error(`No JSON object found in CLI output:\n${output}`);
+}
+
+describe('Health — framework source mode', () => {
+  test('gsdd health in framework repo suppresses E3-E8 and W1-W3', { skip: skipFrameworkSourceMode }, async () => {
+    const result = await runCliAsMain(FRAMEWORK_ROOT, ['health', '--json']);
+    const parsed = extractJsonPayload(result.output);
+
+    for (const id of ['E3', 'E4', 'E5', 'E6', 'E7', 'E8']) {
+      assert.ok(
+        !parsed.errors.some(e => e.id === id),
+        `gsdd health in framework repo must suppress ${id} (frameworkSourceMode). FIX: Check isFrameworkSourceRepo detection in health.mjs.`
+      );
+    }
+    for (const id of ['W1', 'W2', 'W3']) {
+      assert.ok(
+        !parsed.warnings.some(w => w.id === id),
+        `gsdd health in framework repo must suppress ${id} (skipInstalledTemplateChecks). FIX: Check isFrameworkSourceRepo detection in health.mjs.`
+      );
+    }
+    assert.notStrictEqual(
+      parsed.status,
+      'broken',
+      'gsdd health in framework repo must not report broken status. FIX: Check frameworkSourceMode suppression logic in health.mjs.'
+    );
+  });
+});
