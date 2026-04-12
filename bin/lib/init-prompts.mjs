@@ -1,5 +1,5 @@
 import * as readline from 'readline';
-import { DEFAULT_GIT_PROTOCOL, normalizeModelProfile } from './models.mjs';
+import { COST_PROFILES, DEFAULT_GIT_PROTOCOL, RIGOR_PROFILES, resolveCost, resolveRigor } from './models.mjs';
 import { buildRuntimeChoices, INIT_VERSION, resolveWizardAdapterTargets } from './init-runtime.mjs';
 
 const ANSI = {
@@ -51,110 +51,49 @@ export function createInitPromptApi({ input = process.stdin, output = process.st
 export async function promptForConfig(cwd, { input = process.stdin, output = process.stdout } = {}) {
   output.write(`\n${ANSI.bold}Step 3 of 3 - Configure planning defaults${ANSI.reset}\n`);
 
-  const researchDepth = await promptSingleSelect({
+  const rigor = await promptSingleSelect({
     input,
     output,
-    title: 'Research depth',
+    title: 'Rigor',
     choices: [
-      { value: 'balanced', label: 'balanced', description: 'SOTA research per phase (recommended)' },
-      { value: 'fast', label: 'fast', description: 'Skip deeper domain research and plan from current context' },
-      { value: 'deep', label: 'deep', description: 'Exhaustive research sweeps and parallel researchers' },
+      { value: 'quick', label: 'quick', description: 'Faster setup with lighter planning rigor' },
+      { value: 'balanced', label: 'balanced', description: 'Recommended default for most projects' },
+      { value: 'thorough', label: 'thorough', description: 'Maximum research and plan review rigor' },
     ],
-    defaultIndex: 0,
+    defaultIndex: 1,
   });
-  const parallelization = await promptSingleSelect({
+  const cost = await promptSingleSelect({
     input,
     output,
-    title: 'Parallelization',
-    choices: yesNoChoices('Run independent agents in parallel?', true),
-    defaultIndex: 0,
+    title: 'Cost',
+    choices: [
+      { value: 'budget', label: 'budget', description: 'Lower-cost model profile and no parallelization' },
+      { value: 'balanced', label: 'balanced', description: 'Recommended cost/quality tradeoff' },
+      { value: 'quality', label: 'quality', description: 'Maximum quality with parallel work enabled' },
+    ],
+    defaultIndex: 1,
   });
   const commitDocs = await promptSingleSelect({
     input,
     output,
     title: 'Planning docs in git',
-    choices: yesNoChoices('Track .planning/ in git?', true),
-    defaultIndex: 0,
-  });
-  const modelProfile = await promptSingleSelect({
-    input,
-    output,
-    title: 'Model profile',
     choices: [
-      { value: 'balanced', label: 'balanced', description: 'Capable default for most agents (recommended)' },
-      { value: 'quality', label: 'quality', description: 'Most capable model for research and roadmap work' },
-      { value: 'budget', label: 'budget', description: 'Cheapest and fastest model profile' },
+      { value: true, label: 'yes', description: 'Track .planning/ in git.' },
+      { value: false, label: 'no', description: 'Keep .planning/ local only.' },
     ],
     defaultIndex: 0,
   });
-  const workflowResearch = await promptSingleSelect({
-    input,
-    output,
-    title: 'Workflow research',
-    choices: yesNoChoices('Research before planning each phase?', true),
-    defaultIndex: 0,
-  });
-  const workflowDiscuss = await promptSingleSelect({
-    input,
-    output,
-    title: 'Approach discussion',
-    choices: yesNoChoices('Explore approaches with the user before planning?', false),
-    defaultIndex: 0,
-  });
-  const workflowPlanCheck = await promptSingleSelect({
-    input,
-    output,
-    title: 'Plan checking',
-    choices: yesNoChoices('Run the fresh-context plan checker before execution?', true),
-    defaultIndex: 0,
-  });
-  const workflowVerifier = await promptSingleSelect({
-    input,
-    output,
-    title: 'Phase verification',
-    choices: yesNoChoices('Run phase verification after execution?', true),
-    defaultIndex: 0,
-  });
 
-  const gitProtocol = await promptGitProtocol(cwd, { input, output });
+  const rigorConfig = resolveRigor(rigor);
+  const costConfig = resolveCost(cost);
 
   return {
-    researchDepth,
-    parallelization,
+    ...rigorConfig,
+    ...costConfig,
     commitDocs,
-    modelProfile: normalizeModelProfile(modelProfile),
-    workflow: {
-      research: workflowResearch,
-      discuss: workflowDiscuss,
-      planCheck: workflowPlanCheck,
-      verifier: workflowVerifier,
-    },
-    gitProtocol,
+    gitProtocol: { ...DEFAULT_GIT_PROTOCOL },
     initVersion: INIT_VERSION,
   };
-}
-
-export async function promptGitProtocol(cwd, { input = process.stdin, output = process.stdout } = {}) {
-  if (typeof input.resume === 'function') input.resume();
-  output.write(`\n${ANSI.bold}Version control guidance${ANSI.reset}\n`);
-  output.write(`${ANSI.dim}This is advisory only. Repo or user conventions still win.${ANSI.reset}\n`);
-  const rl = readline.createInterface({ input, output });
-  const askQuestion = (query) => new Promise((resolve) => rl.question(query, resolve));
-
-  try {
-    let branch = await askQuestion('  Branching guidance (Enter for default): ');
-    branch = branch.trim() || DEFAULT_GIT_PROTOCOL.branch;
-
-    let commit = await askQuestion('  Commit guidance (Enter for default): ');
-    commit = commit.trim() || DEFAULT_GIT_PROTOCOL.commit;
-
-    let pr = await askQuestion('  PR guidance (Enter for default): ');
-    pr = pr.trim() || DEFAULT_GIT_PROTOCOL.pr;
-
-    return { branch, commit, pr };
-  } finally {
-    rl.close();
-  }
 }
 
 export function yesNoChoices(prompt, defaultYes) {

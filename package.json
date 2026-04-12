@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "npm run test:gsdd",
-    "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.models.test.cjs && node tests/gsdd.manifest.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs && node tests/gsdd.guards.test.cjs && node tests/gsdd.health.test.cjs && node tests/gsdd.scenarios.test.cjs && node tests/gsdd.cross-runtime.test.cjs"
+    "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.models.test.cjs && node tests/gsdd.consumer-ceremony.test.cjs && node tests/gsdd.manifest.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs && node tests/gsdd.guards.test.cjs && node tests/gsdd.health.test.cjs && node tests/gsdd.scenarios.test.cjs && node tests/gsdd.cross-runtime.test.cjs"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",

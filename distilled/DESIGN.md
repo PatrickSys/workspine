@@ -1148,41 +1148,39 @@ This is acceptable because:
 
 ## 24. Consumer Governance Completeness
 
-**Problem:** Consumer governance surfaces (`agents.block.md`) listed only 4 of 10 delivered workflows. When a consumer ran `gsdd init --tools agents`, the generated AGENTS.md told the agent about new-project, plan, execute, and verify -- but audit-milestone, quick, pause, resume, progress, and map-codebase were invisible. AI agents working in consumer projects could not discover 60% of the available workflows.
+**Problem:** Consumer governance surfaces were oscillating between two failure modes. The earlier block was too thin and hid core lifecycle entry points. The later block over-corrected into a long wall that tried to enumerate every delivered workflow, which made first-run `AGENTS.md` too heavy for a stranger to scan quickly.
 
-**GSDD decision:** Consumer governance surfaces must enumerate all delivered capabilities. Governance maps that omit delivered workflows are functionally broken -- agents cannot use what they cannot discover.
+**GSDD decision:** Consumer-generated `AGENTS.md` must be complete for the primary lifecycle, not exhaustive for the whole framework. The generated governance surface is a routing map for the core path (`new-project -> plan -> execute -> verify -> progress`) plus the durable location of the portable skills. Secondary workflows remain discoverable through `.agents/skills/gsdd-*/SKILL.md`, but they do not all need to be listed inline in the short generated file.
 
 **What changed:**
 
-- `agents.block.md` now lists all 10 workflow skills, organized by function (primary lifecycle + supporting workflows)
-- Lifecycle description updated to mention audit-milestone and supporting surfaces
-- G18 guard suite mechanically prevents recurrence: asserts every WORKFLOWS entry appears in `agents.block.md`
-- CHANGELOG and README synced to actual counts (assertions, design decisions, PRs, test suites)
+- `agents.block.md` now names the five core lifecycle skills explicitly instead of trying to inline all workflow inventory
+- The lifecycle line still anchors the full flow through `audit-milestone`, but the generated block stays routing-first and compact
+- The block tells agents where the full portable workflow set lives: `.agents/skills/gsdd-*/SKILL.md`
+- Guard coverage now enforces the compact contract instead of exhaustive inventory in the generated file
 
-**Why this is high-leverage:** The framework machinery is mechanically sound (800+ assertions, 10 workflows, 10 roles, 3 native adapters, 23 design decisions). But an incomplete AGENTS.md map is functionally broken governance -- agents succeed or fail based on the harness, not the LLM.
+**Why this is high-leverage:** Consumer `AGENTS.md` is read at the exact moment a stranger is deciding whether the framework is legible. The file has to preserve load-bearing routing while staying short enough to scan. Exhaustive workflow inventory belongs in the durable skills directory and public docs, not in the first-run governance block.
 
 **Evidence:**
 
-- Anthropic, "Effective harnesses for long-running agents" (2026): harnesses must provide comprehensive, discoverable context; incomplete maps cause agent failure
-- Agent Skills specification (agentskills.io): progressive disclosure requires a complete top-level map
-- HumanLayer, "Skill Issue" (2026): AGENTS.md should be a short map (~100 lines) that points to all available capabilities
-- OpenAI, "Harness Engineering" (2026): the harness determines whether agents succeed or fail
-- External audits (2026-03-13, 2026-03-17): both independently flagged documentation accuracy as the top remaining blocker for consumer adoption
-- GSDD implementation: `distilled/templates/agents.block.md`, `CHANGELOG.md`, `README.md`, `tests/gsdd.guards.test.cjs` (G18)
+- HumanLayer, "Skill Issue" (2026): AGENTS.md works best as a short routing map, not a full product manual
+- OpenAI, "Harness Engineering" (2026): the harness should surface the critical path clearly at the moment of action
+- Phase 17 repo proof: `tests/gsdd.consumer-ceremony.test.cjs` now asserts the generated consumer file stays within 15-25 lines while preserving core routing hints and portable-skill discovery
+- GSDD implementation: `distilled/templates/agents.block.md`, `distilled/templates/agents.md`, `tests/gsdd.consumer-ceremony.test.cjs`, `tests/gsdd.guards.test.cjs`
 
 ---
 
 ## 25. Consumer First-Run Experience
 
-**Problem:** GSDD's internal architecture is complete (24 design decisions, 800+ tests, 10 workflows, 10 roles), but consumer-facing surfaces don't honestly guide first-time users. Two independent audits identified this as the single largest barrier to adoption.
+**Problem:** GSDD's internal architecture was stronger than its first-run UX. The framework had the right runtime surfaces and workflow depth, but consumer onboarding still felt like an internal tool: too many init questions, too much generated governance text, and not enough immediate clarity about the next step.
 
-**Decision:** Keep launch-proof posture in public docs and install/help surfaces, while keeping consumer governance surfaces focused on invocation guidance and the governance-vs-discovery boundary.
+**Decision:** Keep launch-proof posture in public docs and install/help surfaces, while making the actual first-run experience intentionally lightweight: a guided init wizard with only load-bearing choices, explicit post-init summary output, and a compact generated governance block focused on the core path.
 
 **Key changes:**
-- Platform adapter table uses honest capability tiers (native vs governance) instead of aspirational labels (skill_aware, custom_command_aware)
-- Post-init CLI output shows platform-specific next-step commands and the launch proof split for install guidance
-- AGENTS.md governance block includes per-platform invocation guide and the governance-vs-discovery boundary, but does not carry launch-proof copy
-- Quickstart section provides a guided first-use flow
+- Interactive init now asks only five visible questions: runtimes, AGENTS governance, rigor, cost, and whether to track `.planning/` in git
+- Init prints a short summary showing the selected rigor/cost defaults and the core workflow route
+- AGENTS.md governance stays focused on invocation guidance, the governance-vs-discovery boundary, and the core lifecycle rather than launch-proof copy or exhaustive inventory
+- Quickstart and public docs still carry the broader platform and proof story
 
 **Evidence:**
 1. **Anthropic harness engineering** (2025-2026): "honest constraints over vague prompting" — harnesses should clearly communicate what they can and cannot enforce
@@ -1191,7 +1189,7 @@ This is acceptable because:
 4. **Martin Fowler on context engineering**: Emphasizes that "the right information at the right time" applies to human consumers as much as to AI agents
 5. **Both GSDD external audits** (March 13 + 17, 2026): Independently concluded the same gap — "architecture is solid, presentation lags implementation"
 
-**GSDD implementation:** `README.md` (quickstart, honest platform tiers), `distilled/templates/agents.block.md` (per-platform invocation guide plus governance/discovery boundary), `bin/lib/init.mjs` (platform-aware post-init routing), `tests/gsdd.guards.test.cjs` (G19)
+**GSDD implementation:** `README.md` (quickstart, honest platform tiers), `distilled/templates/agents.block.md` (compact governance plus governance/discovery boundary), `bin/lib/init-flow.mjs` (post-init summary), `bin/lib/init-prompts.mjs` (5-prompt guided flow), `tests/gsdd.consumer-ceremony.test.cjs`, `tests/gsdd.guards.test.cjs`
 
 ---
 
@@ -1599,11 +1597,11 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 
 **Problem:** `gsdd init` had two mismatched onboarding models at once. The public story was moving toward skills-native runtimes and optional governance, but the actual CLI still made users memorize `--tools ...` values as the primary install experience. The only interactive part was the config questionnaire, which started after filesystem writes and did not help the user decide which runtime surfaces or governance overlays to install.
 
-**Decision:** Make `gsdd init` a guided install wizard in TTY environments, while preserving `--tools` and `--auto` as the manual/headless contract.
+**Decision:** Make `gsdd init` a guided install wizard in TTY environments, while preserving `--tools` and `--auto` as the manual/headless contract. The guided path must stay intentionally compact: runtime choice, governance opt-in, and a small set of bundled planning defaults rather than a long per-setting questionnaire.
 
 - Step 1: choose runtimes/vendors with a simple checkbox-style selector (space toggles, enter confirms).
 - Step 2: ask separately whether to install repo-wide `AGENTS.md` governance, with explicit explanation of why it helps and why it may feel invasive.
-- Step 3: collect the existing planning defaults in the same guided flow instead of dropping back to free-form line prompts.
+- Step 3: collect the planning defaults through two orthogonal bundled choices (`Rigor` and `Cost`) plus the separate `.planning` tracking choice, instead of a long per-setting questionnaire.
 - Portable `.agents/skills/gsdd-*` skills remain the always-generated baseline.
 - Legacy values such as `--tools cursor`, `--tools copilot`, and `--tools gemini` remain valid for backward compatibility.
 
@@ -1612,6 +1610,13 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 - In the wizard, choosing Cursor/Copilot/Gemini affects post-init routing and user-facing install intent, but does **not** silently write root `AGENTS.md`.
 - Root `AGENTS.md` is generated only when the user explicitly opts into governance (wizard) or explicitly requests a governance-writing flag path (`--tools agents`, `--tools all`, or legacy runtime aliases).
 - This keeps D35's capability split honest instead of re-conflating skills-native runtime choice with governance-file generation.
+
+**Phase 17 refinement:**
+
+- The guided config path was reduced from 13 visible prompts to 5.
+- `Rigor` controls `researchDepth` and workflow strictness (`research`, `discuss`, `planCheck`) while keeping `workflow.verifier` always on.
+- `Cost` controls `modelProfile` and `parallelization` independently, so combinations such as `thorough + budget` remain reachable.
+- `gitProtocol` remains in `config.json` with defaults but is intentionally out of the wizard until a dedicated UX pass decides the right shape.
 
 **Why this fits the codebase:** The adapter registry and `init.mjs` already own the right boundary. The high-leverage change was to add a decision layer in front of writes, not to invent a new adapter model or a new config schema. This keeps the CLI lightweight, preserves backward compatibility, and makes the default install path match the product story.
 
@@ -1624,7 +1629,7 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 
 **GSD comparison:** GSD's install surface is more operator-heavy and framework-specific. GSDD keeps the deterministic bootstrap principle but shifts the user-facing choice surface into a lightweight guided CLI instead of requiring users to know adapter values in advance.
 
-**GSDD implementation:** `bin/lib/init.mjs`, `bin/gsdd.mjs`, `README.md`, `distilled/README.md`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`, `tests/gsdd.init.test.cjs`, `tests/gsdd.guards.test.cjs`
+**GSDD implementation:** `bin/lib/init.mjs`, `bin/lib/init-flow.mjs`, `bin/lib/init-prompts.mjs`, `bin/lib/models.mjs`, `bin/gsdd.mjs`, `README.md`, `distilled/README.md`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`, `tests/gsdd.init.test.cjs`, `tests/gsdd.consumer-ceremony.test.cjs`, `tests/gsdd.guards.test.cjs`
 
 ---
 

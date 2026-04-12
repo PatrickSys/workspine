@@ -3,7 +3,7 @@ import { join, isAbsolute } from 'path';
 import { renderSkillContent } from './rendering.mjs';
 import { buildManifest, writeManifest } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
-import { buildDefaultConfig } from './models.mjs';
+import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './models.mjs';
 import { installProjectTemplates, refreshTemplates } from './templates.mjs';
 import {
   detectPlatforms,
@@ -120,6 +120,7 @@ export function createCmdInit(ctx) {
     console.log('  - wrote generation manifest');
 
     console.log('\nGSDD initialized.');
+    printInitSummary(interactiveSession.config ?? buildDefaultConfig({ autoAdvance: isAuto }));
     console.log('Next: run the new-project workflow to produce SPEC.md and ROADMAP.md:\n');
     printPostInitRouting(interactiveSession.selectedRuntimes);
   };
@@ -243,5 +244,24 @@ function printPostInitRouting(selectedRuntimes) {
   for (const line of getPostInitRoutingLines(selectedRuntimes)) {
     console.log(line);
   }
+  console.log('');
+}
+
+function printInitSummary(config) {
+  const rigor = Object.entries(RIGOR_PROFILES).find(([, profile]) => (
+    profile.researchDepth === config.researchDepth
+    && profile.workflow.research === config.workflow?.research
+    && profile.workflow.discuss === config.workflow?.discuss
+    && profile.workflow.planCheck === config.workflow?.planCheck
+    && profile.workflow.verifier === config.workflow?.verifier
+  ))?.[0] ?? 'balanced';
+  const cost = Object.entries(COST_PROFILES).find(([, profile]) => (
+    profile.modelProfile === config.modelProfile
+    && profile.parallelization === config.parallelization
+  ))?.[0] ?? 'balanced';
+
+  console.log(`Rigor: ${rigor}   Cost: ${cost}   Track .planning/ in git: ${config.commitDocs ? 'yes' : 'no'}`);
+  console.log('Workflows: new-project → plan → execute → verify → progress');
+  console.log('Edit .planning/config.json to fine-tune (verifier, gitProtocol, individual workflow flags).');
   console.log('');
 }

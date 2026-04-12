@@ -597,13 +597,12 @@ describe('G18 - Consumer Governance Completeness', () => {
 
   test('agents.block.md keeps only a compact set of anchor workflow names', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    const section = content.slice(content.indexOf('Where The Workflows Live'));
     for (const anchor of ['gsdd-new-project', 'gsdd-plan', 'gsdd-execute', 'gsdd-verify', 'gsdd-progress']) {
-      assert.match(section, new RegExp(anchor),
+      assert.match(content, new RegExp(anchor),
         `agents.block.md must keep ${anchor} as an anchor workflow. FIX: Add ${anchor} to the compact workflow list.`);
     }
 
-    const explicitSkillPaths = [...section.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
+    const explicitSkillPaths = [...content.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
     assert.ok(explicitSkillPaths.length === 0,
       `agents.block.md should not enumerate every workflow path. Found ${explicitSkillPaths.length} explicit paths. FIX: Keep only the wildcard directory pointer.`);
   });
@@ -703,16 +702,16 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'Quickstart must not group Cursor/Copilot/Gemini under direct SKILL.md opening. FIX: Keep them under slash-command guidance and reserve SKILL.md for fallback tools.');
   });
 
-  test('agents.block.md contains "How To Invoke Workflows" section', () => {
+  test('agents.block.md uses compact invoke guidance', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /### How To Invoke Workflows/,
-      'agents.block.md must have "How To Invoke Workflows" section. FIX: Add ### How To Invoke Workflows section.');
+    assert.match(content, /^Invoke:/m,
+      'agents.block.md must keep a compact Invoke line. FIX: Add a single-line Invoke section.');
   });
 
-  test('agents.block.md invocation section mentions slash commands for skills-native runtimes', () => {
+  test('agents.block.md invocation line mentions slash commands for supported runtimes', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /Claude Code.*OpenCode.*Cursor.*Copilot.*Gemini.*slash commands|slash commands.*\/gsdd-/i,
-      'agents.block.md invocation must mention slash commands for skills-native runtimes. FIX: Include Cursor/Copilot/Gemini in slash-command guidance.');
+    assert.match(content, /\/gsdd-plan.*Claude.*OpenCode.*Cursor.*Copilot.*Gemini/i,
+      'agents.block.md invocation must mention slash-command guidance for supported runtimes. FIX: Include the slash-command runtime list in the compact Invoke line.');
   });
 
   test('agents.block.md invocation section mentions Codex skill references', () => {
@@ -721,16 +720,18 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'agents.block.md invocation must mention Codex skill references. FIX: Add skill reference guidance for Codex.');
   });
 
-  test('agents.block.md invocation section mentions opening SKILL.md for fallback tools', () => {
+  test('agents.block.md invocation line mentions opening SKILL.md for fallback tools', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /Other AI tools.*Open the SKILL\.md file/i,
-      'agents.block.md invocation must mention opening SKILL.md for fallback tools. FIX: Add explicit SKILL.md guidance for other AI tools.');
+    assert.match(content, /open SKILL\.md directly elsewhere/i,
+      'agents.block.md invocation must mention opening SKILL.md for fallback tools. FIX: Add compact SKILL.md fallback guidance to the Invoke line.');
   });
 
-  test('agents.block.md says AGENTS governance is not workflow discovery for Cursor/Copilot/Gemini', () => {
+  test('agents.block.md stays focused on compact governance rules', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /Do not treat this file as the mechanism that makes the workflows discoverable/i,
-      'agents.block.md must distinguish AGENTS governance from workflow discovery for Cursor/Copilot/Gemini. FIX: Add explicit governance-vs-discovery wording.');
+    assert.match(content, /^Rules:/m,
+      'agents.block.md must keep a compact Rules section. FIX: Preserve the short governance rules list.');
+    assert.doesNotMatch(content, /### How To Invoke Workflows|### Where The Workflows Live/i,
+      'agents.block.md should stay compact and avoid the old verbose section layout. FIX: Keep invocation/workflow guidance condensed.');
   });
 
   test('agents.block.md stays focused on governance and discovery, not launch proof posture', () => {
