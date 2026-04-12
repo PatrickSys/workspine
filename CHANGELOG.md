@@ -1,3 +1,17 @@
+# [0.15.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.14.0...v0.15.0) (2026-04-12)
+
+
+### Bug Fixes
+
+* add health truth consistency guards ([c025441](https://github.com/PatrickSys/get-shit-done-distilled/commit/c0254419384a96c812849556721a3236a9c93392))
+* harden deterministic workflow helper contracts ([7a23a5b](https://github.com/PatrickSys/get-shit-done-distilled/commit/7a23a5b8ceb2a10750dde827f3095a16ed493463))
+
+
+### Features
+
+* add deterministic workflow CLI helpers ([8f09d6b](https://github.com/PatrickSys/get-shit-done-distilled/commit/8f09d6b8f0222a536281537e7b818daeebef8e69))
+* reduce init ceremony and consumer AGENTS.md ([c47c555](https://github.com/PatrickSys/get-shit-done-distilled/commit/c47c555ec27d613b166438789b6228310adcce11))
+
 # [0.14.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.13.5...v0.14.0) (2026-04-11)
 
 
