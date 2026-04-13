@@ -102,14 +102,22 @@ const COMMANDS = {
   help: cmdHelp,
 };
 
-async function runCli(cliCommand = command, cliArgs = args) {
+async function runCli(cliCommand = command, ...cliArgs) {
+  const normalizedArgs = cliArgs.length === 0
+    ? args
+    : cliArgs.length === 1 && Array.isArray(cliArgs[0])
+      ? cliArgs[0]
+      : cliArgs;
+
+  process.exitCode = 0;
+
   if (!cliCommand || !COMMANDS[cliCommand]) {
     cmdHelp();
     if (cliCommand) process.exitCode = 1;
     return;
   }
 
-  await COMMANDS[cliCommand](...cliArgs);
+  await COMMANDS[cliCommand](...normalizedArgs);
 }
 
 if (IS_MAIN) {

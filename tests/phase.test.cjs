@@ -9,6 +9,7 @@ const path = require('path');
 const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
 const {
   createTempProject: createGsddTempProject,
+  loadGsdd,
   runCliAsMain,
 } = require('./gsdd.helpers.cjs');
 
@@ -1153,6 +1154,29 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /file-op <copy\|delete\|regex-sub>/);
     assert.match(result.output, /phase-status <N> <status>/);
+  });
+
+  test('a later successful in-process CLI run clears an earlier phase-command failure exit code', async () => {
+    const gsdd = await loadGsdd(tmpDir);
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const previousCwd = process.cwd();
+
+    fs.writeFileSync(
+      roadmapPath,
+      '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
+    );
+
+    process.chdir(tmpDir);
+    try {
+      await gsdd.runCli('verify', []);
+      assert.strictEqual(process.exitCode, 1, 'failing verify should set a non-zero exit code');
+
+      await gsdd.runCli('phase-status', ['18', 'done']);
+      assert.strictEqual(process.exitCode, 0, 'successful follow-up run should clear the prior failure exit code');
+      assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[x\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
+    } finally {
+      process.chdir(previousCwd);
+    }
   });
 });
 
