@@ -1,3 +1,15 @@
+# [0.16.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.15.1...v0.16.0) (2026-04-13)
+
+
+### Bug Fixes
+
+* harden provenance transition checks ([5bdb9a9](https://github.com/PatrickSys/get-shit-done-distilled/commit/5bdb9a9a38a63aefe6e9cf6520a5ee10f6dc86a9))
+
+
+### Features
+
+* harden workflow provenance and transition safety ([9f4e485](https://github.com/PatrickSys/get-shit-done-distilled/commit/9f4e485ae75b1cb6a2242a93d66015e9bfe1b288))
+
 ## [0.15.1](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.15.0...v0.15.1) (2026-04-13)
 
 
