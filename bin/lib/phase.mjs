@@ -105,12 +105,14 @@ export function cmdPhaseStatus(...args) {
 
   if (!phaseNumber || !status) {
     console.error('Usage: gsdd phase-status <phase-number> <not_started|todo|in_progress|done>');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   if (!existsSync(roadmapPath)) {
     console.error('No ROADMAP.md found. Run the new-project workflow first.');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   try {
@@ -123,7 +125,7 @@ export function cmdPhaseStatus(...args) {
     output({ phase: phaseNumber, status, roadmap: '.planning/ROADMAP.md', changed });
   } catch (error) {
     console.error(error.message);
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -183,18 +185,18 @@ export function cmdVerify(...args) {
   const phaseNum = args[0];
   if (!phaseNum) {
     console.error('Usage: gsdd verify <phase-number>');
-    process.exit(1);
+    process.exitCode = 1; return;
   }
 
   if (!existsSync(planningDir)) {
     console.error('No .planning/ directory found.');
-    process.exit(1);
+    process.exitCode = 1; return;
   }
 
   const planFile = findFiles(join(planningDir, 'phases'), `${padPhase(phaseNum)}-PLAN`)[0];
   if (!planFile) {
     console.error(`No plan found for phase ${phaseNum}`);
-    process.exit(1);
+    process.exitCode = 1; return;
   }
 
   const planPath = join(planningDir, 'phases', planFile);
@@ -267,14 +269,14 @@ export function cmdScaffold(...args) {
 
   if (type !== 'phase') {
     console.error('Usage: gsdd scaffold phase <number> [name]');
-    process.exit(1);
+    process.exitCode = 1; return;
   }
 
   const phaseNum = rest[0];
   const phaseName = rest.slice(1).join(' ');
   if (!phaseNum) {
     console.error('Usage: gsdd scaffold phase <number> [name]');
-    process.exit(1);
+    process.exitCode = 1; return;
   }
 
   const phasesDir = join(planningDir, 'phases');
