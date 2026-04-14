@@ -1,7 +1,7 @@
 {
   "name": "gsdd-cli",
   "version": "0.16.0",
-  "description": "Northline — a repo-native, verification-first workflow spine for long-horizon AI software delivery, published as gsdd-cli.",
+  "description": "Northline — a repo-native workflow kernel for long-horizon AI software delivery, with directly validated support for Claude Code, Codex CLI, and OpenCode, published as gsdd-cli.",
   "type": "module",
   "bin": {
     "gsdd": "bin/gsdd.mjs"

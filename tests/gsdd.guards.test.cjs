@@ -2587,17 +2587,17 @@ describe('G37 - Launch Surface Consistency', () => {
       'package.json name must remain gsdd-cli. FIX: Keep the package name stable while the public product brand changes.');
   });
 
-  test('planning truth surfaces use qualified_support instead of governance_only', () => {
-    const planningSpec = fs.readFileSync(path.join(ROOT, '.planning', 'SPEC.md'), 'utf-8');
-    const planningResearch = fs.readFileSync(path.join(ROOT, '.planning', 'research', '09-RESEARCH.md'), 'utf-8');
-    assert.doesNotMatch(planningSpec, /governance_only/i,
-      '.planning/SPEC.md must not expose governance_only after Phase 21. FIX: Use qualified_support wording in the runtime matrix.');
-    assert.match(planningSpec, /qualified_support/i,
-      '.planning/SPEC.md must describe the non-parity launch tier as qualified_support. FIX: Update the runtime matrix wording.');
-    assert.doesNotMatch(planningResearch, /governance_only/i,
-      '.planning/research/09-RESEARCH.md must not expose governance_only after Phase 21. FIX: Replace the tier wording.');
-    assert.match(planningResearch, /qualified_support/i,
-      '.planning/research/09-RESEARCH.md must describe the launch-facing non-parity tier as qualified_support. FIX: Update the tier table and runtime entries.');
+  test('tracked public launch surfaces preserve the qualified support proof split', () => {
+    const rootReadme = fs.readFileSync(README_MD, 'utf-8');
+    const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
+    assert.doesNotMatch(rootReadme, /governance_only/i,
+      'README.md must not expose governance_only after Phase 21. FIX: Keep internal runtime taxonomy out of the public launch surface.');
+    assert.match(rootReadme, /Qualified support:.*Cursor.*Copilot.*Gemini/i,
+      'README.md must keep the qualified-support proof split explicit. FIX: Retain the qualified support launch wording near the top of the README.');
+    assert.doesNotMatch(distilledReadme, /governance_only/i,
+      'distilled/README.md must not expose governance_only after Phase 21. FIX: Keep internal runtime taxonomy out of the distilled launch surface.');
+    assert.match(distilledReadme, /Qualified support only:.*Cursor.*Copilot.*Gemini/i,
+      'distilled/README.md must keep the qualified-support proof split explicit. FIX: Retain the launch proof posture in the distilled README.');
   });
 
   test('README install command and package metadata stay aligned', () => {
