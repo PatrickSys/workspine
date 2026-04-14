@@ -22,6 +22,12 @@ function lineCount(filePath) {
   return fs.readFileSync(filePath, 'utf-8').split('\n').length;
 }
 
+function introBeforeWhatThisIs(markdown) {
+  const marker = '\n## What This Is';
+  const idx = markdown.indexOf(marker);
+  return idx === -1 ? markdown : markdown.slice(0, idx);
+}
+
 describe('G9 - Generation Manifest Contract', () => {
   test('bin/lib/manifest.mjs exists', () => {
     assert.ok(fs.existsSync(MANIFEST_MODULE),
@@ -2552,6 +2558,46 @@ describe('G37 - Launch Surface Consistency', () => {
       'README.md must describe GSDD as a repo-native workflow kernel. FIX: Use the kernel framing in the public intro.');
     assert.match(distilledReadme, /repo-native workflow kernel/i,
       'distilled/README.md must describe GSDD as a repo-native workflow kernel. FIX: Align the distilled intro with the launch framing.');
+  });
+
+  test('lead launch copy is product-first instead of origin-first', () => {
+    const rootIntro = introBeforeWhatThisIs(fs.readFileSync(README_MD, 'utf-8'));
+    const distilledIntro = introBeforeWhatThisIs(fs.readFileSync(DISTILLED_README_MD, 'utf-8'));
+    assert.match(rootIntro, /planning, execution, verification, and handoff spine/i,
+      'README.md must lead with what Northline does. FIX: Make the first explanatory paragraph describe the planning/execution/verification/handoff spine.');
+    assert.doesNotMatch(rootIntro, /Distilled from|Get Shit Done/i,
+      'README.md lead copy must not foreground origin-story wording. FIX: Move GSD attribution out of the lead intro.');
+    assert.match(distilledIntro, /planning, execution, verification, and handoff/i,
+      'distilled/README.md must lead with what Northline does. FIX: Make the first explanatory paragraph describe the repo spine before any origin context.');
+    assert.doesNotMatch(distilledIntro, /Distilled from|from GSD/i,
+      'distilled/README.md lead copy must not foreground GSD origin wording. FIX: Move origin context out of the lead intro.');
+  });
+
+  test('public launch surfaces use Northline as the product brand while keeping gsdd-cli as the package', () => {
+    const rootReadme = fs.readFileSync(README_MD, 'utf-8');
+    const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+    assert.match(rootReadme, /# Northline/i,
+      'README.md must lead with the Northline product name. FIX: Rename the public title to Northline.');
+    assert.match(distilledReadme, /# Northline/i,
+      'distilled/README.md must lead with the Northline product name. FIX: Rename the distilled public title to Northline.');
+    assert.match(pkg.description, /Northline/i,
+      'package.json description must mention Northline. FIX: Align package metadata with the public brand.');
+    assert.strictEqual(pkg.name, 'gsdd-cli',
+      'package.json name must remain gsdd-cli. FIX: Keep the package name stable while the public product brand changes.');
+  });
+
+  test('tracked public launch surfaces preserve the qualified support proof split', () => {
+    const rootReadme = fs.readFileSync(README_MD, 'utf-8');
+    const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
+    assert.doesNotMatch(rootReadme, /governance_only/i,
+      'README.md must not expose governance_only after Phase 21. FIX: Keep internal runtime taxonomy out of the public launch surface.');
+    assert.match(rootReadme, /Qualified support:.*Cursor.*Copilot.*Gemini/i,
+      'README.md must keep the qualified-support proof split explicit. FIX: Retain the qualified support launch wording near the top of the README.');
+    assert.doesNotMatch(distilledReadme, /governance_only/i,
+      'distilled/README.md must not expose governance_only after Phase 21. FIX: Keep internal runtime taxonomy out of the distilled launch surface.');
+    assert.match(distilledReadme, /Qualified support only:.*Cursor.*Copilot.*Gemini/i,
+      'distilled/README.md must keep the qualified-support proof split explicit. FIX: Retain the launch proof posture in the distilled README.');
   });
 
   test('README install command and package metadata stay aligned', () => {

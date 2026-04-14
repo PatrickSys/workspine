@@ -1,6 +1,6 @@
-# GSDD User Guide
+# Northline User Guide
 
-A detailed reference for workflows, troubleshooting, and configuration. For quick-start setup, see the [README](../README.md).
+A detailed reference for Northline workflows, troubleshooting, and configuration. The package and CLI remain `gsdd-cli` and `gsdd`. For quick-start setup, see the [README](../README.md).
 
 ---
 

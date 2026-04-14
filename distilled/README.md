@@ -1,15 +1,17 @@
-# GSDD (Get Shit Done Distilled)
+# Northline
 
-Lightweight, repo-native workflow kernel for AI-assisted engineering.
+A repo-native workflow kernel for long-horizon AI software delivery.
 
-Distilled from GSD (Get Shit Done): keep rigor and leverage, drop ceremony.
+Northline gives long-horizon AI-assisted software work a durable repo spine for planning, execution, verification, and handoff. The package and CLI remain `gsdd-cli` / `gsdd`.
 
 ## What This Is
 
-GSDD is a small set of workflow sources plus a CLI (`gsdd`) that:
+Northline is a small set of workflow sources plus a CLI (`gsdd`) that:
 - scaffolds a project planning workspace (`.planning/`)
 - generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)
 - optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)
+
+It gives serious AI-assisted software work one durable repo workflow spine for planning, execution, verification, and handoff without pretending to be a hosted orchestration layer.
 
 Launch proof posture:
 - Directly validated in repo truth: Claude Code, Codex CLI, OpenCode

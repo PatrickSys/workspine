@@ -1,14 +1,13 @@
 <div align="center">
 
-# GSD Distilled
+# Northline
 
-**A repo-native workflow kernel for AI coding agents.**
+**A repo-native workflow kernel for long-horizon AI software delivery.**
 
-Extracted from [Get Shit Done](https://github.com/gsd-build/get-shit-done). Same long-horizon delivery spine — fewer moving parts.
+Northline gives long-horizon AI-assisted software work one repo-native planning, execution, verification, and handoff spine so progress survives runtime switching and session loss. The package and CLI remain `gsdd-cli` / `gsdd`.
 
 [![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/assertions-1228_passing-brightgreen?style=for-the-badge)](tests/)
 
 ```bash
 npx gsdd-cli init
@@ -23,7 +22,11 @@ npx gsdd-cli init
 
 ## What This Is
 
-GSDD is a distilled fork of GSD. It preserves the high-leverage parts of long-horizon AI-assisted development:
+Northline gives serious AI-assisted software work one repo-native planning, execution, verification, and handoff spine so progress survives long horizons, runtime switching, and session loss without turning into a dashboard or orchestration control plane.
+
+The current package and CLI stay `gsdd-cli` and `gsdd`. Northline is the public product brand layered on top of that stable install surface.
+
+It preserves the high-leverage parts of long-horizon AI-assisted development:
 
 - **Persistent artifacts** — SPEC.md, ROADMAP.md, and config.json as the durable workspace
 - **Codebase mapping** — 4 parallel mappers produce STACK, ARCHITECTURE, CONVENTIONS, CONCERNS
@@ -33,9 +36,9 @@ GSDD is a distilled fork of GSD. It preserves the high-leverage parts of long-ho
 - **Milestone audit** — cross-phase integration, requirements coverage, E2E flows
 - **Session management** — pause work with checkpoint, resume with context restoration and routing
 
-What it strips: GSD's broader operator surface (32 workflows, 11 agents, discovery modes, sprint ceremony, a settings flow, and additional operator ergonomics). GSDD has 14 workflows and 10 roles.
+What it strips: GSD's broader operator surface (32 workflows, 11 agents, discovery modes, sprint ceremony, a settings flow, and additional operator ergonomics). Northline keeps 14 workflows and 10 roles.
 
-**Target user:** Developer or small team that wants a repo-native, spec-driven delivery kernel, not a dashboard or orchestration control plane.
+**Target user:** Developer or small team that wants a repo-native, spec-driven workflow kernel with durable proof and handoff, not a dashboard or orchestration control plane.
 
 ---
 
