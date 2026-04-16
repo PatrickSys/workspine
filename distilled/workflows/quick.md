@@ -8,7 +8,7 @@ They reuse the same planner, executor, and verifier roles but skip research and 
 <anti_patterns>
 - Do not execute before the user sees the plan preview (Step 3.7 must complete before Step 4)
 - Do not proceed past file verification gates if the expected file does not exist on disk — a plan that exists only in conversation context will be lost on compaction
-- Do not ask more than 2 approach clarification questions — if 3+ grey areas exist, recommend /gsdd-plan instead
+- Do not ask more than 2 approach clarification questions — if the bounded change is still undefined, recommend `/gsdd-new-project`; if the change is defined but 3+ grey areas remain, recommend `/gsdd-plan` instead
 - Do not create APPROACH.md for quick tasks — use inline $APPROACH_CONTEXT only
 - Do not update ROADMAP.md or SPEC.md from quick tasks — these are phase-level artifacts
 - Do not skip config.json reads — workflow toggles (discuss, planCheck, verifier) control flow
@@ -37,7 +37,7 @@ Store the response as `$DESCRIPTION`. If empty, re-prompt.
 2. Scan `.planning/quick/` for existing task directories. Calculate `$NEXT_NUM` as the next 3-digit number (001, 002, ...).
 3. Generate `$SLUG` from `$DESCRIPTION` (lowercase, hyphens, max 40 chars).
 4. Create `.planning/quick/$NEXT_NUM-$SLUG/`.
-5. If `.planning/codebase/` exists, read `.planning/codebase/ARCHITECTURE.md` and `.planning/codebase/STACK.md`. Summarize key findings in <=500 words as `$CODEBASE_CONTEXT`. If `.planning/codebase/` does not exist, set `$CODEBASE_CONTEXT` to empty.
+5. If `.planning/codebase/` exists, read `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STACK.md`, `.planning/codebase/CONVENTIONS.md`, and `.planning/codebase/CONCERNS.md`. Summarize key findings in <=500 words as `$CODEBASE_CONTEXT`, emphasizing: safest surfaces to touch, risky zones to avoid, must-know conventions/traps, and what must be re-verified after change. If `.planning/codebase/` does not exist, set `$CODEBASE_CONTEXT` to empty.
 6. **Session-boundary fallback:** If `.planning/.continue-here.bak` exists, read its `<judgment>` section. Use `<active_constraints>` and `<anti_regression>` rules as task-scoping context (do not violate active constraints; do not regress on listed invariants). After reading, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 7. Inspect the live branch/worktree surface separately from checkpoint or planning artifacts. If the current branch appears stale/spent, PR-less with overlapping write scope, or otherwise like the wrong execution surface, warn before proceeding. This is advisory for quick tasks unless the mismatch makes the task description materially misleading.
 
@@ -79,7 +79,7 @@ For each grey area, present 2-3 concrete options with a recommended default:
 
 - If user says "go ahead" / "your call" / presses Enter → use the recommendation.
 - If user specifies a preference → record it.
-- Maximum 2 questions. If the task has 3+ grey areas, it's not a quick task.
+- Maximum 2 questions. If the bounded change is still undefined after clarification, recommend `/gsdd-new-project`. If the change is defined but the task still has 3+ grey areas, it's not a quick task — recommend `/gsdd-plan`.
 
 ### Output
 
@@ -101,7 +101,7 @@ Delegate to the planner role in quick mode.
 **Context to provide:**
 - Task description: `$DESCRIPTION`
 - Approach context: `$APPROACH_CONTEXT` (user-confirmed decisions from Step 2.5 — treat as locked constraints, do not revisit)
-- Codebase context: `$CODEBASE_CONTEXT` (existing architecture and stack — use for orientation, not as constraints; empty if no codebase map exists)
+- Codebase context: `$CODEBASE_CONTEXT` (existing brownfield codebase summary from architecture, stack, conventions, and concerns — use for orientation and risk awareness, not as hard constraints; empty if no codebase map exists)
 - Mode: quick (single plan, 1-3 tasks, no research phase)
 - Output path: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
 
@@ -178,6 +178,7 @@ Evaluate the plan against quick-scope boundaries. Read the plan file and check:
 | Files modified | >8 distinct files in plan | "This task touches {N} files — consider `/gsdd-plan` for full ceremony." |
 | Architecture keywords in `$DESCRIPTION` | contains: `refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database` | "This looks like architectural work — consider `/gsdd-plan` for approach exploration." |
 | New public APIs | Plan tasks create new route files, API endpoints, or exported interfaces | "New public surface area detected — consider `/gsdd-plan` for approach exploration." |
+| Undefined bounded change | `$DESCRIPTION` still does not identify a concrete bug, feature, target surface, or observable outcome after clarification | "This does not yet describe a bounded change — use `/gsdd-new-project` to define the work first." |
 
 If any signal fires, set `$SCOPE_WARNING` to the first matching advisory text. Multiple signals concatenate.
 If no signals fire, `$SCOPE_WARNING` is empty.

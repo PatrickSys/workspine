@@ -1713,18 +1713,20 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 **Problem:** The brownfield path was structurally incomplete. `map-codebase` generated useful orientation artifacts, but it routed users only toward full project initialization. `quick` remained blind to those same codebase maps, so brownfield users who wanted disciplined feature work without full roadmap ceremony had no first-class lane.
 
-**Decision:** Wire the existing brownfield lane instead of adding a new workflow.
+**Decision:** Wire the existing secondary brownfield lane instead of adding a new workflow.
 
-- `map-codebase` completion now offers two explicit next steps: `/gsdd-new-project` for full lifecycle setup and `/gsdd-quick` for brownfield feature work.
-- `quick` now reads `.planning/codebase/ARCHITECTURE.md` and `.planning/codebase/STACK.md` when they exist and passes a summarized `$CODEBASE_CONTEXT` into the planner delegate.
+- `map-codebase` completion now offers two explicit next steps: `/gsdd-new-project` for full lifecycle setup and `/gsdd-quick` for bounded brownfield feature work.
+- `map-codebase` completion now synthesizes an explicit brownfield routing summary from the existing 4 docs: safest next change lane, highest-risk zones, must-know traps, and the recommended workflow with rationale.
+- `quick` now reads `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STACK.md`, `.planning/codebase/CONVENTIONS.md`, and `.planning/codebase/CONCERNS.md` when they exist and passes a summarized `$CODEBASE_CONTEXT` into the planner delegate.
+- `quick` stays structurally pure: it gains safer brownfield routing/context, not spec, roadmap, or research-lite behavior.
 
-**Why this shape:** The missing leverage was routing and context reuse, not another onboarding surface. Reusing the existing codebase map artifacts preserves the current workflow set, keeps quick mode lightweight, and gives brownfield users immediate architecture awareness without forcing full milestone ceremony.
+**Why this shape:** The missing leverage was routing and context reuse, not another onboarding surface. Reusing the existing codebase map artifacts preserves the current workflow set, keeps quick mode lightweight, and gives brownfield users immediate architecture, convention, and risk awareness without forcing full milestone ceremony.
 
-**Tradeoff:** This gives `quick` orientation, not full brownfield inference. It deliberately avoids turning quick mode into a lite `new-project`; the planner receives only a bounded summary from the codebase maps, not a new research phase.
+**Tradeoff:** This gives `quick` orientation, not full brownfield inference. It deliberately avoids turning quick mode into a lite `new-project`; the planner receives only a bounded summary from the codebase maps, not a new research phase and not a fifth persistent artifact. If the user cannot yet name the bounded change, the workflow should steer back to `new-project`.
 
-**GSD comparison:** GSD's brownfield posture is centered on the full project-initialization flow after mapping. GSDD keeps the full path available, but adds an explicit lighter-weight branch for feature-by-feature brownfield work.
+**GSD comparison:** GSD's brownfield posture is centered on the full project-initialization flow after mapping. GSDD keeps the full path available, but adds an explicit lighter-weight secondary branch for feature-by-feature brownfield work.
 
-**GSDD implementation:** `distilled/workflows/quick.md` (Step 2 codebase context, planner context), `distilled/workflows/map-codebase.md` (completion routing), `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+**GSDD implementation:** `distilled/workflows/quick.md` (Step 2 codebase context, planner context, bounded-lane hardening), `distilled/workflows/map-codebase.md` (completion routing + brownfield routing summary), `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 **Evidence:**
 

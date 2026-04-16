@@ -263,6 +263,12 @@ describe('S2 — Brownfield Path (init → map-codebase → new-project brownfie
     const content = readSkill(tmpDir, 'gsdd-map-codebase');
     assert.ok(content.includes('/gsdd-quick'), 'map-codebase must offer /gsdd-quick as a next step');
     assert.ok(/brownfield/i.test(content), 'map-codebase must describe the quick path as brownfield feature work');
+    assert.ok(/full lifecycle setup|project initialization/i.test(content),
+      'map-codebase must preserve /gsdd-new-project as the full initializer');
+    assert.ok(/Safest next change lane/i.test(content), 'map-codebase must synthesize a safest-next-change routing signal');
+    assert.ok(/Highest-risk zones/i.test(content), 'map-codebase must synthesize highest-risk zones from the 4 docs');
+    assert.ok(/Do NOT create a fifth persistent artifact/i.test(content),
+      'map-codebase must keep the routing synthesis ephemeral rather than adding a fifth file');
   });
 
   test('each mapper delegate exists in .planning/templates/delegates/', () => {
@@ -367,8 +373,20 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
     const content = readSkill(tmpDir, 'gsdd-quick');
     assert.ok(content.includes('ARCHITECTURE.md'), 'quick must reference ARCHITECTURE.md for codebase context');
     assert.ok(content.includes('STACK.md'), 'quick must reference STACK.md for codebase context');
+    assert.ok(content.includes('CONVENTIONS.md'), 'quick must reference CONVENTIONS.md for codebase context');
+    assert.ok(content.includes('CONCERNS.md'), 'quick must reference CONCERNS.md for codebase context');
+    assert.ok(/safest surfaces to touch/i.test(content), 'quick codebase context must capture safe-to-touch guidance');
+    assert.ok(/risky zones to avoid/i.test(content), 'quick codebase context must capture risk boundaries');
     assert.ok(content.includes('$CODEBASE_CONTEXT') || /codebase context/i.test(content),
       'quick planner delegate must receive codebase context');
+  });
+
+  test('quick preserves split escalation for undefined scope vs too many grey areas', () => {
+    const content = readSkill(tmpDir, 'gsdd-quick');
+    assert.match(content, /bounded change is still undefined.*\/gsdd-new-project/s,
+      'generated quick skill must route undefined bounded changes to /gsdd-new-project.');
+    assert.match(content, /3\+ grey areas.*\/gsdd-plan/s,
+      'generated quick skill must route defined-but-too-ambiguous tasks to /gsdd-plan.');
   });
 });
 

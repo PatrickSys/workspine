@@ -93,7 +93,7 @@ Your tool determines how you invoke workflows:
 
 If you generate the root `AGENTS.md` block, it adds the framework's behavioral governance. For Cursor, Copilot, and Gemini, that governance is optional discipline on top of native skill discovery — not the mechanism that makes workflows discoverable.
 
-First workflow to run: **new-project** — it asks about your goals, audits the codebase (if brownfield), and produces `.planning/SPEC.md` + `.planning/ROADMAP.md`.
+First workflow to run: **new-project** — it asks about your goals, audits/maps the codebase if brownfield, and produces `.planning/SPEC.md` + `.planning/ROADMAP.md`. If you already know the bounded brownfield change you want, run `map-codebase` first and then use `quick`.
 
 ### Platform Adapters
 
@@ -165,7 +165,7 @@ init → [plan → execute → verify] × N phases → audit-milestone → done
 Run the `gsdd-new-project` workflow. The system:
 
 1. **Questions** — asks until it understands your idea (goals, constraints, tech, edge cases)
-2. **Codebase audit** — if brownfield, runs 4 parallel mappers (or prompts for `/gsdd-map-codebase` first)
+2. **Codebase map** — if brownfield, maps the codebase across stack, architecture, conventions, and concerns so you can either continue with `/gsdd-new-project` or take a bounded `quick` lane
 3. **Research** — spawns parallel researchers to investigate the domain (configurable depth: fast/balanced/deep)
 4. **Spec + Roadmap** — produces `SPEC.md` (living specification) and `ROADMAP.md` (phased delivery plan)
 
@@ -253,7 +253,7 @@ Workspine has 14 workflows, run via generated skills or adapters:
 | Workflow | What it does |
 |----------|--------------|
 | `gsdd-new-project` | Full initialization: questioning, codebase audit, research, spec, roadmap |
-| `gsdd-map-codebase` | Map existing codebase with 4 parallel mappers |
+| `gsdd-map-codebase` | Map an existing codebase for reuse by `new-project` or bounded `quick` work |
 | `gsdd-plan` | Research + plan + check for a phase |
 | `gsdd-execute` | Execute phase plan: implement tasks, verify changes |
 | `gsdd-verify` | Verify completed phase: 3-level checks, anti-pattern scan |
