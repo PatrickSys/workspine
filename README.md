@@ -88,7 +88,7 @@ Start with the public proof pack:
 Your tool determines how you invoke workflows:
 
 - **Claude Code / OpenCode / Cursor / Copilot / Gemini:** Use slash commands directly — `/gsdd-new-project`, `/gsdd-plan`, etc.
-- **Codex CLI:** Use skill references — `$gsdd-new-project`, `$gsdd-plan`, etc.
+- **Codex CLI:** Use skill references — `$gsdd-new-project`, `$gsdd-plan`, etc. `$gsdd-plan` writes the plan and stops; start a separate `$gsdd-execute` run when you want implementation to begin.
 - **Other AI tools:** Open `.agents/skills/gsdd-<workflow>/SKILL.md` and follow the instructions.
 
 If you generate the root `AGENTS.md` block, it adds the framework's behavioral governance. For Cursor, Copilot, and Gemini, that governance is optional discipline on top of native skill discovery — not the mechanism that makes workflows discoverable.
@@ -114,7 +114,7 @@ npx gsdd-cli init --tools all        # All of the above
 | **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |
 | **Claude Code** | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — native workflow surfaces |
 | **OpenCode** | Directly validated | `.opencode/commands/`, `.opencode/agents/` — native workflow surfaces |
-| **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml` |
+| **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute` |
 | **Cursor / Copilot / Gemini** | Qualified support | Skills-native discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance |
 | **Other AI tools** | Fallback only | Open `.agents/skills/gsdd-*/SKILL.md` directly |
 
@@ -182,6 +182,8 @@ Run `gsdd-plan` for the current phase. The system:
 3. **Checks** — a separate agent in a fresh context window reviews the plan against 7 dimensions (requirement coverage, task completeness, dependency correctness, key-link completeness, scope sanity, must-have quality, context compliance). If the plan fails, it revises and re-checks — up to 3 cycles before escalating to the human. Output is typed JSON so orchestration is machine-parseable, not prompt-dependent.
 
 Each plan is small enough to execute in a fresh context window. The checker runs in a separate context from the planner — this is the [ICLR-validated](https://arxiv.org/abs/2310.12397) pattern for catching blind spots the planner inherits from its own reasoning.
+
+`gsdd-plan` is terminal for the current run: it writes planning artifacts only. Execution begins only after an explicit `gsdd-execute` / `/gsdd-execute` / `$gsdd-execute` transition, depending on the runtime.
 
 **Creates:** Phase plans in `.planning/phases/`
 
@@ -327,7 +329,7 @@ Workspine generates vendor-specific files from vendor-agnostic markdown — it d
 |---------|------------------|----------|
 | **Claude Code** | Directly validated | Skill-primary plan surface, thin command alias, native `gsdd-plan-checker` agent |
 | **OpenCode** | Directly validated | Specialized `/gsdd-plan` command (`subtask: false`), hidden `gsdd-plan-checker` subagent (`mode: subagent`) |
-| **Codex CLI** | Directly validated | Portable skill as entry surface, `.codex/agents/gsdd-plan-checker.toml` (read-only, high reasoning effort) |
+| **Codex CLI** | Directly validated | Portable skill as entry surface, `.codex/agents/gsdd-plan-checker.toml` (read-only, high reasoning effort), explicit `$gsdd-execute` unlock |
 | **Cursor / Copilot / Gemini** | Qualified support | Runtime discovers `.agents/skills/` natively; optional root `AGENTS.md` block adds behavioral governance only |
 | **agents** (`--tools agents`) | Governance-only helper | Root `AGENTS.md` block for tools that benefit from governance or need open-standard fallback guidance |
 

@@ -125,6 +125,7 @@ describe('consumer ceremony reduction', () => {
     for (const token of ['gsdd-new-project', 'gsdd-plan', 'gsdd-execute', 'gsdd-verify', 'gsdd-progress', '/gsdd-plan', '$gsdd-plan']) {
       assert.match(agents, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
+    assert.match(agents, /plan-only|execution begins only after an explicit .*gsdd-execute/i);
   });
 
   test('update preserves content below END GSDD marker', async () => {

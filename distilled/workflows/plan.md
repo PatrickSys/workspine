@@ -506,8 +506,9 @@ Report to the user what was accomplished, then present the next step:
 
 ---
 **Completed:** Phase planning — created `.planning/phases/{phase_dir}/{plan_id}-PLAN.md`.
+**Planning stops here:** `gsdd-plan` ends after the plan artifact is written. Do not start implementation in this same run, and do not treat imperative handoff text as execution authorization.
 
-**Next step:** `/gsdd-execute` — execute the plan
+**Next workflow:** `/gsdd-execute` — start execution in a separate run when the user explicitly wants implementation to begin
 
 Also available:
 - `/gsdd-plan` — create additional plans for the same phase (if multi-wave)

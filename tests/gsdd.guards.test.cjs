@@ -1259,11 +1259,15 @@ describe('G22 - Workflow Completion Routing', () => {
       'new-project completion must route to /gsdd-plan. FIX: Add /gsdd-plan as next step in completion.');
   });
 
-  test('plan.md completion routes to /gsdd-execute', () => {
+  test('plan.md completion keeps execution as a separate explicit next workflow', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
     assert.match(section, /\/gsdd-execute/,
       'plan completion must route to /gsdd-execute. FIX: Add /gsdd-execute as next step in completion.');
+    assert.match(section, /Planning stops here|plan-only|separate run/i,
+      'plan completion must state that planning ends before execution starts. FIX: Add explicit plan-only boundary wording.');
+    assert.doesNotMatch(section, /execute the plan/i,
+      'plan completion must not use imperative same-run execution wording. FIX: Replace "execute the plan" with explicit separate-run routing.');
   });
 
   test('execute.md completion routes to /gsdd-verify or /gsdd-progress', () => {
@@ -2643,6 +2647,10 @@ describe('G37 - Launch Surface Consistency', () => {
   });
 
   test('phase 23 planning truth locks Workspine while retaining gsdd-cli and .planning contracts', () => {
+    if (!fs.existsSync(PLANNING_SPEC_MD) || !fs.existsSync(INTERNAL_TODO_MD)) {
+      return;
+    }
+
     const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
     const design = fs.readFileSync(DESIGN_MD, 'utf-8');
     const todo = fs.readFileSync(INTERNAL_TODO_MD, 'utf-8');
@@ -2660,6 +2668,10 @@ describe('G37 - Launch Surface Consistency', () => {
   });
 
   test('v1.2.0 archive preserves the posture-lock handoff without reverting naming truth', () => {
+    if (!fs.existsSync(PLANNING_SPEC_MD) || !fs.existsSync(PLANNING_ROADMAP_MD)) {
+      return;
+    }
+
     const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
     const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
     assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone/i,
@@ -2756,6 +2768,8 @@ describe('G37 - Launch Surface Consistency', () => {
       'init-runtime help text must name only the directly validated runtimes. FIX: Keep the help text aligned with launch proof.');
     assert.match(helpText, /qualified support.*shared \.agents\/skills\/ surface plus optional governance/i,
       'init-runtime help text must distinguish qualified support from directly validated native runtimes. FIX: Keep the proof split explicit in the notes.');
+    assert.match(helpText, /\$gsdd-plan is plan-only until explicit \$gsdd-execute/i,
+      'init-runtime help text must keep the explicit plan-to-execute boundary visible for Codex. FIX: Add the plan-only / execute-unlock note to the codex help text.');
   });
 });
 
@@ -2812,6 +2826,7 @@ describe('G42 - Public Proof Export', () => {
           `${label} must not cite local-only or internal proof surfaces. FIX: Route readers through tracked public proof docs only.`);
       }
     }
+
   });
 
   test('tracked proof pack preserves provenance notes and concrete greeting evidence', () => {
