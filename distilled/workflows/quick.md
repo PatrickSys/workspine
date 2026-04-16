@@ -37,7 +37,7 @@ Store the response as `$DESCRIPTION`. If empty, re-prompt.
 2. Scan `.planning/quick/` for existing task directories. Calculate `$NEXT_NUM` as the next 3-digit number (001, 002, ...).
 3. Generate `$SLUG` from `$DESCRIPTION` (lowercase, hyphens, max 40 chars).
 4. Create `.planning/quick/$NEXT_NUM-$SLUG/`.
-5. If `.planning/codebase/` exists, read `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STACK.md`, `.planning/codebase/CONVENTIONS.md`, and `.planning/codebase/CONCERNS.md`. Summarize key findings in <=500 words as `$CODEBASE_CONTEXT`, emphasizing: safest surfaces to touch, risky zones to avoid, must-know conventions/traps, and what must be re-verified after change. If `.planning/codebase/` does not exist, set `$CODEBASE_CONTEXT` to empty.
+5. If `.planning/codebase/` exists, read whichever of `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STACK.md`, `.planning/codebase/CONVENTIONS.md`, and `.planning/codebase/CONCERNS.md` are present. Summarize key findings from available docs in <=500 words as `$CODEBASE_CONTEXT`, emphasizing: safest surfaces to touch, risky zones to avoid, must-know conventions/traps, and what must be re-verified after change. Note any missing docs in the summary. If `.planning/codebase/` does not exist, set `$CODEBASE_CONTEXT` to empty.
 6. **Session-boundary fallback:** If `.planning/.continue-here.bak` exists, read its `<judgment>` section. Use `<active_constraints>` and `<anti_regression>` rules as task-scoping context (do not violate active constraints; do not regress on listed invariants). After reading, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 7. Inspect the live branch/worktree surface separately from checkpoint or planning artifacts. If the current branch appears stale/spent, PR-less with overlapping write scope, or otherwise like the wrong execution surface, warn before proceeding. This is advisory for quick tasks unless the mismatch makes the task description materially misleading.
 
@@ -180,7 +180,7 @@ Evaluate the plan against quick-scope boundaries. Read the plan file and check:
 | New public APIs | Plan tasks create new route files, API endpoints, or exported interfaces | "New public surface area detected — consider `/gsdd-plan` for approach exploration." |
 | Undefined bounded change | `$DESCRIPTION` still does not identify a concrete bug, feature, target surface, or observable outcome after clarification | "This does not yet describe a bounded change — use `/gsdd-new-project` to define the work first." |
 
-If any signal fires, set `$SCOPE_WARNING` to the first matching advisory text. Multiple signals concatenate.
+If any signals fire, concatenate the matching advisory text in the listed order as `$SCOPE_WARNING`. If the undefined bounded change signal fires, keep that advisory first so the routing recommendation stays explicit.
 If no signals fire, `$SCOPE_WARNING` is empty.
 
 This is advisory only — it does NOT block execution.
@@ -217,11 +217,13 @@ Plan check issues: {$CHECKER_ISSUES}
 
 Present options (default-yes — pressing Enter proceeds):
 - If `$SCOPE_WARNING` is empty: `[Enter to proceed / edit description / abort]`
-- If `$SCOPE_WARNING` is non-empty: `[Enter to proceed / switch to /gsdd-plan / edit description / abort]`
+- If `$SCOPE_WARNING` contains `/gsdd-new-project`: `[Enter to proceed / switch to /gsdd-new-project / edit description / abort]`
+- Otherwise if `$SCOPE_WARNING` is non-empty: `[Enter to proceed / switch to /gsdd-plan / edit description / abort]`
 
 Handle response:
 - **Enter (or "yes"):** proceed to Step 4.
 - **"edit description":** clean up the task directory, then return to Step 1 with `$DESCRIPTION` pre-filled as the starting point.
+- **"switch to /gsdd-new-project":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd-new-project` to define the bounded work first. Task description: {$DESCRIPTION}"
 - **"switch to /gsdd-plan":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd-plan` for full ceremony with approach exploration. Task description: {$DESCRIPTION}"
 - **"abort":** clean up the task directory, report cancellation, stop.
 

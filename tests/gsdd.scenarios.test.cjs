@@ -375,6 +375,8 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
     assert.ok(content.includes('STACK.md'), 'quick must reference STACK.md for codebase context');
     assert.ok(content.includes('CONVENTIONS.md'), 'quick must reference CONVENTIONS.md for codebase context');
     assert.ok(content.includes('CONCERNS.md'), 'quick must reference CONCERNS.md for codebase context');
+    assert.ok(/whichever.*are present|available docs|missing docs/i.test(content),
+      'quick must tolerate partial codebase-map state by reading available docs and noting missing ones');
     assert.ok(/safest surfaces to touch/i.test(content), 'quick codebase context must capture safe-to-touch guidance');
     assert.ok(/risky zones to avoid/i.test(content), 'quick codebase context must capture risk boundaries');
     assert.ok(content.includes('$CODEBASE_CONTEXT') || /codebase context/i.test(content),
@@ -387,6 +389,8 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
       'generated quick skill must route undefined bounded changes to /gsdd-new-project.');
     assert.match(content, /3\+ grey areas.*\/gsdd-plan/s,
       'generated quick skill must route defined-but-too-ambiguous tasks to /gsdd-plan.');
+    assert.match(content, /contains.*\/gsdd-new-project.*switch to \/gsdd-new-project/s,
+      'generated quick skill must offer a /gsdd-new-project switch option from the preview when the bounded change is still undefined.');
   });
 });
 

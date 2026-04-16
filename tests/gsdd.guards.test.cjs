@@ -1651,6 +1651,8 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md must read CONVENTIONS.md when codebase maps exist. FIX: Add conventions context in Step 2.');
     assert.match(step2Section, /\.planning\/codebase\/.*CONCERNS\.md|CONCERNS\.md/,
       'quick.md must read CONCERNS.md when codebase maps exist. FIX: Add concerns context in Step 2.');
+    assert.match(step2Section, /whichever.*are present|available docs|missing docs/i,
+      'quick.md Step 2 must handle partial codebase-map state gracefully. FIX: Read whichever codebase docs exist and note missing ones.');
     assert.match(step2Section, /safest surfaces to touch|risky zones to avoid|re-verified after change/i,
       'quick.md Step 2 must summarize actionable brownfield guidance, not only architecture/stack facts. FIX: Add safe/risky/re-verify guidance to $CODEBASE_CONTEXT.');
     const step3Start = content.indexOf('## Step 3:');
@@ -1896,6 +1898,17 @@ describe('G26 - Context Engineering: Quick Workflow', () => {
       'quick.md must route undefined bounded changes to /gsdd-new-project. FIX: Keep the undefined-scope escalation explicit.');
     assert.match(content, /3\+ grey areas.*\/gsdd-plan/s,
       'quick.md must route defined-but-too-ambiguous tasks to /gsdd-plan. FIX: Keep the complexity escalation explicit.');
+  });
+
+  test('quick.md plan preview offers the correct switch route for undefined bounded changes', () => {
+    const content = fs.readFileSync(QUICK_PATH, 'utf-8');
+    const previewStart = content.indexOf('## Step 3.7');
+    assert.ok(previewStart > -1, 'quick.md must have ## Step 3.7 plan preview section.');
+    const previewSection = content.slice(previewStart, previewStart + 2600);
+    assert.match(previewSection, /contains.*\/gsdd-new-project.*switch to \/gsdd-new-project/s,
+      'quick.md plan preview must surface a /gsdd-new-project switch option when the scope warning says the bounded change is undefined. FIX: Split preview routing by warning type.');
+    assert.match(previewSection, /switch to \/gsdd-new-project.*clean up the task directory/i,
+      'quick.md must clean up the provisional quick-task directory before switching to /gsdd-new-project from the plan preview. FIX: Add cleanup to the new-project branch.');
   });
 });
 
