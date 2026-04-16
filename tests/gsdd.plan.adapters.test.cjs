@@ -129,6 +129,9 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(portableSkill, /Status must be either "passed" or "issues_found"\./);
     assert.match(portableSkill, /reduced_assurance/);
     assert.match(portableSkill, /Orchestration Summary/);
+    assert.match(portableSkill, /Planning stops here|plan-only/i);
+    assert.match(portableSkill, /separate run.*gsdd-execute|explicitly wants implementation to begin/i);
+    assert.doesNotMatch(portableSkill, /execute the plan/i);
 
     // Must NOT contain vendor-specific content
     assert.doesNotMatch(portableSkill, /Codex-Native/);
@@ -136,6 +139,26 @@ describe('specialized plan adapter surfaces', () => {
     assert.doesNotMatch(portableSkill, /\.codex\/agents\//);
     assert.doesNotMatch(portableSkill, /\.claude\/agents\//);
     assert.doesNotMatch(portableSkill, /\.opencode\/agents\//);
+  });
+
+  test('portable skill keeps the explicit execute unlock without adding Codex-only planner logic', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'codex');
+    } finally {
+      restoreStdin();
+    }
+
+    const portableSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      'utf-8'
+    );
+
+    assert.match(portableSkill, /Planning stops here|plan-only/i);
+    assert.match(portableSkill, /\/gsdd-execute/);
+    assert.doesNotMatch(portableSkill, /\.codex\/AGENTS\.md/i);
+    assert.doesNotMatch(portableSkill, /gsdd-planner\.toml/i);
   });
 
   test('codex plan-checker is a read-only TOML agent with delegate content', async () => {

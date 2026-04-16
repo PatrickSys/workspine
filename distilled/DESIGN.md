@@ -841,7 +841,7 @@ Implementation lives under `bin/lib/`:
 
 **GSDD (before this decision):** Codex CLI was a skills-first runtime at ~40% parity. It consumed the portable `.agents/skills/gsdd-*/SKILL.md` surface but had no native plan-checker, no orchestration loop, no model control, and no dedicated adapter module. `--tools codex` was deprecated and silently stripped. Every Codex plan ran in silent `reduced_assurance` mode.
 
-**GSDD (after this decision):** Codex CLI is promoted to `native_capable` — same tier as Claude Code and OpenCode. A dedicated `bin/adapters/codex.mjs` generates `.codex/agents/gsdd-plan-checker.toml` (read-only TOML agent with the plan-checker delegate). Codex's entry surface is the portable skill at `.agents/skills/gsdd-plan/SKILL.md` — Codex auto-discovers it via its `.agents/skills/` skill scanning ([developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)). The portable skill now contains vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation), so when Codex follows it, it spawns the native `gsdd-plan-checker` agent for fresh-context review. `--tools codex` is reinstated as an active adapter flag.
+**GSDD (after this decision):** Codex CLI is promoted to `native_capable` — same tier as Claude Code and OpenCode. A dedicated `bin/adapters/codex.mjs` generates `.codex/agents/gsdd-plan-checker.toml` (read-only TOML agent with the plan-checker delegate). Codex's entry surface is the portable skill at `.agents/skills/gsdd-plan/SKILL.md` — Codex auto-discovers it via its `.agents/skills/` skill scanning ([developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)). The portable skill now contains vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation) plus an explicit plan-only completion lock, so when Codex follows it, it spawns the native `gsdd-plan-checker` agent for fresh-context review and still requires a separate `$gsdd-execute` transition before implementation. `--tools codex` is reinstated as an active adapter flag.
 
 **Why:** Codex CLI v0.115.0 (2026-03-16) stabilized its multi-agent system with `.codex/agents/*.toml` definitions, `spawn_agent` fresh-context invocation, per-agent `model` and `model_reasoning_effort` fields, and `sandbox_mode` access control. This provides structural parity with Claude's `.claude/agents/` and OpenCode's `.opencode/agents/`.
 
@@ -863,6 +863,7 @@ Implementation lives under `bin/lib/`:
 - No deterministic spawn API — spawning is model-interpreted via natural language, not a programmatic `Task()` call
 - GitHub issues #14719 (re-spawn failure) and #14841 (spawn loops with weaker models) are documented risks; GSDD's simple spawn-wait-pattern minimizes exposure, and the max-3 loop has escalation
 - JSON schema duplication — the checker JSON schema is embedded in Claude, OpenCode orchestration prompts and the portable skill; tests guard drift across all surfaces
+- Execution authorization must stay explicit — Codex and other runtimes must not infer implementation permission from generic imperative handoff text after `gsdd-plan`
 - No Codex CLI in CI — future regressions still require disposable-fixture validation even though local live validation now exists
 - Entry surface is shared — Codex uses the portable `.agents/skills/gsdd-plan/SKILL.md` as its entry surface (no vendor-specific skill path exists in Codex). The portable skill's checker invocation is vendor-neutral, but routing depends on Codex's implicit skill selection matching the task description
 
@@ -1245,7 +1246,7 @@ D12 established the session persistence design. D26 mechanically enforces the ro
 
 **Problem:** Consumer testing (2026-03-21) revealed that AI agents completing a GSDD workflow go silent — the user must manually figure out which `/gsdd-*` command to run next. The lifecycle contract (`new-project → plan → execute → verify → [next phase]`) was correct in design but invisible in practice at each step boundary. GSD original solved this with explicit "Next Up" sections at the end of every workflow; GSDD lost this pattern during distillation.
 
-**Decision:** Add `<completion>` sections after `<success_criteria>` in all 9 terminal workflows. Add positional discipline gates (STOP instructions at exact deviation points) and mandatory persistence enforcement for critical artifacts.
+**Decision:** Add `<completion>` sections after `<success_criteria>` in all 9 terminal workflows. Add positional discipline gates (STOP instructions at exact deviation points) and mandatory persistence enforcement for critical artifacts. Preserve lifecycle order, but for `plan` make the boundary explicit: completion may name `/gsdd-execute` as the next workflow, while the current `gsdd-plan` run remains plan-only and does not authorize implementation.
 
 **Changes:**
 
@@ -1277,7 +1278,7 @@ Consider clearing context before starting the next workflow for best results.
 
 **Routing map (acyclic, complete):**
 - `new-project` → `/gsdd-plan`
-- `plan` → `/gsdd-execute`
+- `plan` → separate `/gsdd-execute` run (routing only; no same-run execution authorization)
 - `execute` → `/gsdd-verify` (if verifier enabled) or `/gsdd-progress`
 - `verify` → `/gsdd-progress` (passed), `/gsdd-plan` (gaps), `/gsdd-verify` (human_needed)
 - `audit-milestone` → `/gsdd-complete-milestone` (passed), `/gsdd-plan` (gaps/debt)

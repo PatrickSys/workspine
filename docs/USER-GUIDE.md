@@ -152,7 +152,7 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 |----------|---------|-------------|
 | `gsdd-new-project` | Full project init: questioning, codebase audit, research, spec, roadmap | Start of a new project |
 | `gsdd-map-codebase` | Map existing codebase for reusable brownfield context | Before `gsdd-new-project`, or before `gsdd-quick` only when you already know the bounded change you want |
-| `gsdd-plan` | Research + plan + adversarial check for current phase | Before executing a phase |
+| `gsdd-plan` | Research + plan + adversarial check for current phase; writes planning artifacts only | Before executing a phase |
 | `gsdd-execute` | Execute phase plans in parallel waves | After planning is complete |
 | `gsdd-verify` | 3-level verification gate + anti-pattern scan | After execution completes |
 | `gsdd-audit-milestone` | Cross-phase integration, requirements coverage, E2E flows | When all phases are done |
@@ -184,7 +184,7 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 |------|-----------------|
 | `claude` | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
 | `opencode` | `.opencode/commands/`, `.opencode/agents/` |
-| `codex` | `.codex/agents/gsdd-plan-checker.toml` (portable skill is always generated) |
+| `codex` | `.codex/agents/gsdd-plan-checker.toml` (portable skill is always generated; `$gsdd-plan` stays plan-only until explicit `$gsdd-execute`) |
 | `agents` | Bounded fallback block in root `AGENTS.md` |
 | `all` | All of the above |
 | *(none)* | Auto-detect installed tools |
@@ -274,7 +274,7 @@ Workspine does not impose commit formats, branch naming, or one-commit-per-task 
 `npx gsdd-cli init`
 
 - `Claude/OpenCode`: `/gsdd-new-project -> /gsdd-plan -> /gsdd-execute -> /gsdd-verify -> /gsdd-audit-milestone`
-- `Codex`: `$gsdd-new-project -> $gsdd-plan -> $gsdd-execute -> $gsdd-verify -> $gsdd-audit-milestone`
+- `Codex`: `$gsdd-new-project -> $gsdd-plan -> $gsdd-execute -> $gsdd-verify -> $gsdd-audit-milestone` (`$gsdd-plan` ends at plan creation; `$gsdd-execute` is a separate explicit unlock)
 - `Cursor / Copilot / Gemini`: `/gsdd-new-project -> /gsdd-plan -> /gsdd-execute -> /gsdd-verify -> /gsdd-audit-milestone` from the slash command menu once the skill is installed
 
 ### Existing Codebase

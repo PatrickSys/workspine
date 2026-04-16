@@ -7,7 +7,7 @@ Lifecycle: `new-project -> plan -> execute -> verify -> audit-milestone`.
 Core skills: `gsdd-new-project`, `gsdd-plan`, `gsdd-execute`, `gsdd-verify`, `gsdd-progress`.
 Planning state: `.planning/`. Portable workflows: `.agents/skills/gsdd-*/SKILL.md`.
 
-Invoke: `/gsdd-plan` (Claude, OpenCode, Cursor, Copilot, Gemini) · `$gsdd-plan` (Codex) · open SKILL.md directly elsewhere.
+Invoke: `/gsdd-plan` (Claude, OpenCode, Cursor, Copilot, Gemini) · `$gsdd-plan` (Codex, plan-only until `$gsdd-execute`) · open SKILL.md directly elsewhere.
 
 Rules:
 1. Read before writing roadmap work: `.planning/SPEC.md`, `.planning/ROADMAP.md`, `.planning/config.json`, and the relevant phase plan when one exists.
