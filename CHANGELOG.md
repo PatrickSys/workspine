@@ -1,3 +1,17 @@
+# [0.17.0](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.16.1...v0.17.0) (2026-04-16)
+
+
+### Bug Fixes
+
+* harden codex plan-execute boundary ([d4361c5](https://github.com/PatrickSys/get-shit-done-distilled/commit/d4361c5c74bd928cf0a57408cb4720f0704ad47c))
+* harden quick brownfield review flow ([a49b98e](https://github.com/PatrickSys/get-shit-done-distilled/commit/a49b98ee66f056f448a2460f47e559d10d9e6b8b))
+
+
+### Features
+
+* clarify brownfield entry and non-phase routing ([b490cfc](https://github.com/PatrickSys/get-shit-done-distilled/commit/b490cfc59012b14617c3d203bfd84e4290944817))
+* clarify brownfield quick routing ([9084072](https://github.com/PatrickSys/get-shit-done-distilled/commit/9084072d182030b3a945803213bd1afbe8d12bed))
+
 ## [0.16.1](https://github.com/PatrickSys/get-shit-done-distilled/compare/v0.16.0...v0.16.1) (2026-04-14)
 
 
