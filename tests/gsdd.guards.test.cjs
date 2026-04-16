@@ -821,11 +821,12 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'post-init routing must show Gemini slash-command guidance. FIX: Add Gemini /gsdd-new-project to init output.');
   });
 
-  test('DESIGN.md ToC lists 39 entries', () => {
+  test('DESIGN.md ToC lists every documented decision', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     const tocEntries = (content.match(/^\d+\. \[/gm) || []);
-    assert.strictEqual(tocEntries.length, 39,
-      `DESIGN.md ToC has ${tocEntries.length} entries, expected 39. FIX: Update DESIGN.md ToC to list all 39 decisions.`);
+    const decisionHeaders = (content.match(/^## (?:(?:\d+\.)|(?:D\d+ - ))/gm) || []);
+    assert.strictEqual(tocEntries.length, decisionHeaders.length,
+      `DESIGN.md ToC has ${tocEntries.length} entries but ${decisionHeaders.length} documented decisions. FIX: Update DESIGN.md ToC to list every decision.`);
   });
 });
 
@@ -942,6 +943,8 @@ describe('G20 - Session Continuity Contracts', () => {
     const section = content.slice(content.indexOf('<check_existence>'), content.indexOf('</check_existence>'));
     assert.match(section, /No `.planning\/`|No.*\.planning/, 'check_existence must check for missing .planning/. FIX: Add .planning/ existence check.');
     assert.match(section, /No.*ROADMAP.*AND.*no.*SPEC|no artifacts/i, 'check_existence must check for no artifacts. FIX: Add no-artifacts detection.');
+    assert.match(section, /codebase|quick/i,
+      'check_existence must distinguish non-phase brownfield artifacts from truly empty state. FIX: Add codebase/quick detection before routing to /gsdd-new-project.');
     assert.match(section, /between.milestones|SPEC.*exists.*ROADMAP.*not/i, 'check_existence must detect between-milestones state. FIX: Add between-milestones detection.');
     assert.match(section, /Both exist|proceed/i, 'check_existence must have proceed path. FIX: Add proceed condition.');
   });
@@ -954,7 +957,7 @@ describe('G20 - Session Continuity Contracts', () => {
     assert.match(section, /Branch C/i, 'route_action must have Branch C (plan). FIX: Add Branch C.');
     assert.match(section, /Branch D/i, 'route_action must have Branch D (verify). FIX: Add Branch D.');
     assert.match(section, /Branch E/i, 'route_action must have Branch E (audit-milestone). FIX: Add Branch E.');
-    assert.match(section, /Branch F/i, 'route_action must have Branch F (between milestones). FIX: Add Branch F.');
+    assert.match(section, /Branch F/i, 'route_action must have Branch F (non-phase state). FIX: Add Branch F.');
   });
 
   test('progress.md distinguishes audit-ready from archived-with-ROADMAP state', () => {
@@ -972,6 +975,23 @@ describe('G20 - Session Continuity Contracts', () => {
       'Branch E must stay limited to audit-ready, not-yet-archived milestones. FIX: Narrow Branch E condition.');
     assert.match(route, /Branch F[\s\S]*\/gsdd-new-milestone/i,
       'Branch F must route archived milestones to /gsdd-new-milestone. FIX: Add archived milestone routing.');
+  });
+
+  test('progress.md Branch F covers codebase-only and quick-lane brownfield states', () => {
+    const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
+    const derive = content.slice(content.indexOf('<derive_status>'), content.indexOf('</derive_status>'));
+    const route = content.slice(content.indexOf('<route_action>'), content.indexOf('</route_action>'));
+
+    assert.match(derive, /codebase_only|codebase-only/i,
+      'derive_status must classify codebase-only brownfield state. FIX: Add codebase-only non-phase classification.');
+    assert.match(derive, /quick_lane|quick lane/i,
+      'derive_status must classify quick-lane-only brownfield state. FIX: Add quick-lane non-phase classification.');
+    assert.match(route, /codebase-only brownfield state[\s\S]*\/gsdd-quick/i,
+      'Branch F must route codebase-only brownfield state toward /gsdd-quick. FIX: Add codebase-only quick routing.');
+    assert.match(route, /quick-lane brownfield state with incomplete quick work[\s\S]*\/gsdd-quick/i,
+      'Branch F must route incomplete quick-lane state back to /gsdd-quick. FIX: Add quick-lane continuation routing.');
+    assert.match(route, /Also available: \/gsdd-new-project[\s\S]*\/gsdd-map-codebase/i,
+      'Branch F must preserve both /gsdd-new-project and /gsdd-map-codebase as brownfield alternatives. FIX: Add both alternatives to the non-phase brownfield route.');
   });
 
   test('progress.md <edge_cases> section exists and documents compound states', () => {
@@ -1666,6 +1686,37 @@ describe('G24 - Hardening Propagation', () => {
     const plannerSection = content.slice(step3Start, step35Start);
     assert.match(plannerSection, /\$CODEBASE_CONTEXT|[Cc]odebase context/i,
       'quick.md Step 3 planner delegate must receive $CODEBASE_CONTEXT. FIX: Pass codebase context to planner delegate.');
+  });
+
+  test('quick.md builds an inline brownfield baseline when codebase maps are missing', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    const step2Start = content.indexOf('## Step 2:');
+    const step25Start = content.indexOf('## Step 2.5:');
+    assert.ok(step2Start > -1 && step25Start > -1, 'quick.md must have Step 2 and Step 2.5.');
+    const step2Section = content.slice(step2Start, step25Start);
+    assert.match(step2Section, /If `?\.planning\/codebase\/`? does not exist.*inline brownfield baseline/is,
+      'quick.md must build an inline brownfield baseline when no codebase maps exist. FIX: Add provisional baseline logic to Step 2.');
+    assert.match(step2Section, /README\.md|package\.json|pyproject\.toml|Cargo\.toml/i,
+      'quick.md inline baseline must inspect stable repo-root guidance such as README or manifests. FIX: Add root-surface reads for the inline baseline.');
+    assert.match(step2Section, /provisional baseline|calling out unknowns/i,
+      'quick.md inline baseline must mark its uncertainty explicitly. FIX: Label the baseline as provisional and note unknowns.');
+  });
+
+  test('quick.md scope signal can escalate to /gsdd-map-codebase when orientation is too weak', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    const scopeStart = content.indexOf('## Step 3.6:');
+    const previewStart = content.indexOf('## Step 3.7:');
+    assert.ok(scopeStart > -1 && previewStart > -1, 'quick.md must have Step 3.6 and Step 3.7.');
+    const scopeSection = content.slice(scopeStart, previewStart);
+    const previewSection = content.slice(previewStart, content.indexOf('## Step 4:'));
+    assert.match(scopeSection, /Orientation gap/i,
+      'quick.md scope signal must include an orientation-gap heuristic. FIX: Add orientation-gap escalation to Step 3.6.');
+    assert.match(scopeSection, /\/gsdd-map-codebase/i,
+      'quick.md orientation-gap heuristic must recommend /gsdd-map-codebase. FIX: Add map-codebase recommendation to Step 3.6.');
+    assert.match(previewSection, /contains.*\/gsdd-map-codebase.*switch to \/gsdd-map-codebase/s,
+      'quick.md plan preview must offer a /gsdd-map-codebase switch when the scope warning calls for deeper orientation. FIX: Add preview routing for /gsdd-map-codebase.');
+    assert.match(previewSection, /switch to \/gsdd-map-codebase.*clean up the task directory/i,
+      'quick.md must clean up the provisional quick-task directory before switching to /gsdd-map-codebase. FIX: Add cleanup to the map-codebase branch.');
   });
 
   test('quick.md approach clarification limits to max 2 questions', () => {

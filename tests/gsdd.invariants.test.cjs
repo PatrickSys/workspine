@@ -61,6 +61,15 @@ function isGitTracked(relativePath) {
   }
 }
 
+function getDesignDecisionHeaders(content) {
+  const decisionHeaderPattern = /^## (?:(\d+)\.|D(\d+) - ).*/gm;
+  return [...content.matchAll(decisionHeaderPattern)].map(match => ({
+    label: match[1] || `D${match[2]}`,
+    index: match.index,
+    header: match[0],
+  }));
+}
+
 // Roles that received S12 hardening (XML-bounded sections)
 const HARDENED_ROLES = [
   'executor.md',
@@ -1299,29 +1308,31 @@ describe('G7 — Delegate Thinness', () => {
 describe('G6 — DESIGN.md Decision Registry', () => {
   const designContent = fs.readFileSync(DESIGN_MD, 'utf-8');
 
-  test('DESIGN.md has at least 14 numbered decision sections', () => {
-    const sections = designContent.match(/^## \d+\./gm) || [];
+  test('DESIGN.md has at least 14 decision sections', () => {
+    const sections = getDesignDecisionHeaders(designContent);
     assert.ok(
       sections.length >= 14,
-      `DESIGN.md has ${sections.length} numbered sections (need >= 14). FIX: Add missing decision records.`
+      `DESIGN.md has ${sections.length} decision sections (need >= 14). FIX: Add missing decision records.`
     );
   });
 
   // Extract section boundaries
-  const sectionHeaders = [...designContent.matchAll(/^## (\d+)\..*/gm)];
-  for (const header of sectionHeaders) {
-    const sectionNum = header[1];
-    const startIdx = header.index + header[0].length;
+  const sectionHeaders = getDesignDecisionHeaders(designContent);
+  for (let i = 0; i < sectionHeaders.length; i += 1) {
+    const header = sectionHeaders[i];
+    const startIdx = header.index + header.header.length;
     // Find the next ## header or end of file
-    const nextHeader = designContent.indexOf('\n## ', startIdx);
-    const sectionBody = nextHeader === -1
+    const nextHeaderIdx = i + 1 < sectionHeaders.length
+      ? sectionHeaders[i + 1].index
+      : -1;
+    const sectionBody = nextHeaderIdx === -1
       ? designContent.slice(startIdx)
-      : designContent.slice(startIdx, nextHeader);
+      : designContent.slice(startIdx, nextHeaderIdx);
 
-    test(`DESIGN.md section ${sectionNum} has Evidence subsection`, () => {
+    test(`DESIGN.md section ${header.label} has Evidence subsection`, () => {
       assert.ok(
         sectionBody.includes('Evidence'),
-        `DESIGN.md section ${sectionNum} missing Evidence subsection. FIX: Add **Evidence:** with source citations.`
+        `DESIGN.md section ${header.label} missing Evidence subsection. FIX: Add **Evidence:** with source citations.`
       );
     });
   }
@@ -1582,7 +1593,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
 
   // G12.1: DESIGN.md actual decision count matches README claims
   test('DESIGN.md decision count matches root README claim', () => {
-    const actualSections = (designContent.match(/^## \d+\./gm) || []).length;
+    const actualSections = getDesignDecisionHeaders(designContent).length;
     assert.ok(
       rootReadme.includes(`${actualSections} documented design decisions`),
       `Root README claims wrong DESIGN.md decision count. Actual: ${actualSections}. FIX: Update root README to say "${actualSections} documented design decisions".`
@@ -1590,7 +1601,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
   });
 
   test('DESIGN.md decision count matches distilled/README claim', () => {
-    const actualSections = (designContent.match(/^## \d+\./gm) || []).length;
+    const actualSections = getDesignDecisionHeaders(designContent).length;
     assert.ok(
       distilledReadme.includes(`${actualSections} decisions`),
       `distilled/README claims wrong DESIGN.md decision count. Actual: ${actualSections}. FIX: Update distilled/README DESIGN.md description to say "${actualSections} decisions".`

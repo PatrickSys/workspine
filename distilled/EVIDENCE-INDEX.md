@@ -286,6 +286,65 @@
 - `distilled/workflows/map-codebase.md` (completion offers `/gsdd-quick` as the brownfield lane)
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
+## D40 — Three-Layer Continuity Boundary
+- Phase 7 continuity review across all 14 workflow files: durable artifacts and live-state artifacts were present, but compressed judgment was not explicitly modeled
+- D12 and D26: artifact/state continuity existed already, but without a named three-layer boundary
+- `.planning/SPEC.md` (Continuity Layers constraint, Key Decisions row)
+- `distilled/workflows/resume.md` (first workflow adopting the boundary directly)
+
+## D41 — Compressed Judgment Persistence Surface
+- Phase 8 review of `plan.md`, `execute.md`, `verify.md`, and `resume.md` as the four judgment-recovery entry points
+- `distilled/workflows/pause.md` (checkpoint `<judgment>` write)
+- `distilled/workflows/execute.md` (`SUMMARY.md` `<judgment>` write and prior-summary read)
+- `distilled/workflows/plan.md`, `distilled/workflows/verify.md`, `distilled/workflows/resume.md` (judgment reads)
+- `.planning/SPEC.md` (Key Decisions row)
+
+## D42 — Session-Boundary Safety
+- `distilled/workflows/resume.md` (`.continue-here.bak` retained across dispatch)
+- `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/verify.md`, `distilled/workflows/quick.md` (fallback `.bak` judgment reads)
+- `distilled/workflows/pause.md` (stale `.bak` crash-cleanup path)
+- `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`
+
+## D43 — Resume Provenance Truth Split
+- `.internal-research/gaps.md` (`I29`, `I30`)
+- `.internal-research/TODO.md` (stale checkpoint/worktree drift notes)
+- `.internal-research/consumer-audits/worktree-provenance-and-checkpoint-drift-2026-04-12.md`
+- `distilled/workflows/pause.md`, `distilled/workflows/resume.md`
+- `bin/lib/provenance.mjs`
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`
+
+## D44 — Warning-First Transition Safety And Fail-Closed Terminal Writes
+- `.planning/SPEC.md` (`LAUNCH-12`, `LAUNCH-13`)
+- `.planning/ROADMAP.md` (Phase 20 and Phase 22 scope notes)
+- `distilled/workflows/plan.md`, `execute.md`, `quick.md`, `new-milestone.md`, `complete-milestone.md`
+- `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`
+- `bin/lib/provenance.mjs`
+- `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
+## D45 — Fork-Honest Launch Posture Before Identity Migration
+- `.planning/SPEC.md` (v1.2.0 active requirements and posture)
+- `.planning/ROADMAP.md` (Phase 23-27 ownership)
+- `.internal-research/TODO.md`, `.internal-research/gaps.md` (`I39`), `.internal-research/lessons-learned.md`
+- `.internal-research/release-jury-verdict-2026-04-15.md`
+- `.internal-research/release-jury-public-truth-drift-2026-04-15.md`
+- `.internal-research/public-release-two-layer-brief-2026-04-15.md`
+- `get-shit-done/workflows/progress.md`
+
+## D46 — Archived Milestone Routing With Retained ROADMAP
+- `.internal-research/gaps.md` (`I39`)
+- `.planning/MILESTONES.md`
+- `.planning/v1.1-MILESTONE-AUDIT.md`
+- `distilled/workflows/progress.md`
+- `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`, `tests/gsdd.health.test.cjs`
+- `get-shit-done/workflows/progress.md`
+
+## D47 — Brownfield Quick-Win Repair
+- `.planning/SPEC.md` (`DX-03`, `BROWNFIELD-01`)
+- `distilled/workflows/quick.md`, `distilled/workflows/progress.md`
+- `distilled/workflows/new-project.md`, `distilled/workflows/map-codebase.md`
+- `README.md`, `docs/USER-GUIDE.md`, `distilled/README.md`
+- `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`, `tests/gsdd.invariants.test.cjs`
+
 ---
 
 ## Maintenance

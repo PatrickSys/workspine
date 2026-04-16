@@ -107,21 +107,27 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 ### Brownfield Workflow (Existing Codebase)
 
 ```
-  gsdd-map-codebase
-         │
-         ├── Stack Mapper     -> codebase/STACK.md
-         ├── Arch Mapper      -> codebase/ARCHITECTURE.md
-         ├── Convention Mapper -> codebase/CONVENTIONS.md
-         └── Concern Mapper   -> codebase/CONCERNS.md
-                │
-        ┌───────┴───────────────┐
-        │                       │
- if bounded change        otherwise
- is already concrete      use the canonical initializer
-        │                       │
-        ▼                       ▼
-  gsdd-quick              gsdd-new-project
-  bounded feature work    full lifecycle setup
+  Brownfield repo
+        │
+        ├── bounded change already concrete
+        │        │
+        │        ▼
+        │   gsdd-quick
+        │   bounded feature work
+        │   with inline baseline
+        │
+        ├── repo unfamiliar / risky / deeper orientation needed
+        │        │
+        │        ▼
+        │   gsdd-map-codebase
+        │        │
+        │        └── continue with gsdd-quick or gsdd-new-project
+        │
+        └── fuzzy scope / full lifecycle setup
+                 │
+                 ▼
+           gsdd-new-project
+           canonical initializer
 ```
 
 ### Verification Gate
@@ -150,8 +156,8 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 
 | Workflow | Purpose | When to Use |
 |----------|---------|-------------|
-| `gsdd-new-project` | Full project init: questioning, codebase audit, research, spec, roadmap | Start of a new project |
-| `gsdd-map-codebase` | Map existing codebase for reusable brownfield context | Before `gsdd-new-project`, or before `gsdd-quick` only when you already know the bounded change you want |
+| `gsdd-new-project` | Full project init: questioning, brownfield audit when needed, research, spec, roadmap | Greenfield, fuzzy brownfield scope, or full lifecycle setup |
+| `gsdd-map-codebase` | Map existing codebase for reusable brownfield context | When the repo is unfamiliar, risky, or you want a deeper baseline before choosing `quick` vs `new-project` |
 | `gsdd-plan` | Research + plan + adversarial check for current phase; writes planning artifacts only | Before executing a phase |
 | `gsdd-execute` | Execute phase plans in parallel waves | After planning is complete |
 | `gsdd-verify` | 3-level verification gate + anti-pattern scan | After execution completes |
@@ -281,9 +287,9 @@ Workspine does not impose commit formats, branch naming, or one-commit-per-task 
 
 `npx gsdd-cli init`
 
-- `Claude/OpenCode`: `/gsdd-map-codebase -> /gsdd-quick` for bounded brownfield work you can already name, or `/gsdd-map-codebase -> /gsdd-new-project` for full lifecycle setup
-- `Codex`: `$gsdd-map-codebase -> $gsdd-quick` for bounded brownfield work you can already name, or `$gsdd-map-codebase -> $gsdd-new-project`
-- `Cursor / Copilot / Gemini`: `/gsdd-map-codebase -> /gsdd-quick` or `/gsdd-map-codebase -> /gsdd-new-project` from the slash command menu once the skills are installed
+- `Claude/OpenCode`: `/gsdd-quick` for a concrete bounded change, `/gsdd-new-project` for fuzzy or milestone-shaped work, or `/gsdd-map-codebase` first when the repo needs a deeper brownfield baseline
+- `Codex`: `$gsdd-quick` for a concrete bounded change, `$gsdd-new-project` for fuzzy or milestone-shaped work, or `$gsdd-map-codebase` first when the repo needs a deeper brownfield baseline
+- `Cursor / Copilot / Gemini`: `/gsdd-quick`, `/gsdd-new-project`, or `/gsdd-map-codebase` from the slash command menu once the skills are installed, using the same routing rules above
 
 ### Quick Bug Fix
 

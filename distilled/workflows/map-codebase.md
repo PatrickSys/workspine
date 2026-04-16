@@ -9,11 +9,13 @@ Use this workflow when:
 - Starting work on a brownfield (existing) codebase for the first time
 - Codebase maps are missing or stale (major refactors, dependency upgrades, new modules)
 - Explicitly requested as a standalone re-mapping
+- You want a deeper brownfield orientation pass before choosing between bounded `quick` work and full `new-project` setup
 
 Do NOT use when:
 - Greenfield project with no existing code
 - Maps already exist and are fresh (use Skip)
 - You are in the middle of a plan/execute/verify cycle (use existing maps)
+- You only need a small bounded brownfield change and the repo is already familiar enough for `quick` to build an inline baseline safely
 </when_to_use>
 
 <load_context>

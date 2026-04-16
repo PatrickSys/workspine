@@ -383,6 +383,16 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
       'quick planner delegate must receive codebase context');
   });
 
+  test('quick can build an inline brownfield baseline without codebase maps', () => {
+    const content = readSkill(tmpDir, 'gsdd-quick');
+    assert.match(content, /inline brownfield baseline/i,
+      'generated quick skill must build a just-enough inline brownfield baseline when maps are missing.');
+    assert.match(content, /README\.md|package\.json|pyproject\.toml|Cargo\.toml/i,
+      'generated quick skill must inspect stable repo-root guidance during the inline baseline.');
+    assert.match(content, /provisional baseline|calling out unknowns/i,
+      'generated quick skill must mark the inline baseline as provisional when uncertainty remains.');
+  });
+
   test('quick preserves split escalation for undefined scope vs too many grey areas', () => {
     const content = readSkill(tmpDir, 'gsdd-quick');
     assert.match(content, /bounded change is still undefined.*\/gsdd-new-project/s,
@@ -391,6 +401,26 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
       'generated quick skill must route defined-but-too-ambiguous tasks to /gsdd-plan.');
     assert.match(content, /contains.*\/gsdd-new-project.*switch to \/gsdd-new-project/s,
       'generated quick skill must offer a /gsdd-new-project switch option from the preview when the bounded change is still undefined.');
+  });
+
+  test('quick can escalate to map-codebase when the inline brownfield baseline is too weak', () => {
+    const content = readSkill(tmpDir, 'gsdd-quick');
+    assert.match(content, /Orientation gap[\s\S]*\/gsdd-map-codebase/s,
+      'generated quick skill must recommend /gsdd-map-codebase when orientation is still too weak after the inline baseline.');
+    assert.match(content, /contains.*\/gsdd-map-codebase.*switch to \/gsdd-map-codebase/s,
+      'generated quick skill must offer a /gsdd-map-codebase switch from the preview when orientation remains too weak.');
+  });
+
+  test('progress treats codebase-only and quick-lane brownfield states as non-phase state instead of empty init state', () => {
+    const content = readSkill(tmpDir, 'gsdd-progress');
+    assert.match(content, /codebase_only|codebase-only/i,
+      'generated progress skill must classify codebase-only brownfield state.');
+    assert.match(content, /quick_lane|quick lane/i,
+      'generated progress skill must classify quick-lane brownfield state.');
+    assert.match(content, /codebase-only brownfield state[\s\S]*\/gsdd-quick/i,
+      'generated progress skill must route codebase-only brownfield state toward /gsdd-quick.');
+    assert.match(content, /quick-lane brownfield state with incomplete quick work[\s\S]*\/gsdd-quick/i,
+      'generated progress skill must route incomplete quick-lane state toward /gsdd-quick.');
   });
 });
 

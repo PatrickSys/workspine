@@ -50,6 +50,14 @@
 37. [Mutability-Driven Workflow Classification](#37-mutability-driven-workflow-classification)
 38. [Retroactive Artifact Enforcement](#38-retroactive-artifact-enforcement)
 39. [Brownfield Entry Wiring](#39-brownfield-entry-wiring)
+40. [Three-Layer Continuity Boundary](#d40---three-layer-continuity-boundary)
+41. [Compressed Judgment Persistence Surface](#d41---compressed-judgment-persistence-surface)
+42. [Session-Boundary Safety](#d42---session-boundary-safety)
+43. [Resume Provenance Truth Split](#d43---resume-provenance-truth-split)
+44. [Warning-First Transition Safety And Fail-Closed Terminal Writes](#d44---warning-first-transition-safety-and-fail-closed-terminal-writes)
+45. [Fork-Honest Launch Posture Before Identity Migration](#d45---fork-honest-launch-posture-before-identity-migration)
+46. [Archived Milestone Routing With Retained ROADMAP](#d46---archived-milestone-routing-with-retained-roadmap)
+47. [Brownfield Quick-Win Repair](#d47---brownfield-quick-win-repair)
 
 ---
 
@@ -2017,6 +2025,55 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Future milestone-lifecycle changes that retain or restore historical roadmap files must preserve the current-milestone archive-evidence check.
 
 **GSDD implementation:** `distilled/workflows/progress.md`, `.planning/MILESTONES.md`, `.planning/v1.1-MILESTONE-AUDIT.md`, `.internal-research/gaps.md`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`, `tests/gsdd.health.test.cjs`
+
+---
+
+## D47 - Brownfield Quick-Win Repair
+
+**Decision (2026-04-16):** Keep the existing workflow set, but repair the brownfield contract end to end so the same story holds in docs, workflow routing, and progress reporting.
+
+**Context:**
+- The earlier brownfield fix (D39) made `map-codebase -> quick` explicit, but the full user journey still had three contradictions:
+  - public docs still over-taught `new-project` or implied users must always start brownfield work with `map-codebase`
+  - `quick.md` depended on codebase maps when present but had no documented just-enough fallback when maps were absent
+  - `progress.md` still treated codebase-only or quick-only repos as "no artifacts", so `map-codebase -> quick -> progress` was not a coherent lane
+- The user explicitly chose a quick win over a heavier product redesign: repair the existing lane now, and record the larger enterprise middle-lane question as follow-on work.
+
+**Decision:**
+- `gsdd-new-project` remains the full initializer for greenfield work, fuzzy brownfield scope, or milestone-shaped work. It owns brownfield codebase mapping internally when the deeper baseline is needed.
+- `gsdd-quick` is now the documented bounded brownfield lane. It reuses `.planning/codebase/*` when present and otherwise builds a just-enough inline brownfield baseline from stable repo-root surfaces before planning.
+- `gsdd-map-codebase` remains the deeper orientation pass for unfamiliar or higher-risk brownfield repos. It is optional before `quick`, not a mandatory first step for every existing repo.
+- `gsdd-progress` keeps the same six route branches, but Branch F is broadened into a general non-phase state branch that covers:
+  - between milestones
+  - codebase-only brownfield state
+  - quick-lane-only brownfield state
+- The heavier "durable enterprise middle lane" problem is explicitly deferred rather than being smuggled into `quick`.
+
+**Why this shape:** The highest-leverage failure was contract drift, not missing workflow count. Repairing the existing lane preserves the current architecture, minimizes new surface area, and removes the onboarding contradiction without prematurely inventing a durable change-management workflow.
+
+**Tradeoff:** This is intentionally not the full middle-lane redesign. `quick` is stronger and clearer now, but it still stays optimized for bounded work. Long-lived ticket/PBI continuity remains an explicit deferred product decision instead of silent scope creep inside `quick`.
+
+**Evidence:**
+- `.planning/SPEC.md` `DX-03` and `BROWNFIELD-01`
+- `distilled/workflows/quick.md`
+- `distilled/workflows/progress.md`
+- `distilled/workflows/new-project.md`
+- `distilled/workflows/map-codebase.md`
+- `README.md`
+- `docs/USER-GUIDE.md`
+- `distilled/README.md`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- `.internal-research/gaps.md` (`I43`)
+
+**Consequences:**
+- New consumers no longer need to be told "always start with new-project, then maybe map-codebase, then maybe quick" for bounded brownfield work.
+- Brownfield onboarding, workflow routing, and status reporting now move together as one contract.
+- Any future change to brownfield entry must update the docs, workflow contracts, and status routing together instead of treating them as separate concerns.
+
+**GSD comparison:** GSD keeps brownfield posture closer to the full initialization flow after mapping. GSDD now preserves that full path, but also treats bounded-change brownfield work as a first-class documented lane without adding a new workflow surface.
+
+**GSDD implementation:** `distilled/workflows/quick.md`, `distilled/workflows/progress.md`, `distilled/workflows/new-project.md`, `distilled/workflows/map-codebase.md`, `README.md`, `docs/USER-GUIDE.md`, `distilled/README.md`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`
 
 ---
 

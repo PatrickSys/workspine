@@ -18,7 +18,9 @@ This is a read-only workflow. No files are created, modified, or deleted. If `.p
 Check for project artifacts in order:
 
 1. **No `.planning/` directory** — tell the user to run `gsdd init`. Stop.
-2. **No `.planning/ROADMAP.md` AND no `.planning/SPEC.md`** — project has no artifacts. Suggest running the `/gsdd-new-project` workflow. Stop.
+2. **No `.planning/ROADMAP.md` AND no `.planning/SPEC.md`** — check for non-phase brownfield artifacts:
+   - if `.planning/codebase/` has substantive map documents, or `.planning/quick/` has LOG/task artifacts, treat this as a non-phase brownfield state. Go to Branch F.
+   - otherwise the project has no artifacts. Suggest running the `/gsdd-new-project` workflow. Stop.
 3. **No `.planning/ROADMAP.md` BUT `.planning/SPEC.md` exists** — this is a between-milestones state (milestone was completed and archived). Go to Branch F.
 4. **Both exist** — proceed to derive status, including whether a retained `ROADMAP.md` already represents an archived milestone rather than an audit-ready one.
 </check_existence>
@@ -27,10 +29,19 @@ Check for project artifacts in order:
 Read the following and extract state:
 
 **Project identity:**
-Read `.planning/SPEC.md`. Extract the project name from the first heading.
+- If `.planning/SPEC.md` exists, read it and extract the project name from the first heading.
+- If `.planning/SPEC.md` does not exist, derive the project name from the repo root directory name.
+
+**Non-phase brownfield state:**
+If `.planning/ROADMAP.md` does not exist, determine whether the repo is currently in one of these Branch F states:
+- `between_milestones` — `.planning/SPEC.md` exists
+- `codebase_only` — `.planning/codebase/` has substantive map documents but `.planning/SPEC.md` does not exist
+- `quick_lane` — `.planning/quick/LOG.md` or quick task directories exist but `.planning/SPEC.md` and `.planning/ROADMAP.md` do not
+
+For `codebase_only` and `quick_lane`, there is no active phase count. Record the non-phase state instead of trying to infer current milestone progress.
 
 **Phase statuses:**
-Read `.planning/ROADMAP.md`. Parse phase statuses:
+If `.planning/ROADMAP.md` exists, read it and parse phase statuses:
 - `[ ]` = not started
 - `[-]` = in progress
 - `[x]` = done
@@ -53,7 +64,7 @@ If `ROADMAP.md` exists and all phases in the current milestone are `[x]`, determ
 Check if `.planning/.continue-here.md` exists. If yes, note the `workflow` and `phase` frontmatter and the `next_action` section.
 
 **Incomplete work:**
-Scan `.planning/phases/` for:
+If `.planning/phases/` exists, scan it for:
 - PLAN files without a matching SUMMARY file (incomplete execution)
 - SUMMARY files without a matching VERIFICATION file (unverified, only relevant if `workflow.verifier` is enabled in `.planning/config.json`; if config.json cannot be read, assume verifier is disabled)
 
@@ -88,6 +99,10 @@ Present a status block to the user. Template:
 Project: [name from SPEC.md]
 Phase: [current] of [total] — [phase name]
 Completed: [N] phases done
+
+[If no active roadmap and Branch F is handling a non-phase state:]
+State: [between milestones | codebase map only | quick lane only]
+Completed: no active roadmap
 
 Recent Work:
 - Phase [X]: [one-liner from SUMMARY.md]
@@ -186,9 +201,10 @@ Suggested next action:
   Also available: /gsdd-verify (re-verify a specific phase), /gsdd-quick (sub-hour task)
 ```
 
-**Branch F: Between milestones (SPEC.md exists, no active milestone)**
+**Branch F: Non-phase state (no active roadmap, or retained roadmap already archived)**
 Condition:
 - `.planning/SPEC.md` exists but `.planning/ROADMAP.md` does not, **or**
+- `.planning/codebase/` or `.planning/quick/` exists while both `.planning/SPEC.md` and `.planning/ROADMAP.md` are absent, **or**
 - `.planning/ROADMAP.md` still exists, but the current roadmap milestone/version already has both a shipped entry in `.planning/MILESTONES.md` and the matching archived milestone audit artifact — this is the archived-with-`ROADMAP.md` state, not a second trip through audit
 
 Check `.planning/MILESTONES.md`:
@@ -204,6 +220,18 @@ Suggested next action (incomplete milestone state — SPEC.md exists but no mile
   Inspect .planning/ manually — a milestone is likely still in progress.
   If a ROADMAP.md was deleted prematurely, re-run /gsdd-new-milestone to restore it.
   Do NOT run /gsdd-new-project — SPEC.md already exists and re-running would overwrite it.
+
+Suggested next action (codebase-only brownfield state):
+  Run /gsdd-quick if the bounded change is already concrete.
+  Also available: /gsdd-new-project (define broader lifecycle work), /gsdd-map-codebase (refresh or deepen the baseline)
+
+Suggested next action (quick-lane brownfield state with incomplete quick work):
+  Run /gsdd-quick to continue or finish the current bounded change.
+  Also available: /gsdd-new-project (switch to full lifecycle setup), /gsdd-progress (refresh after the quick task is updated)
+
+Suggested next action (quick-lane brownfield state with no incomplete quick work):
+  Run /gsdd-quick for the next bounded change.
+  Also available: /gsdd-new-project (if you now need SPEC.md + ROADMAP.md), /gsdd-map-codebase (if the repo baseline feels stale)
 ```
 
 If none of the above conditions match, report that the project is in a clean state with no obvious next action.

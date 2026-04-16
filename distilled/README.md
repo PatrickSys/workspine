@@ -68,6 +68,14 @@ gsdd init                  -> bootstrap (create .planning/, copy templates, gene
 /gsdd-progress             -> show status, route to next action
 ```
 
+## Brownfield Entry Contract
+
+Use the same three-way routing everywhere:
+
+- `gsdd-new-project` is the full initializer for greenfield work, fuzzy brownfield scope, or milestone-shaped work. Users do not need to pre-run `map-codebase`; `new-project` does that internally when needed.
+- `gsdd-quick` is the bounded brownfield lane when the change is already concrete. It uses existing codebase maps when present and otherwise builds a just-enough inline baseline.
+- `gsdd-map-codebase` is the deeper orientation pass for unfamiliar or higher-risk repos before choosing between `quick` and `new-project`.
+
 ## Current Status (updated 2026-04-10)
 
 | Workflow | Status | Notes |
@@ -80,11 +88,11 @@ gsdd init                  -> bootstrap (create .planning/, copy templates, gene
 | `complete-milestone.md` | [OK] Defined | Archives milestone, evolves SPEC.md, collapses ROADMAP.md — no gsd-tools.cjs dependency |
 | `new-milestone.md` | [OK] Defined | Brownfield milestone continuation: goals, SPEC.md requirements, ROADMAP.md phases |
 | `plan-milestone-gaps.md` | [OK] Defined (unvalidated) | Gap closure phases from MILESTONE-AUDIT.md results |
-| `quick.md` | [OK] | Quick-work lane for sub-hour tasks outside the phase cycle (D11) |
+| `quick.md` | [OK] | Quick-work lane for sub-hour tasks outside the phase cycle, including bounded brownfield inline baseline and escalation (D11, D47) |
 | `pause.md` | [OK] Source-audited | Session checkpoint writer with conversational handoff (D12) |
 | `resume.md` | [OK] Source-audited | Session context restorer with priority-ordered routing (D12) |
-| `progress.md` | [OK] Source-audited | Read-only status reporter with 6 named route branches, recent work, between-milestones detection (D12) |
-| `map-codebase.md` | [OK] Defined, source-audited | Standalone codebase mapping/refresh |
+| `progress.md` | [OK] Source-audited | Read-only status reporter with 6 named route branches, recent work, archived-milestone detection, and non-phase brownfield-state routing (D12, D46, D47) |
+| `map-codebase.md` | [OK] Defined, source-audited | Standalone codebase mapping/refresh and deeper brownfield orientation |
 | `verify-work.md` | [OK] Defined | Conversational UAT validation with structured gap tracking |
 
 Architecture notes:
@@ -154,7 +162,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 
 ```
 distilled/
-  DESIGN.md                # design decisions and rationale (39 decisions, evidence-backed)
+  DESIGN.md                # design decisions and rationale (47 decisions, evidence-backed)
   EVIDENCE-INDEX.md        # source-to-decision index for durable research-backed claims
   SKILL.md                 # primary entry point (plain markdown)
   workflows/

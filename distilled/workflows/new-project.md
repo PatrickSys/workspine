@@ -83,6 +83,8 @@ Check whether `.planning/codebase/STACK.md`, `.planning/codebase/ARCHITECTURE.md
 
 Inform the user: "No codebase maps found. Running codebase mapping before continuing."
 
+This is an internal prerequisite of `new-project`, not a user-facing routing requirement. If the user started with `/gsdd-new-project` on a brownfield repo, do not bounce them out and tell them to restart with `/gsdd-map-codebase`. Run the mapping dependency, then continue this workflow.
+
 Read and follow `.agents/skills/gsdd-map-codebase/SKILL.md` now. Execute its full flow (check existing, spawn mappers, validate, secrets scan). When map-codebase completes, return here and continue from Brownfield Validated Requirements Inference below.
 
 ### Brownfield Validated Requirements Inference
@@ -415,7 +417,7 @@ Report to the user what was accomplished, then present the next step:
 
 Also available:
 - `/gsdd-progress` — check overall project status
-- `/gsdd-map-codebase` — map existing codebase (if not already done)
+- `/gsdd-map-codebase` — deeper brownfield baseline or refresh (optional; `new-project` already runs it when needed)
 
 Consider clearing context before starting the next workflow for best results.
 ---

@@ -93,7 +93,13 @@ Your tool determines how you invoke workflows:
 
 If you generate the root `AGENTS.md` block, it adds the framework's behavioral governance. For Cursor, Copilot, and Gemini, that governance is optional discipline on top of native skill discovery — not the mechanism that makes workflows discoverable.
 
-First workflow to run: **new-project** — it asks about your goals, audits/maps the codebase if brownfield, and produces `.planning/SPEC.md` + `.planning/ROADMAP.md`. If you already know the bounded brownfield change you want, run `map-codebase` first and then use `quick`.
+### Choose Your Starting Workflow
+
+| Situation | Start here | Why |
+|----------|------------|-----|
+| Greenfield project, or brownfield work that is fuzzy / broad / milestone-shaped | `gsdd-new-project` | This is the full initializer. On brownfield repos it will run codebase mapping internally when it needs it. |
+| Brownfield repo and the bounded change is already concrete | `gsdd-quick` | This is the bounded-change lane. It can use existing codebase maps when present and otherwise builds a just-enough inline brownfield baseline. |
+| Brownfield repo is unfamiliar, risky, or you want a deeper baseline before choosing the lane | `gsdd-map-codebase` | This is the deeper orientation pass. Use it when the inline quick baseline would be too weak, then continue with `gsdd-quick` or `gsdd-new-project`. |
 
 ### Platform Adapters
 
@@ -165,7 +171,7 @@ init → [plan → execute → verify] × N phases → audit-milestone → done
 Run the `gsdd-new-project` workflow. The system:
 
 1. **Questions** — asks until it understands your idea (goals, constraints, tech, edge cases)
-2. **Codebase map** — if brownfield, maps the codebase across stack, architecture, conventions, and concerns so you can either continue with `/gsdd-new-project` or take a bounded `quick` lane
+2. **Codebase map** — if brownfield and a deeper baseline is needed, maps the codebase across stack, architecture, conventions, and concerns; users do not need to pre-run `map-codebase` before `new-project`
 3. **Research** — spawns parallel researchers to investigate the domain (configurable depth: fast/balanced/deep)
 4. **Spec + Roadmap** — produces `SPEC.md` (living specification) and `ROADMAP.md` (phased delivery plan)
 
@@ -254,8 +260,8 @@ Workspine has 14 workflows, run via generated skills or adapters:
 
 | Workflow | What it does |
 |----------|--------------|
-| `gsdd-new-project` | Full initialization: questioning, codebase audit, research, spec, roadmap |
-| `gsdd-map-codebase` | Map an existing codebase for reuse by `new-project` or bounded `quick` work |
+| `gsdd-new-project` | Full initialization: questioning, brownfield audit when needed, research, spec, roadmap |
+| `gsdd-map-codebase` | Deeper brownfield orientation and refresh before `quick` or `new-project` |
 | `gsdd-plan` | Research + plan + check for a phase |
 | `gsdd-execute` | Execute phase plan: implement tasks, verify changes |
 | `gsdd-verify` | Verify completed phase: 3-level checks, anti-pattern scan |
@@ -264,7 +270,7 @@ Workspine has 14 workflows, run via generated skills or adapters:
 | `gsdd-complete-milestone` | Archive shipped milestone, evolve spec, collapse roadmap |
 | `gsdd-new-milestone` | Start next milestone: gather goals, define requirements, create roadmap phases |
 | `gsdd-plan-milestone-gaps` | Create gap-closure phases from audit results |
-| `gsdd-quick` | Quick task: plan and execute sub-hour work outside the phase cycle |
+| `gsdd-quick` | Quick task: bounded brownfield change lane with inline baseline when full mapping is unnecessary |
 | `gsdd-pause` | Pause work: save session context to checkpoint for seamless resumption |
 | `gsdd-resume` | Resume work: restore context from artifacts and route to next action |
 | `gsdd-progress` | Show project status and route to next action |
@@ -459,7 +465,7 @@ For detailed troubleshooting and recovery procedures, see the [User Guide](docs/
 
 ## Design Decisions
 
-This repo records 39 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+This repo records 47 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't
