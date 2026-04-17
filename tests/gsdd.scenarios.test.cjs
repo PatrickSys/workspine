@@ -677,11 +677,32 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
       'gsdd-resume must not keep the old manual checkpoint delete prose.');
   });
 
-  test('execute and verify portable skills route roadmap transitions through gsdd phase-status', () => {
-    for (const skillName of ['gsdd-execute', 'gsdd-verify']) {
+  test('transition-sensitive portable skills route lifecycle eligibility through gsdd lifecycle-preflight', () => {
+    const expectations = new Map([
+      ['gsdd-execute', ['gsdd lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'gsdd phase-status']],
+      ['gsdd-verify', ['gsdd lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'gsdd phase-status']],
+      ['gsdd-audit-milestone', ['gsdd lifecycle-preflight audit-milestone']],
+      ['gsdd-complete-milestone', ['gsdd lifecycle-preflight complete-milestone']],
+      ['gsdd-new-milestone', ['gsdd lifecycle-preflight new-milestone']],
+      ['gsdd-resume', ['gsdd lifecycle-preflight resume']],
+    ]);
+
+    for (const [skillName, snippets] of expectations.entries()) {
       const content = readSkill(tmpDir, skillName);
-      assert.ok(content.includes('gsdd phase-status'), `${skillName} must reference gsdd phase-status.`);
+      for (const snippet of snippets) {
+        assert.ok(content.includes(snippet), `${skillName} must include ${snippet}`);
+      }
     }
+  });
+
+  test('progress portable skill preserves the read-only lifecycle boundary', () => {
+    const content = readSkill(tmpDir, 'gsdd-progress');
+    assert.ok(content.includes('progress` stays read-only.') || content.includes('progress stays read-only.'),
+      'gsdd-progress must preserve the read-only lifecycle boundary.');
+    assert.ok(content.includes('Do not call `gsdd phase-status` here.'),
+      'gsdd-progress must forbid gsdd phase-status in the read-only reporter.');
+    assert.ok(content.includes('downstream mutating workflow must rerun its own `gsdd lifecycle-preflight ...` gate before acting.'),
+      'gsdd-progress must route downstream lifecycle transitions back through gsdd lifecycle-preflight.');
   });
 });
 

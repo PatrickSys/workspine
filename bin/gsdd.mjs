@@ -19,6 +19,7 @@ import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { createCmdHealth } from './lib/health.mjs';
+import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -87,7 +88,7 @@ const INIT_CONTEXT = createCliContext(CWD);
 
 const cmdInit = createCmdInit(INIT_CONTEXT);
 const cmdUpdate = createCmdUpdate(INIT_CONTEXT);
-const cmdHealth = createCmdHealth({ frameworkVersion: FRAMEWORK_VERSION });
+const cmdHealth = createCmdHealth(INIT_CONTEXT);
 
 const COMMANDS = {
   init: cmdInit,
@@ -95,6 +96,7 @@ const COMMANDS = {
   models: cmdModels,
   health: cmdHealth,
   'file-op': cmdFileOp,
+  'lifecycle-preflight': cmdLifecyclePreflight,
   'find-phase': cmdFindPhase,
   'phase-status': cmdPhaseStatus,
   verify: cmdVerify,
@@ -124,4 +126,4 @@ if (IS_MAIN) {
   await runCli();
 }
 
-export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFileOp, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

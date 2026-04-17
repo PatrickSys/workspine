@@ -12,6 +12,14 @@ Scope boundary: you are NOT resume.md. You do not wait for user input, clean up 
 This is a read-only workflow. No files are created, modified, or deleted. If `.planning/` does not exist, tell the user to run `gsdd init` and stop.
 </prerequisites>
 
+<lifecycle_boundary>
+`progress` stays read-only.
+
+- Derive lifecycle posture from repo truth only; do not mutate phase or milestone state from this workflow.
+- Do not call `gsdd phase-status` here.
+- If you recommend a next step that crosses a lifecycle boundary, the downstream mutating workflow must rerun its own `gsdd lifecycle-preflight ...` gate before acting.
+</lifecycle_boundary>
+
 <process>
 
 <check_existence>

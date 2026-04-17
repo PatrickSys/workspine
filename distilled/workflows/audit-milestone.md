@@ -13,6 +13,19 @@ Before starting, read these files:
 5. `.planning/AUTH_MATRIX.md` (if it exists) — authorization matrix for matrix-driven auth verification
 </load_context>
 
+<lifecycle_preflight>
+Before determining milestone scope or spawning the integration checker, run:
+
+- `gsdd lifecycle-preflight audit-milestone`
+
+If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone eligibility from workflow-local prose.
+
+Treat the preflight as an authorization seam over shared repo truth only:
+- it may authorize or reject milestone audit
+- it does not archive or mutate milestone state
+- the owned write for this workflow remains `.planning/v{version}-MILESTONE-AUDIT.md`
+</lifecycle_preflight>
+
 <process>
 
 ## 1. Determine Milestone Scope

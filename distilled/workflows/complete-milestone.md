@@ -25,6 +25,19 @@ Before starting, read these files:
 6. Most recent `.planning/v*-MILESTONE-AUDIT.md` — audit status (passed / gaps_found)
 </load_context>
 
+<lifecycle_preflight>
+Before verifying readiness or gathering archive stats, run:
+
+- `gsdd lifecycle-preflight complete-milestone`
+
+If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone-close eligibility from workflow-local prose.
+
+Treat the preflight as an authorization seam over shared repo truth only:
+- it may authorize or reject milestone completion
+- it does not mutate lifecycle state by itself
+- owned writes remain the archive artifacts, `MILESTONES.md`, `.planning/SPEC.md`, and the retained `ROADMAP.md` collapse
+</lifecycle_preflight>
+
 <process>
 
 ## 1. Verify Readiness
