@@ -6,6 +6,7 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const {
   cleanup,
   createTempProject,
@@ -432,6 +433,30 @@ describe('specialized plan adapter surfaces', () => {
     assert.ok(delegateContent.includes(keyPhrase), `delegate source must contain key phrase: ${keyPhrase}`);
     for (const [label, content] of [['claude', claudeChecker], ['opencode', opencodeChecker], ['codex', codexChecker]]) {
       assert.ok(content.includes(keyPhrase), `${label} checker must contain delegate key phrase: ${keyPhrase}`);
+    }
+  });
+
+  test('runtime-freshness helper catches rendered/generated drift directly', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'claude');
+      const freshness = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'runtime-freshness.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+      let report = freshness.evaluateRuntimeFreshness({
+        cwd: tmpDir,
+        workflows: gsdd.createCliContext(tmpDir).workflows,
+      });
+      assert.strictEqual(report.issueCount, 0, 'freshly generated surfaces must match current render output');
+
+      fs.appendFileSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'), '\n<!-- drift -->\n');
+      report = freshness.evaluateRuntimeFreshness({
+        cwd: tmpDir,
+        workflows: gsdd.createCliContext(tmpDir).workflows,
+      });
+      assert.ok(report.issues.some((entry) => entry.relativePath === '.claude/commands/gsdd-plan.md' && entry.status === 'stale'),
+        'helper must detect direct rendered/generated drift on native plan surfaces');
+    } finally {
+      restoreStdin();
     }
   });
 });

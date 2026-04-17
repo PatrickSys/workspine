@@ -1,9 +1,14 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { evaluateLifecycleState } from './lifecycle-state.mjs';
+import {
+  getRuntimeFreshnessRepairGuidance,
+  summarizeRuntimeFreshnessIssues,
+} from './runtime-freshness.mjs';
 
-export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10'];
+export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10', 'W11'];
 
-export function runTruthChecks(planningDir, frameworkDir, actualCheckIds) {
+export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, options = {}) {
   const warnings = [];
   const designPath = join(frameworkDir, 'distilled', 'DESIGN.md');
   const readmePath = join(frameworkDir, 'distilled', 'README.md');
@@ -11,6 +16,7 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds) {
   const gapsPath = join(frameworkDir, '.internal-research', 'gaps.md');
   const specPath = join(planningDir, 'SPEC.md');
   const roadmapPath = join(planningDir, 'ROADMAP.md');
+  const lifecycle = evaluateLifecycleState({ planningDir });
 
   if (existsSync(designPath)) {
     const documentedIds = extractHealthTableIds(readFileSync(designPath, 'utf-8'));
@@ -69,16 +75,7 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds) {
   }
 
   if (existsSync(specPath) && existsSync(roadmapPath)) {
-    const spec = readFileSync(specPath, 'utf-8');
-    const roadmap = readFileSync(roadmapPath, 'utf-8');
-    const checkedRequirements = extractCheckedRequirements(spec);
-    const roadmapRequirements = extractRoadmapRequirements(roadmap);
-    const mismatches = [];
-    for (const [requirementId, roadmapStatus] of roadmapRequirements.entries()) {
-      const specChecked = checkedRequirements.has(requirementId);
-      if (roadmapStatus && !specChecked) mismatches.push(`${requirementId} phase complete but SPEC unchecked`);
-      if (!roadmapStatus && specChecked) mismatches.push(`${requirementId} SPEC checked but phase incomplete`);
-    }
+    const mismatches = lifecycle.requirementAlignment.mismatches;
     if (mismatches.length > 0) {
       warnings.push({
         id: 'W10',
@@ -87,6 +84,15 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds) {
         fix: 'Reconcile .planning/ROADMAP.md phase completion markers with .planning/SPEC.md requirement checkboxes',
       });
     }
+  }
+
+  if (options.runtimeFreshnessReport?.issueCount > 0) {
+    warnings.push({
+      id: 'W11',
+      severity: 'WARN',
+      message: `Installed generated runtime surfaces drift from current render output (${summarizeRuntimeFreshnessIssues(options.runtimeFreshnessReport)})`,
+      fix: getRuntimeFreshnessRepairGuidance(options.runtimeFreshnessReport),
+    });
   }
 
   return warnings;
@@ -166,23 +172,4 @@ function extractSection(content, startMarker, endMarker) {
 
 function normalizeContent(content) {
   return content.replace(/\r\n/g, '\n');
-}
-
-function extractCheckedRequirements(content) {
-  const checked = new Set();
-  for (const result of content.matchAll(/- \[x\] \*\*\[([A-Z0-9-]+)]\*\*/g)) {
-    checked.add(result[1]);
-  }
-  return checked;
-}
-
-function extractRoadmapRequirements(content) {
-  const mapped = new Map();
-  for (const result of content.matchAll(/- \[([ x-])] \*\*Phase\s+\d+[a-z]?:.*?\*\*\s+—\s+\[([^\]]+)]/g)) {
-    const requirementIds = result[2].split(',').map((id) => id.trim());
-    for (const requirementId of requirementIds) {
-      mapped.set(requirementId, result[1].toLowerCase() === 'x');
-    }
-  }
-  return mapped;
 }

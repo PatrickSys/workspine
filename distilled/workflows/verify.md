@@ -20,6 +20,19 @@ Establish your verification basis (must-have sources, requirement scope, previou
 If a previous `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md` exists, read it first and treat this as re-verification.
 </load_context>
 
+<lifecycle_preflight>
+Before code inspection or report writing, run:
+
+- `gsdd lifecycle-preflight verify {phase_num} --expects-mutation phase-status`
+
+If the preflight result is `blocked`, STOP and report the blocker instead of inferring lifecycle eligibility from prompt-local prose.
+
+Treat the preflight as an authorization seam over shared repo truth only:
+- it may authorize or reject verification
+- it does not mutate `.planning/ROADMAP.md` by itself
+- owned writes remain the verification artifact plus any explicit `gsdd phase-status` transition that occurs later on `passed`
+</lifecycle_preflight>
+
 <runtime_contract>
 Verification uses the same `Runtime` and `Assurance` types as planning and execution.
 Infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
@@ -75,28 +88,41 @@ Also check for orphan requirements:
 Risk classification:
 For each truth, assess: does it involve a behavioral change, UX change, or user-visible outcome without a clear, relevant acceptance criterion?
 
-- If yes → mark it `risk: high`. This truth will require `runtime-check` or `user-confirmation` proof in the proof contract step below. Code-evidence alone is insufficient.
-- If no → `risk: normal`. Code-evidence or repo-test is sufficient.
+- If yes → mark it `risk: high`. This truth will require runtime-grade evidence in the evidence contract step below. `code` alone is insufficient.
+- If no → `risk: normal`. `code` is the floor, and `test` is preferred when the repo has a direct automated check.
 
 This is the verifier's own internal judgment — not a field imported from the plan. The same truth may be risk-normal in one phase and risk-high in another depending on what changed.
 </must_haves>
 
-<proof_contract>
-Before beginning artifact inspection, classify each must-have truth by its required proof type. This step separates "did the artifact pass levels 1–3?" from "did the outcome have the right kind of proof?"
-Proof types (from SPEC.md `VerificationEvidence`):
-- `repo-test` — a passing automated test in the repo directly exercises this outcome
-- `code-evidence` — source inspection confirms the implementation is present and wired
-- `runtime-check` — a live execution confirms the behavior (script, curl, manual run)
-- `user-confirmation` — a human observer confirmed the user-visible outcome
+<evidence_contract>
+Before beginning artifact inspection, classify the phase closure posture and apply the fixed evidence kinds. This step separates "did the artifact pass levels 1–3?" from "did the outcome have the right kind of evidence?"
 
-Assign required proof type per truth using the risk classification from `<must_haves>`:
-- `risk: high` truths (behavioral/UX changes, user-visible outcomes without acceptance criteria) → require `runtime-check` or `user-confirmation`. Code-evidence alone is **not sufficient**.
-- `risk: normal` truths (structural or content changes) → `code-evidence` is sufficient. `repo-test` is always valid regardless of risk level.
+Stable evidence kinds:
+- `code` — source inspection confirms the implementation is present and wired
+- `test` — a passing automated check in the repo directly exercises the outcome
+- `runtime` — a live execution confirms the behavior (script, curl, manual run)
+- `delivery` — shipped or distributable proof exists (merged PR, packaged artifact, published doc/proof pack, release evidence)
+- `human` — a human observer confirmed a visual or judgment-based outcome
 
-If the required proof type cannot be collected programmatically (e.g., runtime environment unavailable) → route that truth to `human_verification` in the report, not to `gaps`.
+Delivery posture:
+- `repo_only` — the phase outcome stays inside repo truth; no shipped runtime or external delivery claim is needed
+- `delivery_sensitive` — the phase claims a live behavior, shipped UX, install/release posture, or other externally consumed runtime outcome
 
-Note: this step does NOT replace levels 1–3. An artifact can satisfy the proof-type requirement and still fail Level 2 (substantive) or Level 3 (wired). Both checks must run.
-</proof_contract>
+Apply the shared `verify` matrix:
+
+| delivery_posture     | required evidence | recommended evidence       | cannot carry closure alone |
+| -------------------- | ----------------- | -------------------------- | -------------------------- |
+| `repo_only`          | `code`            | `test`                     | `human`, `delivery`        |
+| `delivery_sensitive` | `code`, `runtime` | `test`, `delivery`, `human` | `code`, `human`            |
+
+Rules:
+- repo-only work must not invent `runtime` or `delivery` proof just to satisfy a template
+- delivery-sensitive closure must not pass on prose, `code`-only inspection, or `human` confirmation without the required `runtime` evidence
+- `human` evidence supports ambiguous or visual outcomes; it does not replace required `code` or `runtime` evidence
+- if a required evidence kind cannot be collected, record it in `missing_evidence`; route purely human-observable follow-up to `human_verification` only when the blocking runtime/delivery requirement is already satisfied
+
+Note: this step does NOT replace levels 1–3. An artifact can satisfy the evidence-kind requirement and still fail Level 2 (substantive) or Level 3 (wired). Both checks must run.
+</evidence_contract>
 
 <verification_levels>
 Check every artifact at three levels. A common failure mode is a file that exists but is still a stub.
@@ -215,6 +241,12 @@ assurance: cross_runtime_checked
 verified: 2026-03-11T12:00:00Z
 status: gaps_found
 score: 2/3 must-haves verified
+delivery_posture: delivery_sensitive
+evidence_contract:
+  required_kinds: [code, runtime]
+  recommended_kinds: [test, delivery, human]
+  observed_kinds: [code]
+  missing_kinds: [runtime]
 re_verification:
   previous_status: gaps_found
   previous_score: 1/3
@@ -226,7 +258,9 @@ re_verification:
 gaps:
   - truth: "Users can create a user from the page"
     status: failed
-    proof_type: runtime-check # required proof type for this truth
+    required_evidence: [code, runtime]
+    observed_evidence: [code]
+    missing_evidence: [runtime]
     severity: blocker # blocker = required proof absent; warning = artifact missing but proof exists via other means
     reason: "Form submits, but route returns placeholder data"
     artifacts:
@@ -304,10 +338,11 @@ Status rules:
 
 Frontmatter guidance:
 - `phase`, `runtime`, `assurance`, `verified`, `status`, and `score` are the minimal report fields
+- `delivery_posture` plus `evidence_contract.required_kinds|recommended_kinds|observed_kinds|missing_kinds` must reflect the shared verify matrix actually used for this phase
 - when gaps or human checks exist, keep them machine-readable in frontmatter — do not collapse them into prose-only body text
 - keep `re_verification`, `gaps`, and `human_verification` structured when they materially help re-verification, gap closure, or explicit human handoff
 - keep `<git_delivery_check>` in frontmatter with the observed `branch`, `commits_ahead_of_main`, and `pr_state` values from the delivery checks above
-- use `severity: warning` in gaps when an artifact is missing but proof exists through other means; use `severity: blocker` only when the required proof type (`runtime-check`, `repo-test`, or `user-confirmation` where mandated) could not be satisfied by any available evidence
+- use `severity: warning` in gaps when an artifact is missing but required evidence still exists through other means; use `severity: blocker` only when one or more required evidence kinds in `missing_evidence` could not be satisfied
 - if verification runs in the same runtime/vendor as execution, cap frontmatter `assurance` at `self_checked`
 - if verification runs in a different runtime/vendor than execution, set frontmatter `assurance: cross_runtime_checked`
 </report_format>

@@ -8,10 +8,12 @@ import { join } from 'path';
 import { readManifest, detectModifications } from './manifest.mjs';
 import { output } from './cli-utils.mjs';
 import { runTruthChecks, TRUTH_CHECK_IDS } from './health-truth.mjs';
+import { evaluateLifecycleState } from './lifecycle-state.mjs';
+import { evaluateRuntimeFreshness } from './runtime-freshness.mjs';
 
 /**
  * Factory function returning the health command.
- * ctx must provide: { frameworkVersion }
+ * ctx should provide: { frameworkVersion, workflows }
  */
 export function createCmdHealth(ctx) {
   return async function cmdHealth(...healthArgs) {
@@ -41,8 +43,10 @@ export function createCmdHealth(ctx) {
     // E1: config.json missing (already handled by pre-init guard, but keep for completeness)
     // E2: config.json missing required fields
     let config = null;
+    let configOk = false;
     try {
       config = JSON.parse(readFileSync(join(planningDir, 'config.json'), 'utf-8'));
+      configOk = true;
       const requiredFields = ['researchDepth', 'modelProfile', 'initVersion'];
       const missing = requiredFields.filter((f) => !(f in config));
       if (missing.length > 0) {
@@ -148,45 +152,28 @@ export function createCmdHealth(ctx) {
     const roadmapPath = join(planningDir, 'ROADMAP.md');
     const phasesDir = join(planningDir, 'phases');
     const roadmap = existsSync(roadmapPath) ? readFileSync(roadmapPath, 'utf-8') : null;
-    const phaseArtifacts = existsSync(phasesDir) ? listPhaseArtifacts(phasesDir) : [];
+    const lifecycle = evaluateLifecycleState({ planningDir });
 
     if (roadmap && existsSync(phasesDir)) {
-      const phaseLabels = [];
-      let inDetails = false;
-      for (const line of roadmap.split('\n')) {
-        if (line.includes('<details>') && !line.includes('</details>')) {
-          inDetails = true;
-          continue;
-        }
-        if (line.includes('</details>')) {
-          inDetails = false;
-          continue;
-        }
-        if (inDetails) continue;
-        const match = line.match(/^\s*[-*]\s*\[([x-])\]\s*\*\*Phase\s+(\d+[a-z]?)/i);
-        if (match) phaseLabels.push(normalizePhaseLabel(match[2]));
-      }
-      for (const label of phaseLabels) {
-        const hasFile = phaseArtifacts.some((artifact) => normalizePhaseLabel(artifact.phasePrefix) === label);
-        if (!hasFile) {
-          warnings.push({ id: 'W4', severity: 'WARN', message: `ROADMAP.md references active Phase ${label} but no files found in .planning/phases/`, fix: 'Create missing phase dirs or update ROADMAP' });
-        }
+      for (const phase of lifecycle.phases.filter((entry) => entry.status !== 'not_started' && !entry.hasArtifacts)) {
+        warnings.push({
+          id: 'W4',
+          severity: 'WARN',
+          message: `ROADMAP.md references active Phase ${phase.number} but no files found in .planning/phases/`,
+          fix: 'Create missing phase dirs or update ROADMAP',
+        });
       }
     }
 
     // W5: Phase dir has PLAN but no SUMMARY (stale in-progress)
-    if (phaseArtifacts.length > 0) {
-      const plans = phaseArtifacts.filter((artifact) => artifact.name.includes('PLAN'));
-      for (const plan of plans) {
-        const prefix = plan.name.split('-PLAN')[0];
-        const hasSummary = phaseArtifacts.some((artifact) =>
-          artifact.dir === plan.dir &&
-          artifact.name.startsWith(prefix) &&
-          artifact.name.includes('SUMMARY')
-        );
-        if (!hasSummary) {
-          warnings.push({ id: 'W5', severity: 'WARN', message: `${plan.displayPath} exists but no matching SUMMARY found (stale in-progress?)`, fix: 'Resume or complete the phase' });
-        }
+    if (lifecycle.incompletePlans.length > 0) {
+      for (const plan of lifecycle.incompletePlans) {
+        warnings.push({
+          id: 'W5',
+          severity: 'WARN',
+          message: `${plan.displayPath} exists but no matching SUMMARY found (stale in-progress?)`,
+          fix: 'Resume or complete the phase',
+        });
       }
     }
 
@@ -202,7 +189,11 @@ export function createCmdHealth(ctx) {
       warnings.push({ id: 'W6', severity: 'WARN', message: 'No adapter surfaces detected', fix: 'Run `gsdd init --tools <platform>`' });
     }
 
-    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds));
+    const runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
+      ? evaluateRuntimeFreshness({ cwd, workflows: ctx.workflows })
+      : null;
+
+    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport }));
 
     // --- INFO checks ---
 
@@ -212,20 +203,12 @@ export function createCmdHealth(ctx) {
     }
 
     // I2: Phase completion count
-    if (roadmap) {
-      const lines = roadmap.split('\n');
-      let total = 0;
-      let done = 0;
-      for (const line of lines) {
-        const match = line.match(/^\s*[-*]\s*\[([x ]|-)\]\s*\*\*Phase\s+\d+/i);
-        if (match) {
-          total++;
-          if (match[1] === 'x') done++;
-        }
-      }
-      if (total > 0) {
-        info.push({ id: 'I2', severity: 'INFO', message: `Phases: ${done}/${total} completed` });
-      }
+    if (lifecycle.counts.total > 0) {
+      info.push({
+        id: 'I2',
+        severity: 'INFO',
+        message: `Phases: ${lifecycle.counts.completed}/${lifecycle.counts.total} completed`,
+      });
     }
 
     // I3: Which adapters are installed
@@ -268,34 +251,3 @@ function isFrameworkSourceRepo(cwd) {
   return existsSync(join(cwd, 'distilled', 'templates')) && existsSync(join(cwd, 'distilled', 'workflows'));
 }
 
-function normalizePhaseLabel(value) {
-  if (!value) return null;
-  return value.toLowerCase().replace(/^0+(\d)/, '$1');
-}
-
-function listPhaseArtifacts(phasesDir) {
-  const artifacts = [];
-  for (const entry of readdirSync(phasesDir, { withFileTypes: true })) {
-    const entryPath = join(phasesDir, entry.name);
-    if (entry.isFile()) {
-      artifacts.push(createPhaseArtifact('', entry.name));
-      continue;
-    }
-    if (!entry.isDirectory()) continue;
-    for (const child of readdirSync(entryPath, { withFileTypes: true })) {
-      if (child.isFile()) {
-        artifacts.push(createPhaseArtifact(entry.name, child.name));
-      }
-    }
-  }
-  return artifacts;
-}
-
-function createPhaseArtifact(dir, name) {
-  return {
-    dir,
-    name,
-    displayPath: dir ? `${dir}/${name}` : name,
-    phasePrefix: name.match(/^(\d+[a-z]?(?:\.\d+)?)-/i)?.[1] || dir.match(/^(\d+[a-z]?(?:\.\d+)?)-/i)?.[1] || null,
-  };
-}

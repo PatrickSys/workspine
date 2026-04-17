@@ -78,4 +78,8 @@ function createCodexAdapter({
   };
 }
 
-export { createCodexAdapter };
+export {
+  createCodexAdapter,
+  renderCodexApproachExplorer,
+  renderCodexPlanChecker,
+};

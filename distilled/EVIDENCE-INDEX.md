@@ -345,6 +345,52 @@
 - `README.md`, `docs/USER-GUIDE.md`, `distilled/README.md`
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`, `tests/gsdd.invariants.test.cjs`
 
+## D48 — Shared Lifecycle Evaluator And Dual-Canonical Runtime Boundary
+- `.planning/SPEC.md` (`ENGINE-01`, `ENGINE-02`, `ENGINE-05`)
+- `.planning/ROADMAP.md` (Phases 29 and 32)
+- `.internal-research/TODO.md`, `.internal-research/gaps.md` (`I42`)
+- `bin/lib/lifecycle-state.mjs`, `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`
+- `tests/phase.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.guards.test.cjs`
+- `get-shit-done/workflows/progress.md`
+
+## D49 — Deterministic Lifecycle Preflight Gates
+- `.planning/SPEC.md` (`ENGINE-01`, `ENGINE-02`, `ENGINE-03`)
+- `.planning/ROADMAP.md` (Phase 30)
+- `bin/lib/lifecycle-preflight.mjs`, `bin/lib/lifecycle-state.mjs`
+- `bin/gsdd.mjs`, `bin/lib/init.mjs`
+- `distilled/workflows/execute.md`, `distilled/workflows/verify.md`
+- `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`
+- `distilled/workflows/new-milestone.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/progress.md`
+
+## D50 — Evidence-Gated Closure Matrix
+- `.planning/SPEC.md` (`ENGINE-04`, `VERIFY-01`)
+- `.planning/ROADMAP.md` (Phase 31)
+- `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `agents/_archive/gsd-verifier.md`, `agents/_archive/gsd-integration-checker.md`
+
+## D51 — Deterministic Runtime Surface Freshness
+- `.planning/SPEC.md` (`ENGINE-05`)
+- `.planning/ROADMAP.md` (Phase 32)
+- `.internal-research/gaps.md` (`I42`)
+- `bin/lib/runtime-freshness.mjs`, `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`, `bin/lib/rendering.mjs`
+- `bin/adapters/claude.mjs`, `bin/adapters/opencode.mjs`, `bin/adapters/codex.mjs`
+- `README.md`, `docs/RUNTIME-SUPPORT.md`, `distilled/README.md`
+- `tests/phase.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/progress.md`
+
+## D52 — Generic Checkpoint Routing Ownership
+- `.planning/SPEC.md` (`ENGINE-01`, `ENGINE-03`)
+- `.internal-research/gaps.md` (`I45`)
+- `bin/lib/provenance.mjs`
+- `distilled/workflows/resume.md`, `distilled/workflows/progress.md`
+- `.agents/skills/gsdd-resume/SKILL.md`, `.agents/skills/gsdd-progress/SKILL.md`
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/progress.md`
+
 ---
 
 ## Maintenance

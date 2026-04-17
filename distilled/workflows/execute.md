@@ -17,6 +17,19 @@ CRITICAL: Read every file below before performing any other actions. This is you
 7. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 6, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Honor `<anti_regression>` rules as execution constraints and use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions. After reading, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 </load_context>
 
+<lifecycle_preflight>
+Before implementing or mutating any lifecycle artifact, run:
+
+- `gsdd lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
+
+If the preflight result is `blocked`, STOP and surface the blocker instead of inferring eligibility from workflow-local prose.
+
+Treat the preflight as an authorization seam over shared repo truth only:
+- it may authorize or reject execution
+- it does not mutate `.planning/ROADMAP.md` by itself
+- owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `gsdd phase-status`
+</lifecycle_preflight>
+
 <runtime_contract>
 Execution uses the same `Runtime` and `Assurance` types as planning and verification.
 Infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.

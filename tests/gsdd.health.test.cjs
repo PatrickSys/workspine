@@ -56,6 +56,7 @@ function writeAlignedTruthFixtures() {
 | W8 | WARN | x |
 | W9 | WARN | x |
 | W10 | WARN | x |
+| W11 | WARN | x |
 | I1 | INFO | x |
 | I2 | INFO | x |
 | I3 | INFO | x |
@@ -416,6 +417,27 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.ok(json.warnings.some((w) => w.id === 'W10'));
   });
 
+  test('generated runtime surface drift → W11 with gsdd update guidance', async () => {
+    await initWorkspace();
+    fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'), '\n<!-- drift -->\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, 'should warn when installed generated runtime surfaces drift');
+    assert.match(warning.message, /\.agents\/skills\/gsdd-plan\/SKILL\.md/);
+    assert.match(warning.fix, /gsdd update/);
+  });
+
+  test('no installed generated runtime surfaces → no W11', async () => {
+    await initWorkspace();
+    for (const rel of ['.agents', '.claude', '.opencode', '.codex']) {
+      fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
+    }
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(!json.warnings.some((w) => w.id === 'W11'), 'absence of generated runtime surfaces should not be treated as drift');
+  });
+
   test('aligned framework truth files → no W7-W10', async () => {
     await initWorkspace();
     writeAlignedTruthFixtures();
@@ -472,6 +494,30 @@ describe('Health — INFO: phase completion count', () => {
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.info.some((i) => i.id === 'I2' && i.message.includes('1/2')));
+  });
+
+  test('I2 counts only the active milestone phases, not archived phases nested in details', async () => {
+    await initWorkspace();
+    writeFile('.planning/ROADMAP.md', [
+      '# Roadmap',
+      '',
+      '<details>',
+      '<summary>✅ v1.2.0 Fork-Honest Launch Hardening</summary>',
+      '',
+      '- [x] **Phase 23: Launch Posture Lock**',
+      '- [x] **Phase 24: Naming Contract Reconciliation**',
+      '</details>',
+      '',
+      '### v1.3.0 Engine Contract Hardening',
+      '',
+      '- [x] **Phase 29: Contract Inventory And Claim Narrowing** — [ENGINE-01]',
+      '- [ ] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+    ].join('\n'));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(json.info.some((i) => i.id === 'I2' && i.message.includes('1/2')),
+      'I2 should report only the active milestone phase count');
   });
 });
 

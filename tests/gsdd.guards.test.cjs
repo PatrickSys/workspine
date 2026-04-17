@@ -13,8 +13,11 @@ const GSDD_PATH = path.join(ROOT, 'bin', 'gsdd.mjs');
 const MODELS_MODULE = path.join(ROOT, 'bin', 'lib', 'models.mjs');
 const MANIFEST_MODULE = path.join(ROOT, 'bin', 'lib', 'manifest.mjs');
 const HEALTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health.mjs');
+const HEALTH_TRUTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health-truth.mjs');
 const INIT_MODULE = path.join(ROOT, 'bin', 'lib', 'init.mjs');
 const INIT_RUNTIME_MODULE = path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs');
+const LIFECYCLE_STATE_MODULE = path.join(ROOT, 'bin', 'lib', 'lifecycle-state.mjs');
+const LIFECYCLE_PREFLIGHT_MODULE = path.join(ROOT, 'bin', 'lib', 'lifecycle-preflight.mjs');
 const TEMPLATES_MODULE = path.join(ROOT, 'bin', 'lib', 'templates.mjs');
 const README_MD = path.join(ROOT, 'README.md');
 const DISTILLED_README_MD = path.join(ROOT, 'distilled', 'README.md');
@@ -2064,30 +2067,36 @@ describe('G29 - Outcome-Based Verification Contracts', () => {
     path.join(__dirname, '..', 'distilled', 'workflows', 'verify.md'), 'utf-8'
   );
 
-  test('verify.md has <proof_contract> section', () => {
-    assert.match(verifyWorkflow, /<proof_contract>/,
-      'verify.md must have <proof_contract> section (GA1/VERIFY-01). FIX: Add <proof_contract> between </must_haves> and <verification_levels>.');
+  test('verify.md has <evidence_contract> section', () => {
+    assert.match(verifyWorkflow, /<evidence_contract>/,
+      'verify.md must have <evidence_contract> section (GA1/ENGINE-04). FIX: Add <evidence_contract> between </must_haves> and <verification_levels>.');
   });
 
-  test('verify.md proof_contract is positioned between must_haves and verification_levels', () => {
+  test('verify.md evidence_contract is positioned between must_haves and verification_levels', () => {
     const mustHavesEnd = verifyWorkflow.indexOf('</must_haves>');
-    const proofContractStart = verifyWorkflow.indexOf('<proof_contract>');
+    const proofContractStart = verifyWorkflow.indexOf('<evidence_contract>');
     const verificationLevelsStart = verifyWorkflow.indexOf('<verification_levels>');
     assert.ok(mustHavesEnd > -1 && proofContractStart > -1 && verificationLevelsStart > -1,
-      'verify.md must have </must_haves>, <proof_contract>, and <verification_levels>. FIX: Check section structure.');
+      'verify.md must have </must_haves>, <evidence_contract>, and <verification_levels>. FIX: Check section structure.');
     assert.ok(
       proofContractStart > mustHavesEnd && proofContractStart < verificationLevelsStart,
-      'verify.md <proof_contract> must be after </must_haves> and before <verification_levels> (GA1). FIX: Reorder sections.');
+      'verify.md <evidence_contract> must be after </must_haves> and before <verification_levels> (GA1). FIX: Reorder sections.');
   });
 
-  test('verify.md proof_contract names all four SPEC.md proof types', () => {
-    const pcStart = verifyWorkflow.indexOf('<proof_contract>');
-    const pcEnd = verifyWorkflow.indexOf('</proof_contract>');
+  test('verify.md evidence_contract names the five stable evidence kinds and both delivery postures', () => {
+    const pcStart = verifyWorkflow.indexOf('<evidence_contract>');
+    const pcEnd = verifyWorkflow.indexOf('</evidence_contract>');
     const section = verifyWorkflow.slice(pcStart, pcEnd);
-    for (const proofType of ['repo-test', 'code-evidence', 'runtime-check', 'user-confirmation']) {
+    for (const proofType of ['code', 'test', 'runtime', 'delivery', 'human']) {
       assert.ok(
         section.includes(proofType),
-        `verify.md <proof_contract> must name proof type "${proofType}" (GA1/VERIFY-01). FIX: Add all four VerificationEvidence proofType values.`);
+        `verify.md <evidence_contract> must name evidence kind "${proofType}" (GA1/ENGINE-04). FIX: Add all five stable evidence kinds.`);
+    }
+    for (const posture of ['repo_only', 'delivery_sensitive']) {
+      assert.ok(
+        section.includes(posture),
+        `verify.md <evidence_contract> must name delivery posture "${posture}" (ENGINE-04). FIX: Add both shared delivery postures.`
+      );
     }
   });
 
@@ -2109,16 +2118,16 @@ describe('G29 - Outcome-Based Verification Contracts', () => {
       'verify.md <must_haves> risk classification must reference behavioral/UX changes as the trigger (GA2). FIX: Add trigger language.');
   });
 
-  test('verify.md report_format gaps schema includes proof_type and severity fields', () => {
+  test('verify.md report_format records delivery posture plus required/observed/missing evidence fields', () => {
     const rfStart = verifyWorkflow.indexOf('<report_format>');
     const rfEnd = verifyWorkflow.indexOf('</report_format>');
     const section = verifyWorkflow.slice(rfStart, rfEnd);
-    assert.ok(
-      section.includes('proof_type'),
-      'verify.md <report_format> gaps schema must include proof_type field (GA4/VERIFY-01). FIX: Add proof_type to gaps frontmatter example.');
-    assert.ok(
-      section.includes('severity'),
-      'verify.md <report_format> gaps schema must include severity field (GA4). FIX: Add severity to gaps frontmatter example.');
+    for (const field of ['delivery_posture', 'required_evidence', 'observed_evidence', 'missing_evidence', 'severity']) {
+      assert.ok(
+        section.includes(field),
+        `verify.md <report_format> must include ${field}. FIX: Keep the evidence-gated closure fields in the frontmatter contract.`
+      );
+    }
   });
 
 });
@@ -2269,12 +2278,14 @@ describe('G34 - Git Delivery Visibility', () => {
 describe('Phase 18 deterministic CLI guards', () => {
   const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
 
-  test('bin/gsdd.mjs registers file-op and phase-status commands', () => {
+  test('bin/gsdd.mjs registers file-op, phase-status, and lifecycle-preflight commands', () => {
     const gsddContent = fs.readFileSync(GSDD_PATH, 'utf-8');
     assert.match(gsddContent, /'file-op'\s*:/,
       'bin/gsdd.mjs must register the file-op command. FIX: Add file-op to COMMANDS.');
     assert.match(gsddContent, /'phase-status'\s*:/,
       'bin/gsdd.mjs must register the phase-status command. FIX: Add phase-status to COMMANDS.');
+    assert.match(gsddContent, /'lifecycle-preflight'\s*:/,
+      'bin/gsdd.mjs must register the lifecycle-preflight command. FIX: Add lifecycle-preflight to COMMANDS.');
   });
 
   test('bin/lib/file-ops.mjs exists and exports cmdFileOp', async () => {
@@ -2286,7 +2297,7 @@ describe('Phase 18 deterministic CLI guards', () => {
       'bin/lib/file-ops.mjs must export cmdFileOp. FIX: Export the file-op command handler.');
   });
 
-  test('init help text documents file-op and phase-status', async () => {
+  test('init help text documents file-op, phase-status, and lifecycle-preflight', async () => {
     const mod = await import(`file://${INIT_MODULE.replace(/\\/g, '/')}`);
     const previousLog = console.log;
     let output = '';
@@ -2301,6 +2312,8 @@ describe('Phase 18 deterministic CLI guards', () => {
       'Help text must document file-op. FIX: Add file-op command to cmdHelp output.');
     assert.match(output, /phase-status <N> <status>/,
       'Help text must document phase-status. FIX: Add phase-status command to cmdHelp output.');
+    assert.match(output, /lifecycle-preflight <surface> \[phase\]/,
+      'Help text must document lifecycle-preflight. FIX: Add lifecycle-preflight command to cmdHelp output.');
   });
 
   test('affected workflows route checkpoint file ops through gsdd file-op', () => {
@@ -2725,8 +2738,8 @@ describe('G37 - Launch Surface Consistency', () => {
 
     const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
     const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
-    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone/i,
-      '.planning/SPEC.md must reflect the shipped v1.2.0 state after archive. FIX: Update Current State instead of restoring active-milestone wording.');
+    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone|v1\.3\.0 Engine Contract Hardening|\/gsdd-verify 29/i,
+      '.planning/SPEC.md must reflect honest milestone state after the v1.2.0 archive handoff, whether still between milestones or already in the next milestone. FIX: Keep Current State aligned to repo truth.');
     assert.match(roadmap, /Phase 24: Naming Contract Reconciliation/i,
       '.planning/ROADMAP.md must preserve the archived naming-surface reconciliation path. FIX: Keep the v1.2.0 phase chain visible after collapse.');
     assert.match(roadmap, /Phase 25: Public Proof Export/i,
@@ -2959,11 +2972,9 @@ describe('G43 - Release Packaging Audit', () => {
 // W7 silently skips the new ID when comparing against DESIGN.md.
 // ---------------------------------------------------------------------------
 describe('G39 - Health Check ID Consistency', () => {
-  const HEALTH_TRUTH_MODULE_PATH = path.join(ROOT, 'bin', 'lib', 'health-truth.mjs');
-
   test('healthCheckIds array in health.mjs matches all implemented diagnostic IDs', () => {
     const healthSource = fs.readFileSync(HEALTH_MODULE, 'utf-8');
-    const healthTruthSource = fs.readFileSync(HEALTH_TRUTH_MODULE_PATH, 'utf-8');
+    const healthTruthSource = fs.readFileSync(HEALTH_TRUTH_MODULE, 'utf-8');
 
     // Extract TRUTH_CHECK_IDS literal from health-truth.mjs
     const truthMatch = healthTruthSource.match(/export const TRUTH_CHECK_IDS\s*=\s*\[([\s\S]*?)\]/);
@@ -2993,7 +3004,7 @@ describe('G39 - Health Check ID Consistency', () => {
   });
 
   test('TRUTH_CHECK_IDS matches the diagnostic IDs implemented in health-truth.mjs', () => {
-    const healthTruthSource = fs.readFileSync(HEALTH_TRUTH_MODULE_PATH, 'utf-8');
+    const healthTruthSource = fs.readFileSync(HEALTH_TRUTH_MODULE, 'utf-8');
 
     const truthMatch = healthTruthSource.match(/export const TRUTH_CHECK_IDS\s*=\s*\[([\s\S]*?)\]/);
     assert.ok(truthMatch,
@@ -3011,6 +3022,152 @@ describe('G39 - Health Check ID Consistency', () => {
       `TRUTH_CHECK_IDS is missing IDs implemented in health-truth.mjs: ${missing.join(', ')}. FIX: Add the missing IDs to the TRUTH_CHECK_IDS export in health-truth.mjs.`);
     assert.deepStrictEqual(extra, [],
       `TRUTH_CHECK_IDS declares IDs with no matching warning push in health-truth.mjs: ${extra.join(', ')}. FIX: Remove the extra IDs or add the missing push call.`);
+  });
+});
+
+describe('G44 - Engine Contract Hardening', () => {
+  test('lifecycle-state helper exists as the shared evaluator seam', () => {
+    assert.ok(fs.existsSync(LIFECYCLE_STATE_MODULE),
+      'bin/lib/lifecycle-state.mjs must exist. FIX: Add the shared lifecycle evaluator helper.');
+  });
+
+  test('lifecycle-preflight helper exists and reuses lifecycle-state', async () => {
+    assert.ok(fs.existsSync(LIFECYCLE_PREFLIGHT_MODULE),
+      'bin/lib/lifecycle-preflight.mjs must exist. FIX: Add the deterministic lifecycle preflight helper.');
+
+    const preflightSource = fs.readFileSync(LIFECYCLE_PREFLIGHT_MODULE, 'utf-8');
+    assert.match(preflightSource, /from '\.\/lifecycle-state\.mjs'/,
+      'lifecycle-preflight.mjs must import lifecycle-state.mjs. FIX: Layer preflight decisions over the shared evaluator.');
+    assert.match(preflightSource, /evaluateLifecycleState\(/,
+      'lifecycle-preflight.mjs must evaluate lifecycle state via the shared helper. FIX: Do not reparse roadmap/spec state locally.');
+
+    const mod = await import(`file://${LIFECYCLE_PREFLIGHT_MODULE.replace(/\\/g, '/')}`);
+    assert.strictEqual(typeof mod.evaluateLifecyclePreflight, 'function',
+      'lifecycle-preflight.mjs must export evaluateLifecyclePreflight. FIX: Export the shared preflight evaluator.');
+    assert.strictEqual(typeof mod.cmdLifecyclePreflight, 'function',
+      'lifecycle-preflight.mjs must export cmdLifecyclePreflight. FIX: Export the CLI handler.');
+  });
+
+  test('health and health-truth both consume the shared lifecycle evaluator', () => {
+    const healthSource = fs.readFileSync(HEALTH_MODULE, 'utf-8');
+    const truthSource = fs.readFileSync(HEALTH_TRUTH_MODULE, 'utf-8');
+
+    assert.match(healthSource, /from '\.\/lifecycle-state\.mjs'/,
+      'health.mjs must import lifecycle-state.mjs. FIX: Route lifecycle interpretation through the shared evaluator.');
+    assert.match(healthSource, /evaluateLifecycleState\(\{ planningDir \}\)/,
+      'health.mjs must evaluate lifecycle state once per run. FIX: Replace ad hoc lifecycle parsing with the shared helper.');
+    assert.match(truthSource, /from '\.\/lifecycle-state\.mjs'/,
+      'health-truth.mjs must import lifecycle-state.mjs. FIX: Route requirement/lifecycle truth checks through the shared evaluator.');
+    assert.match(truthSource, /requirementAlignment\.mismatches/,
+      'health-truth.mjs must consume requirementAlignment from the shared evaluator. FIX: Remove the duplicate ROADMAP/SPEC parser.');
+  });
+
+  test('internal truth surfaces preserve the dual-canonical runtime story and engine-only deferral boundary', () => {
+    const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
+    const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
+    const todo = fs.readFileSync(INTERNAL_TODO_MD, 'utf-8');
+    const gaps = fs.readFileSync(path.join(ROOT, '.internal-research', 'gaps.md'), 'utf-8');
+    const design = fs.readFileSync(DESIGN_MD, 'utf-8');
+
+    assert.match(planningSpec, /dual-canonical/i,
+      '.planning/SPEC.md must describe the runtime contract as dual-canonical. FIX: Narrow ENGINE-05 and milestone wording to the authoring/runtime-consumed split.');
+    assert.match(planningSpec, /owned artifacts.*distinct from lifecycle-state mutation|artifact ownership.*lifecycle-state mutation/i,
+      '.planning/SPEC.md must distinguish owned artifact writes from lifecycle-state mutation. FIX: Tighten ENGINE-01 wording.');
+    assert.match(roadmap, /dual-canonical/i,
+      '.planning/ROADMAP.md must carry the dual-canonical runtime wording into Phase 29/32. FIX: Update the phase success criteria.');
+    assert.match(todo, /dual-canonical/i,
+      '.internal-research/TODO.md must carry the dual-canonical runtime story into the next-session handoff. FIX: Update the active milestone notes.');
+    assert.match(gaps, /claim contradiction narrowed|dual-canonical|freshness enforcement remains Phase 32/i,
+      '.internal-research/gaps.md must narrow I42 to the remaining freshness/enforcement seam. FIX: Re-scope I42 after Phase 29 claim narrowing.');
+    assert.match(design, /dual-canonical/i,
+      'distilled/DESIGN.md must record the Phase 29 dual-canonical/runtime contract decision. FIX: Add a durable design decision for the shared evaluator and runtime-story split.');
+    assert.match(todo, /launch identity\/naming audit explicitly deferred|launch identity.*deferred/i,
+      '.internal-research/TODO.md must keep the launch identity follow-up deferred. FIX: Preserve the engine-only milestone boundary in the handoff.');
+  });
+
+  test('transition-sensitive workflow contracts route through lifecycle-preflight while progress stays read-only', () => {
+    const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
+    const checks = [
+      ['execute.md', /gsdd lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
+      ['verify.md', /gsdd lifecycle-preflight verify \{phase_num\} --expects-mutation phase-status/],
+      ['audit-milestone.md', /gsdd lifecycle-preflight audit-milestone/],
+      ['complete-milestone.md', /gsdd lifecycle-preflight complete-milestone/],
+      ['new-milestone.md', /gsdd lifecycle-preflight new-milestone/],
+      ['resume.md', /gsdd lifecycle-preflight resume/],
+    ];
+
+    for (const [file, pattern] of checks) {
+      const content = fs.readFileSync(path.join(workflowsDir, file), 'utf-8');
+      assert.match(content, pattern,
+        `${file} must route lifecycle eligibility through gsdd lifecycle-preflight. FIX: Restore the shared preflight invocation.`);
+    }
+
+    const progress = fs.readFileSync(path.join(workflowsDir, 'progress.md'), 'utf-8');
+    assert.match(progress, /progress` stays read-only|progress stays read-only/i,
+      'progress.md must preserve the read-only lifecycle boundary. FIX: Keep the lifecycle_boundary read-only language.');
+    assert.match(progress, /Do not call `gsdd phase-status` here\./,
+      'progress.md must forbid lifecycle mutation via gsdd phase-status. FIX: Keep the explicit mutation ban.');
+    assert.match(progress, /downstream mutating workflow must rerun its own `gsdd lifecycle-preflight \.\.\.` gate before acting/i,
+      'progress.md must push downstream lifecycle transitions back through lifecycle-preflight. FIX: Keep the downstream rerun instruction.');
+  });
+
+  test('closure-sensitive workflows preserve the shared evidence-gated closure contract', () => {
+    const verify = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'verify.md'), 'utf-8');
+    const audit = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'audit-milestone.md'), 'utf-8');
+    const complete = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'complete-milestone.md'), 'utf-8');
+
+    for (const [label, content] of [
+      ['verify.md', verify],
+      ['audit-milestone.md', audit],
+      ['complete-milestone.md', complete],
+    ]) {
+      assert.match(content, /code.*test.*runtime.*delivery.*human/s,
+        `${label} must preserve the stable evidence-kind vocabulary. FIX: Add all five closure evidence kinds.`);
+      assert.match(content, /repo_only/,
+        `${label} must preserve repo_only delivery posture language. FIX: Add the shared repo_only posture.`);
+      assert.match(content, /delivery_sensitive/,
+        `${label} must preserve delivery_sensitive posture language. FIX: Add the shared delivery_sensitive posture.`);
+    }
+
+    assert.match(audit, /required_kinds.*observed_kinds.*missing_kinds/s,
+      'audit-milestone.md must record evidence_contract.required_kinds|observed_kinds|missing_kinds in frontmatter. FIX: Add the shared audit evidence block.');
+    assert.match(complete, /missing required kinds|missing_kinds/i,
+      'complete-milestone.md must fail closed when the passed audit still lacks required closure evidence. FIX: Add the audit evidence gate.');
+  });
+});
+
+describe('G45 - Runtime Surface Freshness Contract', () => {
+  test('runtime-freshness helper exists and health truth includes W11', () => {
+    const runtimeFreshnessModule = path.join(ROOT, 'bin', 'lib', 'runtime-freshness.mjs');
+    assert.ok(fs.existsSync(runtimeFreshnessModule),
+      'bin/lib/runtime-freshness.mjs must exist. FIX: Add the shared renderer-backed runtime freshness helper.');
+
+    const runtimeFreshnessSource = fs.readFileSync(runtimeFreshnessModule, 'utf-8');
+    const truthSource = fs.readFileSync(HEALTH_TRUTH_MODULE, 'utf-8');
+    assert.match(truthSource, /W11/,
+      'health-truth.mjs must register W11. FIX: Add the generated-surface freshness warning ID.');
+    assert.match(truthSource, /getRuntimeFreshnessRepairGuidance/,
+      'health-truth.mjs must route W11 repair text through the shared runtime-freshness helper. FIX: Use getRuntimeFreshnessRepairGuidance for the W11 fix field.');
+    assert.match(runtimeFreshnessSource, /gsdd update/i,
+      'runtime-freshness.mjs must keep gsdd update as the deterministic repair path. FIX: Preserve the gsdd update guidance in getRuntimeFreshnessRepairGuidance.');
+  });
+
+  test('runtime-facing docs and help describe rendered freshness checks briefly and consistently', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const support = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    const helpSource = fs.readFileSync(INIT_RUNTIME_MODULE, 'utf-8');
+    const planWorkflow = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'plan.md'), 'utf-8');
+
+    assert.match(readme, /gsdd health.*render output|current render output/i,
+      'README.md must explain that generated runtime surfaces are checked against current render output. FIX: Add the runtime-surface freshness note.');
+    assert.match(readme, /gsdd update/i,
+      'README.md must include deterministic repair guidance through gsdd update. FIX: Add the repair path.');
+    assert.match(support, /Generated-surface freshness/i,
+      'docs/RUNTIME-SUPPORT.md must have a generated-surface freshness section. FIX: Add the explicit runtime-boundary section.');
+    assert.match(helpSource, /gsdd health.*gsdd update/i,
+      'bin/lib/init-runtime.mjs help text must mention health/update runtime-surface drift handling. FIX: Add the note to getHelpText().');
+    assert.match(planWorkflow, /gsdd health.*gsdd update/i,
+      'distilled/workflows/plan.md must mention the renderer-backed freshness/repair path. FIX: Add the runtime-surface trust note to completion.');
   });
 });
 
@@ -3037,6 +3194,22 @@ describe('G40 - Provenance And Write-Gate Contracts', () => {
       'resume.md must require explicit acknowledgement on material mismatch. FIX: Add acknowledgement gating to determine_action/present_options.');
     assert.match(content, /bare "continue" skip the warning/i,
       'resume.md must forbid bare "continue" on material mismatch. FIX: Keep the mismatch acknowledgement warning in present_options.');
+  });
+
+  test('resume and progress share the generic-checkpoint ownership split', () => {
+    const resume = fs.readFileSync(path.join(workflowsDir, 'resume.md'), 'utf-8');
+    const progress = fs.readFileSync(path.join(workflowsDir, 'progress.md'), 'utf-8');
+
+    assert.match(resume, /generic.*next_action.*user decide/i,
+      'resume.md must keep generic checkpoints resume-readable instead of auto-consuming them. FIX: Preserve the generic next_action routing.');
+    assert.match(resume, /downstream read-only `?progress`? routing.*informational context rather than an automatic blocker/i,
+      'resume.md must state that post-resume generic checkpoints are informational to progress. FIX: Add the shared ownership split.');
+    assert.match(progress, /`?generic`? checkpoints? (?:are|stay) informational-only/i,
+      'progress.md must treat generic checkpoints as informational-only. FIX: Keep the explicit informational rule.');
+    assert.match(progress, /do \*\*not\*\* route back through Branch A|keep evaluating Branch B-F/i,
+      'progress.md must route past informational generic checkpoints instead of bouncing back to /gsdd-resume. FIX: Keep the non-looping routing note.');
+    assert.match(progress, /`?phase`? and `?quick`?.*blocking resume-owned surfaces/i,
+      'progress.md must preserve stronger routing for phase and quick checkpoints. FIX: Keep the blocking checkpoint wording.');
   });
 
   test('transition-sensitive workflows reuse stale-branch and mixed-scope warning language', () => {

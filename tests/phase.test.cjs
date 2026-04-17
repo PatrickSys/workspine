@@ -14,6 +14,22 @@ const {
   runCliAsMain,
 } = require('./gsdd.helpers.cjs');
 
+async function importLifecycleStateModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'lifecycle-state.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
+async function importLifecyclePreflightModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'lifecycle-preflight.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
+async function importEvidenceContractModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'evidence-contract.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
+async function importRuntimeFreshnessModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'runtime-freshness.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
 describe('phases list command', () => {
   let tmpDir;
 
@@ -1150,11 +1166,12 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(result.output, /unsupported phase status/i);
   });
 
-  test('help text documents file-op and phase-status commands', async () => {
+  test('help text documents file-op, phase-status, and lifecycle-preflight commands', async () => {
     const result = await runCliAsMain(tmpDir, ['help']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /file-op <copy\|delete\|regex-sub>/);
     assert.match(result.output, /phase-status <N> <status>/);
+    assert.match(result.output, /lifecycle-preflight <surface> \[phase]/);
   });
 
   test('a later successful in-process CLI run clears an earlier phase-command failure exit code', async () => {
@@ -1203,6 +1220,29 @@ describe('Phase 19 provenance helpers', () => {
     assert.deepStrictEqual(status.files, []);
   });
 
+  test('classifyCheckpointRouting keeps generic checkpoints informational for progress', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+
+    assert.deepStrictEqual(mod.classifyCheckpointRouting('phase'), {
+      workflow: 'phase',
+      routingClass: 'blocking',
+      progressBlocks: true,
+      resumeOwnsCleanup: true,
+    });
+    assert.deepStrictEqual(mod.classifyCheckpointRouting('quick'), {
+      workflow: 'quick',
+      routingClass: 'blocking',
+      progressBlocks: true,
+      resumeOwnsCleanup: true,
+    });
+    assert.deepStrictEqual(mod.classifyCheckpointRouting('generic'), {
+      workflow: 'generic',
+      routingClass: 'informational',
+      progressBlocks: false,
+      resumeOwnsCleanup: true,
+    });
+  });
+
   test('buildProvenanceSnapshot requires acknowledgement for material checkpoint mismatch', async () => {
     const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
     const snapshot = mod.buildProvenanceSnapshot({
@@ -1224,6 +1264,370 @@ describe('Phase 19 provenance helpers', () => {
     assert.ok(snapshot.warnings.some((warning) => warning.id === 'checkpoint_mismatch'));
     assert.ok(snapshot.warnings.some((warning) => warning.id === 'stale_branch'));
     assert.strictEqual(snapshot.git.untrackedCount, 1);
+    assert.deepStrictEqual(snapshot.checkpoint.routing, {
+      workflow: 'generic',
+      routingClass: 'informational',
+      progressBlocks: false,
+      resumeOwnsCleanup: true,
+    });
+  });
+});
+
+describe('Phase 29 lifecycle-state helper', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('derives active milestone posture from roadmap, milestone ledger, audits, and phase artifacts', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '<details>',
+        '<summary>✅ v1.2.0 Fork-Honest Launch Hardening</summary>',
+        '',
+        '- [x] **Phase 28: Tracked Public Proof Closure** — [PROOF-01]',
+        '</details>',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [x] **Phase 29: Contract Inventory And Claim Narrowing** — [ENGINE-01, ENGINE-05]',
+        '- [-] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+        '- [ ] **Phase 31: Evidence-Gated Closure** — [ENGINE-04]',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'SPEC.md'),
+      [
+        '- [x] **[ENGINE-01]**: Lifecycle mutability boundaries',
+        '- [ ] **[ENGINE-02]**: Shared lifecycle evaluator',
+        '- [ ] **[ENGINE-05]**: Runtime contract',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'MILESTONES.md'),
+      [
+        '# Milestones',
+        '',
+        '## ✅ v1.2.0 — Fork-Honest Launch Hardening',
+        '- Status: shipped',
+        '',
+        '## v1.3.0 Engine Contract Hardening',
+        '- Status: in progress',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'v1.2.0-MILESTONE-AUDIT.md'), '# v1.2.0 audit\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing', '29-PLAN.md'), '# plan\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing', '29-SUMMARY.md'), '# summary\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing', '30-PLAN.md'), '# phase 30 plan\n');
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.strictEqual(state.currentMilestone.version, 'v1.3.0');
+    assert.strictEqual(state.currentMilestone.archiveState, 'active');
+    assert.strictEqual(state.counts.completed, 1);
+    assert.strictEqual(state.counts.inProgress, 1);
+    assert.strictEqual(state.counts.notStarted, 1);
+    assert.strictEqual(state.currentPhase.number, '30');
+    assert.strictEqual(state.nextPhase.number, '31');
+    assert.deepStrictEqual(
+      state.incompletePlans.map((artifact) => artifact.displayPath),
+      ['29-contract-inventory-and-claim-narrowing/30-PLAN.md']
+    );
+    assert.deepStrictEqual(state.requirementAlignment.mismatches, ['ENGINE-05 phase complete but SPEC unchecked']);
+  });
+
+  test('treats shipped ledger plus matching audit artifact as archived milestone truth', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.2.0 Fork-Honest Launch Hardening',
+        '',
+        '- [x] **Phase 28: Tracked Public Proof Closure** — [PROOF-01]',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '- [x] **[PROOF-01]**: Tracked public proof\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'MILESTONES.md'),
+      [
+        '# Milestones',
+        '',
+        '## ✅ v1.2.0 — Fork-Honest Launch Hardening',
+        '- Status: shipped',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'v1.2.0-MILESTONE-AUDIT.md'), '# audit\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing', '28-SUMMARY.md'), '# historical summary\n');
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.strictEqual(state.currentMilestone.version, 'v1.2.0');
+    assert.strictEqual(state.currentMilestone.shippedInLedger, true);
+    assert.strictEqual(state.currentMilestone.hasMatchingAudit, true);
+    assert.strictEqual(state.currentMilestone.archiveState, 'archived');
+  });
+});
+
+describe('Phase 30 lifecycle-preflight helper', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('exports the shared preflight evaluator and CLI command handler', async () => {
+    const mod = await importLifecyclePreflightModule();
+
+    assert.strictEqual(typeof mod.evaluateLifecyclePreflight, 'function');
+    assert.strictEqual(typeof mod.cmdLifecyclePreflight, 'function');
+  });
+
+  test('allows execute when the target phase has a pending plan and explicit phase-status mutation', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [x] **Phase 29: Contract Inventory And Claim Narrowing** — [ENGINE-01]',
+        '- [ ] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+        '- [ ] **Phase 31: Evidence-Gated Closure** — [ENGINE-04]',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      '# plan\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.status, 'allowed');
+    assert.strictEqual(output.classification, 'owned_write');
+    assert.strictEqual(output.explicitLifecycleMutation, 'phase-status');
+    assert.deepStrictEqual(output.ownedWrites, ['summary']);
+    assert.strictEqual(output.phase, '30');
+  });
+
+  test('blocks verify when the target phase has no summary artifact yet', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [x] **Phase 29: Contract Inventory And Claim Narrowing** — [ENGINE-01]',
+        '- [-] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      '# plan\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, false);
+    assert.strictEqual(output.reason, 'missing_summary');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_summary'));
+  });
+
+  test('rejects lifecycle mutation requests on read-only progress', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'progress', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, false);
+    assert.strictEqual(output.classification, 'read_only');
+    assert.strictEqual(output.explicitLifecycleMutation, 'none');
+    assert.strictEqual(output.reason, 'illegal_lifecycle_mutation');
+  });
+});
+
+describe('Phase 31 evidence-gated closure helpers', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '31-evidence-gated-closure'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('normalizes legacy verification proof names into stable evidence kinds', async () => {
+    const mod = await importEvidenceContractModule();
+
+    assert.deepStrictEqual(
+      mod.normalizeEvidenceKinds(['repo-test', 'code-evidence', 'runtime-check', 'user-confirmation', 'repo-test', 'delivery']),
+      ['test', 'code', 'runtime', 'human', 'delivery']
+    );
+    assert.strictEqual(mod.normalizeEvidenceKind('unknown-proof'), null);
+  });
+
+  test('defines closure evidence requirements by surface and delivery posture', async () => {
+    const mod = await importEvidenceContractModule();
+
+    assert.deepStrictEqual(
+      mod.getEvidenceContract('verify', 'repo_only'),
+      {
+        surface: 'verify',
+        deliveryPosture: 'repo_only',
+        supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+        requiredKinds: ['code'],
+        recommendedKinds: ['test'],
+        blockedSoloKinds: ['human', 'delivery'],
+      }
+    );
+
+    assert.deepStrictEqual(
+      mod.getEvidenceContract('complete-milestone', 'delivery_sensitive'),
+      {
+        surface: 'complete-milestone',
+        deliveryPosture: 'delivery_sensitive',
+        supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+        requiredKinds: ['code', 'test', 'runtime', 'delivery'],
+        recommendedKinds: ['human'],
+        blockedSoloKinds: ['code', 'human'],
+      }
+    );
+  });
+
+  test('lifecycle preflight exposes closure evidence metadata only for closure surfaces', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [x] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+        '- [-] **Phase 31: Evidence-Gated Closure** — [ENGINE-04]',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '31-evidence-gated-closure', '31-PLAN.md'),
+      '# plan\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '31-evidence-gated-closure', '31-SUMMARY.md'),
+      '# summary\n'
+    );
+
+    const mod = await importLifecyclePreflightModule();
+    const verifyResult = mod.evaluateLifecyclePreflight({
+      planningDir: path.join(tmpDir, '.planning'),
+      surface: 'verify',
+      phaseNumber: '31',
+      expectsMutation: 'phase-status',
+    });
+    const progressResult = mod.evaluateLifecyclePreflight({
+      planningDir: path.join(tmpDir, '.planning'),
+      surface: 'progress',
+    });
+
+    assert.deepStrictEqual(
+      verifyResult.closureEvidence,
+      {
+        surface: 'verify',
+        supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+        deliveryPostures: [
+          {
+            surface: 'verify',
+            deliveryPosture: 'repo_only',
+            supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+            requiredKinds: ['code'],
+            recommendedKinds: ['test'],
+            blockedSoloKinds: ['human', 'delivery'],
+          },
+          {
+            surface: 'verify',
+            deliveryPosture: 'delivery_sensitive',
+            supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+            requiredKinds: ['code', 'runtime'],
+            recommendedKinds: ['test', 'delivery', 'human'],
+            blockedSoloKinds: ['code', 'human'],
+          },
+        ],
+      }
+    );
+    assert.strictEqual(progressResult.closureEvidence, null);
+  });
+});
+
+describe('Phase 32 runtime-freshness helper', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('reports clean generated surfaces for installed runtimes and ignores absent ones', async () => {
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initResult.exitCode, 0, initResult.output);
+
+    const gsdd = await loadGsdd(tmpDir);
+    const mod = await importRuntimeFreshnessModule();
+    const report = mod.evaluateRuntimeFreshness({
+      cwd: tmpDir,
+      workflows: gsdd.createCliContext(tmpDir).workflows,
+    });
+
+    assert.strictEqual(report.issueCount, 0);
+    assert.strictEqual(report.hasInstalledRuntimeSurfaces, true);
+    assert.ok(report.groups.some((group) => group.runtime === 'portable' && group.installed));
+    assert.ok(report.groups.some((group) => group.runtime === 'claude' && group.installed));
+    assert.ok(report.groups.some((group) => group.runtime === 'opencode' && !group.installed));
+  });
+
+  test('reports stale and missing generated files against current render output', async () => {
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initResult.exitCode, 0, initResult.output);
+
+    fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'), '\n<!-- local drift -->\n');
+    fs.unlinkSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'));
+
+    const gsdd = await loadGsdd(tmpDir);
+    const mod = await importRuntimeFreshnessModule();
+    const report = mod.evaluateRuntimeFreshness({
+      cwd: tmpDir,
+      workflows: gsdd.createCliContext(tmpDir).workflows,
+    });
+
+    assert.strictEqual(report.staleCount, 1);
+    assert.strictEqual(report.missingCount, 1);
+    assert.ok(report.issues.some((entry) => entry.relativePath === '.agents/skills/gsdd-plan/SKILL.md' && entry.status === 'stale'));
+    assert.ok(report.issues.some((entry) => entry.relativePath === '.claude/commands/gsdd-plan.md' && entry.status === 'missing'));
   });
 });
 

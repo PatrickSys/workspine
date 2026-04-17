@@ -58,6 +58,11 @@
 45. [Fork-Honest Launch Posture Before Identity Migration](#d45---fork-honest-launch-posture-before-identity-migration)
 46. [Archived Milestone Routing With Retained ROADMAP](#d46---archived-milestone-routing-with-retained-roadmap)
 47. [Brownfield Quick-Win Repair](#d47---brownfield-quick-win-repair)
+48. [Shared Lifecycle Evaluator And Dual-Canonical Runtime Boundary](#d48---shared-lifecycle-evaluator-and-dual-canonical-runtime-boundary)
+49. [Deterministic Lifecycle Preflight Gates](#d49---deterministic-lifecycle-preflight-gates)
+50. [Evidence-Gated Closure Matrix](#d50---evidence-gated-closure-matrix)
+51. [Deterministic Runtime Surface Freshness](#d51---deterministic-runtime-surface-freshness)
+52. [Generic Checkpoint Routing Ownership](#d52---generic-checkpoint-routing-ownership)
 
 ---
 
@@ -950,7 +955,7 @@ Implementation lives under `bin/lib/`:
 | W7 | WARN | `distilled/DESIGN.md` health check table differs from implemented check IDs |
 | W8 | WARN | `distilled/README.md` workflow inventory differs from `distilled/workflows/` |
 | W9 | WARN | `.internal-research/gaps.md` references missing repo-local paths |
-| W10 | WARN | `.planning/ROADMAP.md` phase status differs from `.planning/SPEC.md` requirement checkboxes |
+| W11 | WARN | Installed generated runtime surfaces drift from current render output |
 | I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
 | I2 | INFO | Phase completion count from ROADMAP |
 | I3 | INFO | Which adapters are installed |
@@ -2076,6 +2081,240 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **GSDD implementation:** `distilled/workflows/quick.md`, `distilled/workflows/progress.md`, `distilled/workflows/new-project.md`, `distilled/workflows/map-codebase.md`, `README.md`, `docs/USER-GUIDE.md`, `distilled/README.md`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`
 
 ---
+
+## D48 - Shared Lifecycle Evaluator And Dual-Canonical Runtime Boundary
+
+**Decision (2026-04-16):** Phase and milestone posture should be derived through one shared evaluator over existing repo artifacts, while runtime-surface truth should use a dual-canonical contract that explicitly separates authored workflow source from the generated Codex-consumed surface until deterministic freshness checks exist.
+
+**Context:**
+- v1.3.0 Phase 29 audited two different claim seams that had been conflated in planning truth:
+  - lifecycle-state derivation from `SPEC.md`, `ROADMAP.md`, `MILESTONES.md`, phase artifacts, audit artifacts, and provenance
+  - Codex/runtime-surface truth across `distilled/workflows/*` and generated `.agents/skills/*`
+- `bin/lib/health.mjs` and `bin/lib/health-truth.mjs` both carried overlapping lifecycle parsing logic, which made ENGINE-02 weaker than the docs suggested.
+- At the same time, the repo could not honestly keep saying there was one tracked canonical Codex/runtime surface, because `.agents/` is still ignored and the consumed runtime boundary can drift from the authored source boundary.
+
+**Decision:**
+- Introduce one shared lifecycle evaluator seam for phase and milestone posture and make downstream health/reporting code consume it instead of maintaining competing parsers.
+- Keep lifecycle evaluation repo-truth-only: it reads existing planning artifacts plus provenance inputs and does not introduce a new project-scoped state file.
+- Narrow the runtime story to a **dual-canonical** contract:
+  - `distilled/workflows/*` is the authored source contract
+  - generated `.agents/skills/*` is the consumed Codex runtime surface
+- Treat deterministic freshness enforcement across authored and generated surfaces as later work, not as something Phase 29 can imply without proof.
+
+**Why this fits the codebase:**
+- It matches the repo's existing architecture bias toward file-backed truth and shared helper enforcement instead of workflow-local prose.
+- It separates two different hardening seams cleanly: state derivation and runtime freshness.
+- It preserves the portable-core model without pretending generated runtime surfaces are already tracked or freshness-enforced when repo truth cannot prove that yet.
+
+**Evidence:**
+- `.planning/SPEC.md` `ENGINE-01`, `ENGINE-02`, and `ENGINE-05`
+- `.planning/ROADMAP.md` Phases 29 and 32
+- `.internal-research/TODO.md`
+- `.internal-research/gaps.md` `I42`
+- `bin/lib/lifecycle-state.mjs`
+- `bin/lib/health.mjs`
+- `bin/lib/health-truth.mjs`
+- `tests/phase.test.cjs`
+- `tests/gsdd.health.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- GSD comparison source: `get-shit-done/workflows/progress.md` still assumes workflow-local routing logic rather than a shared lifecycle evaluator seam, so this is an intentional GSDD tightening.
+
+**Consequences:**
+- Phase/milestone posture is now an engine seam with one evaluator, which later lifecycle gates can reuse directly.
+- Runtime-surface claims are more conservative immediately: the repo no longer needs to pretend one tracked canonical Codex surface exists before deterministic freshness enforcement is real.
+- Phase 32 now owns authored/generated freshness enforcement explicitly instead of inheriting that work as vague follow-through from Phase 29.
+
+**GSDD implementation:** `bin/lib/lifecycle-state.mjs`, `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`, `.planning/SPEC.md`, `.planning/ROADMAP.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `tests/phase.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.guards.test.cjs`
+
+---
+
+## D49 - Deterministic Lifecycle Preflight Gates
+
+**Decision (2026-04-16):** Transition-sensitive lifecycle surfaces must derive eligibility from one deterministic preflight seam layered over the shared lifecycle evaluator, while `gsdd phase-status` remains the only explicit ROADMAP mutator and `progress` remains read-only.
+
+**Context:**
+- Phase 29 centralized lifecycle posture into `bin/lib/lifecycle-state.mjs`, but the transition-sensitive workflows still described eligibility in workflow-local prose.
+- That left three risks open:
+  - command entrypoints could grow a second lifecycle parser
+  - transition-sensitive workflows could silently drift into inconsistent blockers or mutation rules
+  - the read-only / owned-write / explicit-lifecycle-mutation split could blur again in docs or helpers
+- Phase 30 was explicitly scoped to turn the shared evaluator seam into deterministic preflight enforcement without widening into Phase 31 evidence typing or Phase 32 freshness enforcement.
+
+**Decision:**
+- Add `bin/lib/lifecycle-preflight.mjs` as the single deterministic gate for lifecycle-sensitive workflow entry surfaces.
+- Keep the preflight seam descriptive and repo-truth-based:
+  - it consumes the shared lifecycle evaluator
+  - it reports blockers, owned writes, mutation expectations, and lifecycle posture
+  - it does not mutate ROADMAP or milestone state itself
+- Keep `gsdd phase-status` as the only explicit ROADMAP mutator for phase-state transitions.
+- Require transition-sensitive workflow contracts to call the shared preflight seam instead of narrating their own lifecycle inference.
+- Preserve `progress` as read-only and make it explicitly defer any recommended transition back to the downstream workflow's own preflight gate.
+
+**Why this fits the codebase:**
+- It extends the existing file-backed engine model rather than adding a new state artifact or hidden control plane.
+- It reuses the shared evaluator introduced in D48 instead of tolerating another lifecycle interpretation seam.
+- It keeps mutation boundaries honest: descriptive evaluation, owned artifact writes, and explicit lifecycle mutation remain separate responsibilities.
+
+**Evidence:**
+- `.planning/SPEC.md` (`ENGINE-01`, `ENGINE-02`, `ENGINE-03`)
+- `.planning/ROADMAP.md` (Phase 30 success criteria)
+- `bin/lib/lifecycle-preflight.mjs`
+- `bin/lib/lifecycle-state.mjs`
+- `bin/gsdd.mjs`
+- `distilled/workflows/execute.md`
+- `distilled/workflows/verify.md`
+- `distilled/workflows/audit-milestone.md`
+- `distilled/workflows/complete-milestone.md`
+- `distilled/workflows/new-milestone.md`
+- `distilled/workflows/resume.md`
+- `distilled/workflows/progress.md`
+- `tests/phase.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- GSD comparison source: `get-shit-done/workflows/progress.md` still keeps lifecycle routing inside the workflow surface rather than through a shared helper seam, so this is an intentional GSDD tightening.
+
+**Consequences:**
+- Illegal transitions and missing prerequisite artifacts can now fail closed from one helper seam instead of from drifting prompt-local logic.
+- `progress` can continue reporting lifecycle posture without inheriting write authority or becoming a hidden transition surface.
+- Phase 31 can build evidence-gated closure on top of a stable deterministic preflight contract instead of competing lifecycle entry logic.
+
+**GSDD implementation:** `bin/lib/lifecycle-preflight.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/gsdd.mjs`, `bin/lib/init.mjs`, `distilled/workflows/execute.md`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `distilled/workflows/new-milestone.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
+---
+
+## D50 - Evidence-Gated Closure Matrix
+
+**Decision (2026-04-17):** Closure-sensitive lifecycle surfaces must share one compact evidence matrix keyed by workflow surface and delivery posture, using the fixed evidence kinds `code`, `test`, `runtime`, `delivery`, and `human`.
+
+**Context:**
+- Phase 30 hardened lifecycle eligibility, but the closure surfaces still described proof in mismatched ways:
+  - `verify.md` still used the older four-proof vocabulary
+  - `audit-milestone.md` aggregated phase outcomes but did not record a shared closure posture
+  - `complete-milestone.md` trusted a passed audit without checking whether the audit had actually proven the right kind of evidence for repo-only versus delivery-sensitive closeout
+- That created two opposite failure modes:
+  - repo-only work could feel pressured to fabricate runtime or delivery proof just to satisfy prose
+  - delivery-sensitive closure could pass on code inspection, tests, or human commentary alone even when the claim required runtime and delivery proof
+
+**Decision:**
+- Add `bin/lib/evidence-contract.mjs` as the shared internal closure-evidence seam.
+- Fix the stable evidence kinds to `code`, `test`, `runtime`, `delivery`, and `human`.
+- Key the matrix by both:
+  - closure surface (`verify`, `audit-milestone`, `complete-milestone`)
+  - delivery posture (`repo_only`, `delivery_sensitive`)
+- Make `verify` record the selected delivery posture plus required, observed, and missing evidence kinds in its report contract.
+- Make `audit-milestone` aggregate the same evidence posture and fail closed when required kinds remain missing.
+- Make `complete-milestone` consume the audit's evidence contract instead of silently trusting a passed audit that lacks the required closure evidence.
+
+**Why this fits the codebase:**
+- It follows the repo's existing pattern of small shared helpers plus file-backed workflow contracts instead of adding another freeform prompt convention.
+- It keeps repo-only work honest without pretending every closure needs runtime or delivery proof.
+- It raises the bar only where the claim itself is stronger: shipped or externally consumed outcomes now pay the stronger evidence cost explicitly.
+- It keeps the matrix internal and compact rather than inventing a second public mini-language for closure semantics.
+
+**Evidence:**
+- `.planning/SPEC.md` (`ENGINE-04`, `VERIFY-01`)
+- `.planning/ROADMAP.md` (Phase 31 success criteria)
+- `bin/lib/evidence-contract.mjs`
+- `bin/lib/lifecycle-preflight.mjs`
+- `distilled/workflows/verify.md`
+- `distilled/workflows/audit-milestone.md`
+- `distilled/workflows/complete-milestone.md`
+- `tests/phase.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- GSD comparison sources: `agents/_archive/gsd-verifier.md` and `agents/_archive/gsd-integration-checker.md` preserve outcome verification and integration audit, but they do not expose one typed closure matrix shared across phase verification, milestone audit, and milestone completion.
+
+**Consequences:**
+- Closure-sensitive workflows now share one stable evidence vocabulary instead of drifting between proof synonyms.
+- Repo-only closures can stay repo-only without invented runtime theatrics.
+- Delivery-sensitive closure now has an explicit fail-closed bar: missing `runtime` or `delivery` evidence cannot be papered over by prose, code-only review, or human confirmation alone.
+- Milestone completion inherits the same evidence posture proven by audit, which reduces false-positive closure on technically incomplete release claims.
+
+**GSDD implementation:** `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `.planning/SPEC.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
+---
+
+## D51 - Deterministic Runtime Surface Freshness
+**Decision (2026-04-17):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When .agents/skills/, .claude/, .opencode/, or .codex/ exist locally, gsdd health must compare those generated files against current render output and route any drift back through gsdd update.
+**Context:**
+- Phase 29 narrowed the runtime story to a dual-canonical boundary: distilled/workflows/* is the authored source contract and generated runtime-facing files are the consumed local surfaces.
+- That narrowing was honest but still left I42 open because the repo could not yet prove that installed generated files stayed aligned with the current authored source without reviewer memory.
+- The framework repo also cannot fail closed on missing generated surfaces, because those directories are intentionally gitignored and may be absent even when the authored source is healthy.
+**Decision:**
+- Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic.
+- Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally.
+- Route drift through deterministic repair (gsdd update or a targeted gsdd update --tools <runtime>) instead of treating the fix as a manual review exercise.
+- Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist.
+**Why this fits the codebase:**
+- It extends the existing render/update/health pattern instead of inventing a new state file or hidden synchronization layer.
+- It keeps the dual-canonical runtime contract honest: authored source and consumed generated files are distinct surfaces, but the boundary is now mechanically checked where the generated surface is actually installed.
+- It preserves framework-source honesty by warning only on installed drift, not on intentionally absent generated directories.
+**Evidence:**
+- .planning/SPEC.md (ENGINE-05)
+- .planning/ROADMAP.md (Phase 32)
+- .internal-research/gaps.md (I42 closure)
+- in/lib/runtime-freshness.mjs
+- in/lib/health.mjs
+- in/lib/health-truth.mjs
+- in/lib/rendering.mjs
+- in/adapters/claude.mjs, in/adapters/opencode.mjs, in/adapters/codex.mjs
+- README.md, docs/RUNTIME-SUPPORT.md, distilled/README.md
+- 	ests/phase.test.cjs, 	ests/gsdd.health.test.cjs, 	ests/gsdd.plan.adapters.test.cjs, 	ests/gsdd.guards.test.cjs, 	ests/gsdd.scenarios.test.cjs
+**Consequences:**
+- gsdd health can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline.
+- gsdd update becomes the explicit repair path for authored/generated runtime-surface drift.
+- Public support wording can stay compact without implying that generated files are trustworthy merely because they were generated once.
+- Claude Code and Codex CLI remain the mandatory live/native validation floor for the hardened runtime boundary, while other runtimes stay honest about their proof level.
+**GSD comparison:** GSD keeps runtime-facing workflow surfaces closer to the Claude-authored source and does not have to model a generated multi-runtime freshness boundary explicitly. GSDD does, because authored workflow source and consumed runtime surfaces are intentionally separated.
+**GSDD implementation:** in/lib/runtime-freshness.mjs, in/lib/health.mjs, in/lib/health-truth.mjs, in/lib/rendering.mjs, in/adapters/claude.mjs, in/adapters/opencode.mjs, in/adapters/codex.mjs, README.md, docs/RUNTIME-SUPPORT.md, distilled/README.md, .planning/SPEC.md, .internal-research/TODO.md, .internal-research/gaps.md, 	ests/phase.test.cjs, 	ests/gsdd.health.test.cjs, 	ests/gsdd.plan.adapters.test.cjs, 	ests/gsdd.guards.test.cjs, 	ests/gsdd.scenarios.test.cjs
+
+---
+
+## D52 - Generic Checkpoint Routing Ownership
+
+**Decision (2026-04-17):** Generic checkpoints remain visible continuity artifacts, but they do not block read-only `progress` routing. `resume` owns checkpoint cleanup only when the user explicitly resumes from the checkpoint, while `progress` treats a surviving generic checkpoint as informational context and continues routing toward the real next lifecycle action.
+
+**Context:**
+- Phase 19 intentionally allowed `resume` to preserve a generic checkpoint when the user chose a different path, because generic checkpoints can carry real context without pretending to be an active phase or quick-task execution surface.
+- That same flexibility exposed a later contradiction: `progress` still treated any `.continue-here.md` as a Branch A reroute back to `/gsdd-resume`, so a generic checkpoint could create a `resume -> progress -> resume` loop even after `resume` had already surfaced the checkpoint and routed the user onward.
+- Phase 33 was scoped narrowly to repair that control-plane seam without inventing a new checkpoint artifact, a broader checkpoint-consumption protocol, or a heavier brownfield/middle-lane redesign.
+
+**Decision:**
+- Add one shared checkpoint-routing classification seam in `bin/lib/provenance.mjs`:
+  - `phase` and `quick` checkpoints are routing blockers
+  - `generic` checkpoints are informational for read-only `progress` routing
+  - checkpoint cleanup remains resume-owned when the user explicitly resumes from the checkpoint
+- Keep `resume` behavior unchanged in one important respect: generic checkpoints still surface their `next_action` and let the user decide whether to resume from them.
+- Change `progress` behavior explicitly:
+  - show a generic checkpoint in the status block
+  - surface its `next_action`
+  - continue evaluating Branch B-F for the primary recommendation instead of routing back through Branch A
+- Regenerate the consumed skill surfaces from the authored workflow source so the portable contract and local runtime surface stay aligned.
+
+**Why this fits the codebase:**
+- It preserves the existing checkpoint artifact model and the three-layer continuity boundary instead of inventing another state file or destructive auto-cleanup step.
+- It keeps `progress` read-only and avoids pushing reporting semantics into lifecycle preflight, which would blur the distinction between routing/reporting and mutation authorization.
+- It moves the ownership split into one small shared seam plus tests, so the rule is no longer dependent on remembering two different workflow wordings.
+
+**Evidence:**
+- `.planning/SPEC.md` (`ENGINE-01`, `ENGINE-03`)
+- `.internal-research/gaps.md` (`I45`)
+- `bin/lib/provenance.mjs`
+- `distilled/workflows/resume.md`
+- `distilled/workflows/progress.md`
+- `.agents/skills/gsdd-resume/SKILL.md`
+- `.agents/skills/gsdd-progress/SKILL.md`
+- `tests/phase.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- GSD comparison source: GSD session-routing surfaces assume the checkpoint itself is the dominant continuity signal. GSDD now keeps that behavior only for real execution checkpoints (`phase`, `quick`) and treats generic checkpoints as context once the user has already been routed onward.
+
+**Consequences:**
+- A surviving generic checkpoint can coexist with milestone-close or next-phase guidance without forcing the user back into `/gsdd-resume`.
+- `resume` still owns the destructive checkpoint-cleanup step, which keeps cleanup tied to an explicit user choice rather than to a read-only reporter.
+- Future checkpoint lifecycle edits must update the shared provenance helper, the authored workflow contracts, the regenerated skill surfaces, and the regression suites together or the repo truth will drift immediately.
+
+**GSDD implementation:** `bin/lib/provenance.mjs`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `.agents/skills/gsdd-resume/SKILL.md`, `.agents/skills/gsdd-progress/SKILL.md`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ## Maintenance
 

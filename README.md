@@ -15,6 +15,7 @@ npx gsdd-cli init
 
 **Directly validated today:** Claude Code, Codex CLI, and OpenCode.  
 **Qualified support:** Cursor, Copilot, and Gemini CLI use the same portable workflow surfaces, but this release does not claim equal proof or equal runtime ergonomics.
+**Generated-surface trust:** When `.agents/skills/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `gsdd health` compares them against current render output and `gsdd update` repairs drift.
 
 </div>
 
@@ -70,11 +71,13 @@ In a terminal, `gsdd init` now opens a guided install wizard:
 - Step 3: configure planning defaults in the same guided flow
 
 Portable `.agents/skills/gsdd-*` skills are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline.
+When those generated surfaces exist locally, `gsdd health` checks them against current render output instead of asking you to trust manual review.
 
 ### Launch Proof Status
 
 - **Directly validated in this repo:** Claude Code, Codex CLI, and OpenCode have recorded `plan -> execute -> verify` evidence for the core lifecycle.
 - **Qualified support:** Cursor, Copilot, and Gemini CLI use the shared `.agents/skills/` surface plus optional governance, but this release does not describe them as equally proven native runtimes or equally ergonomic native surfaces.
+- **Runtime-surface freshness:** Installed generated skills and native adapters are renderer-checked locally; repair stays deterministic through `npx gsdd-cli update`.
 
 Start with the public proof pack:
 
@@ -118,10 +121,10 @@ npx gsdd-cli init --tools all        # All of the above
 | Platform | Public claim | What's generated |
 |----------|--------------|-----------------|
 | **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |
-| **Claude Code** | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — native workflow surfaces |
-| **OpenCode** | Directly validated | `.opencode/commands/`, `.opencode/agents/` — native workflow surfaces |
-| **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute` |
-| **Cursor / Copilot / Gemini** | Qualified support | Skills-native discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance |
+| **Claude Code** | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — native workflow surfaces, freshness-checked when generated locally |
+| **OpenCode** | Directly validated | `.opencode/commands/`, `.opencode/agents/` — native workflow surfaces, freshness-checked when generated locally |
+| **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |
+| **Cursor / Copilot / Gemini** | Qualified support | Skills-native discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance, and the generated skill surface is freshness-checked locally |
 | **Other AI tools** | Fallback only | Open `.agents/skills/gsdd-*/SKILL.md` directly |
 
 ### Updating
@@ -452,6 +455,7 @@ Advisory defaults, overridden by repo conventions:
 | Problem | What to do |
 |---------|------------|
 | Workspace feels broken | `gsdd health` — checks errors, warnings, info |
+| `gsdd health` reports generated runtime-surface drift | `npx gsdd-cli update` (or `npx gsdd-cli update --tools <runtime>`) — regenerates installed skills/adapters from current render output |
 | Lost track of progress | Run `gsdd-progress` — reads artifacts, shows status |
 | Need context from last session | Run `gsdd-resume` — restores state, routes to next action |
 | Plans seem wrong | Check `workflow.research: true` in config |
@@ -465,7 +469,7 @@ For detailed troubleshooting and recovery procedures, see the [User Guide](docs/
 
 ## Design Decisions
 
-This repo records 47 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+This repo records 51 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't

@@ -181,4 +181,11 @@ function createClaudeAdapter({ cwd, workflows, renderSkillContent, getDelegateCo
   };
 }
 
-export { createClaudeAdapter, CLAUDE_MODEL_PROFILES };
+export {
+  createClaudeAdapter,
+  CLAUDE_MODEL_PROFILES,
+  renderClaudeApproachExplorer,
+  renderClaudePlanChecker,
+  renderClaudePlanCommand,
+  renderClaudePlanSkill,
+};

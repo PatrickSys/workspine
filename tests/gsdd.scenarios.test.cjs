@@ -11,6 +11,7 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const {
   cleanup,
   createTempProject,
@@ -208,6 +209,21 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
       fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'integration-checker.md')),
       'integration-checker role must be installed'
     );
+  });
+
+  test('closure workflows preserve the shared evidence-gated closure language after generation', () => {
+    const expectations = new Map([
+      ['gsdd-verify', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_evidence', 'missing_evidence']],
+      ['gsdd-audit-milestone', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_kinds', 'missing_kinds']],
+      ['gsdd-complete-milestone', ['repo_only', 'delivery_sensitive', 'missing_kinds', 'required_kinds']],
+    ]);
+
+    for (const [skillName, snippets] of expectations.entries()) {
+      const content = readSkill(tmpDir, skillName);
+      for (const snippet of snippets) {
+        assert.ok(content.includes(snippet), `${skillName} must include ${snippet}`);
+      }
+    }
   });
 });
 
@@ -541,6 +557,17 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         assert.ok(delegate.includes(dim), `delegate must include dimension: ${dim}`);
       }
     });
+
+    test('installed generated Claude surfaces stay render-aligned after init', async () => {
+      const freshness = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'runtime-freshness.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+      const gsdd = await loadGsdd(tmpDir);
+      const report = freshness.evaluateRuntimeFreshness({
+        cwd: tmpDir,
+        workflows: gsdd.createCliContext(tmpDir).workflows,
+      });
+
+      assert.strictEqual(report.issueCount, 0, 'freshly generated Claude surfaces must match current render output');
+    });
   });
 
   describe('Codex chain', () => {
@@ -593,6 +620,17 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         content.includes('sandbox_mode = "read-only"'),
         'Codex checker must have read-only sandbox'
       );
+    });
+
+    test('installed generated Codex surfaces stay render-aligned after init', async () => {
+      const freshness = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'runtime-freshness.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+      const gsdd = await loadGsdd(tmpDir);
+      const report = freshness.evaluateRuntimeFreshness({
+        cwd: tmpDir,
+        workflows: gsdd.createCliContext(tmpDir).workflows,
+      });
+
+      assert.strictEqual(report.issueCount, 0, 'freshly generated Codex surfaces must match current render output');
     });
   });
 
@@ -677,11 +715,48 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
       'gsdd-resume must not keep the old manual checkpoint delete prose.');
   });
 
-  test('execute and verify portable skills route roadmap transitions through gsdd phase-status', () => {
-    for (const skillName of ['gsdd-execute', 'gsdd-verify']) {
+  test('transition-sensitive portable skills route lifecycle eligibility through gsdd lifecycle-preflight', () => {
+    const expectations = new Map([
+      ['gsdd-execute', ['gsdd lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'gsdd phase-status']],
+      ['gsdd-verify', ['gsdd lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'gsdd phase-status']],
+      ['gsdd-audit-milestone', ['gsdd lifecycle-preflight audit-milestone']],
+      ['gsdd-complete-milestone', ['gsdd lifecycle-preflight complete-milestone']],
+      ['gsdd-new-milestone', ['gsdd lifecycle-preflight new-milestone']],
+      ['gsdd-resume', ['gsdd lifecycle-preflight resume']],
+    ]);
+
+    for (const [skillName, snippets] of expectations.entries()) {
       const content = readSkill(tmpDir, skillName);
-      assert.ok(content.includes('gsdd phase-status'), `${skillName} must reference gsdd phase-status.`);
+      for (const snippet of snippets) {
+        assert.ok(content.includes(snippet), `${skillName} must include ${snippet}`);
+      }
     }
+  });
+
+  test('progress portable skill preserves the read-only lifecycle boundary', () => {
+    const content = readSkill(tmpDir, 'gsdd-progress');
+    assert.ok(content.includes('progress` stays read-only.') || content.includes('progress stays read-only.'),
+      'gsdd-progress must preserve the read-only lifecycle boundary.');
+    assert.ok(content.includes('Do not call `gsdd phase-status` here.'),
+      'gsdd-progress must forbid gsdd phase-status in the read-only reporter.');
+    assert.ok(content.includes('downstream mutating workflow must rerun its own `gsdd lifecycle-preflight ...` gate before acting.'),
+      'gsdd-progress must route downstream lifecycle transitions back through gsdd lifecycle-preflight.');
+  });
+
+  test('generated resume/progress skills preserve the non-looping generic-checkpoint rule', () => {
+    const resume = readSkill(tmpDir, 'gsdd-resume');
+    const progress = readSkill(tmpDir, 'gsdd-progress');
+
+    assert.match(resume, /generic.*next_action.*user decide/i,
+      'gsdd-resume must keep generic checkpoints user-routed through next_action.');
+    assert.match(resume, /informational context rather than an automatic blocker/i,
+      'gsdd-resume must explain that generic checkpoints stay informational for downstream progress routing.');
+    assert.match(progress, /`?generic`? checkpoints? (?:are|stay) informational-only/i,
+      'gsdd-progress must keep generic checkpoints informational-only.');
+    assert.match(progress, /keep evaluating Branch B-F/i,
+      'gsdd-progress must continue routing to the real next action after showing an informational generic checkpoint.');
+    assert.match(progress, /`?phase`? and `?quick`?.*blocking resume-owned surfaces/i,
+      'gsdd-progress must preserve blocking routing for phase and quick checkpoints.');
   });
 });
 

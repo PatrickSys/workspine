@@ -30,6 +30,13 @@ agent: ${workflow.agent}
 ${workflowContent}`;
 }
 
+function buildPortableSkillEntries(workflows) {
+  return workflows.map((workflow) => ({
+    relativePath: `.agents/skills/${workflow.name}/SKILL.md`,
+    content: renderSkillContent(workflow),
+  }));
+}
+
 function renderOpenCodeCommandContent(workflow) {
   const workflowContent = getWorkflowContent(workflow.workflow);
   return `---
@@ -85,6 +92,7 @@ function upsertBoundedBlock(existing, blockContent) {
 }
 
 export {
+  buildPortableSkillEntries,
   getDelegateContent,
   getWorkflowContent,
   renderAgentsBoundedBlock,

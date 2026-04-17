@@ -9,6 +9,23 @@ function normalizeCount(value) {
   return Number.isFinite(numeric) ? numeric : 'unknown';
 }
 
+function normalizeCheckpointWorkflow(workflow) {
+  const normalized = String(workflow || 'generic').trim().toLowerCase();
+  return ['phase', 'quick', 'generic'].includes(normalized) ? normalized : 'generic';
+}
+
+export function classifyCheckpointRouting(workflow) {
+  const normalizedWorkflow = normalizeCheckpointWorkflow(workflow);
+  const progressBlocks = normalizedWorkflow === 'phase' || normalizedWorkflow === 'quick';
+
+  return {
+    workflow: normalizedWorkflow,
+    routingClass: progressBlocks ? 'blocking' : 'informational',
+    progressBlocks,
+    resumeOwnsCleanup: true,
+  };
+}
+
 export function parseGitStatusShort(statusText = '') {
   const lines = statusText
     .replace(/\r\n/g, '\n')
@@ -48,6 +65,7 @@ export function buildProvenanceSnapshot({
   planning = {},
   git = {},
 } = {}) {
+  const checkpointRouting = classifyCheckpointRouting(checkpoint.workflow);
   const status = parseGitStatusShort(git.statusShort || '');
   const commitsAheadOfMain = normalizeCount(git.commitsAheadOfMain);
   const commitsAheadOfRemote = normalizeCount(git.commitsAheadOfRemote);
@@ -113,10 +131,11 @@ export function buildProvenanceSnapshot({
 
   return {
     checkpoint: {
-      workflow: checkpoint.workflow || 'generic',
+      workflow: checkpointRouting.workflow,
       phase: checkpoint.phase ?? null,
       runtime: checkpoint.runtime || 'unknown',
       hasNarrative: Boolean(checkpoint.hasNarrative),
+      routing: checkpointRouting,
     },
     planning: {
       currentPhase: planning.currentPhase || null,

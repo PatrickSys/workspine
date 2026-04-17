@@ -269,4 +269,10 @@ function createOpenCodeAdapter({
   };
 }
 
-export { createOpenCodeAdapter, detectOpenCodeConfiguredModel };
+export {
+  createOpenCodeAdapter,
+  detectOpenCodeConfiguredModel,
+  renderOpenCodeApproachExplorer,
+  renderOpenCodePlanChecker,
+  renderOpenCodePlanCommand,
+};
