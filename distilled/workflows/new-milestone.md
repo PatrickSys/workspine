@@ -23,6 +23,19 @@ Before starting, read these files:
 4. `.planning/config.json` — `workflow.research`, `researchDepth`, `gitProtocol`
 </load_context>
 
+<lifecycle_preflight>
+Before presenting the last milestone or gathering new milestone goals, run:
+
+- `gsdd lifecycle-preflight new-milestone`
+
+If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone-start eligibility from workflow-local prose.
+
+Treat the preflight as an authorization seam over shared repo truth only:
+- it may authorize or reject new milestone creation
+- it does not mutate milestone or roadmap state by itself
+- owned writes remain the new milestone requirements, roadmap entries, and phase-directory scaffolding
+</lifecycle_preflight>
+
 <integration_surface_check>
 Before mutating milestone truth, inspect the current branch/worktree as a separate provenance surface:
 - current branch

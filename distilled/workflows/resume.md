@@ -16,6 +16,19 @@ Infer runtime from the launching surface when obvious: `.claude/` -> `claude-cod
 When a checkpoint's `runtime` differs from the inferred current runtime, surface it as an informational note in `<present_status>` — it is context, not a gate.
 </runtime_contract>
 
+<lifecycle_preflight>
+Before loading checkpoint state or cleaning up any checkpoint file, run:
+
+- `gsdd lifecycle-preflight resume`
+
+If the preflight result is `blocked`, STOP and report the blocker instead of inferring resume eligibility from workflow-local prose.
+
+Treat the preflight as an authorization seam over shared repo truth only:
+- it may authorize or reject resume
+- it does not mutate phase or milestone state
+- the owned write for this workflow remains checkpoint cleanup when the user actually resumes from `.continue-here.md`
+</lifecycle_preflight>
+
 <process>
 
 <detect_state>

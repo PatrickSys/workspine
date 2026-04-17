@@ -13,8 +13,11 @@ const GSDD_PATH = path.join(ROOT, 'bin', 'gsdd.mjs');
 const MODELS_MODULE = path.join(ROOT, 'bin', 'lib', 'models.mjs');
 const MANIFEST_MODULE = path.join(ROOT, 'bin', 'lib', 'manifest.mjs');
 const HEALTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health.mjs');
+const HEALTH_TRUTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health-truth.mjs');
 const INIT_MODULE = path.join(ROOT, 'bin', 'lib', 'init.mjs');
 const INIT_RUNTIME_MODULE = path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs');
+const LIFECYCLE_STATE_MODULE = path.join(ROOT, 'bin', 'lib', 'lifecycle-state.mjs');
+const LIFECYCLE_PREFLIGHT_MODULE = path.join(ROOT, 'bin', 'lib', 'lifecycle-preflight.mjs');
 const TEMPLATES_MODULE = path.join(ROOT, 'bin', 'lib', 'templates.mjs');
 const README_MD = path.join(ROOT, 'README.md');
 const DISTILLED_README_MD = path.join(ROOT, 'distilled', 'README.md');
@@ -2269,12 +2272,14 @@ describe('G34 - Git Delivery Visibility', () => {
 describe('Phase 18 deterministic CLI guards', () => {
   const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
 
-  test('bin/gsdd.mjs registers file-op and phase-status commands', () => {
+  test('bin/gsdd.mjs registers file-op, phase-status, and lifecycle-preflight commands', () => {
     const gsddContent = fs.readFileSync(GSDD_PATH, 'utf-8');
     assert.match(gsddContent, /'file-op'\s*:/,
       'bin/gsdd.mjs must register the file-op command. FIX: Add file-op to COMMANDS.');
     assert.match(gsddContent, /'phase-status'\s*:/,
       'bin/gsdd.mjs must register the phase-status command. FIX: Add phase-status to COMMANDS.');
+    assert.match(gsddContent, /'lifecycle-preflight'\s*:/,
+      'bin/gsdd.mjs must register the lifecycle-preflight command. FIX: Add lifecycle-preflight to COMMANDS.');
   });
 
   test('bin/lib/file-ops.mjs exists and exports cmdFileOp', async () => {
@@ -2286,7 +2291,7 @@ describe('Phase 18 deterministic CLI guards', () => {
       'bin/lib/file-ops.mjs must export cmdFileOp. FIX: Export the file-op command handler.');
   });
 
-  test('init help text documents file-op and phase-status', async () => {
+  test('init help text documents file-op, phase-status, and lifecycle-preflight', async () => {
     const mod = await import(`file://${INIT_MODULE.replace(/\\/g, '/')}`);
     const previousLog = console.log;
     let output = '';
@@ -2301,6 +2306,8 @@ describe('Phase 18 deterministic CLI guards', () => {
       'Help text must document file-op. FIX: Add file-op command to cmdHelp output.');
     assert.match(output, /phase-status <N> <status>/,
       'Help text must document phase-status. FIX: Add phase-status command to cmdHelp output.');
+    assert.match(output, /lifecycle-preflight <surface> \[phase\]/,
+      'Help text must document lifecycle-preflight. FIX: Add lifecycle-preflight command to cmdHelp output.');
   });
 
   test('affected workflows route checkpoint file ops through gsdd file-op', () => {
@@ -3011,6 +3018,70 @@ describe('G39 - Health Check ID Consistency', () => {
       `TRUTH_CHECK_IDS is missing IDs implemented in health-truth.mjs: ${missing.join(', ')}. FIX: Add the missing IDs to the TRUTH_CHECK_IDS export in health-truth.mjs.`);
     assert.deepStrictEqual(extra, [],
       `TRUTH_CHECK_IDS declares IDs with no matching warning push in health-truth.mjs: ${extra.join(', ')}. FIX: Remove the extra IDs or add the missing push call.`);
+  });
+});
+
+describe('G44 - Engine Contract Hardening', () => {
+  test('lifecycle-state helper exists as the shared evaluator seam', () => {
+    assert.ok(fs.existsSync(LIFECYCLE_STATE_MODULE),
+      'bin/lib/lifecycle-state.mjs must exist. FIX: Add the shared lifecycle evaluator helper.');
+  });
+
+  test('lifecycle-preflight helper exists and reuses lifecycle-state', async () => {
+    assert.ok(fs.existsSync(LIFECYCLE_PREFLIGHT_MODULE),
+      'bin/lib/lifecycle-preflight.mjs must exist. FIX: Add the deterministic lifecycle preflight helper.');
+
+    const preflightSource = fs.readFileSync(LIFECYCLE_PREFLIGHT_MODULE, 'utf-8');
+    assert.match(preflightSource, /from '\.\/lifecycle-state\.mjs'/,
+      'lifecycle-preflight.mjs must import lifecycle-state.mjs. FIX: Layer preflight decisions over the shared evaluator.');
+    assert.match(preflightSource, /evaluateLifecycleState\(/,
+      'lifecycle-preflight.mjs must evaluate lifecycle state via the shared helper. FIX: Do not reparse roadmap/spec state locally.');
+
+    const mod = await import(`file://${LIFECYCLE_PREFLIGHT_MODULE.replace(/\\/g, '/')}`);
+    assert.strictEqual(typeof mod.evaluateLifecyclePreflight, 'function',
+      'lifecycle-preflight.mjs must export evaluateLifecyclePreflight. FIX: Export the shared preflight evaluator.');
+    assert.strictEqual(typeof mod.cmdLifecyclePreflight, 'function',
+      'lifecycle-preflight.mjs must export cmdLifecyclePreflight. FIX: Export the CLI handler.');
+  });
+
+  test('health and health-truth both consume the shared lifecycle evaluator', () => {
+    const healthSource = fs.readFileSync(HEALTH_MODULE, 'utf-8');
+    const truthSource = fs.readFileSync(HEALTH_TRUTH_MODULE, 'utf-8');
+
+    assert.match(healthSource, /from '\.\/lifecycle-state\.mjs'/,
+      'health.mjs must import lifecycle-state.mjs. FIX: Route lifecycle interpretation through the shared evaluator.');
+    assert.match(healthSource, /evaluateLifecycleState\(\{ planningDir \}\)/,
+      'health.mjs must evaluate lifecycle state once per run. FIX: Replace ad hoc lifecycle parsing with the shared helper.');
+    assert.match(truthSource, /from '\.\/lifecycle-state\.mjs'/,
+      'health-truth.mjs must import lifecycle-state.mjs. FIX: Route requirement/lifecycle truth checks through the shared evaluator.');
+    assert.match(truthSource, /requirementAlignment\.mismatches/,
+      'health-truth.mjs must consume requirementAlignment from the shared evaluator. FIX: Remove the duplicate ROADMAP/SPEC parser.');
+  });
+
+  test('transition-sensitive workflow contracts route through lifecycle-preflight while progress stays read-only', () => {
+    const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
+    const checks = [
+      ['execute.md', /gsdd lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
+      ['verify.md', /gsdd lifecycle-preflight verify \{phase_num\} --expects-mutation phase-status/],
+      ['audit-milestone.md', /gsdd lifecycle-preflight audit-milestone/],
+      ['complete-milestone.md', /gsdd lifecycle-preflight complete-milestone/],
+      ['new-milestone.md', /gsdd lifecycle-preflight new-milestone/],
+      ['resume.md', /gsdd lifecycle-preflight resume/],
+    ];
+
+    for (const [file, pattern] of checks) {
+      const content = fs.readFileSync(path.join(workflowsDir, file), 'utf-8');
+      assert.match(content, pattern,
+        `${file} must route lifecycle eligibility through gsdd lifecycle-preflight. FIX: Restore the shared preflight invocation.`);
+    }
+
+    const progress = fs.readFileSync(path.join(workflowsDir, 'progress.md'), 'utf-8');
+    assert.match(progress, /progress` stays read-only|progress stays read-only/i,
+      'progress.md must preserve the read-only lifecycle boundary. FIX: Keep the lifecycle_boundary read-only language.');
+    assert.match(progress, /Do not call `gsdd phase-status` here\./,
+      'progress.md must forbid lifecycle mutation via gsdd phase-status. FIX: Keep the explicit mutation ban.');
+    assert.match(progress, /downstream mutating workflow must rerun its own `gsdd lifecycle-preflight \.\.\.` gate before acting/i,
+      'progress.md must push downstream lifecycle transitions back through lifecycle-preflight. FIX: Keep the downstream rerun instruction.');
   });
 });
 
