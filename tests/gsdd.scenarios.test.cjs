@@ -11,6 +11,7 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const {
   cleanup,
   createTempProject,
@@ -556,6 +557,17 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         assert.ok(delegate.includes(dim), `delegate must include dimension: ${dim}`);
       }
     });
+
+    test('installed generated Claude surfaces stay render-aligned after init', async () => {
+      const freshness = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'runtime-freshness.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+      const gsdd = await loadGsdd(tmpDir);
+      const report = freshness.evaluateRuntimeFreshness({
+        cwd: tmpDir,
+        workflows: gsdd.createCliContext(tmpDir).workflows,
+      });
+
+      assert.strictEqual(report.issueCount, 0, 'freshly generated Claude surfaces must match current render output');
+    });
   });
 
   describe('Codex chain', () => {
@@ -608,6 +620,17 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         content.includes('sandbox_mode = "read-only"'),
         'Codex checker must have read-only sandbox'
       );
+    });
+
+    test('installed generated Codex surfaces stay render-aligned after init', async () => {
+      const freshness = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'runtime-freshness.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+      const gsdd = await loadGsdd(tmpDir);
+      const report = freshness.evaluateRuntimeFreshness({
+        cwd: tmpDir,
+        workflows: gsdd.createCliContext(tmpDir).workflows,
+      });
+
+      assert.strictEqual(report.issueCount, 0, 'freshly generated Codex surfaces must match current render output');
     });
   });
 

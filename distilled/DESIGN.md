@@ -59,6 +59,7 @@
 46. [Archived Milestone Routing With Retained ROADMAP](#d46---archived-milestone-routing-with-retained-roadmap)
 47. [Brownfield Quick-Win Repair](#d47---brownfield-quick-win-repair)
 48. [Evidence-Gated Closure Matrix](#d50---evidence-gated-closure-matrix)
+49. [Deterministic Runtime Surface Freshness](#d51---deterministic-runtime-surface-freshness)
 
 ---
 
@@ -952,6 +953,7 @@ Implementation lives under `bin/lib/`:
 | W8 | WARN | `distilled/README.md` workflow inventory differs from `distilled/workflows/` |
 | W9 | WARN | `.internal-research/gaps.md` references missing repo-local paths |
 | W10 | WARN | `.planning/ROADMAP.md` phase status differs from `.planning/SPEC.md` requirement checkboxes |
+| W11 | WARN | Installed generated runtime surfaces drift from current render output |
 | I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
 | I2 | INFO | Phase completion count from ROADMAP |
 | I3 | INFO | Which adapters are installed |
@@ -2127,6 +2129,61 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Milestone completion inherits the same evidence posture proven by audit, which reduces false-positive closure on technically incomplete release claims.
 
 **GSDD implementation:** `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `.planning/SPEC.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
+---
+
+## D51 - Deterministic Runtime Surface Freshness
+
+**Decision (2026-04-17):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When `.agents/skills/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `gsdd health` must compare those generated files against current render output and route any drift back through `gsdd update`.
+
+**Context:**
+- Phase 29 narrowed the runtime story to a dual-canonical boundary: `distilled/workflows/*` is the authored source contract and generated runtime-facing files are the consumed local surfaces.
+- That narrowing was honest but still left I42 open because the repo could not yet prove that installed generated files stayed aligned with the current authored source without reviewer memory.
+- The framework repo also cannot fail closed on missing generated surfaces, because those directories are intentionally gitignored and may be absent even when the authored source is healthy.
+
+**Decision:**
+- Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic.
+- Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally.
+- Route drift through deterministic repair (`gsdd update` or a targeted `gsdd update --tools <runtime>`) instead of treating the fix as a manual review exercise.
+- Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist.
+
+**Why this fits the codebase:**
+- It extends the existing render/update/health pattern instead of inventing a new state file or hidden synchronization layer.
+- It keeps the dual-canonical runtime contract honest: authored source and consumed generated files are distinct surfaces, but the boundary is now mechanically checked where the generated surface is actually installed.
+- It preserves framework-source honesty by warning only on installed drift, not on intentionally absent generated directories.
+
+**Evidence:**
+- `.planning/SPEC.md` (`ENGINE-05`)
+- `.planning/ROADMAP.md` (Phase 32)
+- `.internal-research/gaps.md` (`I42`)
+- `bin/lib/runtime-freshness.mjs`
+- `bin/lib/health.mjs`
+- `bin/lib/health-truth.mjs`
+- `bin/lib/rendering.mjs`
+- `bin/lib/init-runtime.mjs`
+- `bin/adapters/claude.mjs`
+- `bin/adapters/opencode.mjs`
+- `bin/adapters/codex.mjs`
+- `README.md`
+- `docs/RUNTIME-SUPPORT.md`
+- `distilled/README.md`
+- `distilled/workflows/plan.md`
+- `tests/phase.test.cjs`
+- `tests/gsdd.health.test.cjs`
+- `tests/gsdd.plan.adapters.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- GSD comparison source: `get-shit-done/workflows/progress.md`
+
+**Consequences:**
+- `gsdd health` can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline.
+- `gsdd update` becomes the explicit repair path for authored/generated runtime-surface drift.
+- Public support wording can stay compact without implying that generated files are trustworthy merely because they were generated once.
+- Claude Code and Codex CLI remain the mandatory live/native validation floor for the hardened runtime boundary, while other runtimes stay honest about their proof level.
+
+**GSD comparison:** GSD keeps runtime-facing workflow surfaces closer to the Claude-authored source and does not have to model a generated multi-runtime freshness boundary explicitly. GSDD does, because authored workflow source and consumed runtime surfaces are intentionally separated.
+
+**GSDD implementation:** `bin/lib/runtime-freshness.mjs`, `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`, `bin/lib/rendering.mjs`, `bin/lib/init-runtime.mjs`, `bin/adapters/claude.mjs`, `bin/adapters/opencode.mjs`, `bin/adapters/codex.mjs`, `README.md`, `docs/RUNTIME-SUPPORT.md`, `distilled/README.md`, `distilled/workflows/plan.md`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `tests/phase.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
 

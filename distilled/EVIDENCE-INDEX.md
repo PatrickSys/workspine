@@ -353,6 +353,16 @@
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `agents/_archive/gsd-verifier.md`, `agents/_archive/gsd-integration-checker.md`
 
+## D51 — Deterministic Runtime Surface Freshness
+- `.planning/SPEC.md` (`ENGINE-05`)
+- `.planning/ROADMAP.md` (Phase 32)
+- `.internal-research/gaps.md` (`I42`)
+- `bin/lib/runtime-freshness.mjs`, `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`, `bin/lib/rendering.mjs`, `bin/lib/init-runtime.mjs`
+- `bin/adapters/claude.mjs`, `bin/adapters/opencode.mjs`, `bin/adapters/codex.mjs`
+- `README.md`, `docs/RUNTIME-SUPPORT.md`, `distilled/README.md`, `distilled/workflows/plan.md`
+- `tests/phase.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/progress.md`
+
 ---
 
 ## Maintenance
