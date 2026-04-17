@@ -38,6 +38,28 @@ Treat the preflight as an authorization seam over shared repo truth only:
 - owned writes remain the archive artifacts, `MILESTONES.md`, `.planning/SPEC.md`, and the retained `ROADMAP.md` collapse
 </lifecycle_preflight>
 
+<evidence_contract>
+Milestone completion inherits the closure posture proven by the passed milestone audit.
+
+Stable evidence kinds carried forward from audit:
+- `code`
+- `test`
+- `runtime`
+- `delivery`
+- `human`
+
+Read the audit frontmatter and preserve:
+- `delivery_posture`
+- `evidence_contract.required_kinds`
+- `evidence_contract.observed_kinds`
+- `evidence_contract.missing_kinds`
+
+Shared closure rules:
+- `repo_only` completion may proceed with repo-local closure evidence only; do not invent `runtime` or `delivery` proof
+- `delivery_sensitive` completion must not proceed on code/prose-only evidence; the audit must already show required `code`, `test`, `runtime`, and `delivery` evidence with no missing required kinds
+- if the audit omits the evidence contract or still has missing required kinds, STOP and route back to `/gsdd-audit-milestone` or `/gsdd-plan-milestone-gaps` instead of silently closing the milestone
+</evidence_contract>
+
 <process>
 
 ## 1. Verify Readiness
@@ -45,10 +67,11 @@ Treat the preflight as an authorization seam over shared repo truth only:
 Check:
 - **Phase completion**: Are all ROADMAP.md phases for this milestone marked `[x]`? List any that are not.
 - **Audit status**: Does a MILESTONE-AUDIT.md exist and have status `passed`? If it has status `gaps_found`, the milestone has open gaps.
+- **Audit evidence posture**: Does the passed audit frontmatter include `delivery_posture` and an `evidence_contract` block with no missing required kinds?
 - **Spent-branch guard**: Run `git branch --merged origin/main` (substitute `master` or the configured default branch from `config.json → gitProtocol.branch` if different) and verify HEAD is not a spent/already-merged branch. If the current branch already backs a merged PR, STOP - do not instruct any commit or tag operations. Prompt the user to check out a fresh active branch before continuing.
 - **Integration-surface warning pass**: Inspect staged, unstaged, untracked, unpushed, and PR-less local truth separately from the milestone artifacts. Warn if the archive is being attempted from a mixed-scope or stale branch even when the milestone documents themselves look complete.
 
-**If phases incomplete or audit not passed:**
+**If phases incomplete, audit not passed, or the audit evidence contract is missing/insufficient:**
 
 Present options:
 1. **Proceed anyway** — archive with known gaps noted in MILESTONES.md
@@ -60,7 +83,7 @@ Present options:
 
 Exception: if `config.json -> mode` is `yolo`, skip the stop gate and proceed with a note about any gaps.
 
-**If all phases complete and audit passed:** Proceed.
+**If all phases complete, audit passed, and the audit evidence contract is satisfied:** Proceed.
 
 ## 2. Determine Version
 

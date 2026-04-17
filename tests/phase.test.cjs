@@ -22,6 +22,10 @@ async function importLifecyclePreflightModule() {
   return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'lifecycle-preflight.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 }
 
+async function importEvidenceContractModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'evidence-contract.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
 describe('phases list command', () => {
   let tmpDir;
 
@@ -1429,6 +1433,118 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.classification, 'read_only');
     assert.strictEqual(output.explicitLifecycleMutation, 'none');
     assert.strictEqual(output.reason, 'illegal_lifecycle_mutation');
+  });
+});
+
+describe('Phase 31 evidence-gated closure helpers', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '31-evidence-gated-closure'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('normalizes legacy verification proof names into stable evidence kinds', async () => {
+    const mod = await importEvidenceContractModule();
+
+    assert.deepStrictEqual(
+      mod.normalizeEvidenceKinds(['repo-test', 'code-evidence', 'runtime-check', 'user-confirmation', 'repo-test', 'delivery']),
+      ['test', 'code', 'runtime', 'human', 'delivery']
+    );
+    assert.strictEqual(mod.normalizeEvidenceKind('unknown-proof'), null);
+  });
+
+  test('defines closure evidence requirements by surface and delivery posture', async () => {
+    const mod = await importEvidenceContractModule();
+
+    assert.deepStrictEqual(
+      mod.getEvidenceContract('verify', 'repo_only'),
+      {
+        surface: 'verify',
+        deliveryPosture: 'repo_only',
+        supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+        requiredKinds: ['code'],
+        recommendedKinds: ['test'],
+        blockedSoloKinds: ['human', 'delivery'],
+      }
+    );
+
+    assert.deepStrictEqual(
+      mod.getEvidenceContract('complete-milestone', 'delivery_sensitive'),
+      {
+        surface: 'complete-milestone',
+        deliveryPosture: 'delivery_sensitive',
+        supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+        requiredKinds: ['code', 'test', 'runtime', 'delivery'],
+        recommendedKinds: ['human'],
+        blockedSoloKinds: ['code', 'human'],
+      }
+    );
+  });
+
+  test('lifecycle preflight exposes closure evidence metadata only for closure surfaces', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [x] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+        '- [-] **Phase 31: Evidence-Gated Closure** — [ENGINE-04]',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '31-evidence-gated-closure', '31-PLAN.md'),
+      '# plan\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '31-evidence-gated-closure', '31-SUMMARY.md'),
+      '# summary\n'
+    );
+
+    const mod = await importLifecyclePreflightModule();
+    const verifyResult = mod.evaluateLifecyclePreflight({
+      planningDir: path.join(tmpDir, '.planning'),
+      surface: 'verify',
+      phaseNumber: '31',
+      expectsMutation: 'phase-status',
+    });
+    const progressResult = mod.evaluateLifecyclePreflight({
+      planningDir: path.join(tmpDir, '.planning'),
+      surface: 'progress',
+    });
+
+    assert.deepStrictEqual(
+      verifyResult.closureEvidence,
+      {
+        surface: 'verify',
+        supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+        deliveryPostures: [
+          {
+            surface: 'verify',
+            deliveryPosture: 'repo_only',
+            supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+            requiredKinds: ['code'],
+            recommendedKinds: ['test'],
+            blockedSoloKinds: ['human', 'delivery'],
+          },
+          {
+            surface: 'verify',
+            deliveryPosture: 'delivery_sensitive',
+            supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+            requiredKinds: ['code', 'runtime'],
+            recommendedKinds: ['test', 'delivery', 'human'],
+            blockedSoloKinds: ['code', 'human'],
+          },
+        ],
+      }
+    );
+    assert.strictEqual(progressResult.closureEvidence, null);
   });
 });
 

@@ -58,6 +58,7 @@
 45. [Fork-Honest Launch Posture Before Identity Migration](#d45---fork-honest-launch-posture-before-identity-migration)
 46. [Archived Milestone Routing With Retained ROADMAP](#d46---archived-milestone-routing-with-retained-roadmap)
 47. [Brownfield Quick-Win Repair](#d47---brownfield-quick-win-repair)
+48. [Evidence-Gated Closure Matrix](#d50---evidence-gated-closure-matrix)
 
 ---
 
@@ -2074,6 +2075,58 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **GSD comparison:** GSD keeps brownfield posture closer to the full initialization flow after mapping. GSDD now preserves that full path, but also treats bounded-change brownfield work as a first-class documented lane without adding a new workflow surface.
 
 **GSDD implementation:** `distilled/workflows/quick.md`, `distilled/workflows/progress.md`, `distilled/workflows/new-project.md`, `distilled/workflows/map-codebase.md`, `README.md`, `docs/USER-GUIDE.md`, `distilled/README.md`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`
+
+---
+
+## D50 - Evidence-Gated Closure Matrix
+
+**Decision (2026-04-17):** Closure-sensitive lifecycle surfaces must share one compact evidence matrix keyed by workflow surface and delivery posture, using the fixed evidence kinds `code`, `test`, `runtime`, `delivery`, and `human`.
+
+**Context:**
+- Phase 30 hardened lifecycle eligibility, but the closure surfaces still described proof in mismatched ways:
+  - `verify.md` still used the older four-proof vocabulary
+  - `audit-milestone.md` aggregated phase outcomes but did not record a shared closure posture
+  - `complete-milestone.md` trusted a passed audit without checking whether the audit had actually proven the right kind of evidence for repo-only versus delivery-sensitive closeout
+- That created two opposite failure modes:
+  - repo-only work could feel pressured to fabricate runtime or delivery proof just to satisfy prose
+  - delivery-sensitive closure could pass on code inspection, tests, or human commentary alone even when the claim required runtime and delivery proof
+
+**Decision:**
+- Add `bin/lib/evidence-contract.mjs` as the shared internal closure-evidence seam.
+- Fix the stable evidence kinds to `code`, `test`, `runtime`, `delivery`, and `human`.
+- Key the matrix by both:
+  - closure surface (`verify`, `audit-milestone`, `complete-milestone`)
+  - delivery posture (`repo_only`, `delivery_sensitive`)
+- Make `verify` record the selected delivery posture plus required, observed, and missing evidence kinds in its report contract.
+- Make `audit-milestone` aggregate the same evidence posture and fail closed when required kinds remain missing.
+- Make `complete-milestone` consume the audit's evidence contract instead of silently trusting a passed audit that lacks the required closure evidence.
+
+**Why this fits the codebase:**
+- It follows the repo's existing pattern of small shared helpers plus file-backed workflow contracts instead of adding another freeform prompt convention.
+- It keeps repo-only work honest without pretending every closure needs runtime or delivery proof.
+- It raises the bar only where the claim itself is stronger: shipped or externally consumed outcomes now pay the stronger evidence cost explicitly.
+- It keeps the matrix internal and compact rather than inventing a second public mini-language for closure semantics.
+
+**Evidence:**
+- `.planning/SPEC.md` (`ENGINE-04`, `VERIFY-01`)
+- `.planning/ROADMAP.md` (Phase 31 success criteria)
+- `bin/lib/evidence-contract.mjs`
+- `bin/lib/lifecycle-preflight.mjs`
+- `distilled/workflows/verify.md`
+- `distilled/workflows/audit-milestone.md`
+- `distilled/workflows/complete-milestone.md`
+- `tests/phase.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- GSD comparison sources: `agents/_archive/gsd-verifier.md` and `agents/_archive/gsd-integration-checker.md` preserve outcome verification and integration audit, but they do not expose one typed closure matrix shared across phase verification, milestone audit, and milestone completion.
+
+**Consequences:**
+- Closure-sensitive workflows now share one stable evidence vocabulary instead of drifting between proof synonyms.
+- Repo-only closures can stay repo-only without invented runtime theatrics.
+- Delivery-sensitive closure now has an explicit fail-closed bar: missing `runtime` or `delivery` evidence cannot be papered over by prose, code-only review, or human confirmation alone.
+- Milestone completion inherits the same evidence posture proven by audit, which reduces false-positive closure on technically incomplete release claims.
+
+**GSDD implementation:** `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `.planning/SPEC.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
 

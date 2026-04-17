@@ -345,6 +345,14 @@
 - `README.md`, `docs/USER-GUIDE.md`, `distilled/README.md`
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`, `tests/gsdd.invariants.test.cjs`
 
+## D50 — Evidence-Gated Closure Matrix
+- `.planning/SPEC.md` (`ENGINE-04`, `VERIFY-01`)
+- `.planning/ROADMAP.md` (Phase 31)
+- `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `agents/_archive/gsd-verifier.md`, `agents/_archive/gsd-integration-checker.md`
+
 ---
 
 ## Maintenance

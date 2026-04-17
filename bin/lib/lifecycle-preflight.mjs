@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { output } from './cli-utils.mjs';
+import { describeEvidenceSurface } from './evidence-contract.mjs';
 import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
 
 const SURFACE_POLICIES = {
@@ -124,6 +125,7 @@ export function evaluateLifecyclePreflight({
     classification: policy.classification,
     ownedWrites: policy.ownedWrites,
     explicitLifecycleMutation: policy.explicitLifecycleMutation,
+    closureEvidence: describeEvidenceSurface(surface),
     mutationRequest: expectsMutation,
     allowed: blockers.length === 0,
     status: blockers.length === 0 ? 'allowed' : 'blocked',

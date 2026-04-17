@@ -209,6 +209,21 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
       'integration-checker role must be installed'
     );
   });
+
+  test('closure workflows preserve the shared evidence-gated closure language after generation', () => {
+    const expectations = new Map([
+      ['gsdd-verify', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_evidence', 'missing_evidence']],
+      ['gsdd-audit-milestone', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_kinds', 'missing_kinds']],
+      ['gsdd-complete-milestone', ['repo_only', 'delivery_sensitive', 'missing_kinds', 'required_kinds']],
+    ]);
+
+    for (const [skillName, snippets] of expectations.entries()) {
+      const content = readSkill(tmpDir, skillName);
+      for (const snippet of snippets) {
+        assert.ok(content.includes(snippet), `${skillName} must include ${snippet}`);
+      }
+    }
+  });
 });
 
 // ============================================================

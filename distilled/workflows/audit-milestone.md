@@ -26,6 +26,32 @@ Treat the preflight as an authorization seam over shared repo truth only:
 - the owned write for this workflow remains `.planning/v{version}-MILESTONE-AUDIT.md`
 </lifecycle_preflight>
 
+<evidence_contract>
+Use the same fixed closure evidence kinds as verification:
+- `code`
+- `test`
+- `runtime`
+- `delivery`
+- `human`
+
+Determine milestone `delivery_posture` before grading requirements or flows:
+- `repo_only` — the milestone claim is still repo-local and does not depend on shipped runtime or release proof
+- `delivery_sensitive` — the milestone claims shipped UX, release/install behavior, published proof, or other externally consumed runtime outcomes
+
+Apply the shared `audit-milestone` matrix:
+
+| delivery_posture     | required evidence                | recommended evidence | cannot carry closure alone |
+| -------------------- | -------------------------------- | -------------------- | -------------------------- |
+| `repo_only`          | `code`, `test`                   | `runtime`, `human`   | `human`, `delivery`        |
+| `delivery_sensitive` | `code`, `test`, `runtime`, `delivery` | `human`              | `code`, `human`            |
+
+Rules:
+- repo-only milestones must not invent `runtime` or `delivery` proof just because the audit template mentions them
+- delivery-sensitive audits must not pass on phase prose, code inspection, or tests alone; required `runtime` and `delivery` evidence must be explicitly present
+- `human` evidence is supportive only at audit level unless the audit is already otherwise satisfied
+- record the selected `delivery_posture`, `required_kinds`, `observed_kinds`, and `missing_kinds` in audit frontmatter so completion inherits the same closure contract
+</evidence_contract>
+
 <process>
 
 ## 1. Determine Milestone Scope
@@ -83,6 +109,7 @@ Either way, the integration check happens. The quality level is documented.
 Combine:
 - Phase-level gaps and tech debt (from step 2)
 - Integration checker's report (wiring gaps, auth gaps, broken flows, requirements integration map)
+- Evidence observations by kind (`code`, `test`, `runtime`, `delivery`, `human`) from phase verifications, summaries, integration findings, and delivery metadata
 
 ## 5. 3-Source Cross-Reference
 
@@ -138,6 +165,11 @@ milestone: v{version}
 audited: {ISO-8601 timestamp}
 status: passed | gaps_found | tech_debt
 reduced_assurance: false
+delivery_posture: repo_only | delivery_sensitive
+evidence_contract:
+  required_kinds: [code, test]
+  observed_kinds: [code, test]
+  missing_kinds: []
 scores:
   requirements: N/M
   phases: N/M
@@ -172,6 +204,11 @@ Plus full markdown report body with tables for requirements, phases, integration
 - `passed` - all requirements met, no critical gaps, integration and auth protection verified
 - `gaps_found` - critical blockers exist (unsatisfied requirements, unprotected sensitive flows, broken flows, or missing verifications)
 - `tech_debt` - no blockers but accumulated deferred items need review
+
+Evidence gate:
+- a `passed` audit must have no `missing_kinds` for the selected `delivery_posture`
+- `delivery_sensitive` audits cannot pass without explicit `runtime` and `delivery` evidence
+- `repo_only` audits cannot be downgraded merely because `runtime` or `delivery` evidence was never relevant
 
 **MANDATORY: The milestone audit report must exist at `.planning/v{version}-MILESTONE-AUDIT.md` on disk before presenting results. If the file was not written, STOP and report the write failure. Do NOT present audit results from conversation context alone — this is the highest-cost artifact to regenerate. Do NOT downgrade a write failure into "results shown inline anyway."**
 

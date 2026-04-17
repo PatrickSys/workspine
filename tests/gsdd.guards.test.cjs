@@ -2067,30 +2067,36 @@ describe('G29 - Outcome-Based Verification Contracts', () => {
     path.join(__dirname, '..', 'distilled', 'workflows', 'verify.md'), 'utf-8'
   );
 
-  test('verify.md has <proof_contract> section', () => {
-    assert.match(verifyWorkflow, /<proof_contract>/,
-      'verify.md must have <proof_contract> section (GA1/VERIFY-01). FIX: Add <proof_contract> between </must_haves> and <verification_levels>.');
+  test('verify.md has <evidence_contract> section', () => {
+    assert.match(verifyWorkflow, /<evidence_contract>/,
+      'verify.md must have <evidence_contract> section (GA1/ENGINE-04). FIX: Add <evidence_contract> between </must_haves> and <verification_levels>.');
   });
 
-  test('verify.md proof_contract is positioned between must_haves and verification_levels', () => {
+  test('verify.md evidence_contract is positioned between must_haves and verification_levels', () => {
     const mustHavesEnd = verifyWorkflow.indexOf('</must_haves>');
-    const proofContractStart = verifyWorkflow.indexOf('<proof_contract>');
+    const proofContractStart = verifyWorkflow.indexOf('<evidence_contract>');
     const verificationLevelsStart = verifyWorkflow.indexOf('<verification_levels>');
     assert.ok(mustHavesEnd > -1 && proofContractStart > -1 && verificationLevelsStart > -1,
-      'verify.md must have </must_haves>, <proof_contract>, and <verification_levels>. FIX: Check section structure.');
+      'verify.md must have </must_haves>, <evidence_contract>, and <verification_levels>. FIX: Check section structure.');
     assert.ok(
       proofContractStart > mustHavesEnd && proofContractStart < verificationLevelsStart,
-      'verify.md <proof_contract> must be after </must_haves> and before <verification_levels> (GA1). FIX: Reorder sections.');
+      'verify.md <evidence_contract> must be after </must_haves> and before <verification_levels> (GA1). FIX: Reorder sections.');
   });
 
-  test('verify.md proof_contract names all four SPEC.md proof types', () => {
-    const pcStart = verifyWorkflow.indexOf('<proof_contract>');
-    const pcEnd = verifyWorkflow.indexOf('</proof_contract>');
+  test('verify.md evidence_contract names the five stable evidence kinds and both delivery postures', () => {
+    const pcStart = verifyWorkflow.indexOf('<evidence_contract>');
+    const pcEnd = verifyWorkflow.indexOf('</evidence_contract>');
     const section = verifyWorkflow.slice(pcStart, pcEnd);
-    for (const proofType of ['repo-test', 'code-evidence', 'runtime-check', 'user-confirmation']) {
+    for (const proofType of ['code', 'test', 'runtime', 'delivery', 'human']) {
       assert.ok(
         section.includes(proofType),
-        `verify.md <proof_contract> must name proof type "${proofType}" (GA1/VERIFY-01). FIX: Add all four VerificationEvidence proofType values.`);
+        `verify.md <evidence_contract> must name evidence kind "${proofType}" (GA1/ENGINE-04). FIX: Add all five stable evidence kinds.`);
+    }
+    for (const posture of ['repo_only', 'delivery_sensitive']) {
+      assert.ok(
+        section.includes(posture),
+        `verify.md <evidence_contract> must name delivery posture "${posture}" (ENGINE-04). FIX: Add both shared delivery postures.`
+      );
     }
   });
 
@@ -2112,16 +2118,16 @@ describe('G29 - Outcome-Based Verification Contracts', () => {
       'verify.md <must_haves> risk classification must reference behavioral/UX changes as the trigger (GA2). FIX: Add trigger language.');
   });
 
-  test('verify.md report_format gaps schema includes proof_type and severity fields', () => {
+  test('verify.md report_format records delivery posture plus required/observed/missing evidence fields', () => {
     const rfStart = verifyWorkflow.indexOf('<report_format>');
     const rfEnd = verifyWorkflow.indexOf('</report_format>');
     const section = verifyWorkflow.slice(rfStart, rfEnd);
-    assert.ok(
-      section.includes('proof_type'),
-      'verify.md <report_format> gaps schema must include proof_type field (GA4/VERIFY-01). FIX: Add proof_type to gaps frontmatter example.');
-    assert.ok(
-      section.includes('severity'),
-      'verify.md <report_format> gaps schema must include severity field (GA4). FIX: Add severity to gaps frontmatter example.');
+    for (const field of ['delivery_posture', 'required_evidence', 'observed_evidence', 'missing_evidence', 'severity']) {
+      assert.ok(
+        section.includes(field),
+        `verify.md <report_format> must include ${field}. FIX: Keep the evidence-gated closure fields in the frontmatter contract.`
+      );
+    }
   });
 
 });
@@ -3082,6 +3088,30 @@ describe('G44 - Engine Contract Hardening', () => {
       'progress.md must forbid lifecycle mutation via gsdd phase-status. FIX: Keep the explicit mutation ban.');
     assert.match(progress, /downstream mutating workflow must rerun its own `gsdd lifecycle-preflight \.\.\.` gate before acting/i,
       'progress.md must push downstream lifecycle transitions back through lifecycle-preflight. FIX: Keep the downstream rerun instruction.');
+  });
+
+  test('closure-sensitive workflows preserve the shared evidence-gated closure contract', () => {
+    const verify = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'verify.md'), 'utf-8');
+    const audit = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'audit-milestone.md'), 'utf-8');
+    const complete = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'complete-milestone.md'), 'utf-8');
+
+    for (const [label, content] of [
+      ['verify.md', verify],
+      ['audit-milestone.md', audit],
+      ['complete-milestone.md', complete],
+    ]) {
+      assert.match(content, /code.*test.*runtime.*delivery.*human/s,
+        `${label} must preserve the stable evidence-kind vocabulary. FIX: Add all five closure evidence kinds.`);
+      assert.match(content, /repo_only/,
+        `${label} must preserve repo_only delivery posture language. FIX: Add the shared repo_only posture.`);
+      assert.match(content, /delivery_sensitive/,
+        `${label} must preserve delivery_sensitive posture language. FIX: Add the shared delivery_sensitive posture.`);
+    }
+
+    assert.match(audit, /required_kinds.*observed_kinds.*missing_kinds/s,
+      'audit-milestone.md must record evidence_contract.required_kinds|observed_kinds|missing_kinds in frontmatter. FIX: Add the shared audit evidence block.');
+    assert.match(complete, /missing required kinds|missing_kinds/i,
+      'complete-milestone.md must fail closed when the passed audit still lacks required closure evidence. FIX: Add the audit evidence gate.');
   });
 });
 
