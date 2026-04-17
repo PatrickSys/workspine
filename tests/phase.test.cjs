@@ -26,6 +26,10 @@ async function importEvidenceContractModule() {
   return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'evidence-contract.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 }
 
+async function importRuntimeFreshnessModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'runtime-freshness.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
 describe('phases list command', () => {
   let tmpDir;
 
@@ -1545,6 +1549,56 @@ describe('Phase 31 evidence-gated closure helpers', () => {
       }
     );
     assert.strictEqual(progressResult.closureEvidence, null);
+  });
+});
+
+describe('Phase 32 runtime-freshness helper', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('reports clean generated surfaces for installed runtimes and ignores absent ones', async () => {
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initResult.exitCode, 0, initResult.output);
+
+    const gsdd = await loadGsdd(tmpDir);
+    const mod = await importRuntimeFreshnessModule();
+    const report = mod.evaluateRuntimeFreshness({
+      cwd: tmpDir,
+      workflows: gsdd.createCliContext(tmpDir).workflows,
+    });
+
+    assert.strictEqual(report.issueCount, 0);
+    assert.strictEqual(report.hasInstalledRuntimeSurfaces, true);
+    assert.ok(report.groups.some((group) => group.runtime === 'portable' && group.installed));
+    assert.ok(report.groups.some((group) => group.runtime === 'claude' && group.installed));
+    assert.ok(report.groups.some((group) => group.runtime === 'opencode' && !group.installed));
+  });
+
+  test('reports stale and missing generated files against current render output', async () => {
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initResult.exitCode, 0, initResult.output);
+
+    fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'), '\n<!-- local drift -->\n');
+    fs.unlinkSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'));
+
+    const gsdd = await loadGsdd(tmpDir);
+    const mod = await importRuntimeFreshnessModule();
+    const report = mod.evaluateRuntimeFreshness({
+      cwd: tmpDir,
+      workflows: gsdd.createCliContext(tmpDir).workflows,
+    });
+
+    assert.strictEqual(report.staleCount, 1);
+    assert.strictEqual(report.missingCount, 1);
+    assert.ok(report.issues.some((entry) => entry.relativePath === '.agents/skills/gsdd-plan/SKILL.md' && entry.status === 'stale'));
+    assert.ok(report.issues.some((entry) => entry.relativePath === '.claude/commands/gsdd-plan.md' && entry.status === 'missing'));
   });
 });
 

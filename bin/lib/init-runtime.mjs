@@ -2,37 +2,37 @@ const RUNTIME_OPTIONS = [
   {
     id: 'claude',
     label: 'Claude Code',
-    description: 'Directly validated native skills, commands, and agents',
+    description: 'Directly validated native skills, commands, and agents with local freshness checks',
     kind: 'native',
   },
   {
     id: 'opencode',
     label: 'OpenCode',
-    description: 'Directly validated native slash commands and agents',
+    description: 'Directly validated native slash commands and agents with local freshness checks',
     kind: 'native',
   },
   {
     id: 'codex',
     label: 'Codex CLI',
-    description: 'Directly validated portable skills plus native checker agents',
+    description: 'Directly validated portable skills plus native checker agents with local freshness checks',
     kind: 'native',
   },
   {
     id: 'cursor',
     label: 'Cursor',
-    description: 'Qualified support via skills-native slash commands from .agents/skills/',
+    description: 'Qualified support via skills-native slash commands from .agents/skills/ with the same local freshness checks',
     kind: 'skills_native',
   },
   {
     id: 'copilot',
     label: 'GitHub Copilot',
-    description: 'Qualified support via skills-native slash commands from .agents/skills/',
+    description: 'Qualified support via skills-native slash commands from .agents/skills/ with the same local freshness checks',
     kind: 'skills_native',
   },
   {
     id: 'gemini',
     label: 'Gemini CLI',
-    description: 'Qualified support via skills-native slash commands from .agents/skills/',
+    description: 'Qualified support via skills-native slash commands from .agents/skills/ with the same local freshness checks',
     kind: 'skills_native',
   },
 ];
@@ -196,6 +196,7 @@ Notes:
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
   - running plain \`gsdd init\` in a terminal opens the guided runtime-selection wizard
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
+  - \`gsdd health\` compares any installed generated runtime surfaces against current render output and points back to \`gsdd update\` when they drift
   - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility

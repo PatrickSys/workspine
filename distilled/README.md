@@ -20,6 +20,7 @@ Workspine started by distilling ideas from Get Shit Done and earlier GSDD work b
 Launch proof posture:
 - Directly validated in repo truth: Claude Code, Codex CLI, OpenCode
 - Qualified support only: Cursor, Copilot, Gemini CLI via the shared `.agents/skills/` surface plus optional governance
+- Installed generated runtime surfaces are renderer-checked locally through `gsdd health`, with deterministic repair through `gsdd update`
 - Public proof entrypoints: `docs/BROWNFIELD-PROOF.md`, `docs/proof/consumer-node-cli/README.md`, `docs/RUNTIME-SUPPORT.md`, `docs/VERIFICATION-DISCIPLINE.md`
 
 ## Quick Start
@@ -76,7 +77,7 @@ Use the same three-way routing everywhere:
 - `gsdd-quick` is the bounded brownfield lane when the change is already concrete. It uses existing codebase maps when present and otherwise builds a just-enough inline baseline.
 - `gsdd-map-codebase` is the deeper orientation pass for unfamiliar or higher-risk repos before choosing between `quick` and `new-project`.
 
-## Current Status (updated 2026-04-10)
+## Current Status (updated 2026-04-17)
 
 | Workflow | Status | Notes |
 |----------|--------|-------|
@@ -98,6 +99,7 @@ Use the same three-way routing everywhere:
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
 - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
+- `gsdd health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `gsdd update`.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
 - Phase verification and milestone integration audit are treated as separate concerns.
 - Canonical role contracts use bounded sections, typed output examples, and checklist-driven completion where those structures materially improve downstream reliability.
@@ -162,7 +164,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 
 ```
 distilled/
-  DESIGN.md                # design decisions and rationale (47 decisions, evidence-backed)
+  DESIGN.md                # design decisions and rationale (49 decisions, evidence-backed)
   EVIDENCE-INDEX.md        # source-to-decision index for durable research-backed claims
   SKILL.md                 # primary entry point (plain markdown)
   workflows/

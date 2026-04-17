@@ -3115,6 +3115,41 @@ describe('G44 - Engine Contract Hardening', () => {
   });
 });
 
+describe('G45 - Runtime Surface Freshness Contract', () => {
+  test('runtime-freshness helper exists and health truth includes W11', () => {
+    const runtimeFreshnessModule = path.join(ROOT, 'bin', 'lib', 'runtime-freshness.mjs');
+    assert.ok(fs.existsSync(runtimeFreshnessModule),
+      'bin/lib/runtime-freshness.mjs must exist. FIX: Add the shared renderer-backed runtime freshness helper.');
+
+    const runtimeFreshnessSource = fs.readFileSync(runtimeFreshnessModule, 'utf-8');
+    const truthSource = fs.readFileSync(HEALTH_TRUTH_MODULE, 'utf-8');
+    assert.match(truthSource, /W11/,
+      'health-truth.mjs must register W11. FIX: Add the generated-surface freshness warning ID.');
+    assert.match(truthSource, /getRuntimeFreshnessRepairGuidance/,
+      'health-truth.mjs must route W11 repair text through the shared runtime-freshness helper. FIX: Use getRuntimeFreshnessRepairGuidance for the W11 fix field.');
+    assert.match(runtimeFreshnessSource, /gsdd update/i,
+      'runtime-freshness.mjs must keep gsdd update as the deterministic repair path. FIX: Preserve the gsdd update guidance in getRuntimeFreshnessRepairGuidance.');
+  });
+
+  test('runtime-facing docs and help describe rendered freshness checks briefly and consistently', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const support = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    const helpSource = fs.readFileSync(INIT_RUNTIME_MODULE, 'utf-8');
+    const planWorkflow = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'plan.md'), 'utf-8');
+
+    assert.match(readme, /gsdd health.*render output|current render output/i,
+      'README.md must explain that generated runtime surfaces are checked against current render output. FIX: Add the runtime-surface freshness note.');
+    assert.match(readme, /gsdd update/i,
+      'README.md must include deterministic repair guidance through gsdd update. FIX: Add the repair path.');
+    assert.match(support, /Generated-surface freshness/i,
+      'docs/RUNTIME-SUPPORT.md must have a generated-surface freshness section. FIX: Add the explicit runtime-boundary section.');
+    assert.match(helpSource, /gsdd health.*gsdd update/i,
+      'bin/lib/init-runtime.mjs help text must mention health/update runtime-surface drift handling. FIX: Add the note to getHelpText().');
+    assert.match(planWorkflow, /gsdd health.*gsdd update/i,
+      'distilled/workflows/plan.md must mention the renderer-backed freshness/repair path. FIX: Add the runtime-surface trust note to completion.');
+  });
+});
+
 describe('G40 - Provenance And Write-Gate Contracts', () => {
   const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
 

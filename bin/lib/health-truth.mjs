@@ -1,10 +1,14 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
+import {
+  getRuntimeFreshnessRepairGuidance,
+  summarizeRuntimeFreshnessIssues,
+} from './runtime-freshness.mjs';
 
-export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10'];
+export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10', 'W11'];
 
-export function runTruthChecks(planningDir, frameworkDir, actualCheckIds) {
+export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, options = {}) {
   const warnings = [];
   const designPath = join(frameworkDir, 'distilled', 'DESIGN.md');
   const readmePath = join(frameworkDir, 'distilled', 'README.md');
@@ -80,6 +84,15 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds) {
         fix: 'Reconcile .planning/ROADMAP.md phase completion markers with .planning/SPEC.md requirement checkboxes',
       });
     }
+  }
+
+  if (options.runtimeFreshnessReport?.issueCount > 0) {
+    warnings.push({
+      id: 'W11',
+      severity: 'WARN',
+      message: `Installed generated runtime surfaces drift from current render output (${summarizeRuntimeFreshnessIssues(options.runtimeFreshnessReport)})`,
+      fix: getRuntimeFreshnessRepairGuidance(options.runtimeFreshnessReport),
+    });
   }
 
   return warnings;

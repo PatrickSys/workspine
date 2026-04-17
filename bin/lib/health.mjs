@@ -9,10 +9,11 @@ import { readManifest, detectModifications } from './manifest.mjs';
 import { output } from './cli-utils.mjs';
 import { runTruthChecks, TRUTH_CHECK_IDS } from './health-truth.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
+import { evaluateRuntimeFreshness } from './runtime-freshness.mjs';
 
 /**
  * Factory function returning the health command.
- * ctx should provide: { frameworkVersion }
+ * ctx should provide: { frameworkVersion, workflows }
  */
 export function createCmdHealth(ctx) {
   return async function cmdHealth(...healthArgs) {
@@ -42,8 +43,10 @@ export function createCmdHealth(ctx) {
     // E1: config.json missing (already handled by pre-init guard, but keep for completeness)
     // E2: config.json missing required fields
     let config = null;
+    let configOk = false;
     try {
       config = JSON.parse(readFileSync(join(planningDir, 'config.json'), 'utf-8'));
+      configOk = true;
       const requiredFields = ['researchDepth', 'modelProfile', 'initVersion'];
       const missing = requiredFields.filter((f) => !(f in config));
       if (missing.length > 0) {
@@ -186,7 +189,11 @@ export function createCmdHealth(ctx) {
       warnings.push({ id: 'W6', severity: 'WARN', message: 'No adapter surfaces detected', fix: 'Run `gsdd init --tools <platform>`' });
     }
 
-    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds));
+    const runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
+      ? evaluateRuntimeFreshness({ cwd, workflows: ctx.workflows })
+      : null;
+
+    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport }));
 
     // --- INFO checks ---
 

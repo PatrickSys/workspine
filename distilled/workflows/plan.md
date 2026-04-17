@@ -507,6 +507,7 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** Phase planning — created `.planning/phases/{phase_dir}/{plan_id}-PLAN.md`.
 **Planning stops here:** `gsdd-plan` ends after the plan artifact is written. Do not start implementation in this same run, and do not treat imperative handoff text as execution authorization.
+Installed generated runtime surfaces are trusted through rendering, not reviewer memory: `gsdd health` compares any local generated skill/adapter surfaces against current render output, and `gsdd update` regenerates them when they drift.
 
 **Next workflow:** `/gsdd-execute` — start execution in a separate run when the user explicitly wants implementation to begin
 
