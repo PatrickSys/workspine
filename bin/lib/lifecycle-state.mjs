@@ -172,8 +172,8 @@ function collectPhaseArtifacts(phasesDir) {
 
 function classifyPhaseArtifact(dir, name) {
   const baseIdMatch = name.match(/^(\d+(?:\.\d+)*[a-z]?(?:-\d+)?)/i);
-  const phaseTokenMatch = name.match(/^(\d+(?:\.\d+)*[a-z]?)/i)
-    || dir.match(/^(\d+(?:\.\d+)*[a-z]?)-/i);
+  const phaseTokenMatch = (dir ? dir.match(/^(\d+(?:\.\d+)*[a-z]?)-/i) : null)
+    || name.match(/^(\d+(?:\.\d+)*[a-z]?)/i);
 
   if (!baseIdMatch || !phaseTokenMatch) return null;
 

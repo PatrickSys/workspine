@@ -27,7 +27,60 @@ const ROADMAP_PHASE_STATUS_RE = new RegExp(
 
 function findFiles(dir, prefix) {
   if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((f) => f.startsWith(prefix) || f.startsWith(prefix.replace(/^0+/, '')));
+
+  const phaseArtifactPrefix = String(prefix).match(/^(\d+(?:\.\d+)*[a-z]?)-(PLAN|SUMMARY)$/i);
+  if (!phaseArtifactPrefix) {
+    return readdirSync(dir).filter((f) => f.startsWith(prefix) || f.startsWith(prefix.replace(/^0+/, '')));
+  }
+
+  const targetPhase = normalizePhaseToken(phaseArtifactPrefix[1]);
+  const targetKind = phaseArtifactPrefix[2].toUpperCase();
+
+  return listPhaseArtifacts(dir)
+    .filter((artifact) => artifact.phaseToken === targetPhase && artifact.kind === targetKind)
+    .map((artifact) => artifact.displayPath);
+}
+
+function listPhaseArtifacts(dir) {
+  if (!existsSync(dir)) return [];
+
+  const artifacts = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isFile()) {
+      const artifact = classifyPhaseArtifact('', entry.name);
+      if (artifact) artifacts.push(artifact);
+      continue;
+    }
+
+    if (!entry.isDirectory()) continue;
+
+    const entryPath = join(dir, entry.name);
+    for (const child of readdirSync(entryPath, { withFileTypes: true })) {
+      if (!child.isFile()) continue;
+      const artifact = classifyPhaseArtifact(entry.name, child.name);
+      if (artifact) artifacts.push(artifact);
+    }
+  }
+
+  return artifacts;
+}
+
+function classifyPhaseArtifact(dir, name) {
+  const dirMatch = dir ? dir.match(/^(\d+(?:\.\d+)*[a-z]?)-/i) : null;
+  const nameMatch = name.match(/^(\d+(?:\.\d+)*[a-z]?)/i);
+  const phaseToken = normalizePhaseToken((dirMatch || nameMatch)?.[1] || '');
+
+  let kind = 'OTHER';
+  if (name.includes('PLAN')) kind = 'PLAN';
+  else if (name.includes('SUMMARY')) kind = 'SUMMARY';
+
+  return {
+    dir,
+    name,
+    displayPath: dir ? `${dir}/${name}` : name,
+    phaseToken,
+    kind,
+  };
 }
 
 function padPhase(n) {
@@ -163,9 +216,9 @@ export function cmdFindPhase(...args) {
     return;
   }
 
-  const allFiles = existsSync(phasesDir) ? readdirSync(phasesDir) : [];
-  const plans = allFiles.filter((f) => f.includes('PLAN'));
-  const summaries = allFiles.filter((f) => f.includes('SUMMARY'));
+  const allArtifacts = listPhaseArtifacts(phasesDir);
+  const plans = allArtifacts.filter((artifact) => artifact.kind === 'PLAN');
+  const summaries = allArtifacts.filter((artifact) => artifact.kind === 'SUMMARY');
 
   const roadmap = readFileSync(roadmapPath, 'utf-8');
   const phases = parsePhaseStatuses(roadmap);

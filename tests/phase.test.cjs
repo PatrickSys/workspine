@@ -1378,6 +1378,37 @@ describe('Phase 29 lifecycle-state helper', () => {
     assert.strictEqual(state.currentMilestone.hasMatchingAudit, true);
     assert.strictEqual(state.currentMilestone.archiveState, 'archived');
   });
+
+  test('classifies nested phase plan artifacts by parent phase directory instead of plan filename', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.4.0 Launch Surface Coherence',
+        '',
+        '- [ ] **Phase 34: Identity And Story Lock** — [LSC-01]',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '- [ ] **[LSC-01]**: story lock\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
+      '# nested plan\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '34-APPROACH.md'),
+      '# approach\n'
+    );
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.ok(
+      state.phaseArtifacts.some((artifact) => artifact.displayPath === '34-identity-and-story-lock/01-PLAN.md' && artifact.kind === 'plan' && artifact.phaseToken === '34'),
+      'nested 01-PLAN.md must be attributed to Phase 34 via the parent directory. FIX: prefer phase directory token over plan filename token when classifying nested artifacts.'
+    );
+  });
 });
 
 describe('Phase 30 lifecycle-preflight helper', () => {
@@ -1429,6 +1460,32 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.phase, '30');
   });
 
+  test('allows execute when the pending plan uses nested 01-PLAN.md naming inside the phase directory', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.4.0 Launch Surface Coherence',
+        '',
+        '- [ ] **Phase 34: Identity And Story Lock** — [LSC-01]',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
+      '# nested plan\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '34', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.status, 'allowed');
+    assert.strictEqual(output.phase, '34');
+  });
+
   test('blocks verify when the target phase has no summary artifact yet', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'ROADMAP.md'),
@@ -1466,6 +1523,45 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.classification, 'read_only');
     assert.strictEqual(output.explicitLifecycleMutation, 'none');
     assert.strictEqual(output.reason, 'illegal_lifecycle_mutation');
+  });
+});
+
+describe('verify command nested phase plans', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('finds nested 01-PLAN.md when verifying a phase', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
+      [
+        '<task id="34-01" type="auto">',
+        '  <files>',
+        '    - MODIFY: src/example.js',
+        '  </files>',
+        '</task>',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'src', 'example.js'),
+      ['const a = 1;', 'const b = 2;', 'export const sum = a + b;'].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '34']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.phase, 34);
+    assert.deepStrictEqual(output.artifacts.map((artifact) => artifact.file), ['src/example.js']);
+    assert.strictEqual(output.allExist, true);
   });
 });
 
