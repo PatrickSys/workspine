@@ -2688,13 +2688,13 @@ describe('G36 - Git Branch Safety', () => {
 });
 
 describe('G37 - Launch Surface Consistency', () => {
-  test('README and distilled README use portable multi-runtime software delivery framework framing', () => {
+  test('README and distilled README use repo-native delivery spine framing', () => {
     const rootReadme = fs.readFileSync(README_MD, 'utf-8');
     const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
-    assert.match(rootReadme, /portable multi-runtime software delivery framework/i,
-      'README.md must describe GSDD as a portable multi-runtime software delivery framework. FIX: Use the portable framework framing in the public intro.');
-    assert.match(distilledReadme, /portable multi-runtime software delivery framework/i,
-      'distilled/README.md must describe GSDD as a portable multi-runtime software delivery framework. FIX: Align the distilled intro with the portable framework launch framing.');
+    assert.match(rootReadme, /repo-native delivery spine/i,
+      'README.md must describe Workspine as a repo-native delivery spine. FIX: Use the repo-native delivery spine framing in the public intro.');
+    assert.match(distilledReadme, /repo-native delivery spine/i,
+      'distilled/README.md must describe Workspine as a repo-native delivery spine. FIX: Align the distilled intro with the repo-native delivery spine launch framing.');
   });
 
   test('lead launch copy is product-first instead of origin-first', () => {
@@ -2783,9 +2783,9 @@ describe('G37 - Launch Surface Consistency', () => {
       'README.md must explain that gsdd-cli/gsdd/gsdd-* /.planning remain deliberate retained contracts. FIX: Add the retained-contract explanation near the top-level intro.');
     assert.match(userGuide, /retained technical contracts/i,
       'docs/USER-GUIDE.md must explain the retained naming stack explicitly. FIX: Tell users that gsdd-cli/gsdd/gsdd-* /.planning are intentional retained contracts.');
-    assert.match(rootReadme, /started by distilling ideas from Get Shit Done and earlier GSDD work/i,
+    assert.match(rootReadme, /began as a fork of.*Get Shit Done/i,
       'README.md must keep one brief appreciative lineage note. FIX: Add a concise lineage note that acknowledges GSD/GSDD without making it the active product identity.');
-    assert.match(distilledReadme, /started by distilling ideas from Get Shit Done and earlier GSDD work/i,
+    assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
       'distilled/README.md must keep the same brief appreciative lineage note. FIX: Mirror the concise lineage note in the distilled public surface.');
     assert.match(helpText, /Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-\*, and \.planning\//i,
       'init-runtime help text must explain the retained technical contracts explicitly. FIX: Add the Workspine-plus-retained-contract note to the help text.');

@@ -11,10 +11,12 @@
 npx gsdd-cli init
 ```
 
-**Directly validated:** Claude Code, Codex CLI, and OpenCode.
+**Directly validated today:** Claude Code, Codex CLI, and OpenCode.
 **Qualified support:** Cursor, Copilot, and Gemini CLI use the same portable workflow surfaces but do not have equal proof or equal runtime ergonomics.
 
 </div>
+
+One repo-native spine for planning, checking, execution, verification, and handoff — so AI-assisted work survives cold starts, runtime switches, and session loss.
 
 ---
 
@@ -22,7 +24,7 @@ npx gsdd-cli init
 
 Workspine is a repo-native delivery spine for long-horizon AI-assisted software work. It keeps planning, execution, verification, handoff, and progress state in the repo so work survives cold starts, runtime switches, and session loss.
 
-Workspine is the product name. The package, CLI commands, workflow prefixes, and workspace directory remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` — these are stable technical contracts, not rename residue.
+Workspine is the product name. The package, CLI commands, workflow prefixes, and workspace directory remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` — these are retained technical contracts, not rename residue.
 
 ### Lineage
 
@@ -165,7 +167,7 @@ npx gsdd-cli update --tools claude     # Update specific platform only
 npx gsdd-cli update --templates        # Refresh .planning/templates/ and role contracts from framework source
 ```
 
-### Headless Mode (CI / Automation)
+### Non-Interactive Mode (CI / Automation)
 
 For non-interactive environments:
 
@@ -174,7 +176,7 @@ npx gsdd-cli init --auto --tools claude
 npx gsdd-cli init --auto --tools claude --brief path/to/PRD.md
 ```
 
-`--auto` skips interactive prompts, uses smart defaults (`autoAdvance: true` in config). `--brief` copies a project document to `.planning/PROJECT_BRIEF.md` for `new-project` to consume.
+`--auto` skips the interactive install wizard and uses default configuration. It does **not** run downstream workflows (`new-project`, `plan`, `execute`, `verify`) — those are always explicit. `--brief` copies a project document to `.planning/PROJECT_BRIEF.md` for `new-project` to consume.
 
 If you already know exactly what to generate, `--tools ...` remains the manual path. The wizard is the primary onboarding UX; flags remain the advanced/headless contract.
 

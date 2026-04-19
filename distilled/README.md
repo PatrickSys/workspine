@@ -1,8 +1,8 @@
 # Workspine
 
-A portable multi-runtime software delivery framework for long-horizon AI-assisted work.
+A repo-native delivery spine for planning, checking, execution, verification, and handoff of long-horizon AI-assisted work.
 
-Workspine gives long-horizon AI-assisted work a durable repo-native contract for planning, checking, execution, verification, and handoff. The retained package and CLI contracts remain `gsdd-cli` / `gsdd`.
+Workspine keeps planning, execution, verification, handoff, and progress state in the repo so work survives cold starts, runtime switches, and session loss. The retained package and CLI contracts remain `gsdd-cli` / `gsdd`.
 
 ## What This Is
 
@@ -13,9 +13,9 @@ Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:
 
 It gives serious AI-assisted work one durable repo workflow spine for planning, checking, execution, verification, and handoff without pretending to be a hosted orchestration layer.
 
-Workspine is the public product name for this milestone. The package, command, workflow names, and workspace stay `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` as retained technical contracts.
+Workspine is the product name. The package, CLI commands, workflow prefixes, and workspace directory remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` — these are retained technical contracts, not rename residue.
 
-Workspine started by distilling ideas from Get Shit Done and earlier GSDD work because the long-horizon workflow spine was genuinely strong. This repo keeps that lineage explicit while taking a different path on purpose: lower token burn, fewer public workflow surfaces, less runtime-specific coupling, and a stronger multi-runtime posture.
+Workspine began as a fork of Get Shit Done, whose long-horizon delivery spine proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native delivery spine with fewer public workflow surfaces, generated runtime surfaces from a portable core, evidence-gated closure, and provenance-aware continuity.
 
 Launch proof posture:
 - Directly validated in repo truth: Claude Code, Codex CLI, OpenCode
@@ -164,7 +164,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 
 ```
 distilled/
-  DESIGN.md                # design decisions and rationale (51 decisions, evidence-backed)
+  DESIGN.md                # design decisions and rationale (52 decisions, evidence-backed)
   EVIDENCE-INDEX.md        # source-to-decision index for durable research-backed claims
   SKILL.md                 # primary entry point (plain markdown)
   workflows/

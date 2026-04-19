@@ -1267,9 +1267,11 @@ describe('G3 — File Size Guards', () => {
   // plan.md ~453 lines after D29 approach exploration (research subagent prompt extracted to role contract)
   // plan.md ~478 lines after Phase 2 spec_quality_check section addition (D1 ambiguity gate)
   // Phase 9 adds cross-runtime assurance-chain contract details to plan/execute.
+  // v1.3.0 engine hardening added evidence-gated closure and lifecycle preflight
+  // details to execute/verify, pushing them slightly past previous ceilings.
   // These workflows remain bounded but need a slightly higher ceiling to keep the
   // contract in the canonical portable surface instead of scattering it elsewhere.
-  const WORKFLOW_EXEMPT = { 'new-project.md': 430, 'plan.md': 520, 'execute.md': 440 };
+  const WORKFLOW_EXEMPT = { 'new-project.md': 430, 'plan.md': 530, 'execute.md': 460, 'verify.md': 440 };
 
   for (const wf of getWorkflowFiles()) {
     const limit = WORKFLOW_EXEMPT[wf] || SIZE_LIMITS.workflow;
@@ -1621,13 +1623,16 @@ describe('G12 — Documentation Accuracy Guards', () => {
   });
 
   // G12.3: CLI commands completeness — README table includes all registered commands
+  // lifecycle-preflight is internal/agent-facing and intentionally excluded from the README CLI table
   test('root README CLI commands table includes all registered commands', () => {
     // Extract command names from COMMANDS object in bin/gsdd.mjs
     const commandsMatch = cliContent.match(/const COMMANDS = \{([\s\S]*?)\};/);
     assert.ok(commandsMatch, 'bin/gsdd.mjs must define COMMANDS object');
     const commandNames = [...commandsMatch[1].matchAll(/'?([a-z-]+)'?\s*:/g)].map(m => m[1]);
+    const internalCommands = ['lifecycle-preflight'];
 
     for (const cmd of commandNames) {
+      if (internalCommands.includes(cmd)) continue;
       assert.ok(
         rootReadme.includes(`gsdd ${cmd}`),
         `Root README CLI commands table missing "gsdd ${cmd}". FIX: Add "gsdd ${cmd}" row to the CLI Commands table.`
@@ -1673,9 +1678,9 @@ describe('G12 — Documentation Accuracy Guards', () => {
     );
   });
 
-  test('package.json description matches the portable framework launch framing', () => {
-    assert.match(pkg.description, /portable multi-runtime software delivery framework/i,
-      'package.json description must use the portable multi-runtime framework framing. FIX: Update the package description.');
+  test('package.json description matches the repo-native delivery spine launch framing', () => {
+    assert.match(pkg.description, /repo-native delivery spine/i,
+      'package.json description must use the repo-native delivery spine framing. FIX: Update the package description.');
     assert.match(pkg.description, /Claude Code.*Codex CLI.*OpenCode/i,
       'package.json description must name only the directly validated runtimes. FIX: Limit the description to the current proof set.');
   });
@@ -1808,13 +1813,13 @@ describe('G34b - Branch Safety Invariants', () => {
 });
 
 describe('G34c - Launch Surface Invariants', () => {
-  test('distilled README and package description share portable multi-runtime framework framing', () => {
+  test('distilled README and package description share repo-native delivery spine framing', () => {
     const distilledReadme = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'README.md'), 'utf-8');
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
-    assert.match(distilledReadme, /portable multi-runtime software delivery framework/i,
-      'distilled/README.md must keep the portable multi-runtime framework framing. FIX: Align the distilled intro to the launch story.');
-    assert.match(pkg.description, /portable multi-runtime software delivery framework/i,
-      'package.json description must keep the portable multi-runtime framework framing. FIX: Keep package metadata aligned with the launch story.');
+    assert.match(distilledReadme, /repo-native delivery spine/i,
+      'distilled/README.md must keep the repo-native delivery spine framing. FIX: Align the distilled intro to the launch story.');
+    assert.match(pkg.description, /repo-native delivery spine/i,
+      'package.json description must keep the repo-native delivery spine framing. FIX: Keep package metadata aligned with the launch story.');
   });
 
   test('agents block does not carry launch proof posture', () => {
@@ -1893,9 +1898,9 @@ describe('G34e - Phase 24 Public Naming Invariants', () => {
       'README.md must keep the retained naming stack explicit. FIX: Spell out the retained technical contracts.');
     assert.match(userGuide, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.planning\/`/i,
       'docs/USER-GUIDE.md must keep the retained naming stack explicit. FIX: Explain the retained technical contracts in the guide intro.');
-    assert.match(readme, /started by distilling ideas from Get Shit Done and earlier GSDD work/i,
+    assert.match(readme, /began as a fork of.*Get Shit Done/i,
       'README.md must preserve the brief appreciative lineage note. FIX: Keep the lineage explicit but secondary.');
-    assert.match(distilledReadme, /started by distilling ideas from Get Shit Done and earlier GSDD work/i,
+    assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
       'distilled/README.md must preserve the same concise lineage note. FIX: Keep the public surfaces aligned.');
   });
 });
