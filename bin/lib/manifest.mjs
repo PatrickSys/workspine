@@ -42,6 +42,7 @@ export function hashDirectory(dir, baseDir = dir) {
 export function buildManifest({ planningDir, frameworkVersion }) {
   const templatesDir = join(planningDir, 'templates');
   const rolesDir = join(templatesDir, 'roles');
+  const runtimeHelpersDir = join(planningDir, 'bin');
 
   // Template subcategories
   const delegatesHashes = hashDirectory(join(templatesDir, 'delegates'), join(templatesDir, 'delegates'));
@@ -69,6 +70,8 @@ export function buildManifest({ planningDir, frameworkVersion }) {
     }
   }
 
+  const runtimeHelpersHashes = hashDirectory(runtimeHelpersDir, planningDir);
+
   return {
     frameworkVersion,
     generatedAt: new Date().toISOString(),
@@ -79,6 +82,7 @@ export function buildManifest({ planningDir, frameworkVersion }) {
       root: rootHashes,
     },
     roles: rolesHashes,
+    runtimeHelpers: runtimeHelpersHashes,
   };
 }
 

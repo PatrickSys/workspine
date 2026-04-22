@@ -16,8 +16,8 @@ This is a read-only workflow. No files are created, modified, or deleted. If `.p
 `progress` stays read-only.
 
 - Derive lifecycle posture from repo truth only; do not mutate phase or milestone state from this workflow.
-- Do not call `gsdd phase-status` here.
-- If you recommend a next step that crosses a lifecycle boundary, the downstream mutating workflow must rerun its own `gsdd lifecycle-preflight ...` gate before acting.
+- Do not call `node .planning/bin/gsdd.mjs phase-status` here.
+- If you recommend a next step that crosses a lifecycle boundary, the downstream mutating workflow must rerun its own `node .planning/bin/gsdd.mjs lifecycle-preflight ...` gate before acting.
 </lifecycle_boundary>
 
 <process>

@@ -444,6 +444,13 @@
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `get-shit-done/workflows/new-project.md`, `get-shit-done/workflows/quick.md`
 
+## D58 — Local Workflow Helper Launcher
+- `bin/lib/rendering.mjs` (`renderPlanningCliLauncher` and `.planning/bin/gsdd*` shim rendering for a machine-independent local helper surface)
+- `bin/lib/init-flow.mjs` (`gsdd init` / `gsdd update` generation of `.planning/bin/gsdd*`)
+- `bin/lib/runtime-freshness.mjs`, `bin/lib/manifest.mjs`, `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`
+- `distilled/workflows/execute.md`, `distilled/workflows/verify.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`
+- `tests/gsdd.init.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.manifest.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
 ---
 
 ## Maintenance

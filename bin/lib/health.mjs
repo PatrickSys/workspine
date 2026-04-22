@@ -58,7 +58,9 @@ export function createCmdHealth(ctx) {
 
     // E3: templates/ missing
     const templatesDir = join(planningDir, 'templates');
+    const runtimeHelpersDir = join(planningDir, 'bin');
     const hasTemplatesDir = existsSync(templatesDir);
+    const hasRuntimeHelpersDir = existsSync(runtimeHelpersDir);
     const rolesDir = join(templatesDir, 'roles');
     const delegatesDir = join(templatesDir, 'delegates');
     const hasRolesDir = hasTemplatesDir && existsSync(rolesDir);
@@ -123,27 +125,28 @@ export function createCmdHealth(ctx) {
     // W1: generation-manifest.json missing
     const manifest = skipInstalledTemplateChecks ? null : readManifest(planningDir);
     if (!manifest && !skipInstalledTemplateChecks) {
-      warnings.push({ id: 'W1', severity: 'WARN', message: 'generation-manifest.json missing', fix: 'Run `gsdd update --templates` to create' });
+      warnings.push({ id: 'W1', severity: 'WARN', message: 'generation-manifest.json missing', fix: 'Run `gsdd update` to create' });
     }
 
     // W2 + W3: template/role hash mismatches and missing files
     if (manifest && hasTemplatesDir) {
       const allCategories = [
-        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null },
-        { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research },
-        { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase },
-        { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root },
-        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null },
+        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null, fixCommand: 'gsdd update --templates' },
+        { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research, fixCommand: 'gsdd update --templates' },
+        { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase, fixCommand: 'gsdd update --templates' },
+        { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root, fixCommand: 'gsdd update --templates' },
+        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null, fixCommand: 'gsdd update --templates' },
+        { name: 'runtime helpers', dir: planningDir, hashes: hasRuntimeHelpersDir ? manifest.runtimeHelpers : null, fixCommand: 'gsdd update' },
       ];
 
       for (const cat of allCategories) {
         if (!cat.hashes) continue;
         const result = detectModifications(cat.dir, cat.hashes);
         if (result.modified.length > 0) {
-          warnings.push({ id: 'W2', severity: 'WARN', message: `${cat.name}: ${result.modified.length} file(s) modified locally (${result.modified.join(', ')})`, fix: 'Intentional? Run `gsdd update --templates` to reset' });
+          warnings.push({ id: 'W2', severity: 'WARN', message: `${cat.name}: ${result.modified.length} file(s) modified locally (${result.modified.join(', ')})`, fix: `Intentional? Run \`${cat.fixCommand}\` to reset` });
         }
         if (result.missing.length > 0) {
-          warnings.push({ id: 'W3', severity: 'WARN', message: `${cat.name}: ${result.missing.length} file(s) missing from disk (${result.missing.join(', ')})`, fix: 'Run `gsdd update --templates` to restore' });
+          warnings.push({ id: 'W3', severity: 'WARN', message: `${cat.name}: ${result.missing.length} file(s) missing from disk (${result.missing.join(', ')})`, fix: `Run \`${cat.fixCommand}\` to restore` });
         }
       }
     }

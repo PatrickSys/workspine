@@ -199,6 +199,7 @@ Platforms (for --tools):
 
 Notes:
   - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)
+  - init also generates a local .planning/bin/gsdd* helper surface so workflow-embedded helper commands do not depend on a global gsdd binary
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
   - running plain \`gsdd init\` in a terminal opens the guided runtime-selection wizard
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing

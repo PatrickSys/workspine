@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'fs';
-import { join, isAbsolute } from 'path';
-import { renderSkillContent } from './rendering.mjs';
-import { buildManifest, writeManifest } from './manifest.mjs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'fs';
+import { dirname, join, isAbsolute } from 'path';
+import { buildPlanningCliHelperEntries, renderSkillContent } from './rendering.mjs';
+import { buildManifest, readManifest, writeManifest } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './models.mjs';
 import { installProjectTemplates, refreshTemplates } from './templates.mjs';
@@ -109,6 +109,9 @@ export function createCmdInit(ctx) {
     generateOpenStandardSkills(ctx.cwd, ctx.workflows);
     console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
 
+    generatePlanningCliHelpers(ctx);
+    console.log('  - generated local workflow helpers (.planning/bin/gsdd*)');
+
     for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {
       adapter.generate();
       validateKindContract(adapter, ctx.cwd);
@@ -154,6 +157,16 @@ export function createCmdUpdate(ctx) {
       updated = true;
     }
 
+    if (existsSync(ctx.planningDir)) {
+      if (isDry) {
+        console.log('  - would update local workflow helpers (.planning/bin/gsdd*)');
+      } else {
+        generatePlanningCliHelpers(ctx);
+        console.log('  - updated local workflow helpers (.planning/bin/gsdd*)');
+      }
+      updated = true;
+    }
+
     for (const adapter of getAdaptersToUpdate(ctx.adapters, platforms)) {
       if (isDry) {
         console.log(`  - would update ${adapter.name} adapter`);
@@ -170,10 +183,16 @@ export function createCmdUpdate(ctx) {
     } else if (isDry) {
       console.log('\nDry run complete. No files were written.\n');
     } else {
-      if (doTemplates && existsSync(ctx.planningDir)) {
-        const manifest = buildManifest({ planningDir: ctx.planningDir, frameworkVersion: ctx.frameworkVersion });
-        writeManifest(ctx.planningDir, manifest);
-        console.log('  - updated generation manifest');
+      if (existsSync(ctx.planningDir)) {
+        const manifest = buildUpdateManifest({
+          planningDir: ctx.planningDir,
+          frameworkVersion: ctx.frameworkVersion,
+          updateTemplates: doTemplates,
+        });
+        if (manifest) {
+          writeManifest(ctx.planningDir, manifest);
+          console.log('  - updated generation manifest');
+        }
       }
       console.log('\nAdapters updated.\n');
     }
@@ -186,6 +205,46 @@ function generateOpenStandardSkills(cwd, workflows) {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(workflow));
   }
+}
+
+function generatePlanningCliHelpers(ctx) {
+  for (const entry of buildPlanningCliHelperEntries({
+    packageName: ctx.packageName,
+    packageVersion: ctx.packageVersion,
+  })) {
+    const absolutePath = join(ctx.planningDir, entry.relativePath);
+    mkdirSync(dirname(absolutePath), { recursive: true });
+    writeFileSync(absolutePath, entry.content);
+    if (!absolutePath.endsWith('.cmd')) {
+      chmodSync(absolutePath, 0o755);
+    }
+  }
+}
+
+function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates }) {
+  const existingManifest = readManifest(planningDir);
+  const nextManifest = buildManifest({ planningDir, frameworkVersion });
+
+  if (existingManifest && !updateTemplates) {
+    nextManifest.templates = existingManifest.templates ?? nextManifest.templates;
+    nextManifest.roles = existingManifest.roles ?? nextManifest.roles;
+  }
+
+  if (existingManifest && manifestsEqualIgnoringTimestamp(existingManifest, nextManifest)) {
+    return null;
+  }
+
+  return nextManifest;
+}
+
+function manifestsEqualIgnoringTimestamp(left, right) {
+  return JSON.stringify(stripManifestTimestamp(left)) === JSON.stringify(stripManifestTimestamp(right));
+}
+
+function stripManifestTimestamp(manifest) {
+  if (!manifest || typeof manifest !== 'object') return manifest;
+  const { generatedAt, ...rest } = manifest;
+  return rest;
 }
 
 async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedConfig = null }) {

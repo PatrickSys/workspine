@@ -30,6 +30,91 @@ agent: ${workflow.agent}
 ${workflowContent}`;
 }
 
+function renderPlanningCliLauncher({ packageName = 'gsdd-cli', packageVersion }) {
+  if (!packageVersion) {
+    throw new Error('renderPlanningCliLauncher requires packageVersion');
+  }
+
+  const packageSpec = `${packageName}@${packageVersion}`;
+
+  return `#!/usr/bin/env node
+
+import { spawnSync } from 'node:child_process';
+
+const packageSpec = ${JSON.stringify(packageSpec)};
+const args = process.argv.slice(2);
+const env = { ...process.env };
+
+function forwardResult(result, fallbackMessage) {
+  if (result.error) {
+    console.error(fallbackMessage ?? result.error.message);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (typeof result.status === 'number') {
+    process.exitCode = result.status;
+    return;
+  }
+
+  if (result.signal) {
+    process.exitCode = 1;
+  }
+}
+
+function runPackagedCli() {
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  return spawnSync(npmCommand, ['exec', '--yes', \`--package=\${packageSpec}\`, '--', 'gsdd', ...args], {
+    stdio: 'inherit',
+    env,
+  });
+}
+
+if (env.GSDD_CLI_PATH) {
+  const localResult = spawnSync(process.execPath, [env.GSDD_CLI_PATH, ...args], {
+    stdio: 'inherit',
+    env,
+  });
+  forwardResult(localResult, 'Failed to run the local GSDD CLI path from GSDD_CLI_PATH.');
+} else {
+  const packagedResult = runPackagedCli();
+  forwardResult(packagedResult, \`Failed to run \${packageSpec} via npm exec.\`);
+}
+`;
+}
+
+function renderPlanningCliShellShim() {
+  return `#!/usr/bin/env sh
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec node "$SCRIPT_DIR/gsdd.mjs" "$@"
+`;
+}
+
+function renderPlanningCliCmdShim() {
+  return `@echo off
+setlocal
+node "%~dp0gsdd.mjs" %*
+`;
+}
+
+function buildPlanningCliHelperEntries({ packageName = 'gsdd-cli', packageVersion }) {
+  return [
+    {
+      relativePath: 'bin/gsdd.mjs',
+      content: renderPlanningCliLauncher({ packageName, packageVersion }),
+    },
+    {
+      relativePath: 'bin/gsdd',
+      content: renderPlanningCliShellShim(),
+    },
+    {
+      relativePath: 'bin/gsdd.cmd',
+      content: renderPlanningCliCmdShim(),
+    },
+  ];
+}
+
 function buildPortableSkillEntries(workflows) {
   return workflows.map((workflow) => ({
     relativePath: `.agents/skills/${workflow.name}/SKILL.md`,
@@ -92,12 +177,14 @@ function upsertBoundedBlock(existing, blockContent) {
 }
 
 export {
+  buildPlanningCliHelperEntries,
   buildPortableSkillEntries,
   getDelegateContent,
   getWorkflowContent,
   renderAgentsBoundedBlock,
   renderAgentsFileContent,
   renderOpenCodeCommandContent,
+  renderPlanningCliLauncher,
   renderSkillContent,
   upsertBoundedBlock,
 };

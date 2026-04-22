@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import {
+  buildPlanningCliHelperEntries,
   buildPortableSkillEntries,
   getDelegateContent,
   renderOpenCodeCommandContent,
@@ -27,6 +29,10 @@ import {
   loadProjectModelConfig,
   resolveRuntimeAgentModel,
 } from './models.mjs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PACKAGE_JSON = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
 function normalizeContent(content) {
   return String(content).replace(/\r\n/g, '\n');
@@ -144,8 +150,25 @@ function buildCodexEntries({ cwd }) {
   ];
 }
 
+function buildWorkspaceHelperEntries() {
+  return buildPlanningCliHelperEntries({
+    packageName: PACKAGE_JSON.name,
+    packageVersion: PACKAGE_JSON.version,
+  }).map((entry) => ({
+    relativePath: `.planning/${entry.relativePath}`,
+    expectedContent: entry.content,
+  }));
+}
+
 export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workflows }) {
   return [
+    {
+      runtime: 'workspace-helper',
+      label: 'workspace workflow helper',
+      root: '.planning/bin',
+      repairCommand: 'gsdd update',
+      entries: buildWorkspaceHelperEntries(),
+    },
     {
       runtime: 'portable',
       label: 'portable skills',

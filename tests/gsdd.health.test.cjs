@@ -429,6 +429,17 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.match(warning.fix, /gsdd update/);
   });
 
+  test('local workflow helper drift → W11 with gsdd update guidance', async () => {
+    await initWorkspace();
+    fs.appendFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'), '\n// drift\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, 'should warn when local workflow helper drifts');
+    assert.match(warning.message, /\.planning\/bin\/gsdd\.mjs/);
+    assert.match(warning.fix, /gsdd update/);
+  });
+
   test('no installed generated runtime surfaces → no W11', async () => {
     await initWorkspace();
     for (const rel of ['.agents', '.claude', '.opencode', '.codex']) {

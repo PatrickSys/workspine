@@ -164,7 +164,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 
 ```
 distilled/
-  DESIGN.md                # design decisions and rationale (52 decisions, evidence-backed)
+  DESIGN.md                # design decisions and rationale (58 decisions, evidence-backed)
   EVIDENCE-INDEX.md        # source-to-decision index for durable research-backed claims
   SKILL.md                 # primary entry point (plain markdown)
   workflows/

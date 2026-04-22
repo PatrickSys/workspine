@@ -19,7 +19,7 @@ When a checkpoint's `runtime` differs from the inferred current runtime, surface
 <lifecycle_preflight>
 Before loading checkpoint state or cleaning up any checkpoint file, run:
 
-- `gsdd lifecycle-preflight resume`
+- `node .planning/bin/gsdd.mjs lifecycle-preflight resume`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring resume eligibility from workflow-local prose.
 
@@ -315,8 +315,8 @@ Wait for user selection.
 <cleanup_checkpoint>
 Immediately after the user confirms their action selection (before routing to the target workflow):
 - If the user chose to resume from `.continue-here.md`:
-  1. Run `gsdd file-op copy .planning/.continue-here.md .planning/.continue-here.bak`.
-  2. After the copy succeeds, run `gsdd file-op delete .planning/.continue-here.md`.
+  1. Run `node .planning/bin/gsdd.mjs file-op copy .planning/.continue-here.md .planning/.continue-here.bak`.
+  2. After the copy succeeds, run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.md`.
 - If the user chose a different action (not based on the checkpoint), leave `.continue-here.md` in place for a future resume.
 
 Copying before deleting ensures the checkpoint survives a session crash between deletion and dispatch. `.continue-here.bak` is cleaned up by the downstream workflow after absorbing the judgment, or by the next `pause.md` run.

@@ -195,6 +195,8 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 | `gsdd models clear --runtime <rt> --agent <id>` | Remove runtime override |
 | `gsdd help` | Show all commands |
 
+`init` generates a local `.planning/bin/gsdd*` helper surface. Workflow-embedded helper commands still use `node .planning/bin/gsdd.mjs ...` as the portable contract, so lifecycle preflight, file-op, and phase-status mechanics do not depend on a global `gsdd` binary after init.
+
 ### Platform flags for `--tools`
 
 | Flag | What's generated |
@@ -402,6 +404,10 @@ Switch to budget profile: `gsdd models profile budget`. Disable research and pla
   SPEC.md                   # Living specification (goals, constraints, decisions)
   ROADMAP.md                # Phased delivery plan with inline status
   config.json               # Project configuration
+  bin/
+    gsdd                    # POSIX shim for the local helper surface
+    gsdd.cmd                # Windows shim for the local helper surface
+    gsdd.mjs                # Canonical local workflow-helper launcher
   generation-manifest.json  # SHA-256 hashes for template versioning
   .continue-here.md         # Session checkpoint (created by pause, consumed by resume)
   research/                 # Domain research outputs

@@ -16,7 +16,7 @@ Before starting, read these files:
 <lifecycle_preflight>
 Before determining milestone scope or spawning the integration checker, run:
 
-- `gsdd lifecycle-preflight audit-milestone`
+- `node .planning/bin/gsdd.mjs lifecycle-preflight audit-milestone`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone eligibility from workflow-local prose.
 

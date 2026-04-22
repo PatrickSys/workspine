@@ -51,9 +51,13 @@ describe('generation manifest', () => {
     assert.ok(manifest.templates.codebase, 'manifest must have templates.codebase');
     assert.ok(manifest.templates.root, 'manifest must have templates.root');
     assert.ok(manifest.roles, 'manifest must have roles');
+    assert.ok(manifest.runtimeHelpers, 'manifest must have runtimeHelpers');
     assert.ok(Object.keys(manifest.templates.delegates).length >= 10);
     assert.ok(Object.keys(manifest.roles).length >= 9);
     assert.match(Object.values(manifest.templates.delegates)[0], /^[a-f0-9]{64}$/);
+    assert.match(manifest.runtimeHelpers['bin/gsdd.mjs'], /^[a-f0-9]{64}$/);
+    assert.match(manifest.runtimeHelpers['bin/gsdd'], /^[a-f0-9]{64}$/);
+    assert.match(manifest.runtimeHelpers['bin/gsdd.cmd'], /^[a-f0-9]{64}$/);
   });
 
   test('init produces non-empty research, codebase, and root manifest groups', async () => {

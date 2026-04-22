@@ -57,7 +57,7 @@ Question budget:
 </gather_state>
 
 <write_checkpoint>
-Before writing the new checkpoint, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` to clear the prior session backup. This is cleanup-only and should no-op safely if the backup is absent.
+Before writing the new checkpoint, run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` to clear the prior session backup. This is cleanup-only and should no-op safely if the backup is absent.
 
 When the current branch/worktree is known to be evidence-only, stale/spent, or otherwise not the next intended execution surface, say that explicitly in `<current_state>`, `<remaining_work>`, and `<anti_regression>`. Do not flatten evidence-only local state into the same continuity story as the next execution surface.
 

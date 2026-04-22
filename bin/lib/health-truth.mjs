@@ -91,7 +91,7 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, option
     warnings.push({
       id: 'W11',
       severity: 'WARN',
-      message: `Installed generated runtime surfaces drift from current render output (${summarizeRuntimeFreshnessIssues(options.runtimeFreshnessReport)})`,
+      message: `Installed generated runtime and workflow-helper surfaces drift from current render output (${summarizeRuntimeFreshnessIssues(options.runtimeFreshnessReport)})`,
       fix: getRuntimeFreshnessRepairGuidance(options.runtimeFreshnessReport),
     });
   }

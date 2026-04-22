@@ -27,7 +27,7 @@ Before starting, read these files:
 <lifecycle_preflight>
 Before presenting the last milestone or gathering new milestone goals, run:
 
-- `gsdd lifecycle-preflight new-milestone`
+- `node .planning/bin/gsdd.mjs lifecycle-preflight new-milestone`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone-start eligibility from workflow-local prose.
 

@@ -28,7 +28,7 @@ Before starting, read these files:
 <lifecycle_preflight>
 Before verifying readiness or gathering archive stats, run:
 
-- `gsdd lifecycle-preflight complete-milestone`
+- `node .planning/bin/gsdd.mjs lifecycle-preflight complete-milestone`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone-close eligibility from workflow-local prose.
 

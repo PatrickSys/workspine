@@ -2,7 +2,7 @@
 
 // gsdd - Workspine CLI
 
-import { realpathSync } from 'fs';
+import { realpathSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createAdapterRegistry } from './adapters/index.mjs';
@@ -25,6 +25,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', 'distilled');
 const AGENTS_DIR = join(__dirname, '..', 'agents');
+const PACKAGE_JSON = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
 const CWD = process.cwd();
 const IS_MAIN = process.argv[1]
   ? realpathSync(process.argv[1]) === realpathSync(__filename)
@@ -66,6 +67,8 @@ function createCliContext(cwd = process.cwd()) {
     planningDir: join(cwd, '.planning'),
     distilledDir: DISTILLED_DIR,
     agentsDir: AGENTS_DIR,
+    packageName: PACKAGE_JSON.name,
+    packageVersion: PACKAGE_JSON.version,
     workflows: WORKFLOWS,
     frameworkVersion: FRAMEWORK_VERSION,
     adapters: createAdapterRegistry({

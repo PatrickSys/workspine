@@ -68,6 +68,7 @@
 55. [Brownfield Continuity Anchor And Mismatch Split](#d55---brownfield-continuity-anchor-and-mismatch-split)
 56. [Executable Brownfield Routing And Widen-Only Escalation](#d56---executable-brownfield-routing-and-widen-only-escalation)
 57. [Bounded Brownfield Growth And Context-Preserving Milestone Handoff](#d57---bounded-brownfield-growth-and-context-preserving-milestone-handoff)
+58. [Local Workflow Helper Launcher](#d58---local-workflow-helper-launcher)
 
 ---
 
@@ -2580,6 +2581,50 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Milestone initiation can inherit real brownfield context without adding a second handoff file or restarting discovery.
 - `progress` and `resume` can present widening as a deliberate choice while keeping `CHANGE.md` primary until the user intentionally crosses the lifecycle boundary.
 - Phase 43 can now verify one concrete seam: bounded growth and context-preserving milestone handoff from repo truth.
+
+## D58 - Local Workflow Helper Launcher
+
+**Decision (2026-04-22):** Workflow-embedded CLI helper commands must run through a generated local helper surface under `.planning/bin/`, with `.planning/bin/gsdd.mjs` as the canonical launcher, instead of assuming a bare `gsdd` binary is available on the consumer repo's PATH.
+
+**Context:**
+- Public onboarding already leads with `npx gsdd-cli init`, which works even when the package is not globally installed.
+- The authored workflow surfaces had drifted into a different assumption: embedded helper commands such as `lifecycle-preflight`, `file-op`, and `phase-status` were written as bare `gsdd ...` invocations.
+- That split contract caused consumer friction in the exact place the deterministic helper seam was supposed to help: a workflow could initialize successfully, then fail later because the repo did not have a global `gsdd` on PATH.
+- The helper surface must stay out of `.agents/` ownership so it does not pollute unrelated `.agents` folders or leak into generated governance.
+
+**Decision:**
+- Generate `.planning/bin/gsdd.mjs` plus thin repo-local shell shims (`.planning/bin/gsdd`, `.planning/bin/gsdd.cmd`) on `gsdd init` for every initialized workspace.
+- Regenerate that helper surface on `gsdd update` whenever `.planning/` exists.
+- Keep the launcher machine-independent by resolving back to the published `gsdd-cli` package version used for generation rather than embedding framework checkout paths, and invoke the packaged `gsdd` bin explicitly through `npm exec --package=... -- gsdd ...` instead of the fragile bare `npx <package>` form.
+- Route workflow-embedded helper commands through `node .planning/bin/gsdd.mjs ...` for the deterministic helper seam:
+  - `lifecycle-preflight`
+  - `file-op`
+  - `phase-status`
+- Keep `.agents/skills/` as the canonical portable workflow discovery surface and keep generated `AGENTS.md` governance-only. No `.agents/bin` surface is introduced.
+
+**Why this fits the codebase:**
+- It preserves the existing skills-first architecture instead of inventing a second discovery or governance path.
+- It fixes the actual consumer DX failure at the point where workflows invoke deterministic helper commands.
+- It keeps ownership aligned with `.planning/`, which already holds the other local runtime mechanics and generation-manifest state.
+
+**Evidence:**
+- `bin/lib/init-flow.mjs`
+- `bin/lib/rendering.mjs`
+- `bin/lib/runtime-freshness.mjs`
+- `bin/lib/manifest.mjs`
+- `bin/lib/health.mjs`
+- `distilled/workflows/execute.md`
+- `distilled/workflows/verify.md`
+- `distilled/workflows/resume.md`
+- `tests/gsdd.init.test.cjs`
+- `tests/gsdd.health.test.cjs`
+- `tests/gsdd.manifest.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+
+**Consequences:**
+- Consumer repos no longer need a global `gsdd` binary for workflow-embedded helper mechanics after init.
+- Helper-command freshness is now owned under `.planning/` without widening `.agents` install detection.
+- Generated governance remains compact and routing-focused because helper-surface instructions stay out of `AGENTS.md`.
 
 ## Maintenance
 

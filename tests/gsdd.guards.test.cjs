@@ -2553,37 +2553,51 @@ describe('Phase 18 deterministic CLI guards', () => {
       'Help text must document lifecycle-preflight. FIX: Add lifecycle-preflight command to cmdHelp output.');
   });
 
-  test('affected workflows route checkpoint file ops through gsdd file-op', () => {
+  test('local helper renderer uses explicit packaged gsdd execution and emits shell shims', async () => {
+    const renderingPath = path.join(ROOT, 'bin', 'lib', 'rendering.mjs');
+    const renderingSource = fs.readFileSync(renderingPath, 'utf-8');
+
+    assert.match(renderingSource, /npm(?:\.cmd)?'.*exec.*--package=/s,
+      'rendering.mjs must invoke the packaged CLI via npm exec --package=... -- gsdd. FIX: Replace the fragile bare npx package invocation.');
+    assert.doesNotMatch(renderingSource, /\['--yes', packageSpec, \.\.\.args]/,
+      'rendering.mjs must not keep the old npx <packageSpec> invocation shape. FIX: Remove the bare package execution path.');
+    assert.match(renderingSource, /relativePath:\s*'bin\/gsdd'/,
+      'rendering.mjs must emit a POSIX repo-local gsdd shim. FIX: Add the .planning/bin/gsdd wrapper.');
+    assert.match(renderingSource, /relativePath:\s*'bin\/gsdd\.cmd'/,
+      'rendering.mjs must emit a Windows repo-local gsdd shim. FIX: Add the .planning/bin/gsdd.cmd wrapper.');
+  });
+
+  test('affected workflows route checkpoint file ops through the local workflow helper launcher', () => {
     const expectations = [
-      ['pause.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
-      ['resume.md', /gsdd file-op copy \.planning\/\.continue-here\.md \.planning\/\.continue-here\.bak/],
-      ['resume.md', /gsdd file-op delete \.planning\/\.continue-here\.md/],
-      ['plan.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
-      ['execute.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
-      ['verify.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
-      ['quick.md', /gsdd file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['pause.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['resume.md', /node \.planning\/bin\/gsdd\.mjs file-op copy \.planning\/\.continue-here\.md \.planning\/\.continue-here\.bak/],
+      ['resume.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.md/],
+      ['plan.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['execute.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['verify.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['quick.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
     ];
 
     for (const [name, pattern] of expectations) {
       const content = fs.readFileSync(path.join(workflowsDir, name), 'utf-8');
       assert.match(content, pattern,
-        `${name} must route deterministic checkpoint file ops through gsdd file-op. FIX: Replace manual copy/delete instructions with gsdd file-op.`);
+        `${name} must route deterministic checkpoint file ops through node .planning/bin/gsdd.mjs file-op. FIX: Replace manual copy/delete instructions with the local workflow helper launcher.`);
     }
   });
 
   test('resume.md no longer describes manual checkpoint copy/delete prose', () => {
     const content = fs.readFileSync(path.join(workflowsDir, 'resume.md'), 'utf-8');
     assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Copy `?\.planning\/\.continue-here\.md`? to `?\.planning\/\.continue-here\.bak`?/i,
-      'resume.md must not keep the old manual copy wording. FIX: Reference gsdd file-op copy only.');
+      'resume.md must not keep the old manual copy wording. FIX: Reference node .planning/bin/gsdd.mjs file-op copy only.');
     assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Delete `?\.planning\/\.continue-here\.md`?/i,
-      'resume.md must not keep the old manual delete wording. FIX: Reference gsdd file-op delete only.');
+      'resume.md must not keep the old manual delete wording. FIX: Reference node .planning/bin/gsdd.mjs file-op delete only.');
   });
 
-  test('execute.md and verify.md route roadmap status changes through gsdd phase-status', () => {
+  test('execute.md and verify.md route roadmap status changes through the local workflow helper launcher', () => {
     for (const name of ['execute.md', 'verify.md']) {
       const content = fs.readFileSync(path.join(workflowsDir, name), 'utf-8');
-      assert.match(content, /gsdd phase-status/,
-        `${name} must route ROADMAP phase status updates through gsdd phase-status. FIX: Replace manual checkbox mutation text.`);
+      assert.match(content, /node \.planning\/bin\/gsdd\.mjs phase-status/,
+        `${name} must route ROADMAP phase status updates through node .planning/bin/gsdd.mjs phase-status. FIX: Replace manual checkbox mutation text.`);
     }
   });
 });
@@ -3331,26 +3345,26 @@ describe('G44 - Engine Contract Hardening', () => {
   test('transition-sensitive workflow contracts route through lifecycle-preflight while progress stays read-only', () => {
     const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
     const checks = [
-      ['execute.md', /gsdd lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
-      ['verify.md', /gsdd lifecycle-preflight verify \{phase_num\} --expects-mutation phase-status/],
-      ['audit-milestone.md', /gsdd lifecycle-preflight audit-milestone/],
-      ['complete-milestone.md', /gsdd lifecycle-preflight complete-milestone/],
-      ['new-milestone.md', /gsdd lifecycle-preflight new-milestone/],
-      ['resume.md', /gsdd lifecycle-preflight resume/],
+      ['execute.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
+      ['verify.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight verify \{phase_num\} --expects-mutation phase-status/],
+      ['audit-milestone.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight audit-milestone/],
+      ['complete-milestone.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight complete-milestone/],
+      ['new-milestone.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight new-milestone/],
+      ['resume.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight resume/],
     ];
 
     for (const [file, pattern] of checks) {
       const content = fs.readFileSync(path.join(workflowsDir, file), 'utf-8');
       assert.match(content, pattern,
-        `${file} must route lifecycle eligibility through gsdd lifecycle-preflight. FIX: Restore the shared preflight invocation.`);
+        `${file} must route lifecycle eligibility through node .planning/bin/gsdd.mjs lifecycle-preflight. FIX: Restore the shared preflight invocation via the local workflow helper launcher.`);
     }
 
     const progress = fs.readFileSync(path.join(workflowsDir, 'progress.md'), 'utf-8');
     assert.match(progress, /progress` stays read-only|progress stays read-only/i,
       'progress.md must preserve the read-only lifecycle boundary. FIX: Keep the lifecycle_boundary read-only language.');
-    assert.match(progress, /Do not call `gsdd phase-status` here\./,
-      'progress.md must forbid lifecycle mutation via gsdd phase-status. FIX: Keep the explicit mutation ban.');
-    assert.match(progress, /downstream mutating workflow must rerun its own `gsdd lifecycle-preflight \.\.\.` gate before acting/i,
+    assert.match(progress, /Do not call `node \.planning\/bin\/gsdd\.mjs phase-status` here\./,
+      'progress.md must forbid lifecycle mutation via the local workflow helper launcher. FIX: Keep the explicit mutation ban.');
+    assert.match(progress, /downstream mutating workflow must rerun its own `node \.planning\/bin\/gsdd\.mjs lifecycle-preflight \.\.\.` gate before acting/i,
       'progress.md must push downstream lifecycle transitions back through lifecycle-preflight. FIX: Keep the downstream rerun instruction.');
   });
 

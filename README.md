@@ -63,7 +63,7 @@ Verification is a separate workflow with a separate context window, not a checkb
 <details>
 <summary>How it works</summary>
 
-Invariant suites (I-series), guard suites (G-series), and scenario suites (S-series) run on every change. Each assertion includes a `FIX:` instruction so failures are actionable. 52 documented design decisions in `distilled/DESIGN.md` record the rationale with evidence trails.
+Invariant suites (I-series), guard suites (G-series), and scenario suites (S-series) run on every change. Each assertion includes a `FIX:` instruction so failures are actionable. 58 documented design decisions in `distilled/DESIGN.md` record the rationale with evidence trails.
 
 </details>
 
@@ -104,6 +104,7 @@ In a terminal, `gsdd init` now opens a guided install wizard:
 
 Portable `.agents/skills/gsdd-*` skills are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline.
 When those generated surfaces exist locally, `gsdd health` checks them against current render output instead of asking you to trust manual review.
+`init` generates a local `.planning/bin/gsdd*` helper surface. Workflow-embedded helper commands still use `node .planning/bin/gsdd.mjs ...` as the portable contract, so execution-time lifecycle helpers do not depend on a global `gsdd` binary after init.
 
 ### Launch Proof Status
 
@@ -504,7 +505,7 @@ For detailed troubleshooting and recovery procedures, see the [User Guide](docs/
 
 ## Design Decisions
 
-This repo records 52 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
+This repo records 58 documented design decisions relative to GSD, each with evidence from source files and external research. See [`distilled/DESIGN.md`](distilled/DESIGN.md) for the full rationale.
 
 Key choices:
 - **4-file codebase standard** — drop state that rots (STRUCTURE, INTEGRATIONS, TESTING), keep rules that don't

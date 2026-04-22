@@ -1,0 +1,2365 @@
+- generic [ref=e2]:
+  - region
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=e6]:
+      - heading "Navigation Menu" [level=2] [ref=e7]
+      - generic [ref=e9]:
+        - button "Toggle navigation" [ref=e11] [cursor=pointer]
+        - link "Homepage" [ref=e17] [cursor=pointer]:
+          - /url: /
+          - img [ref=e18]
+        - generic [ref=e20]:
+          - link "Sign in" [ref=e21] [cursor=pointer]:
+            - /url: /login?return_to=https%3A%2F%2Fgithub.com%2FPatrickSys%2Fworkspine%2Fpull%2F90%2Ffiles
+          - button "Appearance settings" [ref=e24] [cursor=pointer]:
+            - img
+  - main [ref=e28]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e32]:
+          - img [ref=e33]
+          - link "PatrickSys" [ref=e36] [cursor=pointer]:
+            - /url: /PatrickSys
+          - generic [ref=e37]: /
+          - strong [ref=e38]:
+            - link "workspine" [ref=e39] [cursor=pointer]:
+              - /url: /PatrickSys/workspine
+          - generic [ref=e40]: Public
+        - generic [ref=e41]:
+          - list:
+            - listitem [ref=e42]:
+              - link "You must be signed in to change notification settings" [ref=e43] [cursor=pointer]:
+                - /url: /login?return_to=%2FPatrickSys%2Fworkspine
+                - img [ref=e44]
+                - text: Notifications
+            - listitem [ref=e46]:
+              - link "Fork 1" [ref=e47] [cursor=pointer]:
+                - /url: /login?return_to=%2FPatrickSys%2Fworkspine
+                - img [ref=e48]
+                - text: Fork
+                - generic "1" [ref=e50]
+            - listitem [ref=e51]:
+              - link "You must be signed in to star a repository" [ref=e53] [cursor=pointer]:
+                - /url: /login?return_to=%2FPatrickSys%2Fworkspine
+                - img [ref=e54]
+                - text: Star
+                - generic "10 users starred this repository" [ref=e56]: "10"
+      - navigation "Repository" [ref=e57]:
+        - list [ref=e58]:
+          - listitem [ref=e59]:
+            - link "Code" [ref=e60] [cursor=pointer]:
+              - /url: /PatrickSys/workspine
+              - img [ref=e61]
+              - generic [ref=e63]: Code
+          - listitem [ref=e64]:
+            - link "Issues" [ref=e65] [cursor=pointer]:
+              - /url: /PatrickSys/workspine/issues
+              - img [ref=e66]
+              - generic [ref=e69]: Issues
+          - listitem [ref=e70]:
+            - link "Pull requests 2" [ref=e71] [cursor=pointer]:
+              - /url: /PatrickSys/workspine/pulls
+              - img [ref=e72]
+              - generic [ref=e74]: Pull requests
+              - generic "2" [ref=e75]
+          - listitem [ref=e76]:
+            - link "Discussions" [ref=e77] [cursor=pointer]:
+              - /url: /PatrickSys/workspine/discussions
+              - img [ref=e78]
+              - generic [ref=e80]: Discussions
+          - listitem [ref=e81]:
+            - link "Actions" [ref=e82] [cursor=pointer]:
+              - /url: /PatrickSys/workspine/actions
+              - img [ref=e83]
+              - generic [ref=e85]: Actions
+          - listitem [ref=e86]:
+            - link "Projects" [ref=e87] [cursor=pointer]:
+              - /url: /PatrickSys/workspine/projects
+              - img [ref=e88]
+              - generic [ref=e90]: Projects
+          - listitem [ref=e91]:
+            - link "Security and quality" [ref=e92] [cursor=pointer]:
+              - /url: /PatrickSys/workspine/security
+              - img [ref=e93]
+              - generic [ref=e95]: Security and quality
+          - listitem [ref=e96]
+        - button "Additional navigation options" [ref=e100] [cursor=pointer]:
+          - img
+    - generic [ref=e106]:
+      - generic [ref=e108]:
+        - generic [ref=e110]:
+          - 'heading "fix: harden repo-local helper launcher resolution #90" [level=1] [ref=e111]'
+          - group [ref=e113]:
+            - button "New issue" [ref=e114] [cursor=pointer]
+        - generic [ref=e115]:
+          - 'generic "Status: Open" [ref=e117]':
+            - img [ref=e118]
+            - text: Open
+          - generic [ref=e120]:
+            - link "PatrickSys" [ref=e121] [cursor=pointer]:
+              - /url: /PatrickSys
+            - text: wants to merge 1 commit into
+            - generic "PatrickSys/workspine:main" [ref=e122]:
+              - link "main" [ref=e123] [cursor=pointer]:
+                - /url: /PatrickSys/workspine/tree/main
+                - generic [ref=e124]: main
+            - text: from
+            - generic "PatrickSys/workspine:feat/repo-local-helper-launcher" [ref=e125]:
+              - link "feat/repo-local-helper-launcher" [ref=e126] [cursor=pointer]:
+                - /url: /PatrickSys/workspine/tree/feat/repo-local-helper-launcher
+                - generic [ref=e127]: feat/repo-local-helper-launcher
+            - button "Copy" [ref=e130]:
+              - img [ref=e131]
+      - generic [ref=e135]:
+        - generic [ref=e137]: +283 −108
+        - navigation "Pull request tabs" [ref=e144]:
+          - link "Conversation 3" [ref=e145] [cursor=pointer]:
+            - /url: /PatrickSys/workspine/pull/90
+            - img [ref=e146]
+            - text: Conversation
+            - generic "3" [ref=e148]
+          - link "Commits 1" [ref=e149] [cursor=pointer]:
+            - /url: /PatrickSys/workspine/pull/90/commits
+            - img [ref=e150]
+            - text: Commits
+            - generic "1" [ref=e152]
+          - link "Checks 1" [ref=e153] [cursor=pointer]:
+            - /url: /PatrickSys/workspine/pull/90/checks
+            - img [ref=e154]
+            - text: Checks
+            - generic "1" [ref=e156]
+          - link "Files changed 24" [ref=e157] [cursor=pointer]:
+            - /url: /PatrickSys/workspine/pull/90/files
+            - img [ref=e158]
+            - text: Files changed
+            - generic "24" [ref=e160]
+      - generic [ref=e161]:
+        - generic [ref=e163]:
+          - 'generic "Status: Open" [ref=e166]':
+            - img [ref=e167]
+            - text: Open
+          - generic [ref=e169]:
+            - 'heading "fix: harden repo-local helper launcher resolution #90" [level=1] [ref=e171]':
+              - 'link "fix: harden repo-local helper launcher resolution" [ref=e172] [cursor=pointer]':
+                - /url: "#top"
+              - generic [ref=e173]: "#90"
+            - generic [ref=e174]:
+              - button "Hide file tree" [ref=e177] [cursor=pointer]:
+                - img [ref=e178]
+              - group [ref=e181]:
+                - button "Changes from all commits" [ref=e182] [cursor=pointer]:
+                  - text: Changes from
+                  - strong [ref=e183]: all commits
+              - group [ref=e185]:
+                - button "File filter" [ref=e186] [cursor=pointer]:
+                  - strong [ref=e187]: File filter
+              - group [ref=e189]:
+                - button "Conversations" [ref=e190] [cursor=pointer]:
+                  - strong [ref=e191]: Conversations
+              - group [ref=e193]:
+                - button "Diff settings" [ref=e194] [cursor=pointer]:
+                  - img "Diff settings" [ref=e195]
+        - generic [ref=e198]:
+          - generic [ref=e200]:
+            - generic [ref=e201]:
+              - textbox "Filter changed files" [ref=e202]
+              - img
+            - navigation "File Tree Navigation" [ref=e205]:
+              - tree "File Tree" [ref=e206]:
+                - treeitem "README.md" [level=1] [ref=e207]:
+                  - link "README.md" [ref=e208] [cursor=pointer]:
+                    - /url: "#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+                    - generic:
+                      - img
+                    - generic: README.md
+                    - generic:
+                      - img
+                - treeitem "bin/lib" [level=1] [ref=e209]:
+                  - button "bin/lib" [expanded] [ref=e210] [cursor=pointer]:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic [ref=e211]: bin/lib
+                  - group [ref=e212]:
+                    - treeitem "init-flow.mjs" [level=2] [ref=e213]:
+                      - link "init-flow.mjs" [ref=e214] [cursor=pointer]:
+                        - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                        - generic:
+                          - img
+                        - generic: init-flow.mjs
+                        - generic:
+                          - img
+                    - treeitem "init-runtime.mjs" [level=2] [ref=e215]:
+                      - link "init-runtime.mjs" [ref=e216] [cursor=pointer]:
+                        - /url: "#diff-a68db8da00607d139d89189abec04ca283140c8b723e40e80b384c68c9e425b0"
+                        - generic:
+                          - img
+                        - generic: init-runtime.mjs
+                        - generic:
+                          - img
+                    - treeitem "rendering.mjs" [level=2] [ref=e217]:
+                      - link "rendering.mjs" [ref=e218] [cursor=pointer]:
+                        - /url: "#diff-3b34d4b3f0281655c82b13775b62d39e0f42caebb87e3548ef4d544bddf8b6c0"
+                        - generic:
+                          - img
+                        - generic: rendering.mjs
+                        - generic:
+                          - img
+                    - treeitem "runtime-freshness.mjs" [level=2] [ref=e219]:
+                      - link "runtime-freshness.mjs" [ref=e220] [cursor=pointer]:
+                        - /url: "#diff-0392d9df71ec79513a1e36f69cb9daeb37bbe63d8513668112629059bef7412a"
+                        - generic:
+                          - img
+                        - generic: runtime-freshness.mjs
+                        - generic:
+                          - img
+                - treeitem "distilled" [level=1] [ref=e221]:
+                  - button "distilled" [expanded] [ref=e222] [cursor=pointer]:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic [ref=e223]: distilled
+                  - group [ref=e224]:
+                    - treeitem "DESIGN.md" [level=2] [ref=e225]:
+                      - link "DESIGN.md" [ref=e226] [cursor=pointer]:
+                        - /url: "#diff-3fa07ad6cde9de56aac78091c352415422b439f3a174deafa1711340f2073ae5"
+                        - generic:
+                          - img
+                        - generic: DESIGN.md
+                        - generic:
+                          - img
+                    - treeitem "README.md" [level=2] [ref=e227]:
+                      - link "README.md" [ref=e228] [cursor=pointer]:
+                        - /url: "#diff-61a2539609ec8ad0c8570d011fc81f76db3c72062f3369b9f903433b5bd7f338"
+                        - generic:
+                          - img
+                        - generic: README.md
+                        - generic:
+                          - img
+                    - treeitem "workflows" [level=2] [ref=e229]:
+                      - button "workflows" [expanded] [ref=e230] [cursor=pointer]:
+                        - generic:
+                          - img
+                        - generic:
+                          - img
+                        - generic [ref=e231]: workflows
+                      - group [ref=e232]:
+                        - treeitem "audit-milestone.md" [level=3] [ref=e233]:
+                          - link "audit-milestone.md" [ref=e234] [cursor=pointer]:
+                            - /url: "#diff-247737ff6b836c0627c20d730e6fd8fa6d47b6814f54068baf1c891bd555e251"
+                            - generic:
+                              - img
+                            - generic: audit-milestone.md
+                            - generic:
+                              - img
+                        - treeitem "complete-milestone.md" [level=3] [ref=e235]:
+                          - link "complete-milestone.md" [ref=e236] [cursor=pointer]:
+                            - /url: "#diff-e91afa19ea4b4a6c4bcb5e3c3a9ea35ad6fbad6f1ebea868f93e270f7a83e521"
+                            - generic:
+                              - img
+                            - generic: complete-milestone.md
+                            - generic:
+                              - img
+                        - treeitem "execute.md" [level=3] [ref=e237]:
+                          - link "execute.md" [ref=e238] [cursor=pointer]:
+                            - /url: "#diff-3d647e5efc1b44ed8e7028d0d42a69ff651ed7b99c016c6a502b57dc9df7e392"
+                            - generic:
+                              - img
+                            - generic: execute.md
+                            - generic:
+                              - img
+                        - treeitem "new-milestone.md" [level=3] [ref=e239]:
+                          - link "new-milestone.md" [ref=e240] [cursor=pointer]:
+                            - /url: "#diff-a7ddba85cfc9e0d14de5d8c34d09bb810bd76839e46c6b58edebfd84b2bd6c7b"
+                            - generic:
+                              - img
+                            - generic: new-milestone.md
+                            - generic:
+                              - img
+                        - treeitem "pause.md" [level=3] [ref=e241]:
+                          - link "pause.md" [ref=e242] [cursor=pointer]:
+                            - /url: "#diff-eb533a59bb63eee6ff01431acf007a7e3a67cd040c2bdf595303655395f45e12"
+                            - generic:
+                              - img
+                            - generic: pause.md
+                            - generic:
+                              - img
+                        - treeitem "plan.md" [level=3] [ref=e243]:
+                          - link "plan.md" [ref=e244] [cursor=pointer]:
+                            - /url: "#diff-f3e18a191854556e07e1659a66e4123688252da08344f5810ff87297477a0b70"
+                            - generic:
+                              - img
+                            - generic: plan.md
+                            - generic:
+                              - img
+                        - treeitem "progress.md" [level=3] [ref=e245]:
+                          - link "progress.md" [ref=e246] [cursor=pointer]:
+                            - /url: "#diff-0087aa170d1a55fe929c122aab51b83e46fc7edfed2ae95b23290dd36be1f263"
+                            - generic:
+                              - img
+                            - generic: progress.md
+                            - generic:
+                              - img
+                        - treeitem "quick.md" [level=3] [ref=e247]:
+                          - link "quick.md" [ref=e248] [cursor=pointer]:
+                            - /url: "#diff-800fa84f2640c94065be1047eb7f0116e370b22507e4ec10be4e46924a5f97b9"
+                            - generic:
+                              - img
+                            - generic: quick.md
+                            - generic:
+                              - img
+                        - treeitem "resume.md" [level=3] [ref=e249]:
+                          - link "resume.md" [ref=e250] [cursor=pointer]:
+                            - /url: "#diff-82c7662f231dba880714ca928db21a17d50da0076ac772493129268947bd2cf2"
+                            - generic:
+                              - img
+                            - generic: resume.md
+                            - generic:
+                              - img
+                        - treeitem "verify.md" [level=3] [ref=e251]:
+                          - link "verify.md" [ref=e252] [cursor=pointer]:
+                            - /url: "#diff-2ace523d004888fc5266785a1f3c1287235400d1fd942662babeef06ff7f9654"
+                            - generic:
+                              - img
+                            - generic: verify.md
+                            - generic:
+                              - img
+                - treeitem "docs" [level=1] [ref=e253]:
+                  - button "docs" [expanded] [ref=e254] [cursor=pointer]:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic [ref=e255]: docs
+                  - group [ref=e256]:
+                    - treeitem "USER-GUIDE.md" [level=2] [ref=e257]:
+                      - link "USER-GUIDE.md" [ref=e258] [cursor=pointer]:
+                        - /url: "#diff-1d63f1ff24f128a7de356a8ca365576f1ca7330b8c6ad144e543ccbcec21730a"
+                        - generic:
+                          - img
+                        - generic: USER-GUIDE.md
+                        - generic:
+                          - img
+                - treeitem "tests" [level=1] [ref=e259]:
+                  - button "tests" [expanded] [ref=e260] [cursor=pointer]:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic [ref=e261]: tests
+                  - group [ref=e262]:
+                    - treeitem "gsdd.guards.test.cjs" [level=2] [ref=e263]:
+                      - link "gsdd.guards.test.cjs" [ref=e264] [cursor=pointer]:
+                        - /url: "#diff-165f02c3a7480e430409f8ba061db0ac77e51f95941a373677e13381d40f13bf"
+                        - generic:
+                          - img
+                        - generic: gsdd.guards.test.cjs
+                        - generic:
+                          - img
+                    - treeitem "gsdd.init.test.cjs" [level=2] [ref=e265]:
+                      - link "gsdd.init.test.cjs" [ref=e266] [cursor=pointer]:
+                        - /url: "#diff-8adc945979a05e5f6f560dc9589b87ea50f5a7556c2f77b0750ecdedee1fc64c"
+                        - generic:
+                          - img
+                        - generic: gsdd.init.test.cjs
+                        - generic:
+                          - img
+                    - treeitem "gsdd.invariants.test.cjs" [level=2] [ref=e267]:
+                      - link "gsdd.invariants.test.cjs" [ref=e268] [cursor=pointer]:
+                        - /url: "#diff-d1f6d3b802ec645d079e82e11790a1cf20d1a6cfce4bcc1a7aa7e61ab77a4639"
+                        - generic:
+                          - img
+                        - generic: gsdd.invariants.test.cjs
+                        - generic:
+                          - img
+                    - treeitem "gsdd.manifest.test.cjs" [level=2] [ref=e269]:
+                      - link "gsdd.manifest.test.cjs" [ref=e270] [cursor=pointer]:
+                        - /url: "#diff-0642a152bd846e32fed7d4f9dedc9fc9f5103aba7ca5ccdb7a874370ae722837"
+                        - generic:
+                          - img
+                        - generic: gsdd.manifest.test.cjs
+                        - generic:
+                          - img
+                    - treeitem "gsdd.scenarios.test.cjs" [level=2] [ref=e271]:
+                      - link "gsdd.scenarios.test.cjs" [ref=e272] [cursor=pointer]:
+                        - /url: "#diff-00dacbda043bd0be7c9039c1f9987fac568491178ed58837c5b033c48d8ba6d6"
+                        - generic:
+                          - img
+                        - generic: gsdd.scenarios.test.cjs
+                        - generic:
+                          - img
+                    - treeitem "phase.test.cjs" [level=2] [ref=e273]:
+                      - link "phase.test.cjs" [ref=e274] [cursor=pointer]:
+                        - /url: "#diff-fbe3d7e4a15225ed884b8826aaeaf543a50d7e23da6b376f9732e6866c999d2c"
+                        - generic:
+                          - img
+                        - generic: phase.test.cjs
+                        - generic:
+                          - img
+          - generic [ref=e275]:
+            - generic [ref=e276]:
+              - generic [ref=e277]:
+                - generic [ref=e279]:
+                  - generic [ref=e280]:
+                    - generic [ref=e281]:
+                      - button "Toggle diff contents" [expanded] [ref=e282] [cursor=pointer]:
+                        - img [ref=e283]
+                      - button "Expand all" [ref=e286] [cursor=pointer]:
+                        - img "Expand all" [ref=e287]
+                      - link "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e289] [cursor=pointer]:
+                        - /url: /PatrickSys/workspine/blob/main/.github/CODEOWNERS#L2
+                        - generic "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e290]:
+                          - img [ref=e291]
+                      - generic [ref=e293]: "9 changes: 5 additions & 4 deletions"
+                      - generic [ref=e294]: "9"
+                      - generic [ref=e300]:
+                        - link "README.md" [ref=e301] [cursor=pointer]:
+                          - /url: "#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+                        - button "Copy" [ref=e303]:
+                          - img [ref=e304]
+                    - generic [ref=e309]:
+                      - generic [ref=e310]:
+                        - button "Display the source diff" [ref=e312] [cursor=pointer]:
+                          - img [ref=e313]
+                        - button "Display the rich diff" [ref=e316] [cursor=pointer]:
+                          - img [ref=e317]
+                      - group [ref=e319]:
+                        - button "Show options" [ref=e320] [cursor=pointer]:
+                          - img "Show options" [ref=e322]
+                  - table [ref=e327]:
+                    - rowgroup [ref=e328]:
+                      - row "Original file line number Diff line number Diff line change" [ref=e329]:
+                        - columnheader "Original file line number" [ref=e330]
+                        - columnheader "Diff line number" [ref=e331]
+                        - columnheader "Diff line change" [ref=e332]
+                    - rowgroup [ref=e337]:
+                      - row "Expand Up @@ -92,7 +92,8 @@ This creates:" [ref=e338]:
+                        - cell "Expand Up" [ref=e339] [cursor=pointer]:
+                          - link "Expand Up" [ref=e340]:
+                            - /url: "#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+                            - img [ref=e341]
+                        - cell "@@ -92,7 +92,8 @@ This creates:" [ref=e343]
+                      - row "92 92" [ref=e344]:
+                        - cell "92" [ref=e345] [cursor=pointer]
+                        - cell "92" [ref=e346] [cursor=pointer]
+                        - cell [ref=e347]
+                      - 'row "93 93 1. `.planning/` — durable workspace with templates, role contracts, and config" [ref=e348]':
+                        - cell "93" [ref=e349] [cursor=pointer]
+                        - cell "93" [ref=e350] [cursor=pointer]
+                        - 'cell "1. `.planning/` — durable workspace with templates, role contracts, and config" [ref=e351]':
+                          - generic [ref=e352]: "1. `.planning/` — durable workspace with templates, role contracts, and config"
+                      - 'row "94 94 2. `.agents/skills/gsdd-*` — portable workflow entrypoints" [ref=e353]':
+                        - cell "94" [ref=e354] [cursor=pointer]
+                        - cell "94" [ref=e355] [cursor=pointer]
+                        - 'cell "2. `.agents/skills/gsdd-*` — portable workflow entrypoints" [ref=e356]':
+                          - generic [ref=e357]: "2. `.agents/skills/gsdd-*` — portable workflow entrypoints"
+                      - row "95 - 3. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)" [ref=e358]:
+                        - cell "95" [ref=e359] [cursor=pointer]
+                        - cell [ref=e360] [cursor=pointer]
+                        - cell "- 3. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)" [ref=e361]:
+                          - generic [ref=e362]: "- 3. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)"
+                      - 'row "95 + 3. `.agents/bin/gsdd.mjs` — repo-local helper launcher for deterministic workflow commands inside generated skills (run helper commands from the repo root)" [ref=e363]':
+                        - cell [ref=e364] [cursor=pointer]
+                        - cell "95" [ref=e365] [cursor=pointer]
+                        - 'cell "+ 3. `.agents/bin/gsdd.mjs` — repo-local helper launcher for deterministic workflow commands inside generated skills (run helper commands from the repo root)" [ref=e366]':
+                          - generic [ref=e367]: "+ 3. `.agents/bin/gsdd.mjs` — repo-local helper launcher for deterministic workflow commands inside generated skills (run helper commands from the repo root)"
+                      - row "96 + 4. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)" [ref=e368]:
+                        - cell [ref=e369] [cursor=pointer]
+                        - cell "96" [ref=e370] [cursor=pointer]
+                        - cell "+ 4. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)" [ref=e371]:
+                          - generic [ref=e372]: + 4. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)
+                      - row "96 97" [ref=e373]:
+                        - cell "96" [ref=e374] [cursor=pointer]
+                        - cell "97" [ref=e375] [cursor=pointer]
+                        - cell [ref=e376]
+                      - 'row "97 98 Then run the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`." [ref=e377]':
+                        - cell "97" [ref=e378] [cursor=pointer]
+                        - cell "98" [ref=e379] [cursor=pointer]
+                        - 'cell "Then run the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`." [ref=e380]':
+                          - generic [ref=e381]: "Then run the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`."
+                      - row "98 99" [ref=e382]:
+                        - cell "98" [ref=e383] [cursor=pointer]
+                        - cell "99" [ref=e384] [cursor=pointer]
+                        - cell [ref=e385]
+                      - 'row "Expand All @@ -102,7 +103,7 @@ In a terminal, `gsdd init` now opens a guided install wizard:" [ref=e386]':
+                        - cell "Expand All" [ref=e387] [cursor=pointer]:
+                          - link "Expand All" [ref=e388]:
+                            - /url: "#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+                            - img [ref=e389]
+                        - 'cell "@@ -102,7 +103,7 @@ In a terminal, `gsdd init` now opens a guided install wizard:" [ref=e391]'
+                      - 'row "102 103 - Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing" [ref=e392]':
+                        - cell "102" [ref=e393] [cursor=pointer]
+                        - cell "103" [ref=e394] [cursor=pointer]
+                        - 'cell "- Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing" [ref=e395]':
+                          - generic [ref=e396]: "- Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing"
+                      - 'row "103 104 - Step 3: configure planning defaults in the same guided flow" [ref=e397]':
+                        - cell "103" [ref=e398] [cursor=pointer]
+                        - cell "104" [ref=e399] [cursor=pointer]
+                        - 'cell "- Step 3: configure planning defaults in the same guided flow" [ref=e400]':
+                          - generic [ref=e401]: "- Step 3: configure planning defaults in the same guided flow"
+                      - row "104 105" [ref=e402]:
+                        - cell "104" [ref=e403] [cursor=pointer]
+                        - cell "105" [ref=e404] [cursor=pointer]
+                        - cell [ref=e405]
+                      - 'row "105 - Portable `.agents/skills/gsdd-*` skills are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline." [ref=e406]':
+                        - cell "105" [ref=e407] [cursor=pointer]
+                        - cell [ref=e408] [cursor=pointer]
+                        - 'cell "- Portable `.agents/skills/gsdd-*` skills are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline." [ref=e409]':
+                          - generic [ref=e410]: "- Portable `.agents/skills/gsdd-*` skills are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline."
+                      - 'row "106 + Portable `.agents/skills/gsdd-*` skills and the repo-local `.agents/bin/gsdd.mjs` helper launcher are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands that call the launcher assume the repo root as the current working directory." [ref=e411]':
+                        - cell [ref=e412] [cursor=pointer]
+                        - cell "106" [ref=e413] [cursor=pointer]
+                        - 'cell "+ Portable `.agents/skills/gsdd-*` skills and the repo-local `.agents/bin/gsdd.mjs` helper launcher are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands that call the launcher assume the repo root as the current working directory." [ref=e414]':
+                          - generic [ref=e415]: "+ Portable `.agents/skills/gsdd-*` skills and the repo-local `.agents/bin/gsdd.mjs` helper launcher are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands that call the launcher assume the repo root as the current working directory."
+                      - 'row "106 107 When those generated surfaces exist locally, `gsdd health` checks them against current render output instead of asking you to trust manual review." [ref=e416]':
+                        - cell "106" [ref=e417] [cursor=pointer]
+                        - cell "107" [ref=e418] [cursor=pointer]
+                        - 'cell "When those generated surfaces exist locally, `gsdd health` checks them against current render output instead of asking you to trust manual review." [ref=e419]':
+                          - generic [ref=e420]: "When those generated surfaces exist locally, `gsdd health` checks them against current render output instead of asking you to trust manual review."
+                      - row "107 108" [ref=e421]:
+                        - cell "107" [ref=e422] [cursor=pointer]
+                        - cell "108" [ref=e423] [cursor=pointer]
+                        - cell [ref=e424]
+                      - 'row "108 109 ### Launch Proof Status" [ref=e425]':
+                        - cell "108" [ref=e426] [cursor=pointer]
+                        - cell "109" [ref=e427] [cursor=pointer]
+                        - cell "### Launch Proof Status" [ref=e428]:
+                          - generic [ref=e429]: "### Launch Proof Status"
+                      - 'row "Expand Down Expand Up @@ -154,10 +155,10 @@ npx gsdd-cli init --tools all # All of the above" [ref=e430]':
+                        - cell "Expand Down Expand Up" [ref=e431] [cursor=pointer]:
+                          - link "Expand Down" [ref=e432]:
+                            - /url: "#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+                            - img [ref=e433]
+                          - link "Expand Up" [ref=e435]:
+                            - /url: "#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+                            - img [ref=e436]
+                        - 'cell "@@ -154,10 +155,10 @@ npx gsdd-cli init --tools all # All of the above" [ref=e438]'
+                      - row "154 155" [ref=e439]:
+                        - cell "154" [ref=e440] [cursor=pointer]
+                        - cell "155" [ref=e441] [cursor=pointer]
+                        - cell [ref=e442]
+                      - row "155 156 | Platform | Public claim | What's generated |" [ref=e443]:
+                        - cell "155" [ref=e444] [cursor=pointer]
+                        - cell "156" [ref=e445] [cursor=pointer]
+                        - cell "| Platform | Public claim | What's generated |" [ref=e446]:
+                          - generic [ref=e447]: "| Platform | Public claim | What's generated |"
+                      - row "156 157 |----------|--------------|-----------------|" [ref=e448]:
+                        - cell "156" [ref=e449] [cursor=pointer]
+                        - cell "157" [ref=e450] [cursor=pointer]
+                        - cell "|----------|--------------|-----------------|" [ref=e451]:
+                          - generic [ref=e452]: "|----------|--------------|-----------------|"
+                      - 'row "157 - | **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |" [ref=e453]':
+                        - cell "157" [ref=e454] [cursor=pointer]
+                        - cell [ref=e455] [cursor=pointer]
+                        - 'cell "- | **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |" [ref=e456]':
+                          - generic [ref=e457]: "- | **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |"
+                      - 'row "158 + | **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` plus `.agents/bin/gsdd.mjs` — portable workflow entrypoints and repo-local helper launcher (always generated) |" [ref=e458]':
+                        - cell [ref=e459] [cursor=pointer]
+                        - cell "158" [ref=e460] [cursor=pointer]
+                        - 'cell "+ | **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` plus `.agents/bin/gsdd.mjs` — portable workflow entrypoints and repo-local helper launcher (always generated) |" [ref=e461]':
+                          - generic [ref=e462]: "+ | **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` plus `.agents/bin/gsdd.mjs` — portable workflow entrypoints and repo-local helper launcher (always generated) |"
+                      - 'row "158 159 | **Claude Code** | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — native workflow surfaces, freshness-checked when generated locally |" [ref=e463]':
+                        - cell "158" [ref=e464] [cursor=pointer]
+                        - cell "159" [ref=e465] [cursor=pointer]
+                        - 'cell "| **Claude Code** | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — native workflow surfaces, freshness-checked when generated locally |" [ref=e466]':
+                          - generic [ref=e467]: "| **Claude Code** | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — native workflow surfaces, freshness-checked when generated locally |"
+                      - 'row "159 160 | **OpenCode** | Directly validated | `.opencode/commands/`, `.opencode/agents/` — native workflow surfaces, freshness-checked when generated locally |" [ref=e468]':
+                        - cell "159" [ref=e469] [cursor=pointer]
+                        - cell "160" [ref=e470] [cursor=pointer]
+                        - 'cell "| **OpenCode** | Directly validated | `.opencode/commands/`, `.opencode/agents/` — native workflow surfaces, freshness-checked when generated locally |" [ref=e471]':
+                          - generic [ref=e472]: "| **OpenCode** | Directly validated | `.opencode/commands/`, `.opencode/agents/` — native workflow surfaces, freshness-checked when generated locally |"
+                      - 'row "160 - | **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |" [ref=e473]':
+                        - cell "160" [ref=e474] [cursor=pointer]
+                        - cell [ref=e475] [cursor=pointer]
+                        - 'cell "- | **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |" [ref=e476]':
+                          - generic [ref=e477]: "- | **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |"
+                      - 'row "161 + | **Codex CLI** | Directly validated | Portable skill entry plus `.agents/bin/gsdd.mjs` and `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |" [ref=e478]':
+                        - cell [ref=e479] [cursor=pointer]
+                        - cell "161" [ref=e480] [cursor=pointer]
+                        - 'cell "+ | **Codex CLI** | Directly validated | Portable skill entry plus `.agents/bin/gsdd.mjs` and `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |" [ref=e481]':
+                          - generic [ref=e482]: "+ | **Codex CLI** | Directly validated | Portable skill entry plus `.agents/bin/gsdd.mjs` and `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |"
+                      - 'row "161 162 | **Cursor / Copilot / Gemini** | Same core workflow | Skills-native discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance, and the generated skill surface is freshness-checked locally |" [ref=e483]':
+                        - cell "161" [ref=e484] [cursor=pointer]
+                        - cell "162" [ref=e485] [cursor=pointer]
+                        - 'cell "| **Cursor / Copilot / Gemini** | Same core workflow | Skills-native discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance, and the generated skill surface is freshness-checked locally |" [ref=e486]':
+                          - generic [ref=e487]: "| **Cursor / Copilot / Gemini** | Same core workflow | Skills-native discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance, and the generated skill surface is freshness-checked locally |"
+                      - 'row "162 163 | **Other AI tools** | Fallback only | Open `.agents/skills/gsdd-*/SKILL.md` directly |" [ref=e488]':
+                        - cell "162" [ref=e489] [cursor=pointer]
+                        - cell "163" [ref=e490] [cursor=pointer]
+                        - 'cell "| **Other AI tools** | Fallback only | Open `.agents/skills/gsdd-*/SKILL.md` directly |" [ref=e491]':
+                          - generic [ref=e492]: "| **Other AI tools** | Fallback only | Open `.agents/skills/gsdd-*/SKILL.md` directly |"
+                      - row "163 164" [ref=e493]:
+                        - cell "163" [ref=e494] [cursor=pointer]
+                        - cell "164" [ref=e495] [cursor=pointer]
+                        - cell [ref=e496]
+                      - row "Expand Down" [ref=e497]:
+                        - cell "Expand Down" [ref=e498] [cursor=pointer]:
+                          - link "Expand Down" [ref=e499]:
+                            - /url: "#diff-b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5"
+                            - img [ref=e500]
+                        - cell [ref=e502]
+                - generic [ref=e504]:
+                  - generic [ref=e505]:
+                    - generic [ref=e506]:
+                      - button "Toggle diff contents" [expanded] [ref=e507] [cursor=pointer]:
+                        - img [ref=e508]
+                      - button "Expand all" [ref=e511] [cursor=pointer]:
+                        - img "Expand all" [ref=e512]
+                      - link "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e514] [cursor=pointer]:
+                        - /url: /PatrickSys/workspine/blob/main/.github/CODEOWNERS#L2
+                        - generic "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e515]:
+                          - img [ref=e516]
+                      - generic [ref=e518]: "26 changes: 13 additions & 13 deletions"
+                      - generic [ref=e519]: "26"
+                      - generic [ref=e525]:
+                        - link "bin/lib/init-flow.mjs" [ref=e526] [cursor=pointer]:
+                          - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                        - button "Copy" [ref=e528]:
+                          - img [ref=e529]
+                    - group [ref=e535]:
+                      - button "Show options" [ref=e536] [cursor=pointer]:
+                        - img "Show options" [ref=e538]
+                  - table [ref=e543]:
+                    - rowgroup [ref=e544]:
+                      - row "Original file line number Diff line number Diff line change" [ref=e545]:
+                        - columnheader "Original file line number" [ref=e546]
+                        - columnheader "Diff line number" [ref=e547]
+                        - columnheader "Diff line change" [ref=e548]
+                    - rowgroup [ref=e549]:
+                      - row "... ... @@ -1,6 +1,6 @@" [ref=e550]:
+                        - cell "..." [ref=e551]
+                        - cell "..." [ref=e552]
+                        - cell "@@ -1,6 +1,6 @@" [ref=e553]
+                      - 'row "1 1 import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from ''fs'';" [ref=e554]':
+                        - cell "1" [ref=e555] [cursor=pointer]
+                        - cell "1" [ref=e556] [cursor=pointer]
+                        - 'cell "import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from ''fs'';" [ref=e557]':
+                          - generic [ref=e558]: "import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'fs';"
+                      - 'row "2 - import { join, isAbsolute } from ''path'';" [ref=e559]':
+                        - cell "2" [ref=e560] [cursor=pointer]
+                        - cell [ref=e561] [cursor=pointer]
+                        - 'cell "- import { join, isAbsolute } from ''path'';" [ref=e562]':
+                          - generic [ref=e563]: "- import { join, isAbsolute } from 'path';"
+                      - 'row "3 - import { renderSkillContent } from ''./rendering.mjs'';" [ref=e564]':
+                        - cell "3" [ref=e565] [cursor=pointer]
+                        - cell [ref=e566] [cursor=pointer]
+                        - 'cell "- import { renderSkillContent } from ''./rendering.mjs'';" [ref=e567]':
+                          - generic [ref=e568]: "- import { renderSkillContent } from './rendering.mjs';"
+                      - 'row "2 + import { dirname, join, isAbsolute } from ''path'';" [ref=e569]':
+                        - cell [ref=e570] [cursor=pointer]
+                        - cell "2" [ref=e571] [cursor=pointer]
+                        - 'cell "+ import { dirname, join, isAbsolute } from ''path'';" [ref=e572]':
+                          - generic [ref=e573]: "+ import { dirname, join, isAbsolute } from 'path';"
+                      - 'row "3 + import { buildPortableRuntimeEntries } from ''./rendering.mjs'';" [ref=e574]':
+                        - cell [ref=e575] [cursor=pointer]
+                        - cell "3" [ref=e576] [cursor=pointer]
+                        - 'cell "+ import { buildPortableRuntimeEntries } from ''./rendering.mjs'';" [ref=e577]':
+                          - generic [ref=e578]: "+ import { buildPortableRuntimeEntries } from './rendering.mjs';"
+                      - 'row "4 4 import { buildManifest, writeManifest } from ''./manifest.mjs'';" [ref=e579]':
+                        - cell "4" [ref=e580] [cursor=pointer]
+                        - cell "4" [ref=e581] [cursor=pointer]
+                        - 'cell "import { buildManifest, writeManifest } from ''./manifest.mjs'';" [ref=e582]':
+                          - generic [ref=e583]: "import { buildManifest, writeManifest } from './manifest.mjs';"
+                      - 'row "5 5 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from ''./cli-utils.mjs'';" [ref=e584]':
+                        - cell "5" [ref=e585] [cursor=pointer]
+                        - cell "5" [ref=e586] [cursor=pointer]
+                        - 'cell "import { parseFlagValue, parseToolsFlag, parseAutoFlag } from ''./cli-utils.mjs'';" [ref=e587]':
+                          - generic [ref=e588]: "import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';"
+                      - 'row "6 6 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from ''./models.mjs'';" [ref=e589]':
+                        - cell "6" [ref=e590] [cursor=pointer]
+                        - cell "6" [ref=e591] [cursor=pointer]
+                        - 'cell "import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from ''./models.mjs'';" [ref=e592]':
+                          - generic [ref=e593]: "import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './models.mjs';"
+                      - 'row "Expand Down Expand Up @@ -106,8 +106,8 @@ export function createCmdInit(ctx) {" [ref=e594]':
+                        - cell "Expand Down Expand Up" [ref=e595] [cursor=pointer]:
+                          - link "Expand Down" [ref=e596]:
+                            - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                            - img [ref=e597]
+                          - link "Expand Up" [ref=e599]:
+                            - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                            - img [ref=e600]
+                        - 'cell "@@ -106,8 +106,8 @@ export function createCmdInit(ctx) {" [ref=e602]'
+                      - row "106 106 console.log(' - copied project brief to .planning/PROJECT_BRIEF.md');" [ref=e603]:
+                        - cell "106" [ref=e604] [cursor=pointer]
+                        - cell "106" [ref=e605] [cursor=pointer]
+                        - cell "console.log(' - copied project brief to .planning/PROJECT_BRIEF.md');" [ref=e606]:
+                          - generic [ref=e607]: console.log(' - copied project brief to .planning/PROJECT_BRIEF.md');
+                      - 'row "107 107 }" [ref=e608]':
+                        - cell "107" [ref=e609] [cursor=pointer]
+                        - cell "107" [ref=e610] [cursor=pointer]
+                        - 'cell "}" [ref=e611]':
+                          - generic [ref=e612]: "}"
+                      - row "108 108" [ref=e613]:
+                        - cell "108" [ref=e614] [cursor=pointer]
+                        - cell "108" [ref=e615] [cursor=pointer]
+                        - cell [ref=e616]
+                      - row "109 - generateOpenStandardSkills(ctx.cwd, ctx.workflows);" [ref=e617]:
+                        - cell "109" [ref=e618] [cursor=pointer]
+                        - cell [ref=e619] [cursor=pointer]
+                        - cell "- generateOpenStandardSkills(ctx.cwd, ctx.workflows);" [ref=e620]:
+                          - generic [ref=e621]: "- generateOpenStandardSkills(ctx.cwd, ctx.workflows);"
+                      - row "110 - console.log(' - generated open-standard skills (.agents/skills/gsdd-*)');" [ref=e622]:
+                        - cell "110" [ref=e623] [cursor=pointer]
+                        - cell [ref=e624] [cursor=pointer]
+                        - cell "- console.log(' - generated open-standard skills (.agents/skills/gsdd-*)');" [ref=e625]:
+                          - generic [ref=e626]: "- console.log(' - generated open-standard skills (.agents/skills/gsdd-*)');"
+                      - row "109 + generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);" [ref=e627]:
+                        - cell [ref=e628] [cursor=pointer]
+                        - cell "109" [ref=e629] [cursor=pointer]
+                        - cell "+ generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);" [ref=e630]:
+                          - generic [ref=e631]: + generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);
+                      - row "110 + console.log(' - generated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');" [ref=e632]:
+                        - cell [ref=e633] [cursor=pointer]
+                        - cell "110" [ref=e634] [cursor=pointer]
+                        - cell "+ console.log(' - generated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');" [ref=e635]:
+                          - generic [ref=e636]: + console.log(' - generated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
+                      - row "111 111" [ref=e637]:
+                        - cell "111" [ref=e638] [cursor=pointer]
+                        - cell "111" [ref=e639] [cursor=pointer]
+                        - cell [ref=e640]
+                      - 'row "112 112 for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {" [ref=e641]':
+                        - cell "112" [ref=e642] [cursor=pointer]
+                        - cell "112" [ref=e643] [cursor=pointer]
+                        - 'cell "for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {" [ref=e644]':
+                          - generic [ref=e645]: "for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {"
+                      - row "113 113 adapter.generate();" [ref=e646]:
+                        - cell "113" [ref=e647] [cursor=pointer]
+                        - cell "113" [ref=e648] [cursor=pointer]
+                        - cell "adapter.generate();" [ref=e649]:
+                          - generic [ref=e650]: adapter.generate();
+                      - 'row "Expand Down Expand Up @@ -144,12 +144,12 @@ export function createCmdUpdate(ctx) {" [ref=e651]':
+                        - cell "Expand Down Expand Up" [ref=e652] [cursor=pointer]:
+                          - link "Expand Down" [ref=e653]:
+                            - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                            - img [ref=e654]
+                          - link "Expand Up" [ref=e656]:
+                            - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                            - img [ref=e657]
+                        - 'cell "@@ -144,12 +144,12 @@ export function createCmdUpdate(ctx) {" [ref=e659]'
+                      - row "144 144 updated = true;" [ref=e660]:
+                        - cell "144" [ref=e661] [cursor=pointer]
+                        - cell "144" [ref=e662] [cursor=pointer]
+                        - cell "updated = true;" [ref=e663]:
+                          - generic [ref=e664]: updated = true;
+                      - 'row "145 145 }" [ref=e665]':
+                        - cell "145" [ref=e666] [cursor=pointer]
+                        - cell "145" [ref=e667] [cursor=pointer]
+                        - 'cell "}" [ref=e668]':
+                          - generic [ref=e669]: "}"
+                      - row "146 146" [ref=e670]:
+                        - cell "146" [ref=e671] [cursor=pointer]
+                        - cell "146" [ref=e672] [cursor=pointer]
+                        - cell [ref=e673]
+                      - 'row "147 - if (platforms.length > 0 || existsSync(join(ctx.cwd, ''.agents'', ''skills''))) {" [ref=e674]':
+                        - cell "147" [ref=e675] [cursor=pointer]
+                        - cell [ref=e676] [cursor=pointer]
+                        - 'cell "- if (platforms.length > 0 || existsSync(join(ctx.cwd, ''.agents'', ''skills''))) {" [ref=e677]':
+                          - generic [ref=e678]: "- if (platforms.length > 0 || existsSync(join(ctx.cwd, '.agents', 'skills'))) {"
+                      - 'row "147 + if (platforms.length > 0 || existsSync(join(ctx.cwd, ''.agents''))) {" [ref=e679]':
+                        - cell [ref=e680] [cursor=pointer]
+                        - cell "147" [ref=e681] [cursor=pointer]
+                        - 'cell "+ if (platforms.length > 0 || existsSync(join(ctx.cwd, ''.agents''))) {" [ref=e682]':
+                          - generic [ref=e683]: "+ if (platforms.length > 0 || existsSync(join(ctx.cwd, '.agents'))) {"
+                      - row "@chatgpt-codex-connector chatgpt-codex-connector Bot Apr 22, 202644 minutes ago P2 Badge Restrict portable-surface update trigger to GSDD markers This condition now treats any existing .agents/ directory as evidence that GSDD portable surfaces are installed. In repos that use .agents/ for unrelated tooling, gsdd update will unexpectedly generate .agents/skills/gsdd-* and .agents/bin/gsdd.mjs even when gsdd init was never run, causing unintended repository mutations. The trigger should check for explicit GSDD-owned paths (for example .agents/bin/gsdd.mjs or gsdd-* skill folders) rather than the top-level .agents directory. Useful? React with 👍 / 👎." [ref=e684]:
+                        - cell "@chatgpt-codex-connector chatgpt-codex-connector Bot Apr 22, 202644 minutes ago P2 Badge Restrict portable-surface update trigger to GSDD markers This condition now treats any existing .agents/ directory as evidence that GSDD portable surfaces are installed. In repos that use .agents/ for unrelated tooling, gsdd update will unexpectedly generate .agents/skills/gsdd-* and .agents/bin/gsdd.mjs even when gsdd init was never run, causing unintended repository mutations. The trigger should check for explicit GSDD-owned paths (for example .agents/bin/gsdd.mjs or gsdd-* skill folders) rather than the top-level .agents directory. Useful? React with 👍 / 👎." [ref=e685]:
+                          - generic [ref=e693]:
+                            - generic [ref=e694]:
+                              - group [ref=e697]:
+                                - button "Show options" [ref=e698] [cursor=pointer]:
+                                  - img "Show options" [ref=e701]
+                              - heading "@chatgpt-codex-connector chatgpt-codex-connector Bot Apr 22, 202644 minutes ago" [level=3] [ref=e703]:
+                                - generic [ref=e704]:
+                                  - img "@chatgpt-codex-connector" [ref=e706]
+                                  - strong [ref=e707]:
+                                    - link "chatgpt-codex-connector" [ref=e708] [cursor=pointer]:
+                                      - /url: /apps/chatgpt-codex-connector
+                                    - generic [ref=e709]: Bot
+                                  - link "Apr 22, 202644 minutes ago" [ref=e710] [cursor=pointer]:
+                                    - /url: "#r3125646869"
+                            - generic [ref=e714]:
+                              - paragraph [ref=e715]:
+                                - strong [ref=e716]:
+                                  - subscript [ref=e717]:
+                                    - subscript [ref=e718]:
+                                      - link "P2 Badge" [ref=e719] [cursor=pointer]:
+                                        - /url: https://camo.githubusercontent.com/f2c1aacb361ddd3a0e9f9cacdb84fab050de434017f6747bb916e31e29bdf03d/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f50322d79656c6c6f773f7374796c653d666c6174
+                                        - img "P2 Badge" [ref=e720]
+                                  - text: Restrict portable-surface update trigger to GSDD markers
+                              - paragraph [ref=e721]:
+                                - text: This condition now treats any existing
+                                - code [ref=e722]: .agents/
+                                - text: directory as evidence that GSDD portable surfaces are installed. In repos that use
+                                - code [ref=e723]: .agents/
+                                - text: for unrelated tooling,
+                                - code [ref=e724]: gsdd update
+                                - text: will unexpectedly generate
+                                - code [ref=e725]: .agents/skills/gsdd-*
+                                - text: and
+                                - code [ref=e726]: .agents/bin/gsdd.mjs
+                                - text: even when
+                                - code [ref=e727]: gsdd init
+                                - text: was never run, causing unintended repository mutations. The trigger should check for explicit GSDD-owned paths (for example
+                                - code [ref=e728]: .agents/bin/gsdd.mjs
+                                - text: or
+                                - code [ref=e729]: gsdd-*
+                                - text: skill folders) rather than the top-level
+                                - code [ref=e730]: .agents
+                                - text: directory.
+                              - paragraph [ref=e731]: Useful? React with 👍 / 👎.
+                      - 'row "148 148 if (isDry) {" [ref=e732]':
+                        - cell "148" [ref=e733] [cursor=pointer]
+                        - cell "148" [ref=e734] [cursor=pointer]
+                        - 'cell "if (isDry) {" [ref=e735]':
+                          - generic [ref=e736]: "if (isDry) {"
+                      - row "149 - console.log(' - would update open-standard skills (.agents/skills/gsdd-*)');" [ref=e737]:
+                        - cell "149" [ref=e738] [cursor=pointer]
+                        - cell [ref=e739] [cursor=pointer]
+                        - cell "- console.log(' - would update open-standard skills (.agents/skills/gsdd-*)');" [ref=e740]:
+                          - generic [ref=e741]: "- console.log(' - would update open-standard skills (.agents/skills/gsdd-*)');"
+                      - row "149 + console.log(' - would update portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');" [ref=e742]:
+                        - cell [ref=e743] [cursor=pointer]
+                        - cell "149" [ref=e744] [cursor=pointer]
+                        - cell "+ console.log(' - would update portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');" [ref=e745]:
+                          - generic [ref=e746]: + console.log(' - would update portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
+                      - 'row "150 150 } else {" [ref=e747]':
+                        - cell "150" [ref=e748] [cursor=pointer]
+                        - cell "150" [ref=e749] [cursor=pointer]
+                        - 'cell "} else {" [ref=e750]':
+                          - generic [ref=e751]: "} else {"
+                      - row "151 - generateOpenStandardSkills(ctx.cwd, ctx.workflows);" [ref=e752]:
+                        - cell "151" [ref=e753] [cursor=pointer]
+                        - cell [ref=e754] [cursor=pointer]
+                        - cell "- generateOpenStandardSkills(ctx.cwd, ctx.workflows);" [ref=e755]:
+                          - generic [ref=e756]: "- generateOpenStandardSkills(ctx.cwd, ctx.workflows);"
+                      - row "152 - console.log(' - updated open-standard skills (.agents/skills/gsdd-*)');" [ref=e757]:
+                        - cell "152" [ref=e758] [cursor=pointer]
+                        - cell [ref=e759] [cursor=pointer]
+                        - cell "- console.log(' - updated open-standard skills (.agents/skills/gsdd-*)');" [ref=e760]:
+                          - generic [ref=e761]: "- console.log(' - updated open-standard skills (.agents/skills/gsdd-*)');"
+                      - row "151 + generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);" [ref=e762]:
+                        - cell [ref=e763] [cursor=pointer]
+                        - cell "151" [ref=e764] [cursor=pointer]
+                        - cell "+ generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);" [ref=e765]:
+                          - generic [ref=e766]: + generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);
+                      - row "152 + console.log(' - updated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');" [ref=e767]:
+                        - cell [ref=e768] [cursor=pointer]
+                        - cell "152" [ref=e769] [cursor=pointer]
+                        - cell "+ console.log(' - updated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');" [ref=e770]:
+                          - generic [ref=e771]: + console.log(' - updated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
+                      - 'row "153 153 }" [ref=e772]':
+                        - cell "153" [ref=e773] [cursor=pointer]
+                        - cell "153" [ref=e774] [cursor=pointer]
+                        - 'cell "}" [ref=e775]':
+                          - generic [ref=e776]: "}"
+                      - row "154 154 updated = true;" [ref=e777]:
+                        - cell "154" [ref=e778] [cursor=pointer]
+                        - cell "154" [ref=e779] [cursor=pointer]
+                        - cell "updated = true;" [ref=e780]:
+                          - generic [ref=e781]: updated = true;
+                      - 'row "155 155 }" [ref=e782]':
+                        - cell "155" [ref=e783] [cursor=pointer]
+                        - cell "155" [ref=e784] [cursor=pointer]
+                        - 'cell "}" [ref=e785]':
+                          - generic [ref=e786]: "}"
+                      - 'row "Expand Down Expand Up @@ -180,11 +180,11 @@ export function createCmdUpdate(ctx) {" [ref=e787]':
+                        - cell "Expand Down Expand Up" [ref=e788] [cursor=pointer]:
+                          - link "Expand Down" [ref=e789]:
+                            - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                            - img [ref=e790]
+                          - link "Expand Up" [ref=e792]:
+                            - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                            - img [ref=e793]
+                        - 'cell "@@ -180,11 +180,11 @@ export function createCmdUpdate(ctx) {" [ref=e795]'
+                      - 'row "180 180 };" [ref=e796]':
+                        - cell "180" [ref=e797] [cursor=pointer]
+                        - cell "180" [ref=e798] [cursor=pointer]
+                        - 'cell "};" [ref=e799]':
+                          - generic [ref=e800]: "};"
+                      - 'row "181 181 }" [ref=e801]':
+                        - cell "181" [ref=e802] [cursor=pointer]
+                        - cell "181" [ref=e803] [cursor=pointer]
+                        - 'cell "}" [ref=e804]':
+                          - generic [ref=e805]: "}"
+                      - row "182 182" [ref=e806]:
+                        - cell "182" [ref=e807] [cursor=pointer]
+                        - cell "182" [ref=e808] [cursor=pointer]
+                        - cell [ref=e809]
+                      - 'row "183 - function generateOpenStandardSkills(cwd, workflows) {" [ref=e810]':
+                        - cell "183" [ref=e811] [cursor=pointer]
+                        - cell [ref=e812] [cursor=pointer]
+                        - 'cell "- function generateOpenStandardSkills(cwd, workflows) {" [ref=e813]':
+                          - generic [ref=e814]: "- function generateOpenStandardSkills(cwd, workflows) {"
+                      - 'row "184 - for (const workflow of workflows) {" [ref=e815]':
+                        - cell "184" [ref=e816] [cursor=pointer]
+                        - cell [ref=e817] [cursor=pointer]
+                        - 'cell "- for (const workflow of workflows) {" [ref=e818]':
+                          - generic [ref=e819]: "- for (const workflow of workflows) {"
+                      - row "185 - const dir = join(cwd, '.agents', 'skills', workflow.name);" [ref=e820]:
+                        - cell "185" [ref=e821] [cursor=pointer]
+                        - cell [ref=e822] [cursor=pointer]
+                        - cell "- const dir = join(cwd, '.agents', 'skills', workflow.name);" [ref=e823]:
+                          - generic [ref=e824]: "- const dir = join(cwd, '.agents', 'skills', workflow.name);"
+                      - 'row "186 - mkdirSync(dir, { recursive: true });" [ref=e825]':
+                        - cell "186" [ref=e826] [cursor=pointer]
+                        - cell [ref=e827] [cursor=pointer]
+                        - 'cell "- mkdirSync(dir, { recursive: true });" [ref=e828]':
+                          - generic [ref=e829]: "- mkdirSync(dir, { recursive: true });"
+                      - row "187 - writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(workflow));" [ref=e830]:
+                        - cell "187" [ref=e831] [cursor=pointer]
+                        - cell [ref=e832] [cursor=pointer]
+                        - cell "- writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(workflow));" [ref=e833]:
+                          - generic [ref=e834]: "- writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(workflow));"
+                      - 'row "183 + function generatePortableRuntimeSurfaces(cwd, workflows) {" [ref=e835]':
+                        - cell [ref=e836] [cursor=pointer]
+                        - cell "183" [ref=e837] [cursor=pointer]
+                        - 'cell "+ function generatePortableRuntimeSurfaces(cwd, workflows) {" [ref=e838]':
+                          - generic [ref=e839]: "+ function generatePortableRuntimeSurfaces(cwd, workflows) {"
+                      - 'row "184 + for (const entry of buildPortableRuntimeEntries({ workflows })) {" [ref=e840]':
+                        - cell [ref=e841] [cursor=pointer]
+                        - cell "184" [ref=e842] [cursor=pointer]
+                        - 'cell "+ for (const entry of buildPortableRuntimeEntries({ workflows })) {" [ref=e843]':
+                          - generic [ref=e844]: "+ for (const entry of buildPortableRuntimeEntries({ workflows })) {"
+                      - row "185 + const targetPath = join(cwd, entry.relativePath);" [ref=e845]:
+                        - cell [ref=e846] [cursor=pointer]
+                        - cell "185" [ref=e847] [cursor=pointer]
+                        - cell "+ const targetPath = join(cwd, entry.relativePath);" [ref=e848]:
+                          - generic [ref=e849]: + const targetPath = join(cwd, entry.relativePath);
+                      - 'row "186 + mkdirSync(dirname(targetPath), { recursive: true });" [ref=e850]':
+                        - cell [ref=e851] [cursor=pointer]
+                        - cell "186" [ref=e852] [cursor=pointer]
+                        - 'cell "+ mkdirSync(dirname(targetPath), { recursive: true });" [ref=e853]':
+                          - generic [ref=e854]: "+ mkdirSync(dirname(targetPath), { recursive: true });"
+                      - row "187 + writeFileSync(targetPath, entry.content);" [ref=e855]:
+                        - cell [ref=e856] [cursor=pointer]
+                        - cell "187" [ref=e857] [cursor=pointer]
+                        - cell "+ writeFileSync(targetPath, entry.content);" [ref=e858]:
+                          - generic [ref=e859]: + writeFileSync(targetPath, entry.content);
+                      - 'row "188 188 }" [ref=e860]':
+                        - cell "188" [ref=e861] [cursor=pointer]
+                        - cell "188" [ref=e862] [cursor=pointer]
+                        - 'cell "}" [ref=e863]':
+                          - generic [ref=e864]: "}"
+                      - 'row "189 189 }" [ref=e865]':
+                        - cell "189" [ref=e866] [cursor=pointer]
+                        - cell "189" [ref=e867] [cursor=pointer]
+                        - 'cell "}" [ref=e868]':
+                          - generic [ref=e869]: "}"
+                      - row "190 190" [ref=e870]:
+                        - cell "190" [ref=e871] [cursor=pointer]
+                        - cell "190" [ref=e872] [cursor=pointer]
+                        - cell [ref=e873]
+                      - row "Expand Down" [ref=e874]:
+                        - cell "Expand Down" [ref=e875] [cursor=pointer]:
+                          - link "Expand Down" [ref=e876]:
+                            - /url: "#diff-6375cb39475e304ef9a70205c7332121a778c46361a649e0ee1be8414b6f9bf7"
+                            - img [ref=e877]
+                        - cell [ref=e879]
+                - generic [ref=e881]:
+                  - generic [ref=e882]:
+                    - generic [ref=e883]:
+                      - button "Toggle diff contents" [expanded] [ref=e884] [cursor=pointer]:
+                        - img [ref=e885]
+                      - button "Expand all" [ref=e888] [cursor=pointer]:
+                        - img "Expand all" [ref=e889]
+                      - link "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e891] [cursor=pointer]:
+                        - /url: /PatrickSys/workspine/blob/main/.github/CODEOWNERS#L2
+                        - generic "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e892]:
+                          - img [ref=e893]
+                      - generic [ref=e895]: "4 changes: 2 additions & 2 deletions"
+                      - generic [ref=e896]: "4"
+                      - generic [ref=e902]:
+                        - link "bin/lib/init-runtime.mjs" [ref=e903] [cursor=pointer]:
+                          - /url: "#diff-a68db8da00607d139d89189abec04ca283140c8b723e40e80b384c68c9e425b0"
+                        - button "Copy" [ref=e905]:
+                          - img [ref=e906]
+                    - group [ref=e912]:
+                      - button "Show options" [ref=e913] [cursor=pointer]:
+                        - img "Show options" [ref=e915]
+                  - table [ref=e920]:
+                    - rowgroup [ref=e921]:
+                      - row "Original file line number Diff line number Diff line change" [ref=e922]:
+                        - columnheader "Original file line number" [ref=e923]
+                        - columnheader "Diff line number" [ref=e924]
+                        - columnheader "Diff line change" [ref=e925]
+                    - rowgroup [ref=e926]:
+                      - row "Expand Up @@ -198,15 +198,15 @@ Platforms (for --tools):" [ref=e927]:
+                        - cell "Expand Up" [ref=e928] [cursor=pointer]:
+                          - link "Expand Up" [ref=e929]:
+                            - /url: "#diff-a68db8da00607d139d89189abec04ca283140c8b723e40e80b384c68c9e425b0"
+                            - img [ref=e930]
+                        - cell "@@ -198,15 +198,15 @@ Platforms (for --tools):" [ref=e932]
+                      - row "198 198 all Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)" [ref=e933]:
+                        - cell "198" [ref=e934] [cursor=pointer]
+                        - cell "198" [ref=e935] [cursor=pointer]
+                        - cell "all Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)" [ref=e936]:
+                          - generic [ref=e937]: all Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)
+                      - row "199 199" [ref=e938]:
+                        - cell "199" [ref=e939] [cursor=pointer]
+                        - cell "199" [ref=e940] [cursor=pointer]
+                        - cell [ref=e941]
+                      - row "200 200 Notes:" [ref=e942]:
+                        - cell "200" [ref=e943] [cursor=pointer]
+                        - cell "200" [ref=e944] [cursor=pointer]
+                        - cell "Notes:" [ref=e945]:
+                          - generic [ref=e946]: "Notes:"
+                      - row "201 - - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)" [ref=e947]:
+                        - cell "201" [ref=e948] [cursor=pointer]
+                        - cell [ref=e949] [cursor=pointer]
+                        - cell "- - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)" [ref=e950]:
+                          - generic [ref=e951]: "- - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)"
+                      - row "201 + - init always generates portable runtime surfaces at .agents/skills/gsdd-* plus .agents/bin/gsdd.mjs" [ref=e952]:
+                        - cell [ref=e953] [cursor=pointer]
+                        - cell "201" [ref=e954] [cursor=pointer]
+                        - cell "+ - init always generates portable runtime surfaces at .agents/skills/gsdd-* plus .agents/bin/gsdd.mjs" [ref=e955]:
+                          - generic [ref=e956]: + - init always generates portable runtime surfaces at .agents/skills/gsdd-* plus .agents/bin/gsdd.mjs
+                      - row "202 202 - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/" [ref=e957]:
+                        - cell "202" [ref=e958] [cursor=pointer]
+                        - cell "202" [ref=e959] [cursor=pointer]
+                        - cell "- Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/" [ref=e960]:
+                          - generic [ref=e961]: "- Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/"
+                      - 'row "203 203 - running plain \\`gsdd init\\` in a terminal opens the guided runtime-selection wizard" [ref=e962]':
+                        - cell "203" [ref=e963] [cursor=pointer]
+                        - cell "203" [ref=e964] [cursor=pointer]
+                        - 'cell "- running plain \\`gsdd init\\` in a terminal opens the guided runtime-selection wizard" [ref=e965]':
+                          - generic [ref=e966]: "- running plain \\`gsdd init\\` in a terminal opens the guided runtime-selection wizard"
+                      - row "204 204 - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing" [ref=e967]:
+                        - cell "204" [ref=e968] [cursor=pointer]
+                        - cell "204" [ref=e969] [cursor=pointer]
+                        - cell "- the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing" [ref=e970]:
+                          - generic [ref=e971]: "- the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing"
+                      - 'row "205 205 - \\`gsdd health\\` compares any installed generated runtime surfaces against current render output and points back to \\`gsdd update\\` when they drift" [ref=e972]':
+                        - cell "205" [ref=e973] [cursor=pointer]
+                        - cell "205" [ref=e974] [cursor=pointer]
+                        - 'cell "- \\`gsdd health\\` compares any installed generated runtime surfaces against current render output and points back to \\`gsdd update\\` when they drift" [ref=e975]':
+                          - generic [ref=e976]: "- \\`gsdd health\\` compares any installed generated runtime surfaces against current render output and points back to \\`gsdd update\\` when they drift"
+                      - row "206 206 - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI" [ref=e977]:
+                        - cell "206" [ref=e978] [cursor=pointer]
+                        - cell "206" [ref=e979] [cursor=pointer]
+                        - cell "- directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI" [ref=e980]:
+                          - generic [ref=e981]: "- directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI"
+                      - row "207 207 - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance" [ref=e982]:
+                        - cell "207" [ref=e983] [cursor=pointer]
+                        - cell "207" [ref=e984] [cursor=pointer]
+                        - cell "- Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance" [ref=e985]:
+                          - generic [ref=e986]: "- Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance"
+                      - row "208 208 - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility" [ref=e987]:
+                        - cell "208" [ref=e988] [cursor=pointer]
+                        - cell "208" [ref=e989] [cursor=pointer]
+                        - cell "- --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility" [ref=e990]:
+                          - generic [ref=e991]: "- --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility"
+                      - row "209 - - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)" [ref=e992]:
+                        - cell "209" [ref=e993] [cursor=pointer]
+                        - cell [ref=e994] [cursor=pointer]
+                        - cell "- - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)" [ref=e995]:
+                          - generic [ref=e996]: "- - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)"
+                      - row "209 + - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; repo-local helper commands route through .agents/bin/gsdd.mjs; $gsdd-plan is plan-only until explicit $gsdd-execute)" [ref=e997]:
+                        - cell [ref=e998] [cursor=pointer]
+                        - cell "209" [ref=e999] [cursor=pointer]
+                        - cell "+ - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; repo-local helper commands route through .agents/bin/gsdd.mjs; $gsdd-plan is plan-only until explicit $gsdd-execute)" [ref=e1000]:
+                          - generic [ref=e1001]: + - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; repo-local helper commands route through .agents/bin/gsdd.mjs; $gsdd-plan is plan-only until explicit $gsdd-execute)
+                      - row "210 210 - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in" [ref=e1002]:
+                        - cell "210" [ref=e1003] [cursor=pointer]
+                        - cell "210" [ref=e1004] [cursor=pointer]
+                        - cell "- root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in" [ref=e1005]:
+                          - generic [ref=e1006]: "- root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in"
+                      - row "211 211" [ref=e1007]:
+                        - cell "211" [ref=e1008] [cursor=pointer]
+                        - cell "211" [ref=e1009] [cursor=pointer]
+                        - cell [ref=e1010]
+                      - row "212 212 Examples:" [ref=e1011]:
+                        - cell "212" [ref=e1012] [cursor=pointer]
+                        - cell "212" [ref=e1013] [cursor=pointer]
+                        - cell "Examples:" [ref=e1014]:
+                          - generic [ref=e1015]: "Examples:"
+                      - row "Expand Down" [ref=e1016]:
+                        - cell "Expand Down" [ref=e1017] [cursor=pointer]:
+                          - link "Expand Down" [ref=e1018]:
+                            - /url: "#diff-a68db8da00607d139d89189abec04ca283140c8b723e40e80b384c68c9e425b0"
+                            - img [ref=e1019]
+                        - cell [ref=e1021]
+                - generic [ref=e1023]:
+                  - generic [ref=e1024]:
+                    - generic [ref=e1025]:
+                      - button "Toggle diff contents" [expanded] [ref=e1026] [cursor=pointer]:
+                        - img [ref=e1027]
+                      - button "Expand all" [ref=e1030] [cursor=pointer]:
+                        - img "Expand all" [ref=e1031]
+                      - link "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e1033] [cursor=pointer]:
+                        - /url: /PatrickSys/workspine/blob/main/.github/CODEOWNERS#L2
+                        - generic "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e1034]:
+                          - img [ref=e1035]
+                      - generic [ref=e1037]: "85 changes: 85 additions & 0 deletions"
+                      - generic [ref=e1038]: "85"
+                      - generic [ref=e1044]:
+                        - link "bin/lib/rendering.mjs" [ref=e1045] [cursor=pointer]:
+                          - /url: "#diff-3b34d4b3f0281655c82b13775b62d39e0f42caebb87e3548ef4d544bddf8b6c0"
+                        - button "Copy" [ref=e1047]:
+                          - img [ref=e1048]
+                    - group [ref=e1054]:
+                      - button "Show options" [ref=e1055] [cursor=pointer]:
+                        - img "Show options" [ref=e1057]
+                  - table [ref=e1062]:
+                    - rowgroup [ref=e1063]:
+                      - row "Original file line number Diff line number Diff line change" [ref=e1064]:
+                        - columnheader "Original file line number" [ref=e1065]
+                        - columnheader "Diff line number" [ref=e1066]
+                        - columnheader "Diff line change" [ref=e1067]
+                    - rowgroup [ref=e1068]:
+                      - 'row "Expand Up @@ -5,6 +5,9 @@ import { fileURLToPath } from ''url'';" [ref=e1069]':
+                        - cell "Expand Up" [ref=e1070] [cursor=pointer]:
+                          - link "Expand Up" [ref=e1071]:
+                            - /url: "#diff-3b34d4b3f0281655c82b13775b62d39e0f42caebb87e3548ef4d544bddf8b6c0"
+                            - img [ref=e1072]
+                        - 'cell "@@ -5,6 +5,9 @@ import { fileURLToPath } from ''url'';" [ref=e1074]'
+                      - row "5 5 const __filename = fileURLToPath(import.meta.url);" [ref=e1075]:
+                        - cell "5" [ref=e1076] [cursor=pointer]
+                        - cell "5" [ref=e1077] [cursor=pointer]
+                        - cell "const __filename = fileURLToPath(import.meta.url);" [ref=e1078]:
+                          - generic [ref=e1079]: const __filename = fileURLToPath(import.meta.url);
+                      - row "6 6 const __dirname = dirname(__filename);" [ref=e1080]:
+                        - cell "6" [ref=e1081] [cursor=pointer]
+                        - cell "6" [ref=e1082] [cursor=pointer]
+                        - cell "const __dirname = dirname(__filename);" [ref=e1083]:
+                          - generic [ref=e1084]: const __dirname = dirname(__filename);
+                      - row "7 7 const DISTILLED_DIR = join(__dirname, '..', '..', 'distilled');" [ref=e1085]:
+                        - cell "7" [ref=e1086] [cursor=pointer]
+                        - cell "7" [ref=e1087] [cursor=pointer]
+                        - cell "const DISTILLED_DIR = join(__dirname, '..', '..', 'distilled');" [ref=e1088]:
+                          - generic [ref=e1089]: const DISTILLED_DIR = join(__dirname, '..', '..', 'distilled');
+                      - row "8 + const FRAMEWORK_ROOT = join(__dirname, '..', '..');" [ref=e1090]:
+                        - cell [ref=e1091] [cursor=pointer]
+                        - cell "8" [ref=e1092] [cursor=pointer]
+                        - cell "+ const FRAMEWORK_ROOT = join(__dirname, '..', '..');" [ref=e1093]:
+                          - generic [ref=e1094]: + const FRAMEWORK_ROOT = join(__dirname, '..', '..');
+                      - row "9 + const PACKAGE_VERSION = JSON.parse(readFileSync(join(FRAMEWORK_ROOT, 'package.json'), 'utf-8')).version;" [ref=e1095]:
+                        - cell [ref=e1096] [cursor=pointer]
+                        - cell "9" [ref=e1097] [cursor=pointer]
+                        - cell "+ const PACKAGE_VERSION = JSON.parse(readFileSync(join(FRAMEWORK_ROOT, 'package.json'), 'utf-8')).version;" [ref=e1098]:
+                          - generic [ref=e1099]: + const PACKAGE_VERSION = JSON.parse(readFileSync(join(FRAMEWORK_ROOT, 'package.json'), 'utf-8')).version;
+                      - 'row "10 + const SOURCE_ROOT_HINT = existsSync(join(FRAMEWORK_ROOT, ''.git'')) ? FRAMEWORK_ROOT : null;" [ref=e1100]':
+                        - cell [ref=e1101] [cursor=pointer]
+                        - cell "10" [ref=e1102] [cursor=pointer]
+                        - 'cell "+ const SOURCE_ROOT_HINT = existsSync(join(FRAMEWORK_ROOT, ''.git'')) ? FRAMEWORK_ROOT : null;" [ref=e1103]':
+                          - generic [ref=e1104]: "+ const SOURCE_ROOT_HINT = existsSync(join(FRAMEWORK_ROOT, '.git')) ? FRAMEWORK_ROOT : null;"
+                      - row "8 11" [ref=e1105]:
+                        - cell "8" [ref=e1106] [cursor=pointer]
+                        - cell "11" [ref=e1107] [cursor=pointer]
+                        - cell [ref=e1108]
+                      - 'row "9 12 function getWorkflowContent(workflowFile) {" [ref=e1109]':
+                        - cell "9" [ref=e1110] [cursor=pointer]
+                        - cell "12" [ref=e1111] [cursor=pointer]
+                        - 'cell "function getWorkflowContent(workflowFile) {" [ref=e1112]':
+                          - generic [ref=e1113]: "function getWorkflowContent(workflowFile) {"
+                      - row "10 13 const filePath = join(DISTILLED_DIR, 'workflows', workflowFile);" [ref=e1114]:
+                        - cell "10" [ref=e1115] [cursor=pointer]
+                        - cell "13" [ref=e1116] [cursor=pointer]
+                        - cell "const filePath = join(DISTILLED_DIR, 'workflows', workflowFile);" [ref=e1117]:
+                          - generic [ref=e1118]: const filePath = join(DISTILLED_DIR, 'workflows', workflowFile);
+                      - 'row "Expand Down Expand Up @@ -37,6 +40,86 @@ function buildPortableSkillEntries(workflows) {" [ref=e1119]':
+                        - cell "Expand Down Expand Up" [ref=e1120] [cursor=pointer]:
+                          - link "Expand Down" [ref=e1121]:
+                            - /url: "#diff-3b34d4b3f0281655c82b13775b62d39e0f42caebb87e3548ef4d544bddf8b6c0"
+                            - img [ref=e1122]
+                          - link "Expand Up" [ref=e1124]:
+                            - /url: "#diff-3b34d4b3f0281655c82b13775b62d39e0f42caebb87e3548ef4d544bddf8b6c0"
+                            - img [ref=e1125]
+                        - 'cell "@@ -37,6 +40,86 @@ function buildPortableSkillEntries(workflows) {" [ref=e1127]'
+                      - 'row "37 40 }));" [ref=e1128]':
+                        - cell "37" [ref=e1129] [cursor=pointer]
+                        - cell "40" [ref=e1130] [cursor=pointer]
+                        - 'cell "}));" [ref=e1131]':
+                          - generic [ref=e1132]: "}));"
+                      - 'row "38 41 }" [ref=e1133]':
+                        - cell "38" [ref=e1134] [cursor=pointer]
+                        - cell "41" [ref=e1135] [cursor=pointer]
+                        - 'cell "}" [ref=e1136]':
+                          - generic [ref=e1137]: "}"
+                      - row "39 42" [ref=e1138]:
+                        - cell "39" [ref=e1139] [cursor=pointer]
+                        - cell "42" [ref=e1140] [cursor=pointer]
+                        - cell [ref=e1141]
+                      - 'row "43 + function renderPortableHelperLauncher({" [ref=e1142]':
+                        - cell [ref=e1143] [cursor=pointer]
+                        - cell "43" [ref=e1144] [cursor=pointer]
+                        - 'cell "+ function renderPortableHelperLauncher({" [ref=e1145]':
+                          - generic [ref=e1146]: "+ function renderPortableHelperLauncher({"
+                      - row "44 + packageVersion = PACKAGE_VERSION," [ref=e1147]:
+                        - cell [ref=e1148] [cursor=pointer]
+                        - cell "44" [ref=e1149] [cursor=pointer]
+                        - cell "+ packageVersion = PACKAGE_VERSION," [ref=e1150]:
+                          - generic [ref=e1151]: + packageVersion = PACKAGE_VERSION,
+                      - row "45 + sourceRootHint = SOURCE_ROOT_HINT," [ref=e1152]:
+                        - cell [ref=e1153] [cursor=pointer]
+                        - cell "45" [ref=e1154] [cursor=pointer]
+                        - cell "+ sourceRootHint = SOURCE_ROOT_HINT," [ref=e1155]:
+                          - generic [ref=e1156]: + sourceRootHint = SOURCE_ROOT_HINT,
+                      - 'row "46 + } = {}) {" [ref=e1157]':
+                        - cell [ref=e1158] [cursor=pointer]
+                        - cell "46" [ref=e1159] [cursor=pointer]
+                        - 'cell "+ } = {}) {" [ref=e1160]':
+                          - generic [ref=e1161]: "+ } = {}) {"
+                      - 'row "47 + return `#!/usr/bin/env node" [ref=e1162]':
+                        - cell [ref=e1163] [cursor=pointer]
+                        - cell "47" [ref=e1164] [cursor=pointer]
+                        - 'cell "+ return `#!/usr/bin/env node" [ref=e1165]':
+                          - generic [ref=e1166]: "+ return `#!/usr/bin/env node"
+                      - row "48 +" [ref=e1167]:
+                        - cell [ref=e1168] [cursor=pointer]
+                        - cell "48" [ref=e1169] [cursor=pointer]
+                        - cell "+" [ref=e1170]:
+                          - generic: +
+                      - 'row "49 + import { spawnSync } from ''child_process'';" [ref=e1171]':
+                        - cell [ref=e1172] [cursor=pointer]
+                        - cell "49" [ref=e1173] [cursor=pointer]
+                        - 'cell "+ import { spawnSync } from ''child_process'';" [ref=e1174]':
+                          - generic [ref=e1175]: "+ import { spawnSync } from 'child_process';"
+                      - 'row "50 + import { existsSync } from ''fs'';" [ref=e1176]':
+                        - cell [ref=e1177] [cursor=pointer]
+                        - cell "50" [ref=e1178] [cursor=pointer]
+                        - 'cell "+ import { existsSync } from ''fs'';" [ref=e1179]':
+                          - generic [ref=e1180]: "+ import { existsSync } from 'fs';"
+                      - 'row "51 + import { dirname, join, resolve } from ''path'';" [ref=e1181]':
+                        - cell [ref=e1182] [cursor=pointer]
+                        - cell "51" [ref=e1183] [cursor=pointer]
+                        - 'cell "+ import { dirname, join, resolve } from ''path'';" [ref=e1184]':
+                          - generic [ref=e1185]: "+ import { dirname, join, resolve } from 'path';"
+                      - 'row "52 + import { fileURLToPath } from ''url'';" [ref=e1186]':
+                        - cell [ref=e1187] [cursor=pointer]
+                        - cell "52" [ref=e1188] [cursor=pointer]
+                        - 'cell "+ import { fileURLToPath } from ''url'';" [ref=e1189]':
+                          - generic [ref=e1190]: "+ import { fileURLToPath } from 'url';"
+                      - row "53 +" [ref=e1191]:
+                        - cell [ref=e1192] [cursor=pointer]
+                        - cell "53" [ref=e1193] [cursor=pointer]
+                        - cell "+" [ref=e1194]:
+                          - generic: +
+                      - row "54 + const __filename = fileURLToPath(import.meta.url);" [ref=e1195]:
+                        - cell [ref=e1196] [cursor=pointer]
+                        - cell "54" [ref=e1197] [cursor=pointer]
+                        - cell "+ const __filename = fileURLToPath(import.meta.url);" [ref=e1198]:
+                          - generic [ref=e1199]: + const __filename = fileURLToPath(import.meta.url);
+                      - row "55 + const __dirname = dirname(__filename);" [ref=e1200]:
+                        - cell [ref=e1201] [cursor=pointer]
+                        - cell "55" [ref=e1202] [cursor=pointer]
+                        - cell "+ const __dirname = dirname(__filename);" [ref=e1203]:
+                          - generic [ref=e1204]: + const __dirname = dirname(__filename);
+                      - row "56 + const repoRoot = resolve(__dirname, '..', '..');" [ref=e1205]:
+                        - cell [ref=e1206] [cursor=pointer]
+                        - cell "56" [ref=e1207] [cursor=pointer]
+                        - cell "+ const repoRoot = resolve(__dirname, '..', '..');" [ref=e1208]:
+                          - generic [ref=e1209]: + const repoRoot = resolve(__dirname, '..', '..');
+                      - row "57 + const args = process.argv.slice(2);" [ref=e1210]:
+                        - cell [ref=e1211] [cursor=pointer]
+                        - cell "57" [ref=e1212] [cursor=pointer]
+                        - cell "+ const args = process.argv.slice(2);" [ref=e1213]:
+                          - generic [ref=e1214]: + const args = process.argv.slice(2);
+                      - 'row "58 + const generatorRootHint = ${JSON.stringify(sourceRootHint)};" [ref=e1215]':
+                        - cell [ref=e1216] [cursor=pointer]
+                        - cell "58" [ref=e1217] [cursor=pointer]
+                        - 'cell "+ const generatorRootHint = ${JSON.stringify(sourceRootHint)};" [ref=e1218]':
+                          - generic [ref=e1219]: "+ const generatorRootHint = ${JSON.stringify(sourceRootHint)};"
+                      - row "59 +" [ref=e1220]:
+                        - cell [ref=e1221] [cursor=pointer]
+                        - cell "59" [ref=e1222] [cursor=pointer]
+                        - cell "+" [ref=e1223]:
+                          - generic: +
+                      - 'row "60 + function exitWithResult(result) {" [ref=e1224]':
+                        - cell [ref=e1225] [cursor=pointer]
+                        - cell "60" [ref=e1226] [cursor=pointer]
+                        - 'cell "+ function exitWithResult(result) {" [ref=e1227]':
+                          - generic [ref=e1228]: "+ function exitWithResult(result) {"
+                      - 'row "61 + if (result.error) {" [ref=e1229]':
+                        - cell [ref=e1230] [cursor=pointer]
+                        - cell "61" [ref=e1231] [cursor=pointer]
+                        - 'cell "+ if (result.error) {" [ref=e1232]':
+                          - generic [ref=e1233]: "+ if (result.error) {"
+                      - row "62 + if (result.error.code === 'ENOENT') return false;" [ref=e1234]:
+                        - cell [ref=e1235] [cursor=pointer]
+                        - cell "62" [ref=e1236] [cursor=pointer]
+                        - cell "+ if (result.error.code === 'ENOENT') return false;" [ref=e1237]:
+                          - generic [ref=e1238]: + if (result.error.code === 'ENOENT') return false;
+                      - row "63 + throw result.error;" [ref=e1239]:
+                        - cell [ref=e1240] [cursor=pointer]
+                        - cell "63" [ref=e1241] [cursor=pointer]
+                        - cell "+ throw result.error;" [ref=e1242]:
+                          - generic [ref=e1243]: + throw result.error;
+                      - 'row "64 + }" [ref=e1244]':
+                        - cell [ref=e1245] [cursor=pointer]
+                        - cell "64" [ref=e1246] [cursor=pointer]
+                        - 'cell "+ }" [ref=e1247]':
+                          - generic [ref=e1248]: "+ }"
+                      - row "65 + process.exit(result.status ?? 0);" [ref=e1249]:
+                        - cell [ref=e1250] [cursor=pointer]
+                        - cell "65" [ref=e1251] [cursor=pointer]
+                        - cell "+ process.exit(result.status ?? 0);" [ref=e1252]:
+                          - generic [ref=e1253]: + process.exit(result.status ?? 0);
+                      - 'row "@chatgpt-codex-connector chatgpt-codex-connector Bot Apr 22, 202644 minutes ago P1 Badge Propagate child termination signals in helper launcher spawnSync returns status: null and sets signal when the child is terminated, but process.exit(result.status ?? 0) converts that into exit code 0. As a result, node .agents/bin/gsdd.mjs ... can report success even when the underlying gsdd command was killed (for example by SIGTERM/OOM/timeout), which allows workflows to continue after failed file-op/phase-status mutations. Treat signaled exits as failures (or re-emit the signal) instead of coercing them to success. Useful? React with 👍 / 👎." [ref=e1254]':
+                        - 'cell "@chatgpt-codex-connector chatgpt-codex-connector Bot Apr 22, 202644 minutes ago P1 Badge Propagate child termination signals in helper launcher spawnSync returns status: null and sets signal when the child is terminated, but process.exit(result.status ?? 0) converts that into exit code 0. As a result, node .agents/bin/gsdd.mjs ... can report success even when the underlying gsdd command was killed (for example by SIGTERM/OOM/timeout), which allows workflows to continue after failed file-op/phase-status mutations. Treat signaled exits as failures (or re-emit the signal) instead of coercing them to success. Useful? React with 👍 / 👎." [ref=e1255]':
+                          - generic [ref=e1263]:
+                            - generic [ref=e1264]:
+                              - group [ref=e1267]:
+                                - button "Show options" [ref=e1268] [cursor=pointer]:
+                                  - img "Show options" [ref=e1271]
+                              - heading "@chatgpt-codex-connector chatgpt-codex-connector Bot Apr 22, 202644 minutes ago" [level=3] [ref=e1273]:
+                                - generic [ref=e1274]:
+                                  - img "@chatgpt-codex-connector" [ref=e1276]
+                                  - strong [ref=e1277]:
+                                    - link "chatgpt-codex-connector" [ref=e1278] [cursor=pointer]:
+                                      - /url: /apps/chatgpt-codex-connector
+                                    - generic [ref=e1279]: Bot
+                                  - link "Apr 22, 202644 minutes ago" [ref=e1280] [cursor=pointer]:
+                                    - /url: "#r3125646864"
+                            - generic [ref=e1284]:
+                              - paragraph [ref=e1285]:
+                                - strong [ref=e1286]:
+                                  - subscript [ref=e1287]:
+                                    - subscript [ref=e1288]:
+                                      - link "P1 Badge" [ref=e1289] [cursor=pointer]:
+                                        - /url: https://camo.githubusercontent.com/c595229c0ecb6ee85b9c7804144d495f131a495ec87091fea2b262d954c9a92d/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f50312d6f72616e67653f7374796c653d666c6174
+                                        - img "P1 Badge" [ref=e1290]
+                                  - text: Propagate child termination signals in helper launcher
+                              - paragraph [ref=e1291]:
+                                - code [ref=e1292]: spawnSync
+                                - text: returns
+                                - code [ref=e1293]: "status: null"
+                                - text: and sets
+                                - code [ref=e1294]: signal
+                                - text: when the child is terminated, but
+                                - code [ref=e1295]: process.exit(result.status ?? 0)
+                                - text: converts that into exit code
+                                - code [ref=e1296]: "0"
+                                - text: . As a result,
+                                - code [ref=e1297]: node .agents/bin/gsdd.mjs ...
+                                - text: can report success even when the underlying
+                                - code [ref=e1298]: gsdd
+                                - text: command was killed (for example by SIGTERM/OOM/timeout), which allows workflows to continue after failed
+                                - code [ref=e1299]: file-op
+                                - text: /
+                                - code [ref=e1300]: phase-status
+                                - text: mutations. Treat signaled exits as failures (or re-emit the signal) instead of coercing them to success.
+                              - paragraph [ref=e1301]: Useful? React with 👍 / 👎.
+                      - 'row "66 + }" [ref=e1302]':
+                        - cell [ref=e1303] [cursor=pointer]
+                        - cell "66" [ref=e1304] [cursor=pointer]
+                        - 'cell "+ }" [ref=e1305]':
+                          - generic [ref=e1306]: "+ }"
+                      - row "67 +" [ref=e1307]:
+                        - cell [ref=e1308] [cursor=pointer]
+                        - cell "67" [ref=e1309] [cursor=pointer]
+                        - cell "+" [ref=e1310]:
+                          - generic: +
+                      - 'row "68 + function looksLikeFrameworkRoot(root) {" [ref=e1311]':
+                        - cell [ref=e1312] [cursor=pointer]
+                        - cell "68" [ref=e1313] [cursor=pointer]
+                        - 'cell "+ function looksLikeFrameworkRoot(root) {" [ref=e1314]':
+                          - generic [ref=e1315]: "+ function looksLikeFrameworkRoot(root) {"
+                      - row "69 + return Boolean(root)" [ref=e1316]:
+                        - cell [ref=e1317] [cursor=pointer]
+                        - cell "69" [ref=e1318] [cursor=pointer]
+                        - cell "+ return Boolean(root)" [ref=e1319]:
+                          - generic [ref=e1320]: + return Boolean(root)
+                      - row "70 + && existsSync(join(root, 'bin', 'gsdd.mjs'))" [ref=e1321]:
+                        - cell [ref=e1322] [cursor=pointer]
+                        - cell "70" [ref=e1323] [cursor=pointer]
+                        - cell "+ && existsSync(join(root, 'bin', 'gsdd.mjs'))" [ref=e1324]:
+                          - generic [ref=e1325]: + && existsSync(join(root, 'bin', 'gsdd.mjs'))
+                      - row "71 + && existsSync(join(root, 'distilled', 'workflows', 'plan.md'));" [ref=e1326]:
+                        - cell [ref=e1327] [cursor=pointer]
+                        - cell "71" [ref=e1328] [cursor=pointer]
+                        - cell "+ && existsSync(join(root, 'distilled', 'workflows', 'plan.md'));" [ref=e1329]:
+                          - generic [ref=e1330]: + && existsSync(join(root, 'distilled', 'workflows', 'plan.md'));
+                      - 'row "72 + }" [ref=e1331]':
+                        - cell [ref=e1332] [cursor=pointer]
+                        - cell "72" [ref=e1333] [cursor=pointer]
+                        - 'cell "+ }" [ref=e1334]':
+                          - generic [ref=e1335]: "+ }"
+                      - row "73 +" [ref=e1336]:
+                        - cell [ref=e1337] [cursor=pointer]
+                        - cell "73" [ref=e1338] [cursor=pointer]
+                        - cell "+" [ref=e1339]:
+                          - generic: +
+                      - row "74 + const sourceCliPath = join(repoRoot, 'bin', 'gsdd.mjs');" [ref=e1340]:
+                        - cell [ref=e1341] [cursor=pointer]
+                        - cell "74" [ref=e1342] [cursor=pointer]
+                        - cell "+ const sourceCliPath = join(repoRoot, 'bin', 'gsdd.mjs');" [ref=e1343]:
+                          - generic [ref=e1344]: + const sourceCliPath = join(repoRoot, 'bin', 'gsdd.mjs');
+                      - row "75 + const sourceWorkflowPath = join(repoRoot, 'distilled', 'workflows', 'plan.md');" [ref=e1345]:
+                        - cell [ref=e1346] [cursor=pointer]
+                        - cell "75" [ref=e1347] [cursor=pointer]
+                        - cell "+ const sourceWorkflowPath = join(repoRoot, 'distilled', 'workflows', 'plan.md');" [ref=e1348]:
+                          - generic [ref=e1349]: + const sourceWorkflowPath = join(repoRoot, 'distilled', 'workflows', 'plan.md');
+                      - row "76 +" [ref=e1350]:
+                        - cell [ref=e1351] [cursor=pointer]
+                        - cell "76" [ref=e1352] [cursor=pointer]
+                        - cell "+" [ref=e1353]:
+                          - generic: +
+                      - row "77 + // Framework-source mode should execute the current branch code, not the published package." [ref=e1354]:
+                        - cell [ref=e1355] [cursor=pointer]
+                        - cell "77" [ref=e1356] [cursor=pointer]
+                        - cell "+ // Framework-source mode should execute the current branch code, not the published package." [ref=e1357]:
+                          - generic [ref=e1358]: + // Framework-source mode should execute the current branch code, not the published package.
+                      - 'row "78 + if (existsSync(sourceCliPath) && existsSync(sourceWorkflowPath)) {" [ref=e1359]':
+                        - cell [ref=e1360] [cursor=pointer]
+                        - cell "78" [ref=e1361] [cursor=pointer]
+                        - 'cell "+ if (existsSync(sourceCliPath) && existsSync(sourceWorkflowPath)) {" [ref=e1362]':
+                          - generic [ref=e1363]: "+ if (existsSync(sourceCliPath) && existsSync(sourceWorkflowPath)) {"
+                      - 'row "79 + exitWithResult(spawnSync(process.execPath, [sourceCliPath, ...args], {" [ref=e1364]':
+                        - cell [ref=e1365] [cursor=pointer]
+                        - cell "79" [ref=e1366] [cursor=pointer]
+                        - 'cell "+ exitWithResult(spawnSync(process.execPath, [sourceCliPath, ...args], {" [ref=e1367]':
+                          - generic [ref=e1368]: "+ exitWithResult(spawnSync(process.execPath, [sourceCliPath, ...args], {"
+                      - 'row "80 + cwd: repoRoot," [ref=e1369]':
+                        - cell [ref=e1370] [cursor=pointer]
+                        - cell "80" [ref=e1371] [cursor=pointer]
+                        - 'cell "+ cwd: repoRoot," [ref=e1372]':
+                          - generic [ref=e1373]: "+ cwd: repoRoot,"
+                      - 'row "81 + stdio: ''inherit''," [ref=e1374]':
+                        - cell [ref=e1375] [cursor=pointer]
+                        - cell "81" [ref=e1376] [cursor=pointer]
+                        - 'cell "+ stdio: ''inherit''," [ref=e1377]':
+                          - generic [ref=e1378]: "+ stdio: 'inherit',"
+                      - 'row "82 + }));" [ref=e1379]':
+                        - cell [ref=e1380] [cursor=pointer]
+                        - cell "82" [ref=e1381] [cursor=pointer]
+                        - 'cell "+ }));" [ref=e1382]':
+                          - generic [ref=e1383]: "+ }));"
+                      - 'row "83 + }" [ref=e1384]':
+                        - cell [ref=e1385] [cursor=pointer]
+                        - cell "83" [ref=e1386] [cursor=pointer]
+                        - 'cell "+ }" [ref=e1387]':
+                          - generic [ref=e1388]: "+ }"
+                      - row "84 +" [ref=e1389]:
+                        - cell [ref=e1390] [cursor=pointer]
+                        - cell "84" [ref=e1391] [cursor=pointer]
+                        - cell "+" [ref=e1392]:
+                          - generic: +
+                      - 'row "85 + if (generatorRootHint && resolve(generatorRootHint) !== repoRoot && looksLikeFrameworkRoot(generatorRootHint)) {" [ref=e1393]':
+                        - cell [ref=e1394] [cursor=pointer]
+                        - cell "85" [ref=e1395] [cursor=pointer]
+                        - 'cell "+ if (generatorRootHint && resolve(generatorRootHint) !== repoRoot && looksLikeFrameworkRoot(generatorRootHint)) {" [ref=e1396]':
+                          - generic [ref=e1397]: "+ if (generatorRootHint && resolve(generatorRootHint) !== repoRoot && looksLikeFrameworkRoot(generatorRootHint)) {"
+                      - 'row "86 + exitWithResult(spawnSync(process.execPath, [join(generatorRootHint, ''bin'', ''gsdd.mjs''), ...args], {" [ref=e1398]':
+                        - cell [ref=e1399] [cursor=pointer]
+                        - cell "86" [ref=e1400] [cursor=pointer]
+                        - 'cell "+ exitWithResult(spawnSync(process.execPath, [join(generatorRootHint, ''bin'', ''gsdd.mjs''), ...args], {" [ref=e1401]':
+                          - generic [ref=e1402]: "+ exitWithResult(spawnSync(process.execPath, [join(generatorRootHint, 'bin', 'gsdd.mjs'), ...args], {"
+                      - 'row "87 + cwd: repoRoot," [ref=e1403]':
+                        - cell [ref=e1404] [cursor=pointer]
+                        - cell "87" [ref=e1405] [cursor=pointer]
+                        - 'cell "+ cwd: repoRoot," [ref=e1406]':
+                          - generic [ref=e1407]: "+ cwd: repoRoot,"
+                      - 'row "88 + stdio: ''inherit''," [ref=e1408]':
+                        - cell [ref=e1409] [cursor=pointer]
+                        - cell "88" [ref=e1410] [cursor=pointer]
+                        - 'cell "+ stdio: ''inherit''," [ref=e1411]':
+                          - generic [ref=e1412]: "+ stdio: 'inherit',"
+                      - 'row "89 + }));" [ref=e1413]':
+                        - cell [ref=e1414] [cursor=pointer]
+                        - cell "89" [ref=e1415] [cursor=pointer]
+                        - 'cell "+ }));" [ref=e1416]':
+                          - generic [ref=e1417]: "+ }));"
+                      - 'row "90 + }" [ref=e1418]':
+                        - cell [ref=e1419] [cursor=pointer]
+                        - cell "90" [ref=e1420] [cursor=pointer]
+                        - 'cell "+ }" [ref=e1421]':
+                          - generic [ref=e1422]: "+ }"
+                      - row "91 +" [ref=e1423]:
+                        - cell [ref=e1424] [cursor=pointer]
+                        - cell "91" [ref=e1425] [cursor=pointer]
+                        - cell "+" [ref=e1426]:
+                          - generic: +
+                      - 'row "92 + const fallbackResult = spawnSync(process.platform === ''win32'' ? ''npx.cmd'' : ''npx'', [" [ref=e1427]':
+                        - cell [ref=e1428] [cursor=pointer]
+                        - cell "92" [ref=e1429] [cursor=pointer]
+                        - 'cell "+ const fallbackResult = spawnSync(process.platform === ''win32'' ? ''npx.cmd'' : ''npx'', [" [ref=e1430]':
+                          - generic [ref=e1431]: "+ const fallbackResult = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ["
+                      - row "93 + '--yes'," [ref=e1432]:
+                        - cell [ref=e1433] [cursor=pointer]
+                        - cell "93" [ref=e1434] [cursor=pointer]
+                        - cell "+ '--yes'," [ref=e1435]:
+                          - generic [ref=e1436]: + '--yes',
+                      - 'row "94 + ''--package=gsdd-cli@${packageVersion}''," [ref=e1437]':
+                        - cell [ref=e1438] [cursor=pointer]
+                        - cell "94" [ref=e1439] [cursor=pointer]
+                        - 'cell "+ ''--package=gsdd-cli@${packageVersion}''," [ref=e1440]':
+                          - generic [ref=e1441]: "+ '--package=gsdd-cli@${packageVersion}',"
+                      - row "95 + 'gsdd'," [ref=e1442]:
+                        - cell [ref=e1443] [cursor=pointer]
+                        - cell "95" [ref=e1444] [cursor=pointer]
+                        - cell "+ 'gsdd'," [ref=e1445]:
+                          - generic [ref=e1446]: + 'gsdd',
+                      - row "96 + ...args," [ref=e1447]:
+                        - cell [ref=e1448] [cursor=pointer]
+                        - cell "96" [ref=e1449] [cursor=pointer]
+                        - cell "+ ...args," [ref=e1450]:
+                          - generic [ref=e1451]: + ...args,
+                      - 'row "97 + ], {" [ref=e1452]':
+                        - cell [ref=e1453] [cursor=pointer]
+                        - cell "97" [ref=e1454] [cursor=pointer]
+                        - 'cell "+ ], {" [ref=e1455]':
+                          - generic [ref=e1456]: "+ ], {"
+                      - 'row "98 + cwd: repoRoot," [ref=e1457]':
+                        - cell [ref=e1458] [cursor=pointer]
+                        - cell "98" [ref=e1459] [cursor=pointer]
+                        - 'cell "+ cwd: repoRoot," [ref=e1460]':
+                          - generic [ref=e1461]: "+ cwd: repoRoot,"
+                      - 'row "99 + stdio: ''inherit''," [ref=e1462]':
+                        - cell [ref=e1463] [cursor=pointer]
+                        - cell "99" [ref=e1464] [cursor=pointer]
+                        - 'cell "+ stdio: ''inherit''," [ref=e1465]':
+                          - generic [ref=e1466]: "+ stdio: 'inherit',"
+                      - 'row "100 + });" [ref=e1467]':
+                        - cell [ref=e1468] [cursor=pointer]
+                        - cell "100" [ref=e1469] [cursor=pointer]
+                        - 'cell "+ });" [ref=e1470]':
+                          - generic [ref=e1471]: "+ });"
+                      - row "101 +" [ref=e1472]:
+                        - cell [ref=e1473] [cursor=pointer]
+                        - cell "101" [ref=e1474] [cursor=pointer]
+                        - cell "+" [ref=e1475]:
+                          - generic: +
+                      - 'row "102 + if (!exitWithResult(fallbackResult)) {" [ref=e1476]':
+                        - cell [ref=e1477] [cursor=pointer]
+                        - cell "102" [ref=e1478] [cursor=pointer]
+                        - 'cell "+ if (!exitWithResult(fallbackResult)) {" [ref=e1479]':
+                          - generic [ref=e1480]: "+ if (!exitWithResult(fallbackResult)) {"
+                      - row "103 + console.error('Unable to resolve the gsdd helper through framework source mode, generator hint, or pinned npx fallback.');" [ref=e1481]:
+                        - cell [ref=e1482] [cursor=pointer]
+                        - cell "103" [ref=e1483] [cursor=pointer]
+                        - cell "+ console.error('Unable to resolve the gsdd helper through framework source mode, generator hint, or pinned npx fallback.');" [ref=e1484]:
+                          - generic [ref=e1485]: + console.error('Unable to resolve the gsdd helper through framework source mode, generator hint, or pinned npx fallback.');
+                      - row "104 + process.exit(1);" [ref=e1486]:
+                        - cell [ref=e1487] [cursor=pointer]
+                        - cell "104" [ref=e1488] [cursor=pointer]
+                        - cell "+ process.exit(1);" [ref=e1489]:
+                          - generic [ref=e1490]: + process.exit(1);
+                      - 'row "105 + }" [ref=e1491]':
+                        - cell [ref=e1492] [cursor=pointer]
+                        - cell "105" [ref=e1493] [cursor=pointer]
+                        - 'cell "+ }" [ref=e1494]':
+                          - generic [ref=e1495]: "+ }"
+                      - 'row "106 + `;" [ref=e1496]':
+                        - cell [ref=e1497] [cursor=pointer]
+                        - cell "106" [ref=e1498] [cursor=pointer]
+                        - 'cell "+ `;" [ref=e1499]':
+                          - generic [ref=e1500]: "+ `;"
+                      - 'row "107 + }" [ref=e1501]':
+                        - cell [ref=e1502] [cursor=pointer]
+                        - cell "107" [ref=e1503] [cursor=pointer]
+                        - 'cell "+ }" [ref=e1504]':
+                          - generic [ref=e1505]: "+ }"
+                      - row "108 +" [ref=e1506]:
+                        - cell [ref=e1507] [cursor=pointer]
+                        - cell "108" [ref=e1508] [cursor=pointer]
+                        - cell "+" [ref=e1509]:
+                          - generic: +
+                      - 'row "109 + function buildPortableRuntimeEntries({" [ref=e1510]':
+                        - cell [ref=e1511] [cursor=pointer]
+                        - cell "109" [ref=e1512] [cursor=pointer]
+                        - 'cell "+ function buildPortableRuntimeEntries({" [ref=e1513]':
+                          - generic [ref=e1514]: "+ function buildPortableRuntimeEntries({"
+                      - row "110 + workflows," [ref=e1515]:
+                        - cell [ref=e1516] [cursor=pointer]
+                        - cell "110" [ref=e1517] [cursor=pointer]
+                        - cell "+ workflows," [ref=e1518]:
+                          - generic [ref=e1519]: + workflows,
+                      - row "111 + packageVersion = PACKAGE_VERSION," [ref=e1520]:
+                        - cell [ref=e1521] [cursor=pointer]
+                        - cell "111" [ref=e1522] [cursor=pointer]
+                        - cell "+ packageVersion = PACKAGE_VERSION," [ref=e1523]:
+                          - generic [ref=e1524]: + packageVersion = PACKAGE_VERSION,
+                      - row "112 + sourceRootHint = SOURCE_ROOT_HINT," [ref=e1525]:
+                        - cell [ref=e1526] [cursor=pointer]
+                        - cell "112" [ref=e1527] [cursor=pointer]
+                        - cell "+ sourceRootHint = SOURCE_ROOT_HINT," [ref=e1528]:
+                          - generic [ref=e1529]: + sourceRootHint = SOURCE_ROOT_HINT,
+                      - 'row "113 + }) {" [ref=e1530]':
+                        - cell [ref=e1531] [cursor=pointer]
+                        - cell "113" [ref=e1532] [cursor=pointer]
+                        - 'cell "+ }) {" [ref=e1533]':
+                          - generic [ref=e1534]: "+ }) {"
+                      - row "114 + return [" [ref=e1535]:
+                        - cell [ref=e1536] [cursor=pointer]
+                        - cell "114" [ref=e1537] [cursor=pointer]
+                        - cell "+ return [" [ref=e1538]:
+                          - generic [ref=e1539]: + return [
+                      - row "115 + ...buildPortableSkillEntries(workflows)," [ref=e1540]:
+                        - cell [ref=e1541] [cursor=pointer]
+                        - cell "115" [ref=e1542] [cursor=pointer]
+                        - cell "+ ...buildPortableSkillEntries(workflows)," [ref=e1543]:
+                          - generic [ref=e1544]: + ...buildPortableSkillEntries(workflows),
+                      - 'row "116 + {" [ref=e1545]':
+                        - cell [ref=e1546] [cursor=pointer]
+                        - cell "116" [ref=e1547] [cursor=pointer]
+                        - 'cell "+ {" [ref=e1548]':
+                          - generic [ref=e1549]: "+ {"
+                      - 'row "117 + relativePath: ''.agents/bin/gsdd.mjs''," [ref=e1550]':
+                        - cell [ref=e1551] [cursor=pointer]
+                        - cell "117" [ref=e1552] [cursor=pointer]
+                        - 'cell "+ relativePath: ''.agents/bin/gsdd.mjs''," [ref=e1553]':
+                          - generic [ref=e1554]: "+ relativePath: '.agents/bin/gsdd.mjs',"
+                      - 'row "118 + content: renderPortableHelperLauncher({ packageVersion, sourceRootHint })," [ref=e1555]':
+                        - cell [ref=e1556] [cursor=pointer]
+                        - cell "118" [ref=e1557] [cursor=pointer]
+                        - 'cell "+ content: renderPortableHelperLauncher({ packageVersion, sourceRootHint })," [ref=e1558]':
+                          - generic [ref=e1559]: "+ content: renderPortableHelperLauncher({ packageVersion, sourceRootHint }),"
+                      - 'row "119 + }," [ref=e1560]':
+                        - cell [ref=e1561] [cursor=pointer]
+                        - cell "119" [ref=e1562] [cursor=pointer]
+                        - 'cell "+ }," [ref=e1563]':
+                          - generic [ref=e1564]: "+ },"
+                      - row "120 + ];" [ref=e1565]:
+                        - cell [ref=e1566] [cursor=pointer]
+                        - cell "120" [ref=e1567] [cursor=pointer]
+                        - cell "+ ];" [ref=e1568]:
+                          - generic [ref=e1569]: + ];
+                      - 'row "121 + }" [ref=e1570]':
+                        - cell [ref=e1571] [cursor=pointer]
+                        - cell "121" [ref=e1572] [cursor=pointer]
+                        - 'cell "+ }" [ref=e1573]':
+                          - generic [ref=e1574]: "+ }"
+                      - row "122 +" [ref=e1575]:
+                        - cell [ref=e1576] [cursor=pointer]
+                        - cell "122" [ref=e1577] [cursor=pointer]
+                        - cell "+" [ref=e1578]:
+                          - generic: +
+                      - 'row "40 123 function renderOpenCodeCommandContent(workflow) {" [ref=e1579]':
+                        - cell "40" [ref=e1580] [cursor=pointer]
+                        - cell "123" [ref=e1581] [cursor=pointer]
+                        - 'cell "function renderOpenCodeCommandContent(workflow) {" [ref=e1582]':
+                          - generic [ref=e1583]: "function renderOpenCodeCommandContent(workflow) {"
+                      - row "41 124 const workflowContent = getWorkflowContent(workflow.workflow);" [ref=e1584]:
+                        - cell "41" [ref=e1585] [cursor=pointer]
+                        - cell "124" [ref=e1586] [cursor=pointer]
+                        - cell "const workflowContent = getWorkflowContent(workflow.workflow);" [ref=e1587]:
+                          - generic [ref=e1588]: const workflowContent = getWorkflowContent(workflow.workflow);
+                      - 'row "42 125 return `---" [ref=e1589]':
+                        - cell "42" [ref=e1590] [cursor=pointer]
+                        - cell "125" [ref=e1591] [cursor=pointer]
+                        - 'cell "return `---" [ref=e1592]':
+                          - generic [ref=e1593]: "return `---"
+                      - 'row "Expand Down Expand Up @@ -92,12 +175,14 @@ function upsertBoundedBlock(existing, blockContent) {" [ref=e1594]':
+                        - cell "Expand Down Expand Up" [ref=e1595] [cursor=pointer]:
+                          - link "Expand Down" [ref=e1596]:
+                            - /url: "#diff-3b34d4b3f0281655c82b13775b62d39e0f42caebb87e3548ef4d544bddf8b6c0"
+                            - img [ref=e1597]
+                          - link "Expand Up" [ref=e1599]:
+                            - /url: "#diff-3b34d4b3f0281655c82b13775b62d39e0f42caebb87e3548ef4d544bddf8b6c0"
+                            - img [ref=e1600]
+                        - 'cell "@@ -92,12 +175,14 @@ function upsertBoundedBlock(existing, blockContent) {" [ref=e1602]'
+                      - 'row "92 175 }" [ref=e1603]':
+                        - cell "92" [ref=e1604] [cursor=pointer]
+                        - cell "175" [ref=e1605] [cursor=pointer]
+                        - 'cell "}" [ref=e1606]':
+                          - generic [ref=e1607]: "}"
+                      - row "93 176" [ref=e1608]:
+                        - cell "93" [ref=e1609] [cursor=pointer]
+                        - cell "176" [ref=e1610] [cursor=pointer]
+                        - cell [ref=e1611]
+                      - 'row "94 177 export {" [ref=e1612]':
+                        - cell "94" [ref=e1613] [cursor=pointer]
+                        - cell "177" [ref=e1614] [cursor=pointer]
+                        - 'cell "export {" [ref=e1615]':
+                          - generic [ref=e1616]: "export {"
+                      - row "178 + buildPortableRuntimeEntries," [ref=e1617]:
+                        - cell [ref=e1618] [cursor=pointer]
+                        - cell "178" [ref=e1619] [cursor=pointer]
+                        - cell "+ buildPortableRuntimeEntries," [ref=e1620]:
+                          - generic [ref=e1621]: + buildPortableRuntimeEntries,
+                      - row "95 179 buildPortableSkillEntries," [ref=e1622]:
+                        - cell "95" [ref=e1623] [cursor=pointer]
+                        - cell "179" [ref=e1624] [cursor=pointer]
+                        - cell "buildPortableSkillEntries," [ref=e1625]:
+                          - generic [ref=e1626]: buildPortableSkillEntries,
+                      - row "96 180 getDelegateContent," [ref=e1627]:
+                        - cell "96" [ref=e1628] [cursor=pointer]
+                        - cell "180" [ref=e1629] [cursor=pointer]
+                        - cell "getDelegateContent," [ref=e1630]:
+                          - generic [ref=e1631]: getDelegateContent,
+                      - row "97 181 getWorkflowContent," [ref=e1632]:
+                        - cell "97" [ref=e1633] [cursor=pointer]
+                        - cell "181" [ref=e1634] [cursor=pointer]
+                        - cell "getWorkflowContent," [ref=e1635]:
+                          - generic [ref=e1636]: getWorkflowContent,
+                      - row "98 182 renderAgentsBoundedBlock," [ref=e1637]:
+                        - cell "98" [ref=e1638] [cursor=pointer]
+                        - cell "182" [ref=e1639] [cursor=pointer]
+                        - cell "renderAgentsBoundedBlock," [ref=e1640]:
+                          - generic [ref=e1641]: renderAgentsBoundedBlock,
+                      - row "99 183 renderAgentsFileContent," [ref=e1642]:
+                        - cell "99" [ref=e1643] [cursor=pointer]
+                        - cell "183" [ref=e1644] [cursor=pointer]
+                        - cell "renderAgentsFileContent," [ref=e1645]:
+                          - generic [ref=e1646]: renderAgentsFileContent,
+                      - row "100 184 renderOpenCodeCommandContent," [ref=e1647]:
+                        - cell "100" [ref=e1648] [cursor=pointer]
+                        - cell "184" [ref=e1649] [cursor=pointer]
+                        - cell "renderOpenCodeCommandContent," [ref=e1650]:
+                          - generic [ref=e1651]: renderOpenCodeCommandContent,
+                      - row "185 + renderPortableHelperLauncher," [ref=e1652]:
+                        - cell [ref=e1653] [cursor=pointer]
+                        - cell "185" [ref=e1654] [cursor=pointer]
+                        - cell "+ renderPortableHelperLauncher," [ref=e1655]:
+                          - generic [ref=e1656]: + renderPortableHelperLauncher,
+                      - row "101 186 renderSkillContent," [ref=e1657]:
+                        - cell "101" [ref=e1658] [cursor=pointer]
+                        - cell "186" [ref=e1659] [cursor=pointer]
+                        - cell "renderSkillContent," [ref=e1660]:
+                          - generic [ref=e1661]: renderSkillContent,
+                      - row "102 187 upsertBoundedBlock," [ref=e1662]:
+                        - cell "102" [ref=e1663] [cursor=pointer]
+                        - cell "187" [ref=e1664] [cursor=pointer]
+                        - cell "upsertBoundedBlock," [ref=e1665]:
+                          - generic [ref=e1666]: upsertBoundedBlock,
+                      - 'row "103 188 };" [ref=e1667]':
+                        - cell "103" [ref=e1668] [cursor=pointer]
+                        - cell "188" [ref=e1669] [cursor=pointer]
+                        - 'cell "};" [ref=e1670]':
+                          - generic [ref=e1671]: "};"
+                - generic [ref=e1673]:
+                  - generic [ref=e1674]:
+                    - generic [ref=e1675]:
+                      - button "Toggle diff contents" [expanded] [ref=e1676] [cursor=pointer]:
+                        - img [ref=e1677]
+                      - button "Expand all" [ref=e1680] [cursor=pointer]:
+                        - img "Expand all" [ref=e1681]
+                      - link "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e1683] [cursor=pointer]:
+                        - /url: /PatrickSys/workspine/blob/main/.github/CODEOWNERS#L2
+                        - generic "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e1684]:
+                          - img [ref=e1685]
+                      - generic [ref=e1687]: "8 changes: 4 additions & 4 deletions"
+                      - generic [ref=e1688]: "8"
+                      - generic [ref=e1694]:
+                        - link "bin/lib/runtime-freshness.mjs" [ref=e1695] [cursor=pointer]:
+                          - /url: "#diff-0392d9df71ec79513a1e36f69cb9daeb37bbe63d8513668112629059bef7412a"
+                        - button "Copy" [ref=e1697]:
+                          - img [ref=e1698]
+                    - group [ref=e1704]:
+                      - button "Show options" [ref=e1705] [cursor=pointer]:
+                        - img "Show options" [ref=e1707]
+                  - table [ref=e1712]:
+                    - rowgroup [ref=e1713]:
+                      - row "Original file line number Diff line number Diff line change" [ref=e1714]:
+                        - columnheader "Original file line number" [ref=e1715]
+                        - columnheader "Diff line number" [ref=e1716]
+                        - columnheader "Diff line change" [ref=e1717]
+                    - rowgroup [ref=e1718]:
+                      - row "... ... @@ -1,7 +1,7 @@" [ref=e1719]:
+                        - cell "..." [ref=e1720]
+                        - cell "..." [ref=e1721]
+                        - cell "@@ -1,7 +1,7 @@" [ref=e1722]
+                      - 'row "1 1 import { existsSync, readFileSync } from ''fs'';" [ref=e1723]':
+                        - cell "1" [ref=e1724] [cursor=pointer]
+                        - cell "1" [ref=e1725] [cursor=pointer]
+                        - 'cell "import { existsSync, readFileSync } from ''fs'';" [ref=e1726]':
+                          - generic [ref=e1727]: "import { existsSync, readFileSync } from 'fs';"
+                      - 'row "2 2 import { join } from ''path'';" [ref=e1728]':
+                        - cell "2" [ref=e1729] [cursor=pointer]
+                        - cell "2" [ref=e1730] [cursor=pointer]
+                        - 'cell "import { join } from ''path'';" [ref=e1731]':
+                          - generic [ref=e1732]: "import { join } from 'path';"
+                      - 'row "3 3 import {" [ref=e1733]':
+                        - cell "3" [ref=e1734] [cursor=pointer]
+                        - cell "3" [ref=e1735] [cursor=pointer]
+                        - 'cell "import {" [ref=e1736]':
+                          - generic [ref=e1737]: "import {"
+                      - row "4 - buildPortableSkillEntries," [ref=e1738]:
+                        - cell "4" [ref=e1739] [cursor=pointer]
+                        - cell [ref=e1740] [cursor=pointer]
+                        - cell "- buildPortableSkillEntries," [ref=e1741]:
+                          - generic [ref=e1742]: "- buildPortableSkillEntries,"
+                      - row "4 + buildPortableRuntimeEntries," [ref=e1743]:
+                        - cell [ref=e1744] [cursor=pointer]
+                        - cell "4" [ref=e1745] [cursor=pointer]
+                        - cell "+ buildPortableRuntimeEntries," [ref=e1746]:
+                          - generic [ref=e1747]: + buildPortableRuntimeEntries,
+                      - row "5 5 getDelegateContent," [ref=e1748]:
+                        - cell "5" [ref=e1749] [cursor=pointer]
+                        - cell "5" [ref=e1750] [cursor=pointer]
+                        - cell "getDelegateContent," [ref=e1751]:
+                          - generic [ref=e1752]: getDelegateContent,
+                      - row "6 6 renderOpenCodeCommandContent," [ref=e1753]:
+                        - cell "6" [ref=e1754] [cursor=pointer]
+                        - cell "6" [ref=e1755] [cursor=pointer]
+                        - cell "renderOpenCodeCommandContent," [ref=e1756]:
+                          - generic [ref=e1757]: renderOpenCodeCommandContent,
+                      - row "7 7 renderSkillContent," [ref=e1758]:
+                        - cell "7" [ref=e1759] [cursor=pointer]
+                        - cell "7" [ref=e1760] [cursor=pointer]
+                        - cell "renderSkillContent," [ref=e1761]:
+                          - generic [ref=e1762]: renderSkillContent,
+                      - 'row "Expand Down Expand Up @@ -148,10 +148,10 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf" [ref=e1763]':
+                        - cell "Expand Down Expand Up" [ref=e1764] [cursor=pointer]:
+                          - link "Expand Down" [ref=e1765]:
+                            - /url: "#diff-0392d9df71ec79513a1e36f69cb9daeb37bbe63d8513668112629059bef7412a"
+                            - img [ref=e1766]
+                          - link "Expand Up" [ref=e1768]:
+                            - /url: "#diff-0392d9df71ec79513a1e36f69cb9daeb37bbe63d8513668112629059bef7412a"
+                            - img [ref=e1769]
+                        - 'cell "@@ -148,10 +148,10 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf" [ref=e1771]'
+                      - row "148 148 return [" [ref=e1772]:
+                        - cell "148" [ref=e1773] [cursor=pointer]
+                        - cell "148" [ref=e1774] [cursor=pointer]
+                        - cell "return [" [ref=e1775]:
+                          - generic [ref=e1776]: return [
+                      - 'row "149 149 {" [ref=e1777]':
+                        - cell "149" [ref=e1778] [cursor=pointer]
+                        - cell "149" [ref=e1779] [cursor=pointer]
+                        - 'cell "{" [ref=e1780]':
+                          - generic [ref=e1781]: "{"
+                      - 'row "150 150 runtime: ''portable''," [ref=e1782]':
+                        - cell "150" [ref=e1783] [cursor=pointer]
+                        - cell "150" [ref=e1784] [cursor=pointer]
+                        - 'cell "runtime: ''portable''," [ref=e1785]':
+                          - generic [ref=e1786]: "runtime: 'portable',"
+                      - 'row "151 - label: ''portable skills''," [ref=e1787]':
+                        - cell "151" [ref=e1788] [cursor=pointer]
+                        - cell [ref=e1789] [cursor=pointer]
+                        - 'cell "- label: ''portable skills''," [ref=e1790]':
+                          - generic [ref=e1791]: "- label: 'portable skills',"
+                      - 'row "152 - root: ''.agents/skills''," [ref=e1792]':
+                        - cell "152" [ref=e1793] [cursor=pointer]
+                        - cell [ref=e1794] [cursor=pointer]
+                        - 'cell "- root: ''.agents/skills''," [ref=e1795]':
+                          - generic [ref=e1796]: "- root: '.agents/skills',"
+                      - 'row "151 + label: ''portable runtime surfaces''," [ref=e1797]':
+                        - cell [ref=e1798] [cursor=pointer]
+                        - cell "151" [ref=e1799] [cursor=pointer]
+                        - 'cell "+ label: ''portable runtime surfaces''," [ref=e1800]':
+                          - generic [ref=e1801]: "+ label: 'portable runtime surfaces',"
+                      - 'row "152 + root: ''.agents''," [ref=e1802]':
+                        - cell [ref=e1803] [cursor=pointer]
+                        - cell "152" [ref=e1804] [cursor=pointer]
+                        - 'cell "+ root: ''.agents''," [ref=e1805]':
+                          - generic [ref=e1806]: "+ root: '.agents',"
+                      - 'row "153 153 repairCommand: ''gsdd update''," [ref=e1807]':
+                        - cell "153" [ref=e1808] [cursor=pointer]
+                        - cell "153" [ref=e1809] [cursor=pointer]
+                        - 'cell "repairCommand: ''gsdd update''," [ref=e1810]':
+                          - generic [ref=e1811]: "repairCommand: 'gsdd update',"
+                      - 'row "154 - entries: buildPortableSkillEntries(workflows).map((entry) => ({" [ref=e1812]':
+                        - cell "154" [ref=e1813] [cursor=pointer]
+                        - cell [ref=e1814] [cursor=pointer]
+                        - 'cell "- entries: buildPortableSkillEntries(workflows).map((entry) => ({" [ref=e1815]':
+                          - generic [ref=e1816]: "- entries: buildPortableSkillEntries(workflows).map((entry) => ({"
+                      - 'row "154 + entries: buildPortableRuntimeEntries({ workflows }).map((entry) => ({" [ref=e1817]':
+                        - cell [ref=e1818] [cursor=pointer]
+                        - cell "154" [ref=e1819] [cursor=pointer]
+                        - 'cell "+ entries: buildPortableRuntimeEntries({ workflows }).map((entry) => ({" [ref=e1820]':
+                          - generic [ref=e1821]: "+ entries: buildPortableRuntimeEntries({ workflows }).map((entry) => ({"
+                      - 'row "155 155 relativePath: entry.relativePath," [ref=e1822]':
+                        - cell "155" [ref=e1823] [cursor=pointer]
+                        - cell "155" [ref=e1824] [cursor=pointer]
+                        - 'cell "relativePath: entry.relativePath," [ref=e1825]':
+                          - generic [ref=e1826]: "relativePath: entry.relativePath,"
+                      - 'row "156 156 expectedContent: entry.content," [ref=e1827]':
+                        - cell "156" [ref=e1828] [cursor=pointer]
+                        - cell "156" [ref=e1829] [cursor=pointer]
+                        - 'cell "expectedContent: entry.content," [ref=e1830]':
+                          - generic [ref=e1831]: "expectedContent: entry.content,"
+                      - 'row "157 157 }))," [ref=e1832]':
+                        - cell "157" [ref=e1833] [cursor=pointer]
+                        - cell "157" [ref=e1834] [cursor=pointer]
+                        - 'cell "}))," [ref=e1835]':
+                          - generic [ref=e1836]: "})),"
+                      - row "Expand Down" [ref=e1837]:
+                        - cell "Expand Down" [ref=e1838] [cursor=pointer]:
+                          - link "Expand Down" [ref=e1839]:
+                            - /url: "#diff-0392d9df71ec79513a1e36f69cb9daeb37bbe63d8513668112629059bef7412a"
+                            - img [ref=e1840]
+                        - cell [ref=e1842]
+                - generic [ref=e1844]:
+                  - generic [ref=e1845]:
+                    - generic [ref=e1846]:
+                      - button "Toggle diff contents" [expanded] [ref=e1847] [cursor=pointer]:
+                        - img [ref=e1848]
+                      - button "Expand all" [ref=e1851] [cursor=pointer]:
+                        - img "Expand all" [ref=e1852]
+                      - link "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e1854] [cursor=pointer]:
+                        - /url: /PatrickSys/workspine/blob/main/.github/CODEOWNERS#L2
+                        - generic "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e1855]:
+                          - img [ref=e1856]
+                      - generic [ref=e1858]: "11 changes: 9 additions & 2 deletions"
+                      - generic [ref=e1859]: "11"
+                      - generic [ref=e1865]:
+                        - link "distilled/DESIGN.md" [ref=e1866] [cursor=pointer]:
+                          - /url: "#diff-3fa07ad6cde9de56aac78091c352415422b439f3a174deafa1711340f2073ae5"
+                        - button "Copy" [ref=e1868]:
+                          - img [ref=e1869]
+                    - generic [ref=e1874]:
+                      - generic [ref=e1875]:
+                        - button "Display the source diff" [ref=e1877] [cursor=pointer]:
+                          - img [ref=e1878]
+                        - button "Display the rich diff" [ref=e1881] [cursor=pointer]:
+                          - img [ref=e1882]
+                      - group [ref=e1884]:
+                        - button "Show options" [ref=e1885] [cursor=pointer]:
+                          - img "Show options" [ref=e1887]
+                  - table [ref=e1892]:
+                    - rowgroup [ref=e1893]:
+                      - row "Original file line number Diff line number Diff line change" [ref=e1894]:
+                        - columnheader "Original file line number" [ref=e1895]
+                        - columnheader "Diff line number" [ref=e1896]
+                        - columnheader "Diff line change" [ref=e1897]
+                    - rowgroup [ref=e1902]:
+                      - 'row "Expand Up @@ -2237,19 +2237,22 @@ Sub-gap (b) was closed by D28''s `<persistence>` mandate and guarded by G30. Sub-" [ref=e1903]':
+                        - cell "Expand Up" [ref=e1904] [cursor=pointer]:
+                          - link "Expand Up" [ref=e1905]:
+                            - /url: "#diff-3fa07ad6cde9de56aac78091c352415422b439f3a174deafa1711340f2073ae5"
+                            - img [ref=e1906]
+                        - 'cell "@@ -2237,19 +2237,22 @@ Sub-gap (b) was closed by D28''s `<persistence>` mandate and guarded by G30. Sub-" [ref=e1908]'
+                      - row "2237 2237 ---" [ref=e1909]:
+                        - cell "2237" [ref=e1910] [cursor=pointer]
+                        - cell "2237" [ref=e1911] [cursor=pointer]
+                        - cell "---" [ref=e1912]:
+                          - generic [ref=e1913]: "---"
+                      - row "2238 2238" [ref=e1914]:
+                        - cell "2238" [ref=e1915] [cursor=pointer]
+                        - cell "2238" [ref=e1916] [cursor=pointer]
+                        - cell [ref=e1917]
+                      - 'row "2239 2239 ## D51 - Deterministic Runtime Surface Freshness" [ref=e1918]':
+                        - cell "2239" [ref=e1919] [cursor=pointer]
+                        - cell "2239" [ref=e1920] [cursor=pointer]
+                        - cell "## D51 - Deterministic Runtime Surface Freshness" [ref=e1921]:
+                          - generic [ref=e1922]: "## D51 - Deterministic Runtime Surface Freshness"
+                      - row "2240 - **Decision (2026-04-17):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When .agents/skills/, .claude/, .opencode/, or .codex/ exist locally, gsdd health must compare those generated files against current render output and route any drift back through gsdd update." [ref=e1923]:
+                        - cell "2240" [ref=e1924] [cursor=pointer]
+                        - cell [ref=e1925] [cursor=pointer]
+                        - cell "- **Decision (2026-04-17):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When .agents/skills/, .claude/, .opencode/, or .codex/ exist locally, gsdd health must compare those generated files against current render output and route any drift back through gsdd update." [ref=e1926]:
+                          - generic [ref=e1927]: "- **Decision (2026-04-17):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When .agents/skills/, .claude/, .opencode/, or .codex/ exist locally, gsdd health must compare those generated files against current render output and route any drift back through gsdd update."
+                      - 'row "2240 + **Decision (2026-04-17, revised 2026-04-22):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When `.agents/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `gsdd health` must compare those generated files against current render output and route any drift back through `gsdd update`." [ref=e1928]':
+                        - cell [ref=e1929] [cursor=pointer]
+                        - cell "2240" [ref=e1930] [cursor=pointer]
+                        - 'cell "+ **Decision (2026-04-17, revised 2026-04-22):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When `.agents/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `gsdd health` must compare those generated files against current render output and route any drift back through `gsdd update`." [ref=e1931]':
+                          - generic [ref=e1932]: "+ **Decision (2026-04-17, revised 2026-04-22):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When `.agents/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `gsdd health` must compare those generated files against current render output and route any drift back through `gsdd update`."
+                      - row "2241 2241 **Context:**" [ref=e1933]:
+                        - cell "2241" [ref=e1934] [cursor=pointer]
+                        - cell "2241" [ref=e1935] [cursor=pointer]
+                        - cell "**Context:**" [ref=e1936]:
+                          - generic [ref=e1937]: "**Context:**"
+                      - 'row "2242 2242 - Phase 29 narrowed the runtime story to a dual-canonical boundary: distilled/workflows/* is the authored source contract and generated runtime-facing files are the consumed local surfaces." [ref=e1938]':
+                        - cell "2242" [ref=e1939] [cursor=pointer]
+                        - cell "2242" [ref=e1940] [cursor=pointer]
+                        - 'cell "- Phase 29 narrowed the runtime story to a dual-canonical boundary: distilled/workflows/* is the authored source contract and generated runtime-facing files are the consumed local surfaces." [ref=e1941]':
+                          - generic [ref=e1942]: "- Phase 29 narrowed the runtime story to a dual-canonical boundary: distilled/workflows/* is the authored source contract and generated runtime-facing files are the consumed local surfaces."
+                      - row "2243 2243 - That narrowing was honest but still left I42 open because the repo could not yet prove that installed generated files stayed aligned with the current authored source without reviewer memory." [ref=e1943]:
+                        - cell "2243" [ref=e1944] [cursor=pointer]
+                        - cell "2243" [ref=e1945] [cursor=pointer]
+                        - cell "- That narrowing was honest but still left I42 open because the repo could not yet prove that installed generated files stayed aligned with the current authored source without reviewer memory." [ref=e1946]:
+                          - generic [ref=e1947]: "- That narrowing was honest but still left I42 open because the repo could not yet prove that installed generated files stayed aligned with the current authored source without reviewer memory."
+                      - row "2244 2244 - The framework repo also cannot fail closed on missing generated surfaces, because those directories are intentionally gitignored and may be absent even when the authored source is healthy." [ref=e1948]:
+                        - cell "2244" [ref=e1949] [cursor=pointer]
+                        - cell "2244" [ref=e1950] [cursor=pointer]
+                        - cell "- The framework repo also cannot fail closed on missing generated surfaces, because those directories are intentionally gitignored and may be absent even when the authored source is healthy." [ref=e1951]:
+                          - generic [ref=e1952]: "- The framework repo also cannot fail closed on missing generated surfaces, because those directories are intentionally gitignored and may be absent even when the authored source is healthy."
+                      - 'row "2245 + - Fresh consumer repos exposed a second contract gap: workflow-internal helper calls still assumed bare `gsdd ...` resolution even though `init` only guaranteed generated files on disk, not an ambient PATH install." [ref=e1953]':
+                        - cell [ref=e1954] [cursor=pointer]
+                        - cell "2245" [ref=e1955] [cursor=pointer]
+                        - 'cell "+ - Fresh consumer repos exposed a second contract gap: workflow-internal helper calls still assumed bare `gsdd ...` resolution even though `init` only guaranteed generated files on disk, not an ambient PATH install." [ref=e1956]':
+                          - generic [ref=e1957]: "+ - Fresh consumer repos exposed a second contract gap: workflow-internal helper calls still assumed bare `gsdd ...` resolution even though `init` only guaranteed generated files on disk, not an ambient PATH install."
+                      - row "2245 2246 **Decision:**" [ref=e1958]:
+                        - cell "2245" [ref=e1959] [cursor=pointer]
+                        - cell "2246" [ref=e1960] [cursor=pointer]
+                        - cell "**Decision:**" [ref=e1961]:
+                          - generic [ref=e1962]: "**Decision:**"
+                      - row "2246 2247 - Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic." [ref=e1963]:
+                        - cell "2246" [ref=e1964] [cursor=pointer]
+                        - cell "2247" [ref=e1965] [cursor=pointer]
+                        - cell "- Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic." [ref=e1966]:
+                          - generic [ref=e1967]: "- Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic."
+                      - row "2247 2248 - Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally." [ref=e1968]:
+                        - cell "2247" [ref=e1969] [cursor=pointer]
+                        - cell "2248" [ref=e1970] [cursor=pointer]
+                        - cell "- Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally." [ref=e1971]:
+                          - generic [ref=e1972]: "- Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally."
+                      - row "2248 2249 - Route drift through deterministic repair (gsdd update or a targeted gsdd update --tools <runtime>) instead of treating the fix as a manual review exercise." [ref=e1973]:
+                        - cell "2248" [ref=e1974] [cursor=pointer]
+                        - cell "2249" [ref=e1975] [cursor=pointer]
+                        - cell "- Route drift through deterministic repair (gsdd update or a targeted gsdd update --tools <runtime>) instead of treating the fix as a manual review exercise." [ref=e1976]:
+                          - generic [ref=e1977]: "- Route drift through deterministic repair (gsdd update or a targeted gsdd update --tools <runtime>) instead of treating the fix as a manual review exercise."
+                      - 'row "2250 + - Treat the portable runtime surface as more than skill markdown: generate a repo-local helper launcher at `.agents/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .agents/bin/gsdd.mjs ...` instead of bare `gsdd ...`, prefer the current framework repo when self-hosting, prefer the generating source checkout when present, and otherwise fall back to a pinned `gsdd-cli` package version instead of ambient PATH state." [ref=e1978]':
+                        - cell [ref=e1979] [cursor=pointer]
+                        - cell "2250" [ref=e1980] [cursor=pointer]
+                        - 'cell "+ - Treat the portable runtime surface as more than skill markdown: generate a repo-local helper launcher at `.agents/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .agents/bin/gsdd.mjs ...` instead of bare `gsdd ...`, prefer the current framework repo when self-hosting, prefer the generating source checkout when present, and otherwise fall back to a pinned `gsdd-cli` package version instead of ambient PATH state." [ref=e1981]':
+                          - generic [ref=e1982]: "+ - Treat the portable runtime surface as more than skill markdown: generate a repo-local helper launcher at `.agents/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .agents/bin/gsdd.mjs ...` instead of bare `gsdd ...`, prefer the current framework repo when self-hosting, prefer the generating source checkout when present, and otherwise fall back to a pinned `gsdd-cli` package version instead of ambient PATH state."
+                      - 'row "2249 2251 - Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist." [ref=e1983]':
+                        - cell "2249" [ref=e1984] [cursor=pointer]
+                        - cell "2251" [ref=e1985] [cursor=pointer]
+                        - 'cell "- Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist." [ref=e1986]':
+                          - generic [ref=e1987]: "- Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist."
+                      - row "2250 2252 **Why this fits the codebase:**" [ref=e1988]:
+                        - cell "2250" [ref=e1989] [cursor=pointer]
+                        - cell "2252" [ref=e1990] [cursor=pointer]
+                        - cell "**Why this fits the codebase:**" [ref=e1991]:
+                          - generic [ref=e1992]: "**Why this fits the codebase:**"
+                      - row "2251 2253 - It extends the existing render/update/health pattern instead of inventing a new state file or hidden synchronization layer." [ref=e1993]:
+                        - cell "2251" [ref=e1994] [cursor=pointer]
+                        - cell "2253" [ref=e1995] [cursor=pointer]
+                        - cell "- It extends the existing render/update/health pattern instead of inventing a new state file or hidden synchronization layer." [ref=e1996]:
+                          - generic [ref=e1997]: "- It extends the existing render/update/health pattern instead of inventing a new state file or hidden synchronization layer."
+                      - 'row "2252 2254 - It keeps the dual-canonical runtime contract honest: authored source and consumed generated files are distinct surfaces, but the boundary is now mechanically checked where the generated surface is actually installed." [ref=e1998]':
+                        - cell "2252" [ref=e1999] [cursor=pointer]
+                        - cell "2254" [ref=e2000] [cursor=pointer]
+                        - 'cell "- It keeps the dual-canonical runtime contract honest: authored source and consumed generated files are distinct surfaces, but the boundary is now mechanically checked where the generated surface is actually installed." [ref=e2001]':
+                          - generic [ref=e2002]: "- It keeps the dual-canonical runtime contract honest: authored source and consumed generated files are distinct surfaces, but the boundary is now mechanically checked where the generated surface is actually installed."
+                      - 'row "2255 + - It moves helper-command resolution from ambient machine state into generated repo state plus a pinned package fallback, which is the seam `init` and `update` already own deterministically." [ref=e2003]':
+                        - cell [ref=e2004] [cursor=pointer]
+                        - cell "2255" [ref=e2005] [cursor=pointer]
+                        - 'cell "+ - It moves helper-command resolution from ambient machine state into generated repo state plus a pinned package fallback, which is the seam `init` and `update` already own deterministically." [ref=e2006]':
+                          - generic [ref=e2007]: "+ - It moves helper-command resolution from ambient machine state into generated repo state plus a pinned package fallback, which is the seam `init` and `update` already own deterministically."
+                      - row "2253 2256 - It preserves framework-source honesty by warning only on installed drift, not on intentionally absent generated directories." [ref=e2008]:
+                        - cell "2253" [ref=e2009] [cursor=pointer]
+                        - cell "2256" [ref=e2010] [cursor=pointer]
+                        - cell "- It preserves framework-source honesty by warning only on installed drift, not on intentionally absent generated directories." [ref=e2011]:
+                          - generic [ref=e2012]: "- It preserves framework-source honesty by warning only on installed drift, not on intentionally absent generated directories."
+                      - row "2254 2257 **Evidence:**" [ref=e2013]:
+                        - cell "2254" [ref=e2014] [cursor=pointer]
+                        - cell "2257" [ref=e2015] [cursor=pointer]
+                        - cell "**Evidence:**" [ref=e2016]:
+                          - generic [ref=e2017]: "**Evidence:**"
+                      - row "2255 2258 - .planning/SPEC.md (ENGINE-05)" [ref=e2018]:
+                        - cell "2255" [ref=e2019] [cursor=pointer]
+                        - cell "2258" [ref=e2020] [cursor=pointer]
+                        - cell "- .planning/SPEC.md (ENGINE-05)" [ref=e2021]:
+                          - generic [ref=e2022]: "- .planning/SPEC.md (ENGINE-05)"
+                      - 'row "Expand All @@ -2259,12 +2262,16 @@ Sub-gap (b) was closed by D28''s `<persistence>` mandate and guarded by G30. Sub-" [ref=e2023]':
+                        - cell "Expand All" [ref=e2024] [cursor=pointer]:
+                          - link "Expand All" [ref=e2025]:
+                            - /url: "#diff-3fa07ad6cde9de56aac78091c352415422b439f3a174deafa1711340f2073ae5"
+                            - img [ref=e2026]
+                        - 'cell "@@ -2259,12 +2262,16 @@ Sub-gap (b) was closed by D28''s `<persistence>` mandate and guarded by G30. Sub-" [ref=e2028]'
+                      - row "2259 2262 - \bin/lib/health.mjs" [ref=e2029]:
+                        - cell "2259" [ref=e2030] [cursor=pointer]
+                        - cell "2262" [ref=e2031] [cursor=pointer]
+                        - cell "- \bin/lib/health.mjs" [ref=e2032]:
+                          - generic [ref=e2033]: "- \bin/lib/health.mjs"
+                      - row "2260 2263 - \bin/lib/health-truth.mjs" [ref=e2034]:
+                        - cell "2260" [ref=e2035] [cursor=pointer]
+                        - cell "2263" [ref=e2036] [cursor=pointer]
+                        - cell "- \bin/lib/health-truth.mjs" [ref=e2037]:
+                          - generic [ref=e2038]: "- \bin/lib/health-truth.mjs"
+                      - row "2261 2264 - \bin/lib/rendering.mjs" [ref=e2039]:
+                        - cell "2261" [ref=e2040] [cursor=pointer]
+                        - cell "2264" [ref=e2041] [cursor=pointer]
+                        - cell "- \bin/lib/rendering.mjs" [ref=e2042]:
+                          - generic [ref=e2043]: "- \bin/lib/rendering.mjs"
+                      - row "2265 + - \bin/lib/init-flow.mjs" [ref=e2044]:
+                        - cell [ref=e2045] [cursor=pointer]
+                        - cell "2265" [ref=e2046] [cursor=pointer]
+                        - cell "+ - \bin/lib/init-flow.mjs" [ref=e2047]:
+                          - generic [ref=e2048]: "+ - \bin/lib/init-flow.mjs"
+                      - row "2266 + - \bin/lib/init-runtime.mjs" [ref=e2049]:
+                        - cell [ref=e2050] [cursor=pointer]
+                        - cell "2266" [ref=e2051] [cursor=pointer]
+                        - cell "+ - \bin/lib/init-runtime.mjs" [ref=e2052]:
+                          - generic [ref=e2053]: "+ - \bin/lib/init-runtime.mjs"
+                      - row "2262 2267 - \bin/adapters/claude.mjs, \bin/adapters/opencode.mjs, \bin/adapters/codex.mjs" [ref=e2054]:
+                        - cell "2262" [ref=e2055] [cursor=pointer]
+                        - cell "2267" [ref=e2056] [cursor=pointer]
+                        - cell "- \bin/adapters/claude.mjs, \bin/adapters/opencode.mjs, \bin/adapters/codex.mjs" [ref=e2057]:
+                          - generic [ref=e2058]: "- \bin/adapters/claude.mjs, \bin/adapters/opencode.mjs, \bin/adapters/codex.mjs"
+                      - row "2263 2268 - README.md, docs/RUNTIME-SUPPORT.md, distilled/README.md" [ref=e2059]:
+                        - cell "2263" [ref=e2060] [cursor=pointer]
+                        - cell "2268" [ref=e2061] [cursor=pointer]
+                        - cell "- README.md, docs/RUNTIME-SUPPORT.md, distilled/README.md" [ref=e2062]:
+                          - generic [ref=e2063]: "- README.md, docs/RUNTIME-SUPPORT.md, distilled/README.md"
+                      - row "2264 - - ests/phase.test.cjs, ests/gsdd.health.test.cjs, ests/gsdd.plan.adapters.test.cjs, ests/gsdd.guards.test.cjs, ests/gsdd.scenarios.test.cjs" [ref=e2064]:
+                        - cell "2264" [ref=e2065] [cursor=pointer]
+                        - cell [ref=e2066] [cursor=pointer]
+                        - cell "- - ests/phase.test.cjs, ests/gsdd.health.test.cjs, ests/gsdd.plan.adapters.test.cjs, ests/gsdd.guards.test.cjs, ests/gsdd.scenarios.test.cjs" [ref=e2067]:
+                          - generic [ref=e2068]: "- - ests/phase.test.cjs, ests/gsdd.health.test.cjs, ests/gsdd.plan.adapters.test.cjs, ests/gsdd.guards.test.cjs, ests/gsdd.scenarios.test.cjs"
+                      - row "2269 + - docs/USER-GUIDE.md" [ref=e2069]:
+                        - cell [ref=e2070] [cursor=pointer]
+                        - cell "2269" [ref=e2071] [cursor=pointer]
+                        - cell "+ - docs/USER-GUIDE.md" [ref=e2072]:
+                          - generic [ref=e2073]: + - docs/USER-GUIDE.md
+                      - row "2270 + - ests/phase.test.cjs, ests/gsdd.health.test.cjs, ests/gsdd.init.test.cjs, ests/gsdd.plan.adapters.test.cjs, ests/gsdd.guards.test.cjs, ests/gsdd.scenarios.test.cjs" [ref=e2074]:
+                        - cell [ref=e2075] [cursor=pointer]
+                        - cell "2270" [ref=e2076] [cursor=pointer]
+                        - cell "+ - ests/phase.test.cjs, ests/gsdd.health.test.cjs, ests/gsdd.init.test.cjs, ests/gsdd.plan.adapters.test.cjs, ests/gsdd.guards.test.cjs, ests/gsdd.scenarios.test.cjs" [ref=e2077]:
+                          - generic [ref=e2078]: + - ests/phase.test.cjs, ests/gsdd.health.test.cjs, ests/gsdd.init.test.cjs, ests/gsdd.plan.adapters.test.cjs, ests/gsdd.guards.test.cjs, ests/gsdd.scenarios.test.cjs
+                      - row "2265 2271 **Consequences:**" [ref=e2079]:
+                        - cell "2265" [ref=e2080] [cursor=pointer]
+                        - cell "2271" [ref=e2081] [cursor=pointer]
+                        - cell "**Consequences:**" [ref=e2082]:
+                          - generic [ref=e2083]: "**Consequences:**"
+                      - row "2266 2272 - gsdd health can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline." [ref=e2084]:
+                        - cell "2266" [ref=e2085] [cursor=pointer]
+                        - cell "2272" [ref=e2086] [cursor=pointer]
+                        - cell "- gsdd health can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline." [ref=e2087]:
+                          - generic [ref=e2088]: "- gsdd health can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline."
+                      - row "2267 2273 - gsdd update becomes the explicit repair path for authored/generated runtime-surface drift." [ref=e2089]:
+                        - cell "2267" [ref=e2090] [cursor=pointer]
+                        - cell "2273" [ref=e2091] [cursor=pointer]
+                        - cell "- gsdd update becomes the explicit repair path for authored/generated runtime-surface drift." [ref=e2092]:
+                          - generic [ref=e2093]: "- gsdd update becomes the explicit repair path for authored/generated runtime-surface drift."
+                      - 'row "2274 + - Fresh consumer repos now carry their own deterministic helper-command seam, so lifecycle/file-op/status calls no longer depend on whichever `gsdd` binary happens to be present on PATH." [ref=e2094]':
+                        - cell [ref=e2095] [cursor=pointer]
+                        - cell "2274" [ref=e2096] [cursor=pointer]
+                        - 'cell "+ - Fresh consumer repos now carry their own deterministic helper-command seam, so lifecycle/file-op/status calls no longer depend on whichever `gsdd` binary happens to be present on PATH." [ref=e2097]':
+                          - generic [ref=e2098]: "+ - Fresh consumer repos now carry their own deterministic helper-command seam, so lifecycle/file-op/status calls no longer depend on whichever `gsdd` binary happens to be present on PATH."
+                      - row "2268 2275 - Public support wording can stay compact without implying that generated files are trustworthy merely because they were generated once." [ref=e2099]:
+                        - cell "2268" [ref=e2100] [cursor=pointer]
+                        - cell "2275" [ref=e2101] [cursor=pointer]
+                        - cell "- Public support wording can stay compact without implying that generated files are trustworthy merely because they were generated once." [ref=e2102]:
+                          - generic [ref=e2103]: "- Public support wording can stay compact without implying that generated files are trustworthy merely because they were generated once."
+                      - row "2269 2276 - Claude Code and Codex CLI remain the mandatory live/native validation floor for the hardened runtime boundary, while other runtimes stay honest about their proof level." [ref=e2104]:
+                        - cell "2269" [ref=e2105] [cursor=pointer]
+                        - cell "2276" [ref=e2106] [cursor=pointer]
+                        - cell "- Claude Code and Codex CLI remain the mandatory live/native validation floor for the hardened runtime boundary, while other runtimes stay honest about their proof level." [ref=e2107]:
+                          - generic [ref=e2108]: "- Claude Code and Codex CLI remain the mandatory live/native validation floor for the hardened runtime boundary, while other runtimes stay honest about their proof level."
+                      - row "2270 2277 **GSD comparison:** GSD keeps runtime-facing workflow surfaces closer to the Claude-authored source and does not have to model a generated multi-runtime freshness boundary explicitly. GSDD does, because authored workflow source and consumed runtime surfaces are intentionally separated." [ref=e2109]:
+                        - cell "2270" [ref=e2110] [cursor=pointer]
+                        - cell "2277" [ref=e2111] [cursor=pointer]
+                        - cell "**GSD comparison:** GSD keeps runtime-facing workflow surfaces closer to the Claude-authored source and does not have to model a generated multi-runtime freshness boundary explicitly. GSDD does, because authored workflow source and consumed runtime surfaces are intentionally separated." [ref=e2112]:
+                          - generic [ref=e2113]: "**GSD comparison:** GSD keeps runtime-facing workflow surfaces closer to the Claude-authored source and does not have to model a generated multi-runtime freshness boundary explicitly. GSDD does, because authored workflow source and consumed runtime surfaces are intentionally separated."
+                      - row "Expand Down" [ref=e2114]:
+                        - cell "Expand Down" [ref=e2115] [cursor=pointer]:
+                          - link "Expand Down" [ref=e2116]:
+                            - /url: "#diff-3fa07ad6cde9de56aac78091c352415422b439f3a174deafa1711340f2073ae5"
+                            - img [ref=e2117]
+                        - cell [ref=e2119]
+                - generic [ref=e2121]:
+                  - generic [ref=e2122]:
+                    - generic [ref=e2123]:
+                      - button "Toggle diff contents" [expanded] [ref=e2124] [cursor=pointer]:
+                        - img [ref=e2125]
+                      - button "Expand all" [ref=e2128] [cursor=pointer]:
+                        - img "Expand all" [ref=e2129]
+                      - link "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e2131] [cursor=pointer]:
+                        - /url: /PatrickSys/workspine/blob/main/.github/CODEOWNERS#L2
+                        - generic "Owned by @PatrickSys (from CODEOWNERS line 2)" [ref=e2132]:
+                          - img [ref=e2133]
+                      - generic [ref=e2135]: "7 changes: 4 additions & 3 deletions"
+                      - generic [ref=e2136]: "7"
+                      - generic [ref=e2142]:
+                        - link "distilled/README.md" [ref=e2143] [cursor=pointer]:
+                          - /url: "#diff-61a2539609ec8ad0c8570d011fc81f76db3c72062f3369b9f903433b5bd7f338"
+                        - button "Copy" [ref=e2145]:
+                          - img [ref=e2146]
+                    - generic [ref=e2151]:
+                      - generic [ref=e2152]:
+                        - button "Display the source diff" [ref=e2154] [cursor=pointer]:
+                          - img [ref=e2155]
+                        - button "Display the rich diff" [ref=e2158] [cursor=pointer]:
+                          - img [ref=e2159]
+                      - group [ref=e2161]:
+                        - button "Show options" [ref=e2162] [cursor=pointer]:
+                          - img "Show options" [ref=e2164]
+                  - table [ref=e2169]:
+                    - rowgroup [ref=e2170]:
+                      - row "Original file line number Diff line number Diff line change" [ref=e2171]:
+                        - columnheader "Original file line number" [ref=e2172]
+                        - columnheader "Diff line number" [ref=e2173]
+                        - columnheader "Diff line change" [ref=e2174]
+                    - rowgroup [ref=e2179]:
+                      - row "Expand Up @@ -9,6 +9,7 @@ Workspine keeps planning, execution, verification, handoff, and progress state i" [ref=e2180]:
+                        - cell "Expand Up" [ref=e2181] [cursor=pointer]:
+                          - link "Expand Up" [ref=e2182]:
+                            - /url: "#diff-61a2539609ec8ad0c8570d011fc81f76db3c72062f3369b9f903433b5bd7f338"
+                            - img [ref=e2183]
+                        - cell "@@ -9,6 +9,7 @@ Workspine keeps planning, execution, verification, handoff, and progress state i" [ref=e2185]
+                      - 'row "9 9 Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:" [ref=e2186]':
+                        - cell "9" [ref=e2187] [cursor=pointer]
+                        - cell "9" [ref=e2188] [cursor=pointer]
+                        - 'cell "Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:" [ref=e2189]':
+                          - generic [ref=e2190]: "Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:"
+                      - 'row "10 10 - scaffolds a project planning workspace (`.planning/`)" [ref=e2191]':
+                        - cell "10" [ref=e2192] [cursor=pointer]
+                        - cell "10" [ref=e2193] [cursor=pointer]
+                        - 'cell "- scaffolds a project planning workspace (`.planning/`)" [ref=e2194]':
+                          - generic [ref=e2195]: "- scaffolds a project planning workspace (`.planning/`)"
+                      - 'row "11 11 - generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)" [ref=e2196]':
+                        - cell "11" [ref=e2197] [cursor=pointer]
+                        - cell "11" [ref=e2198] [cursor=pointer]
+                        - 'cell "- generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)" [ref=e2199]':
+                          - generic [ref=e2200]: "- generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)"
+                      - 'row "12 + - generates a repo-local helper launcher at `.agents/bin/gsdd.mjs` for deterministic workflow commands run from the repo root" [ref=e2201]':
+                        - cell [ref=e2202] [cursor=pointer]
+                        - cell "12" [ref=e2203] [cursor=pointer]
+                        - 'cell "+ - generates a repo-local helper launcher at `.agents/bin/gsdd.mjs` for deterministic workflow commands run from the repo root" [ref=e2204]':
+                          - generic [ref=e2205]: "+ - generates a repo-local helper launcher at `.agents/bin/gsdd.mjs` for deterministic workflow commands run from the repo root"
+                      - 'row "12 13 - optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)" [ref=e2206]':
+                        - cell "12" [ref=e2207] [cursor=pointer]
+                        - cell "13" [ref=e2208] [cursor=pointer]
+                        - 'cell "- optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)" [ref=e2209]':
+                          - generic [ref=e2210]: "- optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)"
+                      - row "13 14" [ref=e2211]:
+                        - cell "13" [ref=e2212] [cursor=pointer]
+                        - cell "14" [ref=e2213] [cursor=pointer]
+                        - cell [ref=e2214]
+                      - row "14 15 It gives serious AI-assisted work one durable repo workflow spine for planning, checking, execution, verification, and handoff without pretending to be a hosted orchestration layer." [ref=e2215]:
+                        - cell "14" [ref=e2216] [cursor=pointer]
+                        - cell "15" [ref=e2217] [cursor=pointer]
+                        - cell "It gives serious AI-assisted work one durable repo workflow spine for planning, checking, execution, verification, and handoff without pretending to be a hosted orchestration layer." [ref=e2218]:
+                          - generic [ref=e2219]: It gives serious AI-assisted work one durable repo workflow spine for planning, checking, execution, verification, and handoff without pretending to be a hosted orchestration layer.
+                      - row "Expand Down Expand Up @@ -43,11 +44,11 @@ npx gsdd-cli init --tools all" [ref=e2220]:
+                        - cell "Expand Down Expand Up" [ref=e2221] [cursor=pointer]:
+                          - link "Expand Down" [ref=e2222]:
+                            - /url: "#diff-61a2539609ec8ad0c8570d011fc81f76db3c72062f3369b9f903433b5bd7f338"
+                            - img [ref=e2223]
+                          - link "Expand Up" [ref=e2225]:
+                            - /url: "#diff-61a2539609ec8ad0c8570d011fc81f76db3c72062f3369b9f903433b5bd7f338"
+                            - img [ref=e2226]
+                        - cell "@@ -43,11 +44,11 @@ npx gsdd-cli init --tools all" [ref=e2228]
+                      - 'row "43 44 ```" [ref=e2229]':
+                        - cell "43" [ref=e2230] [cursor=pointer]
+                        - cell "44" [ref=e2231] [cursor=pointer]
+                        - 'cell "```" [ref=e2232]':
+                          - generic [ref=e2233]: "```"
+                      - row "44 45" [ref=e2234]:
+                        - cell "44" [ref=e2235] [cursor=pointer]
+                        - cell "45" [ref=e2236] [cursor=pointer]
+                        - cell [ref=e2237]
+                      - row "45 46 Notes:" [ref=e2238]:
+                        - cell "45" [ref=e2239] [cursor=pointer]
+                        - cell "46" [ref=e2240] [cursor=pointer]
+                        - cell "Notes:" [ref=e2241]:
+                          - generic [ref=e2242]: "Notes:"
+                      - 'row "46 - - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`. This is also the primary Codex CLI surface." [ref=e2243]':
+                        - cell "46" [ref=e2244] [cursor=pointer]
+                        - cell [ref=e2245] [cursor=pointer]
+                        - 'cell "- - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`. This is also the primary Codex CLI surface." [ref=e2246]':
+                          - generic [ref=e2247]: "- - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`. This is also the primary Codex CLI surface."
+                      - 'row "47 + - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*` plus the repo-local helper launcher at `.agents/bin/gsdd.mjs`. This is also the primary Codex CLI helper surface, and workflow helper commands assume the repo root as the current working directory." [ref=e2248]':
+                        - cell [ref=e2249] [cursor=pointer]
+                        - cell "47" [ref=e2250] [cursor=pointer]
+                        - 'cell "+ - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*` plus the repo-local helper launcher at `.agents/bin/gsdd.mjs`. This is also the primary Codex CLI helper surface, and workflow helper commands assume the repo root as the current working directory." [ref=e2251]':
+                          - generic [ref=e2252]: "+ - `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*` plus the repo-local helper launcher at `.agents/bin/gsdd.mjs`. This is also the primary Codex CLI helper surface, and workflow helper commands assume the repo root as the current working directory."
+                      - 'row "47 48 - `--tools ...` remains the manual/headless path; legacy runtime aliases such as `cursor`, `copilot`, and `gemini` are still supported for backward compatibility." [ref=e2253]':
+                        - cell "47" [ref=e2254] [cursor=pointer]
+                        - cell "48" [ref=e2255] [cursor=pointer]
+                        - 'cell "- `--tools ...` remains the manual/headless path; legacy runtime aliases such as `cursor`, `copilot`, and `gemini` are still supported for backward compatibility." [ref=e2256]':
+                          - generic [ref=e2257]: "- `--tools ...` remains the manual/headless path; legacy runtime aliases such as `cursor`, `copilot`, and `gemini` are still supported for backward compatibility."
+                      - 'row "48 49 - `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`." [ref=e2258]':
+                        - cell "48" [ref=e2259] [cursor=pointer]
+                        - cell "49" [ref=e2260] [cursor=pointer]
+                        - 'cell "- `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`." [ref=e2261]':
+                          - generic [ref=e2262]: "- `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`."
+                      - 'row "49 50 - `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`." [ref=e2263]':
+                        - cell "49" [ref=e2264] [cursor=pointer]
+                        - cell "50" [ref=e2265] [cursor=pointer]
+                        - 'cell "- `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`." [ref=e2266]':
+                          - generic [ref=e2267]: "- `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`."
+                      - 'row "50 - - `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path." [ref=e2268]':
+                        - cell "50" [ref=e2269] [cursor=pointer]
+                        - cell [ref=e2270] [cursor=pointer]
+                        - 'cell "- - `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path." [ref=e2271]':
+                          - generic [ref=e2272]: "- - `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path."
+                      - 'row "51 + - `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path and internal helper commands route through `.agents/bin/gsdd.mjs`." [ref=e2273]':
+                        - cell [ref=e2274] [cursor=pointer]
+                        - cell "51" [ref=e2275] [cursor=pointer]
+                        - 'cell "+ - `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path and internal helper commands route through `.agents/bin/gsdd.mjs`." [ref=e2276]':
+                          - generic [ref=e2277]: "+ - `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path and internal helper commands route through `.agents/bin/gsdd.mjs`."
+                      - 'row "51 52 - Root `AGENTS.md` is only written when explicitly requested (`--tools agents`, `--tools all`, legacy runtime aliases, or the wizard governance opt-in)." [ref=e2278]':
+                        - cell "51" [ref=e2279] [cursor=pointer]
+                        - cell "52" [ref=e2280] [cursor=pointer]
+                        - 'cell "- Root `AGENTS.md` is only written when explicitly requested (`--tools agents`, `--tools all`, legacy runtime aliases, or the wizard governance opt-in)." [ref=e2281]':
+                          - generic [ref=e2282]: "- Root `AGENTS.md` is only written when explicitly requested (`--tools agents`, `--tools all`, legacy runtime aliases, or the wizard governance opt-in)."
+                      - row "52 53" [ref=e2283]:
+                        - cell "52" [ref=e2284] [cursor=pointer]
+                        - cell "53" [ref=e2285] [cursor=pointer]
+                        - cell [ref=e2286]
+                      - 'row "53 54 ## The Workflow" [ref=e2287]':
+                        - cell "53" [ref=e2288] [cursor=pointer]
+                        - cell "54" [ref=e2289] [cursor=pointer]
+                        - cell "## The Workflow" [ref=e2290]:
+                          - generic [ref=e2291]: "## The Workflow"
+                      - row "Expand Down Expand Up @@ -98,7 +99,7 @@ Use the same three-way routing everywhere:" [ref=e2292]:
+                        - cell "Expand Down Expand Up" [ref=e2293] [cursor=pointer]:
+                          - link "Expand Down" [ref=e2294]:
+                            - /url: "#diff-61a2539609ec8ad0c8570d011fc81f76db3c72062f3369b9f903433b5bd7f338"
+                            - img [ref=e2295]
+                          - link "Expand Up" [ref=e2297]:
+                            - /url: "#diff-61a2539609ec8ad0c8570d011fc81f76db3c72062f3369b9f903433b5bd7f338"
+                            - img [ref=e2298]
+                        - cell "@@ -98,7 +99,7 @@ Use the same three-way routing everywhere:" [ref=e2300]
+                      - row "98 99" [ref=e2301]:
+                        - cell "98" [ref=e2302] [cursor=pointer]
+                        - cell "99" [ref=e2303] [cursor=pointer]
+                        - cell [ref=e2304]
+                      - row "99 100 Architecture notes:" [ref=e2305]:
+                        - cell "99" [ref=e2306] [cursor=pointer]
+                        - cell "100" [ref=e2307] [cursor=pointer]
+                        - cell "Architecture notes:" [ref=e2308]:
+                          - generic [ref=e2309]: "Architecture notes:"
+                      - 'row "100 101 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules." [ref=e2310]':
+                        - cell "100" [ref=e2311] [cursor=pointer]
+                        - cell "101" [ref=e2312] [cursor=pointer]
+                        - 'cell "- `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules." [ref=e2313]':
+                          - generic [ref=e2314]: "- `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules."
+                      - 'row "101 - - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent." [ref=e2315]':
+                        - cell "101" [ref=e2316] [cursor=pointer]
+                        - cell [ref=e2317] [cursor=pointer]
+                        - 'cell "- - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent." [ref=e2318]':
+                          - generic [ref=e2319]: "- - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent."
+                      - 'row "102 + - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.agents/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent." [ref=e2320]':
+                        - cell [ref=e2321] [cursor=pointer]
+                        - cell "102" [ref=e2322] [cursor=pointer]
+                        - 'cell "+ - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.agents/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent." [ref=e2323]':
+                          - generic [ref=e2324]: "+ - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.agents/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent."
+                      - 'row "102 103 - `gsdd health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `gsdd update`." [ref=e2325]':
+                        - cell "102" [ref=e2326] [cursor=pointer]
+                        - cell "103" [ref=e2327] [cursor=pointer]
+                        - 'cell "- `gsdd health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `gsdd update`." [ref=e2328]':
+                          - generic [ref=e2329]: "- `gsdd health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `gsdd update`."
+                      - 'row "103 104 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`." [ref=e2330]':
+                        - cell "103" [ref=e2331] [cursor=pointer]
+                        - cell "104" [ref=e2332] [cursor=pointer]
+                        - 'cell "- Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`." [ref=e2333]':
+                          - generic [ref=e2334]: "- Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`."
+                      - row "104 105 - Phase verification and milestone integration audit are treated as separate concerns." [ref=e2335]:
+                        - cell "104" [ref=e2336] [cursor=pointer]
+                        - cell "105" [ref=e2337] [cursor=pointer]
+                        - cell "- Phase verification and milestone integration audit are treated as separate concerns." [ref=e2338]:
+                          - generic [ref=e2339]: "- Phase verification and milestone integration audit are treated as separate concerns."
+                      - row "Expand Down" [ref=e2340]:
+                        - cell "Expand Down" [ref=e2341] [cursor=pointer]:
+                          - link "Expand Down" [ref=e2342]:
+                            - /url: "#diff-61a2539609ec8ad0c8570d011fc81f76db3c72062f3369b9f903433b5bd7f338"
+                            - img [ref=e2343]
+                        - cell [ref=e2345]
+              - generic [ref=e2348]:
+                - img [ref=e2349]
+                - generic [ref=e2352]: Loading
+            - img [ref=e2353]
+  - contentinfo [ref=e2354]:
+    - heading "Footer" [level=2] [ref=e2355]
+    - generic [ref=e2356]:
+      - generic [ref=e2357]:
+        - link "GitHub Homepage" [ref=e2358] [cursor=pointer]:
+          - /url: https://github.com
+          - img [ref=e2359]
+        - generic [ref=e2361]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e2362]:
+        - heading "Footer navigation" [level=3] [ref=e2363]
+        - list "Footer navigation" [ref=e2364]:
+          - listitem [ref=e2365]:
+            - link "Terms" [ref=e2366] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e2367]:
+            - link "Privacy" [ref=e2368] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e2369]:
+            - link "Security" [ref=e2370] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e2371]:
+            - link "Status" [ref=e2372] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e2373]:
+            - link "Community" [ref=e2374] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e2375]:
+            - link "Docs" [ref=e2376] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e2377]:
+            - link "Contact" [ref=e2378] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e2379]:
+            - button "Manage cookies" [ref=e2381] [cursor=pointer]
+          - listitem [ref=e2382]:
+            - button "Do not share my personal information" [ref=e2384] [cursor=pointer]
