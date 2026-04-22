@@ -247,6 +247,63 @@ describe('Phase 19 provenance helpers', () => {
     });
   });
 
+  test('classifyBrownfieldCheckpointPrecedence keeps CHANGE.md primary when strict-match proof is incomplete', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+    const precedence = mod.classifyBrownfieldCheckpointPrecedence({
+      checkpoint: {
+        workflow: 'phase',
+        phase: '34',
+        branch: 'feat/phase-34-identity-story-lock',
+      },
+      planning: {
+        phases: [{ number: '34', status: 'not_started' }],
+      },
+      brownfieldChange: {
+        exists: true,
+        currentIntegrationSurface: 'main',
+        declaredOwnedPaths: ['distilled/workflows/progress.md'],
+      },
+      git: {
+        branch: 'main',
+        statusShort: 'M  README.md\n',
+      },
+    });
+
+    assert.strictEqual(precedence.primary, 'brownfield_change');
+    assert.strictEqual(precedence.strictMatchRequired, true);
+    assert.strictEqual(precedence.branchAligned, false);
+    assert.strictEqual(precedence.checkpointCanOverrideBrownfield, false);
+  });
+
+  test('classifyBrownfieldCheckpointPrecedence lets a phase checkpoint outrank CHANGE.md only on a full strict match', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+    const precedence = mod.classifyBrownfieldCheckpointPrecedence({
+      checkpoint: {
+        workflow: 'phase',
+        phase: '42',
+        branch: 'feat/brownfield-routing',
+      },
+      planning: {
+        phases: [{ number: '42', status: 'in_progress' }],
+      },
+      brownfieldChange: {
+        exists: true,
+        currentIntegrationSurface: 'feat/brownfield-routing',
+        declaredOwnedPaths: ['distilled/workflows/progress.md', 'distilled/workflows/resume.md'],
+      },
+      git: {
+        branch: 'feat/brownfield-routing',
+        statusShort: 'M  distilled/workflows/progress.md\nM  distilled/workflows/resume.md\n',
+      },
+    });
+
+    assert.strictEqual(precedence.primary, 'checkpoint');
+    assert.strictEqual(precedence.branchAligned, true);
+    assert.strictEqual(precedence.scopeAligned, true);
+    assert.strictEqual(precedence.executionActive, true);
+    assert.strictEqual(precedence.checkpointCanOverrideBrownfield, true);
+  });
+
   test('buildProvenanceSnapshot requires acknowledgement for material checkpoint mismatch', async () => {
     const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
     const snapshot = mod.buildProvenanceSnapshot({
@@ -274,6 +331,36 @@ describe('Phase 19 provenance helpers', () => {
       progressBlocks: false,
       resumeOwnsCleanup: true,
     });
+  });
+
+  test('buildProvenanceSnapshot requires acknowledgement for material brownfield artifact mismatch', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+    const snapshot = mod.buildProvenanceSnapshot({
+      brownfieldChange: {
+        exists: true,
+        title: 'Brownfield Change: Harden progress continuity',
+        currentStatus: 'active',
+        currentIntegrationSurface: 'feat/brownfield-continuity',
+        nextAction: 'Update progress and resume to read the same CHANGE.md anchor.',
+        declaredOwnedPaths: ['distilled/workflows/progress.md', 'distilled/workflows/resume.md'],
+      },
+      git: {
+        branch: 'main',
+        prState: 'unknown',
+        statusShort: 'M  distilled/workflows/progress.md\nM  README.md\n',
+      },
+    });
+
+    assert.strictEqual(snapshot.requiresAcknowledgement, true);
+    assert.strictEqual(snapshot.integrationSurface.materialBrownfieldMismatch, true);
+    assert.ok(snapshot.warnings.some((warning) => warning.id === 'brownfield_branch_mismatch'));
+    assert.ok(snapshot.warnings.some((warning) => warning.id === 'brownfield_scope_mismatch'));
+    assert.strictEqual(snapshot.routing.primary, 'brownfield_change');
+    assert.strictEqual(snapshot.routing.checkpointCanOverrideBrownfield, false);
+    assert.deepStrictEqual(snapshot.brownfieldChange.declaredOwnedPaths, [
+      'distilled/workflows/progress.md',
+      'distilled/workflows/resume.md',
+    ]);
   });
 });
 
@@ -412,6 +499,103 @@ describe('Phase 29 lifecycle-state helper', () => {
       state.phaseArtifacts.some((artifact) => artifact.displayPath === '34-identity-and-story-lock/01-PLAN.md' && artifact.kind === 'plan' && artifact.phaseToken === '34'),
       'nested 01-PLAN.md must be attributed to Phase 34 via the parent directory. FIX: prefer phase directory token over plan filename token when classifying nested artifacts.'
     );
+  });
+
+  test('derives active brownfield change continuity from CHANGE.md and HANDOFF.md without a roadmap', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'brownfield-change'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'),
+      [
+        '---',
+        'change: CHANGE-041',
+        'status: active',
+        '---',
+        '',
+        '# Brownfield Change: Resume Contract Hardening',
+        '',
+        '## Goal',
+        '',
+        '- Keep brownfield continuity honest across progress and resume.',
+        '',
+        '## Out of Scope',
+        '',
+        '- No automatic milestone promotion.',
+        '',
+        '## Structural Promotion Triggers',
+        '',
+        '- Widen when the change no longer fits one active stream.',
+        '- Use `/gsdd-new-milestone` when milestone-owned lifecycle state is required.',
+        '',
+        '## Current Status',
+        '',
+        '- Current posture: active',
+        '- Current branch / integration surface: feat/brownfield-continuity',
+        '- Current owner / runtime: codex-cli',
+        '',
+        '## Next Action',
+        '',
+        '- Update progress and resume so they read the same CHANGE.md anchor.',
+        '',
+        '## PR Slice Ownership',
+        '',
+        '| Slice | Scope | Owned files / modules | Status |',
+        '| --- | --- | --- | --- |',
+        '| A | Continuity contract | distilled/workflows/progress.md, distilled/workflows/resume.md | active |',
+        '',
+        '## Widening Handoff',
+        '',
+        '- `HANDOFF.md` preserves decision context.',
+        '- `VERIFICATION.md` preserves partial proof.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'brownfield-change', 'HANDOFF.md'),
+      [
+        '---',
+        'change: CHANGE-041',
+        'updated: 2026-04-21',
+        '---',
+        '',
+        '# Brownfield Change Handoff',
+        '',
+        '## Active Constraints',
+        '',
+        '- CHANGE.md stays the operational anchor.',
+        '',
+        '## Unresolved Uncertainty',
+        '',
+        '- None yet.',
+        '',
+        '## Decision Posture',
+        '',
+        '- Warning in progress, acknowledgement in resume.',
+        '',
+        '## Anti-Regression',
+        '',
+        '- Do not turn HANDOFF.md into a second status authority.',
+        '',
+        '## Next Action',
+        '',
+        '- If the work widens, carry this judgment into `/gsdd-new-milestone` instead of recreating it.',
+      ].join('\n')
+    );
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.strictEqual(state.nonPhaseState, 'active_brownfield_change');
+    assert.strictEqual(state.brownfieldChange.exists, true);
+    assert.strictEqual(state.brownfieldChange.changeId, 'CHANGE-041');
+    assert.strictEqual(state.brownfieldChange.title, 'Brownfield Change: Resume Contract Hardening');
+    assert.strictEqual(state.brownfieldChange.currentIntegrationSurface, 'feat/brownfield-continuity');
+    assert.strictEqual(state.brownfieldChange.nextAction, 'Update progress and resume so they read the same CHANGE.md anchor.');
+    assert.deepStrictEqual(state.brownfieldChange.declaredOwnedPaths, [
+      'distilled/workflows/progress.md',
+      'distilled/workflows/resume.md',
+    ]);
+    assert.strictEqual(state.brownfieldChange.handoff.activeConstraints, 'CHANGE.md stays the operational anchor.');
+    assert.strictEqual(state.brownfieldChange.handoff.antiRegression, 'Do not turn HANDOFF.md into a second status authority.');
+    assert.match(state.brownfieldChange.handoff.nextActionContext, /\/gsdd-new-milestone/);
   });
 });
 

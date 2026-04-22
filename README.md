@@ -12,7 +12,7 @@ npx gsdd-cli init
 ```
 
 **Directly validated today:** Claude Code, Codex CLI, and OpenCode.
-**Qualified support:** Cursor, Copilot, and Gemini CLI support the same core workflow through the shared `.agents/skills/` surface; this release does not claim the same runtime proof or ergonomics.
+**Qualified support:** Cursor, Copilot, and Gemini CLI support the same core workflow through the shared `.agents/skills/` surface; they do not carry the same runtime proof or ergonomics.
 
 </div>
 
@@ -108,7 +108,7 @@ When those generated surfaces exist locally, `gsdd health` checks them against c
 ### Launch Proof Status
 
 - **Directly validated:** Claude Code, Codex CLI, and OpenCode have recorded `plan -> execute -> verify` evidence for the core lifecycle.
-- **Qualified support:** Cursor, Copilot, and Gemini CLI support the same core workflow through the shared `.agents/skills/` surface; this release does not claim the same runtime proof or ergonomics.
+- **Qualified support:** Cursor, Copilot, and Gemini CLI support the same core workflow through the shared `.agents/skills/` surface; they do not carry the same runtime proof or ergonomics.
 - **Runtime-surface freshness:** Installed generated skills and native adapters are renderer-checked locally; repair stays deterministic through `npx gsdd-cli update`.
 
 Start with the public proof pack:

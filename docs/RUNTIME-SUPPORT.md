@@ -1,6 +1,6 @@
 # Runtime Support Matrix
 
-Workspine is designed as a portable multi-runtime delivery framework, but the proof bar is not the same for every runtime today.
+Workspine is a repo-native delivery spine with portable multi-runtime workflow surfaces, but the proof bar is not the same for every runtime today.
 
 This matrix is the release-floor truth surface.
 
@@ -18,7 +18,7 @@ These are the strongest public runtime claims.
 
 ### Same core workflow
 
-These runtimes use the same portable workflow surfaces, but this release does not claim equal runtime proof or equal ergonomics:
+These runtimes use the same portable workflow surfaces, but they do not carry equal runtime proof or equal ergonomics today:
 
 - **Cursor**
 - **GitHub Copilot**

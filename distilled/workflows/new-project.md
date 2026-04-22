@@ -40,6 +40,7 @@ Before starting, read these files (if they exist):
    - `modelProfile`: balanced | quality | budget — model selection hint
    - `gitProtocol`: advisory git guidance only — follow repo/user conventions first and never invent phase/plan/task git naming by default
 6. Any existing `.planning/SPEC.md` or `.planning/ROADMAP.md` (if resuming)
+7. `.planning/brownfield-change/CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` (when present as the widening input from an active bounded change)
 </load_context>
 
 <project_principles>
@@ -58,7 +59,19 @@ Determine the situation:
 - **Greenfield**: No existing code. Empty or minimal project. Skip codebase audit, go to questioning.
 - **Brownfield**: Existing codebase. You MUST audit before questioning.
 - **Resuming**: `.planning/SPEC.md` already exists. Read it, confirm current state with developer, continue from where things left off.
+- **Concrete brownfield continuity already exists**: if `.planning/brownfield-change/CHANGE.md` exists, treat `/gsdd-new-project` as an explicit widen path into full milestone setup, not as the default resume route for that bounded change. Preserve the current bounded context unless the user clearly wants to widen scope.
 </detect_mode>
+
+<brownfield_widening_context>
+If `.planning/brownfield-change/CHANGE.md` exists, treat it as an explicit widening input rather than as noise to rediscover:
+
+1. Read `CHANGE.md` for the active goal, in-scope/out-of-scope, done-when, next action, and declared write scope.
+2. Read `HANDOFF.md` for preserved constraints, unresolved uncertainty, decision posture, and anti-regression rules.
+3. Read `VERIFICATION.md` for existing proof, open gaps, and any partial validation that the first milestone should inherit honestly.
+
+Do not create a new promotion artifact. Reuse the existing brownfield folder directly when widening into milestone setup.
+If `.planning/MILESTONES.md` already contains shipped milestone history, stop and route this widen request to `/gsdd-new-milestone` instead of reopening first-milestone initialization here.
+</brownfield_widening_context>
 
 <milestone_context>
 Determine research context before spawning researchers. Check if `.planning/SPEC.md` has existing Validated requirements:
@@ -85,6 +98,8 @@ Inform the user: "No codebase maps found. Running codebase mapping before contin
 
 This is an internal prerequisite of `new-project`, not a user-facing routing requirement. If the user started with `/gsdd-new-project` on a brownfield repo, do not bounce them out and tell them to restart with `/gsdd-map-codebase`. Run the mapping dependency, then continue this workflow.
 
+If `.planning/brownfield-change/CHANGE.md` exists, keep it as the current bounded continuity anchor while you do this work. Do not treat its presence as evidence that the user should have used another command instead. The only question is whether they intentionally want to widen that bounded brownfield change into full milestone planning.
+
 Read and follow `.agents/skills/gsdd-map-codebase/SKILL.md` now. Execute its full flow (check existing, spawn mappers, validate, secrets scan). When map-codebase completes, return here and continue from Brownfield Validated Requirements Inference below.
 
 ### Brownfield Validated Requirements Inference
@@ -108,6 +123,8 @@ Brief the developer with a 4-5 sentence summary before starting the questioning 
 <questioning>
 This is the most important step. You are NOT filling out a form. You are having a CONVERSATION.
 You are extracting a vision, not gathering requirements.
+
+If you are widening from active brownfield continuity, begin by summarizing what `CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` already establish. Ask only for the delta needed to justify full milestone scope; do not make the user rediscover context already preserved on disk.
 
 **Start immediately by asking the user: "What do you want to build?"**
 (Wait for their response before continuing).

@@ -1087,13 +1087,13 @@ describe('G20 - Session Continuity Contracts', () => {
     }
   });
 
-  test('resume <determine_action> routes to workflows that exist in the 10-workflow set', () => {
+  test('resume <determine_action> routes to workflows that exist in the valid workflow set', () => {
     const content = fs.readFileSync(RESUME_PATH, 'utf-8');
     const section = content.slice(content.indexOf('<determine_action>'), content.indexOf('</determine_action>'));
     const workflows = section.match(/\/gsdd-[\w-]+/g) || [];
     const validWorkflows = [
       '/gsdd-new-project', '/gsdd-plan', '/gsdd-execute', '/gsdd-verify',
-      '/gsdd-audit-milestone', '/gsdd-quick', '/gsdd-pause', '/gsdd-resume',
+      '/gsdd-audit-milestone', '/gsdd-new-milestone', '/gsdd-quick', '/gsdd-pause', '/gsdd-resume',
       '/gsdd-progress', '/gsdd-map-codebase'
     ];
     for (const wf of workflows) {
@@ -1785,6 +1785,8 @@ describe('G24 - Hardening Propagation', () => {
       'map-codebase completion must surface highest-risk zones from the 4 docs. FIX: Add risk summary guidance.');
     assert.match(section, /Do NOT create a fifth persistent artifact/i,
       'map-codebase completion must keep the routing summary ephemeral. FIX: Explicitly forbid creating a fifth map artifact.');
+    assert.match(section, /intentionally want to widen|only when the user intentionally wants to widen/i,
+      'map-codebase completion must keep /gsdd-new-project as an explicit widen path, not a default fallback. FIX: Add widen-only wording to the completion guidance.');
   });
 
   // --- new-project.md (H5, H9) ---
@@ -1822,6 +1824,14 @@ describe('G24 - Hardening Propagation', () => {
     const between = content.slice(specCreationEnd, roadmapCreation);
     assert.match(between, /\bSTOP\b/,
       'new-project.md must have STOP gate between spec creation and roadmap creation. FIX: Add positional STOP verifying SPEC.md on disk before creating ROADMAP.md.');
+  });
+
+  test('new-project.md treats existing CHANGE.md continuity as an explicit widen path', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
+    assert.match(content, /Concrete brownfield continuity already exists/i,
+      'new-project.md must recognize existing brownfield continuity. FIX: Add the explicit brownfield continuity detect_mode note.');
+    assert.match(content, /explicit widen path|intentionally want to widen/i,
+      'new-project.md must keep /gsdd-new-project as an explicit widen path when CHANGE.md exists. FIX: Add widen-only wording for concrete brownfield continuity.');
   });
 
   // --- audit-milestone.md (H7) ---
@@ -1956,6 +1966,8 @@ describe('G26 - Context Engineering: Quick Workflow', () => {
       'quick.md must route undefined bounded changes to /gsdd-new-project. FIX: Keep the undefined-scope escalation explicit.');
     assert.match(content, /3\+ grey areas.*\/gsdd-plan/s,
       'quick.md must route defined-but-too-ambiguous tasks to /gsdd-plan. FIX: Keep the complexity escalation explicit.');
+    assert.match(content, /intentional widen path|not the default fallback/i,
+      'quick.md must treat /gsdd-new-project as a widen-only move when CHANGE.md already defines a bounded lane. FIX: Add the widen-only brownfield note.');
   });
 
   test('quick.md plan preview offers the correct switch route for undefined bounded changes', () => {
@@ -2043,6 +2055,22 @@ describe('G28 - Spec Quality Check and Contradiction Detection', () => {
       'plan.md context_fidelity must cross-check SPEC.md vs APPROACH.md deferral conflicts. FIX: Add Cross-check line to <context_fidelity>.');
   });
 
+  test('plan.md has phase_contract_gate requiring roadmap out-of-scope and stop/replan conditions', () => {
+    assert.match(planWorkflow, /<phase_contract_gate>/,
+      'plan.md must have <phase_contract_gate> section. FIX: Add a gate that validates roadmap phase contract strength before planning.');
+    assert.match(planWorkflow, /out-of-scope|anti-goals/i,
+      'plan.md phase_contract_gate must require explicit out-of-scope or anti-goals in the roadmap phase contract. FIX: Add out-of-scope requirement to <phase_contract_gate>.');
+    assert.match(planWorkflow, /stop\/replan/i,
+      'plan.md phase_contract_gate must require explicit stop/replan conditions in the roadmap phase contract. FIX: Add stop/replan requirement to <phase_contract_gate>.');
+  });
+
+  test('plan.md anti-drift contract requires boundary and closure fields', () => {
+    for (const token of ['non_goals', 'hard_boundaries', 'escalation_triggers', 'approval_gates', 'closure_claim_limit', 'leverage']) {
+      assert.match(planWorkflow, new RegExp(token),
+        `plan.md must include anti-drift contract field "${token}". FIX: Add ${token} to the plan schema and plan structure.`);
+    }
+  });
+
   test('plan-checker.md context_compliance has must-have coverage sub-check', () => {
     assert.ok(
       planCheckerDelegate.includes('Must-have coverage'),
@@ -2059,6 +2087,215 @@ describe('G28 - Spec Quality Check and Contradiction Detection', () => {
     assert.ok(
       planCheckerDelegate.includes('Cross-surface consistency'),
       'plan-checker.md context_compliance must check for SPEC.md vs APPROACH.md must-have/deferred contradictions. FIX: Add "Cross-surface consistency?" sub-check to context_compliance.');
+  });
+});
+
+describe('G46 - Brownfield Artifact Contract', () => {
+  const changeTemplate = path.join(ROOT, '.planning', 'templates', 'brownfield-change', 'CHANGE.md');
+  const handoffTemplate = path.join(ROOT, '.planning', 'templates', 'brownfield-change', 'HANDOFF.md');
+  const verificationTemplate = path.join(ROOT, '.planning', 'templates', 'brownfield-change', 'VERIFICATION.md');
+  const gapsPath = path.join(ROOT, '.internal-research', 'gaps.md');
+  const evidencePath = path.join(ROOT, 'distilled', 'EVIDENCE-INDEX.md');
+
+  test('brownfield-change template family exists', () => {
+    for (const filePath of [changeTemplate, handoffTemplate, verificationTemplate]) {
+      assert.ok(fs.existsSync(filePath),
+        `${path.relative(ROOT, filePath)} must exist. FIX: Create the bounded brownfield-change template family.`);
+    }
+  });
+
+  test('CHANGE.md defines the canonical one-active-stream contract', () => {
+    const content = fs.readFileSync(changeTemplate, 'utf-8');
+    for (const token of ['## Goal', '## In Scope', '## Out of Scope', '## Done When', '## Next Action', '## PR Slice Ownership', '## Closeout Path']) {
+      assert.match(content, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        `CHANGE.md must include "${token}". FIX: Add the missing contract section.`);
+    }
+    assert.match(content, /one active medium-scope change/i,
+      'CHANGE.md must state the one-active-stream boundary. FIX: Add explicit one active medium-scope change wording.');
+    assert.match(content, /disjoint write ownership|disjoint PR slice/i,
+      'CHANGE.md must preserve the disjoint PR-slice rule. FIX: Add explicit disjoint write-ownership language.');
+    assert.doesNotMatch(content, /Phase \d+|ROADMAP\.md|\[[ x-]\]/,
+      'CHANGE.md must not drift into milestone-lite semantics. FIX: Remove phase numbering, ROADMAP ownership, or checkbox state from the change contract.');
+  });
+
+  test('HANDOFF.md and VERIFICATION.md keep rolling judgment separate from closeout proof', () => {
+    const handoff = fs.readFileSync(handoffTemplate, 'utf-8');
+    const verification = fs.readFileSync(verificationTemplate, 'utf-8');
+
+    for (const token of ['## Active Constraints', '## Unresolved Uncertainty', '## Decision Posture', '## Anti-Regression', '## Next Action']) {
+      assert.match(handoff, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        `HANDOFF.md must include "${token}". FIX: Add the missing rolling-judgment section.`);
+    }
+    for (const token of ['## Goal Verification', '## Evidence', '## Gaps', '## Closeout Decision']) {
+      assert.match(verification, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        `VERIFICATION.md must include "${token}". FIX: Add the missing closeout-proof section.`);
+    }
+    assert.match(verification, /code|test|runtime|delivery|human/,
+      'VERIFICATION.md must preserve the shared evidence-kind vocabulary. FIX: Add the evidence-kinds guidance.');
+  });
+
+  test('planning and design truth agree on the bounded brownfield-change lane', () => {
+    const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
+    const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
+    const todo = fs.readFileSync(INTERNAL_TODO_MD, 'utf-8');
+    const gaps = fs.readFileSync(gapsPath, 'utf-8');
+    const design = fs.readFileSync(DESIGN_MD, 'utf-8');
+    const evidence = fs.readFileSync(evidencePath, 'utf-8');
+
+    assert.match(planningSpec, /brownfield-change\/` folder.*CHANGE\.md.*HANDOFF\.md.*VERIFICATION\.md/i,
+      '.planning/SPEC.md must describe the dedicated brownfield-change family. FIX: Add the explicit 3-file lane contract.');
+    assert.match(roadmap, /parallelism/i,
+      '.planning/ROADMAP.md Phase 40 must preserve parallelism boundaries, not only size/escalation. FIX: Add parallelism to the phase contract.');
+    assert.match(todo, /Phase 41|\/gsdd-plan 41|\/gsdd-verify 41/i,
+      '.internal-research/TODO.md must keep the active brownfield continuity next step current. FIX: Update the active next step after Phase 40 and Phase 41 progress.');
+    assert.match(gaps, /I43[\s\S]*brownfield-change/i,
+      '.internal-research/gaps.md must narrow I43 around the new brownfield-change contract. FIX: Update I43 after Phase 40.');
+    assert.match(design, /## D54 - Bounded Brownfield Change Folder Contract/,
+      'distilled/DESIGN.md must record the bounded brownfield-change decision. FIX: Add D54 to DESIGN.md.');
+    assert.match(evidence, /## D54 — Bounded Brownfield Change Folder Contract/,
+      'distilled/EVIDENCE-INDEX.md must index the new brownfield-change decision. FIX: Add D54 to EVIDENCE-INDEX.md.');
+  });
+});
+
+describe('G47 - Brownfield Continuity Contract', () => {
+  const changeTemplate = path.join(ROOT, '.planning', 'templates', 'brownfield-change', 'CHANGE.md');
+  const handoffTemplate = path.join(ROOT, '.planning', 'templates', 'brownfield-change', 'HANDOFF.md');
+  const progressWorkflow = path.join(ROOT, 'distilled', 'workflows', 'progress.md');
+  const resumeWorkflow = path.join(ROOT, 'distilled', 'workflows', 'resume.md');
+
+  test('CHANGE.md and HANDOFF.md keep one operational anchor plus one judgment surface', () => {
+    const change = fs.readFileSync(changeTemplate, 'utf-8');
+    const handoff = fs.readFileSync(handoffTemplate, 'utf-8');
+
+    assert.match(change, /\.planning\/brownfield-change\/CHANGE\.md/,
+      'CHANGE.md must name the live brownfield artifact path. FIX: Add the instantiated continuity path.');
+    assert.match(change, /read this file first|authoritative next action/i,
+      'CHANGE.md must state that progress/resume read it first for operational continuity. FIX: Add the operational-anchor guidance.');
+    assert.match(handoff, /Operational state still lives in `CHANGE\.md`/i,
+      'HANDOFF.md must explicitly defer operational state to CHANGE.md. FIX: Add the one-anchor wording.');
+    assert.match(handoff, /must not become a second status or routing authority/i,
+      'HANDOFF.md must forbid dual-authority drift. FIX: Preserve the judgment-only boundary.');
+  });
+
+  test('progress.md reports active brownfield change continuity without mutating state', () => {
+    const progress = fs.readFileSync(progressWorkflow, 'utf-8');
+
+    assert.match(progress, /active medium-scope brownfield continuity state/i,
+      'progress.md must recognize the active brownfield change state. FIX: Add the brownfield-change detection branch.');
+    assert.match(progress, /`active_brownfield_change`/i,
+      'progress.md must name the active brownfield non-phase state explicitly. FIX: Add active_brownfield_change to derive_status.');
+    assert.match(progress, /CHANGE\.md` first as the canonical operational anchor/i,
+      'progress.md must read CHANGE.md first for brownfield continuity. FIX: Add the operational-anchor rule.');
+    assert.match(progress, /HANDOFF\.md`.*judgment-only context/i,
+      'progress.md must keep HANDOFF.md as judgment-only context. FIX: Add the handoff-only wording.');
+    assert.match(progress, /Brownfield continuity warning/i,
+      'progress.md must surface brownfield artifact/worktree drift as a warning. FIX: Add the continuity warning block.');
+    assert.match(progress, /Run \/gsdd-resume to restore the active brownfield change context/i,
+      'progress.md must route the active brownfield change toward /gsdd-resume. FIX: Add the active brownfield Branch F recommendation.');
+    assert.match(progress, /progress` stays read-only\.|progress stays read-only\./i,
+      'progress.md must remain read-only while reporting the brownfield state. FIX: Preserve the read-only boundary.');
+    assert.match(progress, /strict-match rule/i,
+      'progress.md must name the shared strict-match rule before letting a checkpoint outrank CHANGE.md. FIX: Add the strict-match routing language.');
+    assert.match(progress, /branch alignment[\s\S]*scope alignment[\s\S]*still-active execution state/i,
+      'progress.md must spell out the three strict-match checks. FIX: Add branch/scope/still-active execution-state wording.');
+  });
+
+  test('resume.md restores active brownfield change context with acknowledgement-gated mismatch handling', () => {
+    const resume = fs.readFileSync(resumeWorkflow, 'utf-8');
+
+    assert.match(resume, /\.planning\/brownfield-change\/CHANGE\.md/,
+      'resume.md must load the active brownfield change artifact. FIX: Add CHANGE.md to detect/load state.');
+    assert.match(resume, /canonical operational continuity anchor/i,
+      'resume.md must treat CHANGE.md as the operational anchor. FIX: Add the anchor wording.');
+    assert.match(resume, /Do not flatten `CHANGE\.md` and `HANDOFF\.md` into co-equal operational sources/i,
+      'resume.md must forbid dual operational authorities. FIX: Preserve the handoff-only posture.');
+    assert.match(resume, /material brownfield artifact\/worktree mismatch|artifact\/worktree mismatch is material/i,
+      'resume.md must name the brownfield artifact/worktree mismatch seam. FIX: Add the mismatch rule.');
+    assert.match(resume, /require acknowledgement before continuing the brownfield change/i,
+      'resume.md must require acknowledgement on material brownfield mismatch. FIX: Add the acknowledgement gate.');
+    assert.match(resume, /present the `CHANGE\.md` next action as the primary resume target/i,
+      'resume.md must route active brownfield continuity through CHANGE.md next_action. FIX: Add the brownfield determine_action branch.');
+    assert.match(resume, /strict-match rule/i,
+      'resume.md must share the strict-match checkpoint precedence rule with progress. FIX: Add the strict-match note to provenance reconciliation or determine_action.');
+    assert.match(resume, /branch alignment[\s\S]*scope alignment[\s\S]*still-active execution state/i,
+      'resume.md must spell out the three strict-match checks. FIX: Add branch/scope/still-active execution-state wording.');
+  });
+});
+
+describe('G47 - Brownfield Growth And Milestone Handoff', () => {
+  const changeTemplate = path.join(ROOT, '.planning', 'templates', 'brownfield-change', 'CHANGE.md');
+  const handoffTemplate = path.join(ROOT, '.planning', 'templates', 'brownfield-change', 'HANDOFF.md');
+  const verificationTemplate = path.join(ROOT, '.planning', 'templates', 'brownfield-change', 'VERIFICATION.md');
+  const newProjectWorkflow = path.join(ROOT, 'distilled', 'workflows', 'new-project.md');
+  const newMilestoneWorkflow = path.join(ROOT, 'distilled', 'workflows', 'new-milestone.md');
+  const progressWorkflow = path.join(ROOT, 'distilled', 'workflows', 'progress.md');
+  const resumeWorkflow = path.join(ROOT, 'distilled', 'workflows', 'resume.md');
+
+  test('brownfield templates preserve structural promotion guidance without inventing a new artifact family', () => {
+    const change = fs.readFileSync(changeTemplate, 'utf-8');
+    const handoff = fs.readFileSync(handoffTemplate, 'utf-8');
+    const verification = fs.readFileSync(verificationTemplate, 'utf-8');
+
+    assert.match(change, /Structural Promotion Triggers/i,
+      'CHANGE.md must define explicit structural promotion triggers. FIX: Add a Structural Promotion Triggers section.');
+    assert.match(change, /one active stream|one active medium-scope change/i,
+      'CHANGE.md must keep the one-active-stream boundary visible during widening. FIX: Re-state the one-active-stream rule near the promotion guidance.');
+    assert.match(change, /\/gsdd-new-project[\s\S]*first milestone/i,
+      'CHANGE.md must route first-milestone widening through /gsdd-new-project. FIX: Add the first-milestone widen path.');
+    assert.match(change, /\/gsdd-new-milestone[\s\S]*shipped milestone history|next milestone cycle/i,
+      'CHANGE.md must route subsequent widening through /gsdd-new-milestone. FIX: Add the subsequent-milestone widen path.');
+    assert.match(change, /Do not invent a separate promotion artifact|Do not create a second durable handoff file/i,
+      'CHANGE.md must forbid a second promotion artifact. FIX: Add the no-new-promotion-artifact rule.');
+
+    assert.match(handoff, /preserved judgment input to `?\/gsdd-new-project`? or `?\/gsdd-new-milestone`?/i,
+      'HANDOFF.md must describe how widening reuses the judgment surface. FIX: Add the widening handoff note.');
+    assert.match(verification, /existing proof surface even when the bounded change widens|Milestone-init workflows should read it/i,
+      'VERIFICATION.md must preserve proof reuse during widening. FIX: Add widening reuse guidance to the verification template.');
+  });
+
+  test('new-project.md reuses brownfield artifacts as widening inputs instead of rediscovering them', () => {
+    const content = fs.readFileSync(newProjectWorkflow, 'utf-8');
+
+    assert.match(content, /brownfield_widening_context/i,
+      'new-project.md must have an explicit brownfield widening section. FIX: Add <brownfield_widening_context>.');
+    assert.match(content, /CHANGE\.md[\s\S]*HANDOFF\.md[\s\S]*VERIFICATION\.md/i,
+      'new-project.md must read CHANGE.md, HANDOFF.md, and VERIFICATION.md when widening. FIX: Add the three widening inputs.');
+    assert.match(content, /Do not create a new promotion artifact/i,
+      'new-project.md must forbid a new promotion artifact during widening. FIX: Add the no-new-artifact rule.');
+    assert.match(content, /do not make the user rediscover context already preserved on disk/i,
+      'new-project.md questioning must reuse preserved brownfield context. FIX: Add the no-rediscovery rule.');
+    assert.match(content, /route this widen request to `?\/gsdd-new-milestone`?/i,
+      'new-project.md must defer to /gsdd-new-milestone when shipped milestone history already exists. FIX: Add the subsequent-milestone redirect.');
+  });
+
+  test('new-milestone.md consumes brownfield widening inputs and preserves context into phase design', () => {
+    const content = fs.readFileSync(newMilestoneWorkflow, 'utf-8');
+
+    assert.match(content, /brownfield_widening_inputs/i,
+      'new-milestone.md must have an explicit brownfield widening input section. FIX: Add <brownfield_widening_inputs>.');
+    assert.match(content, /CHANGE\.md[\s\S]*HANDOFF\.md[\s\S]*VERIFICATION\.md/i,
+      'new-milestone.md must consume the full brownfield artifact family during widening. FIX: Add the three widening inputs.');
+    assert.match(content, /explicit widen request/i,
+      'new-milestone.md must treat invocation from active brownfield continuity as an explicit widen request. FIX: Add the explicit widen-request wording.');
+    assert.match(content, /Do not force the user to rediscover this context/i,
+      'new-milestone.md must preserve brownfield context instead of rediscovery. FIX: Add the no-rediscovery rule.');
+    assert.match(content, /preserve the already-captured scope, decisions, and proof\/gap context/i,
+      'new-milestone.md phase design must preserve the existing brownfield context. FIX: Add the preserved-scope/proof phase-design rule.');
+  });
+
+  test('progress.md and resume.md keep milestone widening case-by-case instead of a default fallback', () => {
+    const progress = fs.readFileSync(progressWorkflow, 'utf-8');
+    const resume = fs.readFileSync(resumeWorkflow, 'utf-8');
+
+    assert.match(progress, /Growth boundary: stay in the bounded lane/i,
+      'progress.md must keep bounded growth explicit. FIX: Add the growth-boundary status line.');
+    assert.match(progress, /\/gsdd-new-milestone[\s\S]*intentionally want to widen/i,
+      'progress.md must offer /gsdd-new-milestone only as an intentional widen path. FIX: Add the explicit subsequent-milestone widen option.');
+
+    assert.match(resume, /multiple active streams, milestone-owned lifecycle state, or broader requirement tracking/i,
+      'resume.md must describe the structural triggers for widening. FIX: Add the bounded-growth trigger wording.');
+    assert.match(resume, /use `?\/gsdd-new-project`? for first-milestone setup and `?\/gsdd-new-milestone`?/i,
+      'resume.md must distinguish first-milestone and subsequent-milestone widening. FIX: Add the split widen-path wording.');
   });
 });
 
@@ -2588,6 +2825,12 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
       'new-milestone load_context must reference SPEC.md. FIX: Add SPEC.md to load_context.');
     assert.match(ctx, /MILESTONES\.md/,
       'new-milestone load_context must reference MILESTONES.md. FIX: Add MILESTONES.md to load_context.');
+    assert.match(ctx, /brownfield-change\/CHANGE\.md/,
+      'new-milestone load_context must reference CHANGE.md when widening from an active bounded change. FIX: Add the brownfield widening inputs to load_context.');
+    assert.match(ctx, /HANDOFF\.md/,
+      'new-milestone load_context must reference HANDOFF.md when widening from an active bounded change. FIX: Add the handoff input to load_context.');
+    assert.match(ctx, /VERIFICATION\.md/,
+      'new-milestone load_context must reference VERIFICATION.md when widening from an active bounded change. FIX: Add the verification input to load_context.');
   });
 
   test('complete-milestone.md load_context references MILESTONE-AUDIT.md', () => {
@@ -2738,7 +2981,7 @@ describe('G37 - Launch Surface Consistency', () => {
 
     const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
     const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
-    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone|v1\.3\.0 Engine Contract Hardening|\/gsdd-verify 29/i,
+    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone|v1\.3\.0 Engine Contract Hardening|\/gsdd-verify 29|v1\.5\.0 Brownfield Change Continuity|\/gsdd-plan 39/i,
       '.planning/SPEC.md must reflect honest milestone state after the v1.2.0 archive handoff, whether still between milestones or already in the next milestone. FIX: Keep Current State aligned to repo truth.');
     assert.match(roadmap, /Phase 24: Naming Contract Reconciliation/i,
       '.planning/ROADMAP.md must preserve the archived naming-surface reconciliation path. FIX: Keep the v1.2.0 phase chain visible after collapse.');

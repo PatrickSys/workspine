@@ -21,6 +21,7 @@ Before starting, read these files:
 2. `.planning/MILESTONES.md` — what shipped previously, last milestone version and date
 3. `.planning/ROADMAP.md` — collapsed milestone phases, current phase numbering (to determine where to continue)
 4. `.planning/config.json` — `workflow.research`, `researchDepth`, `gitProtocol`
+5. `.planning/brownfield-change/CHANGE.md`, `.planning/brownfield-change/HANDOFF.md`, and `.planning/brownfield-change/VERIFICATION.md` when an active bounded change is being widened into the next milestone
 </load_context>
 
 <lifecycle_preflight>
@@ -46,6 +47,17 @@ Before mutating milestone truth, inspect the current branch/worktree as a separa
 If milestone truth on disk is local-only or AI-generated draft truth, or if the checked-out branch is clearly not the intended integration surface, say so explicitly before continuing. Do not flatten local draft planning truth into committed repo truth.
 </integration_surface_check>
 
+<brownfield_widening_inputs>
+If `.planning/brownfield-change/CHANGE.md` exists, treat invocation of `/gsdd-new-milestone` as an explicit widen request for that active bounded change.
+
+Before gathering new milestone goals, read and preserve:
+- `CHANGE.md` for the current goal, scope, done-when, next action, and declared write scope
+- `HANDOFF.md` for active constraints, unresolved uncertainty, decision posture, and anti-regression
+- `VERIFICATION.md` for proof already gathered, remaining gaps, and any partial validation that the new milestone should inherit honestly
+
+Do not force the user to rediscover this context and do not create a new promotion artifact before milestone setup.
+</brownfield_widening_inputs>
+
 <process>
 
 ## 1. Present What Shipped Last
@@ -68,6 +80,8 @@ Ask the user what the next milestone should focus on. Explore:
 - Who benefits?
 - What is explicitly out of scope for this milestone?
 - Any constraints (deadline, team size, dependencies)?
+
+If widening from an active brownfield change, start by presenting the preserved brownfield goal/scope/proof context and ask what now needs milestone-owned lifecycle state beyond that bounded lane.
 
 If a `.planning/MILESTONE-BRIEF.md` exists, use it as the input instead of asking. Note any assumptions inferred from the brief.
 (MILESTONE-BRIEF.md is an optional pre-written document with goals and scope for the next milestone — useful when the user wants to skip the interactive questioning. Create it manually in `.planning/` before running this workflow.)
@@ -131,6 +145,7 @@ Based on milestone goals and research findings (if any), define the new Must Hav
 - Each must have a `[Done-When:]` completion criterion
 - IDs follow the existing category pattern or introduce a new category for new capability areas
 - Do NOT duplicate or restate requirements already in the Validated section
+- If widening from an active brownfield change, convert the preserved `CHANGE.md` / `HANDOFF.md` / `VERIFICATION.md` context into milestone requirements instead of restating the work from scratch
 
 Present the full proposed requirements list:
 
@@ -158,6 +173,7 @@ Design 2-5 phases that cover all new requirements:
 - Each phase has a goal (one sentence), requirement assignments, and 2-4 success criteria
 - All requirements must be assigned to exactly one phase
 - Verify 100% coverage before writing
+- If widening from an active brownfield change, make the phase design preserve the already-captured scope, decisions, and proof/gap context instead of inserting a rediscovery phase
 
 Present the proposed roadmap:
 

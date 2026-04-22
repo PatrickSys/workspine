@@ -21,7 +21,7 @@ Milestone: **v1.4.0 — Launch Surface Coherence**
 * .mailmap for contributor identity consolidation
 * FUNDING.yml and SECURITY.md references updated
 * FRAMEWORK_VERSION bumped to v1.4
-* framework state: 52 design decisions, 14 workflows, 1,381 tests across 13 suites
+* framework state: 52 design decisions, 14 workflows, 1,381 tests across 13 test files
 * npm tarball now ships public docs/proof surfaces plus `distilled/EVIDENCE-INDEX.md` and `distilled/SKILL.md`
 * `gsdd help` now reflects the full workflow surface and helper commands more cleanly
 * launch docs now align on Node 20+, qualified-support caveats, and milestone-continuation surfaces

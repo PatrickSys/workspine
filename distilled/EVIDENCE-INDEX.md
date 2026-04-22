@@ -391,6 +391,59 @@
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `get-shit-done/workflows/progress.md`
 
+## D53 — Fail-Closed Milestone And Phase Contracts
+- `.planning/SPEC.md` (`PLAN-03`, v1.5.0 Current State, key decision on anti-drift milestone/phase contracts)
+- `.planning/ROADMAP.md` (v1.5.0 Phases 39-43 with requirement assignments, success criteria, out-of-scope, and stop/replan conditions)
+- `.internal-research/TODO.md` (active milestone reconciliation and next-step truth)
+- `.internal-research/lessons-learned.md` (`LL-PLANS-MUST-CARRY-THE-ANTI-DRIFT-CONTRACT`, `LL-ACTIVE-MILESTONE-TRUTH-MUST-STAY-SYNCHRONIZED`, `LL-AMBIGUITY-ABOUT-INTENT-MUST-STOP-EXECUTION`)
+- `.agents/skills/gsdd-new-milestone/SKILL.md`, `.agents/skills/gsdd-plan/SKILL.md`, `.agents/skills/gsdd-execute/SKILL.md`, `.agents/skills/gsdd-verify/SKILL.md`
+- `get-shit-done/workflows/new-milestone.md`, `get-shit-done/workflows/plan.md`
+- OpenSpec concepts/workflows, LeanSpec guide/limits, OpenAI practical guide to building agents, Anthropic effective/trustworthy agents, GitHub Copilot task best practices
+
+## D54 — Bounded Brownfield Change Folder Contract
+- `.planning/SPEC.md` (`BROWNFIELD-01` through `BROWNFIELD-05`, v1.5.0 Current State, key decision row)
+- `.planning/ROADMAP.md` (Phase 40 success criteria plus follow-on Phases 41-43)
+- `.planning/templates/brownfield-change/CHANGE.md`
+- `.planning/templates/brownfield-change/HANDOFF.md`
+- `.planning/templates/brownfield-change/VERIFICATION.md`
+- `.internal-research/TODO.md` (Phase 40 execution handoff and Phase 41 next-step ordering)
+- `.internal-research/gaps.md` (`I43`, `I46`)
+- `SPEC.md` (bounded brownfield lane product contract)
+- `tests/gsdd.guards.test.cjs`
+- `get-shit-done/workflows/quick.md`, `get-shit-done/workflows/new-project.md`
+- OpenSpec concepts/getting-started docs, Task Master docs, BMAD workflow map, GitHub Copilot coding-agent best practices
+
+## D55 — Brownfield Continuity Anchor And Mismatch Split
+- `.planning/SPEC.md` (`BROWNFIELD-02`, `BROWNFIELD-05`, Current State, key decision row)
+- `.planning/phases/41-brownfield-continuity-and-resume/41-PLAN.md`
+- `.planning/templates/brownfield-change/CHANGE.md`
+- `.planning/templates/brownfield-change/HANDOFF.md`
+- `bin/lib/lifecycle-state.mjs`
+- `bin/lib/provenance.mjs`
+- `distilled/workflows/progress.md`, `distilled/workflows/resume.md`
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/resume.md`, `get-shit-done/workflows/progress.md`
+
+## D56 — Executable Brownfield Routing And Widen-Only Escalation
+- `.planning/SPEC.md` (`BROWNFIELD-03`, Current State, key decision row)
+- `.planning/phases/42-executable-brownfield-routing/42-PLAN.md`
+- `bin/lib/provenance.mjs`
+- `distilled/workflows/progress.md`, `distilled/workflows/resume.md`, `distilled/workflows/quick.md`, `distilled/workflows/map-codebase.md`, `distilled/workflows/new-project.md`
+- `.internal-research/TODO.md`, `.internal-research/gaps.md`
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/progress.md`, `get-shit-done/workflows/resume.md`, `get-shit-done/workflows/quick.md`, `get-shit-done/workflows/new-project.md`
+
+## D57 — Bounded Brownfield Growth And Context-Preserving Milestone Handoff
+- `.planning/SPEC.md` (`BROWNFIELD-04`, Current State, key decision row)
+- `.planning/phases/43-bounded-growth-and-milestone-handoff/43-PLAN.md`
+- `.planning/templates/brownfield-change/CHANGE.md`
+- `.planning/templates/brownfield-change/HANDOFF.md`
+- `.planning/templates/brownfield-change/VERIFICATION.md`
+- `distilled/workflows/progress.md`, `distilled/workflows/resume.md`, `distilled/workflows/new-project.md`, `distilled/workflows/new-milestone.md`
+- `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/new-project.md`, `get-shit-done/workflows/quick.md`
+
 ---
 
 ## Maintenance

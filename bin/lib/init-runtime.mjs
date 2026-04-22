@@ -162,7 +162,7 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 export function getHelpText() {
   return `
 gsdd - Workspine CLI
-Portable multi-runtime software delivery framework for AI coding agents.
+Repo-native delivery spine for long-horizon AI-assisted work across coding runtimes.
 
 Usage: gsdd <command> [args]
 
