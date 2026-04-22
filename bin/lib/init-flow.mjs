@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'fs';
-import { join, isAbsolute } from 'path';
-import { renderSkillContent } from './rendering.mjs';
+import { dirname, join, isAbsolute } from 'path';
+import { buildPortableRuntimeEntries } from './rendering.mjs';
 import { buildManifest, writeManifest } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './models.mjs';
@@ -106,8 +106,8 @@ export function createCmdInit(ctx) {
       console.log('  - copied project brief to .planning/PROJECT_BRIEF.md');
     }
 
-    generateOpenStandardSkills(ctx.cwd, ctx.workflows);
-    console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
+    generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);
+    console.log('  - generated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
 
     for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {
       adapter.generate();
@@ -144,12 +144,12 @@ export function createCmdUpdate(ctx) {
       updated = true;
     }
 
-    if (platforms.length > 0 || existsSync(join(ctx.cwd, '.agents', 'skills'))) {
+    if (platforms.length > 0 || existsSync(join(ctx.cwd, '.agents'))) {
       if (isDry) {
-        console.log('  - would update open-standard skills (.agents/skills/gsdd-*)');
+        console.log('  - would update portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
       } else {
-        generateOpenStandardSkills(ctx.cwd, ctx.workflows);
-        console.log('  - updated open-standard skills (.agents/skills/gsdd-*)');
+        generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);
+        console.log('  - updated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
       }
       updated = true;
     }
@@ -180,11 +180,11 @@ export function createCmdUpdate(ctx) {
   };
 }
 
-function generateOpenStandardSkills(cwd, workflows) {
-  for (const workflow of workflows) {
-    const dir = join(cwd, '.agents', 'skills', workflow.name);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(workflow));
+function generatePortableRuntimeSurfaces(cwd, workflows) {
+  for (const entry of buildPortableRuntimeEntries({ workflows })) {
+    const targetPath = join(cwd, entry.relativePath);
+    mkdirSync(dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, entry.content);
   }
 }
 

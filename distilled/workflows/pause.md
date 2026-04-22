@@ -12,6 +12,10 @@ Scope boundary: you write a checkpoint file. You do not route, present status, o
 If `.planning/` does not exist, stop and tell the user to run `gsdd init` first.
 </prerequisites>
 
+<repo_root_helper_contract>
+All `node .agents/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
+
 <runtime_contract>
 Use the `Runtime` type from `.planning/SPEC.md`.
 Infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
@@ -57,7 +61,7 @@ Question budget:
 </gather_state>
 
 <write_checkpoint>
-Before writing the new checkpoint, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` to clear the prior session backup. This is cleanup-only and should no-op safely if the backup is absent.
+Before writing the new checkpoint, run `node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` to clear the prior session backup. This is cleanup-only and should no-op safely if the backup is absent.
 
 When the current branch/worktree is known to be evidence-only, stale/spent, or otherwise not the next intended execution surface, say that explicitly in `<current_state>`, `<remaining_work>`, and `<anti_regression>`. Do not flatten evidence-only local state into the same continuity story as the next execution surface.
 

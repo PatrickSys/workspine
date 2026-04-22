@@ -172,6 +172,23 @@ describe('generation manifest', () => {
     assert.strictEqual(afterContent, beforeContent);
   });
 
+  test('update repairs portable runtime surfaces when only the launcher remains', async () => {
+    await initProject();
+
+    const skillsDir = path.join(tmpDir, '.agents', 'skills');
+    const launcherPath = path.join(tmpDir, '.agents', 'bin', 'gsdd.mjs');
+    fs.rmSync(skillsDir, { recursive: true, force: true });
+
+    assert.ok(fs.existsSync(launcherPath), 'launcher must remain present for the partial-runtime repair case');
+    assert.ok(!fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')));
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(result.exitCode, 0);
+    assert.match(result.output, /updated portable runtime surfaces/);
+    assert.ok(fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')));
+    assert.ok(fs.existsSync(launcherPath));
+  });
+
   test('dry-run --templates creates no directories in fresh project', async () => {
     const planningDir = path.join(tmpDir, '.planning');
     assert.ok(!fs.existsSync(planningDir));

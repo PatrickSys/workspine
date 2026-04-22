@@ -13,24 +13,28 @@ Before starting, read these files:
 4. `.planning/SPEC.md` - requirements and constraints for the phase
 5. From the SUMMARY.md loaded in step 3, if a `<judgment>` section is present - read `<anti_regression>` rules as additional verification targets: confirm that invariants listed there were not broken by execution. Read `<active_constraints>` to calibrate verification scope.
 6. The relevant codebase files - the code that was actually built
-7. **Session-boundary fallback:** If the SUMMARY.md loaded in step 3 has no `<judgment>` section, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Treat `<anti_regression>` rules as additional verification targets and `<active_constraints>` to calibrate verification scope (same usage as step 5). After reading, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
+7. **Session-boundary fallback:** If the SUMMARY.md loaded in step 3 has no `<judgment>` section, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Treat `<anti_regression>` rules as additional verification targets and `<active_constraints>` to calibrate verification scope (same usage as step 5). After reading, run `node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 
 Establish your verification basis (must-have sources, requirement scope, previous report status) before beginning code inspection. Do not jump to loose file reading until this basis is explicit.
 
 If a previous `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md` exists, read it first and treat this as re-verification.
 </load_context>
 
+<repo_root_helper_contract>
+All `node .agents/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
+
 <lifecycle_preflight>
 Before code inspection or report writing, run:
 
-- `gsdd lifecycle-preflight verify {phase_num} --expects-mutation phase-status`
+- `node .agents/bin/gsdd.mjs lifecycle-preflight verify {phase_num} --expects-mutation phase-status`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring lifecycle eligibility from prompt-local prose.
 
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject verification
 - it does not mutate `.planning/ROADMAP.md` by itself
-- owned writes remain the verification artifact plus any explicit `gsdd phase-status` transition that occurs later on `passed`
+- owned writes remain the verification artifact plus any explicit `node .agents/bin/gsdd.mjs phase-status` transition that occurs later on `passed`
 </lifecycle_preflight>
 
 <runtime_contract>
@@ -381,7 +385,7 @@ If you cannot write the file (permissions, path issue), STOP and report the bloc
 
 Before any ROADMAP closure step, confirm the required phase `SUMMARY.md` still exists on disk. If `SUMMARY.md` is missing, STOP and report the blocker — do NOT treat verification as terminally successful and do NOT close ROADMAP state from conversation context alone.
 
-After writing VERIFICATION.md, if `status: passed`, run `gsdd phase-status {phase_num} done` to close the phase entry in `.planning/ROADMAP.md`. Execute is the primary owner of ROADMAP status, but execute can be interrupted before its state_updates run. Verify is the terminal workflow and must close the ROADMAP entry when it confirms the phase is complete. If the helper cannot update ROADMAP.md (path issue, missing phase, invalid state), STOP and report the blocker — do NOT complete verification without closing the phase.
+After writing VERIFICATION.md, if `status: passed`, run `node .agents/bin/gsdd.mjs phase-status {phase_num} done` to close the phase entry in `.planning/ROADMAP.md`. Execute is the primary owner of ROADMAP status, but execute can be interrupted before its state_updates run. Verify is the terminal workflow and must close the ROADMAP entry when it confirms the phase is complete. If the helper cannot update ROADMAP.md (path issue, missing phase, invalid state), STOP and report the blocker — do NOT complete verification without closing the phase.
 </persistence>
 
 <success_criteria>
@@ -400,7 +404,7 @@ Verification is done when all of these are true:
 - [ ] Verification explicitly reviewed SUMMARY `<handoff>` and `<deltas>` content
 - [ ] Status is one of `passed`, `gaps_found`, or `human_needed`
 - [ ] The required phase `SUMMARY.md` still exists before any ROADMAP closure on passed status
-- [ ] If status is `passed`, ROADMAP.md phase entry is `[x]` via `gsdd phase-status`
+- [ ] If status is `passed`, ROADMAP.md phase entry is `[x]` via `node .agents/bin/gsdd.mjs phase-status`
 - [ ] The developer was informed of the result and recommended next step
 - [ ] Related failures grouped by concern, not returned as a flat symptom list
 - [ ] Requirements coverage chain completed (collect, restate, map, report, check orphans)

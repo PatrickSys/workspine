@@ -14,20 +14,24 @@ CRITICAL: Read every file below before performing any other actions. This is you
 4. Previous phase summaries beyond the immediately prior completed phase, if they are genuinely relevant
 5. Relevant source files listed in the plan's `<files>` sections
 6. `.planning/phases/*-SUMMARY.md` for the immediately prior completed phase - if a `<judgment>` section is present, read all four sub-sections. Honor `<anti_regression>` rules as execution constraints. Use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions.
-7. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 6, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Honor `<anti_regression>` rules as execution constraints and use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions. After reading, run `gsdd file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
+7. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 6, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Honor `<anti_regression>` rules as execution constraints and use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions. After reading, run `node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 </load_context>
+
+<repo_root_helper_contract>
+All `node .agents/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
 
 <lifecycle_preflight>
 Before implementing or mutating any lifecycle artifact, run:
 
-- `gsdd lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
+- `node .agents/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
 
 If the preflight result is `blocked`, STOP and surface the blocker instead of inferring eligibility from workflow-local prose.
 
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject execution
 - it does not mutate `.planning/ROADMAP.md` by itself
-- owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `gsdd phase-status`
+- owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `node .agents/bin/gsdd.mjs phase-status`
 </lifecycle_preflight>
 
 <runtime_contract>
@@ -286,8 +290,8 @@ Keep the update factual and compact:
 ### 2. Update ROADMAP.md Phase Status
 Do not hand-edit the ROADMAP checkbox line. Use the status-aware helper instead:
 
-- Run `gsdd phase-status {N} done` when this plan completes the phase.
-- Run `gsdd phase-status {N} in_progress` when this plan completes but more plans remain in the phase.
+- Run `node .agents/bin/gsdd.mjs phase-status {N} done` when this plan completes the phase.
+- Run `node .agents/bin/gsdd.mjs phase-status {N} in_progress` when this plan completes but more plans remain in the phase.
 
 The helper owns the `[ ]` / `[-]` / `[x]` mutation for `.planning/ROADMAP.md`.
 

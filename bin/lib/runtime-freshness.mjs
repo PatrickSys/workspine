@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import {
-  buildPortableSkillEntries,
+  buildPortableRuntimeEntries,
   getDelegateContent,
   renderOpenCodeCommandContent,
   renderSkillContent,
@@ -148,10 +148,10 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
   return [
     {
       runtime: 'portable',
-      label: 'portable skills',
-      root: '.agents/skills',
+      label: 'portable runtime surfaces',
+      root: '.agents',
       repairCommand: 'gsdd update',
-      entries: buildPortableSkillEntries(workflows).map((entry) => ({
+      entries: buildPortableRuntimeEntries({ workflows }).map((entry) => ({
         relativePath: entry.relativePath,
         expectedContent: entry.content,
       })),

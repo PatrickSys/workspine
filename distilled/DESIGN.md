@@ -2237,19 +2237,22 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 ---
 
 ## D51 - Deterministic Runtime Surface Freshness
-**Decision (2026-04-17):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When .agents/skills/, .claude/, .opencode/, or .codex/ exist locally, gsdd health must compare those generated files against current render output and route any drift back through gsdd update.
+**Decision (2026-04-17, revised 2026-04-22):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When `.agents/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `gsdd health` must compare those generated files against current render output and route any drift back through `gsdd update`.
 **Context:**
 - Phase 29 narrowed the runtime story to a dual-canonical boundary: distilled/workflows/* is the authored source contract and generated runtime-facing files are the consumed local surfaces.
 - That narrowing was honest but still left I42 open because the repo could not yet prove that installed generated files stayed aligned with the current authored source without reviewer memory.
 - The framework repo also cannot fail closed on missing generated surfaces, because those directories are intentionally gitignored and may be absent even when the authored source is healthy.
+- Fresh consumer repos exposed a second contract gap: workflow-internal helper calls still assumed bare `gsdd ...` resolution even though `init` only guaranteed generated files on disk, not an ambient PATH install.
 **Decision:**
 - Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic.
 - Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally.
 - Route drift through deterministic repair (gsdd update or a targeted gsdd update --tools <runtime>) instead of treating the fix as a manual review exercise.
+- Treat the portable runtime surface as more than skill markdown: generate a repo-local helper launcher at `.agents/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .agents/bin/gsdd.mjs ...` instead of bare `gsdd ...`, prefer the current framework repo when self-hosting, prefer the generating source checkout when present, and otherwise fall back to a pinned `gsdd-cli` package version instead of ambient PATH state.
 - Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist.
 **Why this fits the codebase:**
 - It extends the existing render/update/health pattern instead of inventing a new state file or hidden synchronization layer.
 - It keeps the dual-canonical runtime contract honest: authored source and consumed generated files are distinct surfaces, but the boundary is now mechanically checked where the generated surface is actually installed.
+- It moves helper-command resolution from ambient machine state into generated repo state plus a pinned package fallback, which is the seam `init` and `update` already own deterministically.
 - It preserves framework-source honesty by warning only on installed drift, not on intentionally absent generated directories.
 **Evidence:**
 - .planning/SPEC.md (ENGINE-05)
@@ -2259,12 +2262,16 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - in/lib/health.mjs
 - in/lib/health-truth.mjs
 - in/lib/rendering.mjs
+- in/lib/init-flow.mjs
+- in/lib/init-runtime.mjs
 - in/adapters/claude.mjs, in/adapters/opencode.mjs, in/adapters/codex.mjs
 - README.md, docs/RUNTIME-SUPPORT.md, distilled/README.md
-- 	ests/phase.test.cjs, 	ests/gsdd.health.test.cjs, 	ests/gsdd.plan.adapters.test.cjs, 	ests/gsdd.guards.test.cjs, 	ests/gsdd.scenarios.test.cjs
+- docs/USER-GUIDE.md
+- 	ests/phase.test.cjs, 	ests/gsdd.health.test.cjs, 	ests/gsdd.init.test.cjs, 	ests/gsdd.plan.adapters.test.cjs, 	ests/gsdd.guards.test.cjs, 	ests/gsdd.scenarios.test.cjs
 **Consequences:**
 - gsdd health can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline.
 - gsdd update becomes the explicit repair path for authored/generated runtime-surface drift.
+- Fresh consumer repos now carry their own deterministic helper-command seam, so lifecycle/file-op/status calls no longer depend on whichever `gsdd` binary happens to be present on PATH.
 - Public support wording can stay compact without implying that generated files are trustworthy merely because they were generated once.
 - Claude Code and Codex CLI remain the mandatory live/native validation floor for the hardened runtime boundary, while other runtimes stay honest about their proof level.
 **GSD comparison:** GSD keeps runtime-facing workflow surfaces closer to the Claude-authored source and does not have to model a generated multi-runtime freshness boundary explicitly. GSDD does, because authored workflow source and consumed runtime surfaces are intentionally separated.

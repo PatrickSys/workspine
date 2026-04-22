@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
 const { pathToFileURL } = require('url');
+const packageJson = require('../package.json');
 const {
   cleanup,
   createTempProject,
@@ -119,6 +120,7 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'phases')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'research')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'spec.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'bin', 'gsdd.mjs')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md')));
@@ -441,7 +443,7 @@ describe('gsdd init and update', () => {
     for (const required of [
       /type="checkpoint:user"/,
       /type="checkpoint:review"/,
-      /gsdd phase-status \{N\} done/,
+      /node \.agents\/bin\/gsdd\.mjs phase-status \{N\} done/,
       /DO NOT freelance/,
       /Checkpoint tasks are contract boundaries/i,
       /factual_discovery/,
@@ -511,6 +513,27 @@ describe('gsdd init and update', () => {
       'verify must generate as agent: Code because it writes VERIFICATION.md');
     assert.match(progressSkill, /^agent: Plan$/m,
       'progress must remain agent: Plan because it is the read-only workflow');
+  });
+
+  test('repo-local helper launcher is generated with source, generator-hint, and pinned npx fallback resolution', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    const launcherPath = path.join(tmpDir, '.agents', 'bin', 'gsdd.mjs');
+    const launcher = fs.readFileSync(launcherPath, 'utf-8');
+
+    assert.match(launcher, /const sourceCliPath = join\(repoRoot, 'bin', 'gsdd\.mjs'\);/);
+    assert.match(launcher, /const sourceWorkflowPath = join\(repoRoot, 'distilled', 'workflows', 'plan\.md'\);/);
+    assert.match(launcher, /const generatorRootHint = /);
+    assert.match(launcher, /looksLikeFrameworkRoot/);
+    assert.match(launcher, new RegExp(`--package=gsdd-cli@${packageJson.version.replace(/\./g, '\\.')}`));
+    assert.doesNotMatch(launcher, /where\.exe/);
+    assert.doesNotMatch(launcher, /gsdd\.cmd/);
   });
 
   test('delegates reference canonical role contracts', async () => {

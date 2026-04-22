@@ -198,7 +198,7 @@ Platforms (for --tools):
   all       Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)
 
 Notes:
-  - init always generates open-standard skills at .agents/skills/gsdd-* (portable workflow entrypoints)
+  - init always generates portable runtime surfaces at .agents/skills/gsdd-* plus .agents/bin/gsdd.mjs
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
   - running plain \`gsdd init\` in a terminal opens the guided runtime-selection wizard
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
@@ -206,7 +206,7 @@ Notes:
   - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
-  - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)
+  - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; repo-local helper commands route through .agents/bin/gsdd.mjs; $gsdd-plan is plan-only until explicit $gsdd-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
 
 Examples:

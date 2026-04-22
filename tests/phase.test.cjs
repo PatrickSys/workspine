@@ -715,7 +715,7 @@ describe('Phase 32 runtime-freshness helper', () => {
     assert.strictEqual(initResult.exitCode, 0, initResult.output);
 
     fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'), '\n<!-- local drift -->\n');
-    fs.unlinkSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'));
+    fs.unlinkSync(path.join(tmpDir, '.agents', 'bin', 'gsdd.mjs'));
 
     const gsdd = await loadGsdd(tmpDir);
     const mod = await importRuntimeFreshnessModule();
@@ -727,7 +727,7 @@ describe('Phase 32 runtime-freshness helper', () => {
     assert.strictEqual(report.staleCount, 1);
     assert.strictEqual(report.missingCount, 1);
     assert.ok(report.issues.some((entry) => entry.relativePath === '.agents/skills/gsdd-plan/SKILL.md' && entry.status === 'stale'));
-    assert.ok(report.issues.some((entry) => entry.relativePath === '.claude/commands/gsdd-plan.md' && entry.status === 'missing'));
+    assert.ok(report.issues.some((entry) => entry.relativePath === '.agents/bin/gsdd.mjs' && entry.status === 'missing'));
   });
 });
 

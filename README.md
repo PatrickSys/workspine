@@ -92,7 +92,8 @@ This creates:
 
 1. `.planning/` — durable workspace with templates, role contracts, and config
 2. `.agents/skills/gsdd-*` — portable workflow entrypoints
-3. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)
+3. `.agents/bin/gsdd.mjs` — repo-local helper launcher for deterministic workflow commands inside generated skills (run helper commands from the repo root)
+4. Tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex agents, optional governance)
 
 Then run the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`.
 
@@ -102,7 +103,7 @@ In a terminal, `gsdd init` now opens a guided install wizard:
 - Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing
 - Step 3: configure planning defaults in the same guided flow
 
-Portable `.agents/skills/gsdd-*` skills are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline.
+Portable `.agents/skills/gsdd-*` skills and the repo-local `.agents/bin/gsdd.mjs` helper launcher are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands that call the launcher assume the repo root as the current working directory.
 When those generated surfaces exist locally, `gsdd health` checks them against current render output instead of asking you to trust manual review.
 
 ### Launch Proof Status
@@ -154,10 +155,10 @@ npx gsdd-cli init --tools all        # All of the above
 
 | Platform | Public claim | What's generated |
 |----------|--------------|-----------------|
-| **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` — portable workflow entrypoints (always generated) |
+| **All** (default) | Shared portable surface | `.agents/skills/gsdd-*/SKILL.md` plus `.agents/bin/gsdd.mjs` — portable workflow entrypoints and repo-local helper launcher (always generated) |
 | **Claude Code** | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` — native workflow surfaces, freshness-checked when generated locally |
 | **OpenCode** | Directly validated | `.opencode/commands/`, `.opencode/agents/` — native workflow surfaces, freshness-checked when generated locally |
-| **Codex CLI** | Directly validated | Portable skill entry plus `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |
+| **Codex CLI** | Directly validated | Portable skill entry plus `.agents/bin/gsdd.mjs` and `.codex/agents/gsdd-plan-checker.toml`; planning stays locked until explicit `$gsdd-execute`, and installed surfaces are freshness-checked locally |
 | **Cursor / Copilot / Gemini** | Same core workflow | Skills-native discovery from `.agents/skills/`; optional root `AGENTS.md` block adds behavioral governance, and the generated skill surface is freshness-checked locally |
 | **Other AI tools** | Fallback only | Open `.agents/skills/gsdd-*/SKILL.md` directly |
 

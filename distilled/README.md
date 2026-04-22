@@ -9,6 +9,7 @@ Workspine keeps planning, execution, verification, handoff, and progress state i
 Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:
 - scaffolds a project planning workspace (`.planning/`)
 - generates portable workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)
+- generates a repo-local helper launcher at `.agents/bin/gsdd.mjs` for deterministic workflow commands run from the repo root
 - optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents)
 
 It gives serious AI-assisted work one durable repo workflow spine for planning, checking, execution, verification, and handoff without pretending to be a hosted orchestration layer.
@@ -43,11 +44,11 @@ npx gsdd-cli init --tools all
 ```
 
 Notes:
-- `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*`. This is also the primary Codex CLI surface.
+- `gsdd init` always generates open-standard skills at `.agents/skills/gsdd-*` plus the repo-local helper launcher at `.agents/bin/gsdd.mjs`. This is also the primary Codex CLI helper surface, and workflow helper commands assume the repo root as the current working directory.
 - `--tools ...` remains the manual/headless path; legacy runtime aliases such as `cursor`, `copilot`, and `gemini` are still supported for backward compatibility.
 - `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`.
 - `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`.
-- `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path.
+- `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path and internal helper commands route through `.agents/bin/gsdd.mjs`.
 - Root `AGENTS.md` is only written when explicitly requested (`--tools agents`, `--tools all`, legacy runtime aliases, or the wizard governance opt-in).
 
 ## The Workflow
@@ -98,7 +99,7 @@ Use the same three-way routing everywhere:
 
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
-- Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
+- Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.agents/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
 - `gsdd health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `gsdd update`.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
 - Phase verification and milestone integration audit are treated as separate concerns.

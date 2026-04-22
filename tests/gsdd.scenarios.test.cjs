@@ -689,14 +689,14 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
 
   afterEach(() => { cleanup(tmpDir); });
 
-  test('affected portable skills route checkpoint cleanup through gsdd file-op', () => {
+  test('affected portable skills route checkpoint cleanup through the repo-local helper launcher', () => {
     const expectations = new Map([
-      ['gsdd-pause', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
-      ['gsdd-resume', ['gsdd file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'gsdd file-op delete .planning/.continue-here.md']],
-      ['gsdd-plan', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
-      ['gsdd-execute', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
-      ['gsdd-verify', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
-      ['gsdd-quick', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-pause', ['node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-resume', ['node .agents/bin/gsdd.mjs file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.md']],
+      ['gsdd-plan', ['node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-execute', ['node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-verify', ['node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-quick', ['node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
     ]);
 
     for (const [skillName, snippets] of expectations.entries()) {
@@ -715,14 +715,14 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
       'gsdd-resume must not keep the old manual checkpoint delete prose.');
   });
 
-  test('transition-sensitive portable skills route lifecycle eligibility through gsdd lifecycle-preflight', () => {
+  test('transition-sensitive portable skills route lifecycle eligibility through the repo-local helper launcher', () => {
     const expectations = new Map([
-      ['gsdd-execute', ['gsdd lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'gsdd phase-status']],
-      ['gsdd-verify', ['gsdd lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'gsdd phase-status']],
-      ['gsdd-audit-milestone', ['gsdd lifecycle-preflight audit-milestone']],
-      ['gsdd-complete-milestone', ['gsdd lifecycle-preflight complete-milestone']],
-      ['gsdd-new-milestone', ['gsdd lifecycle-preflight new-milestone']],
-      ['gsdd-resume', ['gsdd lifecycle-preflight resume']],
+      ['gsdd-execute', ['node .agents/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'node .agents/bin/gsdd.mjs phase-status']],
+      ['gsdd-verify', ['node .agents/bin/gsdd.mjs lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'node .agents/bin/gsdd.mjs phase-status']],
+      ['gsdd-audit-milestone', ['node .agents/bin/gsdd.mjs lifecycle-preflight audit-milestone']],
+      ['gsdd-complete-milestone', ['node .agents/bin/gsdd.mjs lifecycle-preflight complete-milestone']],
+      ['gsdd-new-milestone', ['node .agents/bin/gsdd.mjs lifecycle-preflight new-milestone']],
+      ['gsdd-resume', ['node .agents/bin/gsdd.mjs lifecycle-preflight resume']],
     ]);
 
     for (const [skillName, snippets] of expectations.entries()) {
@@ -737,10 +737,10 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
     const content = readSkill(tmpDir, 'gsdd-progress');
     assert.ok(content.includes('progress` stays read-only.') || content.includes('progress stays read-only.'),
       'gsdd-progress must preserve the read-only lifecycle boundary.');
-    assert.ok(content.includes('Do not call `gsdd phase-status` here.'),
-      'gsdd-progress must forbid gsdd phase-status in the read-only reporter.');
-    assert.ok(content.includes('downstream mutating workflow must rerun its own `gsdd lifecycle-preflight ...` gate before acting.'),
-      'gsdd-progress must route downstream lifecycle transitions back through gsdd lifecycle-preflight.');
+    assert.ok(content.includes('Do not call `node .agents/bin/gsdd.mjs phase-status` here.'),
+      'gsdd-progress must forbid node .agents/bin/gsdd.mjs phase-status in the read-only reporter.');
+    assert.ok(content.includes('downstream mutating workflow must rerun its own `node .agents/bin/gsdd.mjs lifecycle-preflight ...` gate before acting.'),
+      'gsdd-progress must route downstream lifecycle transitions back through the repo-local helper launcher.');
   });
 
   test('generated resume/progress skills preserve the non-looping generic-checkpoint rule', () => {
