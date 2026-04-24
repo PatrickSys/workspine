@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 
 import { join, basename } from 'path';
 import { output } from './cli-utils.mjs';
 import { writeFingerprint } from './session-fingerprint.mjs';
+import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const PHASE_STATUS_MARKERS = {
   not_started: '[ ]',
@@ -25,6 +26,10 @@ const ROADMAP_PHASE_STATUS_RE = new RegExp(
   `^(\\s*[-*]\\s*)${PHASE_MARKER_RE}(\\s*\\*\\*Phase\\s+${PHASE_TOKEN_RE}:.*)$`,
   'i'
 );
+const PHASE_DETAIL_HEADING_RE = new RegExp(`^#{3,}\\s+Phase\\s+${PHASE_TOKEN_RE}(?::|\\b)`, 'i');
+const PHASE_DETAIL_STATUS_RE = new RegExp(`^(\\s*\\*\\*Status\\*\\*:\\s*)${PHASE_MARKER_RE}(.*)$`, 'i');
+const DETAILS_OPEN_RE = /<details\b/i;
+const DETAILS_CLOSE_RE = /<\/details>/i;
 
 function findFiles(dir, prefix) {
   if (!existsSync(dir)) return [];
@@ -120,6 +125,28 @@ function normalizePhaseToken(value) {
   return `${numericSegments.join('.')}${match[2] || ''}`;
 }
 
+function extractPlanFileArtifacts(planContent, workspaceRoot) {
+  const artifacts = [];
+  const seen = new Set();
+
+  for (const line of planContent.split('\n')) {
+    const match = line.match(/^\s*-\s*(CREATE|MODIFY|DELETE|READ|TOUCH):\s*(.+?)\s*$/i);
+    if (!match) continue;
+
+    const operation = match[1].toLowerCase();
+    const file = match[2].replace(/^`|`$/g, '').trim();
+    if (!file || seen.has(`${operation}:${file}`)) continue;
+    seen.add(`${operation}:${file}`);
+    artifacts.push({
+      operation,
+      file,
+      exists: existsSync(join(workspaceRoot, file)),
+    });
+  }
+
+  return artifacts;
+}
+
 export function updateRoadmapPhaseStatus(roadmap, phaseNumber, status) {
   const marker = PHASE_STATUS_MARKERS[status];
   if (!marker) {
@@ -127,35 +154,82 @@ export function updateRoadmapPhaseStatus(roadmap, phaseNumber, status) {
   }
 
   const normalizedTarget = normalizePhaseToken(phaseNumber);
-  let matchCount = 0;
+  const lines = roadmap.split('\n');
+  const overviewIndexes = [];
+  const detailSections = [];
+  let inArchivedDetails = false;
 
-  const updated = roadmap
-    .split('\n')
-    .map((line) => {
-      const match = line.match(ROADMAP_PHASE_STATUS_RE);
-      if (!match) return line;
-      if (normalizePhaseToken(match[4]) !== normalizedTarget) return line;
-      matchCount += 1;
-      return `${match[1]}${marker}${match[3]}`;
-    })
-    .join('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    if (DETAILS_OPEN_RE.test(lines[index]) && !DETAILS_CLOSE_RE.test(lines[index])) {
+      inArchivedDetails = true;
+      continue;
+    }
+    if (DETAILS_CLOSE_RE.test(lines[index])) {
+      inArchivedDetails = false;
+      continue;
+    }
+    if (inArchivedDetails) continue;
 
-  if (matchCount === 0) {
+    const overviewMatch = lines[index].match(ROADMAP_PHASE_STATUS_RE);
+    if (overviewMatch && normalizePhaseToken(overviewMatch[4]) === normalizedTarget) {
+      overviewIndexes.push({ index, match: overviewMatch });
+      continue;
+    }
+
+    const headingMatch = lines[index].match(PHASE_DETAIL_HEADING_RE);
+    if (headingMatch && normalizePhaseToken(headingMatch[1]) === normalizedTarget) {
+      let statusIndex = -1;
+      let statusMatch = null;
+      for (let detailIndex = index + 1; detailIndex < lines.length; detailIndex += 1) {
+        if (/^#+\s+/.test(lines[detailIndex])) break;
+        const candidate = lines[detailIndex].match(PHASE_DETAIL_STATUS_RE);
+        if (candidate) {
+          statusIndex = detailIndex;
+          statusMatch = candidate;
+          break;
+        }
+      }
+      detailSections.push({ headingIndex: index, statusIndex, statusMatch });
+    }
+  }
+
+  if (overviewIndexes.length === 0) {
     throw new Error(`Phase ${phaseNumber} was not found in ROADMAP.md`);
   }
 
-  if (matchCount > 1) {
+  if (overviewIndexes.length > 1) {
     throw new Error(`Phase ${phaseNumber} matched multiple ROADMAP.md entries`);
   }
 
-  return updated;
+  if (detailSections.length > 1) {
+    throw new Error(`Phase ${phaseNumber} matched multiple Phase Details sections in ROADMAP.md`);
+  }
+
+  if (detailSections.length === 1 && detailSections[0].statusIndex === -1) {
+    throw new Error(`Phase ${phaseNumber} has a Phase Details section but no **Status** line in ROADMAP.md`);
+  }
+
+  const updatedLines = [...lines];
+  const overview = overviewIndexes[0];
+  updatedLines[overview.index] = `${overview.match[1]}${marker}${overview.match[3]}`;
+
+  if (detailSections.length === 1) {
+    const detail = detailSections[0];
+    updatedLines[detail.statusIndex] = `${detail.statusMatch[1]}${marker}${detail.statusMatch[3]}`;
+  }
+
+  return updatedLines.join('\n');
 }
 
 export function cmdPhaseStatus(...args) {
-  const cwd = process.cwd();
-  const planningDir = join(cwd, '.planning');
+  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  if (invalid) {
+    console.error(error);
+    process.exitCode = 1;
+    return;
+  }
   const roadmapPath = join(planningDir, 'ROADMAP.md');
-  const [phaseNumber, status] = args;
+  const [phaseNumber, status] = normalizedArgs;
 
   if (!phaseNumber || !status) {
     console.error('Usage: gsdd phase-status <phase-number> <not_started|todo|in_progress|done>');
@@ -185,12 +259,16 @@ export function cmdPhaseStatus(...args) {
 }
 
 export function cmdFindPhase(...args) {
-  const cwd = process.cwd();
-  const planningDir = join(cwd, '.planning');
-  const phaseNum = args[0];
+  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  if (invalid) {
+    output({ error });
+    process.exitCode = 1;
+    return;
+  }
+  const phaseNum = normalizedArgs[0];
 
   if (!existsSync(planningDir)) {
-    output({ error: 'No .planning/ directory found. Run `gsdd init` then the new-project workflow first.' });
+    output({ error: 'No .planning/ directory found. Run `npx -y gsdd-cli init` then the new-project workflow first.' });
     return;
   }
 
@@ -235,9 +313,13 @@ export function cmdFindPhase(...args) {
 }
 
 export function cmdVerify(...args) {
-  const cwd = process.cwd();
-  const planningDir = join(cwd, '.planning');
-  const phaseNum = args[0];
+  const { args: normalizedArgs, workspaceRoot, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  if (invalid) {
+    console.error(error);
+    process.exitCode = 1;
+    return;
+  }
+  const phaseNum = normalizedArgs[0];
   if (!phaseNum) {
     console.error('Usage: gsdd verify <phase-number>');
     process.exitCode = 1; return;
@@ -247,132 +329,51 @@ export function cmdVerify(...args) {
     console.error('No .planning/ directory found.');
     process.exitCode = 1; return;
   }
-
-  const planFile = findFiles(join(planningDir, 'phases'), `${padPhase(phaseNum)}-PLAN`)[0];
-  if (!planFile) {
-    console.error(`No plan found for phase ${phaseNum}`);
-    process.exitCode = 1; return;
-  }
-
-  const planPath = join(planningDir, 'phases', planFile);
-  const plan = readFileSync(planPath, 'utf-8');
-
-  const fileMatches = plan.matchAll(/<files>([\s\S]*?)<\/files>/g);
-  const expectedFiles = [];
-  for (const match of fileMatches) {
-    const lines = match[1]
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith('-'));
-    for (const line of lines) {
-      const fileMatch = line.match(/(?:CREATE|MODIFY):\s*(.+)/);
-      if (fileMatch) expectedFiles.push(fileMatch[1].trim());
-    }
-  }
-
-  const results = expectedFiles.map((f) => {
-    const fullPath = join(cwd, f);
-    const exists = existsSync(fullPath);
-    let substantive = false;
-    if (exists) {
-      try {
-        const content = readFileSync(fullPath, 'utf-8');
-        const meaningfulLines = content.split('\n').filter(
-          (l) => l.trim() && !/^\s*(\/\/|\/\*|\*|#)/.test(l)
-        );
-        substantive = meaningfulLines.length >= 3 && !content.includes('// TODO: implement');
-      } catch {
-        substantive = false;
-      }
-    }
-    return { file: f, exists, substantive };
+  const phasesDir = join(planningDir, 'phases');
+  const matchingPlans = findFiles(phasesDir, `${padPhase(phaseNum)}-PLAN`);
+  const matchingSummaries = findFiles(phasesDir, `${padPhase(phaseNum)}-SUMMARY`);
+  const artifacts = matchingPlans.flatMap((planPath) => {
+    const fullPath = join(phasesDir, planPath);
+    return existsSync(fullPath)
+      ? extractPlanFileArtifacts(readFileSync(fullPath, 'utf-8'), workspaceRoot)
+      : [];
   });
 
-  const antiPatterns = [];
-  for (const r of results) {
-    if (!r.exists) continue;
-    try {
-      const content = readFileSync(join(cwd, r.file), 'utf-8');
-      const lines = content.split('\n');
-      lines.forEach((line, i) => {
-        if (/TODO|FIXME|HACK|XXX/.test(line)) {
-          antiPatterns.push({ file: r.file, line: i + 1, pattern: 'TODO/FIXME', content: line.trim() });
-        }
-        if (/catch\s*\([^)]*\)\s*\{[\s]*\}/.test(line) || /catch\s*\([^)]*\)\s*\{\s*$/.test(line)) {
-          antiPatterns.push({ file: r.file, line: i + 1, pattern: 'Empty catch', content: line.trim() });
-        }
-      });
-    } catch {
-      // skip unreadable files
-    }
-  }
-
-  output({
-    phase: parseInt(phaseNum, 10),
-    artifacts: results,
-    allExist: results.every((r) => r.exists),
-    allSubstantive: results.filter((r) => r.exists).every((r) => r.substantive),
-    antiPatterns,
-    antiPatternCount: antiPatterns.length,
-  });
+  const result = {
+    phase: normalizePhaseToken(phaseNum),
+    exists: matchingPlans.length > 0,
+    plans: matchingPlans,
+    summaries: matchingSummaries,
+    artifacts,
+    allExist: artifacts.every((artifact) => artifact.exists),
+    verified: matchingPlans.length > 0 && matchingSummaries.length > 0,
+  };
+  output(result);
 }
 
 export function cmdScaffold(...args) {
-  const cwd = process.cwd();
-  const planningDir = join(cwd, '.planning');
-  const [type, ...rest] = args;
-
-  if (type !== 'phase') {
-    console.error('Usage: gsdd scaffold phase <number> [name]');
-    process.exitCode = 1; return;
-  }
-
-  const phaseNum = rest[0];
-  const phaseName = rest.slice(1).join(' ');
-  if (!phaseNum) {
-    console.error('Usage: gsdd scaffold phase <number> [name]');
-    process.exitCode = 1; return;
-  }
-
-  const phasesDir = join(planningDir, 'phases');
-  mkdirSync(phasesDir, { recursive: true });
-
-  const planFile = join(phasesDir, `${padPhase(phaseNum)}-PLAN.md`);
-  if (existsSync(planFile)) {
-    console.log(`  - ${basename(planFile)} already exists`);
+  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  if (invalid) {
+    console.error(error);
+    process.exitCode = 1;
     return;
   }
-
-  const content = `# Phase ${phaseNum}: ${phaseName || '[Name]'} - Plan
-
-## Phase Goal
-[From ROADMAP.md]
-
-## Requirements Covered
-[REQ-IDs from SPEC.md]
-
-## Approach
-[2-3 sentences]
-
-## Must-Haves (from success criteria)
-1. [Success criterion]
-
-## Tasks
-
-<!-- Add tasks using XML format:
-<task id="${phaseNum}-01">
-  <files>
-    - CREATE: path/to/file
-  </files>
-  <action>Description of what to implement</action>
-  <verify>How to verify it works</verify>
-  <done>When is this task done</done>
-</task>
--->
-
-## Notes
-`;
-
-  writeFileSync(planFile, content);
-  console.log(`  - created ${basename(planFile)}`);
+  const kind = normalizedArgs[0];
+  const phaseNum = normalizedArgs[1];
+  const phaseName = normalizedArgs[2] || 'phase';
+  if (kind !== 'phase' || !phaseNum) {
+    console.error('Usage: gsdd scaffold phase <phase-number> [phase-name]');
+    process.exitCode = 1; return;
+  }
+  mkdirSync(planningDir, { recursive: true });
+  const phasesDir = join(planningDir, 'phases');
+  mkdirSync(phasesDir, { recursive: true });
+  const dirName = `${padPhase(phaseNum)}-${phaseName.replace(/\s+/g, '-').toLowerCase()}`;
+  const phaseDir = join(phasesDir, dirName);
+  mkdirSync(phaseDir, { recursive: true });
+  const planPath = join(phaseDir, `${padPhase(phaseNum)}-PLAN.md`);
+  if (!existsSync(planPath)) {
+    writeFileSync(planPath, `# Phase ${phaseNum} Plan\n\n## Goal\n- \n\n## Tasks\n- [ ] \n`);
+  }
+  output({ created: !existsSync(planPath), path: planPath.replace(/\\/g, '/'), phase: normalizePhaseToken(phaseNum) });
 }

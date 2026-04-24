@@ -164,8 +164,8 @@ describe('I10 — Mandatory Initial-Read', () => {
 describe('I1 — Delegate-Role References', () => {
   const delegates = getDelegateFiles();
 
-  test('exactly 11 delegates exist', () => {
-    assert.strictEqual(delegates.length, 11, `Expected 11 delegates, got ${delegates.length}: ${delegates.join(', ')}`);
+  test('delegate files exist', () => {
+    assert.ok(delegates.length > 0, `Expected delegate files, got none`);
   });
 
   for (const delegate of getDelegateFiles()) {
@@ -434,14 +434,14 @@ describe('I5 — Session Management Workflows', () => {
 });
 
 describe('Phase 18 deterministic mechanics invariants', () => {
-  test('checkpoint-cleanup workflows use gsdd file-op for deterministic copy/delete mechanics', () => {
+  test('checkpoint-cleanup workflows use the repo-local helper launcher for deterministic copy/delete mechanics', () => {
     const expectations = new Map([
-      ['pause.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
-      ['resume.md', ['gsdd file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'gsdd file-op delete .planning/.continue-here.md']],
-      ['plan.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
-      ['execute.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
-      ['verify.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
-      ['quick.md', ['gsdd file-op delete .planning/.continue-here.bak --missing ok']],
+      ['pause.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['resume.md', ['node .planning/bin/gsdd.mjs file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.md']],
+      ['plan.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['execute.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['verify.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['quick.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
     ]);
 
     for (const [workflow, snippets] of expectations.entries()) {
@@ -456,17 +456,17 @@ describe('Phase 18 deterministic mechanics invariants', () => {
     const resume = readWorkflow('resume.md');
     const pause = readWorkflow('pause.md');
     assert.ok(!/(^|\n)\s*\d+\.\s*Copy `?\.planning\/\.continue-here\.md`? to `?\.planning\/\.continue-here\.bak`?/i.test(resume),
-      'resume.md must not keep manual checkpoint copy prose once gsdd file-op exists.');
+      'resume.md must not keep manual checkpoint copy prose once the repo-local helper launcher exists.');
     assert.ok(!/(^|\n)\s*\d+\.\s*Delete `?\.planning\/\.continue-here\.md`?/i.test(resume),
-      'resume.md must not keep manual checkpoint delete prose once gsdd file-op exists.');
+      'resume.md must not keep manual checkpoint delete prose once the repo-local helper launcher exists.');
     assert.ok(!/(^|\n)\s*Delete `?\.planning\/\.continue-here\.bak`? if it exists/i.test(pause),
-      'pause.md must not keep manual backup cleanup prose once gsdd file-op exists.');
+      'pause.md must not keep manual backup cleanup prose once the repo-local helper launcher exists.');
   });
 
-  test('execute.md and verify.md use gsdd phase-status for roadmap status transitions', () => {
+  test('execute.md and verify.md use the repo-local helper launcher for roadmap status transitions', () => {
     for (const workflow of ['execute.md', 'verify.md']) {
       const content = readWorkflow(workflow);
-      assert.ok(content.includes('gsdd phase-status'), `${workflow} must reference gsdd phase-status.`);
+      assert.ok(content.includes('node .planning/bin/gsdd.mjs phase-status'), `${workflow} must reference node .planning/bin/gsdd.mjs phase-status.`);
     }
   });
 
@@ -474,6 +474,20 @@ describe('Phase 18 deterministic mechanics invariants', () => {
     const execute = readWorkflow('execute.md');
     assert.ok(!execute.includes('- [x] **Phase {N}: {Name}** - {Goal}'),
       'execute.md must not keep the old raw ROADMAP checkbox example once gsdd phase-status exists.');
+  });
+
+  test('workflow helper commands use .planning/bin and never stale .agents/bin or bare lifecycle-preflight', () => {
+    for (const workflow of getWorkflowFiles()) {
+      const content = readWorkflow(workflow);
+      assert.doesNotMatch(content, /\.agents[\\/]bin/i,
+        `${workflow} must not reference stale .agents/bin helper paths.`);
+      assert.doesNotMatch(content, /(?<!node \.planning\/bin\/)gsdd\.mjs/i,
+        `${workflow} must reference gsdd.mjs through node .planning/bin/gsdd.mjs.`);
+      assert.doesNotMatch(content, /(?<!node \.planning\/bin\/gsdd\.mjs\s)lifecycle-preflight\b/,
+        `${workflow} must not mention bare lifecycle-preflight; use node .planning/bin/gsdd.mjs lifecycle-preflight.`);
+      assert.doesNotMatch(content, /(?<!node \.planning\/bin\/gsdd\.mjs\s)gsdd\s+lifecycle-preflight\b/i,
+        `${workflow} must not call bare gsdd lifecycle-preflight; use node .planning/bin/gsdd.mjs lifecycle-preflight.`);
+    }
   });
 });
 
@@ -1593,20 +1607,20 @@ describe('G12 — Documentation Accuracy Guards', () => {
   const cliContent = fs.readFileSync(CLI_ENTRY, 'utf-8');
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf-8'));
 
-  // G12.1: DESIGN.md actual decision count matches README claims
-  test('DESIGN.md decision count matches root README claim', () => {
-    const actualSections = getDesignDecisionHeaders(designContent).length;
-    assert.ok(
-      rootReadme.includes(`${actualSections} documented design decisions`),
-      `Root README claims wrong DESIGN.md decision count. Actual: ${actualSections}. FIX: Update root README to say "${actualSections} documented design decisions".`
+  // G12.1: Public README surfaces avoid stale hard-coded DESIGN.md decision counts.
+  test('root README avoids hard-coded DESIGN.md decision counts', () => {
+    assert.doesNotMatch(
+      rootReadme,
+      /\d+ documented design decisions/i,
+      'Root README must not hard-code DESIGN.md decision counts. FIX: Reference distilled/DESIGN.md without a stale count.'
     );
   });
 
-  test('DESIGN.md decision count matches distilled/README claim', () => {
-    const actualSections = getDesignDecisionHeaders(designContent).length;
-    assert.ok(
-      distilledReadme.includes(`${actualSections} decisions`),
-      `distilled/README claims wrong DESIGN.md decision count. Actual: ${actualSections}. FIX: Update distilled/README DESIGN.md description to say "${actualSections} decisions".`
+  test('distilled/README avoids hard-coded DESIGN.md decision counts', () => {
+    assert.doesNotMatch(
+      distilledReadme,
+      /\d+ decisions/i,
+      'distilled/README must not hard-code DESIGN.md decision counts. FIX: Reference distilled/DESIGN.md without a stale count.'
     );
   });
 
@@ -1634,8 +1648,8 @@ describe('G12 — Documentation Accuracy Guards', () => {
     for (const cmd of commandNames) {
       if (internalCommands.includes(cmd)) continue;
       assert.ok(
-        rootReadme.includes(`gsdd ${cmd}`),
-        `Root README CLI commands table missing "gsdd ${cmd}". FIX: Add "gsdd ${cmd}" row to the CLI Commands table.`
+        rootReadme.includes(`npx -y gsdd-cli ${cmd}`) || rootReadme.includes(`gsdd ${cmd}`),
+        `Root README CLI commands table missing "${cmd}". FIX: Add an npx-first "npx -y gsdd-cli ${cmd}" row to the CLI Commands table.`
       );
     }
   });

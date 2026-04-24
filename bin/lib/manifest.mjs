@@ -79,6 +79,7 @@ export function buildManifest({ planningDir, frameworkVersion }) {
       root: rootHashes,
     },
     roles: rolesHashes,
+    runtimeHelpers: hashDirectory(join(planningDir, 'bin'), planningDir),
   };
 }
 

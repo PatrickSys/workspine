@@ -4,6 +4,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const { spawnSync } = require('node:child_process');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -146,6 +147,143 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /\* \[x\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
   });
 
+  test('phase-status updates overview and matching Phase Details status together', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      [
+        '# Roadmap',
+        '',
+        '- [-] **Phase 18: Deterministic CLI Mechanics** - goal',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 18: Deterministic CLI Mechanics',
+        '',
+        '**Goal**: goal',
+        '**Status**: [-]',
+        '',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const roadmap = fs.readFileSync(roadmapPath, 'utf-8');
+    assert.match(roadmap, /- \[x\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
+    assert.match(roadmap, /\*\*Status\*\*: \[x\]/);
+  });
+
+  test('phase-status ignores archived duplicate phase entries in details blocks', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      [
+        '# Roadmap',
+        '',
+        '<details open>',
+        '<summary>Archived v1.0.0</summary>',
+        '',
+        '- [x] **Phase 1: Archived Foundation** - old goal',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 1: Archived Foundation',
+        '**Status**: [x]',
+        '</details>',
+        '',
+        '### v1.1.0 Active Milestone',
+        '',
+        '- [ ] **Phase 1: Active Foundation** - new goal',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 1: Active Foundation',
+        '**Status**: [ ]',
+        '',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '1', 'in_progress']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const roadmap = fs.readFileSync(roadmapPath, 'utf-8');
+    assert.match(roadmap, /- \[x\] \*\*Phase 1: Archived Foundation\*\*/);
+    assert.match(roadmap, /### Phase 1: Archived Foundation\n\*\*Status\*\*: \[x\]/);
+    assert.match(roadmap, /- \[-\] \*\*Phase 1: Active Foundation\*\*/);
+    assert.match(roadmap, /### Phase 1: Active Foundation\n\*\*Status\*\*: \[-\]/);
+  });
+
+  test('phase-status supports dotted phase identifiers in overview and details', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      [
+        '# Roadmap',
+        '',
+        '- [ ] **Phase 1.2a: Follow-up Closure** - goal',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 1.2a: Follow-up Closure',
+        '**Status**: [ ]',
+        '',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '01.02a', 'in_progress']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const roadmap = fs.readFileSync(roadmapPath, 'utf-8');
+    assert.match(roadmap, /- \[-\] \*\*Phase 1\.2a: Follow-up Closure\*\*/);
+    assert.match(roadmap, /\*\*Status\*\*: \[-\]/);
+  });
+
+  test('phase-status fails loudly when a matching Phase Details section lacks Status', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const original = [
+      '# Roadmap',
+      '',
+      '- [ ] **Phase 18: Deterministic CLI Mechanics** - goal',
+      '',
+      '## Phase Details',
+      '',
+      '### Phase 18: Deterministic CLI Mechanics',
+      '**Goal**: goal',
+      '',
+    ].join('\n');
+    fs.writeFileSync(roadmapPath, original);
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
+    assert.notStrictEqual(result.exitCode, 0, 'unreconciled overview/detail status should fail');
+    assert.match(result.output, /Phase Details section but no \*\*Status\*\* line/i);
+    assert.strictEqual(fs.readFileSync(roadmapPath, 'utf-8'), original);
+  });
+
+  test('phase-status does not treat later non-phase heading status as the target detail status', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const original = [
+      '# Roadmap',
+      '',
+      '- [ ] **Phase 18: Deterministic CLI Mechanics** - goal',
+      '',
+      '## Phase Details',
+      '',
+      '### Phase 18: Deterministic CLI Mechanics',
+      '**Goal**: goal',
+      '',
+      '### Risks',
+      '**Status**: [ ]',
+      '',
+    ].join('\n');
+    fs.writeFileSync(roadmapPath, original);
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
+    assert.notStrictEqual(result.exitCode, 0, 'unrelated heading status must not be mutated');
+    assert.match(result.output, /Phase Details section but no \*\*Status\*\* line/i);
+    assert.strictEqual(fs.readFileSync(roadmapPath, 'utf-8'), original);
+  });
+
   test('phase-status reports changed false when target phase already has requested status', async () => {
     const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
     const original = '# Roadmap\n\n- [x] **Phase 18: Deterministic CLI Mechanics** - goal\n';
@@ -176,6 +314,27 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(result.output, /file-op <copy\|delete\|regex-sub>/);
     assert.match(result.output, /phase-status <N> <status>/);
     assert.match(result.output, /lifecycle-preflight <surface> \[phase]/);
+  });
+
+  test('repo-local helper executes correctly from a nested cwd', async () => {
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initResult.exitCode, 0, initResult.output);
+
+    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
+    fs.mkdirSync(nestedDir, { recursive: true });
+
+    const result = spawnSync(process.execPath, [helperPath, 'help'], {
+      cwd: nestedDir,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const output = result.stdout;
+    assert.match(output, /node \.planning\/bin\/gsdd\.mjs file-op/);
+    assert.match(output, /node \.planning\/bin\/gsdd\.mjs phase-status/);
+    assert.match(output, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
+    assert.doesNotMatch(output, /\.agents\/bin\/gsdd\.mjs/);
   });
 
   test('a later successful in-process CLI run clears an earlier phase-command failure exit code', async () => {
@@ -413,6 +572,68 @@ describe('Phase 29 lifecycle-state helper', () => {
       'nested 01-PLAN.md must be attributed to Phase 34 via the parent directory. FIX: prefer phase directory token over plan filename token when classifying nested artifacts.'
     );
   });
+
+  test('reports overview and Phase Details status mismatches in lifecycle state', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '- [x] **Phase 29: Contract Inventory And Claim Narrowing** — [ENGINE-01]',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 29: Contract Inventory And Claim Narrowing',
+        '**Status**: [-]',
+        '',
+      ].join('\n')
+    );
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.deepStrictEqual(state.phaseStatusAlignment.mismatches, [
+      'Phase 29 overview status done disagrees with Phase Details status in_progress',
+    ]);
+    assert.deepStrictEqual(state.requirementAlignment.mismatches, ['ENGINE-01 phase complete but SPEC unchecked']);
+  });
+
+  test('ignores archived duplicate overview and detail statuses when checking active roadmap alignment', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '<details>',
+        '<summary>Archived v1.0.0</summary>',
+        '',
+        '- [x] **Phase 1: Archived Foundation** — [OLD-01]',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 1: Archived Foundation',
+        '**Status**: [-]',
+        '</details>',
+        '',
+        '### v1.1.0 Active Milestone',
+        '',
+        '- [ ] **Phase 1: Active Foundation** — [NEW-01]',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 1: Active Foundation',
+        '**Status**: [ ]',
+        '',
+      ].join('\n')
+    );
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.deepStrictEqual(state.phaseStatusAlignment.mismatches, []);
+    assert.strictEqual(state.counts.total, 1);
+    assert.strictEqual(state.nextPhase.number, '1');
+  });
 });
 
 describe('Phase 30 lifecycle-preflight helper', () => {
@@ -528,6 +749,115 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.explicitLifecycleMutation, 'none');
     assert.strictEqual(output.reason, 'illegal_lifecycle_mutation');
   });
+
+  test('warns when lifecycle preflight sees overview/detail status mismatch', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [-] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 30: Deterministic Lifecycle Gates',
+        '**Status**: [x]',
+        '',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      '# plan\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
+      '# summary\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.warnings.some((warning) => warning.code === 'roadmap_phase_status_mismatch'));
+  });
+
+  test('blocks terminal milestone preflight when roadmap overview/detail status mismatches', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [x] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 30: Deterministic Lifecycle Gates',
+        '**Status**: [-]',
+        '',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      '# plan\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
+      '# summary\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-VERIFICATION.md'),
+      '# verification\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'audit-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'roadmap_phase_status_mismatch');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'roadmap_phase_status_mismatch'));
+  });
+
+  test('blocks complete-milestone preflight when roadmap overview/detail status mismatches', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [x] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 30: Deterministic Lifecycle Gates',
+        '**Status**: [-]',
+        '',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      '# plan\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
+      '# summary\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-VERIFICATION.md'),
+      '# verification\n'
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'roadmap_phase_status_mismatch');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'roadmap_phase_status_mismatch'));
+  });
 });
 
 describe('verify command nested phase plans', () => {
@@ -563,7 +893,7 @@ describe('verify command nested phase plans', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
 
     const output = JSON.parse(result.output);
-    assert.strictEqual(output.phase, 34);
+    assert.strictEqual(output.phase, '34');
     assert.deepStrictEqual(output.artifacts.map((artifact) => artifact.file), ['src/example.js']);
     assert.strictEqual(output.allExist, true);
   });
@@ -715,7 +1045,7 @@ describe('Phase 32 runtime-freshness helper', () => {
     assert.strictEqual(initResult.exitCode, 0, initResult.output);
 
     fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'), '\n<!-- local drift -->\n');
-    fs.unlinkSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'));
+    fs.unlinkSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'));
 
     const gsdd = await loadGsdd(tmpDir);
     const mod = await importRuntimeFreshnessModule();
@@ -727,7 +1057,7 @@ describe('Phase 32 runtime-freshness helper', () => {
     assert.strictEqual(report.staleCount, 1);
     assert.strictEqual(report.missingCount, 1);
     assert.ok(report.issues.some((entry) => entry.relativePath === '.agents/skills/gsdd-plan/SKILL.md' && entry.status === 'stale'));
-    assert.ok(report.issues.some((entry) => entry.relativePath === '.claude/commands/gsdd-plan.md' && entry.status === 'missing'));
+    assert.ok(report.issues.some((entry) => entry.relativePath === '.planning/bin/gsdd.mjs' && entry.status === 'missing'));
   });
 });
 

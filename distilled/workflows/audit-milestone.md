@@ -13,10 +13,14 @@ Before starting, read these files:
 5. `.planning/AUTH_MATRIX.md` (if it exists) — authorization matrix for matrix-driven auth verification
 </load_context>
 
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
+
 <lifecycle_preflight>
 Before determining milestone scope or spawning the integration checker, run:
 
-- `gsdd lifecycle-preflight audit-milestone`
+- `node .planning/bin/gsdd.mjs lifecycle-preflight audit-milestone`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone eligibility from workflow-local prose.
 

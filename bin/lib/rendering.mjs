@@ -5,6 +5,16 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', '..', 'distilled');
+const HELPER_LIB_FILES = Object.freeze([
+  'cli-utils.mjs',
+  'evidence-contract.mjs',
+  'file-ops.mjs',
+  'lifecycle-preflight.mjs',
+  'lifecycle-state.mjs',
+  'phase.mjs',
+  'session-fingerprint.mjs',
+  'workspace-root.mjs',
+]);
 
 function getWorkflowContent(workflowFile) {
   const filePath = join(DISTILLED_DIR, 'workflows', workflowFile);
@@ -28,6 +38,144 @@ agent: ${workflow.agent}
 ---
 
 ${workflowContent}`;
+}
+
+function renderPlanningCliLauncher() {
+  return `#!/usr/bin/env node
+
+import { cmdFileOp } from './lib/file-ops.mjs';
+import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
+import { cmdPhaseStatus } from './lib/phase.mjs';
+import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
+
+const COMMANDS = {
+  'file-op': cmdFileOp,
+  'lifecycle-preflight': cmdLifecyclePreflight,
+  'phase-status': cmdPhaseStatus,
+};
+
+function printHelp() {
+  console.log([
+    'Usage: node .planning/bin/gsdd.mjs [--workspace-root <path>] <command> [args]',
+    '',
+    'Local workflow helper commands:',
+    '  file-op <copy|delete|regex-sub>',
+    '                               Run deterministic workspace-confined file operations',
+    '                               Example: node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok',
+    '  phase-status <N> <status>   Update ROADMAP.md phase status ([ ] / [-] / [x])',
+    '                               Example: node .planning/bin/gsdd.mjs phase-status 1 done',
+    '  lifecycle-preflight <surface> [phase]',
+    '                               Inspect lifecycle gate results for a workflow surface',
+    '                               Example: node .planning/bin/gsdd.mjs lifecycle-preflight verify 1 --expects-mutation phase-status',
+    '',
+    'Advanced option:',
+    '  --workspace-root <path>     Override workspace root discovery before or after the subcommand',
+  ].join('\\n'));
+}
+
+function applyWorkspaceRootOverride(workspaceRootArg) {
+  if (!workspaceRootArg) {
+    bootstrapHelperWorkspace(import.meta.url);
+    return true;
+  }
+
+  const context = resolveWorkspaceContext(['--workspace-root', workspaceRootArg]);
+  if (context.invalid) {
+    console.error(context.error);
+    process.exitCode = 1;
+    return false;
+  }
+
+  process.env.GSDD_WORKSPACE_ROOT = context.workspaceRoot;
+  try {
+    process.chdir(context.workspaceRoot);
+  } catch {
+    // best-effort: command handlers also resolve from GSDD_WORKSPACE_ROOT
+  }
+  return true;
+}
+
+async function main() {
+  const parsed = consumeWorkspaceRootArg(process.argv.slice(2));
+  if (parsed.invalid) {
+    console.error('Usage: --workspace-root <path>');
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!applyWorkspaceRootOverride(parsed.workspaceRootArg)) return;
+
+  const [command, ...args] = parsed.args;
+
+  if (!command || command === 'help' || command === '--help') {
+    printHelp();
+    return;
+  }
+
+  const handler = COMMANDS[command];
+  if (!handler) {
+    printHelp();
+    process.exitCode = 1;
+    return;
+  }
+
+  await handler(...args);
+}
+
+await main();
+`;
+}
+
+function renderPlanningCliShellShim() {
+  return `#!/usr/bin/env sh
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec node "$SCRIPT_DIR/gsdd.mjs" "$@"
+`;
+}
+
+function renderPlanningCliCmdShim() {
+  return `@echo off
+setlocal
+node "%~dp0gsdd.mjs" %*
+`;
+}
+
+function renderPlanningCliPowerShellShim() {
+  return `#!/usr/bin/env pwsh
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+node (Join-Path $scriptDir 'gsdd.mjs') @args
+exit $LASTEXITCODE
+`;
+}
+
+function readHelperLibContent(fileName) {
+  return readFileSync(join(__dirname, fileName), 'utf-8');
+}
+
+function buildPlanningCliHelperEntries() {
+  return [
+    {
+      relativePath: 'bin/gsdd.mjs',
+      content: renderPlanningCliLauncher(),
+    },
+    {
+      relativePath: 'bin/gsdd',
+      content: renderPlanningCliShellShim(),
+    },
+    {
+      relativePath: 'bin/gsdd.cmd',
+      content: renderPlanningCliCmdShim(),
+    },
+    {
+      relativePath: 'bin/gsdd.ps1',
+      content: renderPlanningCliPowerShellShim(),
+    },
+    ...HELPER_LIB_FILES.map((fileName) => ({
+      relativePath: `bin/lib/${fileName}`,
+      content: readHelperLibContent(fileName),
+    })),
+  ];
 }
 
 function buildPortableSkillEntries(workflows) {
@@ -92,12 +240,14 @@ function upsertBoundedBlock(existing, blockContent) {
 }
 
 export {
+  buildPlanningCliHelperEntries,
   buildPortableSkillEntries,
   getDelegateContent,
   getWorkflowContent,
   renderAgentsBoundedBlock,
   renderAgentsFileContent,
   renderOpenCodeCommandContent,
+  renderPlanningCliLauncher,
   renderSkillContent,
   upsertBoundedBlock,
 };

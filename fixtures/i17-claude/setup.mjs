@@ -23,7 +23,7 @@ console.log(`Scaffolding I17 fixture in: ${targetDir}`);
 
 // Step 1: Run gsdd init
 try {
-  execSync('npx gsdd-cli init --tools claude', { cwd: targetDir, stdio: 'inherit' });
+  execSync('npx -y gsdd-cli init --tools claude', { cwd: targetDir, stdio: 'inherit' });
 } catch (e) {
   console.error('gsdd init failed. Ensure gsdd is available via npx.');
   console.error(e.message);

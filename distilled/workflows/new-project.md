@@ -10,7 +10,7 @@ Check `.planning/config.json` for `autoAdvance: true`. If NOT set, skip this sec
 
 When `autoAdvance: true`, this workflow runs non-interactively:
 
-1. **Input:** Read `.planning/PROJECT_BRIEF.md`. If it does not exist, stop with a clear error: "Auto mode requires a project brief. Provide one via `gsdd init --auto --brief <path>` or place it at `.planning/PROJECT_BRIEF.md`."
+1. **Input:** Read `.planning/PROJECT_BRIEF.md`. If it does not exist, stop with a clear error: "Auto mode requires a project brief. Provide one via `npx -y gsdd-cli init --auto --tools <runtime> --brief <path>` or place it at `.planning/PROJECT_BRIEF.md`."
 
 2. **Extract context from brief:** Parse the brief document to understand the project goal, target users, constraints, requirements, and out-of-scope items. Apply the same requirement categorization as `<questioning>` (Table Stakes / Differentiators / Out of Scope). Do NOT ask interactive questions.
 
@@ -300,7 +300,7 @@ After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
 8. **Done-When Verification Chain** *(SOTA: Cyanluna)*: For EVERY requirement in the "Must Have (v1)" section, define a clear, verifiable `[Done-When: ...]` criterion. "User can log in" must become "User can log in [Done-When: Login form submits, JWT is received, and User is redirected to Dashboard]". No exceptions.
 9. **Capability & Security Gates**: Handle per the `<capability_gates>` section at the end of this `<spec_creation>` block.
 10. **Authorization Matrix (optional)**: For projects with multiple user roles or protected resources, create `.planning/AUTH_MATRIX.md` using the template at `.planning/templates/auth-matrix.md`. The integration checker will use this matrix for systematic auth verification during milestone audits.
-11. **Current State is set** to Phase 1, Status: Not started.
+11. **ROADMAP phase status is initialized** with Phase 1 marked `[ ]` / not started using the roadmap template's phase-status language.
 
 <capability_gates>
 **(SOTA Insight: Derived from OpenFang - "16 Security Systems & Capability Gates")**

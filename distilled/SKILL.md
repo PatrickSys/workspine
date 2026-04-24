@@ -59,18 +59,19 @@ Workspine uses `.planning/` as the durable workspace:
 </project_structure>
 
 <adapters>
-Recommended: generate adapters with `gsdd`:
+Recommended: generate adapters with `gsdd-cli`:
 
 ```bash
-npx gsdd-cli init
-npx gsdd-cli init --tools claude
-npx gsdd-cli init --tools agents
+npx -y gsdd-cli init
+npx -y gsdd-cli init --tools claude
+npx -y gsdd-cli init --tools codex
+npx -y gsdd-cli init --tools agents
 ```
 
 Behavior:
-- Always: generates open-standard skills at `.agents/skills/gsdd-*/SKILL.md` by embedding `distilled/workflows/*.md`. This is also the primary Codex CLI surface.
-- Optional: generates tool adapters (root `AGENTS.md`, Claude `.claude/skills` + `.claude/commands` alias + `.claude/agents`, OpenCode `.opencode/commands` + `.opencode/agents`).
-- Deprecated compatibility: `--tools codex` does not generate `.codex/AGENTS.md`; Codex CLI should use the default skills directly.
+- Always: generates open-standard skills at `.agents/skills/gsdd-*/SKILL.md` by embedding `distilled/workflows/*.md`, plus repo-local deterministic helpers at `.planning/bin/gsdd.mjs`.
+- Optional: generates tool adapters (root `AGENTS.md`, Claude `.claude/skills` + `.claude/commands` alias + `.claude/agents`, OpenCode `.opencode/commands` + `.opencode/agents`, Codex CLI `.codex/agents/gsdd-plan-checker.toml`).
+- Codex CLI: uses the portable skill entry surface and the generated `.codex/agents/` checker/approach-explorer agents; it does not use `.codex/AGENTS.md` as the primary integration path.
 - Root `AGENTS.md` is only written when explicitly requested (so we do not pollute existing user governance).
 </adapters>
 
