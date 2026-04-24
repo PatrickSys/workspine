@@ -3031,17 +3031,35 @@ describe('G43 - Release Packaging Audit', () => {
 
   test('release workflow audits the tarball before semantic-release publishes', () => {
     const releaseWorkflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf-8');
+    const releaseConfig = fs.readFileSync(path.join(ROOT, '.releaserc.json'), 'utf-8');
+    const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
 
     assert.match(releaseWorkflow, /Run tests[\s\S]*npm run test:gsdd/i,
       'release.yml must run the full GSDD test suite before publishing. FIX: Keep npm run test:gsdd in the release workflow.');
     assert.match(releaseWorkflow, /Audit packed tarball surface[\s\S]*npm pack --dry-run --json/i,
       'release.yml must audit the packed tarball before publishing. FIX: Add an npm pack --dry-run --json step before release.');
-    assert.match(releaseWorkflow, /Authenticate to npm via OIDC trusted publisher/i,
-      'release.yml must keep the OIDC trusted-publisher authentication step. FIX: Preserve the npm OIDC auth step.');
+    assert.match(releaseWorkflow, /id-token: write/i,
+      'release.yml must grant OIDC id-token write permission for npm trusted publishing. FIX: Preserve id-token: write.');
+    assert.match(releaseWorkflow, /node-version: 22\.14\.0/i,
+      'release.yml must use Node 22.14.0+ for npm trusted publishing. FIX: Keep setup-node on 22.14.0 or newer.');
+    assert.match(releaseWorkflow, /npm install -g npm@11/i,
+      'release.yml must install npm 11 for trusted publishing. FIX: Keep the npm@11 setup step.');
+    assert.doesNotMatch(releaseWorkflow, /loginoauth|ACTIONS_ID_TOKEN_REQUEST_TOKEN|NPM_TOKEN=\$\{NPM_TOKEN\}/i,
+      'release.yml must not hand-roll npm OIDC token exchange. FIX: Let @semantic-release/npm own trusted publishing.');
     assert.match(releaseWorkflow, /NPM_CONFIG_PROVENANCE: "true"/i,
       'release.yml must keep npm provenance enabled for semantic-release. FIX: Preserve NPM_CONFIG_PROVENANCE in the release env.');
     assert.match(releaseWorkflow, /run: npx semantic-release/i,
       'release.yml must continue to publish via semantic-release. FIX: Keep semantic-release as the release entrypoint.');
+    assert.match(releaseConfig, /@semantic-release\/npm/i,
+      '.releaserc.json must publish through @semantic-release/npm. FIX: Do not publish via @semantic-release/exec npm publish.');
+    assert.match(releaseConfig, /@semantic-release\/github/i,
+      '.releaserc.json must create GitHub Releases through @semantic-release/github. FIX: Add the GitHub plugin.');
+    assert.doesNotMatch(releaseConfig, /@semantic-release\/exec|npm version \$\{nextRelease\.version\}|npm publish --provenance/i,
+      '.releaserc.json must not use the brittle exec-based npm version/publish path. FIX: Use @semantic-release/npm.');
+    assert.match(releaseConfig, /package-lock\.json/i,
+      '.releaserc.json must commit package-lock.json with release metadata. FIX: Include package-lock.json in @semantic-release/git assets.');
+    assert.match(packageJson.scripts.prepublishOnly || '', /GITHUB_ACTIONS.*GITHUB_REF_NAME.*main.*GITHUB_WORKFLOW.*Release/,
+      'package.json must block manual or feature-branch npm publish. FIX: Keep the prepublishOnly release-workflow guard.');
   });
 });
 

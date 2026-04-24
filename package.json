@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "npm run test:gsdd",
-    "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.models.test.cjs && node tests/gsdd.consumer-ceremony.test.cjs && node tests/gsdd.manifest.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs && node tests/gsdd.guards.test.cjs && node tests/gsdd.health.test.cjs && node tests/gsdd.scenarios.test.cjs && node tests/gsdd.cross-runtime.test.cjs && node tests/phase.test.cjs && node tests/session-fingerprint.test.cjs"
+    "test:gsdd": "node tests/gsdd.init.test.cjs && node tests/gsdd.models.test.cjs && node tests/gsdd.consumer-ceremony.test.cjs && node tests/gsdd.manifest.test.cjs && node tests/gsdd.plan.adapters.test.cjs && node tests/gsdd.audit-milestone.test.cjs && node tests/gsdd.invariants.test.cjs && node tests/gsdd.guards.test.cjs && node tests/gsdd.health.test.cjs && node tests/gsdd.scenarios.test.cjs && node tests/gsdd.cross-runtime.test.cjs && node tests/phase.test.cjs && node tests/session-fingerprint.test.cjs",
+    "prepublishOnly": "node -e \"const ok=process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REF_NAME==='main'&&process.env.GITHUB_WORKFLOW==='Release'; if(!ok){console.error('Refusing to publish gsdd-cli outside the GitHub Actions Release workflow on main.'); process.exit(1)}\""
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
