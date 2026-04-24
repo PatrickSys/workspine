@@ -122,10 +122,11 @@ export function createCmdInit(ctx) {
     writeManifest(ctx.planningDir, manifest);
     console.log('  - wrote generation manifest');
 
-    console.log('\nGSDD initialized.');
+    console.log('\n\x1B[1m\x1B[32m✓ GSDD initialized.\x1B[0m');
     printInitSummary(interactiveSession.config ?? buildDefaultConfig({ autoAdvance: isAuto }));
     console.log('Next: choose the starting lane that fits your repo and current scope:\n');
     printPostInitRouting(interactiveSession.selectedRuntimes);
+    console.log('\nSetup complete — this session will now exit.');
   };
 }
 

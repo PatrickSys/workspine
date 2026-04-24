@@ -198,6 +198,7 @@ export async function promptChoiceList({ input, output, title, hint = 'Use arrow
     const cleanup = () => {
       input.off('keypress', onKeypress);
       if (typeof input.setRawMode === 'function') input.setRawMode(previousRawMode);
+      if (typeof input.pause === 'function') input.pause();
     };
 
     const onKeypress = (_, key = {}) => {

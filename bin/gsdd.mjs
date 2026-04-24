@@ -134,6 +134,7 @@ async function runCli(cliCommand = command, ...cliArgs) {
 
 if (IS_MAIN) {
   await runCli();
+  process.exit(process.exitCode ?? 0);
 }
 
 export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
