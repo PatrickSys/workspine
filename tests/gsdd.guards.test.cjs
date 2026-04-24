@@ -3313,6 +3313,8 @@ describe('G43 - Release Packaging Audit', () => {
       'release.yml must install npm 11 for trusted publishing. FIX: Keep the npm@11 setup step.');
     assert.match(releaseWorkflow, /Verify npm trusted publisher[\s\S]*oidc\/token\/exchange\/package\/gsdd-cli[\s\S]*before running semantic-release/i,
       'release.yml must fail fast before semantic-release when npm trusted publishing is not configured. FIX: Keep the trusted-publisher preflight before Release.');
+    assert.match(releaseWorkflow, /\[\[ ! "\$\{STATUS\}" =~ \^2 \]\]/,
+      'release.yml must accept successful 2xx npm OIDC token exchange responses. FIX: Do not require a single hardcoded status code.');
     assert.doesNotMatch(releaseWorkflow, /registry-url: https:\/\/registry\.npmjs\.org/i,
       'release.yml must not let setup-node create placeholder npm auth that masks NPM_TOKEN fallback. FIX: Remove setup-node registry-url.');
     assert.doesNotMatch(releaseWorkflow, /loginoauth|NPM_TOKEN/i,
