@@ -1,6 +1,7 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'fs';
 import { dirname, isAbsolute, relative, resolve } from 'path';
 import { output, parseFlagValue } from './cli-utils.mjs';
+import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 class FileOpError extends Error {}
 
@@ -21,6 +22,36 @@ function resolveWorkspacePath(cwd, target) {
   fail(`Path must stay inside the workspace: ${target}`);
 }
 
+function ensureRealPathInsideWorkspace(workspaceRoot, candidate, label) {
+  const realWorkspaceRoot = realpathSync(workspaceRoot);
+  const realCandidate = realpathSync(candidate);
+  const rel = relative(realWorkspaceRoot, realCandidate);
+  if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+    return realCandidate;
+  }
+  fail(`${label} must stay inside the workspace: ${candidate}`);
+}
+
+function ensureExistingFilePathInsideWorkspace(workspaceRoot, candidate, label) {
+  const stats = lstatSync(candidate);
+  if (stats.isSymbolicLink()) {
+    fail(`${label} cannot be a symlink: ${candidate}`);
+  }
+  return ensureRealPathInsideWorkspace(workspaceRoot, candidate, label);
+}
+
+function ensureParentPathInsideWorkspace(workspaceRoot, candidate, label) {
+  let current = dirname(candidate);
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current) {
+      fail(`${label} must stay inside the workspace: ${candidate}`);
+    }
+    current = parent;
+  }
+  ensureExistingFilePathInsideWorkspace(workspaceRoot, current, label);
+}
+
 function getMissingBehavior(args) {
   const parsed = parseFlagValue(args, '--missing');
   if (!parsed.present) return 'error';
@@ -36,6 +67,7 @@ function cmdCopy(cwd, args) {
   }
 
   const missingBehavior = getMissingBehavior(flags);
+  const workspaceRoot = resolve(cwd);
   const source = resolveWorkspacePath(cwd, sourceArg);
   const destination = resolveWorkspacePath(cwd, destinationArg);
 
@@ -51,6 +83,12 @@ function cmdCopy(cwd, args) {
     fail(`Copy only supports files in this phase: ${sourceArg}`);
   }
 
+  ensureExistingFilePathInsideWorkspace(workspaceRoot, source, 'Source path');
+  if (existsSync(destination)) {
+    ensureExistingFilePathInsideWorkspace(workspaceRoot, destination, 'Destination path');
+  }
+  ensureParentPathInsideWorkspace(workspaceRoot, destination, 'Destination path');
+
   mkdirSync(dirname(destination), { recursive: true });
   cpSync(source, destination, { force: true });
   output({ operation: 'copy', source: sourceArg, destination: destinationArg, changed: true });
@@ -63,6 +101,7 @@ function cmdDelete(cwd, args) {
   }
 
   const missingBehavior = getMissingBehavior(flags);
+  const workspaceRoot = resolve(cwd);
   const target = resolveWorkspacePath(cwd, targetArg);
 
   if (!existsSync(target)) {
@@ -77,6 +116,7 @@ function cmdDelete(cwd, args) {
     fail(`Delete only supports files in this phase: ${targetArg}`);
   }
 
+  ensureExistingFilePathInsideWorkspace(workspaceRoot, target, 'Target path');
   unlinkSync(target);
   output({ operation: 'delete', target: targetArg, changed: true });
 }
@@ -93,6 +133,7 @@ function cmdRegexSub(cwd, args) {
   }
 
   const missingBehavior = getMissingBehavior(flags);
+  const workspaceRoot = resolve(cwd);
   const target = resolveWorkspacePath(cwd, targetArg);
 
   if (!existsSync(target)) {
@@ -106,6 +147,8 @@ function cmdRegexSub(cwd, args) {
   if (statSync(target).isDirectory()) {
     fail(`regex-sub only supports files in this phase: ${targetArg}`);
   }
+
+  ensureExistingFilePathInsideWorkspace(workspaceRoot, target, 'Target path');
 
   let regex;
   try {
@@ -134,19 +177,24 @@ function cmdRegexSub(cwd, args) {
 }
 
 export function cmdFileOp(...args) {
-  const cwd = process.cwd();
-  const [operation, ...rest] = args;
+  const { args: normalizedArgs, workspaceRoot, invalid, error } = resolveWorkspaceContext(args);
+  if (invalid) {
+    console.error(error);
+    process.exitCode = 1;
+    return;
+  }
+  const [operation, ...rest] = normalizedArgs;
 
   try {
     switch (operation) {
       case 'copy':
-        cmdCopy(cwd, rest);
+        cmdCopy(workspaceRoot, rest);
         return;
       case 'delete':
-        cmdDelete(cwd, rest);
+        cmdDelete(workspaceRoot, rest);
         return;
       case 'regex-sub':
-        cmdRegexSub(cwd, rest);
+        cmdRegexSub(workspaceRoot, rest);
         return;
       default:
         fail('Usage: gsdd file-op <copy|delete|regex-sub> ...');

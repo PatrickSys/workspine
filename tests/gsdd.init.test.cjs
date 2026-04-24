@@ -6,9 +6,9 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { EventEmitter } = require('events');
 const { pathToFileURL } = require('url');
-const packageJson = require('../package.json');
 const {
   cleanup,
   createTempProject,
@@ -120,7 +120,7 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'phases')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'research')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'spec.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'bin', 'gsdd.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md')));
@@ -443,7 +443,7 @@ describe('gsdd init and update', () => {
     for (const required of [
       /type="checkpoint:user"/,
       /type="checkpoint:review"/,
-      /node \.agents\/bin\/gsdd\.mjs phase-status \{N\} done/,
+      /node \.planning\/bin\/gsdd\.mjs phase-status \{N\} done/,
       /DO NOT freelance/,
       /Checkpoint tasks are contract boundaries/i,
       /factual_discovery/,
@@ -515,7 +515,7 @@ describe('gsdd init and update', () => {
       'progress must remain agent: Plan because it is the read-only workflow');
   });
 
-  test('repo-local helper launcher is generated with source, generator-hint, and pinned npx fallback resolution', async () => {
+  test('repo-local helper runtime is generated under .planning/bin as a self-contained workspace helper', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
       const gsdd = await loadGsdd(tmpDir);
@@ -524,16 +524,105 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    const launcherPath = path.join(tmpDir, '.agents', 'bin', 'gsdd.mjs');
+    const launcherPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
     const launcher = fs.readFileSync(launcherPath, 'utf-8');
 
-    assert.match(launcher, /const sourceCliPath = join\(repoRoot, 'bin', 'gsdd\.mjs'\);/);
-    assert.match(launcher, /const sourceWorkflowPath = join\(repoRoot, 'distilled', 'workflows', 'plan\.md'\);/);
-    assert.match(launcher, /const generatorRootHint = /);
-    assert.match(launcher, /looksLikeFrameworkRoot/);
-    assert.match(launcher, new RegExp(`--package=gsdd-cli@${packageJson.version.replace(/\./g, '\\.')}`));
+    assert.match(launcher, /import \{ cmdFileOp \} from '\.\/lib\/file-ops\.mjs';/);
+    assert.match(launcher, /import \{ cmdLifecyclePreflight \} from '\.\/lib\/lifecycle-preflight\.mjs';/);
+    assert.match(launcher, /import \{ cmdPhaseStatus \} from '\.\/lib\/phase\.mjs';/);
+    assert.match(launcher, /import \{ bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext \} from '\.\/lib\/workspace-root\.mjs';/);
+    assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\);/);
+    assert.doesNotMatch(launcher, /from 'gsdd-cli'/);
+    assert.doesNotMatch(launcher, /from 'gsdd'/);
+    assert.match(launcher, /Usage: node \.planning\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
+    assert.match(launcher, /file-op <copy\|delete\|regex-sub>/);
+    assert.doesNotMatch(launcher, /\.agents\/bin\/gsdd\.mjs/);
     assert.doesNotMatch(launcher, /where\.exe/);
     assert.doesNotMatch(launcher, /gsdd\.cmd/);
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'bin')), '.agents/bin must not be generated');
+  });
+
+  test('repo-local helper works from nested cwd through helper bootstrap', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    const nestedDir = path.join(tmpDir, 'src', 'feature');
+    fs.mkdirSync(nestedDir, { recursive: true });
+
+    const result = spawnSync(process.execPath, [
+      path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'),
+      'file-op',
+      'copy',
+      '.planning/config.json',
+      '.planning/config-copy.json',
+    ], { cwd: nestedDir, encoding: 'utf-8' });
+
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'config-copy.json')));
+    assert.ok(!fs.existsSync(path.join(nestedDir, '.planning', 'config-copy.json')));
+  });
+
+  test('repo-local lifecycle helpers work from nested cwd with workspace-root before or after subcommand', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.writeFileSync(roadmapPath, [
+      '# Roadmap',
+      '',
+      '- [ ] **Phase 1: Build helper hardening**',
+      '',
+      '### Phase 1: Build helper hardening',
+      '**Status**: [ ]',
+      '',
+    ].join('\n'));
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '01-PLAN.md'), '# Plan\n');
+
+    const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+
+    const preflight = spawnSync(process.execPath, [
+      helperPath,
+      '--workspace-root',
+      tmpDir,
+      'lifecycle-preflight',
+      'execute',
+      '1',
+      '--expects-mutation',
+      'phase-status',
+    ], { cwd: nestedDir, encoding: 'utf-8' });
+
+    assert.strictEqual(preflight.status, 0, `${preflight.stdout}\n${preflight.stderr}`);
+    assert.match(preflight.stdout, /"status": "allowed"/);
+    assert.match(preflight.stdout, /"mutationRequest": "phase-status"/);
+
+    const phaseStatus = spawnSync(process.execPath, [
+      helperPath,
+      'phase-status',
+      '1',
+      'done',
+      '--workspace-root',
+      tmpDir,
+    ], { cwd: nestedDir, encoding: 'utf-8' });
+
+    assert.strictEqual(phaseStatus.status, 0, `${phaseStatus.stdout}\n${phaseStatus.stderr}`);
+    assert.match(phaseStatus.stdout, /"changed": true/);
+    const roadmap = fs.readFileSync(roadmapPath, 'utf-8');
+    assert.match(roadmap, /- \[x\] \*\*Phase 1: Build helper hardening\*\*/);
+    assert.match(roadmap, /\*\*Status\*\*: \[x\]/);
+    assert.ok(!fs.existsSync(path.join(nestedDir, '.planning')), 'helper commands must not create a nested workspace');
   });
 
   test('delegates reference canonical role contracts', async () => {
@@ -896,6 +985,47 @@ describe('gsdd init and update', () => {
       'Selecting governance without Codex must not generate unrelated native adapters.');
   });
 
+  test('interactive --tools path prompts only for config and writes a valid config shape', async () => {
+    const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+    const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
+    const ctx = gsddMod.createCliContext(tmpDir);
+    ctx.initPromptApi = {
+      async runInitWizard() {
+        throw new Error('runInitWizard should not run when --tools preselects runtimes');
+      },
+      async promptForConfig() {
+        return {
+          researchDepth: 'balanced',
+          parallelization: true,
+          commitDocs: true,
+          modelProfile: 'balanced',
+          workflow: { research: true, discuss: false, planCheck: true, verifier: true },
+          gitProtocol: {
+            branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
+            commit: 'Group changes logically and follow the existing repo conventions. Do not mention phase, plan, or task IDs unless explicitly requested.',
+            pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
+          },
+          initVersion: 'v1.1',
+        };
+      },
+    };
+
+    const restoreStdin = setInteractiveStdin();
+    try {
+      const cmdInit = initMod.createCmdInit(ctx);
+      await cmdInit('--tools', 'codex');
+    } finally {
+      restoreStdin();
+    }
+
+    const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+    assert.strictEqual(config.researchDepth, 'balanced');
+    assert.strictEqual(config.modelProfile, 'balanced');
+    assert.strictEqual(config.initVersion, 'v1.1');
+    assert.ok(!('selectedRuntimes' in config), 'config must not contain the wizard wrapper shape');
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+  });
+
   test('init is idempotent and upserts the bounded AGENTS block without duplicating it', async () => {
     const agentsPath = path.join(tmpDir, 'AGENTS.md');
     fs.writeFileSync(
@@ -1014,6 +1144,23 @@ describe('gsdd init and update', () => {
       assert.deepStrictEqual(config.workflow, { research: true, discuss: false, planCheck: true, verifier: true });
     });
 
+    test('--auto --tools all generates shared, helper, and native runtime surfaces', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'all');
+      } finally {
+        restoreStdin();
+      }
+
+      assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+      assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
+    });
+
     test('--auto without --tools sets exitCode 1', async () => {
       const previousExitCode = process.exitCode;
       const previousError = console.error;
@@ -1026,6 +1173,7 @@ describe('gsdd init and update', () => {
         await gsdd.cmdInit('--auto');
         assert.strictEqual(process.exitCode, 1);
         assert.match(errorOutput, /--tools/);
+        assert.match(errorOutput, /npx -y gsdd-cli init --auto --tools claude/);
       } finally {
         restoreStdin();
         console.error = previousError;

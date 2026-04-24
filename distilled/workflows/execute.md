@@ -14,24 +14,24 @@ CRITICAL: Read every file below before performing any other actions. This is you
 4. Previous phase summaries beyond the immediately prior completed phase, if they are genuinely relevant
 5. Relevant source files listed in the plan's `<files>` sections
 6. `.planning/phases/*-SUMMARY.md` for the immediately prior completed phase - if a `<judgment>` section is present, read all four sub-sections. Honor `<anti_regression>` rules as execution constraints. Use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions.
-7. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 6, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Honor `<anti_regression>` rules as execution constraints and use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions. After reading, run `node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
+7. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 6, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section. Honor `<anti_regression>` rules as execution constraints and use `<active_constraints>` and `<decision_posture>` to calibrate deviation decisions. After reading, run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 </load_context>
 
 <repo_root_helper_contract>
-All `node .agents/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <lifecycle_preflight>
 Before implementing or mutating any lifecycle artifact, run:
 
-- `node .agents/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
+- `node .planning/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
 
 If the preflight result is `blocked`, STOP and surface the blocker instead of inferring eligibility from workflow-local prose.
 
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject execution
 - it does not mutate `.planning/ROADMAP.md` by itself
-- owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `node .agents/bin/gsdd.mjs phase-status`
+- owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `node .planning/bin/gsdd.mjs phase-status`
 </lifecycle_preflight>
 
 <runtime_contract>
@@ -86,7 +86,8 @@ Phase {N} complete.
 Plans executed: {count}
 Waves: {W} total
 Key deliverables: [bullet list of what was built, one line per plan]
-Next step: /gsdd-verify {N} — verify the phase goal was achieved
+Lifecycle status: implementation complete, verification still required
+Next step: /gsdd-verify {N} — verify the phase goal before closure
 ```
 
 If only a single plan was provided (the common case), skip this section entirely and go straight to the `<execution_loop>`.
@@ -281,7 +282,7 @@ Keep the update factual and compact:
 
 ```markdown
 ## Current State
-- Active Phase: Phase {N} - {Name} (complete)
+- Active Phase: Phase {N} - {Name} (implementation complete, verification pending)
 - Last Completed: Plan {NN} completed
 - Decisions: [New decisions, if any]
 - Blockers: [None or specific blocker]
@@ -290,10 +291,10 @@ Keep the update factual and compact:
 ### 2. Update ROADMAP.md Phase Status
 Do not hand-edit the ROADMAP checkbox line. Use the status-aware helper instead:
 
-- Run `node .agents/bin/gsdd.mjs phase-status {N} done` when this plan completes the phase.
-- Run `node .agents/bin/gsdd.mjs phase-status {N} in_progress` when this plan completes but more plans remain in the phase.
+- Run `node .planning/bin/gsdd.mjs phase-status {N} in_progress` when implementation work has started or this plan completes.
+- Do NOT run `node .planning/bin/gsdd.mjs phase-status {N} done` from execute. Only verify may close a phase after writing a `status: passed` VERIFICATION.md.
 
-The helper owns the `[ ]` / `[-]` / `[x]` mutation for `.planning/ROADMAP.md`.
+The helper owns the `[ ]` / `[-]` / `[x]` mutation for `.planning/ROADMAP.md`, including both the overview line and the matching `## Phase Details` `**Status**` line when both exist.
 
 ### 3. Write Phase Summary
 Create `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md` with:
@@ -408,7 +409,7 @@ For each completed task:
 
 For state updates:
   [ ] .planning/SPEC.md "Current State" is accurate
-  [ ] ROADMAP.md status uses [ ] / [-] / [x] consistently
+  [ ] ROADMAP.md status remains open (`[-]` if status was updated) until verification passes
   [ ] SUMMARY.md exists and reflects the actual work
 
 Overall:
@@ -428,7 +429,7 @@ Execution is done when all of these are true:
 - [ ] Mandatory context files read first when provided
 - [ ] Authentication gates handled with the auth-gate protocol
 - [ ] `.planning/SPEC.md` current state is updated accurately
-- [ ] `ROADMAP.md` uses `[ ]`, `[-]`, `[x]` consistently
+- [ ] `ROADMAP.md` uses `[ ]`, `[-]`, `[x]` consistently and is not marked `[x]` by execute
 - [ ] `SUMMARY.md` is written
 - [ ] `SUMMARY.md` frontmatter records `runtime` and `assurance`
 - [ ] `SUMMARY.md` includes structured `<checks>`, `<handoff>`, and `<deltas>` sections

@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, cpSync } from 'fs';
 import { dirname, join, isAbsolute } from 'path';
-import { buildPortableRuntimeEntries } from './rendering.mjs';
-import { buildManifest, writeManifest } from './manifest.mjs';
+import { buildPlanningCliHelperEntries, renderSkillContent } from './rendering.mjs';
+import { buildManifest, readManifest, writeManifest } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './models.mjs';
 import { installProjectTemplates, refreshTemplates } from './templates.mjs';
@@ -50,13 +50,13 @@ export function createCmdInit(ctx) {
     let briefSource = null;
 
     if (toolsFlag.invalid) {
-      console.error('ERROR: --tools requires a value. Example: gsdd init --tools claude');
+      console.error('ERROR: --tools requires a value. Example: npx -y gsdd-cli init --tools claude');
       process.exitCode = 1;
       return;
     }
 
     if (briefFlag.invalid) {
-      console.error('ERROR: --brief requires a file path. Example: gsdd init --brief project-idea.md');
+      console.error('ERROR: --brief requires a file path. Example: npx -y gsdd-cli init --brief project-idea.md');
       process.exitCode = 1;
       return;
     }
@@ -72,7 +72,7 @@ export function createCmdInit(ctx) {
 
     const parsedTools = parseToolsFlag(initArgs);
     if (isAuto && parsedTools.length === 0) {
-      console.error('ERROR: --auto requires --tools <platform>. Example: gsdd init --auto --tools claude');
+      console.error('ERROR: --auto requires --tools <platform>. Example: npx -y gsdd-cli init --auto --tools claude');
       process.exitCode = 1;
       return;
     }
@@ -106,8 +106,11 @@ export function createCmdInit(ctx) {
       console.log('  - copied project brief to .planning/PROJECT_BRIEF.md');
     }
 
-    generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);
-    console.log('  - generated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
+    generateOpenStandardSkills(ctx.cwd, ctx.workflows);
+    console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
+
+    generatePlanningCliHelpers(ctx);
+    console.log('  - generated local workflow helpers (.planning/bin/gsdd*)');
 
     for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {
       adapter.generate();
@@ -121,7 +124,7 @@ export function createCmdInit(ctx) {
 
     console.log('\nGSDD initialized.');
     printInitSummary(interactiveSession.config ?? buildDefaultConfig({ autoAdvance: isAuto }));
-    console.log('Next: run the new-project workflow to produce SPEC.md and ROADMAP.md:\n');
+    console.log('Next: choose the starting lane that fits your repo and current scope:\n');
     printPostInitRouting(interactiveSession.selectedRuntimes);
   };
 }
@@ -144,12 +147,22 @@ export function createCmdUpdate(ctx) {
       updated = true;
     }
 
-    if (platforms.length > 0 || existsSync(join(ctx.cwd, '.agents'))) {
+    if (platforms.length > 0 || existsSync(ctx.planningDir) || existsSync(join(ctx.cwd, '.agents', 'skills'))) {
       if (isDry) {
-        console.log('  - would update portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
+        console.log('  - would update open-standard skills (.agents/skills/gsdd-*)');
       } else {
-        generatePortableRuntimeSurfaces(ctx.cwd, ctx.workflows);
-        console.log('  - updated portable runtime surfaces (.agents/skills/gsdd-*, .agents/bin/gsdd.mjs)');
+        generateOpenStandardSkills(ctx.cwd, ctx.workflows);
+        console.log('  - updated open-standard skills (.agents/skills/gsdd-*)');
+      }
+      updated = true;
+    }
+
+    if (existsSync(ctx.planningDir)) {
+      if (isDry) {
+        console.log('  - would update local workflow helpers (.planning/bin/gsdd*)');
+      } else {
+        generatePlanningCliHelpers(ctx);
+        console.log('  - updated local workflow helpers (.planning/bin/gsdd*)');
       }
       updated = true;
     }
@@ -166,26 +179,72 @@ export function createCmdUpdate(ctx) {
     }
 
     if (!updated) {
-      console.log('  - no adapters found to update (run `gsdd init` first)');
+      console.log('  - no adapters found to update (run `npx -y gsdd-cli init` first; bare `gsdd init` is equivalent only when globally installed)');
     } else if (isDry) {
       console.log('\nDry run complete. No files were written.\n');
     } else {
-      if (doTemplates && existsSync(ctx.planningDir)) {
-        const manifest = buildManifest({ planningDir: ctx.planningDir, frameworkVersion: ctx.frameworkVersion });
-        writeManifest(ctx.planningDir, manifest);
-        console.log('  - updated generation manifest');
+      if (existsSync(ctx.planningDir)) {
+        const manifest = buildUpdateManifest({
+          planningDir: ctx.planningDir,
+          frameworkVersion: ctx.frameworkVersion,
+          updateTemplates: doTemplates,
+        });
+        if (manifest) {
+          writeManifest(ctx.planningDir, manifest);
+          console.log('  - updated generation manifest');
+        }
       }
       console.log('\nAdapters updated.\n');
     }
   };
 }
 
-function generatePortableRuntimeSurfaces(cwd, workflows) {
-  for (const entry of buildPortableRuntimeEntries({ workflows })) {
-    const targetPath = join(cwd, entry.relativePath);
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, entry.content);
+function generateOpenStandardSkills(cwd, workflows) {
+  for (const workflow of workflows) {
+    const dir = join(cwd, '.agents', 'skills', workflow.name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(workflow));
   }
+}
+
+function generatePlanningCliHelpers(ctx) {
+  for (const entry of buildPlanningCliHelperEntries({
+    packageName: ctx.packageName,
+    packageVersion: ctx.packageVersion,
+  })) {
+    const absolutePath = join(ctx.planningDir, entry.relativePath);
+    mkdirSync(dirname(absolutePath), { recursive: true });
+    writeFileSync(absolutePath, entry.content);
+    if (!absolutePath.endsWith('.cmd')) {
+      chmodSync(absolutePath, 0o755);
+    }
+  }
+}
+
+function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates }) {
+  const existingManifest = readManifest(planningDir);
+  const nextManifest = buildManifest({ planningDir, frameworkVersion });
+
+  if (existingManifest && !updateTemplates) {
+    nextManifest.templates = existingManifest.templates ?? nextManifest.templates;
+    nextManifest.roles = existingManifest.roles ?? nextManifest.roles;
+  }
+
+  if (existingManifest && manifestsEqualIgnoringTimestamp(existingManifest, nextManifest)) {
+    return null;
+  }
+
+  return nextManifest;
+}
+
+function manifestsEqualIgnoringTimestamp(left, right) {
+  return JSON.stringify(stripManifestTimestamp(left)) === JSON.stringify(stripManifestTimestamp(right));
+}
+
+function stripManifestTimestamp(manifest) {
+  if (!manifest || typeof manifest !== 'object') return manifest;
+  const { generatedAt, ...rest } = manifest;
+  return rest;
 }
 
 async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedConfig = null }) {
@@ -203,65 +262,65 @@ async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedCo
   }
 
   if (isAuto) {
-    console.log('  - auto mode: writing config.json with defaults');
-    writeFileSync(configFile, JSON.stringify(buildDefaultConfig({ autoAdvance: true }), null, 2));
-    console.log('  - saved .planning/config.json (auto mode - autoAdvance enabled)\n');
+    const config = buildDefaultConfig({ autoAdvance: true });
+    writeFileSync(configFile, JSON.stringify(config, null, 2));
+    console.log('  - wrote .planning/config.json (auto defaults)\n');
+    if (!config.commitDocs) ensureGitignoreEntry(cwd);
     return;
   }
 
   if (!process.stdin.isTTY) {
-    console.log('  - non-interactive mode detected: writing config.json with defaults');
-    writeFileSync(configFile, JSON.stringify(buildDefaultConfig(), null, 2));
-    console.log('  - saved .planning/config.json (defaults - re-run gsdd init in a terminal to customize)\n');
+    const config = buildDefaultConfig({ autoAdvance: false });
+    writeFileSync(configFile, JSON.stringify(config, null, 2));
+    console.log('  - wrote .planning/config.json (non-interactive defaults)\n');
+    if (!config.commitDocs) ensureGitignoreEntry(cwd);
     return;
   }
 
-  const config = await promptApi.promptForConfig(cwd);
-  writeFileSync(configFile, JSON.stringify(config, null, 2));
-  console.log('  - saved .planning/config.json (guided wizard)\n');
+  const selected = typeof promptApi.promptForConfig === 'function'
+    ? await promptApi.promptForConfig(cwd)
+    : buildDefaultConfig({ autoAdvance: false });
 
-  if (!config.commitDocs) ensureGitignoreEntry(cwd);
+  if (!selected) {
+    throw new Error('Initialization cancelled');
+  }
+
+  writeFileSync(configFile, JSON.stringify(selected, null, 2));
+  console.log('  - saved .planning/config.json (guided wizard)\n');
+  if (!selected.commitDocs) ensureGitignoreEntry(cwd);
 }
 
 function ensureGitignoreEntry(cwd) {
   const gitignorePath = join(cwd, '.gitignore');
-  const ignoreEntry = '\n# GSDD planning docs (local only)\n.planning/\n';
-
-  if (existsSync(gitignorePath)) {
-    const existing = readFileSync(gitignorePath, 'utf-8');
-    if (!existing.includes('.planning/')) {
-      writeFileSync(gitignorePath, existing + ignoreEntry);
-      console.log('  - added .planning/ to .gitignore');
-    }
-    return;
+  const entry = '.planning/';
+  const hasGitignore = existsSync(gitignorePath);
+  const current = hasGitignore ? readFileSync(gitignorePath, 'utf-8') : '';
+  if (!current.split(/\r?\n/).includes(entry)) {
+    const next = current.trimEnd() ? `${current.trimEnd()}\n${entry}\n` : `${entry}\n`;
+    writeFileSync(gitignorePath, next);
+    console.log('  - ensured .planning/ is gitignored');
   }
-
-  writeFileSync(gitignorePath, ignoreEntry.trimStart());
-  console.log('  - created .gitignore with .planning/ entry');
 }
 
-function printPostInitRouting(selectedRuntimes) {
-  for (const line of getPostInitRoutingLines(selectedRuntimes)) {
-    console.log(line);
+function printInitSummary(config) {
+  console.log('Config summary:');
+  console.log(`  - researchDepth: ${config.researchDepth}`);
+  console.log(`  - parallelization: ${config.parallelization}`);
+  console.log(`  - commitDocs: ${config.commitDocs}`);
+  console.log(`  - modelProfile: ${config.modelProfile}`);
+  if (typeof config.autoAdvance === 'boolean') console.log(`  - autoAdvance: ${config.autoAdvance}`);
+  if (config.workflow) {
+    console.log(`  - workflow.research: ${config.workflow.research}`);
+    console.log(`  - workflow.discuss: ${config.workflow.discuss}`);
+    console.log(`  - workflow.planCheck: ${config.workflow.planCheck}`);
+    console.log(`  - workflow.verifier: ${config.workflow.verifier}`);
   }
   console.log('');
 }
 
-function printInitSummary(config) {
-  const rigor = Object.entries(RIGOR_PROFILES).find(([, profile]) => (
-    profile.researchDepth === config.researchDepth
-    && profile.workflow.research === config.workflow?.research
-    && profile.workflow.discuss === config.workflow?.discuss
-    && profile.workflow.planCheck === config.workflow?.planCheck
-    && profile.workflow.verifier === config.workflow?.verifier
-  ))?.[0] ?? 'balanced';
-  const cost = Object.entries(COST_PROFILES).find(([, profile]) => (
-    profile.modelProfile === config.modelProfile
-    && profile.parallelization === config.parallelization
-  ))?.[0] ?? 'balanced';
-
-  console.log(`Rigor: ${rigor}   Cost: ${cost}   Track .planning/ in git: ${config.commitDocs ? 'yes' : 'no'}`);
-  console.log('Workflows: new-project → plan → execute → verify → progress');
-  console.log('Edit .planning/config.json to fine-tune (verifier, gitProtocol, individual workflow flags).');
+function printPostInitRouting(selectedRuntimes = []) {
+  for (const line of getPostInitRoutingLines(selectedRuntimes)) {
+    console.log(line);
+  }
   console.log('');
 }

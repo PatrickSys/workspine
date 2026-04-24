@@ -68,14 +68,14 @@ export function normalizeRequestedTools(requestedTools) {
   return { selectedRuntimes, adapterTargets };
 }
 
-export function detectPlatforms(adapters) {
+export function detectPlatforms(adapters = {}) {
   return Object.values(adapters)
     .filter((adapter, index, arr) => arr.findIndex((other) => other.id === adapter.id) === index)
     .filter((adapter) => adapter.detect())
     .map((adapter) => adapter.name);
 }
 
-export function buildRuntimeChoices(adapters) {
+export function buildRuntimeChoices(adapters = {}) {
   const detected = new Set(detectPlatforms(adapters));
   return RUNTIME_OPTIONS.map((option) => ({
     ...option,
@@ -126,9 +126,10 @@ export async function resolveInteractiveInitSession({ ctx, promptApi, parsedTool
   }
 
   if (!process.stdin.isTTY) {
+    const detected = detectPlatforms(ctx.adapters);
     return {
-      selectedRuntimes: detectPlatforms(ctx.adapters),
-      adapterTargets: detectPlatforms(ctx.adapters),
+      selectedRuntimes: detected,
+      adapterTargets: detected,
       config: null,
     };
   }
@@ -149,20 +150,20 @@ export function resolveWizardAdapterTargets(selectedRuntimes, installGovernance)
 
 export function getPostInitRoutingLines(selectedRuntimes) {
   const lines = [];
-  if (selectedRuntimes.includes('claude')) lines.push('  Claude Code:  /gsdd-new-project');
-  if (selectedRuntimes.includes('opencode')) lines.push('  OpenCode:     /gsdd-new-project');
-  if (selectedRuntimes.includes('codex')) lines.push('  Codex CLI:    $gsdd-new-project');
-  if (selectedRuntimes.includes('cursor')) lines.push('  Cursor:       /gsdd-new-project');
-  if (selectedRuntimes.includes('copilot')) lines.push('  Copilot:      /gsdd-new-project');
-  if (selectedRuntimes.includes('gemini')) lines.push('  Gemini CLI:   /gsdd-new-project');
-  lines.push('  Any tool:     open .agents/skills/gsdd-new-project/SKILL.md');
+  if (selectedRuntimes.includes('claude')) lines.push('  Claude Code:  /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
+  if (selectedRuntimes.includes('opencode')) lines.push('  OpenCode:     /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
+  if (selectedRuntimes.includes('codex')) lines.push('  Codex CLI:    $gsdd-new-project  |  $gsdd-quick  |  $gsdd-map-codebase');
+  if (selectedRuntimes.includes('cursor')) lines.push('  Cursor:       /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
+  if (selectedRuntimes.includes('copilot')) lines.push('  Copilot:      /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
+  if (selectedRuntimes.includes('gemini')) lines.push('  Gemini CLI:   /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
+  lines.push('  Any tool:     open .agents/skills/gsdd-new-project/SKILL.md, gsdd-quick/SKILL.md, or gsdd-map-codebase/SKILL.md');
   return lines;
 }
 
 export function getHelpText() {
   return `
 gsdd - Workspine CLI
-Portable multi-runtime software delivery framework for AI coding agents.
+Repo-native delivery spine for long-horizon AI-assisted work across coding runtimes.
 
 Usage: gsdd <command> [args]
 
@@ -198,34 +199,37 @@ Platforms (for --tools):
   all       Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)
 
 Notes:
-  - init always generates portable runtime surfaces at .agents/skills/gsdd-* plus .agents/bin/gsdd.mjs
+  - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
+  - init also generates a local .planning/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
-  - running plain \`gsdd init\` in a terminal opens the guided runtime-selection wizard
+  - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
-  - \`gsdd health\` compares any installed generated runtime surfaces against current render output and points back to \`gsdd update\` when they drift
+  - \`npx -y gsdd-cli health\` compares any installed generated runtime surfaces against current render output and points back to \`npx -y gsdd-cli update\` when they drift
   - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
-  - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; repo-local helper commands route through .agents/bin/gsdd.mjs; $gsdd-plan is plan-only until explicit $gsdd-execute)
+  - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
+  - normal user path: npx -y gsdd-cli init -> run /gsdd-* or $gsdd-* -> npx -y gsdd-cli health -> npx -y gsdd-cli update when repair or refresh is needed
+  - post-init, choose your starting lane honestly: new-project for greenfield or fuzzy/milestone work, quick for a concrete bounded change, map-codebase first when the repo needs deeper orientation
 
 Examples:
-  npx gsdd-cli init
-  npx gsdd-cli init --tools claude
-  npx gsdd-cli init --tools cursor
-  npx gsdd-cli init --auto --tools claude --brief project-idea.md
-  npx gsdd-cli init --auto --tools all
-  npx gsdd-cli models show
-  npx gsdd-cli models profile quality
-  npx gsdd-cli models agent-profile --agent plan-checker --profile quality
-  npx gsdd-cli models set --runtime opencode --agent plan-checker --model anthropic/claude-opus-4-6
-  npx gsdd-cli models clear --runtime opencode --agent plan-checker
-  npx gsdd-cli init --tools agents
-  npx gsdd-cli init --tools all
-  npx gsdd-cli update
-  npx gsdd-cli find-phase
-  npx gsdd-cli verify 1
-  npx gsdd-cli scaffold phase 4 Payments
+  npx -y gsdd-cli init
+  npx -y gsdd-cli init --tools claude
+  npx -y gsdd-cli init --tools cursor
+  npx -y gsdd-cli init --auto --tools claude --brief project-idea.md
+  npx -y gsdd-cli init --auto --tools all
+  npx -y gsdd-cli models show
+  npx -y gsdd-cli models profile quality
+  npx -y gsdd-cli models agent-profile --agent plan-checker --profile quality
+  npx -y gsdd-cli models set --runtime opencode --agent plan-checker --model anthropic/claude-opus-4-6
+  npx -y gsdd-cli models clear --runtime opencode --agent plan-checker
+  npx -y gsdd-cli init --tools agents
+  npx -y gsdd-cli init --tools all
+  npx -y gsdd-cli update
+  npx -y gsdd-cli find-phase
+  npx -y gsdd-cli verify 1
+  npx -y gsdd-cli scaffold phase 4 Payments
 
 Workflows (run via skills/adapters generated by init, not direct CLI):
   gsdd-new-project          Full initializer: questioning, brownfield audit, research, spec, roadmap

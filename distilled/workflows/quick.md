@@ -16,13 +16,13 @@ They reuse the same planner, executor, and verifier roles but skip research and 
 </anti_patterns>
 
 <prerequisites>
-`.planning/` must exist (from `gsdd init`). ROADMAP.md is NOT required -- quick tasks work during any project phase.
+`.planning/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed). ROADMAP.md is NOT required -- quick tasks work during any project phase.
 
-If `.planning/` does not exist, stop and tell the user to run `gsdd init` first.
+If `.planning/` does not exist, stop and tell the user to run `npx -y gsdd-cli init` first.
 </prerequisites>
 
 <repo_root_helper_contract>
-All `node .agents/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <process>
@@ -43,7 +43,7 @@ Store the response as `$DESCRIPTION`. If empty, re-prompt.
 4. Create `.planning/quick/$NEXT_NUM-$SLUG/`.
 5. If `.planning/codebase/` exists, read whichever of `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STACK.md`, `.planning/codebase/CONVENTIONS.md`, and `.planning/codebase/CONCERNS.md` are present. Summarize key findings from available docs in <=500 words as `$CODEBASE_CONTEXT`, emphasizing: safest surfaces to touch, risky zones to avoid, must-know conventions/traps, and what must be re-verified after change. Note any missing docs in the summary.
 6. If `.planning/codebase/` does not exist, build a just-enough inline brownfield baseline instead of stopping. Read the repo root guidance that is cheap and stable (`README.md`, root manifest such as `package.json` / `pyproject.toml` / `Cargo.toml` when present, top-level app entrypoints, and any obviously relevant config or module files surfaced by `$DESCRIPTION`). Summarize the findings in <=500 words as `$CODEBASE_CONTEXT`, explicitly labeling it as a provisional baseline and calling out unknowns. Emphasize: likely implementation surface, likely dependency boundaries, conventions already visible, risky areas to avoid touching blindly, and what must be re-verified after the change. If the repo is still too unclear after this pass, keep that uncertainty explicit so Step 3.6 can recommend `/gsdd-map-codebase`.
-7. **Session-boundary fallback:** If `.planning/.continue-here.bak` exists, read its `<judgment>` section. Use `<active_constraints>` and `<anti_regression>` rules as task-scoping context (do not violate active constraints; do not regress on listed invariants). After reading, run `node .agents/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
+7. **Session-boundary fallback:** If `.planning/.continue-here.bak` exists, read its `<judgment>` section. Use `<active_constraints>` and `<anti_regression>` rules as task-scoping context (do not violate active constraints; do not regress on listed invariants). After reading, run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
 8. Inspect the live branch/worktree surface separately from checkpoint or planning artifacts. If the current branch appears stale/spent, PR-less with overlapping write scope, or otherwise like the wrong execution surface, warn before proceeding. This is advisory for quick tasks unless the mismatch makes the task description materially misleading.
 
 If `.planning/quick/` does not exist, create it along with an empty `LOG.md`:

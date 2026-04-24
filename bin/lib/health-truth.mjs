@@ -75,8 +75,11 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, option
     }
   }
 
-  if (existsSync(specPath) && existsSync(roadmapPath)) {
-    const mismatches = lifecycle.requirementAlignment.mismatches;
+  if (existsSync(roadmapPath)) {
+    const mismatches = [
+      ...(existsSync(specPath) ? lifecycle.requirementAlignment.mismatches : []),
+      ...lifecycle.phaseStatusAlignment.mismatches,
+    ];
     if (mismatches.length > 0) {
       warnings.push({
         id: 'W10',

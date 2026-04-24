@@ -20,6 +20,7 @@ import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phas
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { createCmdHealth } from './lib/health.mjs';
 import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
+import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -87,8 +88,17 @@ function createCliContext(cwd = process.cwd()) {
 const INIT_CONTEXT = createCliContext(CWD);
 
 const cmdInit = createCmdInit(INIT_CONTEXT);
-const cmdUpdate = createCmdUpdate(INIT_CONTEXT);
 const cmdHealth = createCmdHealth(INIT_CONTEXT);
+
+const cmdUpdate = (...updateArgs) => {
+  const { args: normalizedArgs, workspaceRoot, invalid, error } = resolveWorkspaceContext(updateArgs, { cwd: INIT_CONTEXT.cwd });
+  if (invalid) {
+    console.error(error);
+    process.exitCode = 1;
+    return;
+  }
+  return createCmdUpdate(createCliContext(workspaceRoot))(...normalizedArgs);
+};
 
 const COMMANDS = {
   init: cmdInit,

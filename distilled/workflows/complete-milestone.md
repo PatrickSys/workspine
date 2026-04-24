@@ -26,13 +26,13 @@ Before starting, read these files:
 </load_context>
 
 <repo_root_helper_contract>
-All `node .agents/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <lifecycle_preflight>
 Before verifying readiness or gathering archive stats, run:
 
-- `node .agents/bin/gsdd.mjs lifecycle-preflight complete-milestone`
+- `node .planning/bin/gsdd.mjs lifecycle-preflight complete-milestone`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone-close eligibility from workflow-local prose.
 

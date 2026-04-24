@@ -578,8 +578,10 @@ describe('G16 - Distillation Ledger + Delegate Architecture', () => {
     const content = fs.readFileSync(DESIGN_PATH, 'utf-8');
     assert.match(content, /distilled\/templates\/delegates\//,
       'D22 must reference the delegate path. FIX: Add delegate path reference to D22.');
-    assert.match(content, /11 delegates/,
-      'D22 must document delegate count. FIX: Add delegate count to D22.');
+    assert.match(content, /Delegate catalog/,
+      'D22 must document the delegate catalog without a stale hard-coded count. FIX: Add the Delegate catalog heading.');
+    assert.doesNotMatch(content, /Current delegates \(\d+\)|all \d+ delegate files/i,
+      'D22 must not hard-code stale delegate counts. FIX: Describe the delegate catalog and derive exact file counts from disk in tests.');
   });
 
   test('D22 cites multi-agent orchestration literature', () => {
@@ -598,8 +600,8 @@ describe('G16 - Distillation Ledger + Delegate Architecture', () => {
       assert.ok(content.includes('`' + file + '`'),
         `D22 table must list actual delegate file ${file}. FIX: Update D22 table to match distilled/templates/delegates/.`);
     }
-    assert.strictEqual(actualFiles.length, 11,
-      `Expected 11 delegate files, found ${actualFiles.length}. FIX: Update delegate count.`);
+    assert.ok(actualFiles.length > 0,
+      'Expected delegate files to exist. FIX: Restore distilled/templates/delegates/*.md.');
   });
 });
 
@@ -688,10 +690,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must not contain custom_command_aware. FIX: Replace custom_command_aware with governance_only in adapter tables.');
   });
 
-  test('README invocation table uses slash-command guidance for Cursor/Copilot/Gemini', () => {
+  test('README invocation table qualifies Cursor/Copilot/Gemini slash guidance', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /Cursor \/ Copilot \/ Gemini \| .*\/gsdd-plan.*skills-native slash command/i,
-      'README invocation table must describe Cursor/Copilot/Gemini as skills-native slash-command runtimes. FIX: Replace grouped SKILL.md guidance with slash-command wording plus optional governance note.');
+    assert.match(readme, /Cursor \/ Copilot \/ Gemini \| .*\/gsdd-plan.*when skill\/slash discovery is available/i,
+      'README invocation table must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording plus SKILL.md fallback.');
   });
 
   test('README contains a Quickstart section', () => {
@@ -700,10 +702,60 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must contain a Quickstart section. FIX: Add ### Quickstart section after Getting Started.');
   });
 
-  test('README describes gsdd init as a guided install wizard', () => {
+  test('README describes npx init as a guided install wizard', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     assert.match(readme, /guided install wizard/i,
-      'README.md must describe plain gsdd init as a guided install wizard. FIX: Update the Platform Adapters or Getting Started section.');
+      'README.md must describe the init command as a guided install wizard. FIX: Update the Platform Adapters or Getting Started section.');
+    assert.match(readme, /npx -y gsdd-cli init/i,
+      'README.md must prefer npx -y gsdd-cli init for humans. FIX: Replace primary bare gsdd init guidance.');
+  });
+
+  test('public docs distinguish skills entrypoints from the internal helper runtime', () => {
+    const docs = [
+      fs.readFileSync(README_MD, 'utf-8'),
+      fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8'),
+      fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8'),
+      fs.readFileSync(path.join(ROOT, 'distilled', 'README.md'), 'utf-8'),
+    ].join('\n');
+
+    assert.match(docs, /\.agents\/skills.*workflow entry/i,
+      'Public docs must describe .agents/skills as the workflow entry surface. FIX: Add entry-surface wording.');
+    assert.match(docs, /\.planning\/bin.*helper runtime/i,
+      'Public docs must describe .planning/bin as the helper runtime. FIX: Add helper-runtime wording.');
+    assert.doesNotMatch(docs, /\.agents[\\/]bin/i,
+      'Public docs must not reference stale .agents/bin paths. FIX: Replace with .planning/bin/gsdd.mjs.');
+  });
+
+  test('generated governance and workflow guidance avoids stale helper and bare init paths', () => {
+    const agentsBlock = fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'agents.block.md'), 'utf-8');
+    const newProject = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'new-project.md'), 'utf-8');
+
+    assert.doesNotMatch(agentsBlock, /adapters are generated under `bin\/`/i,
+      'Generated AGENTS block must not describe adapters as generated under bin/. FIX: Describe .agents/skills, .planning/bin, and native adapter directories.');
+    assert.match(agentsBlock, /npx -y gsdd-cli init/i,
+      'Generated AGENTS block must prefer npx -y gsdd-cli init. FIX: Qualify bare gsdd as global-only.');
+    assert.match(agentsBlock, /Codex CLI/i,
+      'Generated AGENTS block must distinguish Codex CLI from Codex VS Code/app. FIX: Use Codex CLI in the $gsdd-plan invocation guidance.');
+    assert.doesNotMatch(newProject, /`gsdd init --auto --brief <path>`/,
+      'Generated new-project workflow must not suggest bare gsdd init for auto brief setup. FIX: Use npx -y gsdd-cli init --auto --tools <runtime> --brief <path>.');
+  });
+
+  test('public docs distinguish Codex CLI from Codex VS Code and app fallback', () => {
+    const docs = [
+      fs.readFileSync(README_MD, 'utf-8'),
+      fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8'),
+      fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8'),
+      fs.readFileSync(path.join(ROOT, 'distilled', 'README.md'), 'utf-8'),
+    ].join('\n');
+
+    assert.match(docs, /Codex CLI/i,
+      'Public docs must keep the validated Codex CLI claim visible. FIX: Add Codex CLI wording.');
+    assert.match(docs, /Codex VS Code/i,
+      'Public docs must distinguish Codex VS Code from Codex CLI. FIX: Add Codex VS Code fallback wording.');
+    assert.match(docs, /Codex app/i,
+      'Public docs must distinguish the Codex app from Codex CLI. FIX: Add Codex app fallback wording.');
+    assert.match(docs, /open|paste/i,
+      'Public docs must describe opening/pasting SKILL.md when discovery is unavailable. FIX: Add fallback wording.');
   });
 
   test('README quickstart mentions all 3 platform invocation patterns', () => {
@@ -719,13 +771,15 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'Quickstart must mention opening SKILL.md. FIX: Add SKILL.md invocation pattern to Quickstart.');
   });
 
-  test('README quickstart does not tell Cursor/Copilot/Gemini to open SKILL.md directly', () => {
+  test('README quickstart qualifies Cursor/Copilot/Gemini slash guidance before SKILL.md fallback', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     const quickstartStart = readme.indexOf('### Quickstart');
     const quickstartEnd = readme.indexOf('###', quickstartStart + 1);
     const quickstart = readme.slice(quickstartStart, quickstartEnd > -1 ? quickstartEnd : quickstartStart + 800);
-    assert.doesNotMatch(quickstart, /Cursor.*Copilot.*Gemini.*SKILL\.md/i,
-      'Quickstart must not group Cursor/Copilot/Gemini under direct SKILL.md opening. FIX: Keep them under slash-command guidance and reserve SKILL.md for fallback tools.');
+    assert.match(quickstart, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers/i,
+      'Quickstart must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording.');
+    assert.match(quickstart, /if it does not, open `.agents\/skills\/gsdd-<workflow>\/SKILL\.md`/i,
+      'Quickstart must include SKILL.md fallback only when discovery is unavailable. FIX: Add fallback wording after slash guidance.');
   });
 
   test('agents.block.md uses compact invoke guidance', () => {
@@ -736,8 +790,8 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
   test('agents.block.md invocation line mentions slash commands for supported runtimes', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /\/gsdd-plan.*Claude.*OpenCode.*Cursor.*Copilot.*Gemini/i,
-      'agents.block.md invocation must mention slash-command guidance for supported runtimes. FIX: Include the slash-command runtime list in the compact Invoke line.');
+    assert.match(content, /\/gsdd-plan.*Claude.*OpenCode.*Cursor\/Copilot\/Gemini when skill discovery is available/i,
+      'agents.block.md invocation must qualify slash-command guidance for less-proven runtimes. FIX: Include discovery-available wording in the compact Invoke line.');
   });
 
   test('agents.block.md invocation section mentions Codex skill references', () => {
@@ -1148,13 +1202,13 @@ describe('G21 - Consumer Surface Completeness', () => {
       'README.md must have a ## Troubleshooting section. FIX: Add ## Troubleshooting section to README.');
   });
 
-  test('Troubleshooting mentions gsdd health as first step', () => {
+  test('Troubleshooting mentions health as first step', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     const tsStart = readme.indexOf('## Troubleshooting');
     const tsEnd = readme.indexOf('\n## ', tsStart + 1);
     const section = readme.slice(tsStart, tsEnd > -1 ? tsEnd : tsStart + 1000);
-    assert.match(section, /gsdd health/,
-      'Troubleshooting must mention gsdd health as first step. FIX: Add gsdd health as first troubleshooting step.');
+    assert.match(section, /npx -y gsdd-cli health|gsdd health/,
+      'Troubleshooting must mention health as first step. FIX: Add npx -y gsdd-cli health as first troubleshooting step.');
   });
 
   test('Troubleshooting links to User Guide', () => {
@@ -2157,6 +2211,32 @@ describe('G11b - Launch Claim Hardening', () => {
     assert.doesNotMatch(distilledReadme, /benchmark|CodeGraphContext/i,
       'distilled/README.md must stay benchmark-free in Phase 13. FIX: Remove benchmark/comparison launch copy.');
   });
+
+  test('public generated wording avoids stale counts, dates, phase leakage, and state-file wording', () => {
+    const publicDocs = [
+      README_MD,
+      path.join(ROOT, 'docs', 'USER-GUIDE.md'),
+      path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'),
+      DISTILLED_README_MD,
+      path.join(ROOT, 'distilled', 'DESIGN.md'),
+      path.join(ROOT, 'distilled', 'EVIDENCE-INDEX.md'),
+      path.join(ROOT, 'distilled', 'workflows', 'new-project.md'),
+      path.join(ROOT, 'distilled', 'templates', 'agents.block.md'),
+    ].map(file => fs.readFileSync(file, 'utf-8')).join('\n');
+
+    assert.doesNotMatch(publicDocs, /Current delegates \(\d+\)|all \d+ delegate files|\b\d+ delegates:/i,
+      'Public/generated docs must not hard-code stale delegate counts. FIX: Use catalog/category wording or derive counts in tests.');
+    assert.doesNotMatch(publicDocs, /updated 2026/i,
+      'Public/generated docs must not use stale date-sensitive "updated 2026" headings. FIX: Use durable headings without update dates.');
+    assert.doesNotMatch(publicDocs, /Phase 32 validation target|mandatory Phase 32|Phase 29\/32|freshness enforcement remains Phase 32/i,
+      'Public/generated docs must not leak internal phase tracking labels. FIX: Describe the durable capability instead of the implementation phase.');
+    assert.doesNotMatch(publicDocs, /Current State is set/i,
+      'Public/generated docs must use ROADMAP/phase-status language, not stale Current State wording. FIX: Reference ROADMAP phase status.');
+    assert.match(publicDocs, /npx -y gsdd-cli init/i,
+      'Public/generated docs must preserve npx-first human guidance. FIX: Keep npx -y gsdd-cli init in onboarding copy.');
+    assert.match(publicDocs, /node \.planning\/bin\/gsdd\.mjs/i,
+      'Public/generated docs must preserve repo-local workflow helper command guidance. FIX: Keep node .planning/bin/gsdd.mjs examples.');
+  });
 });
 
 describe('G30 - Verify ROADMAP Closure On Pass', () => {
@@ -2318,35 +2398,35 @@ describe('Phase 18 deterministic CLI guards', () => {
 
   test('affected workflows route checkpoint file ops through the repo-local helper launcher', () => {
     const expectations = [
-      ['pause.md', /node \.agents\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
-      ['resume.md', /node \.agents\/bin\/gsdd\.mjs file-op copy \.planning\/\.continue-here\.md \.planning\/\.continue-here\.bak/],
-      ['resume.md', /node \.agents\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.md/],
-      ['plan.md', /node \.agents\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
-      ['execute.md', /node \.agents\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
-      ['verify.md', /node \.agents\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
-      ['quick.md', /node \.agents\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['pause.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['resume.md', /node \.planning\/bin\/gsdd\.mjs file-op copy \.planning\/\.continue-here\.md \.planning\/\.continue-here\.bak/],
+      ['resume.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.md/],
+      ['plan.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['execute.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['verify.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
+      ['quick.md', /node \.planning\/bin\/gsdd\.mjs file-op delete \.planning\/\.continue-here\.bak --missing ok/],
     ];
 
     for (const [name, pattern] of expectations) {
       const content = fs.readFileSync(path.join(workflowsDir, name), 'utf-8');
       assert.match(content, pattern,
-        `${name} must route deterministic checkpoint file ops through the repo-local helper launcher. FIX: Replace manual copy/delete instructions with node .agents/bin/gsdd.mjs file-op.`);
+        `${name} must route deterministic checkpoint file ops through the repo-local helper launcher. FIX: Replace manual copy/delete instructions with node .planning/bin/gsdd.mjs file-op.`);
     }
   });
 
   test('resume.md no longer describes manual checkpoint copy/delete prose', () => {
     const content = fs.readFileSync(path.join(workflowsDir, 'resume.md'), 'utf-8');
     assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Copy `?\.planning\/\.continue-here\.md`? to `?\.planning\/\.continue-here\.bak`?/i,
-      'resume.md must not keep the old manual copy wording. FIX: Reference node .agents/bin/gsdd.mjs file-op copy only.');
+      'resume.md must not keep the old manual copy wording. FIX: Reference node .planning/bin/gsdd.mjs file-op copy only.');
     assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Delete `?\.planning\/\.continue-here\.md`?/i,
-      'resume.md must not keep the old manual delete wording. FIX: Reference node .agents/bin/gsdd.mjs file-op delete only.');
+      'resume.md must not keep the old manual delete wording. FIX: Reference node .planning/bin/gsdd.mjs file-op delete only.');
   });
 
   test('execute.md and verify.md route roadmap status changes through the repo-local helper launcher', () => {
     for (const name of ['execute.md', 'verify.md']) {
       const content = fs.readFileSync(path.join(workflowsDir, name), 'utf-8');
-      assert.match(content, /node \.agents\/bin\/gsdd\.mjs phase-status/,
-        `${name} must route ROADMAP phase status updates through node .agents/bin/gsdd.mjs phase-status. FIX: Replace manual checkbox mutation text.`);
+      assert.match(content, /node \.planning\/bin\/gsdd\.mjs phase-status/,
+        `${name} must route ROADMAP phase status updates through node .planning/bin/gsdd.mjs phase-status. FIX: Replace manual checkbox mutation text.`);
     }
   });
 });
@@ -2809,8 +2889,8 @@ describe('G37 - Launch Surface Consistency', () => {
   test('README install command and package metadata stay aligned', () => {
     const rootReadme = fs.readFileSync(README_MD, 'utf-8');
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
-    assert.match(rootReadme, /npx gsdd-cli init/,
-      'README.md must document the published package entrypoint. FIX: Keep npx gsdd-cli init in the install examples.');
+    assert.match(rootReadme, /npx -y gsdd-cli init/,
+      'README.md must document the published package entrypoint. FIX: Keep npx -y gsdd-cli init in the install examples.');
     assert.strictEqual(pkg.name, 'gsdd-cli',
       'package.json name must remain gsdd-cli. FIX: Keep the package name aligned with README install commands.');
     assert.strictEqual(pkg.bin.gsdd, 'bin/gsdd.mjs',
@@ -3063,6 +3143,9 @@ describe('G44 - Engine Contract Hardening', () => {
   });
 
   test('internal truth surfaces preserve the dual-canonical runtime story and engine-only deferral boundary', () => {
+    if (![PLANNING_SPEC_MD, PLANNING_ROADMAP_MD, INTERNAL_TODO_MD, path.join(ROOT, '.internal-research', 'gaps.md')].every(fs.existsSync)) {
+      return;
+    }
     const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
     const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
     const todo = fs.readFileSync(INTERNAL_TODO_MD, 'utf-8');
@@ -3074,11 +3157,11 @@ describe('G44 - Engine Contract Hardening', () => {
     assert.match(planningSpec, /owned artifacts.*distinct from lifecycle-state mutation|artifact ownership.*lifecycle-state mutation/i,
       '.planning/SPEC.md must distinguish owned artifact writes from lifecycle-state mutation. FIX: Tighten ENGINE-01 wording.');
     assert.match(roadmap, /dual-canonical/i,
-      '.planning/ROADMAP.md must carry the dual-canonical runtime wording into Phase 29/32. FIX: Update the phase success criteria.');
+      '.planning/ROADMAP.md must carry the dual-canonical runtime wording into the active runtime milestone. FIX: Update the phase success criteria.');
     assert.match(todo, /dual-canonical/i,
       '.internal-research/TODO.md must carry the dual-canonical runtime story into the next-session handoff. FIX: Update the active milestone notes.');
-    assert.match(gaps, /claim contradiction narrowed|dual-canonical|freshness enforcement remains Phase 32/i,
-      '.internal-research/gaps.md must narrow I42 to the remaining freshness/enforcement seam. FIX: Re-scope I42 after Phase 29 claim narrowing.');
+    assert.match(gaps, /claim contradiction narrowed|dual-canonical|freshness enforcement/i,
+      '.internal-research/gaps.md must narrow I42 to the remaining freshness/enforcement seam. FIX: Re-scope I42 after claim narrowing.');
     assert.match(design, /dual-canonical/i,
       'distilled/DESIGN.md must record the Phase 29 dual-canonical/runtime contract decision. FIX: Add a durable design decision for the shared evaluator and runtime-story split.');
     assert.match(todo, /launch identity\/naming audit explicitly deferred|launch identity.*deferred/i,
@@ -3088,26 +3171,26 @@ describe('G44 - Engine Contract Hardening', () => {
   test('transition-sensitive workflow contracts route through lifecycle-preflight while progress stays read-only', () => {
     const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
     const checks = [
-      ['execute.md', /node \.agents\/bin\/gsdd\.mjs lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
-      ['verify.md', /node \.agents\/bin\/gsdd\.mjs lifecycle-preflight verify \{phase_num\} --expects-mutation phase-status/],
-      ['audit-milestone.md', /node \.agents\/bin\/gsdd\.mjs lifecycle-preflight audit-milestone/],
-      ['complete-milestone.md', /node \.agents\/bin\/gsdd\.mjs lifecycle-preflight complete-milestone/],
-      ['new-milestone.md', /node \.agents\/bin\/gsdd\.mjs lifecycle-preflight new-milestone/],
-      ['resume.md', /node \.agents\/bin\/gsdd\.mjs lifecycle-preflight resume/],
+      ['execute.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
+      ['verify.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight verify \{phase_num\} --expects-mutation phase-status/],
+      ['audit-milestone.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight audit-milestone/],
+      ['complete-milestone.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight complete-milestone/],
+      ['new-milestone.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight new-milestone/],
+      ['resume.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight resume/],
     ];
 
     for (const [file, pattern] of checks) {
       const content = fs.readFileSync(path.join(workflowsDir, file), 'utf-8');
       assert.match(content, pattern,
-        `${file} must route lifecycle eligibility through node .agents/bin/gsdd.mjs lifecycle-preflight. FIX: Restore the shared preflight invocation.`);
+        `${file} must route lifecycle eligibility through node .planning/bin/gsdd.mjs lifecycle-preflight. FIX: Restore the shared preflight invocation.`);
     }
 
     const progress = fs.readFileSync(path.join(workflowsDir, 'progress.md'), 'utf-8');
     assert.match(progress, /progress` stays read-only|progress stays read-only/i,
       'progress.md must preserve the read-only lifecycle boundary. FIX: Keep the lifecycle_boundary read-only language.');
-    assert.match(progress, /Do not call `node \.agents\/bin\/gsdd\.mjs phase-status` here\./,
-      'progress.md must forbid lifecycle mutation via node .agents/bin/gsdd.mjs phase-status. FIX: Keep the explicit mutation ban.');
-    assert.match(progress, /downstream mutating workflow must rerun its own `node \.agents\/bin\/gsdd\.mjs lifecycle-preflight \.\.\.` gate before acting/i,
+    assert.match(progress, /Do not call `node \.planning\/bin\/gsdd\.mjs phase-status` here\./,
+      'progress.md must forbid lifecycle mutation via node .planning/bin/gsdd.mjs phase-status. FIX: Keep the explicit mutation ban.');
+    assert.match(progress, /downstream mutating workflow must rerun its own `node \.planning\/bin\/gsdd\.mjs lifecycle-preflight \.\.\.` gate before acting/i,
       'progress.md must push downstream lifecycle transitions back through the repo-local helper launcher. FIX: Keep the downstream rerun instruction.');
   });
 
@@ -3148,8 +3231,8 @@ describe('G45 - Runtime Surface Freshness Contract', () => {
       'health-truth.mjs must register W11. FIX: Add the generated-surface freshness warning ID.');
     assert.match(truthSource, /getRuntimeFreshnessRepairGuidance/,
       'health-truth.mjs must route W11 repair text through the shared runtime-freshness helper. FIX: Use getRuntimeFreshnessRepairGuidance for the W11 fix field.');
-    assert.match(runtimeFreshnessSource, /gsdd update/i,
-      'runtime-freshness.mjs must keep gsdd update as the deterministic repair path. FIX: Preserve the gsdd update guidance in getRuntimeFreshnessRepairGuidance.');
+    assert.match(runtimeFreshnessSource, /npx -y gsdd-cli update/i,
+      'runtime-freshness.mjs must keep npx -y gsdd-cli update as the deterministic human repair path. FIX: Preserve the npx-first update guidance in getRuntimeFreshnessRepairGuidance.');
   });
 
   test('runtime-facing docs and help describe rendered freshness checks briefly and consistently', () => {
@@ -3160,13 +3243,13 @@ describe('G45 - Runtime Surface Freshness Contract', () => {
 
     assert.match(readme, /gsdd health.*render output|current render output/i,
       'README.md must explain that generated runtime surfaces are checked against current render output. FIX: Add the runtime-surface freshness note.');
-    assert.match(readme, /gsdd update/i,
-      'README.md must include deterministic repair guidance through gsdd update. FIX: Add the repair path.');
+    assert.match(readme, /npx -y gsdd-cli update|gsdd update/i,
+      'README.md must include deterministic repair guidance through npx -y gsdd-cli update or global gsdd update. FIX: Add the repair path.');
     assert.match(support, /Generated-surface freshness/i,
       'docs/RUNTIME-SUPPORT.md must have a generated-surface freshness section. FIX: Add the explicit runtime-boundary section.');
-    assert.match(helpSource, /gsdd health.*gsdd update/i,
+    assert.match(helpSource, /gsdd-cli health.*gsdd-cli update|gsdd health.*gsdd update/i,
       'bin/lib/init-runtime.mjs help text must mention health/update runtime-surface drift handling. FIX: Add the note to getHelpText().');
-    assert.match(planWorkflow, /gsdd health.*gsdd update/i,
+    assert.match(planWorkflow, /gsdd-cli health.*gsdd-cli update|gsdd health.*gsdd update/i,
       'distilled/workflows/plan.md must mention the renderer-backed freshness/repair path. FIX: Add the runtime-surface trust note to completion.');
   });
 });

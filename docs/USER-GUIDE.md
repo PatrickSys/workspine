@@ -1,6 +1,6 @@
 # Workspine User Guide
 
-A detailed reference for Workspine workflows, troubleshooting, and configuration. Workspine is the public product name; the package, CLI, workflow names, and workspace remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` as retained technical contracts. Runtime floor: Node 20+. For quick-start setup and the public proof pack, start with the [README](../README.md).
+A detailed reference for Workspine workflows, troubleshooting, and configuration. Workspine is the public product name; the package, CLI, workflow names, and workspace remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` as retained technical contracts. Runtime floor: Node 20+. For quick-start setup and the public proof pack, start with the [README](../README.md). Human install/update commands use `npx -y gsdd-cli ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
 
 ---
 
@@ -182,18 +182,20 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 
 | Command | Purpose |
 |---------|---------|
-| `gsdd init [--tools <platform>]` | Set up `.planning/`, generate adapters |
-| `gsdd update [--tools <platform>]` | Regenerate adapters from latest sources |
-| `gsdd update --templates` | Refresh role contracts and delegates (warns about user modifications) |
-| `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
-| `gsdd verify <N>` | Run artifact checks for phase N |
-| `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
-| `gsdd models show` | Display effective model state across all runtimes |
-| `gsdd models profile <tier>` | Set global model profile (`quality`/`balanced`/`budget`) |
-| `gsdd models agent-profile --agent <id> --profile <tier>` | Per-agent semantic override |
-| `gsdd models set --runtime <rt> --agent <id> --model <id>` | Exact runtime model override |
-| `gsdd models clear --runtime <rt> --agent <id>` | Remove runtime override |
-| `gsdd help` | Show all commands |
+| `npx -y gsdd-cli init [--tools <platform>]` | Set up `.planning/`, generate skills/adapters |
+| `npx -y gsdd-cli update [--tools <platform>]` | Regenerate skills/adapters from latest sources |
+| `npx -y gsdd-cli update --templates` | Refresh role contracts and delegates (warns about user modifications) |
+| `npx -y gsdd-cli find-phase [N]` | Show phase info as JSON (for agent consumption) |
+| `npx -y gsdd-cli verify <N>` | Run artifact checks for phase N |
+| `npx -y gsdd-cli scaffold phase <N> [name]` | Create a new phase plan file |
+| `npx -y gsdd-cli models show` | Display effective model state across all runtimes |
+| `npx -y gsdd-cli models profile <tier>` | Set global model profile (`quality`/`balanced`/`budget`) |
+| `npx -y gsdd-cli models agent-profile --agent <id> --profile <tier>` | Per-agent semantic override |
+| `npx -y gsdd-cli models set --runtime <rt> --agent <id> --model <id>` | Exact runtime model override |
+| `npx -y gsdd-cli models clear --runtime <rt> --agent <id>` | Remove runtime override |
+| `npx -y gsdd-cli help` | Show all commands |
+
+If `gsdd-cli` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .planning/bin/gsdd.mjs ...` from the repo root.
 
 ### Platform flags for `--tools`
 
@@ -201,7 +203,7 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 |------|-----------------|
 | `claude` | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
 | `opencode` | `.opencode/commands/`, `.opencode/agents/` |
-| `codex` | `.codex/agents/gsdd-plan-checker.toml` (portable skill and `.agents/bin/gsdd.mjs` are always generated; `$gsdd-plan` stays plan-only until explicit `$gsdd-execute`) |
+| `codex` | `.codex/agents/gsdd-plan-checker.toml` (`.agents/skills/gsdd-*` and `.planning/bin/gsdd.mjs` are always generated; `$gsdd-plan` stays plan-only until explicit `$gsdd-execute`) |
 | `agents` | Bounded fallback block in root `AGENTS.md` |
 | `all` | All of the above |
 | *(none)* | Auto-detect installed tools |
@@ -210,7 +212,7 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 
 ## Configuration Reference
 
-`gsdd init` creates `.planning/config.json` interactively (or with defaults via `--auto`).
+`npx -y gsdd-cli init` creates `.planning/config.json` interactively (or with defaults via `--auto`).
 
 ### Full config.json Schema
 
@@ -288,45 +290,46 @@ Workspine does not impose commit formats, branch naming, or one-commit-per-task 
 
 ### New Project (Full Cycle)
 
-`npx gsdd-cli init`
+`npx -y gsdd-cli init`
 
-Cursor, Copilot, and Gemini use the same core workflow through installed `.agents/skills/` surfaces. The difference is runtime proof and ergonomics, not workflow shape.
+Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces when their slash/skill discovery sees that directory. The difference is runtime proof and ergonomics, not workflow shape. If discovery is unavailable, open or paste the relevant `.agents/skills/gsdd-*/SKILL.md` file.
 
 - `Claude/OpenCode`: `/gsdd-new-project -> /gsdd-plan -> /gsdd-execute -> /gsdd-verify -> /gsdd-audit-milestone`
 - `Codex`: `$gsdd-new-project -> $gsdd-plan -> $gsdd-execute -> $gsdd-verify -> $gsdd-audit-milestone` (`$gsdd-plan` ends at plan creation; `$gsdd-execute` is a separate explicit unlock)
-- `Cursor / Copilot / Gemini`: `/gsdd-new-project -> /gsdd-plan -> /gsdd-execute -> /gsdd-verify -> /gsdd-audit-milestone` from the slash command menu once the skill is installed
+- `Codex VS Code / app`: use built-in discovery if available; otherwise open or paste `.agents/skills/gsdd-new-project/SKILL.md` and continue with the matching skill files
+- `Cursor / Copilot / Gemini`: use the same sequence from the slash command menu when skill discovery is available; otherwise open or paste the matching `.agents/skills/gsdd-*/SKILL.md` files
 
 ### Milestone Continuation
 
 - `Claude/OpenCode`: `/gsdd-plan-milestone-gaps` when audit findings need closure work, or `/gsdd-complete-milestone -> /gsdd-new-milestone` when the milestone is ready to ship
 - `Codex`: `$gsdd-plan-milestone-gaps` when audit findings need closure work, or `$gsdd-complete-milestone -> $gsdd-new-milestone` when the milestone is ready to ship
-- `Cursor / Copilot / Gemini`: use the matching slash commands once the skills are installed, with the same routing as above
+- `Cursor / Copilot / Gemini`: use the matching slash commands when skill discovery is available, with the same routing as above
 
 ### Existing Codebase
 
-`npx gsdd-cli init`
+`npx -y gsdd-cli init`
 
 - `Claude/OpenCode`: `/gsdd-quick` for a concrete bounded change, `/gsdd-new-project` for fuzzy or milestone-shaped work, or `/gsdd-map-codebase` first when the repo needs a deeper brownfield baseline
 - `Codex`: `$gsdd-quick` for a concrete bounded change, `$gsdd-new-project` for fuzzy or milestone-shaped work, or `$gsdd-map-codebase` first when the repo needs a deeper brownfield baseline
-- `Cursor / Copilot / Gemini`: `/gsdd-quick`, `/gsdd-new-project`, or `/gsdd-map-codebase` from the slash command menu once the skills are installed, using the same routing rules above
+- `Cursor / Copilot / Gemini`: `/gsdd-quick`, `/gsdd-new-project`, or `/gsdd-map-codebase` from the slash command menu when skill discovery is available, using the same routing rules above
 
 ### Quick Bug Fix
 
 - `Claude/OpenCode`: `/gsdd-quick`
 - `Codex`: `$gsdd-quick`
-- `Cursor / Copilot / Gemini`: `/gsdd-quick` from the slash command menu once the skill is installed
+- `Cursor / Copilot / Gemini`: `/gsdd-quick` from the slash command menu when skill discovery is available
 
 ### Resuming After a Break
 
 - `Claude/OpenCode`: `/gsdd-progress` or `/gsdd-resume`
 - `Codex`: `$gsdd-progress` or `$gsdd-resume`
-- `Cursor / Copilot / Gemini`: use the matching skill from the slash command menu once installed
+- `Cursor / Copilot / Gemini`: use the matching skill from the slash command menu when discovery is available
 
 ### Pausing Mid-Work
 
 - `Claude/OpenCode`: `/gsdd-pause`
 - `Codex`: `$gsdd-pause`
-- `Cursor / Copilot / Gemini`: `/gsdd-pause` from the slash command menu once the skill is installed
+- `Cursor / Copilot / Gemini`: `/gsdd-pause` from the slash command menu when skill discovery is available
 
 ### Speed vs Quality Presets
 
@@ -339,8 +342,8 @@ Cursor, Copilot, and Gemini use the same core workflow through installed `.agent
 ### Headless Init (CI / Automation)
 
 ```bash
-npx gsdd-cli init --auto --tools claude           # Non-interactive, default config
-npx gsdd-cli init --auto --tools claude --brief path/to/PRD.md  # Seed from existing document
+npx -y gsdd-cli init --auto --tools claude           # Non-interactive, default config
+npx -y gsdd-cli init --auto --tools claude --brief path/to/PRD.md  # Seed from existing document
 ```
 
 ---
@@ -370,14 +373,14 @@ Do not re-run `gsdd-execute`. Use `gsdd-quick` for targeted fixes, or `gsdd-veri
 ### Template Refresh After Update
 
 ```bash
-npx gsdd-cli update --templates       # Refreshes role contracts and delegates
+npx -y gsdd-cli update --templates       # Refreshes role contracts and delegates
 ```
 
 If you've modified any templates, the generation manifest detects this and warns you before overwriting. The SHA-256 hash of each generated file is tracked in `.planning/generation-manifest.json`.
 
 ### Model Costs Too High
 
-Switch to budget profile: `gsdd models profile budget`. Disable research and plan-check via config if the domain is familiar.
+Switch to budget profile: `npx -y gsdd-cli models profile budget` (or `gsdd models profile budget` when globally installed). Disable research and plan-check via config if the domain is familiar.
 
 ---
 
@@ -389,9 +392,9 @@ Switch to budget profile: `gsdd models profile budget`. Disable research and pla
 | Phase went wrong | `git revert` the phase commits, then re-plan |
 | Quick targeted fix | `gsdd-quick` |
 | Something broke | Use the debugger role for systematic debugging |
-| Costs running high | `gsdd models profile budget`, disable workflow toggles |
-| Templates out of date | `npx gsdd-cli update --templates` |
-| Adapters out of date | `npx gsdd-cli update` |
+| Costs running high | `npx -y gsdd-cli models profile budget`, disable workflow toggles |
+| Templates out of date | `npx -y gsdd-cli update --templates` or `gsdd update --templates` if globally installed |
+| Adapters out of date | `npx -y gsdd-cli update` or `gsdd update` if globally installed |
 
 ---
 
@@ -421,10 +424,10 @@ Switch to budget profile: `gsdd models profile budget`. Disable research and pla
 
 agents/                     # 10 canonical role contracts
 .agents/skills/gsdd-*/      # Portable workflow entrypoints (open standard)
-.agents/bin/gsdd.mjs        # Repo-local helper launcher for deterministic workflow commands (run from repo root)
+.planning/bin/gsdd.mjs      # Internal repo-local helper runtime for deterministic workflow commands (run from repo root)
 ```
 
-Platform-specific adapters (generated by `gsdd init`):
+Platform-specific adapters (generated by `npx -y gsdd-cli init`, or `gsdd init` when globally installed):
 
 ```
 .claude/skills/             # Claude Code skill files
@@ -436,5 +439,7 @@ Platform-specific adapters (generated by `gsdd init`):
 
 .codex/agents/              # Codex CLI agent TOML files
 
-AGENTS.md                   # Governance fallback block (useful for agents that consume AGENTS.md)
+AGENTS.md                   # Optional governance block (useful for agents that consume AGENTS.md)
 ```
+
+`.agents/skills/` is the workflow entry surface. `.planning/bin/` is the internal helper runtime used by those workflows. Native adapters and governance files are optional ergonomics, not required prompt bulk.

@@ -4,6 +4,7 @@ import { output } from './cli-utils.mjs';
 import { describeEvidenceSurface } from './evidence-contract.mjs';
 import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
 import { checkDrift } from './session-fingerprint.mjs';
+import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const SURFACE_POLICIES = {
   progress: {
@@ -90,15 +91,18 @@ export function evaluateLifecyclePreflight({
   }
 
   if (surface === 'audit-milestone') {
+    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle));
     blockers.push(...buildAuditBlockers(lifecycle));
   }
 
   if (surface === 'complete-milestone') {
+    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle));
     blockers.push(...buildAuditBlockers(lifecycle, { allowArchivedBlocker: true }));
     blockers.push(...buildCompletionBlockers(planningDir, lifecycle));
   }
 
   if (surface === 'new-milestone') {
+    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle));
     if (!existsSync(specPath)) {
       blockers.push(blocker('missing_spec', 'SPEC.md is required before starting a new milestone.', ['.planning/SPEC.md']));
     }
@@ -131,6 +135,14 @@ export function evaluateLifecyclePreflight({
         artifacts: ['.planning/ROADMAP.md', '.planning/SPEC.md', '.planning/config.json'],
       });
     }
+  }
+
+  if (lifecycle.phaseStatusAlignment.mismatches.length > 0) {
+    warnings.push({
+      code: 'roadmap_phase_status_mismatch',
+      message: `ROADMAP.md overview/detail phase statuses disagree: ${lifecycle.phaseStatusAlignment.mismatches.join('; ')}`,
+      artifacts: ['.planning/ROADMAP.md'],
+    });
   }
 
   return {
@@ -219,6 +231,17 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface }) {
   return blockers;
 }
 
+function buildRoadmapAlignmentBlockers(lifecycle) {
+  if (lifecycle.phaseStatusAlignment.mismatches.length === 0) return [];
+  return [
+    blocker(
+      'roadmap_phase_status_mismatch',
+      `ROADMAP.md overview/detail phase statuses disagree: ${lifecycle.phaseStatusAlignment.mismatches.join('; ')}`,
+      ['.planning/ROADMAP.md']
+    ),
+  ];
+}
+
 function buildAuditBlockers(lifecycle, { allowArchivedBlocker = false } = {}) {
   const blockers = [];
   if (!lifecycle.currentMilestone.version) {
@@ -298,12 +321,16 @@ function blocker(code, message, artifacts) {
 }
 
 export function cmdLifecyclePreflight(...args) {
-  const cwd = process.cwd();
-  const planningDir = join(cwd, '.planning');
-  const [surface, maybePhase, ...rest] = args;
+  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  if (invalid) {
+    console.error(error);
+    process.exitCode = 1;
+    return;
+  }
+  const [surface, maybePhase, ...rest] = normalizedArgs;
 
   if (!surface) {
-    console.error('Usage: gsdd lifecycle-preflight <surface> [phase] [--expects-mutation <none|phase-status>]');
+    console.error('Usage: node .planning/bin/gsdd.mjs lifecycle-preflight <surface> [phase] [--expects-mutation <none|phase-status>]');
     process.exitCode = 1;
     return;
   }
