@@ -3044,12 +3044,12 @@ describe('G43 - Release Packaging Audit', () => {
       'release.yml must use Node 22.14.0+ for npm trusted publishing. FIX: Keep setup-node on 22.14.0 or newer.');
     assert.match(releaseWorkflow, /npm install -g npm@11/i,
       'release.yml must install npm 11 for trusted publishing. FIX: Keep the npm@11 setup step.');
-    assert.match(releaseWorkflow, /NPM_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/i,
-      'release.yml must expose NPM_TOKEN as a fallback when npm trusted publishing is not configured. FIX: Pass secrets.NPM_TOKEN to semantic-release.');
+    assert.match(releaseWorkflow, /Verify npm trusted publisher[\s\S]*oidc\/token\/exchange\/package\/gsdd-cli[\s\S]*before running semantic-release/i,
+      'release.yml must fail fast before semantic-release when npm trusted publishing is not configured. FIX: Keep the trusted-publisher preflight before Release.');
     assert.doesNotMatch(releaseWorkflow, /registry-url: https:\/\/registry\.npmjs\.org/i,
       'release.yml must not let setup-node create placeholder npm auth that masks NPM_TOKEN fallback. FIX: Remove setup-node registry-url.');
-    assert.doesNotMatch(releaseWorkflow, /loginoauth|ACTIONS_ID_TOKEN_REQUEST_TOKEN|NPM_TOKEN=\$\{NPM_TOKEN\}/i,
-      'release.yml must not hand-roll npm OIDC token exchange. FIX: Let @semantic-release/npm own trusted publishing.');
+    assert.doesNotMatch(releaseWorkflow, /loginoauth|NPM_TOKEN/i,
+      'release.yml must not hand-roll npm token exchange or fall back to OTP-prone tokens. FIX: Use trusted publishing only.');
     assert.match(releaseWorkflow, /NPM_CONFIG_PROVENANCE: "true"/i,
       'release.yml must keep npm provenance enabled for semantic-release. FIX: Preserve NPM_CONFIG_PROVENANCE in the release env.');
     assert.match(releaseWorkflow, /run: npx semantic-release/i,

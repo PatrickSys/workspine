@@ -35,9 +35,25 @@ jobs:
       - name: Audit packed tarball surface
         run: npm pack --dry-run --json
 
+      - name: Verify npm trusted publisher
+        run: |
+          OIDC_TOKEN=$(curl -fsSL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" \
+            | jq -r '.value')
+          STATUS=$(curl -sS \
+            -o /tmp/npm-oidc.json \
+            -w "%{http_code}" \
+            -X POST "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/gsdd-cli" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}")
+          if [ "${STATUS}" != "200" ]; then
+            cat /tmp/npm-oidc.json
+            echo "::error::npm trusted publishing is not configured for gsdd-cli. Configure npm package trusted publisher for PatrickSys/workspine using .github/workflows/release.yml before running semantic-release."
+            exit 1
+          fi
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
         run: npx semantic-release
