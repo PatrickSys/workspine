@@ -1,6 +1,6 @@
 # Runtime Support Matrix
 
-Workspine is designed as a portable multi-runtime delivery framework, but the proof bar is not the same for every runtime today.
+Workspine is a repo-native delivery spine with portable multi-runtime workflow surfaces, but the proof bar is not the same for every runtime today.
 
 This matrix is the release-floor truth surface.
 
@@ -20,7 +20,7 @@ These are the strongest public runtime claims.
 
 ### Qualified support
 
-These runtimes use the same portable workflow surfaces, but this release does not claim equal runtime proof or equal ergonomics:
+These runtimes use the same portable workflow surfaces, but they do not carry equal runtime proof or equal ergonomics today:
 
 - **Cursor**
 - **GitHub Copilot**
@@ -33,6 +33,11 @@ Codex CLI support means the terminal Codex CLI runtime. It does not automaticall
 Any tool that can read the generated markdown workflows can still use the framework manually, but that is outside the current native-proof story.
 
 ## Current runtime surfaces
+
+Two surfaces matter for users:
+
+- `.agents/skills/gsdd-*` is the shared workflow entry surface. Depending on the runtime, users invoke those workflows as `/gsdd-*`, `$gsdd-*`, or by opening the skill markdown directly.
+- `.planning/bin/gsdd*` is an internal local helper surface used by workflow-embedded lifecycle mechanics after init. It is not the primary user entry surface.
 
 | Runtime | Current claim | Entry surface | Notes |
 | --- | --- | --- | --- |

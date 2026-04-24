@@ -4,6 +4,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const { execFileSync } = require('node:child_process');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -119,6 +120,9 @@ describe('gsdd init and update', () => {
 
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'phases')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'research')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.cmd')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'spec.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md')));
@@ -126,6 +130,10 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'auth-matrix.md')),
       'auth-matrix.md template must be distributed during init');
+    for (const file of ['CHANGE.md', 'HANDOFF.md', 'VERIFICATION.md']) {
+      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'brownfield-change', file)),
+        `brownfield-change/${file} template must be distributed during init`);
+    }
 
     const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
     assert.strictEqual(config.researchDepth, 'balanced');
@@ -142,6 +150,25 @@ describe('gsdd init and update', () => {
       planCheck: true,
       verifier: true,
     });
+
+    const launcher = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'), 'utf-8');
+    assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\)/);
+    assert.match(launcher, /import \{ cmdFileOp \} from '\.\/lib\/file-ops\.mjs';/);
+    assert.doesNotMatch(launcher, /npm(?:\.cmd)?'.*exec.*--package=/s);
+    assert.doesNotMatch(launcher, new RegExp(tmpDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.doesNotMatch(launcher, /Repos[\\/].+get-shit-done-distilled/i);
+
+    const shellShim = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd'), 'utf-8');
+    assert.match(shellShim, /exec node "\$SCRIPT_DIR\/gsdd\.mjs" "\$@"/);
+
+    const cmdShim = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.cmd'), 'utf-8');
+    assert.match(cmdShim, /node "%~dp0gsdd\.mjs" %\*/);
+
+    const ps1Shim = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.ps1'), 'utf-8');
+    assert.match(ps1Shim, /Join-Path \$scriptDir 'gsdd\.mjs'/);
+
+    const helperLib = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'lib', 'workspace-root.mjs'), 'utf-8');
+    assert.match(helperLib, /resolveWorkspaceContext/);
 
     const newProjectSkill = fs.readFileSync(
       path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md'),
@@ -1077,9 +1104,15 @@ describe('gsdd init and update', () => {
     const claudeAgentPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
     const claudeCommandPath = path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md');
     const agentsPath = path.join(tmpDir, 'AGENTS.md');
+    const launcherPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const shellShimPath = path.join(tmpDir, '.planning', 'bin', 'gsdd');
+    const cmdShimPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.cmd');
     fs.writeFileSync(claudeAgentPath, 'stale checker\n');
     fs.writeFileSync(claudeCommandPath, 'stale command\n');
     fs.writeFileSync(agentsPath, '# Local Rules\n\n<!-- BEGIN GSDD -->\nstale block\n<!-- END GSDD -->\n');
+    fs.writeFileSync(launcherPath, 'stale launcher\n');
+    fs.writeFileSync(shellShimPath, 'stale shell shim\n');
+    fs.writeFileSync(cmdShimPath, 'stale cmd shim\n');
 
     await gsdd.cmdUpdate();
 
@@ -1094,6 +1127,21 @@ describe('gsdd init and update', () => {
     const updatedAgents = fs.readFileSync(agentsPath, 'utf-8');
     assert.doesNotMatch(updatedAgents, /stale block/);
     assert.match(updatedAgents, /GSDD/);
+
+    const updatedLauncher = fs.readFileSync(launcherPath, 'utf-8');
+    assert.doesNotMatch(updatedLauncher, /^stale launcher$/m);
+    assert.match(updatedLauncher, /bootstrapHelperWorkspace\(import\.meta\.url\)/);
+
+    const updatedPs1Shim = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.ps1'), 'utf-8');
+    assert.match(updatedPs1Shim, /Join-Path \$scriptDir 'gsdd\.mjs'/);
+
+    const updatedShellShim = fs.readFileSync(shellShimPath, 'utf-8');
+    assert.doesNotMatch(updatedShellShim, /^stale shell shim$/m);
+    assert.match(updatedShellShim, /gsdd\.mjs/);
+
+    const updatedCmdShim = fs.readFileSync(cmdShimPath, 'utf-8');
+    assert.doesNotMatch(updatedCmdShim, /^stale cmd shim$/m);
+    assert.match(updatedCmdShim, /gsdd\.mjs/);
   });
 
   test('update with --tools codex regenerates Codex checker agent', async () => {

@@ -42,11 +42,13 @@ export function hashDirectory(dir, baseDir = dir) {
 export function buildManifest({ planningDir, frameworkVersion }) {
   const templatesDir = join(planningDir, 'templates');
   const rolesDir = join(templatesDir, 'roles');
+  const runtimeHelpersDir = join(planningDir, 'bin');
 
   // Template subcategories
   const delegatesHashes = hashDirectory(join(templatesDir, 'delegates'), join(templatesDir, 'delegates'));
   const researchHashes = hashDirectory(join(templatesDir, 'research'), join(templatesDir, 'research'));
   const codebaseHashes = hashDirectory(join(templatesDir, 'codebase'), join(templatesDir, 'codebase'));
+  const brownfieldChangeHashes = hashDirectory(join(templatesDir, 'brownfield-change'), join(templatesDir, 'brownfield-change'));
 
   // Root-level template .md files (agents.block.md, spec.md, roadmap.md, etc.)
   const rootHashes = {};
@@ -69,6 +71,8 @@ export function buildManifest({ planningDir, frameworkVersion }) {
     }
   }
 
+  const runtimeHelpersHashes = hashDirectory(runtimeHelpersDir, planningDir);
+
   return {
     frameworkVersion,
     generatedAt: new Date().toISOString(),
@@ -76,10 +80,11 @@ export function buildManifest({ planningDir, frameworkVersion }) {
       delegates: delegatesHashes,
       research: researchHashes,
       codebase: codebaseHashes,
+      brownfieldChange: brownfieldChangeHashes,
       root: rootHashes,
     },
     roles: rolesHashes,
-    runtimeHelpers: hashDirectory(join(planningDir, 'bin'), planningDir),
+    runtimeHelpers: runtimeHelpersHashes,
   };
 }
 

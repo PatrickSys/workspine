@@ -95,7 +95,11 @@ This creates:
 3. `.planning/bin/gsdd.mjs` — repo-local helper runtime for deterministic workflow commands inside generated skills (run helper commands from the repo root)
 4. Optional tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex CLI agents, optional governance)
 
-Then run the new-project workflow to produce `.planning/SPEC.md` and `.planning/ROADMAP.md`.
+Then pick the first workflow lane that matches your situation:
+
+- `gsdd-new-project` for greenfield work, fuzzy brownfield work, or milestone-shaped work
+- `gsdd-quick` for a concrete bounded brownfield change
+- `gsdd-map-codebase` first when the repo is unfamiliar, risky, or needs a deeper baseline before choosing a lane
 
 In a terminal, `npx -y gsdd-cli init` opens a guided install wizard. If you installed the package globally, `gsdd init` is the equivalent shorthand:
 
@@ -123,7 +127,7 @@ Start with the public proof pack:
 
 Runtime floor: Node 20+.
 
-Your tool determines how you invoke workflows:
+Your tool determines how you invoke workflows after `npx gsdd-cli init`:
 
 - **Claude Code / OpenCode:** Use native slash commands directly — `/gsdd-new-project`, `/gsdd-plan`, etc.
 - **Codex CLI:** Use skill references — `$gsdd-new-project`, `$gsdd-plan`, etc. `$gsdd-plan` writes the plan and stops; start a separate `$gsdd-execute` run when you want implementation to begin.
@@ -172,13 +176,15 @@ npx -y gsdd-cli init --tools all        # All of the above
 | **Cursor / Copilot / Gemini** | Qualified support | Uses `.agents/skills/` when skill/slash discovery is available; optional root `AGENTS.md` block adds behavioral governance, and the generated skill surface is freshness-checked locally |
 | **Other AI tools** | Fallback only | Open `.agents/skills/gsdd-*/SKILL.md` directly |
 
-### Updating
+### Updating And Repair
 
 ```bash
 npx -y gsdd-cli update                    # Regenerate adapters from latest sources
 npx -y gsdd-cli update --tools claude     # Update specific platform only
 npx -y gsdd-cli update --templates        # Refresh .planning/templates/ and role contracts from framework source
 ```
+
+Use `gsdd health` first when you want a status check. Use `npx gsdd-cli update` when the generated runtime-facing surfaces are missing, drifted, or you want the latest generated output. If a runtime is only in the qualified-support tier, `health` and `update` still cover generated-surface drift; they do not imply parity-level runtime proof.
 
 ### Non-Interactive Mode (CI / Automation)
 

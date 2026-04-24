@@ -4,7 +4,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
-const { spawnSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -297,6 +297,52 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.strictEqual(fs.readFileSync(roadmapPath, 'utf-8'), original);
   });
 
+  test('phase-status finds the workspace root when the main CLI runs from a nested directory', async () => {
+    const nestedDir = path.join(tmpDir, 'src', 'nested');
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.writeFileSync(
+      roadmapPath,
+      '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
+    );
+
+    const result = await runCliAsMain(nestedDir, ['phase-status', '18', 'done']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[x\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
+  });
+
+  test('generated helper runtime resolves the workspace root from a nested directory', async () => {
+    const nestedDir = path.join(tmpDir, 'packages', 'feature');
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+
+    const gsdd = await loadGsdd(tmpDir);
+    await gsdd.cmdInit('--auto', '--tools', 'claude');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.writeFileSync(
+      roadmapPath,
+      '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
+    );
+
+    const output = execFileSync(
+      process.execPath,
+      [helperPath, 'phase-status', '18', 'done'],
+      {
+        cwd: nestedDir,
+        encoding: 'utf-8',
+        env: {
+          ...process.env,
+          PATH: '',
+        },
+      }
+    );
+
+    const result = JSON.parse(output);
+    assert.strictEqual(result.phase, '18');
+    assert.strictEqual(result.changed, true);
+    assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[x\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
+  });
+
   test('phase-status fails loudly for invalid status values', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'ROADMAP.md'),
@@ -306,6 +352,18 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'complete']);
     assert.notStrictEqual(result.exitCode, 0, 'invalid phase status should fail');
     assert.match(result.output, /unsupported phase status/i);
+  });
+
+  test('helper commands fail loudly when --workspace-root is malformed', async () => {
+    const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done', '--workspace-root']);
+    assert.notStrictEqual(result.exitCode, 0, 'malformed workspace-root flag should fail');
+    assert.match(result.output, /Usage: --workspace-root <path>/);
+  });
+
+  test('helper commands fail loudly when --workspace-root targets the wrong path', async () => {
+    const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done', '--workspace-root', path.join(tmpDir, 'missing-root')]);
+    assert.notStrictEqual(result.exitCode, 0, 'invalid workspace-root target should fail');
+    assert.match(result.output, /Workspace root does not contain \.planning\//);
   });
 
   test('help text documents file-op, phase-status, and lifecycle-preflight commands', async () => {
@@ -383,6 +441,16 @@ describe('Phase 19 provenance helpers', () => {
     assert.deepStrictEqual(status.files, []);
   });
 
+  test('parseGitStatusShort normalizes rename entries to destination paths for scope checks', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+    const status = mod.parseGitStatusShort('R  src/old.js -> src/new.js\n');
+
+    assert.strictEqual(status.files.length, 1);
+    assert.strictEqual(status.files[0].path, 'src/new.js');
+    assert.strictEqual(status.files[0].fromPath, 'src/old.js');
+    assert.strictEqual(status.files[0].staged, true);
+  });
+
   test('classifyCheckpointRouting keeps generic checkpoints informational for progress', async () => {
     const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 
@@ -404,6 +472,63 @@ describe('Phase 19 provenance helpers', () => {
       progressBlocks: false,
       resumeOwnsCleanup: true,
     });
+  });
+
+  test('classifyBrownfieldCheckpointPrecedence keeps CHANGE.md primary when strict-match proof is incomplete', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+    const precedence = mod.classifyBrownfieldCheckpointPrecedence({
+      checkpoint: {
+        workflow: 'phase',
+        phase: '34',
+        branch: 'feat/phase-34-identity-story-lock',
+      },
+      planning: {
+        phases: [{ number: '34', status: 'not_started' }],
+      },
+      brownfieldChange: {
+        exists: true,
+        currentIntegrationSurface: 'main',
+        declaredOwnedPaths: ['distilled/workflows/progress.md'],
+      },
+      git: {
+        branch: 'main',
+        statusShort: 'M  README.md\n',
+      },
+    });
+
+    assert.strictEqual(precedence.primary, 'brownfield_change');
+    assert.strictEqual(precedence.strictMatchRequired, true);
+    assert.strictEqual(precedence.branchAligned, false);
+    assert.strictEqual(precedence.checkpointCanOverrideBrownfield, false);
+  });
+
+  test('classifyBrownfieldCheckpointPrecedence lets a phase checkpoint outrank CHANGE.md only on a full strict match', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+    const precedence = mod.classifyBrownfieldCheckpointPrecedence({
+      checkpoint: {
+        workflow: 'phase',
+        phase: '42',
+        branch: 'feat/brownfield-routing',
+      },
+      planning: {
+        phases: [{ number: '42', status: 'in_progress' }],
+      },
+      brownfieldChange: {
+        exists: true,
+        currentIntegrationSurface: 'feat/brownfield-routing',
+        declaredOwnedPaths: ['distilled/workflows/progress.md', 'distilled/workflows/resume.md'],
+      },
+      git: {
+        branch: 'feat/brownfield-routing',
+        statusShort: 'M  distilled/workflows/progress.md\nM  distilled/workflows/resume.md\n',
+      },
+    });
+
+    assert.strictEqual(precedence.primary, 'checkpoint');
+    assert.strictEqual(precedence.branchAligned, true);
+    assert.strictEqual(precedence.scopeAligned, true);
+    assert.strictEqual(precedence.executionActive, true);
+    assert.strictEqual(precedence.checkpointCanOverrideBrownfield, true);
   });
 
   test('buildProvenanceSnapshot requires acknowledgement for material checkpoint mismatch', async () => {
@@ -433,6 +558,36 @@ describe('Phase 19 provenance helpers', () => {
       progressBlocks: false,
       resumeOwnsCleanup: true,
     });
+  });
+
+  test('buildProvenanceSnapshot requires acknowledgement for material brownfield artifact mismatch', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'provenance.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+    const snapshot = mod.buildProvenanceSnapshot({
+      brownfieldChange: {
+        exists: true,
+        title: 'Brownfield Change: Harden progress continuity',
+        currentStatus: 'active',
+        currentIntegrationSurface: 'feat/brownfield-continuity',
+        nextAction: 'Update progress and resume to read the same CHANGE.md anchor.',
+        declaredOwnedPaths: ['distilled/workflows/progress.md', 'distilled/workflows/resume.md'],
+      },
+      git: {
+        branch: 'main',
+        prState: 'unknown',
+        statusShort: 'M  distilled/workflows/progress.md\nM  README.md\n',
+      },
+    });
+
+    assert.strictEqual(snapshot.requiresAcknowledgement, true);
+    assert.strictEqual(snapshot.integrationSurface.materialBrownfieldMismatch, true);
+    assert.ok(snapshot.warnings.some((warning) => warning.id === 'brownfield_branch_mismatch'));
+    assert.ok(snapshot.warnings.some((warning) => warning.id === 'brownfield_scope_mismatch'));
+    assert.strictEqual(snapshot.routing.primary, 'brownfield_change');
+    assert.strictEqual(snapshot.routing.checkpointCanOverrideBrownfield, false);
+    assert.deepStrictEqual(snapshot.brownfieldChange.declaredOwnedPaths, [
+      'distilled/workflows/progress.md',
+      'distilled/workflows/resume.md',
+    ]);
   });
 });
 
@@ -573,6 +728,103 @@ describe('Phase 29 lifecycle-state helper', () => {
     );
   });
 
+  test('derives active brownfield change continuity from CHANGE.md and HANDOFF.md without a roadmap', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'brownfield-change'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'),
+      [
+        '---',
+        'change: CHANGE-041',
+        'status: active',
+        '---',
+        '',
+        '# Brownfield Change: Resume Contract Hardening',
+        '',
+        '## Goal',
+        '',
+        '- Keep brownfield continuity honest across progress and resume.',
+        '',
+        '## Out of Scope',
+        '',
+        '- No automatic milestone promotion.',
+        '',
+        '## Structural Promotion Triggers',
+        '',
+        '- Widen when the change no longer fits one active stream.',
+        '- Use `/gsdd-new-milestone` when milestone-owned lifecycle state is required.',
+        '',
+        '## Current Status',
+        '',
+        '- Current posture: active',
+        '- Current branch / integration surface: feat/brownfield-continuity',
+        '- Current owner / runtime: codex-cli',
+        '',
+        '## Next Action',
+        '',
+        '- Update progress and resume so they read the same CHANGE.md anchor.',
+        '',
+        '## PR Slice Ownership',
+        '',
+        '| Slice | Scope | Owned files / modules | Status |',
+        '| --- | --- | --- | --- |',
+        '| A | Continuity contract | distilled/workflows/progress.md, distilled/workflows/resume.md | active |',
+        '',
+        '## Widening Handoff',
+        '',
+        '- `HANDOFF.md` preserves decision context.',
+        '- `VERIFICATION.md` preserves partial proof.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'brownfield-change', 'HANDOFF.md'),
+      [
+        '---',
+        'change: CHANGE-041',
+        'updated: 2026-04-21',
+        '---',
+        '',
+        '# Brownfield Change Handoff',
+        '',
+        '## Active Constraints',
+        '',
+        '- CHANGE.md stays the operational anchor.',
+        '',
+        '## Unresolved Uncertainty',
+        '',
+        '- None yet.',
+        '',
+        '## Decision Posture',
+        '',
+        '- Warning in progress, acknowledgement in resume.',
+        '',
+        '## Anti-Regression',
+        '',
+        '- Do not turn HANDOFF.md into a second status authority.',
+        '',
+        '## Next Action',
+        '',
+        '- If the work widens, carry this judgment into `/gsdd-new-milestone` instead of recreating it.',
+      ].join('\n')
+    );
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.strictEqual(state.nonPhaseState, 'active_brownfield_change');
+    assert.strictEqual(state.brownfieldChange.exists, true);
+    assert.strictEqual(state.brownfieldChange.changeId, 'CHANGE-041');
+    assert.strictEqual(state.brownfieldChange.title, 'Brownfield Change: Resume Contract Hardening');
+    assert.strictEqual(state.brownfieldChange.currentIntegrationSurface, 'feat/brownfield-continuity');
+    assert.strictEqual(state.brownfieldChange.nextAction, 'Update progress and resume so they read the same CHANGE.md anchor.');
+    assert.deepStrictEqual(state.brownfieldChange.declaredOwnedPaths, [
+      'distilled/workflows/progress.md',
+      'distilled/workflows/resume.md',
+    ]);
+    assert.strictEqual(state.brownfieldChange.handoff.activeConstraints, 'CHANGE.md stays the operational anchor.');
+    assert.strictEqual(state.brownfieldChange.handoff.antiRegression, 'Do not turn HANDOFF.md into a second status authority.');
+    assert.match(state.brownfieldChange.handoff.nextActionContext, /\/gsdd-new-milestone/);
+  });
+
   test('reports overview and Phase Details status mismatches in lifecycle state', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'ROADMAP.md'),
@@ -685,6 +937,32 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.phase, '30');
   });
 
+  test('finds lifecycle state from a nested directory', async () => {
+    const nestedDir = path.join(tmpDir, 'apps', 'web');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [ ] **Phase 30: Deterministic Lifecycle Gates** — [ENGINE-02]',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      '# plan\n'
+    );
+
+    const result = await runCliAsMain(nestedDir, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.phase, '30');
+  });
+
   test('allows execute when the pending plan uses nested 01-PLAN.md naming inside the phase directory', async () => {
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock'), { recursive: true });
     fs.writeFileSync(
@@ -748,6 +1026,34 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.classification, 'read_only');
     assert.strictEqual(output.explicitLifecycleMutation, 'none');
     assert.strictEqual(output.reason, 'illegal_lifecycle_mutation');
+  });
+
+  test('allows resume without checkpoint when active brownfield CHANGE.md exists', async () => {
+    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    fs.mkdirSync(changeDir, { recursive: true });
+    fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
+      '---',
+      'change: CHANGE-041',
+      'status: active',
+      '---',
+      '',
+      '# Brownfield Change: Resume Contract Hardening',
+      '',
+      '## Current Status',
+      '- Current posture: active',
+      '- Current branch / integration surface: feat/brownfield-continuity',
+      '',
+      '## Next Action',
+      '- Continue the brownfield change.',
+    ].join('\n'));
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'resume']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.status, 'allowed');
+    assert.strictEqual(output.reason, null);
   });
 
   test('warns when lifecycle preflight sees overview/detail status mismatch', async () => {
@@ -896,6 +1202,31 @@ describe('verify command nested phase plans', () => {
     assert.strictEqual(output.phase, '34');
     assert.deepStrictEqual(output.artifacts.map((artifact) => artifact.file), ['src/example.js']);
     assert.strictEqual(output.allExist, true);
+  });
+
+  test('reports RENAME and MOVE plan artifacts by destination path', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
+      [
+        '<task id="34-01" type="auto">',
+        '  <files>',
+        '    - RENAME: src/old.js -> src/new.js',
+        '    - MOVE: src/a.js -> src/b.js',
+        '  </files>',
+        '</task>',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, 'src', 'new.js'), 'export const renamed = true;\n');
+    fs.writeFileSync(path.join(tmpDir, 'src', 'b.js'), 'export const moved = true;\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '34']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.deepStrictEqual(output.artifacts, [
+      { operation: 'rename', from: 'src/old.js', to: 'src/new.js', file: 'src/new.js', exists: true },
+      { operation: 'move', from: 'src/a.js', to: 'src/b.js', file: 'src/b.js', exists: true },
+    ]);
   });
 });
 

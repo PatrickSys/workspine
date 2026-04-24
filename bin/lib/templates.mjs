@@ -17,7 +17,7 @@ export function installProjectTemplates({ planningDir, distilledDir, agentsDir }
       // `gsdd health` (E6/E7/E8) which reports these as errors. This is the
       // first layer of the 3-layer scaffold defense (warn at init, error at
       // health, regression tests in manifest suite).
-      const expectedSubdirs = ['delegates', 'research', 'codebase'];
+      const expectedSubdirs = ['delegates', 'research', 'codebase', 'brownfield-change'];
       for (const subdir of expectedSubdirs) {
         if (!existsSync(join(localTemplatesDir, subdir))) {
           console.log(`  - WARN: missing expected template subdir: ${subdir}/`);
@@ -61,6 +61,7 @@ export function refreshTemplates({ planningDir, distilledDir, agentsDir, isDry =
     { name: 'delegates', src: join(globalTemplatesDir, 'delegates'), dest: join(localTemplatesDir, 'delegates'), manifestKey: 'delegates' },
     { name: 'research', src: join(globalTemplatesDir, 'research'), dest: join(localTemplatesDir, 'research'), manifestKey: 'research' },
     { name: 'codebase', src: join(globalTemplatesDir, 'codebase'), dest: join(localTemplatesDir, 'codebase'), manifestKey: 'codebase' },
+    { name: 'brownfield-change', src: join(globalTemplatesDir, 'brownfield-change'), dest: join(localTemplatesDir, 'brownfield-change'), manifestKey: 'brownfieldChange' },
   ];
 
   for (const category of categories) {

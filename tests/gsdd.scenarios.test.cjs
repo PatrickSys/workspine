@@ -281,6 +281,8 @@ describe('S2 — Brownfield Path (init → map-codebase → new-project brownfie
     assert.ok(/brownfield/i.test(content), 'map-codebase must describe the quick path as brownfield feature work');
     assert.ok(/full lifecycle setup|project initialization/i.test(content),
       'map-codebase must preserve /gsdd-new-project as the full initializer');
+    assert.ok(/intentionally want to widen|only when the user intentionally wants to widen/i.test(content),
+      'map-codebase must keep /gsdd-new-project as an explicit widen path.');
     assert.ok(/Safest next change lane/i.test(content), 'map-codebase must synthesize a safest-next-change routing signal');
     assert.ok(/Highest-risk zones/i.test(content), 'map-codebase must synthesize highest-risk zones from the 4 docs');
     assert.ok(/Do NOT create a fifth persistent artifact/i.test(content),
@@ -415,6 +417,8 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
       'generated quick skill must route undefined bounded changes to /gsdd-new-project.');
     assert.match(content, /3\+ grey areas.*\/gsdd-plan/s,
       'generated quick skill must route defined-but-too-ambiguous tasks to /gsdd-plan.');
+    assert.match(content, /intentional widen path|not the default fallback/i,
+      'generated quick skill must keep /gsdd-new-project as a widen-only move when concrete brownfield continuity already exists.');
     assert.match(content, /contains.*\/gsdd-new-project.*switch to \/gsdd-new-project/s,
       'generated quick skill must offer a /gsdd-new-project switch option from the preview when the bounded change is still undefined.');
   });
@@ -768,6 +772,59 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
       'gsdd-progress must continue routing to the real next action after showing an informational generic checkpoint.');
     assert.match(progress, /`?phase`? and `?quick`?.*blocking resume-owned surfaces/i,
       'gsdd-progress must preserve blocking routing for phase and quick checkpoints.');
+  });
+
+  test('generated resume/progress skills preserve the brownfield continuity anchor and mismatch split', () => {
+    const resume = readSkill(tmpDir, 'gsdd-resume');
+    const progress = readSkill(tmpDir, 'gsdd-progress');
+
+    assert.match(progress, /\.planning\/brownfield-change\/CHANGE\.md/,
+      'gsdd-progress must preserve the active brownfield change path.');
+    assert.match(progress, /active_brownfield_change/i,
+      'gsdd-progress must preserve the active_brownfield_change non-phase state.');
+    assert.match(progress, /Run \/gsdd-resume to restore the active brownfield change context/i,
+      'gsdd-progress must route the active brownfield change toward /gsdd-resume.');
+    assert.match(progress, /Brownfield continuity warning/i,
+      'gsdd-progress must preserve brownfield artifact/worktree warnings.');
+    assert.match(progress, /strict-match rule/i,
+      'gsdd-progress must preserve the strict-match checkpoint precedence rule.');
+    assert.match(progress, /branch alignment[\s\S]*scope alignment[\s\S]*still-active execution state/i,
+      'gsdd-progress must preserve all three strict-match checks.');
+
+    assert.match(resume, /canonical operational continuity anchor/i,
+      'gsdd-resume must preserve CHANGE.md as the operational anchor.');
+    assert.match(resume, /Do not flatten `CHANGE\.md` and `HANDOFF\.md` into co-equal operational sources/i,
+      'gsdd-resume must preserve the one-anchor, one-judgment-surface split.');
+    assert.match(resume, /material brownfield artifact\/worktree mismatch|artifact\/worktree mismatch is material/i,
+      'gsdd-resume must preserve brownfield artifact/worktree mismatch handling.');
+    assert.match(resume, /require acknowledgement before continuing the brownfield change/i,
+      'gsdd-resume must preserve the brownfield mismatch acknowledgement gate.');
+    assert.match(resume, /strict-match rule/i,
+      'gsdd-resume must preserve the strict-match checkpoint precedence rule.');
+    assert.match(resume, /branch alignment[\s\S]*scope alignment[\s\S]*still-active execution state/i,
+      'gsdd-resume must preserve all three strict-match checks.');
+  });
+
+  test('generated new-project skill keeps concrete brownfield continuity as a widen-only path', () => {
+    const content = readSkill(tmpDir, 'gsdd-new-project');
+    assert.match(content, /Concrete brownfield continuity already exists/i,
+      'gsdd-new-project must recognize an existing concrete brownfield continuity state.');
+    assert.match(content, /explicit widen path|intentionally want to widen/i,
+      'gsdd-new-project must keep /gsdd-new-project as a widen-only move when CHANGE.md already exists.');
+    assert.match(content, /CHANGE\.md[\s\S]*HANDOFF\.md[\s\S]*VERIFICATION\.md/i,
+      'gsdd-new-project must preserve the full brownfield artifact family during widening.');
+  });
+
+  test('generated new-milestone skill preserves brownfield widening inputs and context reuse', () => {
+    const content = readSkill(tmpDir, 'gsdd-new-milestone');
+    assert.match(content, /brownfield_widening_inputs/i,
+      'gsdd-new-milestone must preserve the explicit brownfield widening section.');
+    assert.match(content, /CHANGE\.md[\s\S]*HANDOFF\.md[\s\S]*VERIFICATION\.md/i,
+      'gsdd-new-milestone must preserve the full brownfield widening input set.');
+    assert.match(content, /explicit widen request/i,
+      'gsdd-new-milestone must preserve explicit widen-request wording.');
+    assert.match(content, /Do not force the user to rediscover this context/i,
+      'gsdd-new-milestone must preserve the no-rediscovery rule during widening.');
   });
 });
 

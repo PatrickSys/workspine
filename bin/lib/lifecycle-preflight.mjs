@@ -120,8 +120,8 @@ export function evaluateLifecyclePreflight({
     }
   }
 
-  if (surface === 'resume' && !existsSync(checkpointPath)) {
-    blockers.push(blocker('missing_checkpoint', 'resume requires .planning/.continue-here.md to exist.', ['.planning/.continue-here.md']));
+  if (surface === 'resume' && !existsSync(checkpointPath) && lifecycle.nonPhaseState !== 'active_brownfield_change') {
+    blockers.push(blocker('missing_checkpoint', 'resume requires .planning/.continue-here.md unless an active .planning/brownfield-change/CHANGE.md continuity anchor exists.', ['.planning/.continue-here.md', '.planning/brownfield-change/CHANGE.md']));
   }
 
   const warnings = [];

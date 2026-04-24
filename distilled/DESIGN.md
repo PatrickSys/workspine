@@ -63,6 +63,12 @@
 50. [Evidence-Gated Closure Matrix](#d50---evidence-gated-closure-matrix)
 51. [Deterministic Runtime Surface Freshness](#d51---deterministic-runtime-surface-freshness)
 52. [Generic Checkpoint Routing Ownership](#d52---generic-checkpoint-routing-ownership)
+53. [Fail-Closed Milestone And Phase Contracts](#d53---fail-closed-milestone-and-phase-contracts)
+54. [Bounded Brownfield Change Folder Contract](#d54---bounded-brownfield-change-folder-contract)
+55. [Brownfield Continuity Anchor And Mismatch Split](#d55---brownfield-continuity-anchor-and-mismatch-split)
+56. [Executable Brownfield Routing And Widen-Only Escalation](#d56---executable-brownfield-routing-and-widen-only-escalation)
+57. [Bounded Brownfield Growth And Context-Preserving Milestone Handoff](#d57---bounded-brownfield-growth-and-context-preserving-milestone-handoff)
+58. [Local Workflow Helper Launcher](#d58---local-workflow-helper-launcher)
 
 ---
 
@@ -2327,6 +2333,318 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Future checkpoint lifecycle edits must update the shared provenance helper, the authored workflow contracts, the regenerated skill surfaces, and the regression suites together or the repo truth will drift immediately.
 
 **GSDD implementation:** `bin/lib/provenance.mjs`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `.agents/skills/gsdd-resume/SKILL.md`, `.agents/skills/gsdd-progress/SKILL.md`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
+---
+
+## D53 - Fail-Closed Milestone And Phase Contracts
+
+**Decision (2026-04-21):** Active milestone roadmaps and new phase plans must carry explicit anti-drift contract fields so agents stop and challenge ambiguity instead of inferring scope or overclaiming closure.
+
+**Context:**
+- v1.5.0 milestone-init truth correctly identified the brownfield middle-lane gap, but the active roadmap was still too weak at the phase-contract layer: one-line phase goals without assigned requirements, explicit out-of-scope, or stop/replan conditions.
+- The repo already had stronger anti-drift rules in `AGENTS.md`, `.internal-research/lessons-learned.md`, and the existing plan/execution/verification skills, but they were fragmented across governance and postmortems rather than enforced by the roadmap and `PLAN.md` schema themselves.
+- Cross-SOTA research converged on the same pattern: OpenSpec/Spec Kit/LeanSpec/Task Master all keep stronger `what / not this / done means` boundaries than the old GSDD roadmap shape, while Anthropic/OpenAI/GitHub guidance all push pause-on-ambiguity, explicit evidence, and approval gates near side effects.
+
+**Decision:**
+- Harden active roadmap phases into compact execution contracts:
+  - requirement assignments
+  - success criteria
+  - out-of-scope
+  - stop/replan conditions
+- Harden `PLAN.md` into a fail-closed anti-drift contract with explicit:
+  - `non_goals`
+  - `hard_boundaries`
+  - `escalation_triggers`
+  - `approval_gates`
+  - `anti_regression_targets`
+  - `closure_claim_limit`
+  - `parallelism_budget`
+  - `leverage` (`lost / kept / gained`)
+- Upgrade planner checking to block missing anti-drift contract fields instead of treating them as optional prose quality.
+- Thread the new contract through execution and verification so the fields constrain what execution may do and what closure may claim.
+
+**Why this fits the codebase:**
+- It keeps the existing Workspine lifecycle intact instead of inventing a new workflow family.
+- It codifies rules the repo already depends on, rather than adding another layer of planning ceremony.
+- It raises rigor where the failure mode actually lives: weak roadmap and plan contracts, not missing abstract governance prose.
+- It stays compact and checkable, following the repo's “rigor that pays rent” principle rather than adopting heavier spec-framework ceremony wholesale.
+
+**Evidence:**
+- `.planning/SPEC.md` (`PLAN-03`, v1.5.0 Current State, key decision on anti-drift planning contract)
+- `.planning/ROADMAP.md` (v1.5.0 Phases 39-43)
+- `.internal-research/TODO.md` (active v1.5.0 objective and next-step reconciliation)
+- `.internal-research/lessons-learned.md` (`LL-PLANS-MUST-CARRY-THE-ANTI-DRIFT-CONTRACT`, `LL-ACTIVE-MILESTONE-TRUTH-MUST-STAY-SYNCHRONIZED`, `LL-AMBIGUITY-ABOUT-INTENT-MUST-STOP-EXECUTION`)
+- `.agents/skills/gsdd-new-milestone/SKILL.md`
+- `.agents/skills/gsdd-plan/SKILL.md`
+- `.agents/skills/gsdd-execute/SKILL.md`
+- `.agents/skills/gsdd-verify/SKILL.md`
+- GSD comparison source: `get-shit-done/workflows/new-milestone.md` and `get-shit-done/workflows/plan.md` preserve stronger planning discipline than the weakened one-line GSDD roadmap shape had drifted into.
+- External comparison sources: OpenSpec concepts/workflows, LeanSpec guide/limits, OpenAI practical guide to building agents, Anthropic effective/trustworthy agents, GitHub Copilot task best practices.
+
+**Consequences:**
+- Active milestone phases are no longer loose roadmap themes; they are the minimum durable contract needed for safe planning.
+- `gsdd-plan` now fails closed when the roadmap phase contract is too weak or self-contradictory.
+- Execution and verification inherit explicit anti-drift boundaries instead of reconstructing them from memory or postmortems.
+- The active milestone truth now needs to stay synchronized across the planning surfaces that drive work, or the contradiction itself becomes a blocker.
+
+---
+
+## D54 - Bounded Brownfield Change Folder Contract
+
+**Decision (2026-04-21):** The medium-scope brownfield lane should use one dedicated `brownfield-change/` folder family with three files (`CHANGE.md`, `HANDOFF.md`, `VERIFICATION.md`) instead of stretching `quick` or reusing milestone phases outside `ROADMAP.md`.
+
+**Context:**
+- D47 intentionally repaired the existing quick brownfield lane without turning it into a hidden middle lane. That left `I43` open on purpose: bounded quick work was cleaner, but ticket/PBI-sized brownfield work still had no durable repo-native contract outside milestones.
+- Phase 39 then hardened the anti-drift planning contract so Phase 40 could define the lane shape under a stronger control surface instead of improvising another loose planning artifact.
+- Phase 40 research converged on the same tradeoff from both repo truth and adjacent systems: one-file brownfield state collapses scope, live status, and proof into a conflict-prone hotspot, while reusing phase artifacts outside milestones either becomes milestone-lite or demands a second planning system.
+
+**Decision:**
+- Introduce one dedicated medium-scope change-folder family under `.planning/templates/brownfield-change/`:
+  - `CHANGE.md` is the canonical active change contract
+  - `HANDOFF.md` carries rolling decision context and anti-regression judgment
+  - `VERIFICATION.md` carries the bounded closeout proof
+- Keep the lane explicitly bounded:
+  - one active medium-scope change stream at a time
+  - no phase numbering or roadmap semantics inside the change folder
+  - multiple PR slices are allowed only when write ownership is explicitly disjoint and every slice still rolls up to one shared goal and closeout path
+- Keep routing, resume continuity, and milestone handoff out of this phase. The contract lands first; Phases 41-43 own continuity, deterministic routing, and promotion behavior.
+
+**Why this fits the codebase:**
+- It preserves the existing milestone-owned lifecycle engine instead of creating a second roadmap system.
+- It keeps the new lane repo-native and file-backed, which matches the rest of Workspine's continuity model.
+- It separates active scope, rolling handoff, and closeout proof without exploding into milestone ceremony.
+- It turns the middle lane into an explicit product contract rather than quiet scope creep inside `quick`.
+
+**Evidence:**
+- `.planning/SPEC.md` (`BROWNFIELD-01` through `BROWNFIELD-05`, Current State, key decision row)
+- `.planning/ROADMAP.md` (Phase 40 success criteria and follow-on Phases 41-43)
+- `.planning/templates/brownfield-change/CHANGE.md`
+- `.planning/templates/brownfield-change/HANDOFF.md`
+- `.planning/templates/brownfield-change/VERIFICATION.md`
+- `.internal-research/TODO.md` (active v1.5.0 order after Phase 40 execution)
+- `.internal-research/gaps.md` (`I43`, `I46`)
+- `SPEC.md` (bounded brownfield lane product contract)
+- `tests/gsdd.guards.test.cjs`
+- GSD comparison source: `get-shit-done/workflows/quick.md` and `get-shit-done/workflows/new-project.md` keep brownfield work closer to the lightweight quick lane or to full project/milestone planning; they do not define a distinct medium-scope change-folder family.
+- External comparison sources: OpenSpec concepts/getting-started docs, Task Master docs, BMAD workflow map, GitHub Copilot coding-agent best practices.
+
+**Consequences:**
+- The medium-scope lane now has a concrete artifact contract instead of an open-ended "maybe deepen quick later" gap.
+- Future continuity and routing work must build on this folder family rather than inventing a different middle-lane shape.
+- `quick` remains the sub-hour lane, and milestones remain the only roadmap-owned lifecycle.
+- If future work weakens the one-active-stream or disjoint-write-ownership boundaries, the repo should treat that as contract drift, not as harmless copy edits.
+
+---
+
+## D55 - Brownfield Continuity Anchor And Mismatch Split
+
+**Decision (2026-04-21):** Active medium-scope brownfield continuity should use one operational anchor plus one judgment surface: `CHANGE.md` owns status, integration surface, and next action; `HANDOFF.md` owns the cold-start judgment layer. `progress` stays warning-only, while `resume` requires acknowledgement when live git/worktree truth materially conflicts with the active change artifact.
+
+**Context:**
+- D54 defined the bounded `brownfield-change/` 3-file family, but it deliberately left continuity, resume behavior, and drift handling for the next phase.
+- Existing repo continuity already had the right primitives in separate places: provenance split in Phase 19, shared lifecycle derivation in Phase 29, deterministic preflight in Phase 30, and generic-checkpoint ownership repair in Phase 33.
+- Without an explicit anchor split, the new lane risked recreating the same ambiguity the milestone hardening had just removed: two files that both looked like status truth, plus git/worktree drift that could remain visible only to whichever session happened to notice it.
+
+**Decision:**
+- Treat `.planning/brownfield-change/CHANGE.md` as the canonical operational continuity anchor for:
+  - current posture
+  - integration surface
+  - owner/runtime
+  - next action
+  - declared write scope when PR slices exist
+- Treat `.planning/brownfield-change/HANDOFF.md` as the judgment-only cold-start surface for:
+  - active constraints
+  - unresolved uncertainty
+  - decision posture
+  - anti-regression
+  - context behind the next action
+- Add one helper-backed continuity seam:
+  - `bin/lib/lifecycle-state.mjs` reconstructs the active brownfield state from repo artifacts
+  - `bin/lib/provenance.mjs` classifies material mismatch between the artifact and live git/worktree truth
+- Keep the mismatch split asymmetric:
+  - `progress` warns but remains read-only
+  - `resume` requires acknowledgement before continuing from materially misleading brownfield continuity state
+
+**Why this fits the codebase:**
+- It extends the existing repo-truth continuity model instead of inventing a second hidden state system or a new user-facing brownfield command.
+- It preserves the earlier checkpoint-ownership rule: read-only reporting should not silently become a gating/mutating control surface.
+- It keeps cold-start judgment available without turning the operational artifact into a second copy of the judgment layer.
+- It narrows `I46` honestly: the repo can now detect more drift deterministically, but it still does not pretend gitignored `.planning/` persistence is solved.
+
+**Evidence:**
+- `.planning/SPEC.md` (`BROWNFIELD-02`, `BROWNFIELD-05`, Current State, key decision row)
+- `.planning/phases/41-brownfield-continuity-and-resume/41-PLAN.md`
+- `.planning/templates/brownfield-change/CHANGE.md`
+- `.planning/templates/brownfield-change/HANDOFF.md`
+- `bin/lib/lifecycle-state.mjs`
+- `bin/lib/provenance.mjs`
+- `distilled/workflows/progress.md`
+- `distilled/workflows/resume.md`
+- `tests/phase.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- GSD comparison sources: `get-shit-done/workflows/resume.md` and `get-shit-done/workflows/progress.md` keep continuity centered on session checkpoints and roadmap state; they do not define a separate medium-scope brownfield continuity anchor with explicit artifact-versus-worktree mismatch handling.
+
+**Consequences:**
+- The medium-scope lane now has a deterministic repo-truth continuity floor rather than only a static artifact family.
+- `CHANGE.md` and `HANDOFF.md` no longer compete implicitly for authority; future edits must preserve the one-anchor split.
+- `progress` can report the active brownfield state without widening into a mutating workflow.
+- `resume` can restore brownfield continuity honestly while still stopping short of the broader routing and promotion work reserved for Phases 42-43.
+
+## D56 - Executable Brownfield Routing And Widen-Only Escalation
+
+**Decision (2026-04-21):** Brownfield routing should treat `CHANGE.md` as the default operational anchor and allow a surviving `phase` or `quick` checkpoint to outrank it only when one strict-match rule proves the checkpoint is still the active execution surface. From concrete brownfield state, `/gsdd-new-project` remains available only as an intentional widen path into full milestone setup, not as an accidental fallback recommendation.
+
+**Context:**
+- D54 defined the bounded `brownfield-change/` contract and D55 established its continuity floor, but the routing matrix above those artifacts was still inconsistent: `progress` could still route back through stale checkpoint residue, `resume` could still make a non-matching checkpoint primary, and `quick` / `map-codebase` / `new-project` still risked implying that full lifecycle initialization was the normal fallback from already-concrete bounded work.
+- The repo already had the right raw pieces in place: checkpoint-class ownership from D52, one-anchor continuity from D55, non-phase state derivation in `lifecycle-state.mjs`, and generated-surface freshness via `gsdd update`.
+- Phase 42 was intentionally scoped to validity of next-step routing only. It did not reopen growth policy, add a new command, or weaken the one-active-stream contract.
+
+**Decision:**
+- Add one shared routing seam in `bin/lib/provenance.mjs`:
+  - `generic` checkpoints never outrank an active brownfield change
+  - `phase` and `quick` checkpoints outrank `CHANGE.md` only when branch alignment, scope alignment, and still-active execution state all hold at once
+  - otherwise the checkpoint stays visible context, but the brownfield operational anchor remains primary
+- Apply that same rule across the authored `progress` and `resume` contracts instead of letting each workflow invent its own checkpoint-versus-change exception.
+- Keep `/gsdd-new-project` available from brownfield surfaces only as an explicit widen path:
+  - `quick` uses it when the bounded change is still undefined or when the user intentionally widens scope
+  - `map-codebase` frames it as full lifecycle setup only when the user wants to widen beyond bounded brownfield work
+  - `new-project` itself recognizes existing `CHANGE.md` continuity and treats invocation from that state as deliberate promotion, not mistaken routing
+- Lock the contract with helper, guard, and generated-surface scenario coverage.
+
+**Why this fits the codebase:**
+- It extends the existing provenance helper and generated-surface workflow model instead of inventing another routing registry or hidden state store.
+- It preserves the D55 one-anchor split: checkpoints stay visible and resume-owned, but they do not silently demote the active brownfield contract unless the repo can prove the checkpoint is still current.
+- It keeps the brownfield lane bounded by removing accidental fallback escalation while still preserving an intentional route into milestone planning.
+- It matches the repo's anti-drift posture: ambiguous or weak routing proof fails closed in favor of the current operational anchor.
+
+**Evidence:**
+- `.planning/SPEC.md` (`BROWNFIELD-03`, Current State, key decision row)
+- `.planning/phases/42-executable-brownfield-routing/42-PLAN.md`
+- `bin/lib/provenance.mjs`
+- `distilled/workflows/progress.md`
+- `distilled/workflows/resume.md`
+- `distilled/workflows/quick.md`
+- `distilled/workflows/map-codebase.md`
+- `distilled/workflows/new-project.md`
+- `.internal-research/TODO.md`
+- `.internal-research/gaps.md` (`I43`, `I46`)
+- `tests/phase.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/progress.md`, `get-shit-done/workflows/resume.md`, `get-shit-done/workflows/quick.md`, `get-shit-done/workflows/new-project.md`
+
+**Consequences:**
+- Brownfield next-step routing now has one deterministic precedence rule instead of five workflow-local interpretations.
+- A stale or unrelated `phase` / `quick` checkpoint can remain reviewable without automatically hijacking the current brownfield lane.
+- `/gsdd-new-project` remains part of the system, but as deliberate promotion from concrete brownfield work rather than as a generic fallback.
+- Phase 43 can now focus on bounded growth and milestone handoff instead of first repairing invalid routing recommendations.
+
+## D57 - Bounded Brownfield Growth And Context-Preserving Milestone Handoff
+
+**Decision (2026-04-22):** When bounded brownfield work widens into milestone planning, keep the lane explicit and case-by-case. Reuse `CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` directly as the promotion input surface through `/gsdd-new-project` (first milestone) or `/gsdd-new-milestone` (subsequent milestone) instead of inventing another artifact family or silently widening the lane.
+
+**Context:**
+- D54 established the bounded brownfield artifact family, D55 gave it a continuity floor, and D56 repaired routing precedence. That still left the final growth seam open: how the bounded lane should widen without becoming milestone-lite or forcing rediscovery.
+- The risk was architectural, not cosmetic. Without an explicit handoff rule, future work could either accrete ad hoc behavior into `quick`-style lanes or create a second "promotion" artifact that duplicated state the brownfield family already carried.
+- Phase 43 was deliberately scoped to finish that seam inside the current architecture: no new workflow family, no hidden state store, and no automatic promotion.
+
+**Decision:**
+- Keep widening explicit and structural, not automatic:
+  - stay in the bounded lane by default
+  - widen only when the work no longer fits one active stream, needs milestone-owned lifecycle state, or needs broader requirement/phase tracking
+- Reuse the existing brownfield artifact family directly during widening:
+  - `CHANGE.md` remains the operational summary of goal, scope, next action, and write scope
+  - `HANDOFF.md` remains the preserved judgment surface
+  - `VERIFICATION.md` remains the carried-forward proof and gap surface, including partial validation
+- Split the milestone-init paths honestly:
+  - `/gsdd-new-project` is the widen path when no shipped milestone history exists yet
+  - `/gsdd-new-milestone` is the widen path when the repo already has shipped milestone history
+- Keep `progress` and `resume` explicit about this boundary so widening remains a deliberate user choice rather than a default fallback.
+
+**Why this fits the codebase:**
+- It completes the brownfield lane using the existing artifact family rather than adding another continuity surface.
+- It preserves the one-active-stream posture by making growth structural and case-by-case instead of opening the lane into silent multi-stream sprawl.
+- It keeps first-milestone and subsequent-milestone initiation aligned without pretending they are the same lifecycle posture.
+- It avoids rediscovery debt: milestone setup inherits current scope, judgment, and proof from repo truth rather than from chat memory.
+
+**Evidence:**
+- `.planning/SPEC.md` (`BROWNFIELD-04`, Current State, key decision row)
+- `.planning/phases/43-bounded-growth-and-milestone-handoff/43-PLAN.md`
+- `.planning/templates/brownfield-change/CHANGE.md`
+- `.planning/templates/brownfield-change/HANDOFF.md`
+- `.planning/templates/brownfield-change/VERIFICATION.md`
+- `distilled/workflows/progress.md`
+- `distilled/workflows/resume.md`
+- `distilled/workflows/new-project.md`
+- `distilled/workflows/new-milestone.md`
+- `.internal-research/TODO.md`
+- `.internal-research/gaps.md` (`I43`, `I46`)
+- `.internal-research/lessons-learned.md`
+- `tests/phase.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+- `get-shit-done/workflows/new-project.md`, `get-shit-done/workflows/quick.md`
+
+**Consequences:**
+- The bounded lane now has an explicit growth contract instead of a hand-wavy "promote later" escape hatch.
+- Milestone initiation can inherit real brownfield context without adding a second handoff file or restarting discovery.
+- `progress` and `resume` can present widening as a deliberate choice while keeping `CHANGE.md` primary until the user intentionally crosses the lifecycle boundary.
+- Phase 43 can now verify one concrete seam: bounded growth and context-preserving milestone handoff from repo truth.
+
+## D58 - Local Workflow Helper Launcher
+
+**Decision (2026-04-22, revised 2026-04-23):** Workflow-embedded CLI helper commands must run through a generated local helper runtime under `.planning/bin/`, with `.planning/bin/gsdd.mjs` as the canonical launcher and copied support modules under `.planning/bin/lib/`, instead of assuming a bare `gsdd` binary is available on the consumer repo's PATH or proxying helper execution back through `npm exec` at workflow runtime.
+
+**Context:**
+- Public onboarding already leads with `npx gsdd-cli init`, which works even when the package is not globally installed.
+- The authored workflow surfaces had drifted into a different assumption: embedded helper commands such as `lifecycle-preflight`, `file-op`, and `phase-status` were written as bare `gsdd ...` invocations.
+- That split contract caused consumer friction in the exact place the deterministic helper seam was supposed to help: a workflow could initialize successfully, then fail later because the repo did not have a global `gsdd` on PATH.
+- The helper surface must stay out of `.agents/` ownership so it does not pollute unrelated `.agents` folders or leak into generated governance.
+- The first `.planning/bin/gsdd.mjs` repair still left the wrong runtime dependency in place: the generated file was a trampoline back through `npm exec --package=gsdd-cli@... -- gsdd ...`, so helper execution still depended on npm/package resolution and shell quirks at the exact moment deterministic local mechanics were supposed to be the reliable fallback.
+
+**Decision:**
+- Generate `.planning/bin/gsdd.mjs` as a self-contained local helper runtime plus repo-local shell shims (`.planning/bin/gsdd`, `.planning/bin/gsdd.cmd`, `.planning/bin/gsdd.ps1`) on `gsdd init` for every initialized workspace.
+- Regenerate that helper surface on `gsdd update` whenever `.planning/` exists.
+- Copy the minimal helper support modules into `.planning/bin/lib/` so workflow-time helper execution needs only Node, not npm/package-manager resolution.
+- Bootstrap the workspace root from the generated helper location and shared root-resolution logic so helper commands operate on repo truth instead of raw `process.cwd()`.
+- Route workflow-embedded helper commands through `node .planning/bin/gsdd.mjs ...` for the deterministic helper seam:
+  - `lifecycle-preflight`
+  - `file-op`
+  - `phase-status`
+- Keep `.agents/skills/` as the canonical portable workflow discovery surface and keep generated `AGENTS.md` governance-only. No `.agents/bin` surface is introduced.
+
+**Why this fits the codebase:**
+- It preserves the existing skills-first architecture instead of inventing a second discovery or governance path.
+- It fixes the actual consumer DX failure at the point where workflows invoke deterministic helper commands.
+- It keeps ownership aligned with `.planning/`, which already holds the other local runtime mechanics and generation-manifest state.
+- It removes npm/package fetches from the helper hot path, which is the stronger cross-platform ownership model for Linux, WSL, and Windows consumers.
+- It lets both the generated helper runtime and the main CLI share one root-resolution seam instead of relying on repo-root `cwd` as an unstated precondition.
+
+**Evidence:**
+- `bin/lib/init-flow.mjs`
+- `bin/lib/rendering.mjs`
+- `bin/lib/workspace-root.mjs`
+- `bin/lib/file-ops.mjs`
+- `bin/lib/phase.mjs`
+- `bin/lib/lifecycle-preflight.mjs`
+- `bin/lib/runtime-freshness.mjs`
+- `bin/lib/manifest.mjs`
+- `bin/lib/health.mjs`
+- `distilled/workflows/execute.md`
+- `distilled/workflows/verify.md`
+- `distilled/workflows/resume.md`
+- `tests/gsdd.init.test.cjs`
+- `tests/gsdd.health.test.cjs`
+- `tests/gsdd.manifest.test.cjs`
+- `tests/phase.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+
+**Consequences:**
+- Consumer repos no longer need a global `gsdd` binary or workflow-time `npm exec` trampoline for embedded helper mechanics after init.
+- Helper-command freshness is now owned under `.planning/` without widening `.agents` install detection.
+- Generated governance remains compact and routing-focused because helper-surface instructions stay out of `AGENTS.md`.
+- Cross-platform proof is stronger for the local-helper seam itself, but direct live validation still needs to stay conservative by environment: the repo now has focused tests plus Windows fixture proof; Linux/WSL live consumer validation remains a separate evidence question.
 
 ## Maintenance
 

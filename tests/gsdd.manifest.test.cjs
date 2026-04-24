@@ -50,6 +50,7 @@ describe('generation manifest', () => {
     assert.ok(manifest.templates.delegates, 'manifest must have templates.delegates');
     assert.ok(manifest.templates.research, 'manifest must have templates.research');
     assert.ok(manifest.templates.codebase, 'manifest must have templates.codebase');
+    assert.ok(manifest.templates.brownfieldChange, 'manifest must have templates.brownfieldChange');
     assert.ok(manifest.templates.root, 'manifest must have templates.root');
     assert.ok(manifest.roles, 'manifest must have roles');
     assert.ok(manifest.runtimeHelpers, 'manifest must have runtimeHelpers');
@@ -57,6 +58,9 @@ describe('generation manifest', () => {
     assert.ok(Object.keys(manifest.roles).length >= 9);
     assert.ok(Object.keys(manifest.runtimeHelpers).includes('bin/gsdd.mjs'));
     assert.match(Object.values(manifest.templates.delegates)[0], /^[a-f0-9]{64}$/);
+    assert.match(manifest.runtimeHelpers['bin/gsdd.mjs'], /^[a-f0-9]{64}$/);
+    assert.match(manifest.runtimeHelpers['bin/gsdd'], /^[a-f0-9]{64}$/);
+    assert.match(manifest.runtimeHelpers['bin/gsdd.cmd'], /^[a-f0-9]{64}$/);
   });
 
   test('init produces non-empty research, codebase, and root manifest groups', async () => {
@@ -67,6 +71,8 @@ describe('generation manifest', () => {
       'templates.research must have at least one file hash after init (empty group = scaffold failure)');
     assert.ok(Object.keys(manifest.templates.codebase).length > 0,
       'templates.codebase must have at least one file hash after init (empty group = scaffold failure)');
+    assert.ok(Object.keys(manifest.templates.brownfieldChange).length > 0,
+      'templates.brownfieldChange must have at least one file hash after init (empty group = scaffold failure)');
     assert.ok(Object.keys(manifest.templates.root).length > 0,
       'templates.root must have at least one file hash after init (spec.md, roadmap.md, auth-matrix.md must be present)');
   });

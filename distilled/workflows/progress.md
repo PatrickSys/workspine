@@ -30,11 +30,12 @@ All `node .planning/bin/gsdd.mjs ...` helper references below assume the current
 Check for project artifacts in order:
 
 1. **No `.planning/` directory** — tell the user to run `npx -y gsdd-cli init`. Stop.
-2. **No `.planning/ROADMAP.md` AND no `.planning/SPEC.md`** — check for non-phase brownfield artifacts:
+2. **If `.planning/brownfield-change/CHANGE.md` exists** — treat this as the active medium-scope brownfield continuity state. Go to Branch F.
+3. **No `.planning/ROADMAP.md` AND no `.planning/SPEC.md`** — check for non-phase brownfield artifacts:
    - if `.planning/codebase/` has substantive map documents, or `.planning/quick/` has LOG/task artifacts, treat this as a non-phase brownfield state. Go to Branch F.
    - otherwise the project has no artifacts. Suggest running the `/gsdd-new-project` workflow. Stop.
-3. **No `.planning/ROADMAP.md` BUT `.planning/SPEC.md` exists** — this is a between-milestones state (milestone was completed and archived). Go to Branch F.
-4. **Both exist** — proceed to derive status, including whether a retained `ROADMAP.md` already represents an archived milestone rather than an audit-ready one.
+4. **No `.planning/ROADMAP.md` BUT `.planning/SPEC.md` exists** — this is a between-milestones state (milestone was completed and archived). Go to Branch F.
+5. **Both exist** — proceed to derive status, including whether a retained `ROADMAP.md` already represents an archived milestone rather than an audit-ready one.
 </check_existence>
 
 <derive_status>
@@ -46,11 +47,28 @@ Read the following and extract state:
 
 **Non-phase brownfield state:**
 If `.planning/ROADMAP.md` does not exist, determine whether the repo is currently in one of these Branch F states:
+- `active_brownfield_change` — `.planning/brownfield-change/CHANGE.md` exists; read `CHANGE.md` first as the canonical operational anchor, then read `HANDOFF.md` for judgment-only context
 - `between_milestones` — `.planning/SPEC.md` exists
 - `codebase_only` — `.planning/codebase/` has substantive map documents but `.planning/SPEC.md` does not exist
 - `quick_lane` — `.planning/quick/LOG.md` or quick task directories exist but `.planning/SPEC.md` and `.planning/ROADMAP.md` do not
 
-For `codebase_only` and `quick_lane`, there is no active phase count. Record the non-phase state instead of trying to infer current milestone progress.
+For `active_brownfield_change`, `codebase_only`, and `quick_lane`, there is no active phase count. Record the non-phase state instead of trying to infer current milestone progress.
+
+**Active brownfield change:**
+If `.planning/brownfield-change/CHANGE.md` exists, extract:
+- change title from the first heading
+- current posture from `## Current Status`
+- current branch / integration surface from `## Current Status`
+- next action from `## Next Action`
+- declared write scope from `## PR Slice Ownership` when present
+
+If `.planning/brownfield-change/HANDOFF.md` exists, read it as judgment-only context:
+- active constraints
+- unresolved uncertainty
+- decision posture
+- anti-regression
+
+Do not treat `HANDOFF.md` as a co-equal status source. It explains the active change; `CHANGE.md` remains the operational anchor.
 
 **Phase statuses:**
 If `.planning/ROADMAP.md` exists, read it and parse phase statuses:
@@ -75,8 +93,13 @@ If `ROADMAP.md` exists and all phases in the current milestone are `[x]`, determ
 **Checkpoint:**
 Check if `.planning/.continue-here.md` exists. If yes, note the `workflow` and `phase` frontmatter and the `next_action` section.
 - Treat checkpoint routing classes explicitly:
-  - `phase` and `quick` checkpoints remain blocking resume-owned surfaces for routing.
+  - `phase` and `quick` checkpoints remain blocking resume-owned surfaces for routing only when there is no active brownfield change, or when a shared strict-match rule proves they still describe the active execution surface.
   - `generic` checkpoints are informational-only for this read-only reporter: show the checkpoint and its `next_action`, but keep evaluating the real lifecycle recommendation instead of routing Branch A back through `/gsdd-resume`.
+- If `.planning/brownfield-change/CHANGE.md` also exists, apply one shared strict-match rule before letting a surviving `phase` or `quick` checkpoint outrank the operational anchor:
+  - branch alignment: the checkpoint branch, `CHANGE.md` integration surface, and current git branch all match
+  - scope alignment: the live dirty tree stays inside the declared brownfield write scope
+  - still-active execution state: the checkpoint still points at live unfinished `phase` or `quick` work
+- If any one of those checks fails, keep the checkpoint visible in the status block but continue routing from the active brownfield change instead of bouncing Branch A back through `/gsdd-resume`.
 
 **Incomplete work:**
 If `.planning/phases/` exists, scan it for:
@@ -85,6 +108,12 @@ If `.planning/phases/` exists, scan it for:
 
 **Quick task log:**
 If `.planning/quick/LOG.md` exists, check the last entry for a non-terminal status.
+
+**Artifact-versus-worktree mismatch:**
+If an active brownfield change exists, compare `CHANGE.md` to live git/worktree truth:
+- branch mismatch between `CHANGE.md` and the current git branch is a warning
+- dirty files outside the declared brownfield write scope are a warning
+- `CHANGE.md` may stay the operational anchor, but conflicting worktree truth must not remain silent
 
 <unmerged_commits_check>
 Run `git log main..HEAD --oneline` to detect commits on the current branch that have not been merged to `main`.
@@ -116,15 +145,27 @@ Phase: [current] of [total] — [phase name]
 Completed: [N] phases done
 
 [If no active roadmap and Branch F is handling a non-phase state:]
-State: [between milestones | codebase map only | quick lane only]
+State: [active brownfield change | between milestones | codebase map only | quick lane only]
 Completed: no active roadmap
+
+[If an active brownfield change exists:]
+Active change: [title]
+Status: [current posture]
+Integration surface: [branch / integration surface from CHANGE.md]
+Next action: [next action from CHANGE.md]
+Judgment context: `HANDOFF.md` remains the decision-critical context surface, not a co-equal status authority
+Growth boundary: stay in the bounded lane unless the work now needs multiple active streams, milestone-owned lifecycle state, or broader requirement tracking
+
+[If the active brownfield artifact conflicts with git/worktree truth:]
+Brownfield continuity warning: the active change artifact and live integration surface disagree
+  Review `CHANGE.md`, `HANDOFF.md`, and the current worktree before resuming
 
 Recent Work:
 - Phase [X]: [one-liner from SUMMARY.md]
 - Phase [Y]: [one-liner from SUMMARY.md]
 
 [If .continue-here.md exists:]
-Checkpoint: paused work found — `phase`/`quick` checkpoints still route through /gsdd-resume; `generic` checkpoints stay visible as informational context only
+Checkpoint: paused work found — `phase`/`quick` checkpoints route through /gsdd-resume only when the strict-match rule still proves they are the active execution surface; `generic` checkpoints stay visible as informational context only
 
 [If PLAN without SUMMARY found:]
 Incomplete execution: Phase [N] has PLAN but no SUMMARY
@@ -172,7 +213,7 @@ No ASCII art, no progress bars. Keep it scannable.
 Evaluate in priority order. Present the single best next step as a suggestion with a formatted output block. Do not wait for user selection, do not present numbered menus, do not clean up files. This is purely informational.
 
 **Branch A: Resume checkpoint**
-Condition: `.continue-here.md` exists and its `workflow` is `phase` or `quick`.
+Condition: `.continue-here.md` exists, its `workflow` is `phase` or `quick`, and either no active brownfield change exists or the strict-match rule still proves that checkpoint is the active execution surface.
 
 ```
 Suggested next action:
@@ -181,6 +222,7 @@ Suggested next action:
 ```
 
 If `.continue-here.md` exists and its `workflow` is `generic`, do **not** route back through Branch A from this read-only reporter. Show the checkpoint in the status block, surface its `next_action`, and keep evaluating Branch B-F so the primary recommendation can advance toward the real next phase, verification, or milestone-close action.
+If an active brownfield change exists and a `phase` or `quick` checkpoint fails the strict-match rule, treat that checkpoint the same way: keep it visible in the status block, but keep evaluating Branch B-F so the active brownfield change remains the primary recommendation.
 
 **Branch B: Execute (PLAN without SUMMARY in current phase)**
 Condition: Current phase has a PLAN file but no matching SUMMARY.
@@ -220,6 +262,7 @@ Suggested next action:
 
 **Branch F: Non-phase state (no active roadmap, or retained roadmap already archived)**
 Condition:
+- `.planning/brownfield-change/CHANGE.md` exists, **or**
 - `.planning/SPEC.md` exists but `.planning/ROADMAP.md` does not, **or**
 - `.planning/codebase/` or `.planning/quick/` exists while both `.planning/SPEC.md` and `.planning/ROADMAP.md` are absent, **or**
 - `.planning/ROADMAP.md` still exists, but the current roadmap milestone/version already has both a shipped entry in `.planning/MILESTONES.md` and the matching archived milestone audit artifact — this is the archived-with-`ROADMAP.md` state, not a second trip through audit
@@ -229,6 +272,10 @@ Check `.planning/MILESTONES.md`:
 - If MILESTONES.md does not exist or is empty → this is the first milestone setup
 
 ```
+Suggested next action (active brownfield change):
+  Run /gsdd-resume to restore the active brownfield change context from `.planning/brownfield-change/CHANGE.md`
+  Also available: inspect `.planning/brownfield-change/HANDOFF.md`, /gsdd-progress (refresh after the artifact or worktree changes), /gsdd-new-project (only if you intentionally want to widen this bounded change into the first milestone), /gsdd-new-milestone (only if the repo already has shipped milestone history and you intentionally want to widen this change into the next milestone cycle)
+
 Suggested next action (subsequent milestone):
   Run /gsdd-new-milestone to start the next milestone cycle (gather goals, define requirements, create ROADMAP.md)
   Also available: /gsdd-progress (refresh after milestone setup)
@@ -240,15 +287,15 @@ Suggested next action (incomplete milestone state — SPEC.md exists but no mile
 
 Suggested next action (codebase-only brownfield state):
   Run /gsdd-quick if the bounded change is already concrete.
-  Also available: /gsdd-new-project (define broader lifecycle work), /gsdd-map-codebase (refresh or deepen the baseline)
+  Also available: /gsdd-new-project (if you intentionally want to widen into full lifecycle work), /gsdd-map-codebase (refresh or deepen the baseline)
 
 Suggested next action (quick-lane brownfield state with incomplete quick work):
   Run /gsdd-quick to continue or finish the current bounded change.
-  Also available: /gsdd-new-project (switch to full lifecycle setup), /gsdd-progress (refresh after the quick task is updated)
+  Also available: /gsdd-new-project (only if you intentionally want to widen this bounded change into full lifecycle setup), /gsdd-progress (refresh after the quick task is updated)
 
 Suggested next action (quick-lane brownfield state with no incomplete quick work):
   Run /gsdd-quick for the next bounded change.
-  Also available: /gsdd-new-project (if you now need SPEC.md + ROADMAP.md), /gsdd-map-codebase (if the repo baseline feels stale)
+  Also available: /gsdd-new-project (if you intentionally want to widen into SPEC.md + ROADMAP.md), /gsdd-map-codebase (if the repo baseline feels stale)
 ```
 
 If none of the above conditions match, report that the project is in a clean state with no obvious next action.
@@ -259,6 +306,8 @@ Handle compound states:
 
 - **Checkpoint + unexecuted plan:** Both `.continue-here.md` exists and a PLAN lacks a SUMMARY. Prioritize checkpoint (Branch A) but mention the unexecuted plan in the status block.
 - **Generic checkpoint + current phase work:** A `workflow: generic` checkpoint may coexist with an incomplete plan, unverified phase, or completed milestone. Keep the checkpoint visible in the status block, but let Branch B-F supply the primary recommendation instead of bouncing back to `/gsdd-resume`.
+- **Active brownfield change + generic checkpoint:** Keep the generic checkpoint visible as informational context, but let the active brownfield change remain the continuity anchor and use Branch F for the primary recommendation.
+- **Active brownfield change + non-matching `phase`/`quick` checkpoint:** Show the checkpoint as surviving context, but let the active brownfield change stay primary unless branch alignment, scope alignment, and still-active execution state all match.
 - **All phases complete + checkpoint:** All phases `[x]` but a checkpoint exists. If the checkpoint is `phase` or `quick`, mention both and suggest `/gsdd-resume` before continuing. If the checkpoint is `generic`, keep it visible as informational context and still route the primary recommendation to milestone audit.
 - **Phase done but next unplanned:** Current phase has both PLAN and SUMMARY, but the next phase has no PLAN. Show the current phase as complete and suggest planning the next phase (Branch C targeting the next phase).
 - **No matching condition:** If the project state does not match any branch, report it clearly and suggest the user inspect `.planning/` manually.

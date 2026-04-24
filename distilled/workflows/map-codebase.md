@@ -237,12 +237,12 @@ Report to the user what was accomplished, then present the next step:
 - Safest next change lane — which module or surface looks cheapest and safest to modify first
 - Highest-risk zones — areas to avoid or isolate unless the task explicitly needs them
 - Must-know traps — convention, dependency, or architecture constraints likely to cause mistakes
-- Recommended next workflow — choose `/gsdd-quick` for bounded brownfield work or `/gsdd-new-project` for full lifecycle setup, and say why
+- Recommended next workflow — choose `/gsdd-quick` for bounded brownfield work or `/gsdd-new-project` only when the user intentionally wants to widen into full lifecycle setup, and say why
 
 Use only the 4 generated documents for this synthesis. Do NOT create a fifth persistent artifact or write an additional routing-summary file.
 
 **Next step:** Choose based on what you need:
-- `/gsdd-new-project` — full project initialization (spec, roadmap, phased delivery), especially if you have not yet defined the bounded change
+- `/gsdd-new-project` — full project initialization (spec, roadmap, phased delivery), especially when you intentionally want to widen beyond the current bounded brownfield lane
 - `/gsdd-quick` — bounded brownfield feature work without full ceremony (bug fixes, small features, one-off tasks)
 
 Also available:

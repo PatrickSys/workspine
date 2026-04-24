@@ -8,7 +8,7 @@ Your plans are specific enough that an executor can follow them without guessing
 <load_context>
 Before starting, read these files:
 1. `.planning/SPEC.md` - requirements, constraints, key decisions, current state
-2. `.planning/ROADMAP.md` - find the target phase, its goal, requirements, and success criteria
+2. `.planning/ROADMAP.md` - find the target phase, its goal, requirements, success criteria, explicit out-of-scope, and stop/replan conditions
 3. `.planning/research/*.md` - if research exists and is relevant to this phase
 4. `.planning/phases/*-APPROACH.md` - approach decisions from user discussion (if exists)
 5. `.planning/phases/*-PLAN.md` - any previous plans that affect this phase
@@ -111,11 +111,28 @@ Trigger questions per item:
 - Exception — **minor technical ambiguity** (e.g., exact error message wording, logging format) that does not change user-facing behavior: note it as a warning in the plan Notes section and proceed. Do not use this exception for behavioral or acceptance-criteria ambiguity.
 </spec_quality_check>
 
+<phase_contract_gate>
+Before goal_backward_planning, verify that the target phase contract in `ROADMAP.md` is strong enough to support execution planning.
+
+The phase entry must provide all of:
+- assigned requirement IDs
+- explicit success criteria
+- explicit out-of-scope or anti-goals
+- explicit stop/replan conditions
+
+Also verify milestone truth is not self-contradictory across the planning surfaces you loaded:
+- the active milestone in `.planning/SPEC.md` must match the active roadmap section you are planning from
+- the target phase number/name must match across SPEC current state and ROADMAP next-step guidance when both are present
+
+If any of these are missing or contradictory, STOP. Report the exact missing contract field or contradiction. Do not improvise a stronger phase contract from chat context alone.
+</phase_contract_gate>
+
 <goal_backward_planning>
 Plan backward from success criteria.
 
 ### Step 1: State the must-haves
 From `ROADMAP.md`, list the success criteria for this phase. These are your non-negotiable targets.
+Also list the phase out-of-scope boundaries and stop/replan conditions. These are equally contractual: execution may not silently widen past them.
 
 ### Step 2: Derive artifacts
 For each success criterion, what concrete artifacts must exist?
@@ -155,6 +172,28 @@ files-modified:
 autonomous: true
 requirements:
   - REQ-AUTH-01
+non_goals:
+  - Do not redesign auth UX beyond the scoped sign-in flow.
+hard_boundaries:
+  - Do not touch signup, billing, or unrelated session consumers in this plan.
+escalation_triggers:
+  - Stop if the request requires changing scoped success criteria or touching a forbidden surface.
+approval_gates:
+  - Ask before any destructive data migration or external delivery action.
+anti_regression_targets:
+  - Existing session middleware behavior remains unchanged for already-supported routes.
+known_unknowns:
+  - Exact copy wording for auth errors may still need product confirmation.
+high_leverage_surfaces: []
+second_pass_required: false
+closure_claim_limit: Do not claim phase completion until verification satisfies the evidence contract for the scoped truths.
+parallelism_budget:
+  max_concurrent_plans: 1
+  safe_parallelism: []
+leverage:
+  lost: Slightly more planning ceremony for this plan.
+  kept: Existing auth/session architecture and repo conventions.
+  gained: Explicit anti-drift boundaries and fail-closed escalation.
 must_haves:
   truths:
     - User can sign in with email and password.
@@ -173,6 +212,10 @@ Schema rules:
 - `requirements` must not be empty
 - `files-modified` should list the files this plan is expected to touch
 - `must_haves` must trace back to roadmap success criteria
+- `non_goals`, `hard_boundaries`, `escalation_triggers`, and `closure_claim_limit` must not be empty
+- `leverage.lost`, `leverage.kept`, and `leverage.gained` must all be explicit
+- `second_pass_required: true` if `high_leverage_surfaces` is non-empty
+- `parallelism_budget.max_concurrent_plans` must stay `1` unless the plan proves disjoint write ownership
 </plan_schema>
 
 <task_format>
@@ -257,6 +300,28 @@ files-modified:
 autonomous: true
 requirements:
   - REQ-USER-01
+non_goals:
+  - Do not redesign adjacent user-management surfaces outside the scoped list page.
+hard_boundaries:
+  - Do not touch billing, permissions, or unrelated dashboard routes in this plan.
+escalation_triggers:
+  - Stop if the requested work expands beyond the phase success criteria or crosses a forbidden surface.
+approval_gates:
+  - Ask before destructive migrations, external release actions, or rewriting approved product decisions.
+anti_regression_targets:
+  - Existing user route behavior outside the new list view remains unchanged.
+known_unknowns:
+  - Final empty-state copy may still need product confirmation.
+high_leverage_surfaces: []
+second_pass_required: false
+closure_claim_limit: Do not claim phase completion until verification confirms the scoped truths with the required evidence.
+parallelism_budget:
+  max_concurrent_plans: 1
+  safe_parallelism: []
+leverage:
+  lost: Slightly more planning ceremony for stronger execution boundaries.
+  kept: Existing route/component conventions and repo-native workflow.
+  gained: Better anti-drift enforcement and more honest closure limits.
 must_haves:
   truths:
     - Users can view the list page.
@@ -285,6 +350,24 @@ must_haves:
 1. [Observable truth from ROADMAP.md]
 2. [Observable truth from ROADMAP.md]
 
+## Anti-Goals
+- [What this plan must not expand into]
+
+## Hard Boundaries
+- [Files, modules, workflows, or delivery surfaces that stay out of scope]
+
+## Evidence Contract
+- [Which tests, runtime checks, docs, or artifacts must exist before this plan can be claimed complete]
+
+## Common Pitfalls
+- [Typical ways this work drifts, overclaims, or breaks neighboring behavior]
+
+## Stop-And-Challenge
+- [Trigger condition that must pause execution and force clarification]
+
+## Approval Gates
+- [Decision or side-effect boundaries that require explicit user approval]
+
 <checks>
 <plan_check>
 checker: self | cross_runtime
@@ -310,6 +393,14 @@ notes: [What the checker actually validated or why it was skipped]
 
 ## Success Criteria
 - [What must be true when this plan is complete]
+
+## High-Leverage Review
+- [Which high-leverage surfaces are touched and whether a second pass is required]
+
+## Leverage Review
+- Lost: [What leverage this plan sacrifices]
+- Kept: [What existing leverage or conventions it preserves]
+- Gained: [What leverage this plan creates]
 
 ## Notes
 [Gotchas, implementation notes, or explicit assumptions]
@@ -407,7 +498,12 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 6. `must_have_quality` - success criteria are specific, observable, and reflected in tasks
 7. `context_compliance` - locked decisions are honored and deferred ideas stay out of scope
 8. `goal_achievement` - the plan, if executed perfectly, actually achieves the stated phase goal: goal addressed (tasks deliver the goal), success criteria reachable (each criterion traceable to a task verify output), and outcome observable (a human or automated check can confirm the goal was met)
-9. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. Skipped when no APPROACH.md is provided.
+9. `scope_boundaries` - anti-goals and hard boundaries are explicit, enforceable, and reflected in the task set
+10. `anti_regression_capture` - anti-regression targets are named and mapped to verification
+11. `escalation_integrity` - stop-and-challenge triggers and approval gates are present where side effects or ambiguity warrant them
+12. `closure_honesty` - closure claim limit prevents the plan from overclaiming what verification can prove
+13. `high_leverage_review` - high-leverage surfaces and second-pass obligations are recorded honestly
+14. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. Skipped when no APPROACH.md is provided.
 ### Invoking the Checker
 1. If `.planning/config.json` has `workflow.planCheck: false`, skip the independent checker. Perform the planner self-check below and report `reduced_assurance`.
 2. If plan checking is enabled, check if your runtime provides a `gsdd-plan-checker` agent.
@@ -424,7 +520,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
      "summary": "One sentence overall assessment",
      "issues": [
        {
-         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
+         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | scope_boundaries | anti_regression_capture | escalation_integrity | closure_honesty | high_leverage_review | approach_alignment",
          "severity": "blocker | warning",
          "description": "What is wrong",
          "plan": "01-PLAN",
@@ -477,12 +573,25 @@ For each task:
 - [ ] The `<done>` description matches the must-have or success criterion it covers
 - [ ] `checkpoint:*` usage is consistent with `autonomous`
 
+### Check The Anti-Drift Contract
+- [ ] `non_goals` are explicit and would stop adjacent cleanup or feature widening
+- [ ] `hard_boundaries` identify the main no-touch surfaces
+- [ ] `escalation_triggers` force stop-and-challenge instead of silent interpretation
+- [ ] `approval_gates` appear anywhere side effects or irreversible choices could happen
+- [ ] `anti_regression_targets` are concrete enough for verification to check later
+- [ ] `closure_claim_limit` prevents the executor from claiming more than the evidence can support
+- [ ] `leverage.lost`, `leverage.kept`, and `leverage.gained` are explicit and defensible
+- [ ] If `high_leverage_surfaces` is non-empty, `second_pass_required` is true and named in the plan body
+
 ### Red Flags
 - A success criterion has no task covering it
 - A task has no corresponding success criterion
 - Two tasks modify the same file in contradictory ways
 - A task depends on output from a later task
 - All verify steps are observational text with no runnable commands
+- The plan can drift into adjacent cleanup because the anti-goals or hard boundaries are vague
+- The executor could cross a risky boundary without tripping a stop-and-challenge condition
+- The plan claims phase completion more broadly than its own evidence contract can prove
 </plan_self_check>
 
 <success_criteria>
@@ -492,16 +601,18 @@ Planning is done when all of these are true:
 - [ ] Approach exploration completed or explicitly skipped with `reduced_alignment` reported
 - [ ] When `workflow.discuss: true`: user alignment confirmed via APPROACH.md before planning
 - [ ] Research check completed where needed
+- [ ] Roadmap phase contract includes requirements, success criteria, explicit out-of-scope, and explicit stop/replan conditions
 - [ ] Plan self-check passed
 - [ ] Success criteria from `ROADMAP.md` are represented as must-haves
 - [ ] Goal-backward derivation from criteria to artifacts to key links to tasks is explicit
-- [ ] Every plan has frontmatter with `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, and `must_haves`
+- [ ] Every plan has frontmatter with `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `non_goals`, `hard_boundaries`, `escalation_triggers`, `approval_gates`, `anti_regression_targets`, `closure_claim_limit`, `parallelism_budget`, `leverage`, and `must_haves`
 - [ ] Every plan frontmatter records `runtime` and `assurance`
 - [ ] Every plan records checker outcome in a structured `<checks>` block
 - [ ] Every task has XML structure with `id`, `type`, `files`, `action`, `verify`, and `done`
 - [ ] Every task has at least one runnable verify command
 - [ ] Plan sizing stays within 2-5 tasks, preferring 2-3
 - [ ] Locked decisions from `.planning/SPEC.md` and APPROACH.md are honored
+- [ ] Plan body includes explicit `## Anti-Goals`, `## Hard Boundaries`, `## Evidence Contract`, `## Common Pitfalls`, `## Stop-And-Challenge`, `## Approval Gates`, and `## Leverage Review` sections
 - [ ] Any git guidance stays repo-native and follows `.planning/config.json`
 </success_criteria>
 

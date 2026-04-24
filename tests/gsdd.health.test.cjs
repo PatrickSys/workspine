@@ -46,6 +46,7 @@ function writeAlignedTruthFixtures() {
 | E6 | ERROR | x |
 | E7 | ERROR | x |
 | E8 | ERROR | x |
+| E9 | ERROR | x |
 | W1 | WARN | x |
 | W2 | WARN | x |
 | W3 | WARN | x |
@@ -153,6 +154,16 @@ describe('Health — healthy workspace', () => {
     assert.strictEqual(json.errors.length, 0);
     assert.strictEqual(json.warnings.length, 0);
     assert.ok(!json.info.some((i) => i.id === 'I1'), 'clean init should not report manifest version drift');
+  });
+
+  test('nested cwd with explicit --workspace-root → healthy JSON', async () => {
+    await initWorkspace();
+    const nestedDir = path.join(tmpDir, 'apps', 'nested');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    const result = await runCliAsMain(nestedDir, ['health', '--json', '--workspace-root', tmpDir]);
+    assert.strictEqual(result.exitCode, 0);
+    const json = JSON.parse(result.output);
+    assert.strictEqual(json.status, 'healthy');
   });
 });
 

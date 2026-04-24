@@ -473,7 +473,7 @@ describe('Phase 18 deterministic mechanics invariants', () => {
   test('execute.md no longer instructs hand-editing roadmap checkbox lines', () => {
     const execute = readWorkflow('execute.md');
     assert.ok(!execute.includes('- [x] **Phase {N}: {Name}** - {Goal}'),
-      'execute.md must not keep the old raw ROADMAP checkbox example once gsdd phase-status exists.');
+      'execute.md must not keep the old raw ROADMAP checkbox example once node .planning/bin/gsdd.mjs phase-status exists.');
   });
 
   test('workflow helper commands use .planning/bin and never stale .agents/bin or bare lifecycle-preflight', () => {
@@ -1283,9 +1283,9 @@ describe('G3 — File Size Guards', () => {
   // Phase 9 adds cross-runtime assurance-chain contract details to plan/execute.
   // v1.3.0 engine hardening added evidence-gated closure and lifecycle preflight
   // details to execute/verify, pushing them slightly past previous ceilings.
-  // These workflows remain bounded but need a slightly higher ceiling to keep the
-  // contract in the canonical portable surface instead of scattering it elsewhere.
-  const WORKFLOW_EXEMPT = { 'new-project.md': 430, 'plan.md': 530, 'execute.md': 460, 'verify.md': 440 };
+  // These workflows remain bounded but need a higher ceiling to keep the contract
+  // in the canonical portable surface instead of scattering it elsewhere.
+  const WORKFLOW_EXEMPT = { 'new-project.md': 445, 'plan.md': 640, 'execute.md': 460, 'verify.md': 440 };
 
   for (const wf of getWorkflowFiles()) {
     const limit = WORKFLOW_EXEMPT[wf] || SIZE_LIMITS.workflow;

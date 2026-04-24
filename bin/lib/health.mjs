@@ -31,7 +31,7 @@ export function createCmdHealth(ctx) {
     }
     const cwd = workspaceRoot;
     const frameworkSourceMode = isFrameworkSourceRepo(cwd);
-    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
+    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
 
     // Pre-init guard
     if (!existsSync(join(planningDir, 'config.json'))) {
@@ -128,6 +128,16 @@ export function createCmdHealth(ctx) {
       if (missingRoot.length > 0) {
         errors.push({ id: 'E8', severity: 'ERROR', message: `.planning/templates/ missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
       }
+
+      const brownfieldChangeDir = join(templatesDir, 'brownfield-change');
+      if (!existsSync(brownfieldChangeDir)) {
+        errors.push({ id: 'E9', severity: 'ERROR', message: '.planning/templates/brownfield-change/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
+      } else {
+        const missingBrownfield = ['CHANGE.md', 'HANDOFF.md', 'VERIFICATION.md'].filter((file) => !existsSync(join(brownfieldChangeDir, file)));
+        if (missingBrownfield.length > 0) {
+          errors.push({ id: 'E9', severity: 'ERROR', message: `.planning/templates/brownfield-change/ missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        }
+      }
     }
 
     // --- WARNING checks ---
@@ -144,6 +154,7 @@ export function createCmdHealth(ctx) {
         { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null, fixCommand: 'npx -y gsdd-cli update --templates' },
         { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research, fixCommand: 'npx -y gsdd-cli update --templates' },
         { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase, fixCommand: 'npx -y gsdd-cli update --templates' },
+        { name: 'brownfield-change', dir: join(templatesDir, 'brownfield-change'), hashes: manifest.templates?.brownfieldChange, fixCommand: 'npx -y gsdd-cli update --templates' },
         { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root, fixCommand: 'npx -y gsdd-cli update --templates' },
         { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null, fixCommand: 'npx -y gsdd-cli update --templates' },
         { name: 'runtime helpers', dir: planningDir, hashes: hasRuntimeHelpersDir ? manifest.runtimeHelpers : null, fixCommand: 'npx -y gsdd-cli update' },

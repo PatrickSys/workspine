@@ -130,6 +130,23 @@ function extractPlanFileArtifacts(planContent, workspaceRoot) {
   const seen = new Set();
 
   for (const line of planContent.split('\n')) {
+    const moveMatch = line.match(/^\s*-\s*(RENAME|MOVE):\s*(.+?)\s*->\s*(.+?)\s*$/i);
+    if (moveMatch) {
+      const operation = moveMatch[1].toLowerCase();
+      const from = moveMatch[2].replace(/^`|`$/g, '').trim();
+      const to = moveMatch[3].replace(/^`|`$/g, '').trim();
+      if (!from || !to || seen.has(`${operation}:${from}->${to}`)) continue;
+      seen.add(`${operation}:${from}->${to}`);
+      artifacts.push({
+        operation,
+        from,
+        to,
+        file: to,
+        exists: existsSync(join(workspaceRoot, to)),
+      });
+      continue;
+    }
+
     const match = line.match(/^\s*-\s*(CREATE|MODIFY|DELETE|READ|TOUCH):\s*(.+?)\s*$/i);
     if (!match) continue;
 
@@ -372,8 +389,9 @@ export function cmdScaffold(...args) {
   const phaseDir = join(phasesDir, dirName);
   mkdirSync(phaseDir, { recursive: true });
   const planPath = join(phaseDir, `${padPhase(phaseNum)}-PLAN.md`);
-  if (!existsSync(planPath)) {
+  const created = !existsSync(planPath);
+  if (created) {
     writeFileSync(planPath, `# Phase ${phaseNum} Plan\n\n## Goal\n- \n\n## Tasks\n- [ ] \n`);
   }
-  output({ created: !existsSync(planPath), path: planPath.replace(/\\/g, '/'), phase: normalizePhaseToken(phaseNum) });
+  output({ created, path: planPath.replace(/\\/g, '/'), phase: normalizePhaseToken(phaseNum) });
 }

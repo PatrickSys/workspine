@@ -39,15 +39,18 @@ Treat the preflight as an authorization seam over shared repo truth only:
 Check for project artifacts in order:
 
 1. **No `.planning/` directory** — route user to run `npx -y gsdd-cli init`. Stop.
-2. **No `.planning/SPEC.md` or no `.planning/ROADMAP.md`** — `.planning/` exists but the project is not fully initialized (partial init). Route user to run the `/gsdd-new-project` workflow. Stop.
-3. **Both exist** — proceed to load state.
+2. **If `.planning/brownfield-change/CHANGE.md` exists** — this repo has an active medium-scope brownfield change. Proceed to load brownfield continuity state even if there is no active roadmap.
+3. **No `.planning/SPEC.md` or no `.planning/ROADMAP.md`** — `.planning/` exists but the project is not fully initialized (partial init). Route user to run the `/gsdd-new-project` workflow. Stop.
+4. **Both exist** — proceed to load state.
 </detect_state>
 
 <load_artifacts>
 Read the following files and extract state:
 
 **ROADMAP.md:**
-Read `.planning/ROADMAP.md`. Parse phase statuses:
+If `.planning/ROADMAP.md` exists, read it. If it is absent because the active brownfield change is the only continuity anchor, keep phase fields empty and continue from `CHANGE.md`.
+
+When present, parse phase statuses:
 - `[ ]` = not started
 - `[-]` = in progress
 - `[x]` = done
@@ -59,9 +62,29 @@ Determine:
 - Completed phase count
 
 **SPEC.md:**
-Read `.planning/SPEC.md`. Extract:
+If `.planning/SPEC.md` exists, read it. If it is absent because the active brownfield change is the only continuity anchor, label project identity as `unknown from SPEC.md` and derive runtime/context from the launching surface plus `CHANGE.md` / `HANDOFF.md`.
+
+When present, extract:
 - Project name or description (first heading or "What This Is" section)
 - Current state summary if present
+
+**Active brownfield change:**
+If `.planning/brownfield-change/CHANGE.md` exists, read it first as the canonical operational continuity anchor and extract:
+- change title from the first heading
+- current posture from `## Current Status`
+- current branch / integration surface from `## Current Status`
+- current owner / runtime from `## Current Status`
+- next action from `## Next Action`
+- declared write scope from `## PR Slice Ownership` when present
+
+If `.planning/brownfield-change/HANDOFF.md` exists, read it as judgment-only context:
+- active constraints
+- unresolved uncertainty
+- decision posture
+- anti-regression
+- next-action context
+
+Do not flatten `CHANGE.md` and `HANDOFF.md` into co-equal operational sources. `CHANGE.md` stays the live status/next-action anchor; `HANDOFF.md` explains why that posture exists.
 
 **Checkpoint file:**
 Check if `.planning/.continue-here.md` exists. If yes, read it and extract:
@@ -94,7 +117,7 @@ Collect the live integration-surface facts separately from checkpoint narrative 
 Before routing, reconstruct and compare these truth buckets explicitly:
 
 1. **Checkpoint narrative truth** — what `.planning/.continue-here.md` claims was happening
-2. **Planning/artifact truth** — what ROADMAP, SPEC, phase files, and quick-task logs say
+2. **Planning/artifact truth** — what ROADMAP, SPEC, phase files, quick-task logs, and the active brownfield change artifacts say
 3. **Git/worktree truth** — what the live branch and working tree say now
 
 Treat them as separate inputs. Do not flatten them into one continuity story.
@@ -103,12 +126,25 @@ Material mismatch signals include:
 - checkpoint narrative describes only a narrow slice of a broader dirty tree
 - current branch is stale/spent relative to the next intended integration surface
 - dirty files suggest overlapping write sets or mixed phase scope
+- `CHANGE.md` names a different branch / integration surface than the current git branch
+- dirty files fall outside the active brownfield write scope declared in `CHANGE.md`
 
 If git/worktree truth materially disagrees with checkpoint narrative truth:
 - record a mismatch flag
 - keep ordinary git risk warning-level by default
 - require explicit user acknowledgement before routing onward
 - do not allow a quick "continue" shortcut to skip that acknowledgement
+
+If git/worktree truth materially disagrees with the active brownfield artifact:
+- keep `CHANGE.md` as the operational anchor
+- surface the mismatch explicitly
+- require acknowledgement before continuing the brownfield change from this workflow
+- keep ordinary git warnings separate from this stronger continuity gate
+- When a checkpoint also exists, let that checkpoint outrank the brownfield anchor only if a strict-match rule proves it is still the active execution surface:
+  - branch alignment: checkpoint branch, `CHANGE.md` integration surface, and current git branch all match
+  - scope alignment: the live dirty tree stays inside the declared brownfield write scope
+  - still-active execution state: the checkpoint still points at unfinished `phase` or `quick` work
+- If any one of those checks fails, keep the checkpoint visible but do not let it become the primary resume target.
 </provenance_reconciliation>
 
 <validate_checkpoint>
@@ -147,6 +183,25 @@ Project: [name from SPEC.md]
 Phase: [current] of [total] — [phase name]
 Completed: [N] phases done
 
+[If an active brownfield change exists:]
+Active brownfield change: [title]
+  Status: [current posture]
+  Integration surface: [branch / integration surface from CHANGE.md]
+  Next action: [next action from CHANGE.md]
+  Judgment source: `HANDOFF.md` explains constraints/posture but does not override the operational state in `CHANGE.md`
+  Growth boundary: stay in the bounded lane unless the work now needs multiple active streams, milestone-owned lifecycle state, or broader requirement tracking
+
+[If `HANDOFF.md` exists for the active brownfield change:]
+  Brownfield judgment:
+    Constraints:
+[Full content of Active Constraints]
+    Uncertainty:
+[Full content of Unresolved Uncertainty]
+    Posture:
+[Full content of Decision Posture]
+    Anti-regression:
+[Full content of Anti-Regression]
+
 [If .continue-here.md exists:]
 [If stale checkpoint flag set:]
 ⚠ Stale checkpoint detected
@@ -158,6 +213,11 @@ Checkpoint found: [workflow type] — [phase name or task description]
   Paused by: [runtime from checkpoint, or unknown if field absent]
   Resuming in: [inferred current runtime]
   Next action: [next_action section content]
+
+[If an active brownfield change also exists and the checkpoint fails the strict-match rule:]
+Checkpoint note:
+  This checkpoint no longer cleanly matches the active brownfield execution surface.
+  Keep it reviewable, but do not treat it as the primary resume target unless the user explicitly chooses it.
 
 [If <judgment> was present in checkpoint:]
   Judgment context:
@@ -185,6 +245,11 @@ Git/worktree truth:
   The checkpoint narrative no longer matches the live branch/worktree scope.
   Review both truth surfaces before choosing the next action.
 
+[If material brownfield artifact/worktree mismatch flag set:]
+⚠ Brownfield continuity mismatch
+  `CHANGE.md` no longer cleanly matches the live branch/worktree truth.
+  Review `CHANGE.md`, `HANDOFF.md`, and the dirty tree before choosing the next action.
+
 [If incomplete phase execution found:]
 Incomplete execution: Phase [N] has a PLAN but no SUMMARY
 
@@ -209,6 +274,17 @@ Route based on the `workflow` frontmatter:
 If `<validate_checkpoint>` marked the checkpoint as stale, keep the same routing logic. The user may still choose to resume from the checkpoint after reviewing the warning. If the user chooses a different path, leave the checkpoint in place and continue without it.
 
 If `<provenance_reconciliation>` marked a material checkpoint/worktree mismatch, keep the same routing logic but require explicit acknowledgement before continuing. The workflow should not silently route onward from a materially misleading checkpoint narrative.
+If an active brownfield change also exists, apply the same strict-match rule before making a `phase` or `quick` checkpoint primary. A checkpoint only stays primary when branch alignment, scope alignment, and still-active execution state all hold at once. Otherwise, keep the checkpoint visible and user-selectable, but fall through to the active brownfield change as the default resume target.
+
+**Active brownfield change (`.planning/brownfield-change/CHANGE.md`):**
+If there is no checkpoint, or if the surviving checkpoint does not satisfy the strict-match rule against the active brownfield change:
+- present the `CHANGE.md` next action as the primary resume target
+- keep `HANDOFF.md` as supporting judgment context only
+- if artifact/worktree mismatch is material, require explicit acknowledgement before continuing
+- if the user does not want to continue immediately, let them review `CHANGE.md` or `HANDOFF.md` without deleting any checkpoint file
+- do not force this state back through `/gsdd-new-project` or milestone routing just because there is no active roadmap
+- keep `/gsdd-new-project` and `/gsdd-new-milestone` as explicit widen-only choices when the bounded change no longer fits one active stream or now needs milestone-owned lifecycle state
+- use `/gsdd-new-project` for first-milestone setup and `/gsdd-new-milestone` when the repo already has shipped milestone history
 
 **Incomplete plan execution (PLAN without SUMMARY):**
 Route to `/gsdd-execute` for that phase.
@@ -235,9 +311,11 @@ What would you like to do?
 4. Something else
 ```
 
+When the primary action is an active brownfield change rather than a checkpoint or lifecycle workflow, replace option 3 with `Review CHANGE.md or HANDOFF.md` if there is no active roadmap to inspect.
+
 **Quick-resume shortcut:** If there is no stale-checkpoint banner and no material checkpoint/worktree mismatch, the user may say "continue", "go", or "resume" without further input to execute the primary action directly.
 
-**Mismatch acknowledgement:** If material checkpoint/worktree mismatch was detected, require an explicit acknowledgement such as "continue despite mismatch" or a different selected path. Do not let a bare "continue" skip the warning.
+**Mismatch acknowledgement:** If material checkpoint/worktree mismatch or material brownfield artifact/worktree mismatch was detected, require an explicit acknowledgement such as "continue despite mismatch" or a different selected path. Do not let a bare "continue" skip the warning.
 
 Wait for user selection.
 </present_options>

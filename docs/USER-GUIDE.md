@@ -197,6 +197,34 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 
 If `gsdd-cli` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .planning/bin/gsdd.mjs ...` from the repo root.
 
+Normal user flow:
+
+1. Run `npx gsdd-cli init`.
+2. Enter workflows through your runtime surface: `/gsdd-*` or `$gsdd-*`.
+3. Use `gsdd health` to check installed generated surfaces.
+4. Use `npx gsdd-cli update` when generated surfaces drift or you want the latest shipped output.
+
+Surface split:
+
+- `.agents/skills/gsdd-*` is the workflow entry surface.
+- `.planning/bin/gsdd*` is an internal local helper surface used by workflow-embedded lifecycle mechanics. It is kept available, but it is not the normal first-run user entrypoint.
+
+Advanced/internal helper commands remain available:
+
+| Command | Purpose |
+|---------|---------|
+| `gsdd file-op <copy\|delete\|regex-sub>` | Deterministic workspace-confined file copy, delete, and text mutation |
+| `gsdd phase-status <N> <status>` | Update a single ROADMAP phase status through the local helper surface |
+| `gsdd lifecycle-preflight <surface> [phase]` | Inspect deterministic lifecycle gate results for a workflow surface |
+
+Other CLI commands that remain available outside the first-run path:
+
+| Command | Purpose |
+|---------|---------|
+| `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
+| `gsdd verify <N>` | Run artifact checks for phase N |
+| `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
+
 ### Platform flags for `--tools`
 
 | Flag | What's generated |
@@ -309,6 +337,7 @@ Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces whe
 
 `npx -y gsdd-cli init`
 
+- Choose one starting lane after init:
 - `Claude/OpenCode`: `/gsdd-quick` for a concrete bounded change, `/gsdd-new-project` for fuzzy or milestone-shaped work, or `/gsdd-map-codebase` first when the repo needs a deeper brownfield baseline
 - `Codex`: `$gsdd-quick` for a concrete bounded change, `$gsdd-new-project` for fuzzy or milestone-shaped work, or `$gsdd-map-codebase` first when the repo needs a deeper brownfield baseline
 - `Cursor / Copilot / Gemini`: `/gsdd-quick`, `/gsdd-new-project`, or `/gsdd-map-codebase` from the slash command menu when skill discovery is available, using the same routing rules above
@@ -378,6 +407,12 @@ npx -y gsdd-cli update --templates       # Refreshes role contracts and delegate
 
 If you've modified any templates, the generation manifest detects this and warns you before overwriting. The SHA-256 hash of each generated file is tracked in `.planning/generation-manifest.json`.
 
+### Generated Surfaces Drift Or A Runtime Command Goes Missing
+
+Start with `gsdd health`. If it reports drift or missing installed generated surfaces, run `npx gsdd-cli update` for the whole workspace or `npx gsdd-cli update --tools <runtime>` for a specific runtime.
+
+That repair path is deterministic for generated files. It does not imply that every runtime has equal native ergonomics or equal validation depth.
+
 ### Model Costs Too High
 
 Switch to budget profile: `npx -y gsdd-cli models profile budget` (or `gsdd models profile budget` when globally installed). Disable research and plan-check via config if the domain is familiar.
@@ -405,6 +440,12 @@ Switch to budget profile: `npx -y gsdd-cli models profile budget` (or `gsdd mode
   SPEC.md                   # Living specification (goals, constraints, decisions)
   ROADMAP.md                # Phased delivery plan with inline status
   config.json               # Project configuration
+  bin/
+    gsdd                    # POSIX shim for the local helper surface
+    gsdd.cmd                # Windows shim for the local helper surface
+    gsdd.mjs                # Canonical self-contained local helper runtime
+    gsdd.ps1                # PowerShell shim for the local helper surface
+    lib/                    # Copied helper-runtime support modules
   generation-manifest.json  # SHA-256 hashes for template versioning
   .continue-here.md         # Session checkpoint (created by pause, consumed by resume)
   research/                 # Domain research outputs

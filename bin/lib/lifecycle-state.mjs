@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
+const BROWNFIELD_CHANGE_DIR = 'brownfield-change';
+
 const PHASE_LINE_RE = /^\s*[-*]\s*\[([ x-])\]\s*\*\*Phase\s+(\d+(?:\.\d+)*[a-z]?):\s*(.+?)\*\*(?:\s+—\s+\[([^\]]+)])?/i;
 const PHASE_DETAIL_HEADING_RE = /^(#{3,})\s+Phase\s+(\d+(?:\.\d+)*[a-z]?)(?::|\b)/i;
 const PHASE_DETAIL_STATUS_RE = /^\s*\*\*Status\*\*:\s*\[([ x-])\]/i;
@@ -22,6 +24,13 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
   const spec = readTextIfExists(specPath);
   const roadmap = readTextIfExists(roadmapPath);
   const milestones = readTextIfExists(milestonesPath);
+  const brownfieldChange = readBrownfieldChangeState(planningDir);
+  const nonPhaseState = deriveNonPhaseState({
+    planningDir,
+    hasSpec: Boolean(spec.trim()),
+    hasRoadmap: Boolean(roadmap.trim()),
+    brownfieldChange,
+  });
 
   const phases = parseActiveRoadmapPhases(roadmap);
   const phaseStatusAlignment = evaluateRoadmapPhaseStatusAlignment(roadmap);
@@ -77,6 +86,8 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     counts,
     phaseArtifacts,
     incompletePlans,
+    brownfieldChange,
+    nonPhaseState,
     phaseStatusAlignment,
     requirementAlignment: evaluateRequirementAlignment(spec, enrichedPhases, phaseStatusAlignment),
     provenance: provenance
@@ -174,6 +185,10 @@ function normalizeContent(content) {
   return String(content || '').replace(/\r\n/g, '\n');
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function normalizePhaseToken(value) {
   const raw = String(value || '').trim().toLowerCase();
   const match = raw.match(/^(\d+(?:\.\d+)*)([a-z]?)$/i);
@@ -221,6 +236,68 @@ function parseActiveRoadmapPhases(roadmap) {
   }
 
   return phases;
+}
+
+export function readBrownfieldChangeState(planningDir) {
+  const dir = join(planningDir, BROWNFIELD_CHANGE_DIR);
+  const changePath = join(dir, 'CHANGE.md');
+  const handoffPath = join(dir, 'HANDOFF.md');
+
+  if (!existsSync(changePath)) {
+    return {
+      exists: false,
+      dir,
+      changePath,
+      handoffPath,
+      title: null,
+      changeId: null,
+      currentStatus: null,
+      currentIntegrationSurface: null,
+      currentOwnerRuntime: null,
+      nextAction: null,
+      declaredOwnedPaths: [],
+      handoff: null,
+    };
+  }
+
+  const changeArtifact = readMarkdownArtifact(changePath);
+  const handoffArtifact = existsSync(handoffPath) ? readMarkdownArtifact(handoffPath) : null;
+  const currentStatusSection = extractMarkdownSection(changeArtifact.body, 'Current Status');
+  const nextActionSection = extractMarkdownSection(changeArtifact.body, 'Next Action');
+  const sliceSection = extractMarkdownSection(changeArtifact.body, 'PR Slice Ownership');
+
+  return {
+    exists: true,
+    dir,
+    changePath,
+    handoffPath,
+    title: extractMarkdownHeading(changeArtifact.body),
+    changeId: changeArtifact.frontmatter.change || null,
+    currentStatus: changeArtifact.frontmatter.status || extractBulletLabel(currentStatusSection, 'Current posture'),
+    currentIntegrationSurface: extractBulletLabel(currentStatusSection, 'Current branch / integration surface'),
+    currentOwnerRuntime: extractBulletLabel(currentStatusSection, 'Current owner / runtime'),
+    nextAction: collapseMarkdownSection(nextActionSection),
+    declaredOwnedPaths: parseOwnedPathHints(sliceSection),
+    handoff: handoffArtifact
+      ? {
+          updated: handoffArtifact.frontmatter.updated || null,
+          activeConstraints: collapseMarkdownSection(extractMarkdownSection(handoffArtifact.body, 'Active Constraints')),
+          unresolvedUncertainty: collapseMarkdownSection(extractMarkdownSection(handoffArtifact.body, 'Unresolved Uncertainty')),
+          decisionPosture: collapseMarkdownSection(extractMarkdownSection(handoffArtifact.body, 'Decision Posture')),
+          antiRegression: collapseMarkdownSection(extractMarkdownSection(handoffArtifact.body, 'Anti-Regression')),
+          nextActionContext: collapseMarkdownSection(extractMarkdownSection(handoffArtifact.body, 'Next Action')),
+        }
+      : null,
+  };
+}
+
+export function deriveNonPhaseState({ planningDir, hasSpec, hasRoadmap, brownfieldChange } = {}) {
+  if (brownfieldChange?.exists) return 'active_brownfield_change';
+  if (hasRoadmap) return null;
+  if (hasSpec) return 'between_milestones';
+  if (hasSubstantiveCodebaseMaps(planningDir)) return 'codebase_only';
+  if (hasQuickLaneArtifacts(planningDir)) return 'quick_lane';
+  return null;
 }
 
 function splitRequirementList(rawRequirements = '') {
@@ -374,4 +451,110 @@ function evaluateRequirementAlignment(spec, phases, phaseStatusAlignment = { mis
     roadmapRequirements,
     mismatches,
   };
+}
+
+function readMarkdownArtifact(filePath) {
+  const raw = readTextIfExists(filePath);
+  const normalized = normalizeContent(raw);
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) {
+    return {
+      raw: normalized,
+      frontmatter: {},
+      body: normalized,
+    };
+  }
+
+  return {
+    raw: normalized,
+    frontmatter: parseFrontmatter(match[1]),
+    body: normalized.slice(match[0].length),
+  };
+}
+
+function parseFrontmatter(content) {
+  const data = {};
+  for (const line of normalizeContent(content).split('\n')) {
+    const match = line.match(/^([A-Za-z0-9_-]+):\s*(.+)$/);
+    if (!match) continue;
+    data[match[1]] = match[2].trim();
+  }
+  return data;
+}
+
+function extractMarkdownHeading(content) {
+  return normalizeContent(content).match(/^#\s+(.+)$/m)?.[1]?.trim() || null;
+}
+
+function extractMarkdownSection(content, heading) {
+  const normalized = normalizeContent(content);
+  const headingMatch = new RegExp(`^##\\s+${escapeRegExp(heading)}\\s*$`, 'm').exec(normalized);
+  if (!headingMatch) return '';
+
+  const start = headingMatch.index + headingMatch[0].length;
+  const remainder = normalized.slice(start).replace(/^\n/, '');
+  const nextHeading = /\n##\s+/.exec(remainder);
+  const end = nextHeading ? nextHeading.index : remainder.length;
+  return remainder.slice(0, end).trim();
+}
+
+function extractBulletLabel(section, label) {
+  const match = normalizeContent(section).match(
+    new RegExp(`^[-*]\\s+${escapeRegExp(label)}\\s*:\\s*(.+)$`, 'im')
+  );
+  return match ? match[1].trim() : null;
+}
+
+function collapseMarkdownSection(section) {
+  return normalizeContent(section)
+    .split('\n')
+    .map((line) => line.replace(/^[-*]\s+/, '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function parseOwnedPathHints(section) {
+  const lines = normalizeContent(section)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('|'));
+  const paths = [];
+
+  for (const line of lines.slice(2)) {
+    const columns = line.split('|').map((column) => column.trim());
+    const owned = columns[3];
+    if (!owned) continue;
+
+    for (const candidate of owned.split(',')) {
+      const normalized = normalizeOwnedPathHint(candidate);
+      if (normalized) paths.push(normalized);
+    }
+  }
+
+  return [...new Set(paths)];
+}
+
+function normalizeOwnedPathHint(value) {
+  const normalized = String(value || '')
+    .replace(/[`[\]]/g, '')
+    .trim()
+    .replace(/\\/g, '/');
+  if (!normalized) return null;
+  if (/^(disjoint write set|owned files \/ modules|what this slice does|planned)$/i.test(normalized)) {
+    return null;
+  }
+  if (!/[/.\\*]/.test(normalized)) return null;
+  return normalized;
+}
+
+function hasSubstantiveCodebaseMaps(planningDir) {
+  const dir = join(planningDir, 'codebase');
+  if (!existsSync(dir)) return false;
+  return readdirSync(dir).some((entry) => entry.toLowerCase().endsWith('.md'));
+}
+
+function hasQuickLaneArtifacts(planningDir) {
+  const dir = join(planningDir, 'quick');
+  if (!existsSync(dir)) return false;
+  return readdirSync(dir).length > 0;
 }
