@@ -22,7 +22,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.14.0
-          registry-url: https://registry.npmjs.org
 
       - name: Use npm trusted-publishing capable CLI
         run: npm install -g npm@11
@@ -39,5 +38,6 @@ jobs:
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
         run: npx semantic-release

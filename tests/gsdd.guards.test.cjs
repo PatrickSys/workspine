@@ -3044,6 +3044,10 @@ describe('G43 - Release Packaging Audit', () => {
       'release.yml must use Node 22.14.0+ for npm trusted publishing. FIX: Keep setup-node on 22.14.0 or newer.');
     assert.match(releaseWorkflow, /npm install -g npm@11/i,
       'release.yml must install npm 11 for trusted publishing. FIX: Keep the npm@11 setup step.');
+    assert.match(releaseWorkflow, /NPM_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/i,
+      'release.yml must expose NPM_TOKEN as a fallback when npm trusted publishing is not configured. FIX: Pass secrets.NPM_TOKEN to semantic-release.');
+    assert.doesNotMatch(releaseWorkflow, /registry-url: https:\/\/registry\.npmjs\.org/i,
+      'release.yml must not let setup-node create placeholder npm auth that masks NPM_TOKEN fallback. FIX: Remove setup-node registry-url.');
     assert.doesNotMatch(releaseWorkflow, /loginoauth|ACTIONS_ID_TOKEN_REQUEST_TOKEN|NPM_TOKEN=\$\{NPM_TOKEN\}/i,
       'release.yml must not hand-roll npm OIDC token exchange. FIX: Let @semantic-release/npm own trusted publishing.');
     assert.match(releaseWorkflow, /NPM_CONFIG_PROVENANCE: "true"/i,
@@ -3054,6 +3058,8 @@ describe('G43 - Release Packaging Audit', () => {
       '.releaserc.json must publish through @semantic-release/npm. FIX: Do not publish via @semantic-release/exec npm publish.');
     assert.match(releaseConfig, /@semantic-release\/github/i,
       '.releaserc.json must create GitHub Releases through @semantic-release/github. FIX: Add the GitHub plugin.');
+    assert.match(releaseConfig, /"failComment": false[\s\S]*"successComment": false[\s\S]*"labels": false/s,
+      '.releaserc.json must not let failed releases create GitHub issues with missing labels. FIX: Disable github fail/success comments and labels.');
     assert.doesNotMatch(releaseConfig, /@semantic-release\/exec|npm version \$\{nextRelease\.version\}|npm publish --provenance/i,
       '.releaserc.json must not use the brittle exec-based npm version/publish path. FIX: Use @semantic-release/npm.');
     assert.match(releaseConfig, /package-lock\.json/i,
