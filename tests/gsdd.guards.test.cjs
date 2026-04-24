@@ -3060,6 +3060,8 @@ describe('G43 - Release Packaging Audit', () => {
       '.releaserc.json must commit package-lock.json with release metadata. FIX: Include package-lock.json in @semantic-release/git assets.');
     assert.match(packageJson.scripts.prepublishOnly || '', /GITHUB_ACTIONS.*GITHUB_REF_NAME.*main.*GITHUB_WORKFLOW.*Release/,
       'package.json must block manual or feature-branch npm publish. FIX: Keep the prepublishOnly release-workflow guard.');
+    assert.match(packageJson.devDependencies['semantic-release'] || '', /\^25\./,
+      'package.json must keep semantic-release on v25+ so @semantic-release/npm supports OIDC trusted publishing. FIX: Upgrade semantic-release.');
   });
 });
 
