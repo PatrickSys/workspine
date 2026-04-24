@@ -1,3 +1,12 @@
+## [0.18.5](https://github.com/PatrickSys/workspine/compare/v0.18.4...v0.18.5) (2026-04-24)
+
+
+### Bug Fixes
+
+* add npm token release fallback ([6a98aca](https://github.com/PatrickSys/workspine/commit/6a98acaab56ee0b11df81ac56df5e845d5a6a42a))
+* enable trusted publishing release plugin ([0c22342](https://github.com/PatrickSys/workspine/commit/0c2234266da741382fa41194513cdfe23b56060d))
+* repair release automation ([871f945](https://github.com/PatrickSys/workspine/commit/871f9458ec5a7b7302ea7b126ed2bafb54888e65))
+
 # [0.18.0](https://github.com/PatrickSys/workspine/compare/v0.17.0...v0.18.0) (2026-04-19)
 
 Milestone: **v1.4.0 — Launch Surface Coherence**

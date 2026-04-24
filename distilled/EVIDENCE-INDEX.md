@@ -25,7 +25,7 @@
 - `agents/README.md` (Two-Layer Architecture and Runtime Distribution sections)
 - `bin/gsdd.mjs` lines 84-102 (role copy step with existsSync guard)
 - `tests/gsdd.init.test.cjs` (role file existence and delegate-role reference validation)
-- All 10 delegate files in `distilled/templates/delegates/`
+- Delegate files in `distilled/templates/delegates/`
 - Jensen & Meckling "Theory of the Firm" (Journal of Financial Economics 1976) — principal-agent delegation contracts
 - Gamma et al. GoF Strategy Pattern ("Design Patterns" 1994) — separating algorithm definition from usage context
 - LangGraph multi-agent subgraphs + Microsoft AutoGen hierarchical agents (production validation of two-layer separation)
@@ -81,7 +81,7 @@
 
 ## D10 — Context Isolation: Summaries Up, Documents to Disk
 - `get-shit-done/workflows/new-project.md` lines 544-706 (4 researchers write to files, return summaries)
-- All 9 delegate files (return format instructions)
+- Delegate files in `distilled/templates/delegates/` (return format instructions)
 - `agents/synthesizer.md` (reads full research files from disk)
 - Anthropic Agent Teams (Feb 2026): "Shared State, Not Shared Context"
 - AI21 Modular Intelligence (Feb 2026): orchestrator-based designs prevent context drift
@@ -137,6 +137,7 @@
 - OpenAI Codex CLI docs: developers.openai.com/codex/subagents
 - Codex CLI v0.115.0 release notes: github.com/openai/codex/releases/tag/rust-v0.115.0
 - Agent Skills standard: developers.openai.com/codex/skills
+- `README.md` and `docs/RUNTIME-SUPPORT.md` distinguish Codex CLI from Codex VS Code/app fallback behavior
 - `bin/adapters/codex.mjs` (implementation)
 - Live validation fixtures (2026-03-17): 3 Codex test runs confirming happy path, revision, max-3 escalation
 
@@ -162,7 +163,7 @@
 - Anthropic multi-agent guidance: orchestration patterns with isolated sub-agents
 - OpenAI Harness Engineering (2026): delegate pattern for reusable sub-agent behavior
 - OpenDev "Terminal Agents" (arXiv 2603.05344): multi-agent coordination with explicit role contracts
-- `distilled/templates/delegates/` (11 delegate files)
+- `distilled/templates/delegates/` (delegate files)
 - `distilled/workflows/*.md` (`<delegate>` blocks)
 
 ## D23 — Mapper Output Quantification
@@ -250,7 +251,7 @@
 - Live consumer testing (2026-03-20): Cursor and Copilot auto-discover `.agents/skills/`
 - User-performed live validation (2026-03-25): Gemini confirms same behavior
 - `bin/lib/init.mjs` (adapter registry and root-governance generator)
-- `README.md`, `distilled/templates/agents.block.md`, `tests/gsdd.guards.test.cjs`
+- `README.md`, `docs/RUNTIME-SUPPORT.md`, `docs/USER-GUIDE.md`, `distilled/templates/agents.block.md`, `tests/gsdd.guards.test.cjs`
 
 ## D36 — Interactive Init Wizard
 - `bin/lib/init.mjs` existing adapter-selection seam
@@ -374,11 +375,12 @@
 
 ## D51 — Deterministic Runtime Surface Freshness
 - `.planning/SPEC.md` (`ENGINE-05`)
-- `.planning/ROADMAP.md` (Phase 32)
+- `.planning/ROADMAP.md` runtime-freshness milestone entry
 - `.internal-research/gaps.md` (`I42`)
 - `bin/lib/runtime-freshness.mjs`, `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`, `bin/lib/rendering.mjs`
 - `bin/adapters/claude.mjs`, `bin/adapters/opencode.mjs`, `bin/adapters/codex.mjs`
-- `README.md`, `docs/RUNTIME-SUPPORT.md`, `distilled/README.md`
+- `README.md`, `docs/USER-GUIDE.md`, `docs/RUNTIME-SUPPORT.md`, `distilled/README.md`, `distilled/DESIGN.md`
+- Workflow docs use `node .planning/bin/gsdd.mjs ...` for internal helper commands and human docs prefer `npx -y gsdd-cli init/update/health`
 - `tests/phase.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `get-shit-done/workflows/progress.md`
 

@@ -4,8 +4,12 @@ import { join } from 'path';
 const BROWNFIELD_CHANGE_DIR = 'brownfield-change';
 
 const PHASE_LINE_RE = /^\s*[-*]\s*\[([ x-])\]\s*\*\*Phase\s+(\d+(?:\.\d+)*[a-z]?):\s*(.+?)\*\*(?:\s+—\s+\[([^\]]+)])?/i;
+const PHASE_DETAIL_HEADING_RE = /^(#{3,})\s+Phase\s+(\d+(?:\.\d+)*[a-z]?)(?::|\b)/i;
+const PHASE_DETAIL_STATUS_RE = /^\s*\*\*Status\*\*:\s*\[([ x-])\]/i;
 const ACTIVE_MILESTONE_HEADING_RE = /^###\s+(v[^\s]+)\s+(.+)$/im;
 const MILESTONE_LEDGER_HEADING_RE = /^##\s+(?:✅\s+)?(v[^\s]+)\s*(?:—|-)?\s*(.*)$/i;
+const DETAILS_OPEN_RE = /<details\b/i;
+const DETAILS_CLOSE_RE = /<\/details>/i;
 
 export function evaluateLifecycleState({ planningDir, provenance = null } = {}) {
   if (!planningDir) {
@@ -29,6 +33,7 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
   });
 
   const phases = parseActiveRoadmapPhases(roadmap);
+  const phaseStatusAlignment = evaluateRoadmapPhaseStatusAlignment(roadmap);
   const phaseArtifacts = collectPhaseArtifacts(phasesDir);
   const enrichedPhases = phases.map((phase) => {
     const matchingArtifacts = phaseArtifacts.filter((artifact) => artifact.phaseToken === phase.number);
@@ -83,7 +88,8 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     incompletePlans,
     brownfieldChange,
     nonPhaseState,
-    requirementAlignment: evaluateRequirementAlignment(spec, enrichedPhases),
+    phaseStatusAlignment,
+    requirementAlignment: evaluateRequirementAlignment(spec, enrichedPhases, phaseStatusAlignment),
     provenance: provenance
       ? {
           provided: true,
@@ -91,6 +97,84 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
         }
       : { provided: false },
   };
+}
+
+function evaluateRoadmapPhaseStatusAlignment(roadmap) {
+  if (!roadmap) return { mismatches: [] };
+
+  const overview = new Map();
+  const details = new Map();
+  const lines = normalizeContent(roadmap).split('\n');
+  let inDetails = false;
+  let currentDetailPhase = null;
+
+  for (const line of lines) {
+    if (DETAILS_OPEN_RE.test(line) && !DETAILS_CLOSE_RE.test(line)) {
+      inDetails = true;
+      currentDetailPhase = null;
+      continue;
+    }
+    if (DETAILS_CLOSE_RE.test(line)) {
+      inDetails = false;
+      currentDetailPhase = null;
+      continue;
+    }
+    if (inDetails) continue;
+
+    const phaseMatch = line.match(PHASE_LINE_RE);
+    if (phaseMatch) {
+      const phaseToken = normalizePhaseToken(phaseMatch[2]);
+      const status = normalizePhaseStatus(phaseMatch[1]);
+      if (!overview.has(phaseToken)) overview.set(phaseToken, []);
+      overview.get(phaseToken).push(status);
+      continue;
+    }
+
+    const headingMatch = line.match(PHASE_DETAIL_HEADING_RE);
+    if (headingMatch) {
+      currentDetailPhase = normalizePhaseToken(headingMatch[2]);
+      if (!details.has(currentDetailPhase)) details.set(currentDetailPhase, []);
+      continue;
+    }
+
+    if (/^#+\s+/.test(line)) {
+      currentDetailPhase = null;
+      continue;
+    }
+
+    const statusMatch = line.match(PHASE_DETAIL_STATUS_RE);
+    if (statusMatch && currentDetailPhase) {
+      details.get(currentDetailPhase).push(normalizePhaseStatus(statusMatch[1]));
+    }
+  }
+
+  const mismatches = [];
+  const phaseTokens = new Set([...overview.keys(), ...details.keys()]);
+  for (const phaseToken of [...phaseTokens].sort(comparePhaseTokens)) {
+    const overviewStatuses = overview.get(phaseToken) || [];
+    const detailStatuses = details.get(phaseToken) || [];
+    if (overviewStatuses.length > 1) {
+      mismatches.push(`Phase ${phaseToken} has multiple overview status entries`);
+    }
+    if (detailStatuses.length > 1) {
+      mismatches.push(`Phase ${phaseToken} has multiple Phase Details status entries`);
+    }
+    if (overviewStatuses.length === 1 && details.has(phaseToken) && detailStatuses.length === 0) {
+      mismatches.push(`Phase ${phaseToken} overview exists but Phase Details status is missing`);
+    }
+    if (detailStatuses.length > 0 && overviewStatuses.length === 0) {
+      mismatches.push(`Phase ${phaseToken} Phase Details status exists but overview entry is missing`);
+    }
+    if (overviewStatuses.length === 1 && detailStatuses.length === 1 && overviewStatuses[0] !== detailStatuses[0]) {
+      mismatches.push(`Phase ${phaseToken} overview status ${overviewStatuses[0]} disagrees with Phase Details status ${detailStatuses[0]}`);
+    }
+  }
+
+  return { mismatches };
+}
+
+function comparePhaseTokens(a, b) {
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 }
 
 function readTextIfExists(filePath) {
@@ -130,11 +214,11 @@ function parseActiveRoadmapPhases(roadmap) {
   let inDetails = false;
 
   for (const line of normalizeContent(roadmap).split('\n')) {
-    if (line.includes('<details>') && !line.includes('</details>')) {
+    if (DETAILS_OPEN_RE.test(line) && !DETAILS_CLOSE_RE.test(line)) {
       inDetails = true;
       continue;
     }
-    if (line.includes('</details>')) {
+    if (DETAILS_CLOSE_RE.test(line)) {
       inDetails = false;
       continue;
     }
@@ -339,7 +423,7 @@ function deriveCurrentMilestone({ roadmap, planningDir, milestoneLedger, counts 
   };
 }
 
-function evaluateRequirementAlignment(spec, phases) {
+function evaluateRequirementAlignment(spec, phases, phaseStatusAlignment = { mismatches: [] }) {
   const checkedRequirements = new Set(
     [...normalizeContent(spec).matchAll(/- \[x\] \*\*\[([A-Z0-9-]+)]\*\*/g)].map((result) => result[1])
   );

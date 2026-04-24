@@ -20,7 +20,7 @@ Use this template when creating `.planning/ROADMAP.md` (phase breakdown + progre
 ### Phase 1: [Name]
 
 **Goal**: [What this phase delivers]
-**Status**: [ ] / [-] / [x]
+**Status**: [ ]
 **Requirements**: [REQ-IDs from `.planning/SPEC.md`]
 **Success Criteria** (must be TRUE when done):
 1. [Observable behavior]
@@ -29,8 +29,18 @@ Use this template when creating `.planning/ROADMAP.md` (phase breakdown + progre
 ### Phase 2: [Name]
 
 **Goal**: [What this phase delivers]
-**Status**: [ ] / [-] / [x]
+**Status**: [ ]
 **Depends on**: Phase 1
+**Requirements**: [REQ-IDs]
+**Success Criteria**:
+1. [Observable behavior]
+2. [Observable behavior]
+
+### Phase 3: [Name]
+
+**Goal**: [What this phase delivers]
+**Status**: [ ]
+**Depends on**: Phase 2
 **Requirements**: [REQ-IDs]
 **Success Criteria**:
 1. [Observable behavior]
@@ -47,6 +57,8 @@ Use this template when creating `.planning/ROADMAP.md` (phase breakdown + progre
 - Success criteria are 2-5 observable behaviors per phase.
 - No time estimates: focus on verifiable outcomes.
 - These status markers are the portable source of truth. Workflow files and summaries should use `[ ]`, `[-]`, and `[x]` consistently.
+- Keep each overview phase marker and its matching Phase Details `**Status**` marker identical. Use `gsdd phase-status <phase> <status>` instead of hand-editing either location.
+- Treat `<details>...</details>` sections as archived roadmap history only; lifecycle helpers ignore phases inside those blocks.
 
 ## Coverage Verification
 

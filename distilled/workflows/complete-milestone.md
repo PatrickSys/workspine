@@ -25,6 +25,10 @@ Before starting, read these files:
 6. Most recent `.planning/v*-MILESTONE-AUDIT.md` — audit status (passed / gaps_found)
 </load_context>
 
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
+
 <lifecycle_preflight>
 Before verifying readiness or gathering archive stats, run:
 

@@ -46,6 +46,7 @@ function writeAlignedTruthFixtures() {
 | E6 | ERROR | x |
 | E7 | ERROR | x |
 | E8 | ERROR | x |
+| E9 | ERROR | x |
 | W1 | WARN | x |
 | W2 | WARN | x |
 | W3 | WARN | x |
@@ -428,47 +429,75 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.ok(json.warnings.some((w) => w.id === 'W10'));
   });
 
-  test('generated runtime surface drift → W11 with gsdd update guidance', async () => {
+  test('ROADMAP overview and Phase Details status mismatch → W10', async () => {
     await initWorkspace();
-    fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'), '\n<!-- drift -->\n');
+    writeFile('.planning/SPEC.md', '- [ ] **[LAUNCH-07]**: Health\n');
+    writeFile('.planning/ROADMAP.md', [
+      '# Roadmap',
+      '',
+      '- [-] **Phase 16: Framework Health & Truth Reconciliation** — [LAUNCH-07]',
+      '',
+      '## Phase Details',
+      '',
+      '### Phase 16: Framework Health & Truth Reconciliation',
+      '**Status**: [x]',
+      '',
+    ].join('\n'));
+
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    const warning = json.warnings.find((w) => w.id === 'W11');
-    assert.ok(warning, 'should warn when installed generated runtime surfaces drift');
-    assert.match(warning.message, /\.agents\/skills\/gsdd-plan\/SKILL\.md/);
-    assert.match(warning.fix, /gsdd update/);
+    const warning = json.warnings.find((w) => w.id === 'W10');
+    assert.ok(warning, 'should warn when overview/detail phase status differs');
+    assert.match(warning.message, /ROADMAP lifecycle status drift/);
+    assert.match(warning.message, /overview\/detail phase status mismatch/);
+    assert.match(warning.message, /overview status in_progress disagrees with Phase Details status done/);
+    assert.match(warning.fix, /overview\/detail phase markers/);
   });
 
-  test('local workflow helper drift → W11 with gsdd update guidance', async () => {
+  test('ROADMAP overview/detail mismatch still reports W10 when SPEC is missing', async () => {
+    await initWorkspace();
+    fs.rmSync(path.join(tmpDir, '.planning', 'SPEC.md'), { force: true });
+    writeFile('.planning/ROADMAP.md', [
+      '# Roadmap',
+      '',
+      '- [-] **Phase 16: Framework Health & Truth Reconciliation**',
+      '',
+      '## Phase Details',
+      '',
+      '### Phase 16: Framework Health & Truth Reconciliation',
+      '**Status**: [x]',
+      '',
+    ].join('\n'));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W10');
+    assert.ok(warning, 'ROADMAP-only lifecycle drift must not depend on SPEC.md existing');
+    assert.match(warning.message, /overview status in_progress disagrees with Phase Details status done/);
+  });
+
+  test('generated helper runtime drift under .planning/bin → W11 with npx-first update guidance', async () => {
     await initWorkspace();
     fs.appendFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'), '\n// drift\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     const warning = json.warnings.find((w) => w.id === 'W11');
-    assert.ok(warning, 'should warn when local workflow helper drifts');
+    assert.ok(warning, 'should warn when installed generated runtime surfaces drift');
     assert.match(warning.message, /\.planning\/bin\/gsdd\.mjs/);
-    assert.match(warning.fix, /gsdd update/);
+    assert.match(warning.fix, /npx -y gsdd-cli update/);
   });
 
-  test('missing local workflow helper runtime → W11 with gsdd update guidance', async () => {
+  test('missing generated helper runtime under .planning/bin → W11 repair guidance', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'bin'), { recursive: true, force: true });
-    const result = await runCliAsMain(tmpDir, ['health', '--json']);
-    const json = JSON.parse(result.output);
-    const warning = json.warnings.find((w) => w.id === 'W11');
-    assert.ok(warning, 'should warn when the generated local helper runtime is missing');
-    assert.match(warning.message, /\.planning\/bin\/gsdd\.mjs/);
-    assert.match(warning.fix, /gsdd update/);
-  });
-
-  test('no installed generated runtime surfaces → no W11', async () => {
-    await initWorkspace();
-    for (const rel of ['.agents', '.claude', '.opencode', '.codex']) {
+    for (const rel of ['.agents', '.planning/bin', '.claude', '.opencode', '.codex']) {
       fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
     }
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(!json.warnings.some((w) => w.id === 'W11'), 'absence of generated runtime surfaces should not be treated as drift');
+    const warning = json.warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, 'missing .planning/bin helper should be repairable generated-surface drift');
+    assert.match(warning.message, /\.planning\/bin\/gsdd\.mjs/);
+    assert.match(warning.fix, /npx -y gsdd-cli update/);
   });
 
   test('aligned framework truth files → no W7-W10', async () => {
@@ -534,7 +563,7 @@ describe('Health — INFO: phase completion count', () => {
     writeFile('.planning/ROADMAP.md', [
       '# Roadmap',
       '',
-      '<details>',
+      '<details open>',
       '<summary>✅ v1.2.0 Fork-Honest Launch Hardening</summary>',
       '',
       '- [x] **Phase 23: Launch Posture Lock**',

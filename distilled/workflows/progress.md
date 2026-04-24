@@ -7,10 +7,14 @@ Scope boundary: you are NOT resume.md. You do not wait for user input, clean up 
 </role>
 
 <prerequisites>
-`.planning/` must exist (from `gsdd init`).
+`.planning/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed).
 
-This is a read-only workflow. No files are created, modified, or deleted. If `.planning/` does not exist, tell the user to run `gsdd init` and stop.
+This is a read-only workflow. No files are created, modified, or deleted. If `.planning/` does not exist, tell the user to run `npx -y gsdd-cli init` and stop.
 </prerequisites>
+
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper references below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before acting on them.
+</repo_root_helper_contract>
 
 <lifecycle_boundary>
 `progress` stays read-only.
@@ -25,7 +29,7 @@ This is a read-only workflow. No files are created, modified, or deleted. If `.p
 <check_existence>
 Check for project artifacts in order:
 
-1. **No `.planning/` directory** — tell the user to run `gsdd init`. Stop.
+1. **No `.planning/` directory** — tell the user to run `npx -y gsdd-cli init`. Stop.
 2. **If `.planning/brownfield-change/CHANGE.md` exists** — treat this as the active medium-scope brownfield continuity state. Go to Branch F.
 3. **No `.planning/ROADMAP.md` AND no `.planning/SPEC.md`** — check for non-phase brownfield artifacts:
    - if `.planning/codebase/` has substantive map documents, or `.planning/quick/` has LOG/task artifacts, treat this as a non-phase brownfield state. Go to Branch F.

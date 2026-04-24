@@ -166,14 +166,14 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
       runtime: 'workspace-helper',
       label: 'workspace workflow helper',
       root: '.planning/bin',
-      repairCommand: 'gsdd update',
+      repairCommand: 'npx -y gsdd-cli update',
       entries: buildWorkspaceHelperEntries(),
     },
     {
       runtime: 'portable',
       label: 'portable skills',
       root: '.agents/skills',
-      repairCommand: 'gsdd update',
+      repairCommand: 'npx -y gsdd-cli update',
       entries: buildPortableSkillEntries(workflows).map((entry) => ({
         relativePath: entry.relativePath,
         expectedContent: entry.content,
@@ -183,21 +183,21 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
       runtime: 'claude',
       label: 'Claude Code native surfaces',
       root: '.claude',
-      repairCommand: 'gsdd update --tools claude',
+      repairCommand: 'npx -y gsdd-cli update --tools claude',
       entries: buildClaudeEntries({ cwd, workflows }),
     },
     {
       runtime: 'opencode',
       label: 'OpenCode native surfaces',
       root: '.opencode',
-      repairCommand: 'gsdd update --tools opencode',
+      repairCommand: 'npx -y gsdd-cli update --tools opencode',
       entries: buildOpenCodeEntries({ cwd, workflows }),
     },
     {
       runtime: 'codex',
       label: 'Codex CLI native agents',
       root: '.codex',
-      repairCommand: 'gsdd update --tools codex',
+      repairCommand: 'npx -y gsdd-cli update --tools codex',
       entries: buildCodexEntries({ cwd }),
     },
   ];
@@ -255,10 +255,10 @@ export function summarizeRuntimeFreshnessIssues(report, limit = 4) {
 }
 
 export function getRuntimeFreshnessRepairGuidance(report) {
-  if (!report || report.issueCount === 0) return 'Run `gsdd update` to regenerate installed runtime surfaces.';
+  if (!report || report.issueCount === 0) return 'Run `npx -y gsdd-cli update` to regenerate installed runtime surfaces.';
   const commands = [...new Set(report.issues.map((entry) => entry.repairCommand))];
   if (commands.length === 1) {
     return `Run \`${commands[0]}\` to regenerate the installed runtime surfaces.`;
   }
-  return `Run \`gsdd update\` to regenerate all installed runtime surfaces, or target the affected adapters individually: ${commands.map((command) => `\`${command}\``).join(', ')}.`;
+  return `Run \`npx -y gsdd-cli update\` to regenerate all installed runtime surfaces, or target the affected adapters individually: ${commands.map((command) => `\`${command}\``).join(', ')}.`;
 }

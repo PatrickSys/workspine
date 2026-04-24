@@ -693,7 +693,7 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
 
   afterEach(() => { cleanup(tmpDir); });
 
-  test('affected portable skills route checkpoint cleanup through the local workflow helper launcher', () => {
+  test('affected portable skills route checkpoint cleanup through the repo-local helper launcher', () => {
     const expectations = new Map([
       ['gsdd-pause', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
       ['gsdd-resume', ['node .planning/bin/gsdd.mjs file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.md']],
@@ -719,7 +719,7 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
       'gsdd-resume must not keep the old manual checkpoint delete prose.');
   });
 
-  test('transition-sensitive portable skills route lifecycle eligibility through the local workflow helper launcher', () => {
+  test('transition-sensitive portable skills route lifecycle eligibility through the repo-local helper launcher', () => {
     const expectations = new Map([
       ['gsdd-execute', ['node .planning/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'node .planning/bin/gsdd.mjs phase-status']],
       ['gsdd-verify', ['node .planning/bin/gsdd.mjs lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'node .planning/bin/gsdd.mjs phase-status']],
@@ -737,14 +737,25 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
     }
   });
 
+  test('generated portable skills do not contain stale helper paths or bare lifecycle-preflight', () => {
+    const skillsDir = path.join(tmpDir, '.agents', 'skills');
+    for (const entry of fs.readdirSync(skillsDir).filter(name => name.startsWith('gsdd-'))) {
+      const content = readSkill(tmpDir, entry);
+      assert.doesNotMatch(content, /\.agents[\\/]bin/i,
+        `${entry} must not reference stale .agents/bin helper paths.`);
+      assert.doesNotMatch(content, /(?<!node \.planning\/bin\/gsdd\.mjs\s)gsdd\s+lifecycle-preflight\b/i,
+        `${entry} must not call bare gsdd lifecycle-preflight.`);
+    }
+  });
+
   test('progress portable skill preserves the read-only lifecycle boundary', () => {
     const content = readSkill(tmpDir, 'gsdd-progress');
     assert.ok(content.includes('progress` stays read-only.') || content.includes('progress stays read-only.'),
       'gsdd-progress must preserve the read-only lifecycle boundary.');
     assert.ok(content.includes('Do not call `node .planning/bin/gsdd.mjs phase-status` here.'),
-      'gsdd-progress must forbid phase-status through the local workflow helper launcher in the read-only reporter.');
+      'gsdd-progress must forbid node .planning/bin/gsdd.mjs phase-status in the read-only reporter.');
     assert.ok(content.includes('downstream mutating workflow must rerun its own `node .planning/bin/gsdd.mjs lifecycle-preflight ...` gate before acting.'),
-      'gsdd-progress must route downstream lifecycle transitions back through lifecycle-preflight via the local workflow helper launcher.');
+      'gsdd-progress must route downstream lifecycle transitions back through the repo-local helper launcher.');
   });
 
   test('generated resume/progress skills preserve the non-looping generic-checkpoint rule', () => {

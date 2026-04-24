@@ -31,14 +31,14 @@ export function createCmdHealth(ctx) {
     }
     const cwd = workspaceRoot;
     const frameworkSourceMode = isFrameworkSourceRepo(cwd);
-    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
+    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
 
     // Pre-init guard
     if (!existsSync(join(planningDir, 'config.json'))) {
       if (jsonMode) {
-        output({ status: 'broken', errors: [{ id: 'E1', severity: 'ERROR', message: '.planning/config.json missing', fix: 'Run `gsdd init`' }], warnings: [], info: [] });
+        output({ status: 'broken', errors: [{ id: 'E1', severity: 'ERROR', message: '.planning/config.json missing', fix: 'Run `npx -y gsdd-cli init`' }], warnings: [], info: [] });
       } else {
-        console.log('Not initialized. Run `gsdd init`.');
+        console.log('Not initialized. Run `npx -y gsdd-cli init`. If `gsdd` is installed globally, `gsdd init` is also fine.');
       }
       process.exitCode = 1;
       return;
@@ -60,10 +60,10 @@ export function createCmdHealth(ctx) {
       const requiredFields = ['researchDepth', 'modelProfile', 'initVersion'];
       const missing = requiredFields.filter((f) => !(f in config));
       if (missing.length > 0) {
-        errors.push({ id: 'E2', severity: 'ERROR', message: `config.json missing required fields: ${missing.join(', ')}`, fix: 'Run `gsdd init` to regenerate' });
+        errors.push({ id: 'E2', severity: 'ERROR', message: `config.json missing required fields: ${missing.join(', ')}`, fix: 'Run `npx -y gsdd-cli init` to regenerate' });
       }
     } catch {
-      errors.push({ id: 'E1', severity: 'ERROR', message: '.planning/config.json is unparseable', fix: 'Run `gsdd init`' });
+      errors.push({ id: 'E1', severity: 'ERROR', message: '.planning/config.json is unparseable', fix: 'Run `npx -y gsdd-cli init`' });
     }
 
     // E3: templates/ missing
@@ -78,47 +78,47 @@ export function createCmdHealth(ctx) {
     const skipInstalledTemplateChecks = !hasTemplatesDir && frameworkSourceMode;
 
     if (!hasTemplatesDir && !skipInstalledTemplateChecks) {
-      errors.push({ id: 'E3', severity: 'ERROR', message: '.planning/templates/ missing', fix: 'Run `gsdd update --templates`' });
+      errors.push({ id: 'E3', severity: 'ERROR', message: '.planning/templates/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
     } else if (hasTemplatesDir) {
       // E4: roles/ missing or empty
       if (!hasRolesDir) {
-        errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ missing', fix: 'Run `gsdd update --templates`' });
+        errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const roleFiles = readdirSync(rolesDir).filter((f) => f.endsWith('.md'));
         if (roleFiles.length === 0) {
-          errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ has 0 role files', fix: 'Run `gsdd update --templates`' });
+          errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ has 0 role files', fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
       }
 
       // E5: delegates/ missing or empty
       if (!hasDelegatesDir) {
-        errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ missing', fix: 'Run `gsdd update --templates`' });
+        errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const delegateFiles = readdirSync(delegatesDir).filter((f) => f.endsWith('.md'));
         if (delegateFiles.length === 0) {
-          errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ has 0 delegate files', fix: 'Run `gsdd update --templates`' });
+          errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ has 0 delegate files', fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
       }
 
       // E6: research/ missing or empty
       const researchDir = join(templatesDir, 'research');
       if (!existsSync(researchDir)) {
-        errors.push({ id: 'E6', severity: 'ERROR', message: '.planning/templates/research/ missing', fix: 'Run `gsdd update --templates`' });
+        errors.push({ id: 'E6', severity: 'ERROR', message: '.planning/templates/research/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const researchFiles = readdirSync(researchDir).filter((f) => f.endsWith('.md'));
         if (researchFiles.length === 0) {
-          errors.push({ id: 'E6', severity: 'ERROR', message: '.planning/templates/research/ has 0 template files', fix: 'Run `gsdd update --templates`' });
+          errors.push({ id: 'E6', severity: 'ERROR', message: '.planning/templates/research/ has 0 template files', fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
       }
 
       // E7: codebase/ missing or empty
       const codebaseDir = join(templatesDir, 'codebase');
       if (!existsSync(codebaseDir)) {
-        errors.push({ id: 'E7', severity: 'ERROR', message: '.planning/templates/codebase/ missing', fix: 'Run `gsdd update --templates`' });
+        errors.push({ id: 'E7', severity: 'ERROR', message: '.planning/templates/codebase/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const codebaseFiles = readdirSync(codebaseDir).filter((f) => f.endsWith('.md'));
         if (codebaseFiles.length === 0) {
-          errors.push({ id: 'E7', severity: 'ERROR', message: '.planning/templates/codebase/ has 0 template files', fix: 'Run `gsdd update --templates`' });
+          errors.push({ id: 'E7', severity: 'ERROR', message: '.planning/templates/codebase/ has 0 template files', fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
       }
 
@@ -126,7 +126,17 @@ export function createCmdHealth(ctx) {
       const requiredRootFiles = ['spec.md', 'roadmap.md', 'auth-matrix.md'];
       const missingRoot = requiredRootFiles.filter((f) => !existsSync(join(templatesDir, f)));
       if (missingRoot.length > 0) {
-        errors.push({ id: 'E8', severity: 'ERROR', message: `.planning/templates/ missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `gsdd update --templates`' });
+        errors.push({ id: 'E8', severity: 'ERROR', message: `.planning/templates/ missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+      }
+
+      const brownfieldChangeDir = join(templatesDir, 'brownfield-change');
+      if (!existsSync(brownfieldChangeDir)) {
+        errors.push({ id: 'E9', severity: 'ERROR', message: '.planning/templates/brownfield-change/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
+      } else {
+        const missingBrownfield = ['CHANGE.md', 'HANDOFF.md', 'VERIFICATION.md'].filter((file) => !existsSync(join(brownfieldChangeDir, file)));
+        if (missingBrownfield.length > 0) {
+          errors.push({ id: 'E9', severity: 'ERROR', message: `.planning/templates/brownfield-change/ missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        }
       }
     }
 
@@ -135,18 +145,19 @@ export function createCmdHealth(ctx) {
     // W1: generation-manifest.json missing
     const manifest = skipInstalledTemplateChecks ? null : readManifest(planningDir);
     if (!manifest && !skipInstalledTemplateChecks) {
-      warnings.push({ id: 'W1', severity: 'WARN', message: 'generation-manifest.json missing', fix: 'Run `gsdd update` to create' });
+      warnings.push({ id: 'W1', severity: 'WARN', message: 'generation-manifest.json missing', fix: 'Run `npx -y gsdd-cli update` to create' });
     }
 
     // W2 + W3: template/role hash mismatches and missing files
     if (manifest && hasTemplatesDir) {
       const allCategories = [
-        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null, fixCommand: 'gsdd update --templates' },
-        { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research, fixCommand: 'gsdd update --templates' },
-        { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase, fixCommand: 'gsdd update --templates' },
-        { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root, fixCommand: 'gsdd update --templates' },
-        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null, fixCommand: 'gsdd update --templates' },
-        { name: 'runtime helpers', dir: planningDir, hashes: hasRuntimeHelpersDir ? manifest.runtimeHelpers : null, fixCommand: 'gsdd update' },
+        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null, fixCommand: 'npx -y gsdd-cli update --templates' },
+        { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research, fixCommand: 'npx -y gsdd-cli update --templates' },
+        { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase, fixCommand: 'npx -y gsdd-cli update --templates' },
+        { name: 'brownfield-change', dir: join(templatesDir, 'brownfield-change'), hashes: manifest.templates?.brownfieldChange, fixCommand: 'npx -y gsdd-cli update --templates' },
+        { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root, fixCommand: 'npx -y gsdd-cli update --templates' },
+        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null, fixCommand: 'npx -y gsdd-cli update --templates' },
+        { name: 'runtime helpers', dir: planningDir, hashes: hasRuntimeHelpersDir ? manifest.runtimeHelpers : null, fixCommand: 'npx -y gsdd-cli update' },
       ];
 
       for (const cat of allCategories) {
@@ -199,20 +210,30 @@ export function createCmdHealth(ctx) {
     ];
     const hasAnyAdapter = adapterPaths.some((p) => existsSync(p));
     if (!hasAnyAdapter) {
-      warnings.push({ id: 'W6', severity: 'WARN', message: 'No adapter surfaces detected', fix: 'Run `gsdd init --tools <platform>`' });
+      warnings.push({ id: 'W6', severity: 'WARN', message: 'No adapter surfaces detected', fix: 'Run `npx -y gsdd-cli init --tools <platform>`' });
     }
 
     const runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
       ? evaluateRuntimeFreshness({ cwd, workflows: ctx.workflows })
       : null;
 
-    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport }));
+    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport }).map((warning) => {
+      if (warning.id !== 'W10') return warning;
+      return {
+        ...warning,
+        message: warning.message.replace(
+          /^ROADMAP\/SPEC requirement status drift/,
+          'ROADMAP lifecycle status drift (requirement checkbox and/or overview/detail phase status mismatch)'
+        ),
+        fix: 'Reconcile .planning/ROADMAP.md overview/detail phase markers and .planning/SPEC.md requirement checkboxes',
+      };
+    }));
 
     // --- INFO checks ---
 
     // I1: generation manifest was produced by a different framework version
     if (manifest && manifest.frameworkVersion && manifest.frameworkVersion !== ctx.frameworkVersion) {
-      info.push({ id: 'I1', severity: 'INFO', message: `Generation manifest frameworkVersion (${manifest.frameworkVersion}) differs from current framework version (${ctx.frameworkVersion})`, fix: 'Run `gsdd update --templates`' });
+      info.push({ id: 'I1', severity: 'INFO', message: `Generation manifest frameworkVersion (${manifest.frameworkVersion}) differs from current framework version (${ctx.frameworkVersion})`, fix: 'Run `npx -y gsdd-cli update --templates`' });
     }
 
     // I2: Phase completion count
@@ -263,4 +284,3 @@ export function createCmdHealth(ctx) {
 function isFrameworkSourceRepo(cwd) {
   return existsSync(join(cwd, 'distilled', 'templates')) && existsSync(join(cwd, 'distilled', 'workflows'));
 }
-

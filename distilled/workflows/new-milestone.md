@@ -24,6 +24,10 @@ Before starting, read these files:
 5. `.planning/brownfield-change/CHANGE.md`, `.planning/brownfield-change/HANDOFF.md`, and `.planning/brownfield-change/VERIFICATION.md` when an active bounded change is being widened into the next milestone
 </load_context>
 
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
+
 <lifecycle_preflight>
 Before presenting the last milestone or gathering new milestone goals, run:
 

@@ -16,10 +16,14 @@ They reuse the same planner, executor, and verifier roles but skip research and 
 </anti_patterns>
 
 <prerequisites>
-`.planning/` must exist (from `gsdd init`). ROADMAP.md is NOT required -- quick tasks work during any project phase.
+`.planning/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed). ROADMAP.md is NOT required -- quick tasks work during any project phase.
 
-If `.planning/` does not exist, stop and tell the user to run `gsdd init` first.
+If `.planning/` does not exist, stop and tell the user to run `npx -y gsdd-cli init` first.
 </prerequisites>
+
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
 
 <process>
 

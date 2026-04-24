@@ -13,6 +13,7 @@ const {
   readJson,
   runCliAsMain,
   setNonInteractiveStdin,
+  withEnv,
 } = require('./gsdd.helpers.cjs');
 
 describe('generation manifest', () => {
@@ -49,11 +50,13 @@ describe('generation manifest', () => {
     assert.ok(manifest.templates.delegates, 'manifest must have templates.delegates');
     assert.ok(manifest.templates.research, 'manifest must have templates.research');
     assert.ok(manifest.templates.codebase, 'manifest must have templates.codebase');
+    assert.ok(manifest.templates.brownfieldChange, 'manifest must have templates.brownfieldChange');
     assert.ok(manifest.templates.root, 'manifest must have templates.root');
     assert.ok(manifest.roles, 'manifest must have roles');
     assert.ok(manifest.runtimeHelpers, 'manifest must have runtimeHelpers');
     assert.ok(Object.keys(manifest.templates.delegates).length >= 10);
     assert.ok(Object.keys(manifest.roles).length >= 9);
+    assert.ok(Object.keys(manifest.runtimeHelpers).includes('bin/gsdd.mjs'));
     assert.match(Object.values(manifest.templates.delegates)[0], /^[a-f0-9]{64}$/);
     assert.match(manifest.runtimeHelpers['bin/gsdd.mjs'], /^[a-f0-9]{64}$/);
     assert.match(manifest.runtimeHelpers['bin/gsdd'], /^[a-f0-9]{64}$/);
@@ -68,6 +71,8 @@ describe('generation manifest', () => {
       'templates.research must have at least one file hash after init (empty group = scaffold failure)');
     assert.ok(Object.keys(manifest.templates.codebase).length > 0,
       'templates.codebase must have at least one file hash after init (empty group = scaffold failure)');
+    assert.ok(Object.keys(manifest.templates.brownfieldChange).length > 0,
+      'templates.brownfieldChange must have at least one file hash after init (empty group = scaffold failure)');
     assert.ok(Object.keys(manifest.templates.root).length > 0,
       'templates.root must have at least one file hash after init (spec.md, roadmap.md, auth-matrix.md must be present)');
   });
@@ -174,6 +179,119 @@ describe('generation manifest', () => {
 
     const afterContent = fs.readFileSync(manifestPath, 'utf-8');
     assert.strictEqual(afterContent, beforeContent);
+  });
+
+  test('update does not generate GSDD skills for unrelated .agents/skills directories', async () => {
+    const unrelatedSkillDir = path.join(tmpDir, '.agents', 'skills', 'custom-agent');
+    fs.mkdirSync(unrelatedSkillDir, { recursive: true });
+    fs.writeFileSync(path.join(unrelatedSkillDir, 'SKILL.md'), '# Custom Agent\n');
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /no adapters found to update/);
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan')),
+      'unrelated .agents/skills must not trigger GSDD skill generation');
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')),
+      'update must not bootstrap planning state for an unrelated .agents/skills directory');
+  });
+
+  test('update repairs open-standard skills when only the .planning/bin helper remains', async () => {
+    await initProject();
+
+    const skillsDir = path.join(tmpDir, '.agents', 'skills');
+    const launcherPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    fs.rmSync(skillsDir, { recursive: true, force: true });
+
+    assert.ok(fs.existsSync(launcherPath), 'launcher must remain present for the partial-runtime repair case');
+    assert.ok(!fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')));
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(result.exitCode, 0);
+    assert.match(result.output, /updated open-standard skills/);
+    assert.ok(fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')));
+    assert.ok(fs.existsSync(launcherPath));
+  });
+
+  test('update repairs .planning/bin helper when planning exists and helpers are missing', async () => {
+    await initProject();
+
+    const helperDir = path.join(tmpDir, '.planning', 'bin');
+    const launcherPath = path.join(helperDir, 'gsdd.mjs');
+    fs.rmSync(helperDir, { recursive: true, force: true });
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(result.exitCode, 0);
+    assert.match(result.output, /updated local workflow helpers/);
+    assert.ok(fs.existsSync(launcherPath));
+  });
+
+  test('update repairs generated surfaces from a nested cwd by discovering the workspace root', async () => {
+    await initProject();
+
+    const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.rmSync(path.join(tmpDir, '.planning', 'bin'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.agents', 'skills'), { recursive: true, force: true });
+
+    const result = await runCliAsMain(nestedDir, ['update']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
+    assert.ok(!fs.existsSync(path.join(nestedDir, '.planning')), 'update must not initialize nested cwd as a separate workspace');
+  });
+
+  test('nested update prefers discovered cwd workspace over stale GSDD_WORKSPACE_ROOT env', async () => {
+    await initProject();
+    const otherDir = createTempProject();
+    try {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(otherDir);
+        await gsdd.cmdInit();
+      } finally {
+        restoreStdin();
+      }
+
+      const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
+      fs.mkdirSync(nestedDir, { recursive: true });
+      fs.rmSync(path.join(tmpDir, '.planning', 'bin'), { recursive: true, force: true });
+      fs.rmSync(path.join(tmpDir, '.agents', 'skills'), { recursive: true, force: true });
+
+      const result = await withEnv({ GSDD_WORKSPACE_ROOT: otherDir }, () => runCliAsMain(nestedDir, ['update']));
+      assert.strictEqual(result.exitCode, 0, result.output);
+
+      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')),
+        'update must repair the cwd-discovered workspace, not the stale env workspace');
+      assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')),
+        'update must repair skills in the cwd-discovered workspace');
+    } finally {
+      cleanup(otherDir);
+    }
+  });
+
+  test('nested update --dry reports missing generated surfaces without repairing or writing', async () => {
+    await initProject();
+
+    const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
+    const helperDir = path.join(tmpDir, '.planning', 'bin');
+    const skillsDir = path.join(tmpDir, '.agents', 'skills');
+    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.rmSync(helperDir, { recursive: true, force: true });
+    fs.rmSync(skillsDir, { recursive: true, force: true });
+    const manifestBefore = fs.readFileSync(manifestPath, 'utf-8');
+
+    const result = await runCliAsMain(nestedDir, ['update', '--dry']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /would update open-standard skills/);
+    assert.match(result.output, /would update local workflow helpers/);
+    assert.match(result.output, /Dry run/);
+
+    assert.ok(!fs.existsSync(path.join(helperDir, 'gsdd.mjs')), 'dry update must not repair .planning/bin');
+    assert.ok(!fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')), 'dry update must not repair .agents/skills');
+    assert.strictEqual(fs.readFileSync(manifestPath, 'utf-8'), manifestBefore, 'dry update must not rewrite the manifest');
+    assert.ok(!fs.existsSync(path.join(nestedDir, '.planning')), 'dry update must not initialize nested cwd as a separate workspace');
   });
 
   test('dry-run --templates creates no directories in fresh project', async () => {

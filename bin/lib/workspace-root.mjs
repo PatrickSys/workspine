@@ -91,10 +91,11 @@ export function resolveWorkspaceContext(rawArgs = [], { cwd = process.cwd(), env
   const candidates = [];
 
   if (workspaceRootArg) candidates.push(normalizePath(workspaceRootArg, cwd));
-  if (env.GSDD_WORKSPACE_ROOT) candidates.push(normalizePath(env.GSDD_WORKSPACE_ROOT, cwd));
 
   const discovered = findWorkspaceRoot(cwd);
   if (discovered) candidates.push(discovered);
+
+  if (env.GSDD_WORKSPACE_ROOT) candidates.push(normalizePath(env.GSDD_WORKSPACE_ROOT, cwd));
 
   candidates.push(resolve(cwd));
 

@@ -22,6 +22,8 @@ Every commit that lands on `main` must follow this format:
 
 `chore(release):` is written by the release bot — do not use it manually.
 
+Do not manually bump `package.json` versions or run `npm publish` from a local checkout or feature branch. Releases are cut from `main` by the `Release` GitHub Actions workflow through semantic-release, npm trusted publishing, and Conventional Commits.
+
 ## Running tests
 
 Use Node 20+.

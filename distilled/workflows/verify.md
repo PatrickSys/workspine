@@ -20,6 +20,10 @@ Establish your verification basis (must-have sources, requirement scope, previou
 If a previous `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md` exists, read it first and treat this as re-verification.
 </load_context>
 
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
+
 <lifecycle_preflight>
 Before code inspection or report writing, run:
 
@@ -353,9 +357,13 @@ Based on the verification result:
 ### `passed`
 
 - phase is ready to move forward
+- write `status: passed` in VERIFICATION.md, then run `node .planning/bin/gsdd.mjs phase-status {phase_num} done`
 - communicate that the phase goal was verified successfully
 
 ### `gaps_found`
+
+- write `status: gaps_found` in VERIFICATION.md and leave ROADMAP.md open (`[-]` or `[ ]`); if it is currently `[x]`, run `node .planning/bin/gsdd.mjs phase-status {phase_num} in_progress`
+- do not run `phase-status {phase_num} done`
 
 Present a focused recommendation:
 
@@ -368,6 +376,8 @@ Present a focused recommendation:
 - list the exact manual checks
 - state the expected outcome for each one
 - do not convert human-needed status into passed until those checks are acknowledged
+- write `status: human_needed` in VERIFICATION.md and leave ROADMAP.md open (`[-]` or `[ ]`); if it is currently `[x]`, run `node .planning/bin/gsdd.mjs phase-status {phase_num} in_progress`
+- do not run `phase-status {phase_num} done`
 </next_steps>
 
 <persistence>
@@ -381,7 +391,9 @@ If you cannot write the file (permissions, path issue), STOP and report the bloc
 
 Before any ROADMAP closure step, confirm the required phase `SUMMARY.md` still exists on disk. If `SUMMARY.md` is missing, STOP and report the blocker — do NOT treat verification as terminally successful and do NOT close ROADMAP state from conversation context alone.
 
-After writing VERIFICATION.md, if `status: passed`, run `node .planning/bin/gsdd.mjs phase-status {phase_num} done` to close the phase entry in `.planning/ROADMAP.md`. Execute is the primary owner of ROADMAP status, but execute can be interrupted before its state_updates run. Verify is the terminal workflow and must close the ROADMAP entry when it confirms the phase is complete. If the helper cannot update ROADMAP.md (path issue, missing phase, invalid state), STOP and report the blocker — do NOT complete verification without closing the phase.
+After writing VERIFICATION.md, if `status: passed`, run `node .planning/bin/gsdd.mjs phase-status {phase_num} done` to close the phase entry in `.planning/ROADMAP.md`. Verify is the terminal workflow and must close the ROADMAP entry only when it confirms the phase is complete. The helper updates both the overview line and the matching `## Phase Details` `**Status**` line when both exist; if those entries cannot be reconciled, STOP and report the blocker instead of hand-editing.
+
+If `status: gaps_found` or `status: human_needed`, do not close ROADMAP.md. If ROADMAP currently marks the phase `[x]`, run `node .planning/bin/gsdd.mjs phase-status {phase_num} in_progress` to reopen/reconcile both status locations before reporting the result.
 </persistence>
 
 <success_criteria>
@@ -401,6 +413,7 @@ Verification is done when all of these are true:
 - [ ] Status is one of `passed`, `gaps_found`, or `human_needed`
 - [ ] The required phase `SUMMARY.md` still exists before any ROADMAP closure on passed status
 - [ ] If status is `passed`, ROADMAP.md phase entry is `[x]` via `node .planning/bin/gsdd.mjs phase-status`
+- [ ] If status is `gaps_found` or `human_needed`, ROADMAP.md phase entry is not `[x]`
 - [ ] The developer was informed of the result and recommended next step
 - [ ] Related failures grouped by concern, not returned as a flat symptom list
 - [ ] Requirements coverage chain completed (collect, restate, map, report, check orphans)
@@ -413,20 +426,9 @@ Report the verification result to the user, then present the next step:
 
 **Completed:** Phase verification — created `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md`.
 
-If status is `passed`:
-**Next step:** `/gsdd-progress` — check status and route to the next phase or milestone audit
-
-If status is `gaps_found`:
-**Next step:** `/gsdd-plan` — re-plan to close the identified gaps
-
-If status is `human_needed`:
-**Next step:** `/gsdd-verify-work` — run conversational UAT to test items interactively and capture results in UAT.md
-- After UAT is complete, run `/gsdd-verify` again with the UAT results as additional context
-
-Also available:
-
-- `/gsdd-execute` — fix gaps inline without re-planning (small fixes only)
-- `/gsdd-pause` — save context for later if stopping work
+If status is `passed`: **Next step:** `/gsdd-progress` — route to the next phase or milestone audit.
+If status is `gaps_found`: **Next step:** `/gsdd-plan` — re-plan to close the identified gaps.
+If status is `human_needed`: **Next step:** `/gsdd-verify-work`, then rerun `/gsdd-verify` with UAT results.
 
 Consider clearing context before starting the next workflow for best results.
 

@@ -18,6 +18,10 @@ Before starting, read these files:
 Identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>
 
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
+
 <integration_surface_check>
 Before planning roadmap work, inspect the live integration surface separately from checkpoint or planning artifacts:
 - current branch name
@@ -618,7 +622,7 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** Phase planning — created `.planning/phases/{phase_dir}/{plan_id}-PLAN.md`.
 **Planning stops here:** `gsdd-plan` ends after the plan artifact is written. Do not start implementation in this same run, and do not treat imperative handoff text as execution authorization.
-Installed generated runtime surfaces are trusted through rendering, not reviewer memory: `gsdd health` compares any local generated skill/adapter surfaces against current render output, and `gsdd update` regenerates them when they drift.
+Installed generated runtime surfaces are trusted through rendering, not reviewer memory: `npx -y gsdd-cli health` compares any local generated skill/adapter surfaces against current render output, and `npx -y gsdd-cli update` regenerates them when they drift. Bare `gsdd health` / `gsdd update` are equivalent only when globally installed.
 
 **Next workflow:** `/gsdd-execute` — start execution in a separate run when the user explicitly wants implementation to begin
 

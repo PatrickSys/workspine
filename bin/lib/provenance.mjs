@@ -42,9 +42,12 @@ export function parseGitStatusShort(statusText = '') {
     const worktreeStatus = match[2];
     if (indexStatus === '!' && worktreeStatus === '!') continue;
 
-    const filePath = match[3].replace(/\\/g, '/');
+    const rawPath = match[3].replace(/\\/g, '/');
+    const renameMatch = rawPath.match(/^(.*?)\s+->\s+(.*?)$/);
+    const filePath = renameMatch ? renameMatch[2] : rawPath;
     files.push({
       path: filePath,
+      fromPath: renameMatch ? renameMatch[1] : null,
       staged: indexStatus !== ' ' && indexStatus !== '?' && indexStatus !== '!',
       unstaged: worktreeStatus !== ' ' && worktreeStatus !== '?' && worktreeStatus !== '!',
       untracked: indexStatus === '?' || worktreeStatus === '?',

@@ -21,7 +21,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.14.0
+
+      - name: Use npm trusted-publishing capable CLI
+        run: npm install -g npm@11
 
       - name: Install dev dependencies
         run: npm ci
@@ -32,20 +35,22 @@ jobs:
       - name: Audit packed tarball surface
         run: npm pack --dry-run --json
 
-      - name: Authenticate to npm via OIDC trusted publisher
+      - name: Verify npm trusted publisher
         run: |
           OIDC_TOKEN=$(curl -fsSL \
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" \
             | jq -r '.value')
-          NPM_TOKEN=$(curl -fsSL \
-            -X POST "https://registry.npmjs.org/-/npm/v1/loginoauth" \
-            -H "Content-Type: application/json" \
-            -d "{\"oidcToken\": \"${OIDC_TOKEN}\"}" \
-            | jq -r '.token')
-          echo "::add-mask::${NPM_TOKEN}"
-          npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}"
-          echo "NPM_TOKEN=${NPM_TOKEN}" >> "${GITHUB_ENV}"
+          STATUS=$(curl -sS \
+            -o /tmp/npm-oidc.json \
+            -w "%{http_code}" \
+            -X POST "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/gsdd-cli" \
+            -H "Authorization: Bearer ${OIDC_TOKEN}")
+          if [ "${STATUS}" != "200" ]; then
+            cat /tmp/npm-oidc.json
+            echo "::error::npm trusted publishing is not configured for gsdd-cli. Configure npm package trusted publisher for PatrickSys/workspine using .github/workflows/release.yml before running semantic-release."
+            exit 1
+          fi
 
       - name: Release
         env:

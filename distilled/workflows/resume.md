@@ -7,8 +7,12 @@ Scope boundary: unlike progress.md, you have side effects — checkpoint cleanup
 </role>
 
 <prerequisites>
-`.planning/` should exist. If it does not, route the user to `gsdd init`.
+`.planning/` should exist. If it does not, route the user to `npx -y gsdd-cli init`.
 </prerequisites>
+
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
 
 <runtime_contract>
 Use the `Runtime` type from `.planning/SPEC.md`.
@@ -34,7 +38,7 @@ Treat the preflight as an authorization seam over shared repo truth only:
 <detect_state>
 Check for project artifacts in order:
 
-1. **No `.planning/` directory** — route user to run `gsdd init`. Stop.
+1. **No `.planning/` directory** — route user to run `npx -y gsdd-cli init`. Stop.
 2. **If `.planning/brownfield-change/CHANGE.md` exists** — this repo has an active medium-scope brownfield change. Proceed to load brownfield continuity state even if there is no active roadmap.
 3. **No `.planning/SPEC.md` or no `.planning/ROADMAP.md`** — `.planning/` exists but the project is not fully initialized (partial init). Route user to run the `/gsdd-new-project` workflow. Stop.
 4. **Both exist** — proceed to load state.
@@ -44,7 +48,9 @@ Check for project artifacts in order:
 Read the following files and extract state:
 
 **ROADMAP.md:**
-Read `.planning/ROADMAP.md`. Parse phase statuses:
+If `.planning/ROADMAP.md` exists, read it. If it is absent because the active brownfield change is the only continuity anchor, keep phase fields empty and continue from `CHANGE.md`.
+
+When present, parse phase statuses:
 - `[ ]` = not started
 - `[-]` = in progress
 - `[x]` = done
@@ -56,7 +62,9 @@ Determine:
 - Completed phase count
 
 **SPEC.md:**
-Read `.planning/SPEC.md`. Extract:
+If `.planning/SPEC.md` exists, read it. If it is absent because the active brownfield change is the only continuity anchor, label project identity as `unknown from SPEC.md` and derive runtime/context from the launching surface plus `CHANGE.md` / `HANDOFF.md`.
+
+When present, extract:
 - Project name or description (first heading or "What This Is" section)
 - Current state summary if present
 
