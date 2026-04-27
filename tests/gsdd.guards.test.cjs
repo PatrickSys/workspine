@@ -3508,6 +3508,34 @@ describe('G39 - Health Check ID Consistency', () => {
       `TRUTH_CHECK_IDS declares IDs with no matching warning push in health-truth.mjs: ${extra.join(', ')}. FIX: Remove the extra IDs or add the missing push call.`);
   });
 
+  test('DESIGN.md health diagnostics table matches implemented health check IDs', () => {
+    const healthSource = fs.readFileSync(HEALTH_MODULE, 'utf-8');
+    const healthTruthSource = fs.readFileSync(HEALTH_TRUTH_MODULE, 'utf-8');
+    const designSource = fs.readFileSync(DESIGN_MD, 'utf-8');
+
+    const truthMatch = healthTruthSource.match(/export const TRUTH_CHECK_IDS\s*=\s*\[([\s\S]*?)\]/);
+    assert.ok(truthMatch,
+      'health-truth.mjs must export TRUTH_CHECK_IDS as an array literal. FIX: Check export declaration.');
+    const truthIds = [...truthMatch[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+
+    const declaredMatch = healthSource.match(/const healthCheckIds\s*=\s*\[([\s\S]*?)\]/);
+    assert.ok(declaredMatch,
+      'health.mjs must declare healthCheckIds as an array literal. FIX: Check healthCheckIds declaration.');
+    const rawDeclared = declaredMatch[1].replace('...TRUTH_CHECK_IDS', truthIds.map(id => `'${id}'`).join(', '));
+    const implementedIds = [...rawDeclared.matchAll(/'([^']+)'/g)].map(m => m[1]);
+
+    const sectionStart = designSource.indexOf('## 20. Workspace Health Diagnostics');
+    const sectionEnd = designSource.indexOf('## 21.', sectionStart);
+    assert.notStrictEqual(sectionStart, -1,
+      'DESIGN.md must include section 20 Workspace Health Diagnostics. FIX: Restore the health diagnostics section.');
+    assert.notStrictEqual(sectionEnd, -1,
+      'DESIGN.md health diagnostics section must be followed by section 21. FIX: Restore DESIGN.md decision ordering.');
+    const section = designSource.slice(sectionStart, sectionEnd);
+    const documentedIds = [...section.matchAll(/^\|\s*([EWI]\d+)\s*\|/gm)].map(m => m[1]);
+
+    assert.deepStrictEqual(documentedIds, implementedIds,
+      `DESIGN.md section 20 health table must match implemented health IDs. FIX: Update the table to ${implementedIds.join(', ')}.`);
+  });
 });
 
 describe('G44 - Engine Contract Hardening', () => {
@@ -3620,8 +3648,24 @@ describe('G44 - Engine Contract Hardening', () => {
 
     assert.match(audit, /required_kinds.*observed_kinds.*missing_kinds/s,
       'audit-milestone.md must record evidence_contract.required_kinds|observed_kinds|missing_kinds in frontmatter. FIX: Add the shared audit evidence block.');
+    assert.match(verify, /`delivery_sensitive`\s*\|\s*`code`, `runtime`, `delivery`/,
+      'verify.md must require delivery evidence for delivery_sensitive verification. FIX: Keep verify delivery-sensitive evidence aligned with the shared contract.');
+    assert.match(verify, /required_kinds:\s*\[code, runtime, delivery\]/,
+      'verify.md report template must require code, runtime, and delivery for delivery_sensitive verification. FIX: Update the structured frontmatter template.');
+    assert.match(audit, /repo_closeout.*runtime_validated_closeout.*delivery_supported_closeout/s,
+      'audit-milestone.md must preserve the release claim posture vocabulary. FIX: Add repo/runtime/delivery closeout posture language.');
+    assert.match(audit, /unsupported_claims.*waivers.*deferrals.*contradiction_checks/s,
+      'audit-milestone.md must record unsupported claims, waivers, deferrals, and contradiction checks. FIX: Add release_claim_contract frontmatter.');
+    assert.match(audit, /missing required evidence cannot be waived|waiver.*narrow/i,
+      'audit-milestone.md must prevent waivers from preserving unsupported stronger claims. FIX: Add waiver downgrade/defer rule.');
     assert.match(complete, /missing required kinds|missing_kinds/i,
       'complete-milestone.md must fail closed when the passed audit still lacks required closure evidence. FIX: Add the audit evidence gate.');
+    assert.match(complete, /release_claim_posture.*release_claim_contract/s,
+      'complete-milestone.md must inherit release claim posture and contract fields. FIX: Preserve release claim metadata from audit.');
+    assert.match(complete, /unsupported claims.*invalid waivers.*failed contradiction checks/i,
+      'complete-milestone.md must stop on unsupported claims, invalid waivers, or failed contradiction checks. FIX: Add release closeout stop gate.');
+    assert.doesNotMatch(complete, /\bSHIPPED\b|shipped status|what shipped/i,
+      'complete-milestone.md must not use shipped wording for repo-local closeout. FIX: Keep archive wording evidence-scoped.');
   });
 });
 

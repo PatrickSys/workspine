@@ -455,6 +455,29 @@
 - `distilled/workflows/execute.md`, `distilled/workflows/verify.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`
 - `tests/gsdd.init.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.manifest.test.cjs`, `tests/phase.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
+## D59 — Continuity Authority And Planning-State Drift
+- `.planning/phases/44-continuity-authority-and-persistence/44-APPROACH.md`
+- `.planning/phases/44-continuity-authority-and-persistence/44-PLAN.md`
+- `.planning/SPEC.md` (`REL-01`)
+- `.planning/ROADMAP.md` (Phase 44)
+- `.internal-research/gaps.md` (`I46`, `S6`)
+- `bin/lib/session-fingerprint.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/runtime-freshness.mjs`
+- `distilled/workflows/progress.md`, `distilled/workflows/resume.md`, `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `distilled/workflows/new-milestone.md`
+- `distilled/templates/brownfield-change/CHANGE.md`, `distilled/templates/brownfield-change/HANDOFF.md`, `distilled/templates/brownfield-change/VERIFICATION.md`
+- `tests/session-fingerprint.test.cjs`, `tests/phase.test.cjs`
+
+## D60 — Release Closeout Contract
+- `.planning/phases/45-release-closeout-contract/45-APPROACH.md`
+- `.planning/phases/45-release-closeout-contract/45-PLAN.md`
+- `.planning/phases/48-generated-helper-and-closeout-contract-parity/48-PLAN.md`
+- `.planning/research/45-RESEARCH.md`
+- `.planning/SPEC.md` (`REL-02`, deferred `LSC-05`)
+- `.planning/ROADMAP.md` (Phase 45)
+- `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`
+- `distilled/DESIGN.md` D50 and D59
+- `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+
 ---
 
 ## Maintenance

@@ -69,6 +69,8 @@
 56. [Executable Brownfield Routing And Widen-Only Escalation](#d56---executable-brownfield-routing-and-widen-only-escalation)
 57. [Bounded Brownfield Growth And Context-Preserving Milestone Handoff](#d57---bounded-brownfield-growth-and-context-preserving-milestone-handoff)
 58. [Local Workflow Helper Launcher](#d58---local-workflow-helper-launcher)
+59. [Continuity Authority And Planning-State Drift](#d59---continuity-authority-and-planning-state-drift)
+60. [Release Closeout Contract](#d60---release-closeout-contract)
 
 ---
 
@@ -954,6 +956,7 @@ Implementation lives under `bin/lib/`:
 | E6 | ERROR | `.planning/templates/research/` missing or empty |
 | E7 | ERROR | `.planning/templates/codebase/` missing or empty |
 | E8 | ERROR | `.planning/templates/` missing critical root files (`spec.md`, `roadmap.md`, `auth-matrix.md`) |
+| E9 | ERROR | `.planning/templates/brownfield-change/` missing or missing critical files (`CHANGE.md`, `HANDOFF.md`, `VERIFICATION.md`) |
 | W1 | WARN | `generation-manifest.json` missing |
 | W2 | WARN | Template files modified locally (hash mismatch vs manifest) |
 | W3 | WARN | Template/role files missing from disk but listed in manifest |
@@ -963,8 +966,8 @@ Implementation lives under `bin/lib/`:
 | W7 | WARN | `distilled/DESIGN.md` health check table differs from implemented check IDs |
 | W8 | WARN | `distilled/README.md` workflow inventory differs from `distilled/workflows/` |
 | W9 | WARN | `.internal-research/gaps.md` references missing repo-local paths |
-| W10 | WARN | ROADMAP/SPEC requirement status drift |
-| W11 | WARN | Installed generated runtime surfaces drift from current render output |
+| W10 | WARN | ROADMAP lifecycle status drift, including requirement checkbox and overview/detail phase status mismatches |
+| W11 | WARN | Installed generated runtime/helper surfaces drift from current render output |
 | W12 | WARN | Planning state drifted since last recorded session (fingerprint mismatch) |
 | I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
 | I2 | INFO | Phase completion count from ROADMAP |
@@ -987,15 +990,15 @@ Implementation lives under `bin/lib/`:
 
 3. **Pre-init guard.** If `.planning/config.json` doesn't exist, output a one-line message and exit 1. No partial checks — the workspace is simply not initialized.
 
-4. **Split structural vs truth checks.** `bin/lib/health.mjs` keeps the structural workspace checks. `bin/lib/health-truth.mjs` holds the always-on cross-file truth checks (W7-W10) so the health surface can grow without turning the main command into one monolith.
+4. **Split structural vs truth checks.** `bin/lib/health.mjs` keeps the structural workspace checks. `bin/lib/health-truth.mjs` holds the always-on cross-file truth checks (W7-W12) so the health surface can grow without turning the main command into one monolith.
 
 5. **Reuses existing modules.** `readManifest()` and `detectModifications()` from `manifest.mjs` handle W1-W3. `isProjectInitialized()` pattern from `models.mjs` handles the pre-init guard. Truth checks stay read-only and operate on repo-local artifacts only when those framework files exist.
 
-6. **Framework-source mode skips installed-project template checks.** Inside the GSDD framework repo itself, `distilled/templates/` is the source of truth and `.planning/templates/` is intentionally absent. `npx -y gsdd-cli health` therefore skips the installed-project template/manifest checks (E3-E8, W1-W3) in framework-source mode instead of producing false positives during self-health runs.
+6. **Framework-source mode skips installed-project template checks.** Inside the GSDD framework repo itself, `distilled/templates/` is the source of truth and `.planning/templates/` is intentionally absent. `npx -y gsdd-cli health` therefore skips the installed-project template/manifest checks (E3-E9, W1-W3) in framework-source mode instead of producing false positives during self-health runs.
 
 **What was removed vs GSD:**
 - `--repair` flag and associated repair actions
-- Error codes E001-E005/W001-W007 (replaced with simpler E1-E8/W1-W12/I1-I3)
+- Error codes E001-E005/W001-W007 (replaced with simpler E1-E9/W1-W12/I1-I3)
 - STATE.md checks (GSDD has no STATE.md per D7)
 - PROJECT.md checks (GSDD uses SPEC.md, not checked by health — it's workflow-authored)
 - Phase directory naming format checks (GSDD uses flat numbered files, not NN-name directories)
@@ -2183,6 +2186,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `distilled/workflows/resume.md`
 - `distilled/workflows/progress.md`
 - `tests/phase.test.cjs`
+- `tests/session-fingerprint.test.cjs`
 - `tests/gsdd.guards.test.cjs`
 - `tests/gsdd.scenarios.test.cjs`
 - GSD comparison source: `get-shit-done/workflows/progress.md` still keeps lifecycle routing inside the workflow surface rather than through a shared helper seam, so this is an intentional GSDD tightening.
@@ -2649,6 +2653,126 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Helper-command freshness is now owned under `.planning/` without widening `.agents` install detection.
 - Generated governance remains compact and routing-focused because helper-surface instructions stay out of `AGENTS.md`.
 - Cross-platform proof is stronger for the local-helper seam itself, but direct live validation still needs to stay conservative by environment: the repo now has focused tests plus Windows fixture proof; Linux/WSL live consumer validation remains a separate evidence question.
+
+## D59 - Continuity Authority And Planning-State Drift
+
+**Decision (2026-04-27):** Workspine continuity authority is split by surface. Git/worktree truth owns integration visibility and overwrite risk, `.planning/` owns local workflow contracts, phase artifacts own phase-local scope and proof, generated runtime surfaces own consumed helper/adapter freshness, and compressed judgment remains advisory context. Planning-state drift must stay warning-only for read-only/reporting surfaces, but mutating lifecycle surfaces must not silently proceed through material drift.
+
+**Context:**
+- `.planning/` remains local-only by default in this framework repo. That preserves privacy and avoids noisy framework-internal planning commits, but it also means planning state can drift across sessions without git history protecting it.
+- Gap `I46` showed the concrete failure: one session wrote milestone state under ignored `.planning/`, another session read stale planning state and nearly routed execution as if the milestone did not exist.
+- Gap `S6` showed the related judgment failure: fresh sessions can recover artifact structure while losing the active constraints, unresolved uncertainty, decision posture, and anti-regression rules that explain how to continue safely.
+- Existing helper seams already detect part of the risk: `session-fingerprint.mjs` fingerprints `.planning/ROADMAP.md`, `.planning/SPEC.md`, and `.planning/config.json`; `lifecycle-preflight.mjs` exposes drift as `planning_state_drift`; `health` reports the same condition as `W12`.
+
+**Authority matrix:**
+
+| Surface | Owns | Does not own | Provenance check | Drift signal | Stop condition | Proof needed |
+| --- | --- | --- | --- | --- | --- | --- |
+| Git branch/HEAD | Integration surface identity, commit baseline, branch-local work context | Planning truth, phase status, judgment | `git rev-parse --abbrev-ref HEAD`; `git rev-parse --short HEAD` | Unexpected branch or HEAD relative to the active plan/change | Mutating workflow targets a different branch or HEAD than the active plan/change declares | Captured branch/HEAD before mutation; explicit acknowledgement if mismatched |
+| Staged changes | Pending commit contents and delivery visibility risk | Final repo truth until committed; planning authority | `git diff --name-only --cached` | Staged paths outside declared write set | Staged work overlaps unrelated scope or would be accidentally included | Staged path list reviewed against plan write set |
+| Unstaged changes | Local uncommitted edits and overwrite/conflict risk | Approved implementation state; phase closure | `git diff --name-only` | Dirty tracked files outside declared write set | Mutating workflow would overwrite or reinterpret unrelated edits | Dirty path list reviewed; user decision if conflict or overlap exists |
+| Untracked files | Local-only artifacts and possible proof gaps | Durable repo truth; public/delivery evidence | `git status --porcelain=v1` | Untracked required artifacts, generated dirs, or scope-expanding files | Required proof/output exists only untracked when closure claims tracked truth | Required artifacts are tracked intentionally or explicitly classified local-only |
+| `.planning/SPEC.md` | Local product/workflow requirements and active milestone requirement truth | Git-tracked public truth in the framework repo; branch delivery state | Read active requirements/current state; compare to roadmap and trackers | `W12`; mismatch with ROADMAP/TODO/gaps; stale active milestone | Mutating lifecycle action depends on stale or contradictory requirements | Fresh read plus drift acknowledgement/blocking behavior before mutation |
+| `.planning/ROADMAP.md` | Active milestone/phase ordering, status, success criteria, stop/replan contract | Artifact existence proof; implementation completion by itself | Read active phase section; lifecycle evaluator/preflight | `W12`; overview/detail mismatch; phase artifact mismatch | Execute/verify/audit/complete would act on stale or contradictory roadmap state | Preflight passes or blocks; phase status agrees with artifacts |
+| Phase PLAN/SUMMARY/VERIFICATION | Phase-local scope, execution result, verification result, compressed judgment handoff | Milestone-wide truth alone; git integration truth; generated runtime freshness | Check phase directory and required artifact sequence | PLAN without SUMMARY; SUMMARY missing for verify; VERIFICATION missing for completed phase | Execute without valid pending plan; verify without summary; close phase without verification | Required artifact exists, is substantive, and matches roadmap status |
+| Checkpoint files | Session-local resume context and mid-session compressed judgment | Durable status; routing authority over fresh roadmap/git truth | `.planning/.continue-here.md` and `.planning/.continue-here.bak` presence/classification | Checkpoint narrative conflicts with branch/worktree/planning truth; stale generic checkpoint | Resume would route from materially misleading checkpoint without acknowledgement | Resume surfaces checkpoint/planning/git split; material mismatch requires acknowledgement |
+| Brownfield CHANGE/HANDOFF/VERIFICATION | Medium-scope brownfield operational anchor, judgment handoff, closeout proof | Milestone phase state; roadmap-owned lifecycle; generic scratchpad | `.planning/brownfield-change/*` presence and lifecycle-state classification | Artifact branch/write-scope mismatch; missing sibling file; stale next action | Resume/progress would treat stale brownfield artifact as current without warning/acknowledgement | CHANGE primary, HANDOFF judgment-only, VERIFICATION proof; mismatch handled by progress/resume split |
+| Milestone audit | Milestone closure evidence and pass/fail posture | Phase execution; public release/delivery unless evidence says so | `.planning/<version>-MILESTONE-AUDIT.md`, `status: passed`, evidence contract | Missing audit for completion; audit not passed; evidence gaps | `complete-milestone` without passed audit or required evidence | Audit artifact exists, passed, and required evidence kinds are present |
+| Generated runtime surfaces | Consumed local runtime/helper surfaces generated from authored source | Authored workflow truth; planning status; branch truth | `gsdd health --json` runtime freshness and manifest comparison | `W11` drift from current render output | Phase behavior depends on generated-surface parity, or closure claims runtime freshness | Run the normal update path only when needed; health/checks prove freshness |
+
+**Decision rules:**
+- Read-only/reporting surfaces may warn on planning-state drift and continue. They must not refresh or mutate the planning fingerprint as a side effect.
+- Owned-write lifecycle surfaces must treat material planning-state drift as a stop or explicit acknowledgement boundary before writing summary, verification, milestone, roadmap, or checkpoint-cleanup artifacts.
+- No-baseline fingerprint state is not itself proof of drift. It should be classified explicitly, but it must not strand first-session users unless another contradiction exists.
+- Compressed judgment remains the four-section `<judgment>` shape (`active_constraints`, `unresolved_uncertainty`, `decision_posture`, `anti_regression`) and remains subordinate to operational state.
+- A tracked coordination artifact is not justified by Phase 44 evidence alone. It becomes necessary only if deterministic local checks cannot prevent stale-read/overwrite behavior or if a future release claim requires fresh-clone/public evidence.
+
+**Evidence:**
+- `.planning/phases/44-continuity-authority-and-persistence/44-APPROACH.md`
+- `.planning/phases/44-continuity-authority-and-persistence/44-PLAN.md`
+- `.planning/SPEC.md` (`REL-01`)
+- `.planning/ROADMAP.md` (Phase 44)
+- `.internal-research/gaps.md` (`I46`, `S6`)
+- `bin/lib/session-fingerprint.mjs`
+- `bin/lib/lifecycle-preflight.mjs`
+- `bin/lib/runtime-freshness.mjs`
+- `distilled/workflows/progress.md`
+- `distilled/workflows/resume.md`
+- `distilled/workflows/execute.md`
+- `distilled/workflows/verify.md`
+- `distilled/workflows/audit-milestone.md`
+- `distilled/workflows/complete-milestone.md`
+- `distilled/workflows/new-milestone.md`
+- `distilled/templates/brownfield-change/CHANGE.md`
+- `distilled/templates/brownfield-change/HANDOFF.md`
+- `distilled/templates/brownfield-change/VERIFICATION.md`
+- `tests/session-fingerprint.test.cjs`
+- `tests/phase.test.cjs`
+
+**Consequences:**
+- Phase execution can remain local-first without pretending ignored `.planning/` files are unconditional authority.
+- Planning drift becomes a concrete lifecycle safety signal rather than a generic health warning that agents can ignore.
+- The design avoids adding a scratchpad or second state system while preserving enough compressed judgment to guide cold-start continuation.
+- The remaining implementation question is narrow: make helper output and targeted tests reflect this authority split without widening Phase 44 into generated-surface or release-closeout work.
+
+---
+
+## D60 - Release Closeout Contract
+
+**Decision (2026-04-27, enforced 2026-04-27):** Release-quality milestone closeout uses a release claim posture layered over the existing evidence posture matrix. The allowed postures are `repo_closeout`, `runtime_validated_closeout`, and `delivery_supported_closeout`; each posture must stay within the fixed evidence kinds `code`, `test`, `runtime`, `delivery`, and `human`.
+
+**Context:**
+- D50 already defined the closure evidence matrix for `verify`, `audit-milestone`, and `complete-milestone`, but `repo_only` and `delivery_sensitive` are evidence bars rather than wording boundaries.
+- D59 clarified that `.planning/` remains local-only by default, generated runtime surfaces own their own freshness, and public/delivery claims need git/worktree or tracked repo-visible proof.
+- Phase 45 needed a way to close repo-local milestone work honestly without implying GitHub Releases, package publishes, runtime parity, generated-surface freshness, or external availability.
+- GitHub Releases remain explicitly deferred under `LSC-05`, so release closeout cannot depend on public release objects unless a later milestone approves them.
+
+**Decision:**
+- Add release claim posture semantics to `bin/lib/evidence-contract.mjs` without adding evidence kinds or replacing delivery postures.
+- Define the three postures as claim boundaries:
+  - `repo_closeout`: default; permits repo-local closeout only and must not imply public support, runtime validation, delivery, publication, or generated-surface freshness.
+  - `runtime_validated_closeout`: permits claims about a named runtime behavior or runtime surface only when `runtime` evidence exists for that exact runtime or surface.
+  - `delivery_supported_closeout`: permits externally consumed release, install, support, or delivery claims only when the `delivery_sensitive` evidence bar is satisfied.
+- Thread the posture through `audit-milestone` as audit-owned release closeout metadata: unsupported claims, waivers, deferrals, and contradiction checks are recorded with the audit evidence contract.
+- Make `complete-milestone` inherit the audit posture and stop when unsupported claims, invalid waivers, missing evidence, incompatible posture metadata, or failed claim-scoped contradiction checks remain.
+- Keep `verify` out of the main release-claim decision path; phase verification still records evidence, while milestone audit and completion own release closeout.
+- Enforce the inherited contract in `lifecycle-preflight complete-milestone` so milestone completion cannot proceed from a passed audit that lacks release-claim metadata or still contains unsupported stronger claims, invalid waivers, missing required evidence, incompatible posture metadata, or failed claim-scoped contradiction checks.
+
+**Why this fits the codebase:**
+- It preserves the compact D50 evidence matrix and avoids a new `release` evidence kind.
+- It avoids a new workflow lane or `gsdd-release` command by using the existing closeout surfaces.
+- It lets repo-local milestones close without fabricated delivery proof while preventing stronger public/runtime/delivery language from outrunning evidence.
+- It respects D59: local-only planning artifacts can support internal closeout, but public release/support claims need tracked public or repo-visible evidence.
+
+**Waiver and deferral rule:**
+Waivers may narrow a claim posture or defer an unsupported claim, but they never satisfy missing required evidence for the stronger claim. Deferrals must name the unsupported claim, missing evidence kind(s), and later workflow or milestone candidate when known.
+
+**Contradiction checks:**
+Closeout must check evidence, public-surface, runtime, delivery, planning-drift, and generated-surface contradictions. Generated-surface drift blocks only claims that depend on generated runtime/helper freshness; it does not fail unrelated `repo_closeout` claims.
+
+Posture compatibility is part of that closeout contract: `repo_closeout` and `runtime_validated_closeout` are repo-local wording boundaries over `repo_only`, while `delivery_supported_closeout` requires the `delivery_sensitive` evidence bar.
+
+**Evidence:**
+- `.planning/phases/45-release-closeout-contract/45-APPROACH.md`
+- `.planning/phases/45-release-closeout-contract/45-PLAN.md`
+- `.planning/phases/48-generated-helper-and-closeout-contract-parity/48-PLAN.md`
+- `.planning/research/45-RESEARCH.md`
+- `.planning/SPEC.md` (`REL-02`, deferred `LSC-05`)
+- `.planning/ROADMAP.md` (Phase 45)
+- `bin/lib/evidence-contract.mjs`
+- `bin/lib/lifecycle-preflight.mjs`
+- `distilled/workflows/audit-milestone.md`
+- `distilled/workflows/complete-milestone.md`
+- `distilled/DESIGN.md` D50 and D59
+- `tests/phase.test.cjs`
+- `tests/gsdd.guards.test.cjs`
+- `tests/gsdd.scenarios.test.cjs`
+
+**Consequences:**
+- A milestone audit can now distinguish internal repo closeout, runtime-validated closeout, and delivery-supported closeout without changing evidence kinds.
+- Missing delivery or runtime evidence must produce a downgrade or deferral; it cannot be hidden behind human waiver prose.
+- `complete-milestone` now fails closed before archive writes when the passed audit omits or contradicts the release claim contract.
+- Public claims are scoped to tracked public or repo-visible proof, while GitHub Releases, tags, package publication, and release automation remain deferred until explicitly planned.
 
 ## Maintenance
 

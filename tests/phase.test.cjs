@@ -1042,26 +1042,6 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.phase, '30');
   });
 
-  test('blocks plan when the target phase is already complete', async () => {
-    fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
-      [
-        '# Roadmap',
-        '',
-        '### v1.3.0 Engine Contract Hardening',
-        '',
-        '- [x] **Phase 30: Deterministic Lifecycle Gates** - [ENGINE-02]',
-      ].join('\n')
-    );
-
-    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '30']);
-    assert.notStrictEqual(result.exitCode, 0, result.output);
-
-    const output = JSON.parse(result.output);
-    assert.strictEqual(output.allowed, false);
-    assert.strictEqual(output.reason, 'phase_already_complete');
-  });
-
   test('finds lifecycle state from a nested directory', async () => {
     const nestedDir = path.join(tmpDir, 'apps', 'web');
     fs.mkdirSync(nestedDir, { recursive: true });
@@ -1232,6 +1212,28 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.planningState.classification, 'no_baseline');
   });
 
+  test('blocks plan when the target phase is already complete', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.3.0 Engine Contract Hardening',
+        '',
+        '- [x] **Phase 30: Deterministic Lifecycle Gates** - [ENGINE-02]',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '30']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'phase_already_complete');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'phase_already_complete'));
+  });
+
   test('allows resume without checkpoint when active brownfield CHANGE.md exists', async () => {
     const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
     fs.mkdirSync(changeDir, { recursive: true });
@@ -1369,7 +1371,530 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(output.blockers.some((blocker) => blocker.code === 'roadmap_phase_status_mismatch'));
   });
 
+  test('blocks complete-milestone preflight when a passed audit lacks release claim metadata', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'v1.6-MILESTONE-AUDIT.md'),
+      ['---', 'milestone: v1.6', 'status: passed', '---', '', '# audit'].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'missing_release_claim_contract');
+    assert.ok(output.blockers[0].message.includes('release_claim_posture'));
+  });
+
+  test('blocks complete-milestone preflight on invalid waivers and missing release evidence', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      releaseClaimPosture: 'delivery_supported_closeout',
+      requiredKinds: ['code', 'test', 'runtime', 'delivery'],
+      observedKinds: ['code', 'test', 'runtime'],
+      missingKinds: ['delivery'],
+      waivers: ['delivery'],
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_required_release_evidence'));
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'invalid_release_waivers'));
+  });
+
+  test('blocks complete-milestone preflight on unsupported release claims without deferral', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      unsupportedClaims: ['generated surface freshness'],
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'unsupported_release_claims'));
+  });
+
+  test('blocks complete-milestone preflight when deferral names a different unsupported claim', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      unsupportedClaims: ['generated surface freshness', 'public support'],
+      deferrals: ['public support deferred to a later delivery milestone'],
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    const unsupportedBlocker = output.blockers.find((blocker) => blocker.code === 'unsupported_release_claims');
+    assert.ok(unsupportedBlocker);
+    assert.match(unsupportedBlocker.message, /generated surface freshness/);
+    assert.doesNotMatch(unsupportedBlocker.message, /public support/);
+  });
+
+  test('blocks complete-milestone preflight when deferral is too vague', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      unsupportedClaims: ['public support'],
+      deferrals: ['public'],
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    const unsupportedBlocker = output.blockers.find((blocker) => blocker.code === 'unsupported_release_claims');
+    assert.ok(unsupportedBlocker);
+    assert.match(unsupportedBlocker.message, /public support/);
+  });
+
+  test('allows repo closeout when unrelated generated-surface contradiction failed', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'failed',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+  });
+
+  test('blocks repo closeout when claim-scoped evidence contradiction failed', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      contradictionChecks: {
+        evidence: 'failed',
+        public_surface: 'not_applicable',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'not_applicable',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'failed_release_contradiction_checks'));
+  });
+
+  test('blocks repo closeout when public-surface contradiction failed', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'failed',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'not_applicable',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'failed_release_contradiction_checks'));
+  });
+
+  test('blocks runtime-validated closeout when generated-surface contradiction failed', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      releaseClaimPosture: 'runtime_validated_closeout',
+      requiredKinds: ['code', 'test', 'runtime'],
+      observedKinds: ['code', 'test', 'runtime'],
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'passed',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'failed',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'failed_release_contradiction_checks'));
+  });
+
+  test('blocks runtime-validated closeout when required_kinds omits release-claim runtime evidence', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      releaseClaimPosture: 'runtime_validated_closeout',
+      requiredKinds: ['code', 'test'],
+      observedKinds: ['code', 'test', 'runtime'],
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'passed',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'passed',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    const evidenceBlocker = output.blockers.find((blocker) => blocker.code === 'invalid_release_evidence_contract');
+    assert.ok(evidenceBlocker);
+    assert.match(evidenceBlocker.message, /runtime/);
+  });
+
+  test('blocks complete-milestone preflight when required contradiction checks are missing', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      contradictionChecks: {
+        evidence: 'passed',
+        planning_drift: 'passed',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_release_contradiction_checks'));
+  });
+
+  test('blocks complete-milestone preflight on unknown contradiction check keys', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'not_applicable',
+        security: 'failed',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    const unknownBlocker = output.blockers.find((blocker) => blocker.code === 'unknown_release_contradiction_checks');
+    assert.ok(unknownBlocker);
+    assert.match(unknownBlocker.message, /security/);
+  });
+
+  test('blocks complete-milestone preflight when delivery posture evidence is under-observed', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      deliveryPosture: 'delivery_sensitive',
+      releaseClaimPosture: 'repo_closeout',
+      requiredKinds: ['code', 'test', 'runtime', 'delivery'],
+      observedKinds: ['code', 'test'],
+      missingKinds: [],
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    const evidenceBlocker = output.blockers.find((blocker) => blocker.code === 'missing_required_release_evidence');
+    assert.ok(evidenceBlocker);
+    assert.match(evidenceBlocker.message, /runtime/);
+    assert.match(evidenceBlocker.message, /delivery/);
+  });
+
+  test('blocks complete-milestone preflight on incompatible release and delivery postures', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      deliveryPosture: 'repo_only',
+      releaseClaimPosture: 'delivery_supported_closeout',
+      requiredKinds: ['code', 'test', 'runtime', 'delivery'],
+      observedKinds: ['code', 'test', 'runtime', 'delivery'],
+    });
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    let output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'incompatible_release_claim_posture'));
+
+    writeMilestoneAudit(tmpDir, {
+      deliveryPosture: 'delivery_sensitive',
+      releaseClaimPosture: 'repo_closeout',
+      requiredKinds: ['code', 'test', 'runtime', 'delivery'],
+      observedKinds: ['code', 'test', 'runtime', 'delivery'],
+    });
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'incompatible_release_claim_posture'));
+  });
+
+  test('blocks complete-milestone preflight on invalid release claim posture', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      releaseClaimPosture: 'delivery_supported_closout',
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'invalid_release_claim_posture'));
+  });
+
+  test('blocks complete-milestone preflight on invalid evidence kind values', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      requiredKinds: ['code', 'test', 'banana'],
+      observedKinds: ['code', 'test'],
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    const evidenceKindBlocker = output.blockers.find((blocker) => blocker.code === 'invalid_release_evidence_kinds');
+    assert.ok(evidenceKindBlocker);
+    assert.match(evidenceKindBlocker.message, /required_kinds: banana/);
+  });
+
+  test('allows complete-milestone preflight when passed audit release contract is satisfied', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {});
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.reason, null);
+  });
+
+  test('parses quoted release metadata and comma-containing inline lists', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      deliveryPosture: '"repo_only"',
+      releaseClaimPosture: "'repo_closeout'",
+      unsupportedClaims: ['"generated surface freshness, helper output"'],
+      deferrals: ['"generated surface freshness, helper output lacks runtime evidence until a later milestone"'],
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'failed',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+  });
+
+  test('parses structured YAML deferrals for unsupported release claims', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'v1.6-MILESTONE-AUDIT.md'),
+      [
+        '---',
+        'milestone: v1.6',
+        'status: passed',
+        'delivery_posture: repo_only',
+        'release_claim_posture: repo_closeout',
+        'evidence_contract:',
+        '  required_kinds: [code, test]',
+        '  observed_kinds: [code, test]',
+        '  missing_kinds: []',
+        'release_claim_contract:',
+        '  unsupported_claims:',
+        '    - public support',
+        '  waivers: []',
+        '  deferrals:',
+        '    - claim: public support',
+        '      missing_kinds: [delivery]',
+        '      later: next delivery milestone',
+        '  contradiction_checks:',
+        '    evidence: passed',
+        '    public_surface: not_applicable',
+        '    runtime: not_applicable',
+        '    delivery: not_applicable',
+        '    planning_drift: passed',
+        '    generated_surface: failed',
+        '---',
+        '',
+        '# audit',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+  });
+
+  test('parses quoted audit status and wider YAML indentation', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'v1.6-MILESTONE-AUDIT.md'),
+      [
+        '---',
+        'milestone: v1.6',
+        'status: "passed" # audited successfully',
+        'delivery_posture: repo_only',
+        'release_claim_posture: repo_closeout',
+        'evidence_contract:',
+        '    required_kinds: [code, test]',
+        '    observed_kinds: [code, test]',
+        '    missing_kinds: []',
+        'release_claim_contract:',
+        '    unsupported_claims: []',
+        '    waivers: []',
+        '    deferrals: []',
+        '    contradiction_checks:',
+        '        evidence: passed',
+        '        public_surface: not_applicable',
+        '        runtime: not_applicable',
+        '        delivery: not_applicable',
+        '        planning_drift: passed',
+        '        generated_surface: failed',
+        '---',
+        '',
+        '# audit',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+  });
+
+  test('parses release metadata with YAML inline comments', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'v1.6-MILESTONE-AUDIT.md'),
+      [
+        '---',
+        'milestone: v1.6',
+        'status: passed',
+        'delivery_posture: repo_only # local closeout only',
+        'release_claim_posture: repo_closeout # no public delivery claim',
+        'evidence_contract: # D50 closeout proof',
+        '  required_kinds:',
+        '    - code # implementation exists',
+        '    - test # regression coverage exists',
+        '  observed_kinds: [code, test] # observed during audit',
+        '  missing_kinds: [] # none',
+        'release_claim_contract: # claim boundary',
+        '  unsupported_claims: [] # none',
+        '  waivers: [] # none',
+        '  deferrals: [] # none',
+        '  contradiction_checks:',
+        '    evidence: passed # repo evidence aligned',
+        '    public_surface: not_applicable # no public claim',
+        '    runtime: not_applicable # no runtime claim',
+        '    delivery: not_applicable # no delivery claim',
+        '    planning_drift: passed # planning current',
+        '    generated_surface: failed # unrelated generated freshness claim',
+        '---',
+        '',
+        '# audit',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+  });
 });
+
+function writeCompletedMilestoneFixture(tmpDir) {
+  fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '48-generated-helper-and-closeout-contract-parity'), { recursive: true });
+  fs.writeFileSync(
+    path.join(tmpDir, '.planning', 'ROADMAP.md'),
+    [
+      '# Roadmap',
+      '',
+      '### v1.6 Release Spine Hardening',
+      '',
+      '- [x] **Phase 48: Generated Helper And Closeout Contract Parity** — [REL-04]',
+    ].join('\n')
+  );
+  fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '- [x] **[REL-04]**: release spine\n');
+  fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '48-generated-helper-and-closeout-contract-parity', '48-PLAN.md'), '# plan\n');
+  fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '48-generated-helper-and-closeout-contract-parity', '48-SUMMARY.md'), '# summary\n');
+  fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '48-generated-helper-and-closeout-contract-parity', '48-VERIFICATION.md'), '# verification\n');
+}
+
+function writeMilestoneAudit(tmpDir, {
+  deliveryPosture = null,
+  releaseClaimPosture = 'repo_closeout',
+  requiredKinds = ['code', 'test'],
+  observedKinds = ['code', 'test'],
+  missingKinds = [],
+  unsupportedClaims = [],
+  waivers = [],
+  deferrals = [],
+  contradictionChecks = {
+    evidence: 'passed',
+    public_surface: 'not_applicable',
+    runtime: 'not_applicable',
+    delivery: 'not_applicable',
+    planning_drift: 'passed',
+    generated_surface: 'not_applicable',
+  },
+} = {}) {
+  const list = (items) => `[${items.join(', ')}]`;
+  const resolvedDeliveryPosture = deliveryPosture
+    || (releaseClaimPosture === 'delivery_supported_closeout' ? 'delivery_sensitive' : 'repo_only');
+  const contradictionLines = Object.entries(contradictionChecks)
+    .map(([name, status]) => `    ${name}: ${status}`)
+    .join('\n');
+  fs.writeFileSync(
+    path.join(tmpDir, '.planning', 'v1.6-MILESTONE-AUDIT.md'),
+    [
+      '---',
+      'milestone: v1.6',
+      'status: passed',
+      `delivery_posture: ${resolvedDeliveryPosture}`,
+      `release_claim_posture: ${releaseClaimPosture}`,
+      'evidence_contract:',
+      `  required_kinds: ${list(requiredKinds)}`,
+      `  observed_kinds: ${list(observedKinds)}`,
+      `  missing_kinds: ${list(missingKinds)}`,
+      'release_claim_contract:',
+      `  unsupported_claims: ${list(unsupportedClaims)}`,
+      `  waivers: ${list(waivers)}`,
+      `  deferrals: ${list(deferrals)}`,
+      '  contradiction_checks:',
+      contradictionLines,
+      '---',
+      '',
+      '# audit',
+    ].join('\n')
+  );
+}
 
 describe('verify command nested phase plans', () => {
   let tmpDir;
@@ -1485,6 +2010,132 @@ describe('Phase 31 evidence-gated closure helpers', () => {
     );
   });
 
+  test('defines release claim postures without adding evidence kinds', async () => {
+    const mod = await importEvidenceContractModule();
+
+    assert.deepStrictEqual(mod.RELEASE_CLAIM_POSTURES, [
+      'repo_closeout',
+      'runtime_validated_closeout',
+      'delivery_supported_closeout',
+    ]);
+
+    const runtimeClaim = mod.getReleaseClaimContract('audit-milestone', 'runtime_validated_closeout');
+    assert.strictEqual(runtimeClaim.releaseClaimPosture, 'runtime_validated_closeout');
+    assert.strictEqual(runtimeClaim.deliveryPosture, 'repo_only');
+    assert.deepStrictEqual(runtimeClaim.supportedKinds, ['code', 'test', 'runtime', 'delivery', 'human']);
+    assert.deepStrictEqual(runtimeClaim.requiredKinds, ['code', 'test', 'runtime']);
+    assert.match(runtimeClaim.waiverRule, /never satisfy missing required evidence/i);
+    assert.ok(runtimeClaim.contradictionCategories.includes('generated_surface'));
+
+    const deliveryClaim = mod.getReleaseClaimContract('complete-milestone', 'delivery_supported_closeout');
+    assert.strictEqual(deliveryClaim.deliveryPosture, 'delivery_sensitive');
+    assert.deepStrictEqual(deliveryClaim.requiredKinds, ['code', 'test', 'runtime', 'delivery']);
+
+    assert.strictEqual(mod.normalizeReleaseClaimPosture('unknown'), null);
+    assert.throws(
+      () => mod.getReleaseClaimContract('complete-milestone', 'unknown'),
+      /Unsupported release claim posture/
+    );
+  });
+
+  test('unsupported stronger release claims must downgrade or defer instead of using waiver prose', async () => {
+    const mod = await importEvidenceContractModule();
+
+    const unsupportedDelivery = mod.evaluateReleaseClaimPosture({
+      surface: 'complete-milestone',
+      releaseClaimPosture: 'delivery_supported_closeout',
+      observedKinds: ['code', 'test', 'runtime'],
+      waivedKinds: ['delivery'],
+    });
+
+    assert.deepStrictEqual(unsupportedDelivery.missingKinds, ['delivery']);
+    assert.deepStrictEqual(unsupportedDelivery.invalidWaivers, ['delivery']);
+    assert.strictEqual(unsupportedDelivery.status, 'unsupported');
+    assert.strictEqual(unsupportedDelivery.disposition, 'downgrade_or_defer');
+    assert.strictEqual(unsupportedDelivery.downgradeTo, 'runtime_validated_closeout');
+    assert.deepStrictEqual(unsupportedDelivery.deferredClaims, [
+      { claim: 'delivery_supported_closeout', missingKinds: ['delivery'] },
+    ]);
+
+    const supportedRepo = mod.evaluateReleaseClaimPosture({
+      surface: 'audit-milestone',
+      releaseClaimPosture: 'repo_closeout',
+      observedKinds: ['code', 'test', 'human'],
+    });
+
+    assert.strictEqual(supportedRepo.status, 'supported');
+    assert.strictEqual(supportedRepo.disposition, 'proceed');
+    assert.deepStrictEqual(supportedRepo.missingKinds, []);
+  });
+
+  test('release closeout contract fails closed on unknown contradiction check keys', async () => {
+    const mod = await importEvidenceContractModule();
+
+    const result = mod.evaluateReleaseClaimCloseoutContract({
+      surface: 'complete-milestone',
+      releaseClaimPosture: 'repo_closeout',
+      observedKinds: ['code', 'test'],
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'not_applicable',
+        security: 'failed',
+      },
+    });
+
+    assert.strictEqual(result.status, 'unsupported');
+    assert.deepStrictEqual(result.unknownContradictionChecks, ['security']);
+    assert.ok(result.blockers.some((blocker) => blocker.code === 'unknown_release_contradiction_checks'));
+  });
+
+  test('release closeout contract fails closed on missing contradiction checks', async () => {
+    const mod = await importEvidenceContractModule();
+
+    const result = mod.evaluateReleaseClaimCloseoutContract({
+      surface: 'complete-milestone',
+      releaseClaimPosture: 'repo_closeout',
+      observedKinds: ['code', 'test'],
+      contradictionChecks: {
+        evidence: 'passed',
+        planning_drift: 'passed',
+      },
+    });
+
+    assert.strictEqual(result.status, 'unsupported');
+    assert.deepStrictEqual(result.missingContradictionChecks, [
+      'public_surface',
+      'runtime',
+      'delivery',
+      'generated_surface',
+    ]);
+    assert.ok(result.blockers.some((blocker) => blocker.code === 'missing_release_contradiction_checks'));
+  });
+
+  test('release closeout contract fails closed on invalid contradiction check statuses', async () => {
+    const mod = await importEvidenceContractModule();
+
+    const result = mod.evaluateReleaseClaimCloseoutContract({
+      surface: 'complete-milestone',
+      releaseClaimPosture: 'repo_closeout',
+      observedKinds: ['code', 'test'],
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'not_applicable',
+        delivery: 'skipped',
+        planning_drift: 'passed',
+        generated_surface: 'not_applicable',
+      },
+    });
+
+    assert.strictEqual(result.status, 'unsupported');
+    assert.deepStrictEqual(result.invalidContradictionChecks, ['delivery']);
+    assert.ok(result.blockers.some((blocker) => blocker.code === 'invalid_release_contradiction_checks'));
+  });
+
   test('lifecycle preflight exposes closure evidence metadata only for closure surfaces', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'ROADMAP.md'),
@@ -1536,9 +2187,71 @@ describe('Phase 31 evidence-gated closure helpers', () => {
             surface: 'verify',
             deliveryPosture: 'delivery_sensitive',
             supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
-            requiredKinds: ['code', 'runtime'],
-            recommendedKinds: ['test', 'delivery', 'human'],
+            requiredKinds: ['code', 'runtime', 'delivery'],
+            recommendedKinds: ['test', 'human'],
             blockedSoloKinds: ['code', 'human'],
+          },
+        ],
+        releaseClaimPostures: [
+          {
+            surface: 'verify',
+            releaseClaimPosture: 'repo_closeout',
+            deliveryPosture: 'repo_only',
+            supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+            requiredKinds: ['code'],
+            requiredClaimKinds: [],
+            allowedClaim: 'Repo-local milestone or phase closeout is supported by planning and repository artifacts only.',
+            invalidClaim: 'Do not imply runtime validation, delivery, publication, or public support from repo-local closeout alone.',
+            waiverRule: 'Waivers may only narrow the release claim posture or defer an unsupported claim; they never satisfy missing required evidence for the stronger claim.',
+            deferralRule: 'Deferrals must name the unsupported claim, missing evidence kinds, and later workflow or milestone candidate when known.',
+            contradictionCategories: [
+              'evidence',
+              'public_surface',
+              'runtime',
+              'delivery',
+              'planning_drift',
+              'generated_surface',
+            ],
+          },
+          {
+            surface: 'verify',
+            releaseClaimPosture: 'runtime_validated_closeout',
+            deliveryPosture: 'repo_only',
+            supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+            requiredKinds: ['code', 'runtime'],
+            requiredClaimKinds: ['runtime'],
+            allowedClaim: 'Runtime behavior or a runtime surface was directly executed and observed for the named runtime or surface.',
+            invalidClaim: 'Do not generalize validation from one runtime or generated surface to another.',
+            waiverRule: 'Waivers may only narrow the release claim posture or defer an unsupported claim; they never satisfy missing required evidence for the stronger claim.',
+            deferralRule: 'Deferrals must name the unsupported claim, missing evidence kinds, and later workflow or milestone candidate when known.',
+            contradictionCategories: [
+              'evidence',
+              'public_surface',
+              'runtime',
+              'delivery',
+              'planning_drift',
+              'generated_surface',
+            ],
+          },
+          {
+            surface: 'verify',
+            releaseClaimPosture: 'delivery_supported_closeout',
+            deliveryPosture: 'delivery_sensitive',
+            supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
+            requiredKinds: ['code', 'runtime', 'delivery'],
+            requiredClaimKinds: [],
+            allowedClaim: 'Externally consumed release, support, install, or delivery claims are supported by the delivery-sensitive evidence bar.',
+            invalidClaim: 'Do not imply merge, package, tag, GitHub Release, publication, generated-surface freshness, or public support without matching delivery evidence.',
+            waiverRule: 'Waivers may only narrow the release claim posture or defer an unsupported claim; they never satisfy missing required evidence for the stronger claim.',
+            deferralRule: 'Deferrals must name the unsupported claim, missing evidence kinds, and later workflow or milestone candidate when known.',
+            contradictionCategories: [
+              'evidence',
+              'public_surface',
+              'runtime',
+              'delivery',
+              'planning_drift',
+              'generated_surface',
+            ],
           },
         ],
       }

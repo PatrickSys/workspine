@@ -214,8 +214,8 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   test('closure workflows preserve the shared evidence-gated closure language after generation', () => {
     const expectations = new Map([
       ['gsdd-verify', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_evidence', 'missing_evidence']],
-      ['gsdd-audit-milestone', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_kinds', 'missing_kinds']],
-      ['gsdd-complete-milestone', ['repo_only', 'delivery_sensitive', 'missing_kinds', 'required_kinds']],
+      ['gsdd-audit-milestone', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_kinds', 'missing_kinds', 'repo_closeout', 'runtime_validated_closeout', 'delivery_supported_closeout', 'unsupported_claims', 'deferrals', 'contradiction_checks']],
+      ['gsdd-complete-milestone', ['repo_only', 'delivery_sensitive', 'missing_kinds', 'required_kinds', 'release_claim_posture', 'release_claim_contract', 'invalid waivers', 'failed contradiction checks']],
     ]);
 
     for (const [skillName, snippets] of expectations.entries()) {

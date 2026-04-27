@@ -42,6 +42,11 @@ Determine milestone `delivery_posture` before grading requirements or flows:
 - `repo_only` — the milestone claim is still repo-local and does not depend on shipped runtime or release proof
 - `delivery_sensitive` — the milestone claims shipped UX, release/install behavior, published proof, or other externally consumed runtime outcomes
 
+Determine `release_claim_posture` as the release wording boundary layered over `delivery_posture`:
+- `repo_closeout` — default. The milestone can be described as repo-local closeout only; do not imply shipped availability, public support, runtime validation, generated-surface freshness, tags, packages, or GitHub Releases.
+- `runtime_validated_closeout` — a named runtime behavior or generated/runtime surface was directly executed and observed. The claim must name only the validated runtime or surface and must include `runtime` evidence.
+- `delivery_supported_closeout` — the milestone supports externally consumed release, install, support, or public-facing delivery claims. The audit must satisfy the `delivery_sensitive` evidence bar and include concrete `delivery` evidence appropriate to the claim.
+
 Apply the shared `audit-milestone` matrix:
 
 | delivery_posture     | required evidence                | recommended evidence | cannot carry closure alone |
@@ -54,6 +59,12 @@ Rules:
 - delivery-sensitive audits must not pass on phase prose, code inspection, or tests alone; required `runtime` and `delivery` evidence must be explicitly present
 - `human` evidence is supportive only at audit level unless the audit is already otherwise satisfied
 - record the selected `delivery_posture`, `required_kinds`, `observed_kinds`, and `missing_kinds` in audit frontmatter so completion inherits the same closure contract
+- record `release_claim_posture`, unsupported claims, waivers, deferrals, and contradiction checks in audit frontmatter; completion inherits these fields
+- missing required evidence cannot be waived while preserving a stronger release claim. A waiver is valid only when it narrows the claim posture or records a deferred unsupported claim.
+- deferrals must name the unsupported claim, missing evidence kind(s), and later workflow or milestone candidate when known
+- contradiction checks must cover evidence, public-surface, runtime, delivery, planning-drift, and generated-surface contradictions; stop or downgrade when the claim outruns the evidence
+- `delivery_posture` and `release_claim_posture` must remain compatible: `repo_closeout` and `runtime_validated_closeout` pair with `repo_only`; `delivery_supported_closeout` pairs with `delivery_sensitive`
+- local-only `.planning/` proof may support `repo_closeout`, but public-facing release/support claims need tracked public or repo-visible evidence when intended for external readers
 </evidence_contract>
 
 <process>
@@ -114,6 +125,7 @@ Combine:
 - Phase-level gaps and tech debt (from step 2)
 - Integration checker's report (wiring gaps, auth gaps, broken flows, requirements integration map)
 - Evidence observations by kind (`code`, `test`, `runtime`, `delivery`, `human`) from phase verifications, summaries, integration findings, and delivery metadata
+- Release claim posture observations: selected `release_claim_posture`, unsupported claims, waivers, deferrals, and contradiction checks for public, runtime, delivery, planning-drift, and generated-surface claims
 
 ## 5. 3-Source Cross-Reference
 
@@ -170,10 +182,22 @@ audited: {ISO-8601 timestamp}
 status: passed | gaps_found | tech_debt
 reduced_assurance: false
 delivery_posture: repo_only | delivery_sensitive
+release_claim_posture: repo_closeout | runtime_validated_closeout | delivery_supported_closeout
 evidence_contract:
   required_kinds: [code, test]
   observed_kinds: [code, test]
   missing_kinds: []
+release_claim_contract:
+  unsupported_claims: []
+  waivers: []
+  deferrals: []
+  contradiction_checks:
+    evidence: passed | failed
+    public_surface: passed | failed | not_applicable
+    runtime: passed | failed | not_applicable
+    delivery: passed | failed | not_applicable
+    planning_drift: passed | failed
+    generated_surface: passed | failed | not_applicable
 scores:
   requirements: N/M
   phases: N/M
@@ -213,6 +237,10 @@ Evidence gate:
 - a `passed` audit must have no `missing_kinds` for the selected `delivery_posture`
 - `delivery_sensitive` audits cannot pass without explicit `runtime` and `delivery` evidence
 - `repo_only` audits cannot be downgraded merely because `runtime` or `delivery` evidence was never relevant
+- a `passed` audit must have no unsupported stronger release claims unless they are explicitly downgraded or deferred in `release_claim_contract`
+- invalid waivers are blockers: human approval cannot replace missing `code`, `test`, `runtime`, or `delivery` evidence for a stronger claim
+- public/support wording must be scoped to tracked public or repo-visible evidence; local-only `.planning/` artifacts cannot carry public release claims by themselves
+- generated-surface freshness is claim-scoped: W11-style drift blocks only claims that depend on generated runtime/helper freshness, not unrelated repo-only closeout
 
 **MANDATORY: The milestone audit report must exist at `.planning/v{version}-MILESTONE-AUDIT.md` on disk before presenting results. If the file was not written, STOP and report the write failure. Do NOT present audit results from conversation context alone — this is the highest-cost artifact to regenerate. Do NOT downgrade a write failure into "results shown inline anyway."**
 
@@ -222,7 +250,7 @@ Route by audit status:
 
 ### If passed:
 - Report: all requirements covered, cross-phase integration verified, auth protection verified, E2E flows complete
-- Next step: complete the milestone (archive and tag)
+- Next step: complete the milestone (archive; any tag remains advisory and evidence-scoped)
 
 ### If gaps_found:
 - Report: list unsatisfied requirements, auth or cross-phase issues, broken flows

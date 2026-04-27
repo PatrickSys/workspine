@@ -117,12 +117,12 @@ Apply the shared `verify` matrix:
 | delivery_posture     | required evidence | recommended evidence       | cannot carry closure alone |
 | -------------------- | ----------------- | -------------------------- | -------------------------- |
 | `repo_only`          | `code`            | `test`                     | `human`, `delivery`        |
-| `delivery_sensitive` | `code`, `runtime` | `test`, `delivery`, `human` | `code`, `human`            |
+| `delivery_sensitive` | `code`, `runtime`, `delivery` | `test`, `human` | `code`, `human`            |
 
 Rules:
 - repo-only work must not invent `runtime` or `delivery` proof just to satisfy a template
-- delivery-sensitive closure must not pass on prose, `code`-only inspection, or `human` confirmation without the required `runtime` evidence
-- `human` evidence supports ambiguous or visual outcomes; it does not replace required `code` or `runtime` evidence
+- delivery-sensitive closure must not pass on prose, `code`-only inspection, or `human` confirmation without the required `runtime` and `delivery` evidence
+- `human` evidence supports ambiguous or visual outcomes; it does not replace required `code`, `runtime`, or `delivery` evidence
 - if a required evidence kind cannot be collected, record it in `missing_evidence`; route purely human-observable follow-up to `human_verification` only when the blocking runtime/delivery requirement is already satisfied
 
 Note: this step does NOT replace levels 1–3. An artifact can satisfy the evidence-kind requirement and still fail Level 2 (substantive) or Level 3 (wired). Both checks must run.
@@ -247,10 +247,10 @@ status: gaps_found
 score: 2/3 must-haves verified
 delivery_posture: delivery_sensitive
 evidence_contract:
-  required_kinds: [code, runtime]
-  recommended_kinds: [test, delivery, human]
+  required_kinds: [code, runtime, delivery]
+  recommended_kinds: [test, human]
   observed_kinds: [code]
-  missing_kinds: [runtime]
+  missing_kinds: [runtime, delivery]
 re_verification:
   previous_status: gaps_found
   previous_score: 1/3
@@ -262,9 +262,9 @@ re_verification:
 gaps:
   - truth: "Users can create a user from the page"
     status: failed
-    required_evidence: [code, runtime]
+    required_evidence: [code, runtime, delivery]
     observed_evidence: [code]
-    missing_evidence: [runtime]
+    missing_evidence: [runtime, delivery]
     severity: blocker # blocker = required proof absent; warning = artifact missing but proof exists via other means
     reason: "Form submits, but route returns placeholder data"
     artifacts:
