@@ -186,7 +186,7 @@ Execution flow:
    - produced \`.planning/phases/*-PLAN.md\` file(s)
 8. Require the checker to return a single JSON object with this shape:
    {
-     "status": "passed",
+     "status": "issues_found",
      "summary": "One sentence overall assessment",
      "issues": [
        {
@@ -199,7 +199,7 @@ Execution flow:
        }
      ]
    }
-   Status must be either "${CHECKER_STATUSES[0]}" or "${CHECKER_STATUSES[1]}".
+   Status must be either "${CHECKER_STATUSES[0]}" or "${CHECKER_STATUSES[1]}". Use "passed" only when "issues": []; any blocker or warning must use "issues_found".
 9. If the checker returns \`passed\`, finish and summarize.
 10. If the checker returns \`issues_found\`, revise the existing plan files only where needed, then run the checker again.
 11. Maximum ${MAX_CHECKER_CYCLES} checker cycles total. If blockers remain after cycle ${MAX_CHECKER_CYCLES}, stop and escalate to the user instead of pretending the plan is ready.

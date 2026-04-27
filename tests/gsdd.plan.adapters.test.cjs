@@ -52,8 +52,8 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /Do NOT fork this skill into a subagent/);
     assert.match(claudePlanSkill, /not as a stop signal for this Claude-native adapter path/);
     assert.match(claudePlanSkill, /Maximum 3 checker cycles total/);
-    assert.match(claudePlanSkill, /"status": "passed"/);
-    assert.match(claudePlanSkill, /Status must be either "passed" or "issues_found"\./);
+    assert.match(claudePlanSkill, /"status": "issues_found"/);
+    assert.match(claudePlanSkill, /Use "passed" only when "issues": \[\]/);
     assert.match(claudePlanSkill, /alignment_status: user_confirmed/);
     assert.match(claudePlanSkill, /alignment_status: approved_skip/);
     assert.match(claudePlanSkill, /all canonical proof fields[\s\S]{0,260}alignment_status[\s\S]{0,80}alignment_method[\s\S]{0,80}user_confirmed_at[\s\S]{0,80}explicit_skip_approved[\s\S]{0,80}skip_scope[\s\S]{0,80}skip_rationale[\s\S]{0,80}confirmed_decisions/);
@@ -100,8 +100,8 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(opencodePlanCommand, /hidden `gsdd-plan-checker` subagent/);
     assert.match(opencodePlanCommand, /not as a stop signal for this OpenCode-native adapter path/);
     assert.match(opencodePlanCommand, /Maximum 3 checker cycles total/);
-    assert.match(opencodePlanCommand, /"status": "passed"/);
-    assert.match(opencodePlanCommand, /Status must be either "passed" or "issues_found"\./);
+    assert.match(opencodePlanCommand, /"status": "issues_found"/);
+    assert.match(opencodePlanCommand, /Use "passed" only when "issues": \[\]/);
     assert.match(opencodePlanCommand, /alignment_status: user_confirmed/);
     assert.match(opencodePlanCommand, /alignment_status: approved_skip/);
     assert.match(opencodePlanCommand, /all canonical proof fields[\s\S]{0,260}alignment_status[\s\S]{0,80}alignment_method[\s\S]{0,80}user_confirmed_at[\s\S]{0,80}explicit_skip_approved[\s\S]{0,80}skip_scope[\s\S]{0,80}skip_rationale[\s\S]{0,80}confirmed_decisions/);
@@ -148,8 +148,8 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(portableSkill, /Invoking the Checker/);
     assert.match(portableSkill, /gsdd-plan-checker/);
     assert.match(portableSkill, /Maximum 3 checker cycles total/);
-    assert.match(portableSkill, /"status": "passed"/);
-    assert.match(portableSkill, /Status must be either "passed" or "issues_found"\./);
+    assert.match(portableSkill, /"status": "issues_found"/);
+    assert.match(portableSkill, /Use "passed" only when "issues": \[\]/);
     assert.match(portableSkill, /reduced_assurance/);
     assert.match(portableSkill, /Orchestration Summary/);
     assert.match(portableSkill, /Planning stops here|plan-only/i);

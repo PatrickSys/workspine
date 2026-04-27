@@ -518,7 +518,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 4. Require the checker to return a single JSON object:
    ```json
    {
-     "status": "passed",
+     "status": "issues_found",
      "summary": "One sentence overall assessment",
      "issues": [
        {
@@ -532,7 +532,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
      ]
    }
    ```
-   Status must be either "passed" or "issues_found".
+   Status must be either "passed" or "issues_found". Use "passed" only when "issues": []; any blocker or warning must use "issues_found".
 5. If the checker returns `passed`, finish and summarize.
 6. If the checker returns `issues_found`, revise the existing plan files only where needed, then invoke the checker again.
 7. Maximum 3 checker cycles total. If blockers remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
