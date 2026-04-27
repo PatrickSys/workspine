@@ -1644,6 +1644,44 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.allowed, true);
   });
 
+  test('parses quoted audit status and wider YAML indentation', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'v1.6-MILESTONE-AUDIT.md'),
+      [
+        '---',
+        'milestone: v1.6',
+        'status: "passed" # audited successfully',
+        'delivery_posture: repo_only',
+        'release_claim_posture: repo_closeout',
+        'evidence_contract:',
+        '    required_kinds: [code, test]',
+        '    observed_kinds: [code, test]',
+        '    missing_kinds: []',
+        'release_claim_contract:',
+        '    unsupported_claims: []',
+        '    waivers: []',
+        '    deferrals: []',
+        '    contradiction_checks:',
+        '        evidence: passed',
+        '        public_surface: not_applicable',
+        '        runtime: not_applicable',
+        '        delivery: not_applicable',
+        '        planning_drift: passed',
+        '        generated_surface: failed',
+        '---',
+        '',
+        '# audit',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+  });
+
   test('parses release metadata with YAML inline comments', async () => {
     writeCompletedMilestoneFixture(tmpDir);
     fs.writeFileSync(
@@ -1971,8 +2009,8 @@ describe('Phase 31 evidence-gated closure helpers', () => {
             surface: 'verify',
             deliveryPosture: 'delivery_sensitive',
             supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
-            requiredKinds: ['code', 'runtime'],
-            recommendedKinds: ['test', 'delivery', 'human'],
+            requiredKinds: ['code', 'runtime', 'delivery'],
+            recommendedKinds: ['test', 'human'],
             blockedSoloKinds: ['code', 'human'],
           },
         ],
@@ -2022,7 +2060,7 @@ describe('Phase 31 evidence-gated closure helpers', () => {
             releaseClaimPosture: 'delivery_supported_closeout',
             deliveryPosture: 'delivery_sensitive',
             supportedKinds: ['code', 'test', 'runtime', 'delivery', 'human'],
-            requiredKinds: ['code', 'runtime'],
+            requiredKinds: ['code', 'runtime', 'delivery'],
             requiredClaimKinds: [],
             allowedClaim: 'Externally consumed release, support, install, or delivery claims are supported by the delivery-sensitive evidence bar.',
             invalidClaim: 'Do not imply merge, package, tag, GitHub Release, publication, generated-surface freshness, or public support without matching delivery evidence.',

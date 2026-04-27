@@ -27,8 +27,8 @@ const EVIDENCE_MATRIX = Object.freeze({
       blockedSoloKinds: Object.freeze(['human', 'delivery']),
     }),
     delivery_sensitive: Object.freeze({
-      requiredKinds: Object.freeze(['code', 'runtime']),
-      recommendedKinds: Object.freeze(['test', 'delivery', 'human']),
+      requiredKinds: Object.freeze(['code', 'runtime', 'delivery']),
+      recommendedKinds: Object.freeze(['test', 'human']),
       blockedSoloKinds: Object.freeze(['code', 'human']),
     }),
   }),

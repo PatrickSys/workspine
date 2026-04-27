@@ -354,8 +354,9 @@ function buildCompletionBlockers(planningDir, lifecycle) {
   }
 
   const auditContent = readFileSync(auditPath, 'utf-8');
-  const statusMatch = auditContent.match(/^status:\s*(.+)$/m);
-  if (!statusMatch || statusMatch[1].trim() !== 'passed') {
+  const auditFrontmatter = extractFrontmatter(auditContent);
+  const auditStatus = readTopLevelScalar(auditFrontmatter || auditContent, 'status');
+  if (auditStatus !== 'passed') {
     return [
       blocker(
         'audit_not_passed',
@@ -544,15 +545,17 @@ function extractYamlBlock(frontmatter, key) {
 
 function readBlockList(block, key) {
   const lines = String(block || '').replace(/\r\n/g, '\n').split('\n');
-  const startIndex = lines.findIndex((line) => new RegExp(`^  ${key}:`).test(line));
+  const startIndex = lines.findIndex((line) => new RegExp(`^\\s+${key}:`).test(line));
   if (startIndex === -1) return [];
+  const baseIndent = lines[startIndex].match(/^\s*/)[0].length;
 
   const inline = lines[startIndex].match(/^\s+[^:]+:\s*\[([^\]]*)\]/);
   if (inline) return splitInlineList(inline[1]);
 
   const collected = [];
   for (const line of lines.slice(startIndex + 1)) {
-    if (/^  [A-Za-z0-9_-]+:\s*/.test(line)) break;
+    const indent = line.match(/^\s*/)[0].length;
+    if (line.trim() && indent <= baseIndent && /^\s*[A-Za-z0-9_-]+:\s*/.test(line)) break;
     collected.push(line);
   }
 
@@ -574,12 +577,14 @@ function readNestedStatusBlock(block, key) {
 
 function extractIndentedBlock(block, key) {
   const lines = String(block || '').replace(/\r\n/g, '\n').split('\n');
-  const startIndex = lines.findIndex((line) => new RegExp(`^  ${key}:`).test(line));
+  const startIndex = lines.findIndex((line) => new RegExp(`^\\s+${key}:`).test(line));
   if (startIndex === -1) return '';
+  const baseIndent = lines[startIndex].match(/^\s*/)[0].length;
 
   const collected = [];
   for (const line of lines.slice(startIndex + 1)) {
-    if (/^  [A-Za-z0-9_-]+:\s*/.test(line)) break;
+    const indent = line.match(/^\s*/)[0].length;
+    if (line.trim() && indent <= baseIndent && /^\s*[A-Za-z0-9_-]+:\s*/.test(line)) break;
     collected.push(line);
   }
   return collected.join('\n');
