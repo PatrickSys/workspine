@@ -531,7 +531,7 @@ function readTopLevelScalar(frontmatter, key) {
 
 function extractYamlBlock(frontmatter, key) {
   const lines = String(frontmatter || '').replace(/\r\n/g, '\n').split('\n');
-  const startIndex = lines.findIndex((line) => line.trim() === `${key}:`);
+  const startIndex = lines.findIndex((line) => new RegExp(`^${key}:\\s*(?:#.*)?$`).test(line.trim()));
   if (startIndex === -1) return '';
 
   const collected = [];
@@ -626,10 +626,41 @@ function splitCommaAware(value) {
 }
 
 function cleanYamlValue(value) {
-  return String(value || '')
+  return stripInlineYamlComment(String(value || ''))
     .trim()
     .replace(/^['"]|['"]$/g, '')
     .trim();
+}
+
+function stripInlineYamlComment(value) {
+  let current = '';
+  let quote = null;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && quote) {
+      current += char;
+      escaped = true;
+      continue;
+    }
+    if ((char === '"' || char === "'") && (!quote || quote === char)) {
+      quote = quote ? null : char;
+      current += char;
+      continue;
+    }
+    if (char === '#' && !quote && (index === 0 || /\s/.test(value[index - 1]))) {
+      return current.trimEnd();
+    }
+    current += char;
+  }
+
+  return current;
 }
 
 function blocker(code, message, artifacts) {

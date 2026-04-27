@@ -1490,6 +1490,26 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(output.blockers.some((blocker) => blocker.code === 'failed_release_contradiction_checks'));
   });
 
+  test('blocks repo closeout when public-surface contradiction failed', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'failed',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'not_applicable',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'failed_release_contradiction_checks'));
+  });
+
   test('blocks runtime-validated closeout when generated-surface contradiction failed', async () => {
     writeCompletedMilestoneFixture(tmpDir);
     writeMilestoneAudit(tmpDir, {
@@ -1616,6 +1636,46 @@ describe('Phase 30 lifecycle-preflight helper', () => {
         generated_surface: 'failed',
       },
     });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+  });
+
+  test('parses release metadata with YAML inline comments', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'v1.6-MILESTONE-AUDIT.md'),
+      [
+        '---',
+        'milestone: v1.6',
+        'status: passed',
+        'delivery_posture: repo_only # local closeout only',
+        'release_claim_posture: repo_closeout # no public delivery claim',
+        'evidence_contract: # D50 closeout proof',
+        '  required_kinds:',
+        '    - code # implementation exists',
+        '    - test # regression coverage exists',
+        '  observed_kinds: [code, test] # observed during audit',
+        '  missing_kinds: [] # none',
+        'release_claim_contract: # claim boundary',
+        '  unsupported_claims: [] # none',
+        '  waivers: [] # none',
+        '  deferrals: [] # none',
+        '  contradiction_checks:',
+        '    evidence: passed # repo evidence aligned',
+        '    public_surface: not_applicable # no public claim',
+        '    runtime: not_applicable # no runtime claim',
+        '    delivery: not_applicable # no delivery claim',
+        '    planning_drift: passed # planning current',
+        '    generated_surface: failed # unrelated generated freshness claim',
+        '---',
+        '',
+        '# audit',
+      ].join('\n')
+    );
 
     const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
     assert.strictEqual(result.exitCode, 0, result.output);

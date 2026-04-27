@@ -3660,6 +3660,8 @@ describe('G44 - Engine Contract Hardening', () => {
       'complete-milestone.md must inherit release claim posture and contract fields. FIX: Preserve release claim metadata from audit.');
     assert.match(complete, /unsupported claims.*invalid waivers.*failed contradiction checks/i,
       'complete-milestone.md must stop on unsupported claims, invalid waivers, or failed contradiction checks. FIX: Add release closeout stop gate.');
+    assert.doesNotMatch(complete, /\bSHIPPED\b|shipped status|what shipped/i,
+      'complete-milestone.md must not use shipped wording for repo-local closeout. FIX: Keep archive wording evidence-scoped.');
   });
 });
 

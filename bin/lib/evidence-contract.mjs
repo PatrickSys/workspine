@@ -89,7 +89,7 @@ const RELEASE_CLAIM_MATRIX = Object.freeze({
 });
 
 const CONTRADICTION_BLOCKERS_BY_POSTURE = Object.freeze({
-  repo_closeout: Object.freeze(['evidence', 'planning_drift']),
+  repo_closeout: Object.freeze(['evidence', 'public_surface', 'planning_drift']),
   runtime_validated_closeout: Object.freeze(['evidence', 'runtime', 'generated_surface', 'planning_drift']),
   delivery_supported_closeout: CONTRADICTION_CATEGORIES,
 });
