@@ -3238,9 +3238,24 @@ describe('G49 - Native Alignment Proof Gate', () => {
   });
 
   test('plan-checker requires approved skip metadata', () => {
-    for (const snippet of ['explicit user approval', 'skip scope', 'date', 'rationale', 'fix_hint']) {
+    for (const snippet of ['explicit_skip_approved: true', 'alignment_method', 'user_confirmed_at', 'skip_scope', 'skip_rationale', 'fix_hint']) {
       assert.ok(checkerContent.includes(snippet),
         `plan-checker approved-skip validation must include ${snippet}.`);
+    }
+  });
+
+  test('alignment proof schema uses canonical field names across generated inputs', () => {
+    const surfaces = [
+      ['approach template', fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'approach.md'), 'utf-8')],
+      ['approach delegate', fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'delegates', 'approach-explorer.md'), 'utf-8')],
+      ['approach role', fs.readFileSync(path.join(ROOT, 'agents', 'approach-explorer.md'), 'utf-8')],
+      ['plan workflow', planWorkflowContent],
+      ['plan checker', checkerContent],
+    ];
+    for (const [label, content] of surfaces) {
+      for (const field of ['alignment_status', 'alignment_method', 'user_confirmed_at', 'explicit_skip_approved', 'skip_scope', 'skip_rationale', 'confirmed_decisions']) {
+        assert.ok(content.includes(field), `${label} must include canonical alignment proof field ${field}.`);
+      }
     }
   });
 

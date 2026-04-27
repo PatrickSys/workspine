@@ -474,9 +474,8 @@ If neither the primary path nor native agent is available (e.g., the runtime can
 - Explicitly report `reduced_alignment` — the user did not get full research-backed exploration
 
 ### Using APPROACH.md Decisions
-
 After approach exploration completes (or existing APPROACH.md is loaded):
-- If `workflow.discuss: true`, validate that APPROACH.md records `alignment_status: user_confirmed` or `alignment_status: approved_skip` with confirmation or skip source, date, scope, and rationale metadata before goal-backward planning begins. Stop and update the APPROACH artifact if proof is missing, unknown, agent-discretion-only, or based only on agent "No questions needed" judgment.
+- If `workflow.discuss: true`, validate that APPROACH.md records `alignment_status: user_confirmed` or `alignment_status: approved_skip` with the canonical fields `alignment_method`, `user_confirmed_at`, `explicit_skip_approved`, `skip_scope`, `skip_rationale`, and `confirmed_decisions` before goal-backward planning begins. Stop and update the APPROACH artifact if proof is missing, unknown, agent-discretion-only, or based only on agent "No questions needed" judgment.
 - Treat decisions from APPROACH.md as locked constraints, same priority as `.planning/SPEC.md` decisions
 - "Agent's Discretion" items from APPROACH.md give the planner flexibility — do not treat them as locked
 - Thread the APPROACH.md file path to both the planner prompt and the plan-checker prompt
@@ -489,11 +488,9 @@ The approach explorer's full role contract is at `.planning/templates/roles/appr
 
 <plan_check_orchestration>
 ### How Plan Checking Works
-
 After the planner produces a draft plan, an independent checker reviews it in fresh context. The checker does not inherit the planner's hidden reasoning; it treats the plan as an untrusted draft.
 
 ### What The Checker Verifies
-
 1. `requirement_coverage` - every phase requirement is covered by at least one concrete task
 2. `task_completeness` - every task has files, action, verify, and done fields; verify quality sub-checks ensure at least one runnable command per task, flag slow or watch-mode verification, and check test file ordering
 3. `dependency_correctness` - ordering, dependencies, and plan structure are coherent

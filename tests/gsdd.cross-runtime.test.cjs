@@ -273,10 +273,15 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       'must_have_quality',
       'context_compliance',
       'goal_achievement',
+      'scope_boundaries',
+      'anti_regression_capture',
+      'escalation_integrity',
+      'closure_honesty',
+      'high_leverage_review',
       'approach_alignment',
     ];
 
-    test('Claude plan-checker has all 9 dimensions', () => {
+    test('Claude plan-checker has all 14 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
       assert.ok(fs.existsSync(checkerPath), 'Claude checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
@@ -285,7 +290,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       }
     });
 
-    test('OpenCode plan-checker has all 9 dimensions', () => {
+    test('OpenCode plan-checker has all 14 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md');
       assert.ok(fs.existsSync(checkerPath), 'OpenCode checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
@@ -294,7 +299,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       }
     });
 
-    test('Codex plan-checker has all 9 dimensions', () => {
+    test('Codex plan-checker has all 14 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml');
       assert.ok(fs.existsSync(checkerPath), 'Codex checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');

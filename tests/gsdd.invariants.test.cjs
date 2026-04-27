@@ -918,6 +918,11 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     'must_have_quality',
     'context_compliance',
     'goal_achievement',
+    'scope_boundaries',
+    'anti_regression_capture',
+    'escalation_integrity',
+    'closure_honesty',
+    'high_leverage_review',
     'approach_alignment',
   ];
 
@@ -931,7 +936,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     path.join(AGENTS_DIR, 'planner.md'), 'utf-8'
   );
 
-  describe('plan-checker.md documents all 9 dimensions', () => {
+  describe('plan-checker.md documents all 14 dimensions', () => {
     for (const dim of PLAN_CHECKER_DIMENSIONS) {
       test(`plan-checker.md documents dimension: ${dim}`, () => {
         assert.ok(
@@ -942,7 +947,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     }
   });
 
-  describe('plan.md documents all 9 checker dimensions', () => {
+  describe('plan.md documents all 14 checker dimensions', () => {
     for (const dim of PLAN_CHECKER_DIMENSIONS) {
       test(`plan.md documents checker dimension: ${dim}`, () => {
         assert.ok(
@@ -953,7 +958,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     }
   });
 
-  describe('planner.md references all 9 checker dimensions', () => {
+  describe('planner.md references all 14 checker dimensions', () => {
     // planner.md uses natural language labels (e.g. "requirement coverage") not underscored JSON keys
     const PLANNER_DIMENSION_LABELS = [
       'requirement coverage',
@@ -964,6 +969,11 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
       'must-have quality',
       'context compliance',
       'goal achievement',
+      'scope boundaries',
+      'anti-regression capture',
+      'escalation integrity',
+      'closure honesty',
+      'high-leverage review',
       'approach alignment',
     ];
 

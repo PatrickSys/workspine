@@ -6,7 +6,7 @@ Template for `.planning/phases/XX-name/{phase_num}-APPROACH.md` — captures imp
 
 **Key principle:** The top-level structure (`<domain>`, `<decisions>`, `<assumptions>`, `<deferred>`) is fixed. Section names WITHIN `<decisions>` emerge from what was actually discussed for THIS phase — a CLI phase has CLI-relevant sections, a UI phase has UI-relevant sections.
 
-**Alignment proof:** When `.planning/config.json` has `workflow.discuss: true`, every APPROACH artifact must include an `## Alignment Proof` section before `<domain>`. It must record `alignment_status: user_confirmed` or `alignment_status: approved_skip`, confirmation/skip source, date, scope, and rationale. `Agent's Discretion` and agent-only "No questions needed" are not valid proof.
+**Alignment proof:** When `.planning/config.json` has `workflow.discuss: true`, every APPROACH artifact must include an `## Alignment Proof` section before `<domain>`. It must record the canonical fields `alignment_status`, `alignment_method`, `user_confirmed_at`, `explicit_skip_approved`, `skip_scope`, `skip_rationale`, and `confirmed_decisions`. `Agent's Discretion` and agent-only "No questions needed" are not valid proof.
 
 **Downstream consumers:**
 - `planner` — Reads decisions to constrain implementation choices. Locked decisions must be implemented. Agent's Discretion items allow planner flexibility.

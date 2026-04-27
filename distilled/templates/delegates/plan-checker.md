@@ -30,10 +30,15 @@ Verify these dimensions:
   - **Goal addressed?** Compare the phase goal statement to the plan's collective task outputs. Would successful completion of all tasks deliver the goal? If the goal says "users can authenticate" but tasks only set up database schema → `blocker`.
   - **Success criteria reachable?** Are the phase success criteria from ROADMAP.md achievable through the planned tasks? Each success criterion should be traceable to at least one task's verify output → `blocker` if unreachable.
   - **Outcome observable?** After execution, could a human or automated check confirm the goal was met? Plans that produce only internal artifacts with no user-visible or testable outcome → `warning`.
+- `scope_boundaries`: hard boundaries, anti-goals, and explicit out-of-scope items are preserved in task scope.
+- `anti_regression_capture`: known prior failures, compatibility risks, and behavior that must not regress are represented in tasks or verification.
+- `escalation_integrity`: tasks include checkpoints or escalation when evidence, permissions, user decisions, or risky ambiguity are required.
+- `closure_honesty`: the plan's done criteria and evidence limits support only claims that execution can actually prove.
+- `high_leverage_review`: high-leverage surfaces have a second-pass review or equivalent contradiction/staleness check before completion.
 - `approach_alignment`: when APPROACH.md is provided, verify that plan tasks implement the chosen approaches from the user's decisions. Check:
   - **Alignment proof valid?** When `workflow.discuss` is `true`, APPROACH.md must record `alignment_status: user_confirmed` or `alignment_status: approved_skip`. Missing alignment proof, unknown status, or agent-discretion-only proof -> `blocker` with `fix_hint` telling the planner to revise APPROACH.md through real user alignment or an explicit user-approved skip.
-  - **User confirmation present?** For `alignment_status: user_confirmed`, APPROACH.md must include confirmation source/method, date, and at least one confirmed decision. Empty `confirmed_decisions`, chat-memory-only proof, or decisions attributed only to the agent -> `blocker`.
-  - **Approved skip explicit?** For `alignment_status: approved_skip`, APPROACH.md must include explicit user approval, skip scope, date, and rationale. Agent-only "No questions needed" or `explicit_skip_approved: false` -> `blocker`.
+  - **User confirmation present?** For `alignment_status: user_confirmed`, APPROACH.md must include `alignment_method`, `user_confirmed_at`, and at least one non-placeholder `confirmed_decisions` item. Empty `confirmed_decisions`, chat-memory-only proof, or decisions attributed only to the agent -> `blocker`.
+  - **Approved skip explicit?** For `alignment_status: approved_skip`, APPROACH.md must include `explicit_skip_approved: true`, `alignment_method`, `user_confirmed_at`, `skip_scope`, and `skip_rationale`. Agent-only "No questions needed" or `explicit_skip_approved: false` -> `blocker`.
   - **Chosen honored?** Does each plan task align with the approach chosen in APPROACH.md for its gray area? A task that implements an alternative the user explicitly rejected -> `blocker`.
   - **Discretion respected?** "Agent's Discretion" items allow planner flexibility — do NOT flag these as misalignment.
   - **Deferred excluded?** Deferred ideas from APPROACH.md must not appear in plan tasks -> `blocker` if found.
@@ -47,7 +52,7 @@ Return JSON only as a single object with this shape:
   "summary": "One sentence overall assessment",
   "issues": [
     {
-      "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
+      "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | scope_boundaries | anti_regression_capture | escalation_integrity | closure_honesty | high_leverage_review | approach_alignment",
       "severity": "blocker",
       "description": "What is wrong",
       "plan": "01-PLAN",

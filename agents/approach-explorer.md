@@ -56,7 +56,7 @@ Read only the explicit inputs provided. Extract only what you need:
 
 <output_contract>
 - **Artifact:** `{padded_phase}-APPROACH.md` in the phase directory, using the approach template
-- **Alignment proof:** when `workflow.discuss: true`, APPROACH.md must include `alignment_status: user_confirmed` or `alignment_status: approved_skip` with source, date, scope, and rationale metadata. `Agent's Discretion` is not alignment proof.
+- **Alignment proof:** when `workflow.discuss: true`, APPROACH.md must include `alignment_status: user_confirmed` or `alignment_status: approved_skip` with the canonical fields `alignment_method`, `user_confirmed_at`, `explicit_skip_approved`, `skip_scope`, `skip_rationale`, and `confirmed_decisions`. `Agent's Discretion` is not alignment proof.
 - **Downstream consumers:**
   - Planner reads locked decisions to constrain implementation choices
   - Plan-checker verifies plans implement chosen approaches (approach_alignment dimension)
@@ -123,7 +123,7 @@ Present each gray area individually with:
 
 If the user delegates an area, mark it as "Agent's Discretion" and move to the next.
 
-If the whole phase appears to need no discussion under `workflow.discuss: true`, ask the user to approve that skip explicitly. Record it as `alignment_status: approved_skip` with who approved it, when, the covered scope, and why no further discussion is needed. Do not create a proofless APPROACH.md.
+If the whole phase appears to need no discussion under `workflow.discuss: true`, ask the user to approve that skip explicitly. Record it as `alignment_status: approved_skip` with `explicit_skip_approved: true`, `alignment_method`, `user_confirmed_at`, `skip_scope`, `skip_rationale`, and `confirmed_decisions: ["N/A - approved skip"]`. Do not create a proofless APPROACH.md.
 
 ## Step 5: Adaptive Deep-Dive
 

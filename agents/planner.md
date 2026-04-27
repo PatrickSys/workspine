@@ -239,7 +239,12 @@ Before returning, self-check against the checker dimensions:
 6. must-have quality
 7. context compliance
 8. goal achievement
-9. approach alignment (when APPROACH.md exists)
+9. scope boundaries
+10. anti-regression capture
+11. escalation integrity
+12. closure honesty
+13. high-leverage review
+14. approach alignment (when APPROACH.md exists)
 
 Task completeness rules:
 - every task has files, action, verify, and done

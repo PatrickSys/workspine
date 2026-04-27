@@ -61,16 +61,18 @@ Execution flow:
 2. Resolve the target phase from the command arguments. If no phase is provided, choose the first roadmap phase that is not complete.
 3. **Approach exploration** (before planning):
    a. Check \`.planning/config.json\` for \`workflow.discuss\`. If \`false\` or missing, skip to step 4 and report \`reduced_alignment\` in the summary.
-   b. Check if \`{phase_dir}/{padded_phase}-APPROACH.md\` exists. If it does, offer the user: "Use existing" / "Update it" / "View it". If "Use existing", load decisions and skip to step 4.
-   c. If no APPROACH.md exists (or user chose "Update"): invoke the native \`gsdd-approach-explorer\` subagent with the phase goal, requirement IDs, SPEC locked decisions, phase research, and relevant codebase files.
+   b. Check if \`{phase_dir}/{padded_phase}-APPROACH.md\` exists. If it does, offer the user: "Use existing" / "Update it" / "View it". If "Use existing", load decisions, then validate the alignment proof before step 4; proofless or invalid existing APPROACH.md must be updated, not silently trusted.
+   c. If no APPROACH.md exists (or user chose "Update"): invoke the native \`gsdd-approach-explorer\` subagent with the phase goal, requirement IDs, project config from \`.planning/config.json\` (especially \`workflow.discuss\`), SPEC locked decisions, phase research, and relevant codebase files.
    d. The explorer runs a GSD-style interactive conversation with the user (gray areas, research, deep-dive questions, assumptions) and writes APPROACH.md.
-   e. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
+   e. Before planning, confirm APPROACH.md records \`alignment_status: user_confirmed\` or \`alignment_status: approved_skip\` with \`alignment_method\`, \`user_confirmed_at\`, and either \`confirmed_decisions\` or explicit skip fields (\`explicit_skip_approved: true\`, \`skip_scope\`, \`skip_rationale\`). Agent-only "No questions needed" is not valid proof under \`workflow.discuss: true\`.
+   f. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
 4. Produce the initial phase plan according to \`.agents/skills/gsdd-plan/SKILL.md\`. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
-5. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance.
+5. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the step 3 alignment-proof gate when \`workflow.discuss: true\`.
 6. If \`workflow.planCheck: true\`, invoke the native \`gsdd-plan-checker\` subagent with fresh context.
 7. Pass only explicit inputs to the checker:
    - target phase goal and requirement IDs
    - relevant locked decisions / deferred items from \`.planning/SPEC.md\`
+   - project config from \`.planning/config.json\`, especially \`workflow.discuss\` and \`workflow.planCheck\`
    - approach decisions from \`.planning/phases/*-APPROACH.md\` (if exists)
    - relevant phase research file(s)
    - produced \`.planning/phases/*-PLAN.md\` file(s)

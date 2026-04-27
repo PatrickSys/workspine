@@ -54,6 +54,13 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /Maximum 3 checker cycles total/);
     assert.match(claudePlanSkill, /"status": "passed"/);
     assert.match(claudePlanSkill, /Status must be either "passed" or "issues_found"\./);
+    assert.match(claudePlanSkill, /alignment_status: user_confirmed/);
+    assert.match(claudePlanSkill, /alignment_status: approved_skip/);
+    assert.match(claudePlanSkill, /No questions needed.*not valid proof|not valid proof.*No questions needed/);
+    assert.match(claudePlanSkill, /Use existing[\s\S]{0,220}validate the alignment proof/i);
+    assert.match(claudePlanSkill, /gsdd-approach-explorer[\s\S]{0,240}\.planning\/config\.json[\s\S]{0,100}workflow\.discuss/i);
+    assert.match(claudePlanSkill, /workflow\.planCheck: false[\s\S]{0,260}does not skip[\s\S]{0,160}alignment-proof gate/i);
+    assert.match(claudePlanSkill, /\.planning\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
     assert.doesNotMatch(claudePlanSkill, /^context: fork$/m);
     assert.doesNotMatch(claudePlanSkill, /^agent:/m);
 
@@ -315,7 +322,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.doesNotMatch(content, /^sandbox_mode = "read-only"/m, 'approach-explorer must NOT be read-only (needs write access unlike checker)');
   });
 
-  test('all native plan surfaces contain the same 9 dimension names', async () => {
+  test('all native plan surfaces contain the same 14 dimension names', async () => {
     const allDimensions = [
       'requirement_coverage',
       'task_completeness',
@@ -325,6 +332,11 @@ describe('specialized plan adapter surfaces', () => {
       'must_have_quality',
       'context_compliance',
       'goal_achievement',
+      'scope_boundaries',
+      'anti_regression_capture',
+      'escalation_integrity',
+      'closure_honesty',
+      'high_leverage_review',
       'approach_alignment',
     ];
 
