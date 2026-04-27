@@ -56,6 +56,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /Status must be either "passed" or "issues_found"\./);
     assert.match(claudePlanSkill, /alignment_status: user_confirmed/);
     assert.match(claudePlanSkill, /alignment_status: approved_skip/);
+    assert.match(claudePlanSkill, /all canonical proof fields[\s\S]{0,260}alignment_status[\s\S]{0,80}alignment_method[\s\S]{0,80}user_confirmed_at[\s\S]{0,80}explicit_skip_approved[\s\S]{0,80}skip_scope[\s\S]{0,80}skip_rationale[\s\S]{0,80}confirmed_decisions/);
     assert.match(claudePlanSkill, /No questions needed.*not valid proof|not valid proof.*No questions needed/);
     assert.match(claudePlanSkill, /Use existing[\s\S]{0,220}validate the alignment proof/i);
     assert.match(claudePlanSkill, /gsdd-approach-explorer[\s\S]{0,240}\.planning\/config\.json[\s\S]{0,100}workflow\.discuss/i);
@@ -409,6 +410,7 @@ describe('specialized plan adapter surfaces', () => {
     const delegateContent = fs.readFileSync(delegatePath, 'utf-8');
     // Pick a key phrase that must survive into all native checker surfaces
     const keyPhrase = 'Return JSON only';
+    const canonicalProofFieldsPattern = /all canonical proof fields[\s\S]{0,260}alignment_status[\s\S]{0,80}alignment_method[\s\S]{0,80}user_confirmed_at[\s\S]{0,80}explicit_skip_approved[\s\S]{0,80}skip_scope[\s\S]{0,80}skip_rationale[\s\S]{0,80}confirmed_decisions/;
 
     // Init claude
     const claudeTmpDir = createTempProject();
@@ -457,8 +459,10 @@ describe('specialized plan adapter surfaces', () => {
 
     // Verify delegate content appears in all native checker surfaces
     assert.ok(delegateContent.includes(keyPhrase), `delegate source must contain key phrase: ${keyPhrase}`);
+    assert.match(delegateContent, canonicalProofFieldsPattern);
     for (const [label, content] of [['claude', claudeChecker], ['opencode', opencodeChecker], ['codex', codexChecker]]) {
       assert.ok(content.includes(keyPhrase), `${label} checker must contain delegate key phrase: ${keyPhrase}`);
+      assert.match(content, canonicalProofFieldsPattern, `${label} checker must require all canonical proof fields`);
     }
   });
 
