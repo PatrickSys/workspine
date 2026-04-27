@@ -1041,7 +1041,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
   test('plan.md documents max revision cycles and escalation', () => {
     assert.ok(
       planWorkflowContent.includes('escalate'),
-      'plan.md must document escalation when blockers remain after max revision cycles'
+      'plan.md must document escalation when blockers or warnings remain after max revision cycles'
     );
   });
 });

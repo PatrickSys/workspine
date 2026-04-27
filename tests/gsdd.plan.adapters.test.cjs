@@ -52,6 +52,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /Do NOT fork this skill into a subagent/);
     assert.match(claudePlanSkill, /not as a stop signal for this Claude-native adapter path/);
     assert.match(claudePlanSkill, /Maximum 3 checker cycles total/);
+    assert.match(claudePlanSkill, /blockers or warnings remain after cycle 3/);
     assert.match(claudePlanSkill, /"status": "issues_found"/);
     assert.match(claudePlanSkill, /Use "passed" only when "issues": \[\]/);
     assert.match(claudePlanSkill, /alignment_status: user_confirmed/);
@@ -100,6 +101,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(opencodePlanCommand, /hidden `gsdd-plan-checker` subagent/);
     assert.match(opencodePlanCommand, /not as a stop signal for this OpenCode-native adapter path/);
     assert.match(opencodePlanCommand, /Maximum 3 checker cycles total/);
+    assert.match(opencodePlanCommand, /blockers or warnings remain after cycle 3/);
     assert.match(opencodePlanCommand, /"status": "issues_found"/);
     assert.match(opencodePlanCommand, /Use "passed" only when "issues": \[\]/);
     assert.match(opencodePlanCommand, /alignment_status: user_confirmed/);
@@ -148,6 +150,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(portableSkill, /Invoking the Checker/);
     assert.match(portableSkill, /gsdd-plan-checker/);
     assert.match(portableSkill, /Maximum 3 checker cycles total/);
+    assert.match(portableSkill, /blockers or warnings remain after cycle 3/);
     assert.match(portableSkill, /"status": "issues_found"/);
     assert.match(portableSkill, /Use "passed" only when "issues": \[\]/);
     assert.match(portableSkill, /reduced_assurance/);

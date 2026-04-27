@@ -535,7 +535,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
    Status must be either "passed" or "issues_found". Use "passed" only when "issues": []; any blocker or warning must use "issues_found".
 5. If the checker returns `passed`, finish and summarize.
 6. If the checker returns `issues_found`, revise the existing plan files only where needed, then invoke the checker again.
-7. Maximum 3 checker cycles total. If blockers remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
+7. Maximum 3 checker cycles total. If any blockers or warnings remain after cycle 3, stop and escalate to the user instead of pretending the plan is ready.
 8. If no native checker agent is available in your runtime, perform the planner self-check below and explicitly report `reduced_assurance` rather than claiming an independent checker ran.
 When the checker outcome is finalized, write the result into the plan artifact:
 - checker ran in same runtime or planner self-check only -> set frontmatter `assurance: self_checked`
@@ -555,7 +555,7 @@ The checker returns structured JSON feedback with specific issues, severities, a
 
 ### When To Escalate
 
-If blockers remain after 3 checker cycles, the orchestrator stops and escalates to the user. It does not pretend the plan is ready.
+If any blockers or warnings remain after 3 checker cycles, the orchestrator stops and escalates to the user. It does not pretend the plan is ready.
 </plan_check_orchestration>
 
 <plan_self_check>
