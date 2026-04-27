@@ -442,6 +442,8 @@ function buildReleaseClaimCompletionBlockers(auditContent, auditPath) {
   }
 
   const missingContradictionChecks = RELEASE_CONTRADICTION_CHECKS.filter((name) => !(name in contradictionChecks));
+  const unknownContradictionChecks = Object.keys(contradictionChecks)
+    .filter((name) => !RELEASE_CONTRADICTION_CHECKS.includes(name));
   const invalidContradictionChecks = Object.entries(contradictionChecks)
     .filter(([, status]) => !RELEASE_CONTRADICTION_STATUSES.includes(status))
     .map(([name]) => name);
@@ -458,6 +460,14 @@ function buildReleaseClaimCompletionBlockers(auditContent, auditPath) {
     blockers.push(blocker(
       'invalid_release_contradiction_checks',
       `Milestone audit release_claim_contract.contradiction_checks has invalid statuses (${invalidContradictionChecks.join(', ')}).`,
+      [auditPath]
+    ));
+  }
+
+  if (unknownContradictionChecks.length > 0) {
+    blockers.push(blocker(
+      'unknown_release_contradiction_checks',
+      `Milestone audit release_claim_contract.contradiction_checks has unknown checks (${unknownContradictionChecks.join(', ')}). Supported checks are ${RELEASE_CONTRADICTION_CHECKS.join(', ')}.`,
       [auditPath]
     ));
   }

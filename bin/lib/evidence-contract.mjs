@@ -242,6 +242,8 @@ export function evaluateReleaseClaimCloseoutContract({
   const failedContradictionChecks = Object.entries(contradictionChecks)
     .filter(([, status]) => status === 'failed')
     .map(([name]) => name);
+  const unknownContradictionChecks = Object.keys(contradictionChecks)
+    .filter((name) => !CONTRADICTION_CATEGORIES.includes(name));
   const blockingContradictionChecks = failedContradictionChecks.filter((name) =>
     CONTRADICTION_BLOCKERS_BY_POSTURE[posture.releaseClaimPosture].includes(name)
   );
@@ -266,6 +268,9 @@ export function evaluateReleaseClaimCloseoutContract({
   if (unresolvedUnsupportedClaims.length > 0) {
     blockers.push({ code: 'unsupported_release_claims', details: unresolvedUnsupportedClaims });
   }
+  if (unknownContradictionChecks.length > 0) {
+    blockers.push({ code: 'unknown_release_contradiction_checks', details: unknownContradictionChecks });
+  }
   if (blockingContradictionChecks.length > 0) {
     blockers.push({ code: 'failed_release_contradiction_checks', details: blockingContradictionChecks });
   }
@@ -276,6 +281,7 @@ export function evaluateReleaseClaimCloseoutContract({
     deferrals: [...deferrals],
     failedContradictionChecks: blockingContradictionChecks,
     allFailedContradictionChecks: failedContradictionChecks,
+    unknownContradictionChecks,
     unresolvedUnsupportedClaims,
     blockers,
     status: blockers.length === 0 ? 'supported' : 'unsupported',

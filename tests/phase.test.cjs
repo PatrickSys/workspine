@@ -1574,6 +1574,29 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_release_contradiction_checks'));
   });
 
+  test('blocks complete-milestone preflight on unknown contradiction check keys', async () => {
+    writeCompletedMilestoneFixture(tmpDir);
+    writeMilestoneAudit(tmpDir, {
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'not_applicable',
+        security: 'failed',
+      },
+    });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'complete-milestone']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    const unknownBlocker = output.blockers.find((blocker) => blocker.code === 'unknown_release_contradiction_checks');
+    assert.ok(unknownBlocker);
+    assert.match(unknownBlocker.message, /security/);
+  });
+
   test('blocks complete-milestone preflight when delivery posture evidence is under-observed', async () => {
     writeCompletedMilestoneFixture(tmpDir);
     writeMilestoneAudit(tmpDir, {
@@ -2043,6 +2066,29 @@ describe('Phase 31 evidence-gated closure helpers', () => {
     assert.strictEqual(supportedRepo.status, 'supported');
     assert.strictEqual(supportedRepo.disposition, 'proceed');
     assert.deepStrictEqual(supportedRepo.missingKinds, []);
+  });
+
+  test('release closeout contract fails closed on unknown contradiction check keys', async () => {
+    const mod = await importEvidenceContractModule();
+
+    const result = mod.evaluateReleaseClaimCloseoutContract({
+      surface: 'complete-milestone',
+      releaseClaimPosture: 'repo_closeout',
+      observedKinds: ['code', 'test'],
+      contradictionChecks: {
+        evidence: 'passed',
+        public_surface: 'not_applicable',
+        runtime: 'not_applicable',
+        delivery: 'not_applicable',
+        planning_drift: 'passed',
+        generated_surface: 'not_applicable',
+        security: 'failed',
+      },
+    });
+
+    assert.strictEqual(result.status, 'unsupported');
+    assert.deepStrictEqual(result.unknownContradictionChecks, ['security']);
+    assert.ok(result.blockers.some((blocker) => blocker.code === 'unknown_release_contradiction_checks'));
   });
 
   test('lifecycle preflight exposes closure evidence metadata only for closure surfaces', async () => {
