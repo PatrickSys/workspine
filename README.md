@@ -349,6 +349,7 @@ Workflows are agent skills or commands, not plain shell utilities. How you invok
 | `npx -y gsdd-cli file-op <copy\|delete\|regex-sub>` | Run deterministic workspace-confined file copy, delete, and regex substitution |
 | `npx -y gsdd-cli find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `npx -y gsdd-cli phase-status <N> <status>` | Update a single ROADMAP phase status through the status-aware helper |
+| `npx -y gsdd-cli session-fingerprint write` | Refresh the local planning-state drift baseline |
 | `npx -y gsdd-cli verify <N>` | Run artifact checks for phase N |
 | `npx -y gsdd-cli scaffold phase <N> [name]` | Create a new phase plan file |
 | `npx -y gsdd-cli models [show\|profile\|set\|...]` | Inspect and manage model profile propagation |

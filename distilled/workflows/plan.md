@@ -419,15 +419,12 @@ notes: [What the checker actually validated or why it was skipped]
 
 <approach_exploration>
 ### When This Runs
-
 Check `.planning/config.json` for `workflow.discuss`:
 - If `workflow.discuss: false` (or key missing): skip this section, go to `<goal_backward_planning>`. Note `reduced_alignment` in the orchestration summary.
 - If `workflow.discuss: true`: mandatory before planning.
 
 ### Check for Existing APPROACH.md
-
 Check if `{phase_dir}/{padded_phase}-APPROACH.md` exists.
-
 **If exists:**
 Offer the user a choice:
 - "Use existing" — load decisions from APPROACH.md, skip to `<goal_backward_planning>`
@@ -438,9 +435,7 @@ Offer the user a choice:
 Run the approach explorer.
 
 ### Running the Approach Explorer
-
 **Primary path — inline conversation with research subagents:**
-
 The conversation with the user runs inline in the main context. For each technical gray area, a read-only research subagent is spawned to isolate heavy codebase and documentation reads, returning only compressed summaries.
 
 1. Load context: read ONLY locked decisions from `.planning/SPEC.md` and the target phase goal/requirements from `.planning/ROADMAP.md`.
