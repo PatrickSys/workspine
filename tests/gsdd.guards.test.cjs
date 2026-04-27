@@ -2150,6 +2150,21 @@ describe('G28 - Spec Quality Check and Contradiction Detection', () => {
     }
   });
 
+  test('planner role uses the same anti-drift plan schema as plan.md', () => {
+    const plannerRole = fs.readFileSync(path.join(ROOT, 'agents', 'planner.md'), 'utf-8');
+    for (const token of ['non_goals', 'hard_boundaries', 'escalation_triggers', 'approval_gates', 'anti_regression_targets', 'known_unknowns', 'high_leverage_surfaces', 'second_pass_required', 'closure_claim_limit', 'parallelism_budget', 'leverage']) {
+      assert.match(plannerRole, new RegExp(token),
+        `planner role must include anti-drift contract field "${token}". FIX: Keep planner.md schema aligned with plan.md.`);
+    }
+  });
+
+  test('plan-checker status semantics force warnings through issues_found', () => {
+    assert.match(planCheckerDelegate, /Use `"status": "passed"` only when `"issues": \[\]`/,
+      'plan-checker must reserve passed for an empty issues list. FIX: Make warnings use issues_found.');
+    assert.match(planCheckerDelegate, /any blocker or warning exists/i,
+      'plan-checker must route warnings through issues_found. FIX: Remove checker-discretion warning handling.');
+  });
+
   test('plan-checker.md context_compliance has must-have coverage sub-check', () => {
     assert.ok(
       planCheckerDelegate.includes('Must-have coverage'),

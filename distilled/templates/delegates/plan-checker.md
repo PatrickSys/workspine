@@ -66,8 +66,8 @@ Return JSON only as a single object with this shape:
 
 Rules:
 - Status must be either `"passed"` or `"issues_found"`.
-- Use `"status": "passed"` only when no blockers remain. Warnings may still be listed.
-- Use `"status": "issues_found"` when any blocker exists or when warnings should be surfaced for revision.
+- Use `"status": "passed"` only when `"issues": []`.
+- Use `"status": "issues_found"` when any blocker or warning exists so the orchestrator must surface it for revision or explicit acceptance.
 - Keep `fix_hint` targeted. The planner should patch the existing plan, not replan from scratch, unless the issue is fundamental.
 - If there are no issues, return `"issues": []`.
 
