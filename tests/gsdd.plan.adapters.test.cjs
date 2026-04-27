@@ -103,6 +103,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(opencodePlanCommand, /Status must be either "passed" or "issues_found"\./);
     assert.match(opencodePlanCommand, /alignment_status: user_confirmed/);
     assert.match(opencodePlanCommand, /alignment_status: approved_skip/);
+    assert.match(opencodePlanCommand, /all canonical proof fields[\s\S]{0,260}alignment_status[\s\S]{0,80}alignment_method[\s\S]{0,80}user_confirmed_at[\s\S]{0,80}explicit_skip_approved[\s\S]{0,80}skip_scope[\s\S]{0,80}skip_rationale[\s\S]{0,80}confirmed_decisions/);
     assert.match(opencodePlanCommand, /confirmed_decisions/);
     assert.match(opencodePlanCommand, /explicit_skip_approved: true/);
     assert.match(opencodePlanCommand, /skip_scope/);
