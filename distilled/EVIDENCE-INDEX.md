@@ -101,7 +101,7 @@
 - `.internal-research/gsd-distilled-audit-13th-march-2026.md` — Highest-ROI recommendation #3
 
 ## D13 — Mechanical Invariant Enforcement
-- `tests/gsdd.invariants.test.cjs` lines 1015+ (6 suites, ~106 assertions)
+- `tests/gsdd.invariants.test.cjs` and `tests/gsdd.guards.test.cjs` enforce structural drift checks with actionable `FIX:` messages
 - OpenAI Harness Engineering blog (Feb 2026): "error messages as enforcement mechanism"
 - External audit (2026-03-13): recommendation #4 "Mechanize the framework's invariants"
 - PRs #20-23: orphan `</output>` tags survived 4 manual review cycles before G4 caught them

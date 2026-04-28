@@ -58,7 +58,7 @@ Verification is a separate workflow with a separate context window, not a checkb
 
 ### Rules that must be consistent are enforced by code, not by memory
 
-1,381 tests across 13 test files guard properties that PRs repeatedly broke: delegate-role reference integrity, workflow vendor-API cleanliness, artifact schema consistency, plan-checker dimension coverage, and cross-document drift.
+Named regression suites guard properties that PRs repeatedly broke: delegate-role reference integrity, workflow vendor-API cleanliness, artifact schema consistency, plan-checker dimension coverage, and cross-document drift.
 
 <details>
 <summary>How it works</summary>
@@ -542,7 +542,7 @@ Key choices:
 
 ## Testing
 
-The framework has 1,381 tests across 13 test files — named suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
+The framework has named regression suites that guard properties PRs repeatedly fixed manually. These are not unit tests for application code; they are invariant checks on the specification itself.
 
 ### Invariant Suites (I-series)
 
@@ -561,7 +561,7 @@ Structural contracts that prevent drift between roles, delegates, workflows, and
 | **I7** | Plan-checker dimension integrity — 7 dimensions present and correctly structured |
 | **I8** | Workflow vendor API cleanliness — no platform-specific calls in portable workflows |
 | **I9** | No deprecated content — no vendor paths, dropped files, legacy tooling |
-| **I10** | Mandatory initial-read enforcement on hardened lifecycle roles |
+| **I10** | Mandatory context-intake enforcement on hardened lifecycle roles |
 | **S13** | STATE.md elimination — D7 compliance verified across all artifacts |
 
 ### Guard Suites (G-series)

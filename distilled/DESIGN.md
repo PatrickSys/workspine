@@ -153,13 +153,13 @@ The same over-distillation pattern had also flattened `roadmapper.md`, `synthesi
 
 **Executor leverage audit (2026-03-13):**
 
-The executor was the last un-audited core lifecycle role. At 89 lines it was the most under-structured role contract in the system — no XML section boundaries, no mandatory initial read, no scope boundary, no typed output example, no auth-gate protocol, no completion checklist. The audit applied the same S12 hardening pattern.
+The executor was the last un-audited core lifecycle role. At 89 lines it was the most under-structured role contract in the system — no XML section boundaries, no explicit context-intake tiers, no scope boundary, no typed output example, no auth-gate protocol, no completion checklist. The audit applied the same S12 hardening pattern.
 
-- **Executor kept from GSD:** mandatory initial-read discipline, explicit deviation-rule examples (null pointers, missing auth, missing dependency, new DB tables), auth-gate protocol (401/403 recognition, checkpoint return with exact auth steps), substantive summary quality gate, TDD RED/GREEN/REFACTOR steps with infrastructure detection, self-check discipline, and completion checklist.
+- **Executor kept from GSD:** mandatory context-intake discipline, explicit deviation-rule examples (null pointers, missing auth, missing dependency, new DB tables), auth-gate protocol (401/403 recognition, checkpoint return with exact auth steps), substantive summary quality gate, TDD RED/GREEN/REFACTOR steps with infrastructure detection, self-check discipline, and completion checklist.
 - **Executor intentionally stripped:** wave-based parallelization, agent tracking journal, segment execution patterns A/B/C, auto-mode checkpoint routing (`auto_advance` config), per-task commit format `{type}({phase}-{plan}):`, `gsd-tools.cjs` CLI commands, template path references (`~/.claude/`), `user_setup` generation, `executor_model` selection, and codebase-map sync with dropped files (`STRUCTURE.md`, `INTEGRATIONS.md`).
 - **Executor gained in GSDD:** XML-bounded section structure, explicit scope boundary (plan-scoped, does not own planning/verification/milestone audit), typed SUMMARY.md output example with YAML frontmatter, portable auth-gate protocol (checkpoint:user with exact steps, not vendor-specific checkpoint return format), and execution-loop alignment with the current GSDD plan schema (`checkpoint:user`, `checkpoint:review`, change-impact discipline).
 
-The accompanying workflow alignment pass on `distilled/workflows/execute.md` added four targeted changes: mandatory read enforcement upgrade, auth-gate routing in the checkpoint protocol, concrete deviation-rule examples matching the role contract, and a substantive summary quality gate.
+The accompanying workflow alignment pass on `distilled/workflows/execute.md` added four targeted changes: tiered context-intake enforcement, auth-gate routing in the checkpoint protocol, concrete deviation-rule examples matching the role contract, and a substantive summary quality gate.
 
 This hardening pass also clarified a reusable architectural rule: strict portable workflows are not enough if the canonical role contracts underneath them are flattened into prose. Role strictness and workflow strictness both matter.
 
@@ -583,7 +583,7 @@ Design principle unchanged: derive state from primary artifacts (ROADMAP.md, SPE
 
 **GSD:** No structural invariant tests. Framework correctness relies on manual review and ad-hoc checking.
 
-**GSDD:** 6 invariant suites (G1-G7, G2 reserved) with ~106 assertions enforce structural properties across all 29 framework markdown files. Every assertion message includes a `FIX:` instruction so CI agents can self-remediate.
+**GSDD:** The guard and invariant suites enforce structural properties across framework markdown files. Every assertion message includes a `FIX:` instruction so CI agents can self-remediate.
 
 **Suite inventory:**
 
@@ -602,7 +602,7 @@ Design principle unchanged: derive state from primary artifacts (ROADMAP.md, SPE
 
 **Evidence:**
 
-- `tests/gsdd.invariants.test.cjs` lines 1015+ (6 suites, ~106 assertions)
+- `tests/gsdd.invariants.test.cjs` and `tests/gsdd.guards.test.cjs` enforce structural drift checks with actionable `FIX:` messages
 - OpenAI Harness Engineering blog (Feb 2026): "error messages as enforcement mechanism"
 - External audit (2026-03-13): recommendation #4 "Mechanize the framework's invariants"
 - GSD source: no equivalent test infrastructure
