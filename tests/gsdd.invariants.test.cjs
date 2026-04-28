@@ -1555,6 +1555,16 @@ describe('G8 — Auto-Mode Contract', () => {
     );
   });
 
+  test('auto_mode does not imply lifecycle auto-progression', () => {
+    const autoSection = newProjectContent.match(/<auto_mode>([\s\S]*?)<\/auto_mode>/);
+    assert.ok(autoSection, 'new-project.md must have <auto_mode> section');
+    assert.match(
+      autoSection[1],
+      /Do NOT auto-progress into plan, execute, verify, release, or delivery/i,
+      'auto_mode must forbid lifecycle auto-progression. FIX: Keep autoAdvance limited to new-project artifact creation.'
+    );
+  });
+
   test('auto_mode bypass list includes project_principles and capability_gates', () => {
     const autoSection = newProjectContent.match(/<auto_mode>([\s\S]*?)<\/auto_mode>/);
     assert.ok(autoSection, 'new-project.md must have <auto_mode> section');
@@ -1604,6 +1614,20 @@ describe('G8 — Auto-Mode Contract', () => {
       capabilityGates[1].includes('Deferred'),
       'capability_gates must document the deferred-review placeholder for auto mode. FIX: Add the explicit deferred gate-review placeholder text.'
     );
+  });
+
+  test('new-project runtime instructions avoid stale source/performance claims while preserving gates', () => {
+    assert.doesNotMatch(
+      newProjectContent,
+      /90\.2%|SOTA Insight: Derived from|SOTA: Anthropic Agent Teams|SOTA: GitHub Blog|SOTA: Cyanluna|SOTA framework/,
+      'new-project.md must not carry stale named-source or numeric performance shorthand in runtime instructions. FIX: Keep source trails in design/research docs.'
+    );
+    assert.match(newProjectContent, /Typed Data Schemas/,
+      'new-project.md must keep typed schema gate. FIX: Restore typed data schema requirement.');
+    assert.match(newProjectContent, /Done-When Verification Chain/,
+      'new-project.md must keep Done-When verification gate. FIX: Restore Done-When requirement.');
+    assert.match(newProjectContent, /Capability & Security Gates/,
+      'new-project.md must keep capability/security gate. FIX: Restore capability gate requirement.');
   });
 });
 

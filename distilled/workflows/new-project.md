@@ -20,7 +20,7 @@ When `autoAdvance: true`, this workflow runs non-interactively:
 
 5. **Keep quality gates:** All quality checks in `<spec_creation>` and `<roadmap_creation>` still apply. Thoroughness is preserved; only user wait-points are removed.
 
-6. **After completion:** Report what was created and any assumptions inferred from the brief. Do NOT auto-advance to planning — the user or CI system decides when to start planning.
+6. **After completion:** Report what was created and any assumptions inferred from the brief. Do NOT auto-progress into plan, execute, verify, release, or delivery. The user or CI system must start any later lifecycle workflow explicitly.
 
 All other sections (`<detect_mode>`, `<codebase_context>`, `<research>`, `<spec_creation>`, `<roadmap_creation>`, `<success_criteria>`) execute normally. Auto mode bypasses: the `<questioning>` section, both `<approval_gate>` blocks, the user question in `<project_principles>`, and the user question in `<capability_gates>`. All other workflow logic executes normally.
 </auto_mode>
@@ -33,8 +33,8 @@ Before starting, read these files (if they exist):
 4. Project root files: `package.json`, `README.md`, main entry point, `.gitignore`
 5. `.planning/config.json` — The deterministic project settings. Key fields:
    - `researchDepth`: balanced | fast | deep — controls research thoroughness
-   - `parallelization`: true | false � whether to run delegate work in parallel when the platform supports it; when false, run the same delegates sequentially
-   - `workflow.research`: true | false — whether to do SOTA research before spec
+   - `parallelization`: true | false - whether to run delegate work in parallel when the platform supports it; when false, run the same delegates sequentially
+   - `workflow.research`: true | false - whether to do domain research before spec
    - `workflow.planCheck`: true | false — whether plan-check agent runs later
    - `workflow.verifier`: true | false — whether verifier runs after execution
    - `modelProfile`: balanced | quality | budget — model selection hint
@@ -44,7 +44,6 @@ Before starting, read these files (if they exist):
 </load_context>
 
 <project_principles>
-**(SOTA Insight: Derived from Spec-Kit)**
 Before diving into technical specifications, establish the core governing principles of the project.
 If `autoAdvance: true` in `.planning/config.json`, skip this question. Infer core principles
 from the project brief (code quality signals, constraint language, scope decisions) and note
@@ -161,7 +160,7 @@ Before creating a spec, you MUST have clear answers to:
 - **3-5 rounds minimum** for non-trivial projects
 
 ### Categorizing Requirements (Crucial)
-As the user provides answers, you must mentally categorize the features they request using the SOTA framework:
+As the user provides answers, you must mentally categorize the features they request:
 1. **Table Stakes**: Features users absolutely expect. Without them, your product feels broken (e.g., password reset).
 2. **Differentiators**: Features that set this project apart from competitors.
 3. **Out of Scope**: Explicit anti-requirements for v1 to prevent scope creep.
@@ -202,28 +201,27 @@ MANDATORY STEP. After the goal is clarified but BEFORE writing any specs.
 
 **Check config first:** Read `.planning/config.json`.
 - If `workflow.research: false` → skip this section entirely, go to `<spec_creation>`.
-- If `researchDepth: "fast"` � use the same 4 specialists below, then synthesize `SUMMARY.md` inline. Faster and cheaper; acceptable for well-known domains.
-- If `researchDepth: "balanced"` or `"deep"` � use the same 4 specialists below plus the synthesizer (default).
+- If `researchDepth: "fast"` - use the same 4 specialists below, then synthesize `SUMMARY.md` inline. Faster and cheaper; acceptable for well-known domains.
+- If `researchDepth: "balanced"` or `"deep"` - use the same 4 specialists below plus the synthesizer (default).
 
-### Why Parallel Specialists, Not One Generalist
-**(SOTA: Anthropic Agent Teams, OpenAI Multi-Agents — 90.2% performance improvement for complex research tasks)**
+### Why Specialists, Not One Generalist
 
 DO NOT research in this main thread — noisy intermediate output pollutes the context window.
 DO NOT use a single generalist to write all research files — domain switching degrades quality.
 
 Use the same 4 specialized researchers every time. The difference is execution order and synthesis mode.
-- If `parallelization: true` and your platform supports parallel execution (`run_in_background=true`, async tasks, etc.) � run all 4 simultaneously.
-- If `parallelization: false` or your platform lacks parallel execution � run the same 4 researchers sequentially.
-- If `researchDepth: "fast"` � synthesize inline after the 4 researcher outputs return.
-- If `researchDepth: "balanced"` or `"deep"` � use the synthesizer delegate after the 4 researcher outputs are written.
+- If `parallelization: true` and your platform supports parallel execution (`run_in_background=true`, async tasks, etc.) - run all 4 simultaneously.
+- If `parallelization: false` or your platform lacks parallel execution - run the same 4 researchers sequentially.
+- If `researchDepth: "fast"` - synthesize inline after the 4 researcher outputs return.
+- If `researchDepth: "balanced"` or `"deep"` - use the synthesizer delegate after the 4 researcher outputs are written.
 
 
 ```
-◆ Spawning 4 researchers in parallel...
-  → Stack research        → .planning/research/STACK.md
-  → Features research     → .planning/research/FEATURES.md
-  → Architecture research → .planning/research/ARCHITECTURE.md
-  → Pitfalls research     → .planning/research/PITFALLS.md
+Spawning 4 researchers...
+  -> Stack research        -> .planning/research/STACK.md
+  -> Features research     -> .planning/research/FEATURES.md
+  -> Architecture research -> .planning/research/ARCHITECTURE.md
+  -> Pitfalls research     -> .planning/research/PITFALLS.md
 ```
 
 Ensure `.planning/research/` directory exists before spawning.
@@ -234,7 +232,7 @@ Parallel: (use parallelization value from .planning/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-stack.md` for full task instructions. Apply the project goal and milestone context provided above.
 Output: `.planning/research/STACK.md`
-Return: 3-5 sentence summary to Orchestrator.
+Return: 3-5 sentence summary to Orchestrator; full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3.
 </delegate>
 
@@ -244,7 +242,7 @@ Parallel: (use parallelization value from .planning/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-features.md` for full task instructions. Apply the project goal and milestone context provided above.
 Output: `.planning/research/FEATURES.md`
-Return: 3-5 sentence summary to Orchestrator.
+Return: 3-5 sentence summary to Orchestrator; full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3.
 </delegate>
 
@@ -254,7 +252,7 @@ Parallel: (use parallelization value from .planning/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-architecture.md` for full task instructions. Apply the project goal and milestone context provided above.
 Output: `.planning/research/ARCHITECTURE.md`
-Return: 3-5 sentence summary to Orchestrator.
+Return: 3-5 sentence summary to Orchestrator; full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3.
 </delegate>
 
@@ -264,14 +262,14 @@ Parallel: (use parallelization value from .planning/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-pitfalls.md` for full task instructions. Apply the project goal and milestone context provided above.
 Output: `.planning/research/PITFALLS.md`
-Return: 3-5 sentence summary to Orchestrator.
+Return: 3-5 sentence summary to Orchestrator; full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3.
 </delegate>
 
 **After all 4 researchers complete**, synthesize based on `researchDepth`:
 
 **If `researchDepth: "fast"`:** Synthesize inline.
-You hold 4 × 3-5 sentence summaries. Write `.planning/research/SUMMARY.md` directly using `.planning/templates/research/summary.md`. Cross-reference the summaries. Do NOT spawn another agent.
+You hold 4 x 3-5 sentence summaries. Write `.planning/research/SUMMARY.md` directly using `.planning/templates/research/summary.md`. Cross-reference the summaries. Do NOT spawn another agent.
 
 **If `researchDepth: "balanced"` or `"deep"`:** Spawn synthesizer to read the full research files.
 
@@ -281,7 +279,7 @@ Parallel: false
 Context: Researcher summaries returned above. DO NOT share conversation history.
 Instruction: Read `.planning/templates/delegates/researcher-synthesizer.md` for full task instructions.
 Output: `.planning/research/SUMMARY.md`
-Return: 5-7 bullet key findings to Orchestrator.
+Return: 5-7 bullet key findings to Orchestrator; full synthesis stays in the output artifact.
 Guardrails: Max Agent Hops = 2. Do not do new research — synthesize only.
 </delegate>
 
@@ -293,7 +291,7 @@ Display key findings before moving to spec creation.
 - [ ] All 4 specialist files written to `.planning/research/`
 - [ ] SUMMARY.md written with "Implications for Roadmap" section populated
 - [ ] Negative claims verified with current web docs (not training data)
-- [ ] Confidence levels assigned: ✅ verified, ⚠️ likely, ❓ uncertain
+- [ ] Confidence levels assigned: verified | likely | uncertain
 
 **Commit**: `docs: add domain research`
 </research>
@@ -301,7 +299,7 @@ Display key findings before moving to spec creation.
 **STOP. Research is complete. Do NOT write any application code. Proceed to spec creation below. Your job now is to produce SPEC.md and ROADMAP.md — not to build the project.**
 
 <data_schema_definition>
-Before writing SPEC.md, define core Data Models/Typed Schemas *(SOTA: GitHub Blog — "Multi-agent workflows often fail")*. Multi-agent systems require typed schemas to pass reliable state. These schemas MUST be included in SPEC.md (see item 7 in `<spec_creation>` below). Also define Done-When verification criteria for every requirement (see item 8). *SPEC.md defines WHAT, not HOW — do not include implementation tasks.*
+Before writing SPEC.md, define core Data Models/Typed Schemas. Multi-agent handoffs require typed schemas to pass reliable state. These schemas MUST be included in SPEC.md (see item 7 in `<spec_creation>` below). Also define Done-When verification criteria for every requirement (see item 8). *SPEC.md defines WHAT, not HOW - do not include implementation tasks.*
 </data_schema_definition>
 
 <spec_creation>
@@ -312,15 +310,14 @@ After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
 3. **Requirements have IDs**: `AUTH-01`, `DATA-02`, `UI-03`
 4. **Requirements are ordered** by priority within each category
 5. **Out of Scope is populated** — includes things the developer explicitly said "not now" AND anti-features found in Research.
-6. **Key Decisions are logged** — any choices made during questioning or dictated by the SOTA research.
-7. **Typed Data Schemas** *(SOTA: GitHub Blog — "Multi-agent workflows often fail")*: explicitly define the core Data Models/Typed Schemas the project will use (e.g., `type UserProfile = { id: number; plan: 'free' | 'pro' }`). Multi-agent systems require typed schemas to pass reliable state; natural language instructions fail across agent handoffs. *SPEC.md defines WHAT, not HOW — do not include implementation tasks.*
-8. **Done-When Verification Chain** *(SOTA: Cyanluna)*: For EVERY requirement in the "Must Have (v1)" section, define a clear, verifiable `[Done-When: ...]` criterion. "User can log in" must become "User can log in [Done-When: Login form submits, JWT is received, and User is redirected to Dashboard]". No exceptions.
+6. **Key Decisions are logged** — any choices made during questioning or dictated by the research.
+7. **Typed Data Schemas**: explicitly define the core Data Models/Typed Schemas the project will use (e.g., `type UserProfile = { id: number; plan: 'free' | 'pro' }`). Multi-agent handoffs require typed schemas to pass reliable state; natural language instructions fail across agent handoffs. *SPEC.md defines WHAT, not HOW - do not include implementation tasks.*
+8. **Done-When Verification Chain**: For EVERY requirement in the "Must Have (v1)" section, define a clear, verifiable `[Done-When: ...]` criterion. "User can log in" must become "User can log in [Done-When: Login form submits, JWT is received, and User is redirected to Dashboard]". No exceptions.
 9. **Capability & Security Gates**: Handle per the `<capability_gates>` section at the end of this `<spec_creation>` block.
 10. **Authorization Matrix (optional)**: For projects with multiple user roles or protected resources, create `.planning/AUTH_MATRIX.md` using the template at `.planning/templates/auth-matrix.md`. The integration checker will use this matrix for systematic auth verification during milestone audits.
 11. **ROADMAP phase status is initialized** with Phase 1 marked `[ ]` / not started using the roadmap template's phase-status language.
 
 <capability_gates>
-**(SOTA Insight: Derived from OpenFang - "16 Security Systems & Capability Gates")**
 Before finishing SPEC.md, explicitly define what the agents are NOT allowed to do automatically without human approval.
 If `autoAdvance: true`, skip this question. Add a deferred placeholder to SPEC.md:
 "## Capability & Security Gates\n_Deferred — auto mode cannot elicit gate preferences; requires explicit review before production deployment._"
@@ -410,7 +407,7 @@ Init is DONE when ALL of these are true:
 
 - [ ] Codebase audit completed (brownfield) OR greenfield confirmed
 - [ ] Developer was questioned in depth (3+ rounds for non-trivial projects) — [interactive only; skip when autoAdvance: true]
-- [ ] Research subagent spawned and SOTA patterns retrieved
+- [ ] Research subagent spawned and domain patterns retrieved
 - [ ] `SPEC.md` exists with testable requirements, out-of-scope, and current state
 - [ ] SPEC.md was reviewed and approved by the developer — [interactive only; skip when autoAdvance: true]
 - [ ] ROADMAP.md exists with phases, success criteria, and requirement mapping

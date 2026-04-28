@@ -169,9 +169,9 @@ Read `.planning/config.json`.
 If the checker returns `issues_found` with blockers and this is the first cycle:
 1. Send the issue list back to the planner for targeted revision of the plan file.
 2. Re-run the checker once more.
-3. If blockers remain after 1 revision cycle, store `$CHECKER_ISSUES` for display in the plan preview. Do NOT block — the user decides in Step 3.7.
+3. If blockers remain after 1 revision cycle, store `$CHECKER_ISSUES` for display in the plan preview and set `$RISK_ACCEPTANCE_REQUIRED=true`. Do not execute from default Enter; the user must explicitly accept the known risk in Step 3.7.
 
-If the checker returns `passed`, or `workflow.planCheck` is false, `$CHECKER_ISSUES` is empty.
+If the checker returns `passed`, or `workflow.planCheck` is false, `$CHECKER_ISSUES` is empty and `$RISK_ACCEPTANCE_REQUIRED=false`.
 
 ---
 
@@ -222,14 +222,18 @@ If `$CHECKER_ISSUES` is non-empty, append:
 Plan check issues: {$CHECKER_ISSUES}
 ```
 
-Present options (default-yes — pressing Enter proceeds):
-- If `$SCOPE_WARNING` is empty: `[Enter to proceed / edit description / abort]`
-- If `$SCOPE_WARNING` contains `/gsdd-new-project`: `[Enter to proceed / switch to /gsdd-new-project / edit description / abort]`
+Present options:
+- If `$CHECKER_ISSUES` is non-empty: `[type "proceed despite issues" to execute / edit description / abort]`
+- Otherwise if `$SCOPE_WARNING` is empty: `[Enter to proceed / edit description / abort]`
+- Otherwise if `$SCOPE_WARNING` contains `/gsdd-new-project`: `[Enter to proceed / switch to /gsdd-new-project / edit description / abort]`
 - Otherwise if `$SCOPE_WARNING` contains `/gsdd-map-codebase`: `[Enter to proceed / switch to /gsdd-map-codebase / edit description / abort]`
 - Otherwise if `$SCOPE_WARNING` is non-empty: `[Enter to proceed / switch to /gsdd-plan / edit description / abort]`
 
+Default-yes applies only when `$CHECKER_ISSUES` is empty. When unresolved checker blockers remain, pressing Enter must not execute; repeat the issues and ask for `proceed despite issues`, `edit description`, or `abort`.
+
 Handle response:
-- **Enter (or "yes"):** proceed to Step 4.
+- **Enter (or "yes") when `$CHECKER_ISSUES` is empty:** proceed to Step 4.
+- **"proceed despite issues" when `$CHECKER_ISSUES` is non-empty:** proceed to Step 4 and record the explicit risk acceptance in the quick summary.
 - **"edit description":** clean up the task directory, then return to Step 1 with `$DESCRIPTION` pre-filled as the starting point.
 - **"switch to /gsdd-new-project":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd-new-project` to define or intentionally widen the work into full lifecycle planning. Task description: {$DESCRIPTION}"
 - **"switch to /gsdd-map-codebase":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd-map-codebase` for a deeper brownfield baseline before quick work. Task description: {$DESCRIPTION}"

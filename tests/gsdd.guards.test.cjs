@@ -1685,12 +1685,45 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md plan preview must have default-yes (Enter to proceed) confirmation (D32). FIX: Add default-yes prompt to plan preview.');
   });
 
+  test('quick.md requires explicit risk acceptance when checker blockers remain', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    const step35Start = content.indexOf('## Step 3.5');
+    const step36Start = content.indexOf('## Step 3.6');
+    const previewStart = content.indexOf('## Step 3.7');
+    const step4Start = content.indexOf('## Step 4');
+    assert.ok(step35Start > -1 && step36Start > -1 && previewStart > -1 && step4Start > -1,
+      'quick.md must have Step 3.5, 3.6, 3.7, and 4.');
+    const checkerSection = content.slice(step35Start, step36Start);
+    const previewSection = content.slice(previewStart, step4Start);
+
+    assert.match(checkerSection, /\$RISK_ACCEPTANCE_REQUIRED=true/,
+      'quick.md must mark unresolved checker blockers as risk-acceptance-required. FIX: Set $RISK_ACCEPTANCE_REQUIRED when blockers remain.');
+    assert.match(previewSection, /proceed despite issues/,
+      'quick.md preview must require the explicit phrase "proceed despite issues" when checker blockers remain. FIX: Add the explicit-risk option.');
+    assert.match(previewSection, /pressing Enter must not execute/i,
+      'quick.md preview must forbid default Enter when checker blockers remain. FIX: Add non-default handling for $CHECKER_ISSUES.');
+  });
+
+  test('quick.md preserves default-yes only for previews without checker issues', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
+    const previewStart = content.indexOf('## Step 3.7');
+    const step4Start = content.indexOf('## Step 4');
+    assert.ok(previewStart > -1 && step4Start > -1,
+      'quick.md must have Step 3.7 and Step 4.');
+    const previewSection = content.slice(previewStart, step4Start);
+
+    assert.match(previewSection, /Default-yes applies only when `\$CHECKER_ISSUES` is empty/i,
+      'quick.md must scope default-yes to clean checker state. FIX: Add default-yes condition for empty $CHECKER_ISSUES.');
+    assert.match(previewSection, /Enter \(or "yes"\) when `\$CHECKER_ISSUES` is empty/i,
+      'quick.md must keep Enter/yes for normal clean previews. FIX: Preserve the clean quick happy path.');
+  });
+
   test('quick.md preview edit branch cleans up provisional task directory', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     const previewStart = content.indexOf('## Step 3.7');
     assert.ok(previewStart > -1,
       'quick.md must have ## Step 3.7 plan preview section. FIX: Add Step 3.7 plan preview.');
-    const previewSection = content.slice(previewStart, previewStart + 2200);
+    const previewSection = content.slice(previewStart, previewStart + 3200);
     assert.match(previewSection, /edit description.*clean up the task directory/i,
       'quick.md must clean up the provisional quick-task directory before returning to Step 1 from the plan preview. FIX: Add cleanup to the "edit description" branch.');
   });
@@ -1700,7 +1733,7 @@ describe('G24 - Hardening Propagation', () => {
     const previewStart = content.indexOf('## Step 3.7');
     assert.ok(previewStart > -1,
       'quick.md must have ## Step 3.7 plan preview section. FIX: Add Step 3.7 plan preview.');
-    const previewSection = content.slice(previewStart, previewStart + 2200);
+    const previewSection = content.slice(previewStart, previewStart + 3200);
     assert.match(previewSection, /switch to \/gsdd-plan.*clean up the task directory/i,
       'quick.md must clean up the provisional quick-task directory before switching to /gsdd-plan from the plan preview. FIX: Add cleanup to the "switch to /gsdd-plan" branch.');
   });

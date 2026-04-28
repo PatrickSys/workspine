@@ -164,10 +164,10 @@ export function createCmdHealth(ctx) {
         if (!cat.hashes) continue;
         const result = detectModifications(cat.dir, cat.hashes);
         if (result.modified.length > 0) {
-          warnings.push({ id: 'W2', severity: 'WARN', message: `${cat.name}: ${result.modified.length} file(s) modified locally (${result.modified.join(', ')})`, fix: `Intentional? Run \`${cat.fixCommand}\` to reset` });
+          warnings.push({ id: 'W2', severity: 'WARN', message: `${cat.name}: ${result.modified.length} manifest-tracked installed file(s) modified locally (${result.modified.join(', ')})`, fix: `Intentional? Run \`${cat.fixCommand}\` to reset` });
         }
         if (result.missing.length > 0) {
-          warnings.push({ id: 'W3', severity: 'WARN', message: `${cat.name}: ${result.missing.length} file(s) missing from disk (${result.missing.join(', ')})`, fix: `Run \`${cat.fixCommand}\` to restore` });
+          warnings.push({ id: 'W3', severity: 'WARN', message: `${cat.name}: ${result.missing.length} manifest-tracked installed file(s) missing from disk (${result.missing.join(', ')})`, fix: `Run \`${cat.fixCommand}\` to restore` });
         }
       }
     }
@@ -201,16 +201,9 @@ export function createCmdHealth(ctx) {
       }
     }
 
-    // W6: No adapter surfaces detected
-    const adapterPaths = [
-      join(cwd, '.agents', 'skills'),
-      join(cwd, '.claude'),
-      join(cwd, '.opencode'),
-      join(cwd, '.codex'),
-    ];
-    const hasAnyAdapter = adapterPaths.some((p) => existsSync(p));
-    if (!hasAnyAdapter) {
-      warnings.push({ id: 'W6', severity: 'WARN', message: 'No adapter surfaces detected', fix: 'Run `npx -y gsdd-cli init --tools <platform>`' });
+    // W6: No generated workflow adapter surfaces detected
+    if (!hasAnyGeneratedWorkflowSurface(cwd)) {
+      warnings.push({ id: 'W6', severity: 'WARN', message: 'No generated workflow adapter surfaces detected', fix: 'Run `npx -y gsdd-cli init --tools <platform>`' });
     }
 
     const runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
@@ -245,15 +238,15 @@ export function createCmdHealth(ctx) {
       });
     }
 
-    // I3: Which adapters are installed
-    const installedAdapters = [];
-    if (existsSync(join(cwd, '.agents', 'skills'))) installedAdapters.push('open-standard-skills');
-    if (existsSync(join(cwd, '.claude'))) installedAdapters.push('claude');
-    if (existsSync(join(cwd, '.opencode'))) installedAdapters.push('opencode');
-    if (existsSync(join(cwd, '.codex'))) installedAdapters.push('codex');
-    if (existsSync(join(cwd, 'AGENTS.md'))) installedAdapters.push('agents');
-    if (installedAdapters.length > 0) {
-      info.push({ id: 'I3', severity: 'INFO', message: `Adapters installed: ${installedAdapters.join(', ')}` });
+    // I3: Which runtime/governance surfaces are installed
+    const installedSurfaces = [];
+    if (hasGeneratedSkillSurface(cwd)) installedSurfaces.push('open-standard-skills');
+    if (hasGeneratedClaudeSurface(cwd)) installedSurfaces.push('claude');
+    if (hasGeneratedOpenCodeSurface(cwd)) installedSurfaces.push('opencode');
+    if (hasGeneratedCodexSurface(cwd)) installedSurfaces.push('codex');
+    if (existsSync(join(cwd, 'AGENTS.md'))) installedSurfaces.push('root AGENTS.md governance-only');
+    if (installedSurfaces.length > 0) {
+      info.push({ id: 'I3', severity: 'INFO', message: `Installed runtime/governance surfaces: ${installedSurfaces.join(', ')}` });
     }
 
     // --- Verdict ---
@@ -281,6 +274,78 @@ export function createCmdHealth(ctx) {
   };
 }
 
+function hasAnyGeneratedWorkflowSurface(cwd) {
+  return hasGeneratedSkillSurface(cwd)
+    || hasGeneratedClaudeEntrySurface(cwd)
+    || hasGeneratedOpenCodeEntrySurface(cwd);
+}
+
+function hasGeneratedSkillSurface(cwd) {
+  return hasGeneratedSkillDirectory(join(cwd, '.agents', 'skills'));
+}
+
+function hasGeneratedClaudeSurface(cwd) {
+  return hasGeneratedClaudeEntrySurface(cwd)
+    || hasGeneratedMarkdownFile(join(cwd, '.claude', 'agents'));
+}
+
+function hasGeneratedClaudeEntrySurface(cwd) {
+  return hasGeneratedSkillDirectory(join(cwd, '.claude', 'skills'))
+    || hasGeneratedMarkdownFile(join(cwd, '.claude', 'commands'));
+}
+
+function hasGeneratedOpenCodeSurface(cwd) {
+  return hasGeneratedOpenCodeEntrySurface(cwd)
+    || hasGeneratedMarkdownFile(join(cwd, '.opencode', 'agents'));
+}
+
+function hasGeneratedOpenCodeEntrySurface(cwd) {
+  return hasGeneratedMarkdownFile(join(cwd, '.opencode', 'commands'))
+}
+
+function hasGeneratedCodexSurface(cwd) {
+  return hasGeneratedTomlFile(join(cwd, '.codex', 'agents'));
+}
+
+function hasGeneratedSkillDirectory(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).some((entry) => {
+      return entry.isDirectory()
+        && entry.name.startsWith('gsdd-')
+        && existsSync(join(dir, entry.name, 'SKILL.md'));
+    });
+  } catch {
+    return false;
+  }
+}
+
+function hasGeneratedMarkdownFile(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).some((entry) => {
+      return entry.isFile() && entry.name.startsWith('gsdd-') && entry.name.endsWith('.md');
+    });
+  } catch {
+    return false;
+  }
+}
+
+function hasGeneratedTomlFile(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).some((entry) => {
+      return entry.isFile() && entry.name.startsWith('gsdd-') && entry.name.endsWith('.toml');
+    });
+  } catch {
+    return false;
+  }
+}
+
 function isFrameworkSourceRepo(cwd) {
-  return existsSync(join(cwd, 'distilled', 'templates')) && existsSync(join(cwd, 'distilled', 'workflows'));
+  if (!existsSync(join(cwd, 'distilled', 'templates')) || !existsSync(join(cwd, 'distilled', 'workflows'))) return false;
+  if (!existsSync(join(cwd, 'bin', 'gsdd.mjs')) || !existsSync(join(cwd, 'package.json'))) return false;
+  try {
+    const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8'));
+    return pkg.name === 'gsdd-cli';
+  } catch {
+    return false;
+  }
 }

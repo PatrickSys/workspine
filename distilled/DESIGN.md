@@ -958,20 +958,20 @@ Implementation lives under `bin/lib/`:
 | E8 | ERROR | `.planning/templates/` missing critical root files (`spec.md`, `roadmap.md`, `auth-matrix.md`) |
 | E9 | ERROR | `.planning/templates/brownfield-change/` missing or missing critical files (`CHANGE.md`, `HANDOFF.md`, `VERIFICATION.md`) |
 | W1 | WARN | `generation-manifest.json` missing |
-| W2 | WARN | Template files modified locally (hash mismatch vs manifest) |
-| W3 | WARN | Template/role files missing from disk but listed in manifest |
+| W2 | WARN | Manifest-tracked installed templates/helpers modified locally (hash mismatch vs manifest) |
+| W3 | WARN | Manifest-tracked installed templates/helpers missing from disk but listed in manifest |
 | W4 | WARN | Active non-archived phases marked in progress/done are missing from `.planning/phases/` |
 | W5 | WARN | Phase artifact set has PLAN but no matching SUMMARY (stale in-progress) |
-| W6 | WARN | No adapter surfaces detected |
+| W6 | WARN | No generated workflow adapter surfaces detected |
 | W7 | WARN | `distilled/DESIGN.md` health check table differs from implemented check IDs |
 | W8 | WARN | `distilled/README.md` workflow inventory differs from `distilled/workflows/` |
 | W9 | WARN | `.internal-research/gaps.md` references missing repo-local paths |
 | W10 | WARN | ROADMAP lifecycle status drift, including requirement checkbox and overview/detail phase status mismatches |
-| W11 | WARN | Installed generated runtime/helper surfaces drift from current render output |
+| W11 | WARN | Renderer-backed generated runtime/helper surfaces drift from current render output |
 | W12 | WARN | Planning state drifted since last recorded session (fingerprint mismatch) |
 | I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
 | I2 | INFO | Phase completion count from ROADMAP |
-| I3 | INFO | Which adapters are installed |
+| I3 | INFO | Which runtime/governance surfaces are installed |
 
 **Verdict logic:**
 - Any ERROR → `broken` (exit code 1)
@@ -994,7 +994,9 @@ Implementation lives under `bin/lib/`:
 
 5. **Reuses existing modules.** `readManifest()` and `detectModifications()` from `manifest.mjs` handle W1-W3. `isProjectInitialized()` pattern from `models.mjs` handles the pre-init guard. Truth checks stay read-only and operate on repo-local artifacts only when those framework files exist.
 
-6. **Framework-source mode skips installed-project template checks.** Inside the GSDD framework repo itself, `distilled/templates/` is the source of truth and `.planning/templates/` is intentionally absent. `npx -y gsdd-cli health` therefore skips the installed-project template/manifest checks (E3-E9, W1-W3) in framework-source mode instead of producing false positives during self-health runs.
+6. **Framework-source mode skips installed-project template checks only for the actual source repo.** Inside the GSDD framework repo itself, `distilled/templates/` is the source of truth and `.planning/templates/` can be intentionally absent. `npx -y gsdd-cli health` therefore skips installed-project template/manifest checks (E3-E9, W1-W3) only when source-repo identity signals also match (`package.json` name plus CLI source), avoiding false suppression in copied or unusual initialized repos that happen to contain `distilled/templates` and `distilled/workflows`.
+
+7. **Generated adapters and governance are reported separately.** W6 checks generated workflow entry surfaces (`.agents/skills`, Claude skills/commands, OpenCode commands) and does not treat root `AGENTS.md`, native checker agents, or Codex native checker TOML as workflow adapters. Codex CLI uses `.agents/skills` as its workflow entry path. I3 may still report native agents and root `AGENTS.md` as installed runtime/governance surfaces so users understand what exists without confusing those files with executable workflow discovery.
 
 **What was removed vs GSD:**
 - `--repair` flag and associated repair actions

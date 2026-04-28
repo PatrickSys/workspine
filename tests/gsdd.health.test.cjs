@@ -316,7 +316,9 @@ describe('Health — WARN: modified template (hash mismatch)', () => {
     fs.appendFileSync(target, '\n<!-- local modification -->\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.warnings.some((w) => w.id === 'W2'), 'should have W2 warning for modified template');
+    const warning = json.warnings.find((w) => w.id === 'W2');
+    assert.ok(warning, 'should have W2 warning for modified template');
+    assert.match(warning.message, /manifest-tracked installed file\(s\) modified locally/);
   });
 });
 
@@ -329,7 +331,9 @@ describe('Health — WARN: deleted template file (in manifest, not on disk)', ()
     fs.unlinkSync(path.join(delegatesDir, files[0]));
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.warnings.some((w) => w.id === 'W3'), 'should have W3 warning for missing template');
+    const warning = json.warnings.find((w) => w.id === 'W3');
+    assert.ok(warning, 'should have W3 warning for missing template');
+    assert.match(warning.message, /manifest-tracked installed file\(s\) missing from disk/);
   });
 });
 
@@ -406,7 +410,61 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     }
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.warnings.some((w) => w.id === 'W6'));
+    const warning = json.warnings.find((w) => w.id === 'W6');
+    assert.ok(warning);
+    assert.match(warning.message, /No generated workflow adapter surfaces detected/);
+  });
+
+  test('empty or unrelated runtime directories still report W6', async () => {
+    await initWorkspace();
+    for (const rel of ['.agents', '.claude', '.opencode', '.codex']) {
+      fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.join(tmpDir, '.claude'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.opencode', 'commands'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.opencode', 'commands', 'local-note.md'), '# local note\n');
+    fs.mkdirSync(path.join(tmpDir, '.codex', 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.codex', 'agents', 'local.toml'), 'name = "local"\n');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W6');
+    assert.ok(warning, 'empty or unrelated runtime directories must not count as generated workflow adapter surfaces');
+    assert.match(warning.message, /No generated workflow adapter surfaces detected/);
+  });
+
+  test('Codex native agents without skills still report W6', async () => {
+    await initWorkspace();
+    for (const rel of ['.agents', '.claude', '.opencode', '.codex']) {
+      fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.join(tmpDir, '.codex', 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'name = "gsdd-plan-checker"\n');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W6');
+    assert.ok(warning, 'Codex checker agents do not replace workflow entry surfaces and must not suppress W6');
+    assert.match(warning.message, /No generated workflow adapter surfaces detected/);
+  });
+
+  test('Claude and OpenCode generated agents without commands or skills still report W6', async () => {
+    await initWorkspace();
+    for (const rel of ['.agents', '.claude', '.opencode', '.codex']) {
+      fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.join(tmpDir, '.claude', 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), '# checker\n');
+    fs.mkdirSync(path.join(tmpDir, '.opencode', 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), '# checker\n');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W6');
+    assert.ok(warning, 'generated checker agents do not replace workflow entry surfaces and must not suppress W6');
+    assert.match(warning.message, /No generated workflow adapter surfaces detected/);
+    assert.ok(json.info.some((i) => i.id === 'I3' && /claude/.test(i.message) && /opencode/.test(i.message)),
+      'agent-only runtime surfaces should still be reported by I3 for visibility');
   });
 
   test('DESIGN.md health table drift → W7', async () => {
@@ -653,6 +711,7 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     const json = JSON.parse(result.output);
     const warning = json.warnings.find((w) => w.id === 'W11');
     assert.ok(warning, 'should warn when installed generated runtime surfaces drift');
+    assert.match(warning.message, /Renderer-backed generated runtime and workflow-helper surfaces/);
     assert.match(warning.message, /\.planning\/bin\/gsdd\.mjs/);
     assert.match(warning.fix, /npx -y gsdd-cli update/);
   });
@@ -705,11 +764,15 @@ describe('Health — INFO: version drift', () => {
 });
 
 describe('Health — INFO: adapter detection', () => {
-  test('adapters installed → I3', async () => {
+  test('runtime and governance surfaces installed → I3', async () => {
     await initWorkspace();
+    fs.writeFileSync(path.join(tmpDir, 'AGENTS.md'), '# Local governance\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.info.some((i) => i.id === 'I3'), 'should report installed adapters');
+    const info = json.info.find((i) => i.id === 'I3');
+    assert.ok(info, 'should report installed runtime/governance surfaces');
+    assert.match(info.message, /Installed runtime\/governance surfaces/);
+    assert.match(info.message, /root AGENTS\.md governance-only/);
   });
 });
 
@@ -859,5 +922,20 @@ describe('Health — framework source mode', () => {
       'broken',
       'gsdd health in framework repo must not report broken status. FIX: Check frameworkSourceMode suppression logic in health.mjs.'
     );
+  });
+
+  test('source-like consumer repos do not suppress installed-project checks', async () => {
+    await initWorkspace();
+    fs.rmSync(path.join(tmpDir, '.planning', 'templates'), { recursive: true, force: true });
+    fs.mkdirSync(path.join(tmpDir, 'distilled', 'templates'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'distilled', 'workflows'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'consumer-app' }));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const parsed = extractJsonPayload(result.output);
+
+    assert.ok(parsed.errors.some(e => e.id === 'E3'),
+      'consumer repos with distilled folders must still report missing installed templates. FIX: Keep framework-source detection tied to source repo identity.');
+    assert.strictEqual(parsed.status, 'broken');
   });
 });
