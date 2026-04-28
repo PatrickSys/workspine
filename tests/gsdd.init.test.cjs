@@ -218,7 +218,9 @@ describe('gsdd init and update', () => {
     ]) {
       assert.match(executorRole, new RegExp(token.replace(/[<>/]/g, '\\$&')));
     }
-    assert.match(executorRole, /Mandatory initial read/i);
+    assert.match(executorRole, /Tiered context intake/i);
+    assert.match(executorRole, /mandatory_now/i);
+    assert.match(executorRole, /task_scoped/i);
     assert.match(executorRole, /null pointer/i);
     assert.match(executorRole, /no auth on protected routes/i);
     assert.match(executorRole, /Missing dependency/i);
@@ -230,7 +232,7 @@ describe('gsdd init and update', () => {
     assert.match(executorRole, /RED/);
     assert.match(executorRole, /GREEN/);
     assert.match(executorRole, /REFACTOR/);
-    assert.match(executorRole, /\[ \] Mandatory context files read first/i);
+    assert.match(executorRole, /\[ \] Mandatory-now context and task-scoped files read at the correct execution point/i);
     assert.match(executorRole, /\[ \] All `type="auto"` tasks/i);
     assert.match(executorRole, /\[ \] Authentication gates handled/i);
     assert.match(executorRole, /\[ \] .*SUMMARY\.md.* is written with substantive one-liner/i);
@@ -481,7 +483,8 @@ describe('gsdd init and update', () => {
       /^runtime: codex-cli$/m,
       /^assurance: self_checked$/m,
       /stale reference/i,
-      /Mandatory context files read first when provided/i,
+      /Mandatory-now context and task-scoped files read at the correct execution point/i,
+      /session-fingerprint write/i,
       /Authentication gates handled with the auth-gate protocol/i,
     ]) {
       assert.match(executeSkill, required);

@@ -1370,6 +1370,62 @@ describe('G22 - Workflow Completion Routing', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'execute.md'), 'utf-8');
     assert.match(content, /MANDATORY.*SUMMARY\.md.*disk/s,
       'execute.md must have MANDATORY persistence gate for SUMMARY.md. FIX: Add MANDATORY write enforcement in <state_updates>.');
+    const selfCheck = content.slice(content.indexOf('<self_check>'), content.indexOf('</self_check>'));
+    const successCriteria = content.slice(content.indexOf('<success_criteria>'), content.indexOf('</success_criteria>'));
+    for (const token of ['<checks>', '<handoff>', '<deltas>', '<judgment>']) {
+      assert.match(content, new RegExp(token),
+        `execute.md SUMMARY contract must include ${token}. FIX: Restore the structured SUMMARY section.`);
+      assert.match(selfCheck, new RegExp(token),
+        `execute.md self_check must require SUMMARY ${token}. FIX: Restore structured SUMMARY self-check coverage.`);
+      assert.match(successCriteria, new RegExp(token),
+        `execute.md success_criteria must require SUMMARY ${token}. FIX: Restore structured SUMMARY success criteria coverage.`);
+    }
+  });
+
+  test('execute.md uses tiered reads instead of blanket pre-action rereads', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'execute.md'), 'utf-8');
+    const loadCtx = content.slice(content.indexOf('<load_context>'), content.indexOf('</load_context>'));
+
+    for (const token of ['mandatory_now', 'task_scoped', 'reference_only', 'deferred_or_conditional']) {
+      assert.match(loadCtx, new RegExp(token),
+        `execute.md load_context must include ${token}. FIX: Restore tiered execution-read guidance.`);
+    }
+
+    assert.doesNotMatch(loadCtx, /Read every file below before performing any other actions/i,
+      'execute.md must not restore blanket pre-action read wording. FIX: Keep reads tiered and task-scoped.');
+    const mandatoryNow = loadCtx.slice(loadCtx.indexOf('### mandatory_now'), loadCtx.indexOf('### task_scoped'));
+    assert.match(mandatoryNow, /SPEC\.md[\s\S]*current state[\s\S]*requirement[\s\S]*constraint/i,
+      'execute.md must keep bounded SPEC.md current state, requirements, and constraints as mandatory-now context. FIX: Restore bounded SPEC.md mandatory read.');
+    assert.match(mandatoryNow, /ROADMAP\.md[\s\S]*phase goal[\s\S]*status[\s\S]*success criteria/i,
+      'execute.md must keep ROADMAP.md phase goal/status/success criteria as mandatory-now context. FIX: Restore bounded ROADMAP.md mandatory read.');
+    assert.match(mandatoryNow, /\.continue-here\.bak[\s\S]*before mutation/i,
+      'execute.md must check .continue-here.bak before mutation when no SUMMARY judgment exists. FIX: Keep session-boundary fallback mandatory before mutation.');
+  });
+
+  test('executor role treats files_to_read as task-scoped from tracked source', () => {
+    const content = fs.readFileSync(path.join(ROOT, 'agents', 'executor.md'), 'utf-8');
+
+    assert.match(content, /task_scoped/,
+      'agents/executor.md must preserve task_scoped executor read guidance. FIX: Refresh executor role contract.');
+    assert.doesNotMatch(content, /read every file listed there before performing any other actions/i,
+      'agents/executor.md must not restore unbounded <files_to_read> preloading. FIX: Keep <files_to_read> task-scoped.');
+  });
+
+  test('execute.md preserves hard-rule guardrails while reducing read scope', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'execute.md'), 'utf-8');
+    for (const pattern of [
+      /lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/,
+      /Wrong-branch check/,
+      /destructive git, broad cleanup, or file deletion actions without explicit human approval/,
+      /checkpoint/i,
+      /SUMMARY\.md/,
+      /evidence/i,
+      /verification/i,
+      /PR creation/i,
+    ]) {
+      assert.match(content, pattern,
+        `execute.md must preserve hard-rule invariant ${pattern}. FIX: Restore the guardrail while keeping tiered reads.`);
+    }
   });
 
   test('verify.md has <persistence> section for VERIFICATION.md', () => {

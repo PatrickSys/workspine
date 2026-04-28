@@ -139,7 +139,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
 
   // --- plan → execute chain ---
 
-  test('execute load_context references plan outputs (PLAN.md, SPEC.md, ROADMAP.md)', () => {
+  test('execute load_context references plan outputs with tiered read scope (PLAN.md, SPEC.md, ROADMAP.md)', () => {
     const content = readSkill(tmpDir, 'gsdd-execute');
     const loadCtx = extractXmlSection(content, 'load_context');
 
@@ -147,6 +147,12 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     assert.ok(referencesPath(loadCtx, 'PLAN.md'), 'execute must reference PLAN.md');
     assert.ok(referencesPath(loadCtx, '.planning/SPEC.md'), 'execute must reference SPEC.md');
     assert.ok(referencesPath(loadCtx, '.planning/ROADMAP.md'), 'execute must reference ROADMAP.md');
+    assert.match(loadCtx, /mandatory_now/, 'execute load_context must identify mandatory_now reads');
+    assert.match(loadCtx, /task_scoped/, 'execute load_context must identify task_scoped reads');
+    assert.match(loadCtx, /reference_only/, 'execute load_context must identify reference_only reads');
+    assert.match(loadCtx, /deferred_or_conditional/, 'execute load_context must identify deferred or conditional reads');
+    assert.doesNotMatch(loadCtx, /Read every file below before performing any other actions/i,
+      'execute load_context must not restore broad pre-action reread wording');
   });
 
   // --- execute → verify chain ---

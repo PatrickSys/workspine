@@ -136,16 +136,20 @@ describe('I2 — Role Section Structure', () => {
   }
 });
 
-// --- I10: Mandatory Initial-Read ---
+// --- I10: Mandatory Context Intake ---
 
-describe('I10 — Mandatory Initial-Read', () => {
+describe('I10 — Mandatory Context Intake', () => {
   for (const role of HARDENED_ROLES) {
-    test(`${role} enforces mandatory initial-read`, () => {
+    test(`${role} enforces mandatory context intake`, () => {
       const content = readRole(role);
       const hasInitialRead = /[Mm]andatory initial.read/i.test(content);
+      const hasTieredExecutorRead = role === 'executor.md'
+        && /Tiered context intake/i.test(content)
+        && /mandatory_now/i.test(content)
+        && /before mutating files or lifecycle state/i.test(content);
       assert.ok(
-        hasInitialRead,
-        `${role} must enforce mandatory initial-read discipline`
+        hasInitialRead || hasTieredExecutorRead,
+        `${role} must enforce mandatory context intake discipline`
       );
     });
   }
@@ -1049,8 +1053,16 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
 describe('I6b — Cross-runtime artifact contract', () => {
   test('execute.md documents handoff and delta contract', () => {
     const content = readWorkflow('execute.md');
+    const selfCheck = content.slice(content.indexOf('<self_check>'), content.indexOf('</self_check>'));
+    const successCriteria = content.slice(content.indexOf('<success_criteria>'), content.indexOf('</success_criteria>'));
+    assert.ok(content.includes('<checks>'), 'execute.md must document <checks> block');
     assert.ok(content.includes('<handoff>'), 'execute.md must document <handoff> block');
     assert.ok(content.includes('<deltas>'), 'execute.md must document <deltas> block');
+    assert.ok(content.includes('<judgment>'), 'execute.md must document <judgment> block');
+    for (const token of ['<checks>', '<handoff>', '<deltas>', '<judgment>']) {
+      assert.ok(selfCheck.includes(token), `execute.md self_check must require ${token}`);
+      assert.ok(successCriteria.includes(token), `execute.md success_criteria must require ${token}`);
+    }
     assert.ok(content.includes('factual_discovery'), 'execute.md must document factual_discovery mismatch class');
     assert.ok(content.includes('intent_scope_change'), 'execute.md must document intent_scope_change mismatch class');
     assert.ok(content.includes('architecture_risk_conflict'), 'execute.md must document architecture_risk_conflict mismatch class');

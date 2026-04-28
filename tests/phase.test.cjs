@@ -315,6 +315,46 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.strictEqual(fs.readFileSync(roadmapPath, 'utf-8'), original);
   });
 
+  test('explicit session-fingerprint write rebaselines reviewed SPEC drift after no-op phase-status', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates');
+    const original = '# Roadmap\n\n- [-] **Phase 30: Deterministic Lifecycle Gates** - [ENGINE-02]\n';
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(roadmapPath, original);
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec v1\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(phaseDir, '30-PLAN.md'), '# plan\n');
+
+    const fp = await importSessionFingerprintModule();
+    fp.writeFingerprint(path.join(tmpDir, '.planning'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec v2\n');
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).reason, 'planning_state_drift');
+
+    result = await runCliAsMain(tmpDir, ['phase-status', '30', 'in_progress']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.changed, false);
+    assert.strictEqual(fs.readFileSync(roadmapPath, 'utf-8'), original);
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).reason, 'planning_state_drift');
+
+    result = await runCliAsMain(tmpDir, ['session-fingerprint', 'write']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const writeOutput = JSON.parse(result.output);
+    assert.strictEqual(writeOutput.operation, 'session-fingerprint write');
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).allowed, true);
+  });
+
   test('phase-status finds the workspace root when the main CLI runs from a nested directory', async () => {
     const nestedDir = path.join(tmpDir, 'src', 'nested');
     const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
