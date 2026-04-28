@@ -1,3 +1,10 @@
+## [0.19.1](https://github.com/PatrickSys/workspine/compare/v0.19.0...v0.19.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* harden execution context intake ([8dd5511](https://github.com/PatrickSys/workspine/commit/8dd55111ddda8774805e803a4ccd56ad424b8b5a))
+
 # [0.19.0](https://github.com/PatrickSys/workspine/compare/v0.18.5...v0.19.0) (2026-04-24)
 
 
