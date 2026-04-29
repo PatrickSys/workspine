@@ -1,3 +1,10 @@
+# [0.20.0](https://github.com/PatrickSys/workspine/compare/v0.19.3...v0.20.0) (2026-04-29)
+
+
+### Features
+
+* add UI proof validation contract ([#100](https://github.com/PatrickSys/workspine/issues/100)) ([209394d](https://github.com/PatrickSys/workspine/commit/209394de3195108d084b03277a9ff3ec7d060968))
+
 ## [0.19.3](https://github.com/PatrickSys/workspine/compare/v0.19.2...v0.19.3) (2026-04-29)
 
 
