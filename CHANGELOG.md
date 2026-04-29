@@ -1,3 +1,10 @@
+## [0.19.3](https://github.com/PatrickSys/workspine/compare/v0.19.2...v0.19.3) (2026-04-29)
+
+
+### Bug Fixes
+
+* prefer brownfield current status posture ([#99](https://github.com/PatrickSys/workspine/issues/99)) ([3b461ad](https://github.com/PatrickSys/workspine/commit/3b461ad0fb9bc1d2e9f7c49614ae8874bbed80be))
+
 ## [0.19.2](https://github.com/PatrickSys/workspine/compare/v0.19.1...v0.19.2) (2026-04-28)
 
 
