@@ -947,6 +947,36 @@ describe('Phase 29 lifecycle-state helper', () => {
     assert.match(state.brownfieldChange.handoff.nextActionContext, /\/gsdd-new-milestone/);
   });
 
+  test('prefers Current Status posture over stale CHANGE.md frontmatter status', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'brownfield-change'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'),
+      [
+        '---',
+        'change: CHANGE-042',
+        'status: active',
+        '---',
+        '',
+        '# Brownfield Change: Verification Ready',
+        '',
+        '## Current Status',
+        '',
+        '- Current posture: ready_for_verification',
+        '- Current branch / integration surface: feat/verification-ready',
+        '- Current owner / runtime: codex-cli',
+        '',
+        '## Next Action',
+        '',
+        '- Run the closeout checks.',
+      ].join('\n')
+    );
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.strictEqual(state.brownfieldChange.currentStatus, 'ready_for_verification');
+  });
+
   test('reports overview and Phase Details status mismatches in lifecycle state', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'ROADMAP.md'),
