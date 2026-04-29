@@ -41,6 +41,8 @@ MILESTONES.md
 
 # Codebase indexer cache
 .codebase-context/
+_bmad/
+.cursor/
 
 # Local temp files (slides, previews, scratch)
 tmp/

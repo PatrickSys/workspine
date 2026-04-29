@@ -3214,7 +3214,7 @@ describe('G37 - Launch Surface Consistency', () => {
 
     const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
     const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
-    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone|v1\.3\.0 Engine Contract Hardening|\/gsdd-verify 29|v1\.5\.0 Brownfield Change Continuity|\/gsdd-plan 39|v1\.6 Release Spine Hardening|\/gsdd-execute 44/i,
+    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone|v1\.3\.0 Engine Contract Hardening|\/gsdd-verify 29|v1\.5\.0 Brownfield Change Continuity|\/gsdd-plan 39|v1\.6 Release Spine Hardening|\/gsdd-execute 44|v1\.8 UI Proof|\/gsdd-plan 58/i,
       '.planning/SPEC.md must reflect honest milestone state after the v1.2.0 archive handoff, whether still between milestones or already in the next milestone. FIX: Keep Current State aligned to repo truth.');
     assert.match(roadmap, /Phase 24: Naming Contract Reconciliation/i,
       '.planning/ROADMAP.md must preserve the archived naming-surface reconciliation path. FIX: Keep the v1.2.0 phase chain visible after collapse.');
