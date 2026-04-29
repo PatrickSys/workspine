@@ -274,7 +274,7 @@ export function readBrownfieldChangeState(planningDir) {
     handoffPath,
     title: extractMarkdownHeading(changeArtifact.body),
     changeId: changeArtifact.frontmatter.change || null,
-    currentStatus: changeArtifact.frontmatter.status || extractBulletLabel(currentStatusSection, 'Current posture'),
+    currentStatus: extractBulletLabel(currentStatusSection, 'Current posture') || changeArtifact.frontmatter.status || null,
     currentIntegrationSurface: extractBulletLabel(currentStatusSection, 'Current branch / integration surface'),
     currentOwnerRuntime: extractBulletLabel(currentStatusSection, 'Current owner / runtime'),
     nextAction: collapseMarkdownSection(nextActionSection),
