@@ -3050,6 +3050,16 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
       'plan-milestone-gaps completion must route to /gsdd-plan. FIX: Add /gsdd-plan as next step in completion.');
   });
 
+  test('plan-milestone-gaps.md rebaselines fingerprint before recommending /gsdd-plan', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
+    assert.match(content, /lifecycle-preflight plan-milestone-gaps/,
+      'plan-milestone-gaps must preflight before mutating ROADMAP. FIX: Add lifecycle-preflight plan-milestone-gaps.');
+    assert.match(content, /session-fingerprint write/,
+      'plan-milestone-gaps must rebaseline intentional ROADMAP mutations. FIX: Run session-fingerprint write after creating phases.');
+    assert.ok(content.indexOf('session-fingerprint write') < content.indexOf('<completion>'),
+      'plan-milestone-gaps must refresh fingerprint before completion recommends /gsdd-plan. FIX: Move session-fingerprint write before completion.');
+  });
+
   // Context references: each workflow reads the right source files
   test('new-milestone.md load_context references SPEC.md and MILESTONES.md', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-milestone.md'), 'utf-8');
@@ -3518,7 +3528,13 @@ describe('G55 - UI Proof Contract', () => {
     assert.match(executorRole, /UI Proof Execution/, 'executor role must include UI proof execution guidance.');
     assert.match(quickContent, /ui_proof_slots/, 'quick.md must preserve proportional UI proof slots.');
     assert.match(verifyContent, /<ui_proof_comparison>/, 'verify.md must include planned-vs-observed UI proof comparison.');
+    assert.match(verifyContent, /gsdd ui-proof compare <planned-slots-json>/, 'verify.md must prefer the deterministic product-facing UI proof comparison command.');
     assert.match(verifierRole, /For UI proof slots, fail closed/i, 'verifier role must fail closed on weak UI proof.');
+  });
+
+  test('template documents product-facing UI proof comparison command', () => {
+    assert.match(template, /gsdd ui-proof validate <path>/, 'ui-proof.md must document metadata validation.');
+    assert.match(template, /gsdd ui-proof compare <planned-slots-json>/, 'ui-proof.md must document planned-vs-observed comparison.');
   });
 
   test('guardrails reject agent-only proof, artifact theater, and unsafe public claims', () => {

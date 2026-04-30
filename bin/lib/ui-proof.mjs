@@ -305,6 +305,269 @@ function validateObservationArtifactRefs(bundle, artifactRefs, errors) {
   }
 }
 
+function stableString(value) {
+  return JSON.stringify(canonicalize(value));
+}
+
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
+}
+
+function valuesMatch(planned, observed) {
+  if (!hasValue(planned)) return true;
+  if (!hasValue(observed)) return false;
+  return stableString(planned) === stableString(observed);
+}
+
+function slotId(slot, index) {
+  return slot?.slot_id || slot?.slotId || slot?.id || `ui-proof-slot-${index + 1}`;
+}
+
+function observationText(observation) {
+  if (typeof observation === 'string') return observation;
+  if (isPlainObject(observation) && typeof observation.observation === 'string') return observation.observation;
+  return '';
+}
+
+function includesObservation(observations, expected) {
+  const expectedText = typeof expected === 'string' ? expected.trim() : observationText(expected).trim();
+  if (!expectedText) return true;
+  return observations.some((observation) => observationText(observation).includes(expectedText));
+}
+
+function normalizeObservedBundle(entry) {
+  if (entry?.bundle) {
+    return {
+      bundle: entry.bundle,
+      validation: entry.validation || validateUiProofBundle(entry.bundle, entry.options || {}),
+      source: entry.source || entry.filePath || 'observed bundle',
+    };
+  }
+  return {
+    bundle: entry,
+    validation: validateUiProofBundle(entry),
+    source: 'observed bundle',
+  };
+}
+
+function compareSlotToBundle(slot, slotIdValue, observed) {
+  const issues = [];
+  const bundle = observed.bundle;
+  const observations = normalizeArray(bundle?.observations);
+  if (!observed.validation.valid) {
+    issues.push({
+      code: 'invalid_observed_bundle',
+      path: observed.source,
+      message: `Observed UI proof bundle for slot ${slotIdValue} failed metadata validation.`,
+      details: observed.validation.errors,
+    });
+  }
+
+  const bundleStatus = bundle?.result?.comparison_status_by_slot?.[slotIdValue];
+  if (bundle?.result?.claim_status !== 'passed') {
+    issues.push({
+      code: 'unsatisfied_observed_claim_status',
+      path: 'result.claim_status',
+      message: `Observed UI proof bundle claim status is ${bundle?.result?.claim_status || 'missing'} for slot ${slotIdValue}.`,
+    });
+  }
+  if (bundleStatus !== 'satisfied') {
+    issues.push({
+      code: 'unsatisfied_observed_comparison_status',
+      path: `result.comparison_status_by_slot.${slotIdValue}`,
+      message: `Observed UI proof bundle reports ${bundleStatus || 'missing'} for slot ${slotIdValue}.`,
+    });
+  }
+
+  const requiredKinds = normalizeArray(slot?.required_evidence_kinds || slot?.requiredEvidenceKinds);
+  const observedKinds = normalizeArray(bundle?.evidence_inputs?.kinds);
+  const missingKinds = requiredKinds.filter((kind) => !observedKinds.includes(kind));
+  if (missingKinds.length > 0) {
+    issues.push({
+      code: 'missing_required_evidence_kind',
+      path: 'evidence_inputs.kinds',
+      message: `Observed UI proof for slot ${slotIdValue} is missing required evidence kind(s): ${missingKinds.join(', ')}.`,
+    });
+  }
+  const missingNonHuman = missingKinds.filter((kind) => kind !== 'human');
+  if (missingNonHuman.length > 0 && observedKinds.includes('human')) {
+    issues.push({
+      code: 'human_evidence_cannot_bypass_required_non_human_evidence',
+      path: 'evidence_inputs.kinds',
+      message: `Human evidence cannot satisfy missing non-human UI proof evidence for slot ${slotIdValue}: ${missingNonHuman.join(', ')}.`,
+    });
+  }
+
+  if (!valuesMatch(slot?.route_state || slot?.routeState, bundle?.route_state)) {
+    issues.push({
+      code: 'route_state_mismatch',
+      path: 'route_state',
+      message: `Observed UI proof route/state does not match planned slot ${slotIdValue}.`,
+    });
+  }
+
+  if (!valuesMatch(slot?.environment, bundle?.environment)) {
+    issues.push({
+      code: 'environment_mismatch',
+      path: 'environment',
+      message: `Observed UI proof environment does not match planned slot ${slotIdValue}.`,
+    });
+  }
+
+  if (!valuesMatch(slot?.viewport, bundle?.viewport)) {
+    issues.push({
+      code: 'viewport_mismatch',
+      path: 'viewport',
+      message: `Observed UI proof viewport does not match planned slot ${slotIdValue}.`,
+    });
+  }
+
+  const requirementId = slot?.requirement_id || slot?.requirementId;
+  if (hasValue(requirementId) && !normalizeArray(bundle?.scope?.requirement_ids).includes(requirementId)) {
+    issues.push({
+      code: 'requirement_mismatch',
+      path: 'scope.requirement_ids',
+      message: `Observed UI proof bundle does not declare planned requirement ${requirementId} for slot ${slotIdValue}.`,
+    });
+  }
+
+  if (hasValue(slot?.claim) && bundle?.scope?.claim !== slot.claim) {
+    issues.push({
+      code: 'claim_mismatch',
+      path: 'scope.claim',
+      message: `Observed UI proof bundle claim does not match planned slot ${slotIdValue}.`,
+    });
+  }
+
+  if (hasValue(slot?.claim) && !observations.some((observation) => observation?.claim === slot.claim)) {
+    issues.push({
+      code: 'observation_claim_mismatch',
+      path: 'observations[].claim',
+      message: `Observed UI proof observations do not support the exact planned claim for slot ${slotIdValue}.`,
+    });
+  }
+
+  const supportingObservations = hasValue(slot?.claim)
+    ? observations.filter((observation) => observation?.claim === slot.claim)
+    : observations;
+
+  if (hasValue(slot?.route_state || slot?.routeState)) {
+    for (const [index, observation] of supportingObservations.entries()) {
+      if (!valuesMatch(slot?.route_state || slot?.routeState, observation?.route_state)) {
+        issues.push({
+          code: 'observation_route_state_mismatch',
+          path: `observations[${index}].route_state`,
+          message: `Observed UI proof observation route/state does not match planned slot ${slotIdValue}.`,
+        });
+      }
+    }
+  }
+
+  const passedSupportingKinds = new Set(
+    supportingObservations
+      .filter((observation) => observation?.result === 'passed')
+      .map((observation) => observation?.evidence_kind)
+      .filter(Boolean)
+  );
+  const missingSupportingKinds = requiredKinds.filter((kind) => !passedSupportingKinds.has(kind));
+  if (missingSupportingKinds.length > 0) {
+    issues.push({
+      code: 'missing_supporting_observation_evidence_kind',
+      path: 'observations[].evidence_kind',
+      message: `Observed UI proof for slot ${slotIdValue} lacks passed supporting observation(s) for required evidence kind(s): ${missingSupportingKinds.join(', ')}.`,
+    });
+  }
+
+  for (const [index, step] of normalizeArray(bundle?.commands_or_manual_steps).entries()) {
+    if (step?.result !== 'passed') {
+      issues.push({
+        code: 'unsatisfied_proof_step',
+        path: `commands_or_manual_steps[${index}].result`,
+        message: `Observed UI proof command/manual step is ${step?.result || 'missing'} for slot ${slotIdValue}.`,
+      });
+    }
+  }
+
+  for (const [index, observation] of observations.entries()) {
+    if (observation?.result !== 'passed') {
+      issues.push({
+        code: 'unsatisfied_observation_result',
+        path: `observations[${index}].result`,
+        message: `Observed UI proof observation is ${observation?.result || 'missing'} for slot ${slotIdValue}.`,
+      });
+    }
+  }
+
+  for (const expected of normalizeArray(slot?.minimum_observations || slot?.minimumObservations)) {
+    if (!includesObservation(observations, expected)) {
+      issues.push({
+        code: 'missing_minimum_observation',
+        path: 'observations',
+        message: `Observed UI proof for slot ${slotIdValue} is missing a planned minimum observation.`,
+      });
+    }
+  }
+
+  if (hasValue(slot?.claim_limit || slot?.claimLimit)) {
+    const claimLimit = slot.claim_limit || slot.claimLimit;
+    if (!normalizeArray(bundle?.claim_limits).includes(claimLimit)) {
+      issues.push({
+        code: 'missing_claim_limit',
+        path: 'claim_limits',
+        message: `Observed UI proof for slot ${slotIdValue} does not preserve the planned claim limit.`,
+      });
+    }
+  }
+
+  const status = issues.length === 0 ? 'satisfied' : (bundleStatus === 'missing' ? 'missing' : 'partial');
+  return { status, issues, source: observed.source };
+}
+
+export function compareUiProofSlots(plannedSlots, observedBundles) {
+  const slots = normalizeArray(plannedSlots);
+  const bundles = normalizeArray(observedBundles).map(normalizeObservedBundle);
+  const results = [];
+
+  for (const [index, slot] of slots.entries()) {
+    const slotIdValue = slotId(slot, index);
+    const matchingBundles = bundles.filter((observed) => normalizeArray(observed.bundle?.scope?.slot_ids).includes(slotIdValue));
+    if (matchingBundles.length === 0) {
+      results.push({
+        slot_id: slotIdValue,
+        status: 'missing',
+        issues: [{
+          code: 'missing_observed_bundle',
+          path: 'scope.slot_ids',
+          message: `No observed UI proof bundle declares planned slot ${slotIdValue}.`,
+        }],
+      });
+      continue;
+    }
+
+    const candidates = matchingBundles.map((observed) => compareSlotToBundle(slot, slotIdValue, observed));
+    const satisfied = candidates.find((candidate) => candidate.status === 'satisfied');
+    if (satisfied) {
+      results.push({ slot_id: slotIdValue, status: 'satisfied', issues: [], source: satisfied.source });
+      continue;
+    }
+    const partial = candidates.find((candidate) => candidate.status === 'partial') || candidates[0];
+    results.push({ slot_id: slotIdValue, status: partial.status, issues: partial.issues, source: partial.source });
+  }
+
+  const statuses = results.map((result) => result.status);
+  const status = statuses.length === 0
+    ? 'not_applicable'
+    : statuses.every((value) => value === 'satisfied')
+      ? 'satisfied'
+      : statuses.every((value) => value === 'missing')
+        ? 'missing'
+        : 'partial';
+
+  return { status, slots: results };
+}
+
 export function validateUiProofBundle(bundle, options = {}) {
   const errors = [];
   const warnings = [];
@@ -332,10 +595,10 @@ export function validateUiProofBundle(bundle, options = {}) {
   return { valid: errors.length === 0, errors, warnings };
 }
 
-export function parseUiProofBundleContent(content, filePath = 'UI proof bundle') {
+function parseJsonOrFencedContent(content, filePath, label) {
   const trimmed = content.trim();
   if (!trimmed) {
-    return { bundle: null, errors: [{ code: 'empty_bundle_file', path: filePath, message: 'UI proof bundle file is empty.', fix: 'Write JSON UI proof metadata before validating.' }] };
+    return { value: null, errors: [{ code: 'empty_file', path: filePath, message: `${label} file is empty.`, fix: 'Write JSON metadata before validating.' }] };
   }
 
   const jsonCandidates = [trimmed];
@@ -344,16 +607,56 @@ export function parseUiProofBundleContent(content, filePath = 'UI proof bundle')
 
   for (const candidate of jsonCandidates) {
     try {
-      return { bundle: JSON.parse(candidate), errors: [] };
+      return { value: JSON.parse(candidate), errors: [] };
     } catch {
       // Try next candidate; final error is reported below.
     }
   }
 
   return {
-    bundle: null,
-    errors: [{ code: 'unparseable_bundle', path: filePath, message: 'UI proof bundle metadata is not valid JSON.', fix: 'Use a .json proof bundle or a markdown fenced JSON block; no YAML parser dependency is installed.' }],
+    value: null,
+    errors: [{ code: 'unparseable_json', path: filePath, message: `${label} metadata is not valid JSON.`, fix: 'Use a .json file or a markdown fenced JSON block; no YAML parser dependency is installed.' }],
   };
+}
+
+export function parseUiProofBundleContent(content, filePath = 'UI proof bundle') {
+  const parsed = parseJsonOrFencedContent(content, filePath, 'UI proof bundle');
+  return { bundle: parsed.value, errors: parsed.errors.map((error) => ({
+    ...error,
+    code: error.code === 'empty_file' ? 'empty_bundle_file' : error.code === 'unparseable_json' ? 'unparseable_bundle' : error.code,
+    message: error.code === 'empty_file'
+      ? 'UI proof bundle file is empty.'
+      : error.code === 'unparseable_json'
+        ? 'UI proof bundle metadata is not valid JSON.'
+        : error.message,
+    fix: error.code === 'empty_file'
+      ? 'Write JSON UI proof metadata before validating.'
+      : error.fix,
+  })) };
+}
+
+export function parseUiProofSlotsContent(content, filePath = 'UI proof slots') {
+  const parsed = parseJsonOrFencedContent(content, filePath, 'UI proof slots');
+  if (parsed.errors.length > 0) return { slots: [], errors: parsed.errors };
+
+  const value = parsed.value;
+  const slots = Array.isArray(value)
+    ? value
+    : normalizeArray(value?.ui_proof_slots || value?.uiProofSlots || value?.planned_slots || value?.plannedSlots);
+
+  if (slots.length === 0) {
+    return {
+      slots: [],
+      errors: [{
+        code: 'missing_planned_slots',
+        path: filePath,
+        message: 'Planned UI proof input must be an array or contain ui_proof_slots.',
+        fix: 'Provide JSON with an array of planned slots or an object with ui_proof_slots.',
+      }],
+    };
+  }
+
+  return { slots, errors: [] };
 }
 
 export function readUiProofBundleFile(filePath) {
@@ -434,6 +737,50 @@ function cmdValidate(cwd, args) {
   if (!validation.valid) process.exitCode = 1;
 }
 
+function cmdCompare(cwd, args) {
+  const [plannedArg, ...observedArgs] = args;
+  if (!plannedArg) fail('Usage: gsdd ui-proof compare <planned-slots-json> [observed-bundle-json ...]');
+
+  const plannedPath = resolveWorkspacePath(cwd, plannedArg);
+  if (!existsSync(plannedPath) || statSync(plannedPath).isDirectory()) fail(`Planned UI proof slots file does not exist: ${plannedArg}`);
+
+  const planned = parseUiProofSlotsContent(readFileSync(plannedPath, 'utf-8'), plannedArg);
+  const observedBundles = [];
+  const observedTargets = [];
+  const observedErrors = [];
+
+  for (const observedArg of observedArgs) {
+    const observedPath = resolveWorkspacePath(cwd, observedArg);
+    if (!existsSync(observedPath) || statSync(observedPath).isDirectory()) fail(`Observed UI proof bundle file does not exist: ${observedArg}`);
+    const parsed = readUiProofBundleFile(observedPath);
+    if (parsed.errors.length > 0) {
+      observedErrors.push(...parsed.errors.map((error) => ({ ...error, path: observedArg })));
+      observedBundles.push({
+        bundle: {},
+        validation: { valid: false, errors: parsed.errors, warnings: [] },
+        source: observedArg,
+      });
+    } else {
+      observedBundles.push({ bundle: parsed.bundle, source: observedArg });
+    }
+    observedTargets.push(observedArg);
+  }
+
+  const comparison = planned.errors.length > 0
+    ? { status: 'missing', slots: [], errors: planned.errors }
+    : compareUiProofSlots(planned.slots, observedBundles);
+
+  output({
+    operation: 'ui-proof compare',
+    planned: plannedArg,
+    observed: observedTargets,
+    status: comparison.status,
+    slots: comparison.slots,
+    errors: [...(comparison.errors || []), ...observedErrors],
+  });
+  if (!['satisfied', 'not_applicable'].includes(comparison.status)) process.exitCode = 1;
+}
+
 export function cmdUiProof(...args) {
   const { args: normalizedArgs, workspaceRoot, invalid, error } = resolveWorkspaceContext(args);
   if (invalid) {
@@ -447,8 +794,11 @@ export function cmdUiProof(...args) {
       case 'validate':
         cmdValidate(workspaceRoot, rest);
         return;
+      case 'compare':
+        cmdCompare(workspaceRoot, rest);
+        return;
       default:
-        fail('Usage: gsdd ui-proof validate <path> [--claim <public|publication|tracked|delivery|release>]');
+        fail('Usage: gsdd ui-proof <validate|compare> ...');
     }
   } catch (error) {
     if (error instanceof UiProofError) {

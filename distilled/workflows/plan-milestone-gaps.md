@@ -15,6 +15,18 @@ If no audit file exists: stop and direct the user to run `/gsdd-audit-milestone`
 If audit status is `passed`: stop and direct the user to run `/gsdd-complete-milestone` instead.
 </prerequisites>
 
+<repo_root_helper_contract>
+All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+</repo_root_helper_contract>
+
+<lifecycle_preflight>
+Before writing ROADMAP gap-closure phases or phase directories, run:
+
+- `node .planning/bin/gsdd.mjs lifecycle-preflight plan-milestone-gaps`
+
+If the preflight result is `blocked`, STOP and report the blocker. This workflow intentionally mutates planning truth, so it must not proceed through pre-existing planning-state drift.
+</lifecycle_preflight>
+
 <load_context>
 Before starting, read these files:
 
@@ -144,6 +156,14 @@ Create a directory for each gap closure phase:
 
 No files inside — `/gsdd-plan` populates them.
 
+## 8. Rebaseline Planning Fingerprint
+
+After confirming the ROADMAP update and phase directories exist, run:
+
+- `node .planning/bin/gsdd.mjs session-fingerprint write --allow-changed ROADMAP.md`
+
+This records the user-confirmed ROADMAP mutation so the recommended `/gsdd-plan [N]` handoff does not immediately block on expected `planning_state_drift`. The `--allow-changed ROADMAP.md` guard must fail if `SPEC.md` or `config.json` also drifted after preflight; stop and reconcile that unexpected drift instead of rebaselining it. Do not run this if the ROADMAP write failed or the phase directories are missing.
+
 </process>
 
 <success_criteria>
@@ -155,6 +175,7 @@ No files inside — `/gsdd-plan` populates them.
 - [ ] User confirmed gap closure plan before ROADMAP.md was updated
 - [ ] ROADMAP.md updated with new gap closure phases
 - [ ] Phase directories created
+- [ ] `session-fingerprint write` ran after the reviewed ROADMAP update so `/gsdd-plan [N]` is not stranded by expected planning drift
 </success_criteria>
 
 **MANDATORY: `.planning/ROADMAP.md` must be updated on disk before this workflow is complete. If the write fails, STOP and report the failure. Without the updated ROADMAP, the phase cycle cannot begin.**

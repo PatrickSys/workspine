@@ -382,6 +382,48 @@ describe('Health — ERROR: invalid UI proof bundle metadata', () => {
 
     assert.ok(!json.errors.some((e) => e.id === 'E10'));
   });
+
+  test('valid local-only dogfood UI proof bundle → no E10', async () => {
+    await initWorkspace();
+    writeFile('.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json', JSON.stringify(validUiProofBundle({
+      scope: {
+        work_item: 'phase-58-dogfood-ui-proof-loop',
+        requirement_ids: ['UIPROOF-10'],
+        slot_ids: ['ui-58-valid-scoped-proof'],
+        claim: 'Local-only dogfood UI proof validates metadata for a generated fixture.',
+      },
+      result: { claim_status: 'passed', comparison_status_by_slot: { 'ui-58-valid-scoped-proof': 'satisfied' } },
+    }), null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+
+    assert.ok(!json.errors.some((e) => e.id === 'E10'));
+  });
+
+  test('unsafe public-style dogfood UI proof bundle → E10 without mutating files', async () => {
+    await initWorkspace();
+    const bundlePath = path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'proof-bundle.json');
+    const invalidBundle = validUiProofBundle({
+      proof_claims: ['public', 'tracked', 'delivery', 'release', 'publication'],
+      scope: {
+        work_item: 'phase-58-dogfood-ui-proof-loop',
+        requirement_ids: ['UIPROOF-10'],
+        slot_ids: ['ui-58-valid-scoped-proof'],
+        claim: 'Unsafe public-style dogfood UI proof must fail closed.',
+      },
+      result: { claim_status: 'passed', comparison_status_by_slot: { 'ui-58-valid-scoped-proof': 'satisfied' } },
+    });
+    writeFile('.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json', JSON.stringify(invalidBundle, null, 2));
+    const before = fs.readFileSync(bundlePath, 'utf-8');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+
+    assert.strictEqual(json.status, 'broken');
+    assert.ok(json.errors.some((e) => e.id === 'E10' && e.message.includes('unsafe_public_proof_claim')));
+    assert.strictEqual(fs.readFileSync(bundlePath, 'utf-8'), before, 'health must not mutate dogfood UI proof bundles');
+  });
 });
 
 describe('Health — WARN: missing manifest', () => {

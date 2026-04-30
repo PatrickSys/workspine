@@ -229,4 +229,25 @@ describe('session-fingerprint', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.strictEqual(mod.checkDrift(planningDir).drifted, false);
   });
+
+  test('session-fingerprint write can restrict expected changed planning files', async () => {
+    fs.writeFileSync(path.join(planningDir, 'ROADMAP.md'), '# Roadmap v1');
+    fs.writeFileSync(path.join(planningDir, 'SPEC.md'), '# Spec v1');
+    fs.writeFileSync(path.join(planningDir, 'config.json'), '{}');
+    const mod = await importModule();
+    mod.writeFingerprint(planningDir);
+
+    fs.writeFileSync(path.join(planningDir, 'ROADMAP.md'), '# Roadmap v2');
+    let result = await runCliAsMain(tmpDir, ['session-fingerprint', 'write', '--allow-changed', 'ROADMAP.md']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(mod.checkDrift(planningDir).drifted, false);
+
+    fs.writeFileSync(path.join(planningDir, 'ROADMAP.md'), '# Roadmap v3');
+    fs.writeFileSync(path.join(planningDir, 'SPEC.md'), '# Spec v2');
+    result = await runCliAsMain(tmpDir, ['session-fingerprint', 'write', '--allow-changed', 'ROADMAP.md']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'unexpected_planning_drift');
+    assert.deepStrictEqual(output.unexpected, ['SPEC.md']);
+  });
 });
