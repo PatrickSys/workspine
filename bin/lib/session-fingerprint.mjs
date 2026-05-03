@@ -63,14 +63,54 @@ export function cmdSessionFingerprint(...args) {
     return;
   }
 
-  const [action] = normalizedArgs;
+  const [action, ...flags] = normalizedArgs;
   if (action !== 'write') {
-    console.error('Usage: node .planning/bin/gsdd.mjs session-fingerprint write');
+    console.error('Usage: node .planning/bin/gsdd.mjs session-fingerprint write [--allow-changed <ROADMAP.md,SPEC.md,config.json>]');
     process.exitCode = 1;
     return;
   }
 
+  const allowChanged = parseAllowChanged(flags);
+  if (allowChanged.invalid) {
+    console.error('Usage: node .planning/bin/gsdd.mjs session-fingerprint write [--allow-changed <ROADMAP.md,SPEC.md,config.json>]');
+    process.exitCode = 1;
+    return;
+  }
+
+  if (allowChanged.files.length > 0) {
+    const drift = checkDrift(planningDir);
+    const changedFiles = drift.files.filter((file) => file.status !== 'unchanged').map((file) => file.file);
+    const unexpected = changedFiles.filter((file) => !allowChanged.files.includes(file));
+    if (unexpected.length > 0) {
+      output({
+        operation: 'session-fingerprint write',
+        changedFiles,
+        allowedChanged: allowChanged.files,
+        written: false,
+        reason: 'unexpected_planning_drift',
+        unexpected,
+      });
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   output({ operation: 'session-fingerprint write', fingerprint: writeFingerprint(planningDir) });
+}
+
+function parseAllowChanged(flags) {
+  const files = [];
+  for (let index = 0; index < flags.length; index += 1) {
+    if (flags[index] !== '--allow-changed') return { invalid: true, files: [] };
+    const value = flags[index + 1];
+    if (!value || value.startsWith('--')) return { invalid: true, files: [] };
+    files.push(...value.split(',').map((entry) => entry.trim()).filter(Boolean));
+    index += 1;
+  }
+  for (const file of files) {
+    if (!FINGERPRINT_SOURCES.includes(file)) return { invalid: true, files: [] };
+  }
+  return { invalid: false, files: [...new Set(files)] };
 }
 
 /**

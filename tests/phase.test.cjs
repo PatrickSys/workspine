@@ -428,12 +428,14 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(result.output, /Workspace root does not contain \.planning\//);
   });
 
-  test('help text documents file-op, phase-status, and lifecycle-preflight commands', async () => {
+  test('help text documents file-op, phase-status, lifecycle-preflight, and UI proof commands', async () => {
     const result = await runCliAsMain(tmpDir, ['help']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /file-op <copy\|delete\|regex-sub>/);
     assert.match(result.output, /phase-status <N> <status>/);
     assert.match(result.output, /lifecycle-preflight <surface> \[phase]/);
+    assert.match(result.output, /ui-proof validate <path>/);
+    assert.match(result.output, /ui-proof compare <planned-slots-json>/);
   });
 
   test('repo-local helper executes correctly from a nested cwd', async () => {
@@ -454,6 +456,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs file-op/);
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs phase-status/);
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
+    assert.match(output, /ui-proof compare <planned-slots-json>/);
     assert.doesNotMatch(output, /\.agents\/bin\/gsdd\.mjs/);
   });
 
@@ -1114,6 +1117,67 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.deepStrictEqual(output.ownedWrites, ['research', 'plan']);
     assert.strictEqual(output.explicitLifecycleMutation, 'none');
     assert.strictEqual(output.phase, '30');
+  });
+
+  test('allows plan-milestone-gaps as an owned write before mutating roadmap', async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v1.8 UI Proof',
+        '',
+        '- [x] **Phase 58: Dogfood UI Proof Loop** — [UIPROOF-10]',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan-milestone-gaps']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.classification, 'owned_write');
+    assert.deepStrictEqual(output.ownedWrites, ['roadmap', 'phase-directories']);
+    assert.strictEqual(output.explicitLifecycleMutation, 'none');
+  });
+
+  test('gap-planning roadmap additions need fingerprint rebaseline before recommended plan handoff', async () => {
+    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      [
+        '# Roadmap',
+        '',
+        '### v1.8 UI Proof',
+        '',
+        '- [x] **Phase 58: Dogfood UI Proof Loop** — [UIPROOF-10]',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+
+    const fp = await importSessionFingerprintModule();
+    fp.writeFingerprint(path.join(tmpDir, '.planning'));
+
+    fs.appendFileSync(roadmapPath, '\n- [ ] **Phase 59: Product-Facing UI Proof Comparison** — [UIPROOF-10]\n');
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '59-product-facing-ui-proof-comparison'), { recursive: true });
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '59']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    let output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'planning_state_drift');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'planning_state_drift'));
+
+    result = await runCliAsMain(tmpDir, ['session-fingerprint', 'write', '--allow-changed', 'ROADMAP.md']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '59']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.phase, '59');
   });
 
   test('finds lifecycle state from a nested directory', async () => {
@@ -2722,6 +2786,443 @@ describe('Phase 57 UI proof validation helper', () => {
     assert.strictEqual(result.exitCode, 1);
     const parsed = JSON.parse(result.output);
     assert.ok(parsed.errors.some((error) => error.code === 'unsafe_public_proof_claim'));
+  });
+});
+
+describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  function plannedSlots() {
+    return [{
+      slot_id: 'ui-58-valid-scoped-proof',
+      requirement_id: 'UIPROOF-10',
+      claim: 'Valid scoped local UI proof for the generated UI-bearing fixture passes deterministic validation and planned-vs-observed comparison.',
+      route_state: '/dogfood route with synthetic fixture state',
+      required_evidence_kinds: ['code', 'test', 'runtime'],
+      minimum_observations: [
+        'Generated fixture includes actual UI-bearing source for the route/state.',
+        'Observed proof bundle maps to the planned slot, route/state, required evidence kinds, artifact refs, privacy metadata, result, and claim limit.',
+      ],
+      claim_limit: 'Proves Workspine UI proof metadata and comparison behavior only; does not prove real browser rendering quality, cross-browser behavior, full accessibility, production delivery, or public release proof.',
+    }, {
+      slot_id: 'ui-58-missing-or-botched-proof',
+      requirement_id: 'UIPROOF-10',
+      claim: 'Missing, mismatched, or botched UI proof for the generated fixture fails closed instead of being treated as satisfied.',
+      route_state: '/dogfood route with synthetic fixture state',
+      required_evidence_kinds: ['code', 'test', 'runtime'],
+      minimum_observations: ['A botched bundle fails validation or comparison with a deterministic error/status.'],
+      claim_limit: 'Proves fail-closed proof-loop behavior for scoped metadata, not rendered UI correctness.',
+    }, {
+      slot_id: 'ui-58-human-bypass-blocked',
+      requirement_id: 'UIPROOF-10',
+      claim: 'Human approval cannot bypass missing required non-human evidence for visual, taste, accessibility, or privacy-sensitive UI proof.',
+      route_state: '/dogfood route with synthetic fixture state and subjective review metadata',
+      required_evidence_kinds: ['code', 'test', 'runtime', 'human'],
+      minimum_observations: ['Human/manual acceptance is represented as human evidence or waiver/deferment metadata.'],
+      manual_acceptance_required: true,
+      claim_limit: 'Human evidence may narrow, waive, defer, or record proof debt; it does not prove missing non-human evidence or full accessibility/taste acceptance.',
+    }];
+  }
+
+  function dogfoodBundle(overrides = {}) {
+    return {
+      proof_bundle_version: 1,
+      scope: {
+        work_item: 'phase-58-dogfood-ui-proof-loop',
+        requirement_ids: ['UIPROOF-10'],
+        slot_ids: ['ui-58-valid-scoped-proof'],
+        claim: 'Valid scoped local UI proof for the generated UI-bearing fixture passes deterministic validation and planned-vs-observed comparison.',
+      },
+      route_state: '/dogfood route with synthetic fixture state',
+      environment: { app_url: 'file://synthetic-dogfood-fixture', data_state: 'synthetic' },
+      viewport: { width: 1280, height: 720 },
+      evidence_inputs: { kinds: ['code', 'test', 'runtime'], tools_used: ['node:test', 'gsdd ui-proof validate'] },
+      commands_or_manual_steps: [{ command: 'node bin/gsdd.mjs ui-proof validate .planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json', result: 'passed' }],
+      observations: [{
+        observation: 'Generated fixture includes actual UI-bearing source for the route/state.',
+        claim: 'Valid scoped local UI proof for the generated UI-bearing fixture passes deterministic validation and planned-vs-observed comparison.',
+        route_state: '/dogfood route with synthetic fixture state',
+        evidence_kind: 'code',
+        artifact_refs: ['fixtures/dogfood/index.html'],
+        privacy: { data_classification: 'synthetic', raw_artifacts_safe_to_publish: false, retention: 'temporary_review' },
+        result: 'passed',
+        claim_limit: 'Proves Workspine UI proof metadata and comparison behavior only; does not prove real browser rendering quality, cross-browser behavior, full accessibility, production delivery, or public release proof.',
+      }, {
+        observation: 'Observed proof bundle maps to the planned slot, route/state, required evidence kinds, artifact refs, privacy metadata, result, and claim limit.',
+        claim: 'Valid scoped local UI proof for the generated UI-bearing fixture passes deterministic validation and planned-vs-observed comparison.',
+        route_state: '/dogfood route with synthetic fixture state',
+        evidence_kind: 'runtime',
+        artifact_refs: ['.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json'],
+        privacy: { data_classification: 'synthetic', raw_artifacts_safe_to_publish: false, retention: 'temporary_review' },
+        result: 'passed',
+        claim_limit: 'Proves Workspine UI proof metadata and comparison behavior only; does not prove real browser rendering quality, cross-browser behavior, full accessibility, production delivery, or public release proof.',
+      }, {
+        observation: 'Regression coverage exercises the planned proof slot through deterministic tests.',
+        claim: 'Valid scoped local UI proof for the generated UI-bearing fixture passes deterministic validation and planned-vs-observed comparison.',
+        route_state: '/dogfood route with synthetic fixture state',
+        evidence_kind: 'test',
+        artifact_refs: ['.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json'],
+        privacy: { data_classification: 'synthetic', raw_artifacts_safe_to_publish: false, retention: 'temporary_review' },
+        result: 'passed',
+        claim_limit: 'Proves Workspine UI proof metadata and comparison behavior only; does not prove real browser rendering quality, cross-browser behavior, full accessibility, production delivery, or public release proof.',
+      }],
+      artifacts: [{
+        path: 'fixtures/dogfood/index.html',
+        type: 'source',
+        visibility: 'local_only',
+        retention: 'temporary_review',
+        sensitivity: 'synthetic',
+        safe_to_publish: false,
+      }, {
+        path: '.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json',
+        type: 'metadata',
+        visibility: 'local_only',
+        retention: 'temporary_review',
+        sensitivity: 'synthetic',
+        safe_to_publish: false,
+      }],
+      privacy: {
+        data_classification: 'synthetic',
+        redactions: [],
+        raw_artifacts_safe_to_publish: false,
+        retention: 'Temporary generated dogfood fixture only.',
+      },
+      result: { claim_status: 'passed', comparison_status_by_slot: { 'ui-58-valid-scoped-proof': 'satisfied' } },
+      claim_limits: [
+        'Proves Workspine UI proof metadata and comparison behavior only; does not prove real browser rendering quality, cross-browser behavior, full accessibility, production delivery, or public release proof.',
+      ],
+      ...overrides,
+    };
+  }
+
+  function writeDogfoodFixture(bundle = dogfoodBundle()) {
+    const htmlPath = path.join(tmpDir, 'fixtures', 'dogfood', 'index.html');
+    const scriptPath = path.join(tmpDir, 'fixtures', 'dogfood', 'app.js');
+    const bundlePath = path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'proof-bundle.json');
+    fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
+    fs.mkdirSync(path.dirname(bundlePath), { recursive: true });
+    fs.writeFileSync(htmlPath, '<main><h1>Dogfood UI</h1><button id="save">Save synthetic state</button><script src="./app.js"></script></main>\n');
+    fs.writeFileSync(scriptPath, 'document.getElementById("save").dataset.state = "synthetic";\n');
+    fs.writeFileSync(bundlePath, JSON.stringify(bundle, null, 2));
+    return { htmlPath, scriptPath, bundlePath };
+  }
+
+  function writePlannedSlots(slots = [plannedSlots()[0]]) {
+    const slotsPath = path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'ui-proof-slots.json');
+    fs.mkdirSync(path.dirname(slotsPath), { recursive: true });
+    fs.writeFileSync(slotsPath, JSON.stringify({ ui_proof_slots: slots }, null, 2));
+    return slotsPath;
+  }
+
+  test('planned-vs-observed comparison satisfies valid scoped proof and fails closed on missing proof', async () => {
+    const mod = await importUiProofModule();
+    const slots = plannedSlots();
+    const result = mod.compareUiProofSlots(slots.slice(0, 2), [dogfoodBundle()]);
+
+    assert.strictEqual(result.status, 'partial');
+    assert.deepStrictEqual(result.slots.map((slot) => [slot.slot_id, slot.status]), [
+      ['ui-58-valid-scoped-proof', 'satisfied'],
+      ['ui-58-missing-or-botched-proof', 'missing'],
+    ]);
+    assert.ok(result.slots[1].issues.some((issue) => issue.code === 'missing_observed_bundle'));
+  });
+
+  test('mismatched and botched observed proof cannot satisfy planned slots', async () => {
+    const mod = await importUiProofModule();
+    const [validSlot] = plannedSlots();
+    const mismatched = dogfoodBundle({
+      scope: { ...dogfoodBundle().scope, slot_ids: ['ui-58-wrong-slot'] },
+      result: { claim_status: 'passed', comparison_status_by_slot: { 'ui-58-wrong-slot': 'satisfied' } },
+    });
+    const botched = dogfoodBundle({ observations: [] });
+
+    const mismatchedResult = mod.compareUiProofSlots([validSlot], [mismatched]);
+    assert.strictEqual(mismatchedResult.slots[0].status, 'missing');
+
+    const botchedResult = mod.compareUiProofSlots([validSlot], [botched]);
+    assert.strictEqual(botchedResult.slots[0].status, 'partial');
+    assert.ok(botchedResult.slots[0].issues.some((issue) => issue.code === 'invalid_observed_bundle'));
+  });
+
+  test('human approval cannot upgrade missing required non-human proof to satisfied', async () => {
+    const mod = await importUiProofModule();
+    const humanSlot = plannedSlots()[2];
+    const humanOnly = dogfoodBundle({
+      scope: {
+        ...dogfoodBundle().scope,
+        slot_ids: ['ui-58-human-bypass-blocked'],
+        claim: 'Human approval cannot bypass missing required non-human evidence for visual, taste, accessibility, or privacy-sensitive UI proof.',
+      },
+      route_state: '/dogfood route with synthetic fixture state and subjective review metadata',
+      evidence_inputs: { kinds: ['human'], tools_used: ['manual review'] },
+      observations: [{
+        observation: 'Human/manual acceptance is represented as human evidence or waiver/deferment metadata.',
+        claim: 'Human approval recorded for subjective review only.',
+        route_state: '/dogfood route with synthetic fixture state and subjective review metadata',
+        evidence_kind: 'human',
+        artifact_refs: ['.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json'],
+        privacy: { data_classification: 'synthetic', raw_artifacts_safe_to_publish: false, retention: 'temporary_review' },
+        result: 'passed',
+        claim_limit: 'Human evidence may narrow, waive, defer, or record proof debt; it does not prove missing non-human evidence or full accessibility/taste acceptance.',
+      }],
+      result: { claim_status: 'passed', comparison_status_by_slot: { 'ui-58-human-bypass-blocked': 'satisfied' } },
+      claim_limits: ['Human evidence may narrow, waive, defer, or record proof debt; it does not prove missing non-human evidence or full accessibility/taste acceptance.'],
+    });
+
+    const result = mod.compareUiProofSlots([humanSlot], [humanOnly]);
+    assert.strictEqual(result.slots[0].status, 'partial');
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'human_evidence_cannot_bypass_required_non_human_evidence'));
+  });
+
+  test('nested route state and claim mismatches cannot satisfy planned proof', async () => {
+    const mod = await importUiProofModule();
+    const slot = {
+      ...plannedSlots()[0],
+      route_state: { route: '/dogfood', state: { tab: 'expected' } },
+    };
+    const bundle = dogfoodBundle({
+      route_state: { route: '/dogfood', state: { tab: 'actual' } },
+      scope: { ...dogfoodBundle().scope, claim: 'Different claim' },
+      observations: dogfoodBundle().observations.map((observation) => ({
+        ...observation,
+        route_state: { route: '/dogfood', state: { tab: 'actual' } },
+      })),
+    });
+
+    const result = mod.compareUiProofSlots([slot], [bundle]);
+    assert.strictEqual(result.slots[0].status, 'partial');
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'route_state_mismatch'));
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'observation_route_state_mismatch'));
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'claim_mismatch'));
+
+    const observationClaimMismatch = dogfoodBundle({
+      observations: dogfoodBundle().observations.map((observation) => ({
+        ...observation,
+        claim: 'Different claim',
+      })),
+    });
+    const claimResult = mod.compareUiProofSlots([plannedSlots()[0]], [observationClaimMismatch]);
+    assert.ok(claimResult.slots[0].issues.some((issue) => issue.code === 'observation_claim_mismatch'));
+  });
+
+  test('declared required evidence kinds need passed supporting observations', async () => {
+    const mod = await importUiProofModule();
+    const [slot] = plannedSlots();
+    const metadataOnly = dogfoodBundle({
+      observations: dogfoodBundle().observations.filter((observation) => observation.evidence_kind !== 'test'),
+    });
+
+    const result = mod.compareUiProofSlots([slot], [metadataOnly]);
+    assert.strictEqual(result.slots[0].status, 'partial');
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'missing_supporting_observation_evidence_kind'));
+  });
+
+  test('slot comparison ignores unrelated observations but preserves original supporting indices', async () => {
+    const mod = await importUiProofModule();
+    const [slot] = plannedSlots();
+    const unrelatedFailedObservation = {
+      ...dogfoodBundle().observations[0],
+      claim: 'Different planned claim for another slot.',
+      observation: 'This unrelated observation failed and must not make the current slot partial.',
+      result: 'failed',
+    };
+
+    const unrelatedFailure = dogfoodBundle({
+      observations: [unrelatedFailedObservation, ...dogfoodBundle().observations],
+    });
+    const unrelatedFailureResult = mod.compareUiProofSlots([slot], [unrelatedFailure]);
+    assert.strictEqual(unrelatedFailureResult.status, 'satisfied', JSON.stringify(unrelatedFailureResult));
+
+    const routeMismatch = dogfoodBundle({
+      observations: [unrelatedFailedObservation, {
+        ...dogfoodBundle().observations[0],
+        route_state: '/wrong dogfood route',
+      }],
+    });
+    const routeResult = mod.compareUiProofSlots([{ ...slot, required_evidence_kinds: ['code'] }], [routeMismatch]);
+    assert.ok(routeResult.slots[0].issues.some((issue) => issue.code === 'observation_route_state_mismatch' && issue.path === 'observations[1].route_state'));
+  });
+
+  test('minimum observations must come from observations supporting the planned slot', async () => {
+    const mod = await importUiProofModule();
+    const [slot] = plannedSlots();
+    const unrelatedMinimumObservation = {
+      ...dogfoodBundle().observations[0],
+      claim: 'Different planned claim for another slot.',
+      observation: 'Only this unrelated observation mentions the expected unique text.',
+    };
+    const bundle = dogfoodBundle({ observations: [...dogfoodBundle().observations, unrelatedMinimumObservation] });
+
+    const result = mod.compareUiProofSlots([{ ...slot, minimum_observations: ['expected unique text'] }], [bundle]);
+
+    assert.strictEqual(result.slots[0].status, 'partial');
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'missing_minimum_observation'));
+  });
+
+  test('manual acceptance requirement needs explicit passed human observation', async () => {
+    const mod = await importUiProofModule();
+    const [slot] = plannedSlots();
+
+    const result = mod.compareUiProofSlots([{ ...slot, manual_acceptance_required: true }], [dogfoodBundle()]);
+
+    assert.strictEqual(result.slots[0].status, 'partial');
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'missing_manual_acceptance_evidence'));
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'missing_manual_acceptance_observation'));
+  });
+
+  test('manual acceptance requirement can be satisfied by explicit passed human evidence', async () => {
+    const mod = await importUiProofModule();
+    const [slot] = plannedSlots();
+    const manualObservation = {
+      ...dogfoodBundle().observations[0],
+      observation: 'Human reviewer accepted the scoped synthetic UI proof boundary.',
+      evidence_kind: 'human',
+    };
+    const bundle = dogfoodBundle({
+      evidence_inputs: { kinds: ['code', 'test', 'runtime', 'human'], tools_used: ['node:test', 'manual review'] },
+      observations: [...dogfoodBundle().observations, manualObservation],
+    });
+
+    const result = mod.compareUiProofSlots([{ ...slot, required_evidence_kinds: ['code', 'test', 'runtime', 'human'], manual_acceptance_required: true }], [bundle]);
+
+    assert.strictEqual(result.status, 'satisfied', JSON.stringify(result));
+  });
+
+  test('explicitly supplied invalid observed bundles fail closed even when another bundle satisfies the slot', async () => {
+    const mod = await importUiProofModule();
+    const [slot] = plannedSlots();
+
+    const result = mod.compareUiProofSlots([slot], [dogfoodBundle(), { source: 'invalid-observed.json', bundle: {}, validation: { valid: false, errors: [{ code: 'invalid_bundle' }], warnings: [] } }]);
+
+    assert.strictEqual(result.status, 'partial');
+    assert.ok(result.errors.some((error) => error.code === 'invalid_observed_bundle' && error.path === 'invalid-observed.json'));
+  });
+
+  test('generated UI-bearing fixture validates through CLI and compares as narrow local proof', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const { htmlPath, scriptPath } = writeDogfoodFixture();
+    assert.match(fs.readFileSync(htmlPath, 'utf-8'), /<button id="save">/);
+    assert.match(fs.readFileSync(scriptPath, 'utf-8'), /dataset\.state = "synthetic"/);
+
+    const cliResult = await runCliAsMain(tmpDir, ['ui-proof', 'validate', '.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json']);
+    assert.strictEqual(cliResult.exitCode, 0, cliResult.output);
+    const cliOutput = JSON.parse(cliResult.output);
+    assert.strictEqual(cliOutput.valid, true, cliResult.output);
+
+    const mod = await importUiProofModule();
+    const comparison = mod.compareUiProofSlots([plannedSlots()[0]], [dogfoodBundle()]);
+    assert.strictEqual(comparison.status, 'satisfied');
+  });
+
+  test('Phase 59 ui-proof compare command satisfies valid planned and observed proof', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    writePlannedSlots();
+    writeDogfoodFixture();
+
+    const result = await runCliAsMain(tmpDir, [
+      'ui-proof',
+      'compare',
+      '.planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json',
+      '.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.operation, 'ui-proof compare');
+    assert.strictEqual(output.status, 'satisfied');
+    assert.strictEqual(output.planned, '.planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json');
+    assert.deepStrictEqual(output.observed, ['.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json']);
+    assert.deepStrictEqual(output.slots.map((slot) => [slot.slot_id, slot.status]), [['ui-58-valid-scoped-proof', 'satisfied']]);
+  });
+
+  test('Phase 59 ui-proof compare command fails closed when any supplied observed proof is invalid', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    writePlannedSlots();
+    writeDogfoodFixture();
+    const invalidPath = path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'invalid-proof-bundle.json');
+    fs.writeFileSync(invalidPath, JSON.stringify({ proof_bundle_version: 1 }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, [
+      'ui-proof',
+      'compare',
+      '.planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json',
+      '.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json',
+      '.planning/phases/58-dogfood-ui-proof-loop/invalid-proof-bundle.json',
+    ]);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'partial');
+    assert.ok(output.errors.some((error) => error.code === 'invalid_observed_bundle'));
+  });
+
+  test('Phase 59 ui-proof compare command fails closed when observed proof is missing', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    writePlannedSlots();
+
+    const result = await runCliAsMain(tmpDir, [
+      'ui-proof',
+      'compare',
+      '.planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json',
+    ]);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'missing');
+    assert.ok(output.slots[0].issues.some((issue) => issue.code === 'missing_observed_bundle'));
+  });
+
+  test('Phase 59 ui-proof compare command reports botched and human-bypass proof as partial', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+
+    writePlannedSlots([plannedSlots()[0], plannedSlots()[2]]);
+    const botched = dogfoodBundle({ observations: [] });
+    const botchedPath = path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'botched-proof-bundle.json');
+    fs.mkdirSync(path.dirname(botchedPath), { recursive: true });
+    fs.writeFileSync(botchedPath, JSON.stringify(botched, null, 2));
+
+    const humanOnly = dogfoodBundle({
+      scope: { ...dogfoodBundle().scope, slot_ids: ['ui-58-human-bypass-blocked'] },
+      route_state: '/dogfood route with synthetic fixture state and subjective review metadata',
+      evidence_inputs: { kinds: ['human'], tools_used: ['manual review'] },
+      observations: [{
+        observation: 'Human/manual acceptance is represented as human evidence or waiver/deferment metadata.',
+        claim: 'Human approval recorded for subjective review only.',
+        route_state: '/dogfood route with synthetic fixture state and subjective review metadata',
+        evidence_kind: 'human',
+        artifact_refs: ['.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json'],
+        privacy: { data_classification: 'synthetic', raw_artifacts_safe_to_publish: false, retention: 'temporary_review' },
+        result: 'passed',
+        claim_limit: 'Human evidence may narrow, waive, defer, or record proof debt; it does not prove missing non-human evidence or full accessibility/taste acceptance.',
+      }],
+      result: { claim_status: 'passed', comparison_status_by_slot: { 'ui-58-human-bypass-blocked': 'satisfied' } },
+      claim_limits: ['Human evidence may narrow, waive, defer, or record proof debt; it does not prove missing non-human evidence or full accessibility/taste acceptance.'],
+    });
+    const humanPath = path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'human-proof-bundle.json');
+    fs.writeFileSync(humanPath, JSON.stringify(humanOnly, null, 2));
+
+    const result = await runCliAsMain(tmpDir, [
+      'ui-proof',
+      'compare',
+      '.planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json',
+      '.planning/phases/58-dogfood-ui-proof-loop/botched-proof-bundle.json',
+      '.planning/phases/58-dogfood-ui-proof-loop/human-proof-bundle.json',
+    ]);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'partial');
+    assert.ok(output.slots.find((slot) => slot.slot_id === 'ui-58-valid-scoped-proof').issues.some((issue) => issue.code === 'invalid_observed_bundle'));
+    assert.ok(output.slots.find((slot) => slot.slot_id === 'ui-58-human-bypass-blocked').issues.some((issue) => issue.code === 'human_evidence_cannot_bypass_required_non_human_evidence'));
   });
 });
 

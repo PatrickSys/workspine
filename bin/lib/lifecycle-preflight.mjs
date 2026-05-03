@@ -52,6 +52,11 @@ const SURFACE_POLICIES = {
     ownedWrites: ['spec', 'roadmap', 'phase-directories'],
     explicitLifecycleMutation: 'none',
   },
+  'plan-milestone-gaps': {
+    classification: 'owned_write',
+    ownedWrites: ['roadmap', 'phase-directories'],
+    explicitLifecycleMutation: 'none',
+  },
   resume: {
     classification: 'owned_write',
     ownedWrites: ['checkpoint-cleanup'],

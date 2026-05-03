@@ -231,6 +231,18 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
       }
     }
   });
+
+  test('gap closure workflow preserves fingerprint handoff after generation', () => {
+    const content = readSkill(tmpDir, 'gsdd-plan-milestone-gaps');
+    assert.match(content, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight plan-milestone-gaps/,
+      'generated plan-milestone-gaps skill must preflight before mutating ROADMAP.');
+    assert.match(content, /node \.planning\/bin\/gsdd\.mjs session-fingerprint write/,
+      'generated plan-milestone-gaps skill must refresh fingerprint after intentional ROADMAP writes.');
+    assert.doesNotMatch(content, /\bgsdd session-fingerprint write\b/,
+      'generated plan-milestone-gaps skill must use the local helper path, not bare gsdd.');
+    assert.match(content, /\/gsdd-plan/,
+      'generated plan-milestone-gaps skill must still route to /gsdd-plan after creating phases.');
+  });
 });
 
 // ============================================================
