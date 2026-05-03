@@ -100,6 +100,7 @@ Then pick the first workflow lane that matches your situation:
 - `gsdd-new-project` for greenfield work, fuzzy brownfield work, or milestone-shaped work
 - `gsdd-quick` for a concrete bounded brownfield change
 - `gsdd-map-codebase` first when the repo is unfamiliar, risky, or needs a deeper baseline before choosing a lane
+- `agentic-research` workflow contract for web-enabled decomposition-first research (MVP docs in `docs/AGENTIC-RESEARCH-MVP.md`)
 
 In a terminal, `npx -y gsdd-cli init` opens a guided install wizard. If you installed the package globally, `gsdd init` is the equivalent shorthand:
 

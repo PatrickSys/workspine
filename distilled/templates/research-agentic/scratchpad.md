@@ -1,0 +1,16 @@
+# Research Scratchpad
+
+Use this for long-running jobs. Append entries; do not rewrite history.
+
+## Timeline
+
+- YYYY-MM-DD HH:MM UTC — Started run. Objective: ...
+- YYYY-MM-DD HH:MM UTC — Decomposition complete. Notes: ...
+- YYYY-MM-DD HH:MM UTC — Breadth sweep pivot. Why: ...
+- YYYY-MM-DD HH:MM UTC — Depth lane update. Confidence: ...
+- YYYY-MM-DD HH:MM UTC — Critic findings applied. Changes: ...
+
+## Open risks
+
+- Risk:
+- Mitigation:
