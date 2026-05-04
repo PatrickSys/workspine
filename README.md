@@ -122,6 +122,7 @@ Start with the public proof pack:
 - [Exported consumer proof pack](docs/proof/consumer-node-cli/README.md)
 - [Runtime support matrix](docs/RUNTIME-SUPPORT.md)
 - [Verification discipline](docs/VERIFICATION-DISCIPLINE.md)
+- [Agentic research MVP harness](docs/AGENTIC-RESEARCH-MVP.md)
 
 ### Quickstart (after init)
 
