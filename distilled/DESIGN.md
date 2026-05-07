@@ -2817,30 +2817,36 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 ## D62 - Repo-Native UI Proof Contract
 
-**Decision (2026-04-28):** UI-sensitive work should carry a compact planned proof-slot contract and, when executed, an observed UI proof bundle that references artifacts by path or link while preserving the existing closure evidence kinds: `code`, `test`, `runtime`, `delivery`, and `human`.
+**Decision (2026-04-28; revised 2026-05-08):** UI-sensitive work should carry a compact planned proof-slot contract and, when executed, an observed UI proof bundle that references artifacts by path or link while preserving the existing closure evidence kinds: `code`, `test`, `runtime`, `delivery`, and `human`. For live rendered UI proof, `agent-browser` is the default runtime evidence path for consumers, while existing Playwright tests remain the canonical repeatable browser-regression path when present. The deterministic `ui-proof` validator remains provider-agnostic structural validation, but it now validates planned slot specificity, concise tool provenance, local artifact path existence when validating from files, raw-artifact safety for paths and URLs, and failed/partial proof classification so the workflow cannot degrade back into unstructured "looks good" review.
 
 **Context:**
 - UI proof targets the recurring failure mode where agents claim a UI works or looks good without rendered proof, matched observations, or explicit human judgment.
 - The contract defines proof slots, proof bundles, comparison statuses, fail-closed agent guardrails, deterministic metadata validation, privacy metadata, and health visibility without adding a browser-provider framework.
 - GSD's archived planner, executor, and verifier roles preserve strong lifecycle discipline, but they do not provide this UI-specific planned-vs-observed proof model. GSDD keeps the lifecycle leverage and adds a repo-native UI proof substrate without adding a browser-provider framework.
+- OneShot's QC guidance and Vercel's `agent-browser` skill converge on an interactive browser loop for snapshots, ref-based interaction, screenshots, and network/console-adjacent inspection. GSDD adapts that as a default workflow instruction, not as a hard validator dependency.
 
 **Decision:**
 - Planning must classify UI-sensitive work and require either `ui_proof_slots` or an explicit `no_ui_proof_rationale`.
-- Planned slots record claim, route/state, required evidence kinds, minimum observations, environment/viewport, manual-acceptance requirement, claim limit, and requirement IDs.
+- Planned slots record claim, route/state, required evidence kinds, minimum observations, expected artifact types, runnable validation command, environment/viewport, manual-acceptance requirement, claim limit, and requirement IDs.
 - Observed proof bundles record claim, requirement/slot IDs, route/state, environment, viewport, evidence inputs, commands/manual steps, observations, artifacts, privacy metadata, result, and claim limits.
+- Planned slots must be tight enough for the plan checker to reject vague proof: specific route/state, viewport rationale or narrowed claim limit, minimum observations, expected artifact types, runnable validation, and matchability back to the exact UI claim.
+- The planner chooses viewport coverage, but responsive or layout-sensitive claims require desktop/mobile or equivalent state coverage unless the claim is explicitly narrowed.
+- Execution defaults to `agent-browser` for live UI runtime proof: open the route/state, capture interactive snapshots/refs where relevant, exercise the changed flow, capture screenshots for planned viewport(s), and record relevant console/network observations.
+- Existing Playwright tests or package scripts remain the canonical repeatable browser-regression evidence when present. Playwright scripting is reserved for checks `agent-browser` cannot cover cleanly, such as JS-disabled behavior, structured console listeners, or multi-context testing.
 - Verification compares planned slots to observed bundles using `satisfied`, `partial`, `missing`, `waived`, `deferred`, and `not_applicable`; waiver and deferral are not proof.
 - UI correctness claims fail closed unless rendered proof is matched exactly to claim, route/state, observation, evidence kind, artifact path or manual step, privacy metadata, result, and claim limit, or an explicit waiver/deferment narrows the claim.
 - Human acceptance may close a narrowed claim and record proof debt, but it must not convert missing or mismatched non-human evidence into `satisfied` proof.
 - Screenshots, traces, videos, reports, accessibility scans, Gherkin, and visual diffs are artifact types or activities mapped onto the five existing evidence kinds, not new evidence kinds.
 - Source annotations, AST/cAST findings, semantic search hits, comments, and Semble-like retrieval may discover proof obligations, but they are discovery hints only and do not satisfy proof slots.
 - Visual taste, accessibility judgment, baseline acceptance, subjective polish/layout quality, and privacy publication require human evidence or explicit waiver, and human approval does not replace required `code`, `test`, `runtime`, or `delivery` evidence.
-- Deterministic metadata enforcement keeps the evidence and comparison-status vocabularies unchanged: artifact entries require `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; raw screenshots, traces, videos, DOM snapshots, and reports default to `local_only` plus `safe_to_publish: false`; `bin/lib/ui-proof.mjs` validates required bundle/observation fields, structured command/manual-step entries, fixed evidence kinds, claim/result statuses, comparison statuses, claim limits, privacy metadata, safe artifact references, and public/tracked/delivery proof claims backed by local-only, unsafe, unsanitized, or privacy-contradictory artifacts.
-- `gsdd health` reports invalid known UI proof bundles as E10 using the same validator, staying read-only and metadata-only.
+- Deterministic validation keeps the evidence and comparison-status vocabularies unchanged: planned slots require specific claim, route/state, evidence, expected artifacts, validation, viewport, and claim-limit fields; artifact entries require `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; raw screenshots, traces, videos, DOM snapshots, and reports default to `local_only` plus `safe_to_publish: false`; `bin/lib/ui-proof.mjs` validates required bundle/observation fields, structured command/manual-step entries, fixed evidence kinds, concise `tools_used` IDs, claim/result statuses, comparison statuses, failure classification for failed/partial proof, claim limits, privacy metadata, safe artifact references, local artifact path existence when validating file-backed bundles, and public/tracked/delivery proof claims backed by local-only, unsafe, unsanitized, or privacy-contradictory artifacts.
+- `gsdd health` reports invalid known UI proof bundles as E10 using the same validator, staying read-only and avoiding raw artifact content inspection.
+- Failed UI proof is reported through existing GSDD gap/proof-debt language. Product behavior defects, missing or blocked infrastructure, flaky harnesses, and ambiguous specs explain causes, but they do not add new evidence kinds, result statuses, or comparison statuses.
 
 **Leverage:**
-- Lost: UI-sensitive work now carries a small proof-contract burden, and invalid proof metadata can degrade/break health before agents can claim rendered UI outcomes.
-- Kept: repo-native markdown artifacts, optional project tooling, fixed closure evidence kinds, generated-surface freshness, and the plan/execute/verify separation.
-- Gained: exact claim-to-proof traceability, strict comparison statuses, privacy and claim-limit metadata, fail-closed overclaim guardrails, deterministic metadata validation, and health-visible protection against unsafe public proof claims.
+- Lost: UI-sensitive work now carries a small proof-contract burden, and default live proof guidance adds slightly more specificity for planners/checkers to enforce.
+- Kept: repo-native markdown artifacts, optional project tooling, fixed closure evidence kinds, generated-surface freshness, the plan/execute/verify separation, and provider-agnostic deterministic metadata validation.
+- Gained: exact claim-to-proof traceability, strict comparison statuses, privacy and claim-limit metadata, fail-closed overclaim guardrails, deterministic metadata validation, a concrete live browser evidence path, and health-visible protection against unsafe public proof claims.
 
 **Evidence:**
 - `distilled/templates/ui-proof.md`
@@ -2849,11 +2855,22 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - `bin/lib/templates.mjs`, `bin/lib/ui-proof.mjs`, `bin/lib/health.mjs`, `bin/lib/rendering.mjs`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.init.test.cjs`
 - GSD comparison: the upstream planner, executor, and verifier role patterns preserve lifecycle rigor, but they do not define UI proof slots or planned-vs-observed UI proof bundles.
+- OneShot QC source: `https://github.com/oneshot-repo/OneShot/tree/main/skills`
+- Vercel `agent-browser` docs: `https://github.com/vercel-labs/agent-browser/blob/main/skill-data/core/SKILL.md` and `https://agent-browser.dev/snapshots`
+- Playwright docs: `https://playwright.dev/docs/trace-viewer`, `https://playwright.dev/docs/next/screenshots`, and `https://playwright.dev/mcp/tools/tracing`
+- Chrome DevTools for agents/MCP docs: `https://developer.chrome.com/docs/devtools/agents` and `https://developer.chrome.com/blog/chrome-devtools-mcp?hl=en`
+- Harness and UI-agent pitfall sources: `https://www.anthropic.com/engineering/harness-design-long-running-apps`, `https://www.huuhka.net/browser-verification-for-coding-agents-chrome-devtools-mcp-vs-agent-browser/`, `https://www.developersdigest.tech/blog/long-running-agents-need-harnesses`, `https://codemyspec.com/blog/agentic-qa-verification`, `https://dev.to/ratikkoka/your-ui-is-invisible-to-ai-agents-heres-how-to-fix-it-1ib3`, `https://dev.to/louaiboumediene/the-ai-harness-why-your-ai-coding-agent-is-only-as-smart-as-the-repo-you-put-it-in-cml`, and `https://tessl.io/blog/webmcp-making-web-apps-faster-and-cheaper-for-ai-agents/`
+- OpenSpec docs: `https://openspec.dev/`
+- LeanSpec docs: `https://www.lean-spec.dev/docs/guide/first-principles`
+- OpenAI Codex docs: `https://help.openai.com/en/articles/11369540-codex-in-chatgpt`
+- Anthropic Agent Skills docs: `https://docs.claude.com/en/docs/agents-and-tools/agent-skills`
+- GitHub Copilot customization docs: `https://docs.github.com/en/copilot/concepts/prompting/response-customization`
 
 **Consequences:**
 - Future UI-related phases must not add new evidence kinds by treating artifact types as proof categories.
 - Future dogfood or runtime validation must not upgrade artifact counts or human waivers into proof.
 - Generated runtime surfaces and local templates must stay freshness-checkable through `gsdd update --templates` and health diagnostics.
+- Future provider/tooling work must not make `agent-browser` a required validator field without a separate product decision; the current contract makes it the default workflow path, not a schema lock.
 
 ---
 

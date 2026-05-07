@@ -211,7 +211,18 @@ Before reporting a task complete:
 - A task is not complete because code was written. It is complete when the intended verification path actually passes.
 
 ### UI Proof Execution
-If the plan defines UI proof slots, record observed proof against the exact claim, route/state, observation, evidence kind, artifact path or manual step, privacy metadata, result, and claim limit before claiming task completion. Artifact metadata must include `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; raw screenshots, traces, videos, DOM snapshots, and reports are local-only/unsafe by default and cannot back public, tracked, delivery, release, or publication proof claims. Use `gsdd ui-proof validate <path>` or `gsdd health` when a bundle exists. Artifact count, source comments, AST/cAST findings, semantic search, and Semble-like retrieval are not proof. Missing or weakly linked evidence must be recorded as proof debt, waiver, deferment, or reduced claim language rather than satisfied proof.
+If the plan defines UI proof slots, record observed proof against the exact claim, route/state, observation, evidence kind, artifact path or manual step, privacy metadata, result, and claim limit before claiming task completion.
+
+Use `agent-browser` as the default live UI proof path:
+- open the planned route/state
+- capture interactive snapshots/refs when relevant
+- exercise the changed flow
+- capture screenshots for the planned viewport(s)
+- record relevant console/network observations
+
+If `agent-browser` is unavailable, record the availability constraint and closest project-native interactive browser fallback in the proof bundle instead of silently treating the fallback as the default path. Existing Playwright/package-script browser tests remain canonical repeatable regression evidence when present; use Playwright scripting only for checks `agent-browser` cannot cover cleanly, such as JS-disabled, structured console, or multi-context verification.
+
+Artifact metadata must include `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; raw screenshots, traces, videos, DOM snapshots, and reports are local-only/unsafe by default and cannot back public, tracked, delivery, release, or publication proof claims. Use `gsdd ui-proof validate <path>` or `gsdd health` when a bundle exists. Artifact count, source comments, AST/cAST findings, semantic search, and Semble-like retrieval are not proof. Missing or weakly linked evidence must be recorded as proof debt, waiver, deferment, or reduced claim language rather than satisfied proof.
 </execution_loop>
 
 <checkpoint_protocol>

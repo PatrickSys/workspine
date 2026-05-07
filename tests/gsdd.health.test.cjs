@@ -33,6 +33,10 @@ function writeFile(relativePath, content) {
   fs.writeFileSync(fullPath, content);
 }
 
+function writeDefaultUiProofArtifact() {
+  writeFile('artifacts/report.html', '<html><body>UI proof report</body></html>\n');
+}
+
 function writeAlignedTruthFixtures() {
   writeFile('distilled/DESIGN.md', `## 20. Workspace Health Diagnostics
 
@@ -375,6 +379,7 @@ describe('Health — ERROR: invalid UI proof bundle metadata', () => {
 
   test('valid local-only known UI proof bundle → no E10', async () => {
     await initWorkspace();
+    writeDefaultUiProofArtifact();
     fs.writeFileSync(path.join(tmpDir, '.planning', 'ui-proof.json'), JSON.stringify(validUiProofBundle(), null, 2));
 
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
@@ -385,6 +390,7 @@ describe('Health — ERROR: invalid UI proof bundle metadata', () => {
 
   test('valid local-only dogfood UI proof bundle → no E10', async () => {
     await initWorkspace();
+    writeDefaultUiProofArtifact();
     writeFile('.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json', JSON.stringify(validUiProofBundle({
       scope: {
         work_item: 'phase-58-dogfood-ui-proof-loop',
