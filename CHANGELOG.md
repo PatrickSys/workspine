@@ -1,3 +1,10 @@
+# [0.22.0](https://github.com/PatrickSys/workspine/compare/v0.21.0...v0.22.0) (2026-05-08)
+
+
+### Features
+
+* bake agent-browser into UI proof workflow ([9d49792](https://github.com/PatrickSys/workspine/commit/9d497925dd9e88eee3284eb54bfaf36347262781))
+
 # [0.21.0](https://github.com/PatrickSys/workspine/compare/v0.20.0...v0.21.0) (2026-05-03)
 
 
