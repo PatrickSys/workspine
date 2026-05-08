@@ -1,3 +1,15 @@
+# [0.23.0](https://github.com/PatrickSys/workspine/compare/v0.22.0...v0.23.0) (2026-05-08)
+
+
+### Bug Fixes
+
+* harden control map review findings ([c41023a](https://github.com/PatrickSys/workspine/commit/c41023aff132c9944baa84094a4d13650b91a482))
+
+
+### Features
+
+* add computed control map ([2bab950](https://github.com/PatrickSys/workspine/commit/2bab950627c80b1e932cf44b5733fe346d953e74))
+
 # [0.22.0](https://github.com/PatrickSys/workspine/compare/v0.21.0...v0.22.0) (2026-05-08)
 
 
