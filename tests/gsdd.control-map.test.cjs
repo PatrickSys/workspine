@@ -5,6 +5,7 @@
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFileSync } = require('node:child_process');
 
@@ -70,11 +71,12 @@ describe('control-map command', () => {
       'vendor_session_forensics',
     ]);
     assert.strictEqual(map.canonical_worktree.git_valid, true);
+    assert.deepStrictEqual(map.canonical_worktree.ahead_behind, { ahead: null, behind: null });
     assert.strictEqual(map.canonical_worktree.dirty.counts.tracked, 1);
     assert.ok(map.canonical_worktree.dirty.counts.untracked >= 1);
-    assert.strictEqual(map.canonical_worktree.dirty.counts.ignored, 0);
+    assert.strictEqual(map.canonical_worktree.dirty.counts.ignored, null);
     assert.strictEqual(map.canonical_worktree.dirty.ignored.length, 0);
-    assert.strictEqual(map.canonical_worktree.dirty.omitted_counts.ignored, 0);
+    assert.strictEqual(map.canonical_worktree.dirty.omitted_counts.ignored, null);
     assert.ok(map.risks.some((risk) => risk.code === 'canonical_dirty'));
     assert.ok(!map.risks.some((risk) => risk.code === 'ignored_local_surfaces_present'));
   });
@@ -90,7 +92,8 @@ describe('control-map command', () => {
     const summaryMap = JSON.parse(summaryResult.output);
 
     assert.strictEqual(summaryMap.canonical_worktree.dirty.ignored.length, 0);
-    assert.strictEqual(summaryMap.canonical_worktree.dirty.counts.ignored, 0);
+    assert.strictEqual(summaryMap.canonical_worktree.dirty.counts.ignored, null);
+    assert.strictEqual(summaryMap.canonical_worktree.dirty.ignored_count_included, false);
 
     const deepResult = await runCliAsMain(tmpDir, ['control-map', '--json', '--with-ignored']);
     assert.strictEqual(deepResult.exitCode, 0, deepResult.output);
@@ -136,6 +139,27 @@ describe('control-map command', () => {
     assert.strictEqual(map.canonical_worktree.annotation.runtime_owner, 'codex-cli');
     assert.ok(map.risks.some((risk) => risk.code === 'stale_annotation_missing_worktree'));
     assert.strictEqual(map.authority.indexOf('repo_truth') < map.authority.indexOf('local_annotations'), true);
+  });
+
+  test('rejects annotation files outside the workspace without reading them', async () => {
+    await initGitWorkspace();
+    const outsidePath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gsdd-annotation-outside-')), 'annotations.json');
+    fs.writeFileSync(outsidePath, JSON.stringify({
+      worktrees: [{
+        path: '.',
+        runtime_owner: 'outside',
+        cleanup_state: 'active',
+      }],
+    }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['control-map', '--json', '--annotations', outsidePath]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const map = JSON.parse(result.output);
+
+    assert.strictEqual(map.annotations.exists, false);
+    assert.strictEqual(map.annotations.valid, false);
+    assert.ok(map.annotations.errors.some((error) => error.code === 'annotations_path_outside_workspace'));
+    assert.strictEqual(map.canonical_worktree.annotation, null);
   });
 
   test('human output includes lifecycle checkpoint state', async () => {

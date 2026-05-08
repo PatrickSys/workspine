@@ -1,7 +1,7 @@
 // control-map.mjs - computed-first workspace/worktree control map
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { dirname, isAbsolute, join, relative, resolve } from 'path';
+import { existsSync, readFileSync, readdirSync } from 'fs';
+import { isAbsolute, join, relative, resolve } from 'path';
 import { spawnSync } from 'child_process';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
@@ -20,19 +20,31 @@ const AUTHORITY_ORDER = Object.freeze([
 ]);
 
 function runGit(cwd, args) {
-  const result = spawnSync('git', args, {
-    cwd,
-    encoding: 'utf-8',
-    maxBuffer: 1024 * 1024 * 4,
-    timeout: 10000,
-  });
-  return {
-    ok: result.status === 0,
-    status: result.status,
-    stdout: String(result.stdout || '').trimEnd(),
-    stderr: String(result.stderr || '').trimEnd(),
-    command: `git ${args.join(' ')}`,
-  };
+  const command = `git ${args.join(' ')}`;
+  try {
+    const result = spawnSync('git', args, {
+      cwd,
+      encoding: 'utf-8',
+      maxBuffer: 1024 * 1024 * 4,
+      timeout: 10000,
+    });
+    const errorMessage = result.error ? result.error.message : '';
+    return {
+      ok: result.status === 0 && !result.error,
+      status: result.status ?? (result.error ? -1 : null),
+      stdout: String(result.stdout || '').trimEnd(),
+      stderr: String(result.stderr || errorMessage || '').trimEnd(),
+      command,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: -1,
+      stdout: '',
+      stderr: error.message,
+      command,
+    };
+  }
 }
 
 function runIgnoredCount(cwd) {
@@ -105,6 +117,7 @@ function capBucket(entries) {
 
 function parseAheadBehind(branchLine) {
   if (!branchLine) return { ahead: null, behind: null };
+  if (!branchLine.includes('...')) return { ahead: null, behind: null };
   const ahead = branchLine.match(/ahead (\d+)/)?.[1];
   const behind = branchLine.match(/behind (\d+)/)?.[1];
   return {
@@ -131,7 +144,7 @@ function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false
     ? buckets.ignored.length
     : ignoredCountResult && ignoredCountResult.ok
       ? ignoredCountResult.count
-      : 0;
+      : null;
 
   return {
     id: workspacePathLabel(workspaceRoot, pathValue),
@@ -154,7 +167,7 @@ function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false
       omitted_counts: {
         tracked: Math.max(0, buckets.tracked.length - MAX_DIRTY_BUCKET_ENTRIES),
         untracked: Math.max(0, buckets.untracked.length - MAX_DIRTY_BUCKET_ENTRIES),
-        ignored: includeIgnoredPaths ? Math.max(0, buckets.ignored.length - MAX_DIRTY_BUCKET_ENTRIES) : 0,
+        ignored: includeIgnoredPaths ? Math.max(0, buckets.ignored.length - MAX_DIRTY_BUCKET_ENTRIES) : null,
       },
       ignored_paths_included: includeIgnoredPaths,
       ignored_count_included: includeIgnoredPaths || Boolean(ignoredCountResult),
@@ -261,6 +274,19 @@ function loadAnnotations(workspaceRoot, planningDir, annotationPathArg = null) {
   const annotationPath = annotationPathArg
     ? resolve(workspaceRoot, annotationPathArg)
     : join(planningDir, '.local', 'control-map.annotations.json');
+  if (!isInsideOrSame(workspaceRoot, annotationPath)) {
+    return {
+      path: workspacePathLabel(workspaceRoot, annotationPath),
+      exists: false,
+      valid: false,
+      errors: [{
+        code: 'annotations_path_outside_workspace',
+        path: workspacePathLabel(workspaceRoot, annotationPath),
+        message: 'Control-map annotations path must stay inside the workspace.',
+      }],
+      worktrees: [],
+    };
+  }
   if (!existsSync(annotationPath)) {
     return {
       path: workspacePathLabel(workspaceRoot, annotationPath),
@@ -552,7 +578,8 @@ function printHuman(map) {
   for (const worktree of map.worktrees) {
     const marker = worktree.path === map.canonical_worktree.path ? '*' : '-';
     const annotation = worktree.annotation ? ` owner=${worktree.annotation.runtime_owner || 'unspecified'} cleanup=${worktree.annotation.cleanup_state}` : '';
-    console.log(`  ${marker} ${worktree.id} branch=${worktree.branch || 'unknown'} dirty=${worktree.dirty.counts.tracked}/${worktree.dirty.counts.untracked}/${worktree.dirty.counts.ignored}${annotation}`);
+    const ignoredCount = worktree.dirty.ignored_count_included ? String(worktree.dirty.counts.ignored) : 'not-scanned';
+    console.log(`  ${marker} ${worktree.id} branch=${worktree.branch || 'unknown'} dirty=${worktree.dirty.counts.tracked}/${worktree.dirty.counts.untracked}/${ignoredCount}${annotation}`);
   }
   if (map.risks.length > 0) {
     console.log('\nRisks:');

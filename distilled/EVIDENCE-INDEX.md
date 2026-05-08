@@ -507,9 +507,8 @@
 
 ## D63 — Computed-First Control Map
 - `bin/lib/control-map.mjs`, `bin/gsdd.mjs`, `bin/lib/rendering.mjs`
-- `distilled/workflows/progress.md`, `resume.md`, `pause.md`, `quick.md`, `plan.md`, `execute.md`, `verify.md`
-- `bin/lib/ui-proof.mjs`, `bin/lib/phase.mjs`
-- `tests/gsdd.control-map.test.cjs`, `tests/phase.test.cjs`
+- `distilled/workflows/progress.md`, `resume.md`, `pause.md`, `quick.md`, `plan.md`, `execute.md`
+- `tests/gsdd.control-map.test.cjs`
 - `.internal-research/gaps.md` Gap I52 and Gap I54
 - `.internal-research/lessons-learned.md` multi-worktree registry, clean-vs-editor-visible noise, checkpoint/worktree truth split, and subagent stop-condition lessons
 - GSD comparison: upstream GSD lifecycle rigor does not include a vendor-agnostic computed worktree/control-map helper

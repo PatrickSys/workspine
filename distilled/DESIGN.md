@@ -2884,24 +2884,22 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - Current harness guidance favors structured handoff artifacts, worktree isolation, evaluator loops, approval gates around side effects, and browser/runtime evidence. Those ideas fit Workspine only if repo truth remains primary and vendor adapters stay thin.
 
 **Decision:**
-- Add `gsdd control-map [--json] [--annotations <path>]` to the main CLI and generated `.planning/bin/gsdd.mjs` helper runtime.
-- Compute authority from live git/worktree state first: canonical checkout, branch, HEAD, ahead/behind, tracked/untracked/ignored buckets, sibling worktrees, detached/bare state, invalid git access, planning drift, checkpoint existence, lifecycle state, and local runtime worktree directories.
+- Add `gsdd control-map [--json] [--with-ignored] [--annotations <path>]` to the main CLI and generated `.planning/bin/gsdd.mjs` helper runtime.
+- Compute authority from live git/worktree state first: canonical checkout, branch, HEAD, upstream divergence when comparable, tracked/untracked dirty buckets, optional ignored-path scans through `--with-ignored`, sibling git worktrees, detached/bare state, invalid git access, planning drift, checkpoint existence, lifecycle state, and repo-local runtime worktree directories.
 - Read optional annotations from `.planning/.local/control-map.annotations.json`. Annotations may record `runtime_owner`, intended scope, write set, cleanup state, proof state, next step, branch, and last known head.
 - Treat annotations as stale-checkable intent only. They never outrank repo truth, planning artifacts, or checkpoint reconciliation.
 - Keep transcript/session stores out of the helper. Vendor session evidence may support postmortems, but it is not live product truth.
 - Wire the control map into portable workflow behavior by having `progress`, `resume`, `pause`, `quick`, `plan`, and `execute` consult it when available. This is guidance plus deterministic helper output, not a new workflow lane.
-- Extend the existing UI proof comparison contract at the same time: comparison issues now carry `severity` and `fix_hint`, and `gsdd verify <phase>` reports phase-local planned-vs-observed UI proof comparison status before closure.
 
 **Leverage:**
 - Lost: a pure zero-file model cannot preserve non-computable intent such as owner/runtime, intended scope, and cleanup obligation.
 - Kept: Workspine remains a lightweight repo-native spine; no new lifecycle workflow, no dashboard/control plane, no vendor session authority, and no change to the five evidence kinds.
-- Gained: agents can explain "clean" precisely across tracked, untracked, ignored, sibling, detached, stale, and annotated state before planning, execution, resume, cleanup, or milestone continuation.
+- Gained: agents can explain "clean" precisely across tracked, untracked, sibling, detached, stale, and annotated state by default, and across ignored/generated local surfaces when the caller requests the explicit `--with-ignored` scan before planning, execution, resume, cleanup, or milestone continuation.
 
 **Evidence:**
 - `bin/lib/control-map.mjs`, `bin/gsdd.mjs`, `bin/lib/rendering.mjs`
-- `distilled/workflows/progress.md`, `resume.md`, `pause.md`, `quick.md`, `plan.md`, `execute.md`, `verify.md`
-- `bin/lib/ui-proof.mjs`, `bin/lib/phase.mjs`
-- `tests/gsdd.control-map.test.cjs`, `tests/phase.test.cjs`
+- `distilled/workflows/progress.md`, `resume.md`, `pause.md`, `quick.md`, `plan.md`, `execute.md`
+- `tests/gsdd.control-map.test.cjs`
 - `.internal-research/gaps.md` Gap I52 and Gap I54
 - `.internal-research/lessons-learned.md` entries on multi-worktree registry, clean-vs-editor-visible noise, checkpoint/worktree truth split, and subagent stop conditions
 - GSD comparison: upstream GSD preserves lifecycle rigor but does not define a vendor-agnostic computed worktree/control-map helper.
@@ -2909,7 +2907,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - Harness sources: `https://www.anthropic.com/engineering/harness-design-long-running-apps`, `https://code.claude.com/docs/en/worktrees`, `https://developers.openai.com/codex/cloud`, `https://developers.openai.com/api/docs/guides/agents/orchestration`, `https://developers.openai.com/api/docs/guides/agents/guardrails-approvals`, `https://developers.openai.com/api/docs/guides/agent-evals`, `https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent`, `https://agent-browser.dev/sessions`, and `https://developer.chrome.com/docs/devtools/agents`.
 
 **Consequences:**
-- Future cleanup, resume, and parallel-worktree work should start from `gsdd control-map --json` rather than repeated ad hoc repo audits.
+- Future cleanup, resume, and parallel-worktree work should start from `gsdd control-map --json` rather than repeated ad hoc repo audits; use `--with-ignored` before making a clean-workspace claim that includes ignored or generated surfaces.
 - A future mutation command may update annotations, but the current helper intentionally stays computed/read-first and safe to call from status surfaces.
 - Future health or preflight hardening can consume the same helper output for stricter blocking, but must avoid turning local annotations into product truth.
 
