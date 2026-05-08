@@ -446,6 +446,41 @@ function normalizeObservedBundle(entry) {
   };
 }
 
+function comparisonFixHint(code) {
+  const hints = {
+    invalid_observed_bundle: 'Fix the observed proof bundle metadata, then rerun ui-proof compare.',
+    unsatisfied_observed_claim_status: 'Record a passed observed claim only after the changed UI state has been exercised and evidenced.',
+    unsatisfied_observed_comparison_status: 'Set comparison_status_by_slot to satisfied only for slots backed by matching observations and artifacts.',
+    missing_required_evidence_kind: 'Add observed evidence for every evidence kind required by the planned slot, or narrow the planned slot before verification.',
+    human_evidence_cannot_bypass_required_non_human_evidence: 'Add the missing non-human evidence; human approval may narrow or waive but cannot replace it.',
+    route_state_mismatch: 'Capture proof for the exact planned route/state, or update the plan before execution.',
+    environment_mismatch: 'Capture proof in the planned environment, or record a narrowed claim limit and rerun comparison.',
+    viewport_mismatch: 'Capture proof for the planned viewport, or narrow the viewport claim explicitly.',
+    requirement_mismatch: 'Declare the planned requirement id in the observed proof bundle scope.',
+    claim_mismatch: 'Keep the planned and observed claims identical so proof maps to the exact UI assertion.',
+    observation_claim_mismatch: 'Add a passed observation that supports the exact planned claim.',
+    observation_route_state_mismatch: 'Attach observations to the exact planned route/state.',
+    missing_supporting_observation_evidence_kind: 'Add passed supporting observations for each required evidence kind.',
+    unsatisfied_proof_step: 'Rerun or replace failing proof steps before claiming the slot is satisfied.',
+    missing_manual_acceptance_evidence: 'Record human evidence when the planned slot requires manual acceptance.',
+    missing_manual_acceptance_observation: 'Add a passed human observation for manual acceptance.',
+    unsatisfied_observation_result: 'Resolve failed observations or classify the slot as partial, waived, or deferred.',
+    missing_minimum_observation: 'Add observations covering every planned minimum observation.',
+    missing_claim_limit: 'Preserve the planned claim limit in the observed proof bundle.',
+    missing_expected_artifact_type: 'Attach the planned artifact type, such as screenshot, report, trace, or DOM snapshot.',
+    missing_observed_bundle: 'Create an observed UI proof bundle for the planned slot, or explicitly waive/defer the slot with claim narrowing.',
+  };
+  return hints[code] || 'Fix the proof issue, rerun the comparison, and keep the slot partial until evidence matches the plan.';
+}
+
+function decorateComparisonIssue(issue) {
+  return {
+    severity: issue.severity || 'blocker',
+    fix_hint: issue.fix_hint || issue.fix || comparisonFixHint(issue.code),
+    ...issue,
+  };
+}
+
 function compareSlotToBundle(slot, slotIdValue, observed) {
   const issues = [];
   const bundle = observed.bundle;
@@ -648,7 +683,7 @@ function compareSlotToBundle(slot, slotIdValue, observed) {
   }
 
   const status = issues.length === 0 ? 'satisfied' : (bundleStatus === 'missing' ? 'missing' : 'partial');
-  return { status, issues, source: observed.source };
+  return { status, issues: issues.map(decorateComparisonIssue), source: observed.source };
 }
 
 export function compareUiProofSlots(plannedSlots, observedBundles) {
@@ -656,7 +691,7 @@ export function compareUiProofSlots(plannedSlots, observedBundles) {
   const slotValidation = validateUiProofSlots(slots);
   const bundles = normalizeArray(observedBundles).map(normalizeObservedBundle);
   const results = [];
-  const errors = [...slotValidation.errors];
+  const errors = slotValidation.errors.map(decorateComparisonIssue);
 
   for (const observed of bundles) {
     if (!observed.validation.valid) {
@@ -680,7 +715,7 @@ export function compareUiProofSlots(plannedSlots, observedBundles) {
           code: 'missing_observed_bundle',
           path: 'scope.slot_ids',
           message: `No observed UI proof bundle declares planned slot ${slotIdValue}.`,
-        }],
+        }].map(decorateComparisonIssue),
       });
       continue;
     }
@@ -706,7 +741,7 @@ export function compareUiProofSlots(plannedSlots, observedBundles) {
         ? 'missing'
         : 'partial';
 
-  return { status, slots: results, errors };
+  return { status, slots: results, errors: errors.map(decorateComparisonIssue) };
 }
 
 export function validateUiProofBundle(bundle, options = {}) {

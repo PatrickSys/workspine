@@ -3029,6 +3029,9 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       ['ui-58-missing-or-botched-proof', 'missing'],
     ]);
     assert.ok(result.slots[1].issues.some((issue) => issue.code === 'missing_observed_bundle'));
+    const missingIssue = result.slots[1].issues.find((issue) => issue.code === 'missing_observed_bundle');
+    assert.strictEqual(missingIssue.severity, 'blocker');
+    assert.match(missingIssue.fix_hint, /observed UI proof bundle/);
   });
 
   test('planned-vs-observed comparison fails closed on weak planned slots', async () => {
@@ -3352,6 +3355,159 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.strictEqual(output.status, 'partial');
     assert.ok(output.slots.find((slot) => slot.slot_id === 'ui-58-valid-scoped-proof').issues.some((issue) => issue.code === 'invalid_observed_bundle'));
     assert.ok(output.slots.find((slot) => slot.slot_id === 'ui-58-human-bypass-blocked').issues.some((issue) => issue.code === 'human_evidence_cannot_bypass_required_non_human_evidence'));
+  });
+
+  test('phase verify includes UI proof comparison and blocks closure when planned proof is missing', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-ui-proof');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots:\n  - slot_id: ui-58-valid-scoped-proof\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    fs.writeFileSync(path.join(phaseDir, 'ui-proof-slots.json'), JSON.stringify({ ui_proof_slots: [plannedSlots()[0]] }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.strictEqual(output.legacy_verified, true);
+    assert.strictEqual(output.blocks_verification, true);
+    assert.deepStrictEqual(output.blocked_on, ['ui_proof']);
+    assert.deepStrictEqual(output.ui_proof, {
+      status: 'missing',
+      required: true,
+      satisfied: false,
+      blocks_verification: true,
+      required_block: 'ui-proof-failed',
+    });
+    assert.strictEqual(output.uiProof.status, 'missing');
+    assert.deepStrictEqual(output.uiProof.planned, ['.planning/phases/01-ui-proof/ui-proof-slots.json']);
+    assert.ok(output.uiProof.comparison.slots[0].issues.some((issue) => issue.code === 'missing_observed_bundle'));
+  });
+
+  test('phase verify blocks when a plan declares UI proof slots without a planned slots artifact', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-ui-proof');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots:\n  - slot_id: ui-58-valid-scoped-proof\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.strictEqual(output.legacy_verified, true);
+    assert.strictEqual(output.blocks_verification, true);
+    assert.strictEqual(output.ui_proof.status, 'missing');
+    const missingError = output.uiProof.errors.find((error) => error.code === 'missing_planned_ui_proof_slots_file');
+    assert.ok(missingError);
+    assert.strictEqual(missingError.severity, 'blocker');
+    assert.match(missingError.fix_hint, /ui-proof-slots/);
+  });
+
+  test('phase verify blocks when planned file artifacts are unsatisfied', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-artifact-proof');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '<task id="01-01" type="auto">\n  <files>\n    - CREATE: src/missing.js\n  </files>\n</task>\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.strictEqual(output.legacy_verified, true);
+    assert.strictEqual(output.blocks_verification, true);
+    assert.deepStrictEqual(output.blocked_on, ['artifacts']);
+    assert.strictEqual(output.artifact_status.satisfied, false);
+    assert.strictEqual(output.artifact_status.unsatisfied[0].file, 'src/missing.js');
+    assert.strictEqual(output.artifact_status.unsatisfied[0].severity, 'blocker');
+    assert.match(output.artifact_status.unsatisfied[0].fix_hint, /CREATE/);
+  });
+
+  test('phase verify includes satisfied UI proof comparison when bundles match planned slots', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-ui-proof');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots:\n  - slot_id: ui-58-valid-scoped-proof\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    fs.writeFileSync(path.join(phaseDir, 'ui-proof-slots.json'), JSON.stringify({ ui_proof_slots: [plannedSlots()[0]] }, null, 2));
+    writeDogfoodFixture();
+    fs.copyFileSync(
+      path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'proof-bundle.json'),
+      path.join(phaseDir, 'proof-bundle.json')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, true);
+    assert.strictEqual(output.blocks_verification, false);
+    assert.strictEqual(output.blocked_on.length, 0);
+    assert.strictEqual(output.ui_proof.status, 'satisfied');
+    assert.strictEqual(output.ui_proof.required, true);
+    assert.strictEqual(output.ui_proof.satisfied, true);
+    assert.strictEqual(output.uiProof.status, 'satisfied');
+    assert.deepStrictEqual(output.uiProof.observed, ['.planning/phases/01-ui-proof/proof-bundle.json']);
+  });
+
+  test('phase verify ignores stale UI proof sidecars when the plan records no-UI rationale', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-no-ui-proof');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots: [] # no UI proof required\nother_yaml_list:\n  - not a UI proof slot\nno_ui_proof_rationale: Not UI-sensitive.\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    fs.writeFileSync(path.join(phaseDir, 'ui-proof-slots.json'), JSON.stringify({ ui_proof_slots: [plannedSlots()[0]] }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, true);
+    assert.strictEqual(output.blocks_verification, false);
+    assert.strictEqual(output.ui_proof.status, 'not_applicable');
+    assert.deepStrictEqual(output.uiProof.planned, []);
+  });
+
+  test('phase verify blocks stale planned UI proof sidecars that drift from plan-declared slot ids', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-ui-proof-drift');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots:\n  - slot_id: ui-new-slot\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    fs.writeFileSync(path.join(phaseDir, 'ui-proof-slots.json'), JSON.stringify({ ui_proof_slots: [plannedSlots()[0]] }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.strictEqual(output.blocks_verification, true);
+    const driftError = output.uiProof.errors.find((error) => error.code === 'planned_ui_proof_slots_drift');
+    assert.ok(driftError);
+    assert.strictEqual(driftError.severity, 'blocker');
+    assert.match(driftError.fix_hint, /matches the plan-declared slot IDs/);
+  });
+
+  test('phase verify decorates invalid planned UI proof slot errors with severity and fix hints', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-ui-proof-invalid');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots:\n  - slot_id: ui-weak-slot\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    fs.writeFileSync(path.join(phaseDir, 'ui-proof-slots.json'), JSON.stringify({ ui_proof_slots: [{ slot_id: 'ui-weak-slot' }] }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    const fieldError = output.uiProof.errors.find((error) => error.code === 'missing_required_field');
+    assert.ok(fieldError);
+    assert.strictEqual(fieldError.severity, 'blocker');
+    assert.ok(fieldError.fix_hint);
   });
 });
 
