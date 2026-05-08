@@ -223,7 +223,7 @@ Other CLI commands that remain available outside the first-run path:
 | Command | Purpose |
 |---------|---------|
 | `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
-| `gsdd verify <N>` | Run artifact checks for phase N |
+| `gsdd verify <N>` | Run phase artifact and UI-proof closure checks for phase N; exits nonzero when verification is blocked |
 | `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
 
 ### Platform flags for `--tools`

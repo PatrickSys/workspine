@@ -175,18 +175,77 @@ function extractPlanFileArtifacts(planContent, workspaceRoot) {
   return artifacts;
 }
 
+function isPlanArtifactSatisfied(artifact) {
+  if (artifact.operation === 'delete') return !artifact.exists;
+  return artifact.exists;
+}
+
+function planArtifactFixHint(artifact) {
+  if (artifact.operation === 'delete') {
+    return `Complete the planned DELETE for ${artifact.file}, or revise the plan if the file should remain.`;
+  }
+  return `Create or update ${artifact.file} so the planned ${artifact.operation.toUpperCase()} artifact exists, or revise the plan if it is no longer in scope.`;
+}
+
+function evaluatePlanArtifacts(artifacts) {
+  const unsatisfied = artifacts
+    .filter((artifact) => !isPlanArtifactSatisfied(artifact))
+    .map((artifact) => ({
+      ...artifact,
+      severity: 'blocker',
+      expected: artifact.operation === 'delete' ? 'absent' : 'present',
+      fix_hint: planArtifactFixHint(artifact),
+    }));
+  return {
+    satisfied: unsatisfied.length === 0,
+    unsatisfied,
+  };
+}
+
+function normalizeUiProofIssue(issue) {
+  return {
+    ...issue,
+    severity: issue.severity || 'blocker',
+    fix_hint: issue.fix_hint || issue.fix || 'Fix the UI proof issue before claiming verification is complete.',
+  };
+}
+
 function planDeclaresUiProofSlots(planContent) {
-  const match = String(planContent || '').match(/(^|\n)ui_proof_slots:\s*([^\n]*)/);
+  const match = String(planContent || '').match(/(^|\n)ui_proof_slots:[ \t]*([^\n]*)/);
   if (!match) return false;
-  const inlineValue = match[2].trim();
-  if (inlineValue && !['[]', 'null', '~'].includes(inlineValue)) return true;
+  const inlineValue = match[2].replace(/\s+#.*$/, '').trim();
+  if (inlineValue) return !['[]', 'null', '~'].includes(inlineValue);
   const after = String(planContent || '').slice(match.index + match[0].length).split(/\r?\n/);
-  return after.some((line) => /^\s+-\s+/.test(line));
+  for (const line of after) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed === '---' || trimmed === '...') break;
+    if (/^\s+-\s+/.test(line)) return true;
+    if (/^\S[^:\n]*:\s*/.test(line) || /^\S/.test(line)) break;
+  }
+  return false;
+}
+
+function extractDeclaredUiProofSlotIds(planContent) {
+  const match = String(planContent || '').match(/(^|\n)ui_proof_slots:[ \t]*([^\n]*)/);
+  if (!match) return [];
+  const after = String(planContent || '').slice(match.index + match[0].length).split(/\r?\n/);
+  const slotIds = [];
+  for (const line of after) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed === '---' || trimmed === '...') break;
+    if (/^\S[^:\n]*:\s*/.test(line) || /^\S/.test(line)) break;
+    const slotMatch = trimmed.match(/(?:^-\s*)?slot_id:\s*([^#\s]+)/);
+    if (slotMatch) slotIds.push(slotMatch[1].replace(/^['"]|['"]$/g, ''));
+  }
+  return slotIds;
 }
 
 function findUiProofSlotPlansAndFiles(planningDir, planDisplayPaths) {
   const candidates = new Set();
   const declaredPlans = [];
+  const declaredSlotIds = [];
   const names = new Set([
     'ui-proof-slots.json',
     'ui-proof-slots.md',
@@ -198,8 +257,14 @@ function findUiProofSlotPlansAndFiles(planningDir, planDisplayPaths) {
 
   for (const planDisplayPath of planDisplayPaths) {
     const fullPlanPath = join(planningDir, 'phases', planDisplayPath);
-    if (!existsSync(fullPlanPath) || !planDeclaresUiProofSlots(readFileSync(fullPlanPath, 'utf-8'))) continue;
-    declaredPlans.push(relative(planningDir, fullPlanPath).replace(/\\/g, '/'));
+    if (!existsSync(fullPlanPath)) continue;
+    const planContent = readFileSync(fullPlanPath, 'utf-8');
+    if (!planDeclaresUiProofSlots(planContent)) continue;
+    const relPlanPath = relative(planningDir, fullPlanPath).replace(/\\/g, '/');
+    declaredPlans.push(relPlanPath);
+    for (const slotId of extractDeclaredUiProofSlotIds(planContent)) {
+      declaredSlotIds.push({ plan: relPlanPath, slot_id: slotId });
+    }
     const planDir = dirname(fullPlanPath);
     if (!existsSync(planDir)) continue;
     for (const entry of readdirSync(planDir, { withFileTypes: true })) {
@@ -208,7 +273,7 @@ function findUiProofSlotPlansAndFiles(planningDir, planDisplayPaths) {
       }
     }
   }
-  return { declaredPlans, files: [...candidates].sort() };
+  return { declaredPlans, declaredSlotIds, files: [...candidates].sort() };
 }
 
 function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
@@ -228,7 +293,20 @@ function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
     const parsed = parseUiProofSlotsContent(readFileSync(filePath, 'utf-8'), rel);
     planned.push(rel);
     plannedSlots.push(...parsed.slots);
-    errors.push(...parsed.errors);
+    errors.push(...parsed.errors.map(normalizeUiProofIssue));
+  }
+
+  if (plannedSlots.length > 0 && plannedDiscovery.declaredSlotIds.length > 0) {
+    const plannedSlotIds = new Set(plannedSlots.map((slot) => String(slot?.slot_id || '')));
+    for (const declaredSlot of plannedDiscovery.declaredSlotIds) {
+      if (plannedSlotIds.has(String(declaredSlot.slot_id))) continue;
+      errors.push(normalizeUiProofIssue({
+        code: 'planned_ui_proof_slots_drift',
+        path: `${declaredSlot.plan}.ui_proof_slots`,
+        message: `Plan declares UI proof slot ${declaredSlot.slot_id}, but no matching slot exists in the planned UI proof artifact.`,
+        fix: 'Update ui-proof-slots.json or ui-proof-slots.md beside the plan so it matches the plan-declared slot IDs, or update the plan declaration.',
+      }));
+    }
   }
 
   const observedBundles = [];
@@ -237,7 +315,7 @@ function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
     const parsed = readUiProofBundleFile(filePath);
     observed.push(rel);
     if (parsed.errors.length > 0) {
-      errors.push(...parsed.errors.map((error) => ({ ...error, path: error.path || rel })));
+      errors.push(...parsed.errors.map((error) => normalizeUiProofIssue({ ...error, path: error.path || rel })));
       continue;
     }
     observedBundles.push({
@@ -254,7 +332,7 @@ function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
   if (plannedFiles.length === 0 && plannedDiscovery.declaredPlans.length > 0) {
     const missingError = {
       code: 'missing_planned_ui_proof_slots_file',
-      severity: 'error',
+      severity: 'blocker',
       path: plannedDiscovery.declaredPlans[0],
       message: 'Plan declares ui_proof_slots but no ui-proof-slots artifact was found beside the plan.',
       fix_hint: 'Create ui-proof-slots.json or ui-proof-slots.md beside the plan, or set ui_proof_slots: [] with a no_ui_proof_rationale if the phase is not UI-sensitive.',
@@ -279,7 +357,7 @@ function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
   }
 
   const comparison = errors.length > 0
-    ? { status: 'partial', slots: [], errors }
+    ? { status: 'partial', slots: [], errors: errors.map(normalizeUiProofIssue) }
     : compareUiProofSlots(plannedSlots, observedBundles);
 
   return {
@@ -482,6 +560,7 @@ export function cmdVerify(...args) {
       ? extractPlanFileArtifacts(readFileSync(fullPath, 'utf-8'), workspaceRoot)
       : [];
   });
+  const artifactStatus = evaluatePlanArtifacts(artifacts);
   const uiProof = comparePhaseUiProof({
     planningDir,
     workspaceRoot,
@@ -496,6 +575,11 @@ export function cmdVerify(...args) {
     blocks_verification: uiProof.status !== 'not_applicable' && !uiProofSatisfied,
     required_block: uiProof.status !== 'not_applicable' && !uiProofSatisfied ? 'ui-proof-failed' : null,
   };
+  const blockedOn = [
+    ...(artifactStatus.satisfied ? [] : ['artifacts']),
+    ...(uiProofGate.blocks_verification ? ['ui_proof'] : []),
+  ];
+  const closureVerified = legacyVerified && artifactStatus.satisfied && uiProofSatisfied;
 
   const result = {
     phase: normalizePhaseToken(phaseNum),
@@ -504,14 +588,17 @@ export function cmdVerify(...args) {
     summaries: matchingSummaries,
     artifacts,
     allExist: artifacts.every((artifact) => artifact.exists),
+    artifact_status: artifactStatus,
     uiProof,
-    verified: legacyVerified,
+    verified: closureVerified,
+    legacy_verified: legacyVerified,
+    phase_artifacts_present: legacyVerified,
     ui_proof: uiProofGate,
-    blocked_on: uiProofGate.blocks_verification ? ['ui_proof'] : [],
-    blocks_verification: uiProofGate.blocks_verification,
+    blocked_on: blockedOn,
+    blocks_verification: blockedOn.length > 0,
   };
   output(result);
-  if (!uiProofSatisfied) process.exitCode = 1;
+  if (!closureVerified && legacyVerified) process.exitCode = 1;
 }
 
 export function cmdScaffold(...args) {
