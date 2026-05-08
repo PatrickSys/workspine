@@ -1,3 +1,15 @@
+# [0.24.0](https://github.com/PatrickSys/workspine/compare/v0.23.0...v0.24.0) (2026-05-08)
+
+
+### Bug Fixes
+
+* harden verify closure gates ([1474e24](https://github.com/PatrickSys/workspine/commit/1474e240a094ca005e8174ed5fa3bd8074aae665))
+
+
+### Features
+
+* gate verification on ui proof ([619306f](https://github.com/PatrickSys/workspine/commit/619306f698a2d7ce3c1ebc3db732d9f3dfdf97a9))
+
 # [0.23.0](https://github.com/PatrickSys/workspine/compare/v0.22.0...v0.23.0) (2026-05-08)
 
 
