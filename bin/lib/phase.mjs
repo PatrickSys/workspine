@@ -4,10 +4,16 @@
 // evaluate once, so CWD must be computed inside function bodies.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs';
-import { join, basename } from 'path';
+import { dirname, join, relative } from 'path';
 import { output } from './cli-utils.mjs';
 import { writeFingerprint } from './session-fingerprint.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import {
+  compareUiProofSlots,
+  findUiProofBundleFiles,
+  parseUiProofSlotsContent,
+  readUiProofBundleFile,
+} from './ui-proof.mjs';
 
 const PHASE_STATUS_MARKERS = {
   not_started: '[ ]',
@@ -167,6 +173,122 @@ function extractPlanFileArtifacts(planContent, workspaceRoot) {
   }
 
   return artifacts;
+}
+
+function planDeclaresUiProofSlots(planContent) {
+  const match = String(planContent || '').match(/(^|\n)ui_proof_slots:\s*([^\n]*)/);
+  if (!match) return false;
+  const inlineValue = match[2].trim();
+  if (inlineValue && !['[]', 'null', '~'].includes(inlineValue)) return true;
+  const after = String(planContent || '').slice(match.index + match[0].length).split(/\r?\n/);
+  return after.some((line) => /^\s+-\s+/.test(line));
+}
+
+function findUiProofSlotPlansAndFiles(planningDir, planDisplayPaths) {
+  const candidates = new Set();
+  const declaredPlans = [];
+  const names = new Set([
+    'ui-proof-slots.json',
+    'ui-proof-slots.md',
+    'UI-PROOF-SLOTS.json',
+    'UI-PROOF-SLOTS.md',
+    'planned-ui-proof.json',
+    'planned-ui-proof.md',
+  ]);
+
+  for (const planDisplayPath of planDisplayPaths) {
+    const fullPlanPath = join(planningDir, 'phases', planDisplayPath);
+    if (!existsSync(fullPlanPath) || !planDeclaresUiProofSlots(readFileSync(fullPlanPath, 'utf-8'))) continue;
+    declaredPlans.push(relative(planningDir, fullPlanPath).replace(/\\/g, '/'));
+    const planDir = dirname(fullPlanPath);
+    if (!existsSync(planDir)) continue;
+    for (const entry of readdirSync(planDir, { withFileTypes: true })) {
+      if (entry.isFile() && names.has(entry.name)) {
+        candidates.add(join(planDir, entry.name));
+      }
+    }
+  }
+  return { declaredPlans, files: [...candidates].sort() };
+}
+
+function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
+  const plannedDiscovery = findUiProofSlotPlansAndFiles(planningDir, planDisplayPaths);
+  const plannedFiles = plannedDiscovery.files;
+  const phaseDirs = new Set(planDisplayPaths.map((planDisplayPath) => dirname(join(planningDir, 'phases', planDisplayPath))));
+  const observedFiles = findUiProofBundleFiles(planningDir)
+    .filter((filePath) => phaseDirs.has(dirname(filePath)));
+
+  const plannedSlots = [];
+  const errors = [];
+  const planned = [];
+  const observed = [];
+
+  for (const filePath of plannedFiles) {
+    const rel = relative(workspaceRoot, filePath).replace(/\\/g, '/');
+    const parsed = parseUiProofSlotsContent(readFileSync(filePath, 'utf-8'), rel);
+    planned.push(rel);
+    plannedSlots.push(...parsed.slots);
+    errors.push(...parsed.errors);
+  }
+
+  const observedBundles = [];
+  for (const filePath of observedFiles) {
+    const rel = relative(workspaceRoot, filePath).replace(/\\/g, '/');
+    const parsed = readUiProofBundleFile(filePath);
+    observed.push(rel);
+    if (parsed.errors.length > 0) {
+      errors.push(...parsed.errors.map((error) => ({ ...error, path: error.path || rel })));
+      continue;
+    }
+    observedBundles.push({
+      source: rel,
+      bundle: parsed.bundle,
+      options: {
+        requireLocalArtifactExists: true,
+        workspaceRoot,
+        bundleDir: dirname(filePath),
+      },
+    });
+  }
+
+  if (plannedFiles.length === 0 && plannedDiscovery.declaredPlans.length > 0) {
+    const missingError = {
+      code: 'missing_planned_ui_proof_slots_file',
+      severity: 'error',
+      path: plannedDiscovery.declaredPlans[0],
+      message: 'Plan declares ui_proof_slots but no ui-proof-slots artifact was found beside the plan.',
+      fix_hint: 'Create ui-proof-slots.json or ui-proof-slots.md beside the plan, or set ui_proof_slots: [] with a no_ui_proof_rationale if the phase is not UI-sensitive.',
+    };
+    return {
+      planned,
+      observed,
+      status: 'missing',
+      comparison: { status: 'missing', slots: [], errors: [missingError] },
+      errors: [missingError],
+    };
+  }
+
+  if (plannedFiles.length === 0) {
+    return {
+      planned,
+      observed,
+      status: 'not_applicable',
+      comparison: null,
+      errors,
+    };
+  }
+
+  const comparison = errors.length > 0
+    ? { status: 'partial', slots: [], errors }
+    : compareUiProofSlots(plannedSlots, observedBundles);
+
+  return {
+    planned,
+    observed,
+    status: comparison.status,
+    comparison,
+    errors: comparison.errors || errors,
+  };
 }
 
 export function updateRoadmapPhaseStatus(roadmap, phaseNumber, status) {
@@ -360,6 +482,20 @@ export function cmdVerify(...args) {
       ? extractPlanFileArtifacts(readFileSync(fullPath, 'utf-8'), workspaceRoot)
       : [];
   });
+  const uiProof = comparePhaseUiProof({
+    planningDir,
+    workspaceRoot,
+    planDisplayPaths: matchingPlans,
+  });
+  const uiProofSatisfied = ['satisfied', 'not_applicable'].includes(uiProof.status);
+  const legacyVerified = matchingPlans.length > 0 && matchingSummaries.length > 0;
+  const uiProofGate = {
+    status: uiProof.status,
+    required: uiProof.status !== 'not_applicable',
+    satisfied: uiProofSatisfied,
+    blocks_verification: uiProof.status !== 'not_applicable' && !uiProofSatisfied,
+    required_block: uiProof.status !== 'not_applicable' && !uiProofSatisfied ? 'ui-proof-failed' : null,
+  };
 
   const result = {
     phase: normalizePhaseToken(phaseNum),
@@ -368,9 +504,14 @@ export function cmdVerify(...args) {
     summaries: matchingSummaries,
     artifacts,
     allExist: artifacts.every((artifact) => artifact.exists),
-    verified: matchingPlans.length > 0 && matchingSummaries.length > 0,
+    uiProof,
+    verified: legacyVerified,
+    ui_proof: uiProofGate,
+    blocked_on: uiProofGate.blocks_verification ? ['ui_proof'] : [],
+    blocks_verification: uiProofGate.blocks_verification,
   };
   output(result);
+  if (!uiProofSatisfied) process.exitCode = 1;
 }
 
 export function cmdScaffold(...args) {
