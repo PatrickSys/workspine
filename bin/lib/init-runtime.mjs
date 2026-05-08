@@ -192,6 +192,8 @@ Commands:
                               Validate UI proof metadata; use --claim for stronger proof uses
   ui-proof compare <planned-slots-json> [observed-bundle-json ...]
                               Compare planned UI proof slots against observed bundles
+  control-map [--json] [--with-ignored] [--annotations <path>]
+                              Report computed repo/worktree/planning state and local annotations
   help                        Show this summary
 
 Platforms (for --tools):
@@ -263,6 +265,7 @@ Advanced/internal helpers (kept available, but not the primary first-run user st
   session-fingerprint       Rebaseline the local planning-state fingerprint after review
   phase-status              Update ROADMAP.md phase status through the local helper surface
   ui-proof                  Validate UI proof metadata and compare planned slots to observed bundles
+  control-map               Report computed repo/worktree/planning state and local annotations
   file-op                   Deterministic workspace-confined file copy/delete/text mutation
 `;
 }

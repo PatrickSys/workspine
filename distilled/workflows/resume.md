@@ -35,6 +35,10 @@ Treat the preflight as an authorization seam over shared repo truth only:
 
 <process>
 
+<control_map_reconciliation>
+Before routing from a checkpoint, run `node .planning/bin/gsdd.mjs control-map --json` when available. Reconcile the checkpoint narrative against computed repo/worktree/planning truth: canonical branch/HEAD, tracked/untracked/ignored dirty buckets, sibling or detached worktrees, local annotations, active brownfield anchors, and planning drift. If the checkpoint understates dirty work, points at a stale branch/worktree, or conflicts with the active planning/brownfield surface, stop and present the mismatch before recommending execution. Local annotations are useful intent hints, not authority.
+</control_map_reconciliation>
+
 <detect_state>
 Check for project artifacts in order:
 

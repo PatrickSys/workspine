@@ -185,6 +185,7 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 | `npx -y gsdd-cli init [--tools <platform>]` | Set up `.planning/`, generate skills/adapters |
 | `npx -y gsdd-cli update [--tools <platform>]` | Regenerate skills/adapters from latest sources |
 | `npx -y gsdd-cli update --templates` | Refresh role contracts and delegates (warns about user modifications) |
+| `npx -y gsdd-cli control-map [--json] [--with-ignored]` | Show computed repo/worktree/planning state, dirty buckets, optional ignored-path scan, local annotations, and safe next interventions |
 | `npx -y gsdd-cli find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `npx -y gsdd-cli verify <N>` | Run artifact checks for phase N |
 | `npx -y gsdd-cli scaffold phase <N> [name]` | Create a new phase plan file |
@@ -447,6 +448,7 @@ Switch to budget profile: `npx -y gsdd-cli models profile budget` (or `gsdd mode
     gsdd.ps1                # PowerShell shim for the local helper surface
     lib/                    # Copied helper-runtime support modules
   generation-manifest.json  # SHA-256 hashes for template versioning
+  .local/                   # Local-only operational annotations; not product truth
   .continue-here.md         # Session checkpoint (created by pause, consumed by resume)
   research/                 # Domain research outputs
   codebase/                 # Codebase maps (4 files: STACK, ARCHITECTURE, CONVENTIONS, CONCERNS)

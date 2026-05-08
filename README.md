@@ -69,7 +69,7 @@ Invariant suites (I-series), guard suites (G-series), and scenario suites (S-ser
 
 ### Smaller surface, stricter closure
 
-14 workflows. 10 roles. One CLI. Lifecycle progression goes through deterministic preflight gates — not conversational inference. Plans are checked by a separate agent in a separate context before execution begins. Closure requires evidence, not just file existence.
+4 main workflows, 14 public workflow surfaces, 10 roles, one CLI. The daily spine is `new-project -> plan -> execute -> verify`; milestone, quick, pause/resume, progress, audit, and mapping surfaces support that spine. Lifecycle progression goes through deterministic preflight gates — not conversational inference. Plans are checked by a separate agent in a separate context before execution begins. Closure requires evidence, not just file existence.
 
 <details>
 <summary>How it works</summary>
@@ -346,6 +346,7 @@ Workflows are agent skills or commands, not plain shell utilities. How you invok
 | `npx -y gsdd-cli init [--tools <platform>]` | Set up `.planning/`, generate skills/adapters |
 | `npx -y gsdd-cli update [--tools <platform>] [--templates]` | Regenerate skills/adapters and refresh the repo-local helper runtime; `--templates` refreshes `.planning/templates/` and role contracts |
 | `npx -y gsdd-cli health [--json]` | Check workspace integrity and generated-surface freshness (healthy/degraded/broken) |
+| `npx -y gsdd-cli control-map [--json] [--with-ignored]` | Report computed repo/worktree/planning state, dirty buckets, optional ignored-path scan, local annotations, and safe next interventions |
 | `npx -y gsdd-cli ui-proof validate <path> [--claim <public\|publication\|tracked\|delivery\|release>]` | Validate UI proof bundle metadata without requiring browser tooling; use `--claim` only when validating that stronger proof use |
 | `npx -y gsdd-cli file-op <copy\|delete\|regex-sub>` | Run deterministic workspace-confined file copy, delete, and regex substitution |
 | `npx -y gsdd-cli find-phase [N]` | Show phase info as JSON (for agent consumption) |
@@ -415,6 +416,7 @@ Model IDs pass through a two-layer injection guard: a regex whitelist (`/^[a-zA-
 | `.planning/research/` | Research outputs |
 | `.planning/codebase/` | Codebase maps (4 files) |
 | `.planning/quick/` | Quick task tracking |
+| `.planning/.local/` | Local-only operational annotations such as control-map intent; never product truth |
 | `.planning/.continue-here.md` | Session checkpoint (created by pause, consumed by resume) |
 
 ### Advisory Git Protocol

@@ -71,6 +71,14 @@ npx -y gsdd-cli init       -> bootstrap (create .planning/, copy templates, gene
 /gsdd-progress             -> show status, route to next action
 ```
 
+The main operator spine is four workflow moves after bootstrap: `new-project -> plan -> execute -> verify`. The other public workflow surfaces are support lanes for milestone closeout, quick work, progress, pause/resume, and brownfield orientation.
+
+Helper command for long-running sessions:
+
+```
+npx -y gsdd-cli control-map [--json] [--with-ignored] -> computed repo/worktree/planning state plus local annotations
+```
+
 ## Brownfield Entry Contract
 
 Use the same three-way routing everywhere:
@@ -101,6 +109,7 @@ Use the same three-way routing everywhere:
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
 - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.planning/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
+- `control-map` is a helper command, not a lifecycle workflow: it computes repo/worktree/planning truth first and treats `.planning/.local/` annotations as local intent only.
 - Codex VS Code/app are separate surfaces from Codex CLI; do not claim the CLI proof for them unless they expose compatible skill discovery. Fallback is opening or pasting the generated `SKILL.md`.
 - `npx -y gsdd-cli health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `npx -y gsdd-cli update`.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
