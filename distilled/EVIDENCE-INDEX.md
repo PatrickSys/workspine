@@ -491,6 +491,19 @@
 - `agents/planner.md`, `agents/executor.md`, `agents/verifier.md`, `distilled/templates/delegates/plan-checker.md`
 - `bin/lib/templates.mjs`, `bin/lib/ui-proof.mjs`, `bin/lib/health.mjs`, `bin/lib/rendering.mjs`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.init.test.cjs`
+- OneShot QC/browser policy: https://github.com/oneshot-repo/OneShot/tree/main/skills
+- Vercel agent-browser docs: https://github.com/vercel-labs/agent-browser/blob/main/skill-data/core/SKILL.md, https://agent-browser.dev/snapshots
+- Playwright browser proof docs: https://playwright.dev/docs/trace-viewer, https://playwright.dev/docs/next/screenshots, https://playwright.dev/mcp/tools/tracing
+- Chrome DevTools agent/browser docs: https://developer.chrome.com/docs/devtools/agents, https://developer.chrome.com/blog/chrome-devtools-mcp?hl=en
+- Harness engineering source: https://www.anthropic.com/engineering/harness-design-long-running-apps
+- UI-agent browser verification source: https://www.huuhka.net/browser-verification-for-coding-agents-chrome-devtools-mcp-vs-agent-browser/
+- Agent harness discipline source: https://www.developersdigest.tech/blog/long-running-agents-need-harnesses
+- Agentic QA verification-gap source: https://codemyspec.com/blog/agentic-qa-verification
+- Agent-hostile UI semantics source: https://dev.to/ratikkoka/your-ui-is-invisible-to-ai-agents-heres-how-to-fix-it-1ib3
+- Browser-harness efficiency source: https://dev.to/louaiboumediene/the-ai-harness-why-your-ai-coding-agent-is-only-as-smart-as-the-repo-you-put-it-in-cml
+- Dynamic-UI harness brittleness source: https://tessl.io/blog/webmcp-making-web-apps-faster-and-cheaper-for-ai-agents/
+- Long-term pitfalls carried forward: do not accept screenshot-free "looks good" claims, weak planned slots, unverified artifact paths, stale interactive refs after page mutation, partial/failed proof without failure classification, raw artifact publication without privacy metadata, browser contention in parallel checks, or semantic/selector-poor UI that forces fragile coordinate inspection.
+- Supporting spec/runtime docs: https://openspec.dev/, https://www.lean-spec.dev/docs/guide/first-principles, https://help.openai.com/en/articles/11369540-codex-in-chatgpt, https://docs.claude.com/en/docs/agents-and-tools/agent-skills, https://docs.github.com/en/copilot/concepts/prompting/response-customization
 
 ---
 

@@ -2495,6 +2495,12 @@ describe('Phase 57 UI proof validation helper', () => {
     };
   }
 
+  function writeDefaultArtifact() {
+    const artifactPath = path.join(tmpDir, 'artifacts', 'report.html');
+    fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+    fs.writeFileSync(artifactPath, '<html><body>UI proof report</body></html>\n');
+  }
+
   test('valid local-only proof metadata passes without browser tooling or dependencies', async () => {
     const mod = await importUiProofModule();
     const result = mod.validateUiProofBundle(validBundle());
@@ -2530,6 +2536,59 @@ describe('Phase 57 UI proof validation helper', () => {
     assert.ok(result.errors.some((error) => error.code === 'invalid_comparison_status'));
     assert.ok(result.errors.some((error) => error.code === 'missing_claim_limits'));
     assert.ok(result.errors.some((error) => error.path === 'artifacts[0].safe_to_publish'));
+  });
+
+  test('tool provenance must use concise tool identifiers', async () => {
+    const mod = await importUiProofModule();
+    const missingTools = validBundle({ evidence_inputs: { kinds: ['test', 'runtime'] } });
+    const verboseTool = validBundle({ evidence_inputs: { kinds: ['test', 'runtime'], tools_used: ['manual review'] } });
+
+    assert.ok(mod.validateUiProofBundle(missingTools).errors.some((error) => error.code === 'missing_tools_used'));
+    assert.ok(mod.validateUiProofBundle(verboseTool).errors.some((error) => error.code === 'invalid_tool_id'));
+  });
+
+  test('failed or partial UI proof must classify the failure cause', async () => {
+    const mod = await importUiProofModule();
+    const unclassifiedFailure = validBundle({
+      commands_or_manual_steps: [{ manual_step: 'Open /example.', result: 'failed' }],
+      observations: [{
+        observation: 'Changed state is broken.',
+        claim: 'Local reviewer can inspect the changed UI proof metadata.',
+        route_state: { route: '/example', state: 'synthetic user' },
+        evidence_kind: 'runtime',
+        artifact_refs: ['artifacts/report.html'],
+        privacy: { data_classification: 'synthetic', raw_artifacts_safe_to_publish: false, retention: 'temporary_review' },
+        result: 'failed',
+        claim_limit: 'Does not prove unrelated UI states.',
+      }],
+      result: { claim_status: 'failed', comparison_status_by_slot: { 'quick-001-ui-01': 'partial' } },
+    });
+    const invalidClassification = validBundle({
+      result: {
+        claim_status: 'partial',
+        comparison_status_by_slot: { 'quick-001-ui-01': 'partial' },
+        failure_classification: 'looks_bad',
+      },
+    });
+    const classifiedFailure = validBundle({
+      result: {
+        claim_status: 'failed',
+        comparison_status_by_slot: { 'quick-001-ui-01': 'partial' },
+        failure_classification: 'product_bug',
+      },
+    });
+    const partialComparison = validBundle({
+      result: {
+        claim_status: 'passed',
+        comparison_status_by_slot: { 'quick-001-ui-01': 'partial' },
+      },
+    });
+
+    assert.ok(mod.validateUiProofBundle(unclassifiedFailure).errors.some((error) => error.code === 'missing_failure_classification'));
+    assert.ok(mod.validateUiProofBundle(invalidClassification).errors.some((error) => error.code === 'invalid_failure_classification'));
+    assert.ok(!mod.validateUiProofBundle(classifiedFailure).errors.some((error) => error.code === 'missing_failure_classification'));
+    assert.ok(mod.validateUiProofBundle(partialComparison).errors.some((error) => error.code === 'missing_failure_classification'));
+    assert.ok(mod.validateUiProofBundle(partialComparison).errors.some((error) => error.code === 'inconsistent_claim_status'));
   });
 
   test('empty required arrays and mismatched comparison slots fail', async () => {
@@ -2740,6 +2799,25 @@ describe('Phase 57 UI proof validation helper', () => {
     assert.ok(result.errors.some((error) => error.code === 'unsafe_public_artifact_sensitivity'));
   });
 
+  test('public raw artifact URL claims require sanitized artifact sensitivity', async () => {
+    const mod = await importUiProofModule();
+    const bundle = validBundle({ proof_claim: 'public' });
+    bundle.artifacts[0] = {
+      url: 'https://example.com/artifacts/example-1280.png',
+      visibility: 'public',
+      retention: 'temporary_review',
+      sensitivity: 'synthetic',
+      safe_to_publish: true,
+    };
+    bundle.observations[0].artifact_refs = ['https://example.com/artifacts/example-1280.png'];
+    bundle.privacy.raw_artifacts_safe_to_publish = true;
+    bundle.observations[0].privacy.raw_artifacts_safe_to_publish = true;
+
+    const result = mod.validateUiProofBundle(bundle);
+    assert.strictEqual(result.valid, false);
+    assert.ok(result.errors.some((error) => error.code === 'unsafe_public_artifact_sensitivity'));
+  });
+
   test('explicitly safe-to-publish proof metadata can support public claims', async () => {
     const mod = await importUiProofModule();
     const bundle = validBundle({ proof_claim: 'public' });
@@ -2759,6 +2837,7 @@ describe('Phase 57 UI proof validation helper', () => {
   test('ui-proof validate command validates bundle files directly', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const bundlePath = path.join(tmpDir, '.planning', 'ui-proof.json');
+    writeDefaultArtifact();
     fs.writeFileSync(bundlePath, JSON.stringify(validBundle(), null, 2));
 
     const result = await runCliAsMain(tmpDir, ['ui-proof', 'validate', '.planning/ui-proof.json']);
@@ -2770,6 +2849,7 @@ describe('Phase 57 UI proof validation helper', () => {
   test('ui-proof validate rejects unsupported claim flags', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const bundlePath = path.join(tmpDir, '.planning', 'ui-proof.json');
+    writeDefaultArtifact();
     fs.writeFileSync(bundlePath, JSON.stringify(validBundle(), null, 2));
 
     const result = await runCliAsMain(tmpDir, ['ui-proof', 'validate', '.planning/ui-proof.json', '--claim', 'published']);
@@ -2780,6 +2860,7 @@ describe('Phase 57 UI proof validation helper', () => {
   test('ui-proof validate claim flag still enforces public claim artifact safety', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const bundlePath = path.join(tmpDir, '.planning', 'ui-proof.json');
+    writeDefaultArtifact();
     fs.writeFileSync(bundlePath, JSON.stringify(validBundle(), null, 2));
 
     const result = await runCliAsMain(tmpDir, ['ui-proof', 'validate', '.planning/ui-proof.json', '--claim', 'release']);
@@ -2812,6 +2893,11 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Generated fixture includes actual UI-bearing source for the route/state.',
         'Observed proof bundle maps to the planned slot, route/state, required evidence kinds, artifact refs, privacy metadata, result, and claim limit.',
       ],
+      expected_artifact_types: ['source', 'metadata'],
+      validation_command: 'gsdd ui-proof compare .planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json .planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json',
+      environment: { app_url: 'file://synthetic-dogfood-fixture', data_state: 'synthetic' },
+      viewport: { width: 1280, height: 720 },
+      manual_acceptance_required: false,
       claim_limit: 'Proves Workspine UI proof metadata and comparison behavior only; does not prove real browser rendering quality, cross-browser behavior, full accessibility, production delivery, or public release proof.',
     }, {
       slot_id: 'ui-58-missing-or-botched-proof',
@@ -2820,6 +2906,11 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       route_state: '/dogfood route with synthetic fixture state',
       required_evidence_kinds: ['code', 'test', 'runtime'],
       minimum_observations: ['A botched bundle fails validation or comparison with a deterministic error/status.'],
+      expected_artifact_types: ['source', 'metadata'],
+      validation_command: 'gsdd ui-proof compare .planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json .planning/phases/58-dogfood-ui-proof-loop/botched-proof-bundle.json',
+      environment: { app_url: 'file://synthetic-dogfood-fixture', data_state: 'synthetic' },
+      viewport: { width: 1280, height: 720 },
+      manual_acceptance_required: false,
       claim_limit: 'Proves fail-closed proof-loop behavior for scoped metadata, not rendered UI correctness.',
     }, {
       slot_id: 'ui-58-human-bypass-blocked',
@@ -2828,6 +2919,10 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       route_state: '/dogfood route with synthetic fixture state and subjective review metadata',
       required_evidence_kinds: ['code', 'test', 'runtime', 'human'],
       minimum_observations: ['Human/manual acceptance is represented as human evidence or waiver/deferment metadata.'],
+      expected_artifact_types: ['metadata'],
+      validation_command: 'gsdd ui-proof compare .planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json .planning/phases/58-dogfood-ui-proof-loop/human-proof-bundle.json',
+      environment: { app_url: 'file://synthetic-dogfood-fixture', data_state: 'synthetic' },
+      viewport: { width: 1280, height: 720 },
       manual_acceptance_required: true,
       claim_limit: 'Human evidence may narrow, waive, defer, or record proof debt; it does not prove missing non-human evidence or full accessibility/taste acceptance.',
     }];
@@ -2845,7 +2940,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       route_state: '/dogfood route with synthetic fixture state',
       environment: { app_url: 'file://synthetic-dogfood-fixture', data_state: 'synthetic' },
       viewport: { width: 1280, height: 720 },
-      evidence_inputs: { kinds: ['code', 'test', 'runtime'], tools_used: ['node:test', 'gsdd ui-proof validate'] },
+      evidence_inputs: { kinds: ['code', 'test', 'runtime'], tools_used: ['node:test', 'gsdd-ui-proof-validate'] },
       commands_or_manual_steps: [{ command: 'node bin/gsdd.mjs ui-proof validate .planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json', result: 'passed' }],
       observations: [{
         observation: 'Generated fixture includes actual UI-bearing source for the route/state.',
@@ -2936,6 +3031,14 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.ok(result.slots[1].issues.some((issue) => issue.code === 'missing_observed_bundle'));
   });
 
+  test('planned-vs-observed comparison fails closed on weak planned slots', async () => {
+    const mod = await importUiProofModule();
+    const result = mod.compareUiProofSlots([{ slot_id: 'ui-58-valid-scoped-proof' }], [dogfoodBundle()]);
+
+    assert.strictEqual(result.status, 'partial');
+    assert.ok(result.errors.some((error) => error.code === 'missing_required_field' && error.path === 'ui_proof_slots[0].claim'));
+  });
+
   test('mismatched and botched observed proof cannot satisfy planned slots', async () => {
     const mod = await importUiProofModule();
     const [validSlot] = plannedSlots();
@@ -2963,7 +3066,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         claim: 'Human approval cannot bypass missing required non-human evidence for visual, taste, accessibility, or privacy-sensitive UI proof.',
       },
       route_state: '/dogfood route with synthetic fixture state and subjective review metadata',
-      evidence_inputs: { kinds: ['human'], tools_used: ['manual review'] },
+      evidence_inputs: { kinds: ['human'], tools_used: ['manual-review'] },
       observations: [{
         observation: 'Human/manual acceptance is represented as human evidence or waiver/deferment metadata.',
         claim: 'Human approval recorded for subjective review only.',
@@ -3038,6 +3141,10 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
     const unrelatedFailure = dogfoodBundle({
       observations: [unrelatedFailedObservation, ...dogfoodBundle().observations],
+      result: {
+        ...dogfoodBundle().result,
+        failure_classification: 'product_bug',
+      },
     });
     const unrelatedFailureResult = mod.compareUiProofSlots([slot], [unrelatedFailure]);
     assert.strictEqual(unrelatedFailureResult.status, 'satisfied', JSON.stringify(unrelatedFailureResult));
@@ -3047,6 +3154,10 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         ...dogfoodBundle().observations[0],
         route_state: '/wrong dogfood route',
       }],
+      result: {
+        ...dogfoodBundle().result,
+        failure_classification: 'product_bug',
+      },
     });
     const routeResult = mod.compareUiProofSlots([{ ...slot, required_evidence_kinds: ['code'] }], [routeMismatch]);
     assert.ok(routeResult.slots[0].issues.some((issue) => issue.code === 'observation_route_state_mismatch' && issue.path === 'observations[1].route_state'));
@@ -3088,7 +3199,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       evidence_kind: 'human',
     };
     const bundle = dogfoodBundle({
-      evidence_inputs: { kinds: ['code', 'test', 'runtime', 'human'], tools_used: ['node:test', 'manual review'] },
+      evidence_inputs: { kinds: ['code', 'test', 'runtime', 'human'], tools_used: ['node:test', 'manual-review'] },
       observations: [...dogfoodBundle().observations, manualObservation],
     });
 
@@ -3144,6 +3255,24 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.deepStrictEqual(output.slots.map((slot) => [slot.slot_id, slot.status]), [['ui-58-valid-scoped-proof', 'satisfied']]);
   });
 
+  test('Phase 59 ui-proof compare command rejects weak planned slots deterministically', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    writePlannedSlots([{ slot_id: 'ui-58-valid-scoped-proof' }]);
+    writeDogfoodFixture();
+
+    const result = await runCliAsMain(tmpDir, [
+      'ui-proof',
+      'compare',
+      '.planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json',
+      '.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json',
+    ]);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'partial');
+    assert.ok(output.errors.some((error) => error.code === 'missing_required_field' && error.path.endsWith('ui_proof_slots[0].claim')));
+  });
+
   test('Phase 59 ui-proof compare command fails closed when any supplied observed proof is invalid', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     writePlannedSlots();
@@ -3193,7 +3322,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     const humanOnly = dogfoodBundle({
       scope: { ...dogfoodBundle().scope, slot_ids: ['ui-58-human-bypass-blocked'] },
       route_state: '/dogfood route with synthetic fixture state and subjective review metadata',
-      evidence_inputs: { kinds: ['human'], tools_used: ['manual review'] },
+      evidence_inputs: { kinds: ['human'], tools_used: ['manual-review'] },
       observations: [{
         observation: 'Human/manual acceptance is represented as human evidence or waiver/deferment metadata.',
         claim: 'Human approval recorded for subjective review only.',

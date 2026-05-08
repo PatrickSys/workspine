@@ -3483,6 +3483,13 @@ describe('G55 - UI Proof Contract', () => {
   const executorRole = fs.readFileSync(path.join(ROOT, 'agents', 'executor.md'), 'utf-8');
   const verifierRole = fs.readFileSync(path.join(ROOT, 'agents', 'verifier.md'), 'utf-8');
   const planChecker = fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'delegates', 'plan-checker.md'), 'utf-8');
+  const uiProofSource = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'ui-proof.mjs'), 'utf-8');
+
+  function parseObservedBundleExample() {
+    const match = template.match(/```json\s*\n([\s\S]*?)\n```/);
+    assert.ok(match, 'ui-proof.md must include a fenced JSON observed-bundle example.');
+    return JSON.parse(match[1]);
+  }
 
   test('template preserves planned slot and observed bundle fields', () => {
     for (const token of [
@@ -3492,6 +3499,8 @@ describe('G55 - UI Proof Contract', () => {
       'route_state',
       'required_evidence_kinds',
       'minimum_observations',
+      'expected_artifact_types',
+      'validation_command',
       'environment',
       'viewport',
       'manual_acceptance_required',
@@ -3527,6 +3536,7 @@ describe('G55 - UI Proof Contract', () => {
     assert.match(executeContent, /UI Proof Execution/, 'execute.md must include UI proof execution guidance.');
     assert.match(executorRole, /UI Proof Execution/, 'executor role must include UI proof execution guidance.');
     assert.match(quickContent, /ui_proof_slots/, 'quick.md must preserve proportional UI proof slots.');
+    assert.match(quickContent, /ui_proof_slots[\s\S]*closure_honesty/, 'quick.md must run closure_honesty checking for UI-sensitive quick plans.');
     assert.match(verifyContent, /<ui_proof_comparison>/, 'verify.md must include planned-vs-observed UI proof comparison.');
     assert.match(verifyContent, /gsdd ui-proof compare <planned-slots-json>/, 'verify.md must prefer the deterministic product-facing UI proof comparison command.');
     assert.match(verifierRole, /For UI proof slots, fail closed/i, 'verifier role must fail closed on weak UI proof.');
@@ -3535,6 +3545,99 @@ describe('G55 - UI Proof Contract', () => {
   test('template documents product-facing UI proof comparison command', () => {
     assert.match(template, /gsdd ui-proof validate <path>/, 'ui-proof.md must document metadata validation.');
     assert.match(template, /gsdd ui-proof compare <planned-slots-json>/, 'ui-proof.md must document planned-vs-observed comparison.');
+  });
+
+  test('contract preserves agent-browser default without provider-locking validation', () => {
+    const combined = [template, planContent, executeContent, quickContent, verifyContent, plannerRole, executorRole, verifierRole, planChecker].join('\n');
+    assert.match(combined, /agent-browser/i,
+      'UI proof contract must name agent-browser as the default live UI proof path.');
+    assert.match(combined, /availability constraint/i,
+      'UI proof contract must require explicit fallback documentation when agent-browser is unavailable.');
+    assert.match(combined, /Playwright[\s\S]{0,160}(canonical|repeatable).*regression/i,
+      'UI proof contract must keep existing Playwright tests as canonical repeatable regression evidence.');
+    assert.match(combined, /Playwright scripting[\s\S]{0,220}(JS-disabled|structured console|multi-context)/i,
+      'UI proof contract must reserve Playwright scripting for capabilities agent-browser cannot cover cleanly.');
+
+    for (const [surfaceName, source] of [
+      ['ui-proof template', template],
+      ['plan workflow', planContent],
+      ['execute workflow', executeContent],
+      ['quick workflow', quickContent],
+      ['verify workflow', verifyContent],
+      ['planner role', plannerRole],
+      ['executor role', executorRole],
+      ['verifier role', verifierRole]
+    ]) {
+      assert.match(source, /agent-browser/i,
+        `${surfaceName} must preserve agent-browser as the default live UI proof path.`);
+      assert.match(source, /Playwright[\s\S]{0,220}(canonical|repeatable).*regression/i,
+        `${surfaceName} must preserve Playwright/package-script browser tests as repeatable regression evidence.`);
+    }
+
+    for (const [surfaceName, source] of [
+      ['ui-proof template', template],
+      ['plan workflow', planContent],
+      ['execute workflow', executeContent],
+      ['quick workflow', quickContent],
+      ['verify workflow', verifyContent],
+      ['planner role', plannerRole],
+      ['executor role', executorRole],
+      ['verifier role', verifierRole],
+      ['plan-checker', planChecker]
+    ]) {
+      assert.match(source, /availability constraint/i,
+        `${surfaceName} must require explicit availability-constraint fallback wording.`);
+    }
+
+    assert.match(template, /does not inspect raw screenshot[\s\S]{0,180}does not require any specific browser provider/i,
+      'ui-proof.md must keep deterministic validation provider-agnostic.');
+    assert.doesNotMatch(uiProofSource, /agent-browser/i,
+      'bin/lib/ui-proof.mjs must remain provider-agnostic metadata validation, not an agent-browser schema gate.');
+  });
+
+  test('observed bundle example keeps runtime artifacts traceable', () => {
+    const bundle = parseObservedBundleExample();
+    const declaredRefs = new Set(bundle.artifacts.map((artifact) => artifact.path || artifact.url));
+    const observationRefs = new Set(bundle.observations.flatMap((observation) => observation.artifact_refs));
+    const commandText = bundle.commands_or_manual_steps
+      .map((step) => step.command || step.manual_step || '')
+      .join('\n');
+
+    assert.deepStrictEqual(bundle.evidence_inputs.tools_used, ['playwright', 'agent-browser'],
+      'ui-proof.md example must use concise tool identifiers.');
+    for (const tool of bundle.evidence_inputs.tools_used) {
+      assert.match(tool, /^[a-z0-9][a-z0-9_.:-]*$/,
+        `UI proof tool id must be a concise machine-friendly identifier: ${tool}`);
+    }
+
+    assert.doesNotMatch(commandText, /\.planning\/quick\/001-example/,
+      'ui-proof.md example commands must use a work-item placeholder instead of a hardcoded quick-task directory.');
+
+    const screenshotCommand = commandText.match(/agent-browser screenshot\s+(\S+)/);
+    assert.ok(screenshotCommand, 'ui-proof.md example must capture a screenshot through agent-browser.');
+    const screenshotRef = screenshotCommand[1];
+    assert.ok(declaredRefs.has(screenshotRef),
+      'agent-browser screenshot path in the example must be listed in artifacts[].');
+    assert.ok(observationRefs.has(screenshotRef),
+      'agent-browser screenshot path in the example must be linked from observations[].artifact_refs.');
+
+    for (const ref of observationRefs) {
+      assert.ok(declaredRefs.has(ref),
+        `ui-proof.md example observation references undeclared artifact: ${ref}`);
+    }
+  });
+
+  test('plan-checker rejects weak UI proof slots before execution', () => {
+    for (const phrase of [
+      /specific route\/state/i,
+      /viewport rationale/i,
+      /minimum observations/i,
+      /expected artifact types/i,
+      /runnable validation/i,
+      /under-specified viewport coverage/i,
+    ]) {
+      assert.match(planChecker, phrase, `plan-checker must reject weak UI proof slots missing ${phrase}.`);
+    }
   });
 
   test('guardrails reject agent-only proof, artifact theater, and unsafe public claims', () => {

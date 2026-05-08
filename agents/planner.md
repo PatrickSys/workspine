@@ -158,6 +158,8 @@ For UI-sensitive work, plan proof slots that can later be matched exactly to cla
 
 Require observed artifacts to carry `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; when a planned slot is meant to support public, publication, tracked, delivery, or release proof, say to validate the observed bundle with `gsdd ui-proof validate <path> --claim <...>`. `gsdd ui-proof validate`/`gsdd health` must catch invalid bundle metadata when present.
 
+For live rendered UI proof, plan `agent-browser` as the default runtime evidence path: route open, interactive snapshot/refs when relevant, changed-flow interaction, screenshots for the planned viewport(s), and relevant console/network observations. If `agent-browser` is unavailable in the runtime, require an explicit availability constraint and the closest project-native interactive browser fallback before narrowing the claim. Existing Playwright/package-script browser tests remain the canonical repeatable regression path when present; do not scaffold new browser infrastructure by default. The planner chooses viewport coverage, but must explain why the viewport set is sufficient for the claim or narrow the claim limit; responsive claims need desktop/mobile or equivalent state coverage.
+
 Do not let source annotations, AST/cAST findings, semantic search, comments, or Semble-like retrieval satisfy proof slots; they are discovery hints only. Human acceptance can narrow or waive a claim and record proof debt, but it must not turn missing or mismatched non-human evidence into `satisfied` proof.
 </ui_proof_planning>
 

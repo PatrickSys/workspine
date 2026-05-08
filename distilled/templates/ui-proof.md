@@ -4,6 +4,10 @@ Use this template when work affects rendered UI or when a plan defines `ui_proof
 
 UI proof uses the existing closure evidence kinds only: `code`, `test`, `runtime`, `delivery`, and `human`. Screenshots, traces, videos, reports, accessibility scans, Gherkin, visual diffs, and manual notes are artifact types or activities that map onto those evidence kinds. They are not new evidence kinds.
 
+For live rendered UI evidence, default to `agent-browser`: open the route, capture an interactive snapshot/refs when interaction is part of the claim, exercise the changed flow, capture screenshots for the planned viewport(s), and record console/network observations when they affect the claim. If the repo already has Playwright tests or a package script wrapping them, those remain the canonical repeatable regression path; use them as `test` evidence and use `agent-browser` for complementary live runtime proof. Do not introduce new Playwright, Cypress, Storybook, CI, browser MCP, or visual-regression infrastructure just to satisfy this template. Use Playwright scripting only for checks `agent-browser` cannot cover cleanly, such as JS-disabled behavior, structured console listeners, or multi-context testing.
+
+Tool availability is part of the proof record. In runtimes where `agent-browser` is not available, first state that availability constraint, then use the closest project-native interactive browser path and record the fallback in `evidence_inputs.tools_used`, `commands_or_manual_steps`, and `claim_limits`. A fallback can support a narrowed local runtime claim, but it must not silently pretend that the default `agent-browser` path ran.
+
 ## Planned Proof Slots
 
 Every UI-sensitive plan needs either at least one slot under `ui_proof_slots` or an explicit `no_ui_proof_rationale` explaining why no rendered UI proof is required.
@@ -19,13 +23,15 @@ ui_proof_slots:
     minimum_observations:
       - "Changed control is visible and usable in the stated state."
       - "Expected interaction completes without console/runtime error."
+    expected_artifact_types: [screenshot, report]
+    validation_command: "gsdd ui-proof compare {work_item_dir}/ui-proof-slots.json {work_item_dir}/UI-PROOF.md"
     environment:
       app_url: "http://localhost:3000"
       data_state: "synthetic or seeded data"
     viewport:
       width: 1280
       height: 720
-      notes: "Use project default unless responsive behavior is part of the claim."
+      notes: "State why this viewport is enough for the claim, or add separate slots/observations for mobile, desktop, or responsive states."
     manual_acceptance_required: false
     claim_limit: "Does not prove cross-browser layout, full accessibility conformance, production delivery, or unrelated UI states."
 no_ui_proof_rationale: null
@@ -34,6 +40,8 @@ no_ui_proof_rationale: null
 Slot rules:
 - Keep each slot tied to one exact UI claim.
 - Use the lightest proof that can catch a botched rendered experience for that claim.
+- Specify the route/state, viewport choice, minimum observations, expected artifact types, and runnable validation path tightly enough that a checker can reject vague proof before execution.
+- The planner chooses the viewport set, but the slot must explain the choice. Include desktop and mobile proof when the claim covers responsive layout or when the changed surface is likely to behave differently across those sizes; otherwise narrow the claim limit.
 - Source annotations, AST/cAST findings, semantic search hits, comments, and Semble-like retrieval may help discover proof obligations. They are discovery hints only; they do not satisfy proof slots.
 - Do not add Playwright, Cypress, Storybook, Cucumber, CI, browser MCP, or visual-regression tooling by default.
 - Human approval is required for visual taste, accessibility judgment, baseline acceptance, subjective polish/layout quality, and privacy publication decisions.
@@ -42,6 +50,8 @@ Slot rules:
 ## Observed Proof Bundle
 
 Create or update this bundle during execution or verification when planned UI proof slots exist. JSON is the canonical machine-readable proof bundle format. Markdown proof files must include fenced JSON for deterministic validation.
+
+Replace placeholders such as `{work_item_dir}` with the current phase, quick-task, or brownfield-change directory before running commands or validating the bundle.
 
 ```json
 {
@@ -58,7 +68,7 @@ Create or update this bundle during execution or verification when planned UI pr
   },
   "environment": {
     "app_url": "http://localhost:3000",
-    "browser": "project default or manual browser",
+    "browser": "agent-browser default; record fallback when unavailable",
     "browser_version": "record if known",
     "os": "record if relevant",
     "data_state": "synthetic or seeded data"
@@ -70,7 +80,7 @@ Create or update this bundle during execution or verification when planned UI pr
   },
   "evidence_inputs": {
     "kinds": ["test", "runtime"],
-    "tools_used": ["manual"]
+    "tools_used": ["playwright", "agent-browser"]
   },
   "commands_or_manual_steps": [
     {
@@ -80,7 +90,12 @@ Create or update this bundle during execution or verification when planned UI pr
       "attempts": 1
     },
     {
-      "manual_step": "Open /example as synthetic user and complete the changed interaction.",
+      "command": "agent-browser open http://localhost:3000/example && agent-browser snapshot -i && agent-browser screenshot {work_item_dir}/artifacts/example-1280.png --full",
+      "result": "passed",
+      "attempts": 1
+    },
+    {
+      "manual_step": "Using agent-browser refs, complete the changed interaction as a synthetic user and check for visible breakage or relevant console/network failures.",
       "result": "passed"
     }
   ],
@@ -93,7 +108,7 @@ Create or update this bundle during execution or verification when planned UI pr
         "state": "role, data state, feature flag, loading/error/empty state, or component story"
       },
       "evidence_kind": "runtime",
-      "artifact_refs": ["test-results/changed-flow-report/index.html"],
+      "artifact_refs": ["test-results/changed-flow-report/index.html", "{work_item_dir}/artifacts/example-1280.png"],
       "privacy": {
         "data_classification": "synthetic",
         "raw_artifacts_safe_to_publish": false,
@@ -112,6 +127,15 @@ Create or update this bundle during execution or verification when planned UI pr
       "sensitivity": "possible",
       "safe_to_publish": false,
       "notes": "Local report only; not public proof."
+    },
+    {
+      "path": "{work_item_dir}/artifacts/example-1280.png",
+      "type": "screenshot",
+      "visibility": "local_only",
+      "retention": "temporary_review",
+      "sensitivity": "possible",
+      "safe_to_publish": false,
+      "notes": "Local screenshot only; not public proof unless sanitized and reclassified."
     }
   ],
   "privacy": {
@@ -129,7 +153,8 @@ Create or update this bundle during execution or verification when planned UI pr
     "claim_status": "passed",
     "comparison_status_by_slot": {
       "ui-01": "satisfied"
-    }
+    },
+    "failure_classification": null
   },
   "claim_limits": [
     "Does not prove Safari/WebKit behavior.",
@@ -149,10 +174,11 @@ Bundle rules:
 - Local-only or `safe_to_publish: false` artifacts can support local review only; they must not back tracked, public, delivery, release, or publication proof claims.
 - Human acceptance may close a narrowed claim only by recording waiver, deferment, or proof debt; it must not upgrade missing or mismatched non-human proof to `satisfied`.
 - Quick-mode UI proof should use deterministic synthetic IDs such as `quick-001` and `quick-001-ui-01` when roadmap requirement IDs do not exist.
+- Classify failed UI proof using existing GSDD gap/proof-debt language: `product_bug`, `missing_infra`, `flaky_harness`, or `ambiguous_spec`. Do not add new result statuses or evidence kinds for those causes.
 
 ## Deterministic Validation
 
-Use `gsdd ui-proof validate <path>` on JSON proof-bundle metadata or markdown fenced JSON before relying on a bundle for closure; add `--claim <public|publication|tracked|delivery|release>` only when validating that stronger proof use. Use `gsdd ui-proof compare <planned-slots-json> [observed-bundle-json ...]` when verifying planned proof slots against observed bundles through the deterministic product-facing path. Required observed-bundle top-level fields are `proof_bundle_version`, `scope`, `route_state`, `environment`, `viewport`, `evidence_inputs`, `commands_or_manual_steps`, `observations`, `artifacts`, `privacy`, `result`, and `claim_limits`. The validator checks required bundle and observation fields, structured command/manual-step entries, fixed evidence kinds, `result.claim_status`, observation `result`, comparison statuses, non-empty claim limits, locked artifact and observation privacy fields, observation-to-artifact references, workspace-relative/http(s) artifact references, and explicit public/tracked/delivery proof claims that rely on local-only, unsafe, unsanitized, or privacy-contradictory artifacts. `claim_status`, observation `result`, and command/manual-step `result` use `passed`, `failed`, `partial`, `waived`, `deferred`, or `not_applicable`. It is metadata-only and does not inspect raw screenshot, trace, video, DOM, or report contents.
+Use `gsdd ui-proof validate <path>` on JSON proof-bundle metadata or markdown fenced JSON before relying on a bundle for closure; add `--claim <public|publication|tracked|delivery|release>` only when validating that stronger proof use. Use `gsdd ui-proof compare <planned-slots-json> [observed-bundle-json ...]` when verifying planned proof slots against observed bundles through the deterministic product-facing path. Required planned-slot fields are `slot_id`, `claim`, `route_state`, `required_evidence_kinds`, `minimum_observations`, `expected_artifact_types`, `validation_command`, `environment`, `viewport`, `manual_acceptance_required`, and `claim_limit`. Required observed-bundle top-level fields are `proof_bundle_version`, `scope`, `route_state`, `environment`, `viewport`, `evidence_inputs`, `commands_or_manual_steps`, `observations`, `artifacts`, `privacy`, `result`, and `claim_limits`. The validator checks planned-slot specificity, required bundle and observation fields, structured command/manual-step entries, fixed evidence kinds, concise `tools_used` IDs, `result.claim_status`, observation `result`, comparison statuses, failure classification for failed/partial proof, non-empty claim limits, locked artifact and observation privacy fields, observation-to-artifact references, workspace-relative/http(s) artifact references, existing local artifact paths when validating from files, and explicit public/tracked/delivery proof claims that rely on local-only, unsafe, unsanitized, or privacy-contradictory artifacts. `claim_status`, observation `result`, and command/manual-step `result` use `passed`, `failed`, `partial`, `waived`, `deferred`, or `not_applicable`; failed/partial proof uses `product_bug`, `missing_infra`, `flaky_harness`, or `ambiguous_spec`. It does not inspect raw screenshot, trace, video, DOM, or report contents and does not require any specific browser provider such as `agent-browser`.
 
 ## Comparison Statuses
 

@@ -118,9 +118,10 @@ Delegate to the planner role in quick mode.
 - No research phase, no ROADMAP requirements
 - Do NOT extract phase requirement IDs — there is no active phase
 - Derive must-haves directly from the task description
-- If the quick task is UI-sensitive, include proportional `ui_proof_slots` with slot_id, claim, route_state, required_evidence_kinds, minimum_observations, environment, viewport, manual_acceptance_required, and claim_limit; otherwise include a short `no_ui_proof_rationale`
+- If the quick task is UI-sensitive, include proportional `ui_proof_slots` with slot_id, claim, route_state, required_evidence_kinds, minimum_observations, expected_artifact_types, validation_command, environment, viewport, manual_acceptance_required, and claim_limit; otherwise include a short `no_ui_proof_rationale`
 - UI proof slots must be matchable to exact observed evidence later: claim, route/state, observation, evidence kind, artifact path or manual step, privacy metadata, result, and claim limit. Discovery hints from source comments, AST/cAST, semantic search, or Semble-like retrieval do not satisfy proof.
 - Observed artifact metadata must include `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; raw screenshots, traces, videos, DOM snapshots, and reports are local-only/unsafe by default. Use `gsdd ui-proof validate <path>` or `gsdd health` when a bundle exists; add `--claim <...>` only for public, publication, tracked, delivery, or release proof use.
+- For live rendered UI proof, default to `agent-browser` snapshots/refs, interactions, screenshots, and relevant console/network observations. If unavailable, state the availability constraint and closest project-native interactive browser fallback before narrowing the claim. Existing Playwright/package-script browser tests remain the canonical repeatable regression path when present. The viewport set is plan-owned, but under-specified viewport coverage is weak proof; explain the chosen viewport(s) or narrow the claim limit.
 - Keep UI proof proportional: do not scaffold Playwright, Cypress, Cucumber, Storybook, CI, browser MCP, or visual-regression tooling by default
 - Ignore <planning_process> Step 1 requirement extraction; use inline goal-backward planning only
 - Target minimal context usage
@@ -160,7 +161,8 @@ Read `.planning/config.json`.
 - Mode: quick
 
 **Constraints:**
-- Check 5 dimensions only: `requirement_coverage`, `task_completeness`, `dependency_correctness`, `scope_sanity`, `must_have_quality`
+- Check 5 dimensions by default: `requirement_coverage`, `task_completeness`, `dependency_correctness`, `scope_sanity`, `must_have_quality`
+- If the quick plan contains `ui_proof_slots` or a rendered UI claim, also check `closure_honesty` so weak UI proof slots block execution
 - Skip: `key_link_completeness`, `context_compliance`, `goal_achievement`, `approach_alignment`
 - Maximum 1 revision cycle (if blockers found, send back to planner once, then accept result)
 - Blocker threshold: only block on `task_completeness` or `scope_sanity` violations
@@ -268,6 +270,7 @@ Delegate to the executor role.
 - Do NOT update ROADMAP.md phase status or SPEC.md current state
 - Create summary at: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md`
 - If the quick plan defines `ui_proof_slots`, create or update `.planning/quick/$NEXT_NUM-$SLUG/UI-PROOF.md` with fenced JSON containing required top-level fields: `proof_bundle_version`, `scope`, `route_state`, `environment`, `viewport`, `evidence_inputs`, `commands_or_manual_steps`, `observations`, `artifacts`, `privacy`, `result`, and `claim_limits`
+- For live UI proof, record `agent-browser` in `evidence_inputs.tools_used` when used, the exact commands or manual ref-based steps, screenshot/report artifact paths, and any relevant console/network observations. If `agent-browser` was unavailable, record that availability constraint and fallback tool explicitly. If existing Playwright tests supplied regression evidence, record the package command and result separately from the `agent-browser` runtime observation.
 - Human approval for visual taste, accessibility judgment, baseline acceptance, subjective polish/layout quality, or privacy publication does not replace required `code`, `test`, `runtime`, or `delivery` evidence
 
 **Output:** `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md`

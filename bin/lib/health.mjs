@@ -147,13 +147,13 @@ export function createCmdHealth(ctx) {
       const parsed = readUiProofBundleFile(bundlePath);
       const validation = parsed.errors.length > 0
         ? { valid: false, errors: parsed.errors }
-        : validateUiProofBundle(parsed.bundle);
+        : validateUiProofBundle(parsed.bundle, { requireLocalArtifactExists: true, workspaceRoot: cwd });
       if (!validation.valid) {
         errors.push({
           id: 'E10',
           severity: 'ERROR',
           message: `${relativePath} has invalid UI proof metadata (${validation.errors.map((entry) => entry.code).join(', ')})`,
-          fix: 'Run `gsdd ui-proof validate <path>` and add required privacy metadata, claim limits, fixed evidence kinds, observation artifact references, and safe-to-publish handling.',
+          fix: 'Run `gsdd ui-proof validate <path>` and add required privacy metadata, claim limits, fixed evidence kinds, concise tool provenance, failure classification when failed or partial, observation artifact references, existing local artifact paths, and safe-to-publish handling.',
         });
       }
     }

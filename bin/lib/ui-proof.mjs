@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { isAbsolute, join, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
@@ -10,6 +10,8 @@ const ARTIFACT_VISIBILITIES = Object.freeze(['local_only', 'repo_tracked', 'publ
 const RAW_ARTIFACT_TYPES = Object.freeze(['screenshot', 'trace', 'video', 'dom_snapshot', 'dom-snapshot', 'dom', 'report']);
 const PUBLIC_CLAIM_USES = Object.freeze(['public', 'publication', 'tracked', 'delivery', 'release']);
 const CLAIM_USES = Object.freeze([...PUBLIC_CLAIM_USES, 'local', 'local_only']);
+const FAILURE_CLASSIFICATIONS = Object.freeze(['product_bug', 'missing_infra', 'flaky_harness', 'ambiguous_spec']);
+const TOOL_ID_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/;
 const REQUIRED_BUNDLE_FIELDS = Object.freeze([
   'proof_bundle_version',
   'scope',
@@ -25,6 +27,19 @@ const REQUIRED_BUNDLE_FIELDS = Object.freeze([
   'claim_limits',
 ]);
 const REQUIRED_SCOPE_FIELDS = Object.freeze(['work_item', 'claim', 'requirement_ids', 'slot_ids']);
+const REQUIRED_SLOT_FIELDS = Object.freeze([
+  'slot_id',
+  'claim',
+  'route_state',
+  'required_evidence_kinds',
+  'minimum_observations',
+  'environment',
+  'viewport',
+  'expected_artifact_types',
+  'validation_command',
+  'manual_acceptance_required',
+  'claim_limit',
+]);
 const REQUIRED_ARTIFACT_FIELDS = Object.freeze(['visibility', 'retention', 'sensitivity', 'safe_to_publish']);
 const REQUIRED_OBSERVATION_FIELDS = Object.freeze(['observation', 'claim', 'route_state', 'evidence_kind', 'artifact_refs', 'privacy', 'result', 'claim_limit']);
 const REQUIRED_PRIVACY_FIELDS = Object.freeze(['data_classification', 'raw_artifacts_safe_to_publish', 'retention']);
@@ -72,12 +87,12 @@ function normalizeArray(value) {
 
 function artifactType(artifact) {
   const explicit = typeof artifact.type === 'string' ? artifact.type.toLowerCase() : '';
-  const artifactPath = typeof artifact.path === 'string' ? artifact.path.toLowerCase() : '';
-  if (/screenshot|\.png$|\.jpe?g$|\.webp$/.test(artifactPath)) return 'screenshot';
-  if (/trace|\.zip$/.test(artifactPath)) return 'trace';
-  if (/video|\.mp4$|\.webm$|\.mov$/.test(artifactPath)) return 'video';
-  if (/dom|\.html?$/.test(artifactPath)) return 'dom_snapshot';
-  if (/report/.test(artifactPath)) return 'report';
+  const artifactRef = artifactReference(artifact)?.toLowerCase() || '';
+  if (/screenshot|\.png$|\.jpe?g$|\.webp$/.test(artifactRef)) return 'screenshot';
+  if (/trace|\.zip$/.test(artifactRef)) return 'trace';
+  if (/video|\.mp4$|\.webm$|\.mov$/.test(artifactRef)) return 'video';
+  if (/dom|\.html?$/.test(artifactRef)) return 'dom_snapshot';
+  if (/report/.test(artifactRef)) return 'report';
   return explicit;
 }
 
@@ -172,12 +187,47 @@ function validateEvidenceKinds(bundle, errors) {
   }
 }
 
+function validateToolsUsed(bundle, errors) {
+  const tools = normalizeArray(bundle?.evidence_inputs?.tools_used);
+  if (tools.length === 0) {
+    addError(errors, 'missing_tools_used', 'evidence_inputs.tools_used', 'Missing UI proof tool provenance.', 'Record concise tool IDs such as browser, playwright, manual, or project-specific command IDs.');
+    return;
+  }
+  for (const [index, tool] of tools.entries()) {
+    if (!TOOL_ID_PATTERN.test(tool)) {
+      addError(errors, 'invalid_tool_id', `evidence_inputs.tools_used[${index}]`, `Invalid UI proof tool identifier: ${tool}`, 'Use a concise lowercase identifier without spaces, for example browser, playwright, manual, or gsdd-ui-proof-validate.');
+    }
+  }
+}
+
 function validateResult(bundle, errors) {
   if (!isPlainObject(bundle?.result)) return;
   if (!hasValue(bundle.result.claim_status)) {
     addError(errors, 'missing_claim_status', 'result.claim_status', 'Missing UI proof result claim status.', `Record claim_status using: ${CLAIM_STATUSES.join(', ')}.`);
   } else if (!CLAIM_STATUSES.includes(bundle.result.claim_status)) {
     addError(errors, 'invalid_claim_status', 'result.claim_status', `Invalid UI proof claim status: ${bundle.result.claim_status}`, `Use only: ${CLAIM_STATUSES.join(', ')}.`);
+  }
+}
+
+function validateFailureClassification(bundle, errors) {
+  const statuses = [
+    bundle?.result?.claim_status,
+    ...Object.values(isPlainObject(bundle?.result?.comparison_status_by_slot) ? bundle.result.comparison_status_by_slot : {}),
+    ...normalizeArray(bundle?.observations).map((observation) => isPlainObject(observation) ? observation.result : null),
+    ...normalizeArray(bundle?.commands_or_manual_steps).map((step) => isPlainObject(step) ? step.result : null),
+  ].filter(Boolean);
+  const failedOrPartial = statuses.some((status) => status === 'failed' || status === 'partial');
+  const classifications = normalizeArray(bundle?.result?.failure_classification || bundle?.result?.failure_classifications);
+
+  if (failedOrPartial && classifications.length === 0) {
+    addError(errors, 'missing_failure_classification', 'result.failure_classification', 'Failed or partial UI proof must classify why it failed.', `Use one of: ${FAILURE_CLASSIFICATIONS.join(', ')}.`);
+    return;
+  }
+
+  for (const [index, classification] of classifications.entries()) {
+    if (!FAILURE_CLASSIFICATIONS.includes(classification)) {
+      addError(errors, 'invalid_failure_classification', `result.failure_classification[${index}]`, `Invalid UI proof failure classification: ${classification}`, `Use only: ${FAILURE_CLASSIFICATIONS.join(', ')}.`);
+    }
   }
 }
 
@@ -201,6 +251,10 @@ function validateComparisonStatuses(bundle, errors) {
     if (!COMPARISON_STATUSES.includes(status)) {
       addError(errors, 'invalid_comparison_status', `result.comparison_status_by_slot.${slot}`, `Invalid UI proof comparison status: ${status}`, `Use only: ${COMPARISON_STATUSES.join(', ')}.`);
     }
+  }
+  const unsatisfiedStatuses = Object.values(statuses).filter((status) => !['satisfied', 'not_applicable'].includes(status));
+  if (bundle?.result?.claim_status === 'passed' && unsatisfiedStatuses.length > 0) {
+    addError(errors, 'inconsistent_claim_status', 'result.claim_status', 'UI proof claim_status cannot be passed when comparison statuses are unsatisfied.', 'Use partial, failed, waived, deferred, or not_applicable when any slot comparison is not satisfied.');
   }
 }
 
@@ -234,7 +288,7 @@ function isSanitizedSensitivity(value) {
   return typeof value === 'string' && /(^|[_\s-])(sanitized|public_safe|public-safe)($|[_\s-])/.test(value.toLowerCase());
 }
 
-function validateArtifacts(bundle, errors, publicClaim) {
+function validateArtifacts(bundle, errors, publicClaim, options = {}) {
   const artifacts = normalizeArray(bundle?.artifacts);
   if (artifacts.length === 0) {
     addError(errors, 'missing_artifacts', 'artifacts', 'Missing UI proof artifacts list.', 'Record artifact metadata for each referenced proof artifact.');
@@ -254,6 +308,12 @@ function validateArtifacts(bundle, errors, publicClaim) {
     } else {
       validateArtifactReferenceSafety(ref, artifactPath, errors);
       artifactRefs.add(ref);
+      if (options.requireLocalArtifactExists && !/^https?:\/\//i.test(ref) && hasValue(options.workspaceRoot)) {
+        const artifactFile = resolve(options.workspaceRoot, ref);
+        if (!existsSync(artifactFile) || statSync(artifactFile).isDirectory()) {
+          addError(errors, 'missing_local_artifact', artifactPath, `UI proof artifact file does not exist: ${ref}`, 'Create the referenced artifact, correct the path, or narrow the proof claim.');
+        }
+      }
     }
     for (const field of REQUIRED_ARTIFACT_FIELDS) {
       requireField(artifact, field, artifactPath, errors);
@@ -275,6 +335,40 @@ function validateArtifacts(bundle, errors, publicClaim) {
     }
   }
   return artifactRefs;
+}
+
+export function validateUiProofSlots(slots) {
+  const errors = [];
+  const normalizedSlots = normalizeArray(slots);
+  if (normalizedSlots.length === 0) {
+    addError(errors, 'missing_planned_slots', 'ui_proof_slots', 'Planned UI proof input must include at least one slot.', 'Provide ui_proof_slots or no_ui_proof_rationale for non-UI work.');
+    return { valid: false, errors, warnings: [] };
+  }
+
+  for (const [index, slot] of normalizedSlots.entries()) {
+    const slotPath = `ui_proof_slots[${index}]`;
+    if (!isPlainObject(slot)) {
+      addError(errors, 'invalid_planned_slot', slotPath, 'Planned UI proof slot must be an object.', 'Record a scoped slot with claim, route_state, viewport, evidence, artifacts, validation, and claim limit.');
+      continue;
+    }
+    for (const field of REQUIRED_SLOT_FIELDS) requireField(slot, field, slotPath, errors);
+    for (const [kindIndex, kind] of normalizeArray(slot.required_evidence_kinds || slot.requiredEvidenceKinds).entries()) {
+      if (!EVIDENCE_KINDS.includes(kind)) {
+        addError(errors, 'unsupported_planned_evidence_kind', `${slotPath}.required_evidence_kinds[${kindIndex}]`, `Unsupported planned UI proof evidence kind: ${kind}`, `Use only: ${EVIDENCE_KINDS.join(', ')}.`);
+      }
+    }
+    if (hasValue(slot.manual_acceptance_required) && typeof slot.manual_acceptance_required !== 'boolean') {
+      addError(errors, 'invalid_manual_acceptance_required', `${slotPath}.manual_acceptance_required`, 'manual_acceptance_required must be a boolean.', 'Use true only when human judgment is required for this slot; otherwise use false.');
+    }
+    if (normalizeArray(slot.minimum_observations || slot.minimumObservations).length === 0) {
+      addError(errors, 'missing_minimum_observations', `${slotPath}.minimum_observations`, 'Planned UI proof slot must include minimum observations.', 'List the observations execution must prove for this slot.');
+    }
+    if (normalizeArray(slot.expected_artifact_types || slot.expectedArtifactTypes).length === 0) {
+      addError(errors, 'missing_expected_artifact_types', `${slotPath}.expected_artifact_types`, 'Planned UI proof slot must include expected artifact types.', 'List expected artifact types such as screenshot, trace, report, or dom_snapshot.');
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings: [] };
 }
 
 function validatePrivacy(bundle, errors, publicClaim) {
@@ -539,15 +633,30 @@ function compareSlotToBundle(slot, slotIdValue, observed) {
     }
   }
 
+  const expectedArtifactTypes = normalizeArray(slot?.expected_artifact_types || slot?.expectedArtifactTypes);
+  const observedArtifactTypes = new Set(normalizeArray(bundle?.artifacts).filter(isPlainObject).flatMap((artifact) => [
+    typeof artifact.type === 'string' ? artifact.type.toLowerCase() : '',
+    artifactType(artifact),
+  ]).filter(Boolean));
+  const missingArtifactTypes = expectedArtifactTypes.filter((type) => !observedArtifactTypes.has(type));
+  if (missingArtifactTypes.length > 0) {
+    issues.push({
+      code: 'missing_expected_artifact_type',
+      path: 'artifacts[].type',
+      message: `Observed UI proof for slot ${slotIdValue} is missing expected artifact type(s): ${missingArtifactTypes.join(', ')}.`,
+    });
+  }
+
   const status = issues.length === 0 ? 'satisfied' : (bundleStatus === 'missing' ? 'missing' : 'partial');
   return { status, issues, source: observed.source };
 }
 
 export function compareUiProofSlots(plannedSlots, observedBundles) {
   const slots = normalizeArray(plannedSlots);
+  const slotValidation = validateUiProofSlots(slots);
   const bundles = normalizeArray(observedBundles).map(normalizeObservedBundle);
   const results = [];
-  const errors = [];
+  const errors = [...slotValidation.errors];
 
   for (const observed of bundles) {
     if (!observed.validation.valid) {
@@ -614,14 +723,16 @@ export function validateUiProofBundle(bundle, options = {}) {
   const publicClaim = hasPublicClaim(bundle, options);
   validateClaimUses(bundle, options, errors);
   validateEvidenceKinds(bundle, errors);
+  validateToolsUsed(bundle, errors);
   validateCommandsOrManualSteps(bundle, errors);
   validateObservations(bundle, errors);
   validateResult(bundle, errors);
+  validateFailureClassification(bundle, errors);
   validateComparisonStatuses(bundle, errors);
   validateClaimLimits(bundle, errors);
   validatePrivacy(bundle, errors, publicClaim);
   validatePublicObservationPrivacy(bundle, errors, publicClaim);
-  const artifactRefs = validateArtifacts(bundle, errors, publicClaim);
+  const artifactRefs = validateArtifacts(bundle, errors, publicClaim, options);
   validateObservationArtifactRefs(bundle, artifactRefs, errors);
 
   return { valid: errors.length === 0, errors, warnings };
@@ -688,7 +799,14 @@ export function parseUiProofSlotsContent(content, filePath = 'UI proof slots') {
     };
   }
 
-  return { slots, errors: [] };
+  const validation = validateUiProofSlots(slots);
+  return {
+    slots,
+    errors: validation.errors.map((error) => ({
+      ...error,
+      path: error.path === 'ui_proof_slots' ? filePath : `${filePath}.${error.path}`,
+    })),
+  };
 }
 
 export function readUiProofBundleFile(filePath) {
@@ -763,7 +881,12 @@ function cmdValidate(cwd, args) {
   const parsed = readUiProofBundleFile(target);
   const validation = parsed.errors.length > 0
     ? { valid: false, errors: parsed.errors, warnings: [] }
-    : validateUiProofBundle(parsed.bundle, { claimUses: parseClaimUse(flags) });
+    : validateUiProofBundle(parsed.bundle, {
+      claimUses: parseClaimUse(flags),
+      requireLocalArtifactExists: true,
+      workspaceRoot: cwd,
+      bundleDir: dirname(target),
+    });
 
   output({ operation: 'ui-proof validate', target: targetArg, valid: validation.valid, errors: validation.errors, warnings: validation.warnings });
   if (!validation.valid) process.exitCode = 1;
@@ -799,7 +922,7 @@ function cmdCompare(cwd, args) {
   }
 
   const comparison = planned.errors.length > 0
-    ? { status: 'missing', slots: [], errors: planned.errors }
+    ? { status: 'partial', slots: [], errors: planned.errors }
     : compareUiProofSlots(planned.slots, observedBundles);
 
   output({
