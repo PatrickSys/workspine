@@ -7,6 +7,7 @@ const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', '..', 'distilled');
 const HELPER_LIB_FILES = Object.freeze([
   'cli-utils.mjs',
+  'control-map.mjs',
   'evidence-contract.mjs',
   'file-ops.mjs',
   'lifecycle-preflight.mjs',
@@ -49,6 +50,7 @@ import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
 import { cmdPhaseStatus } from './lib/phase.mjs';
 import { cmdSessionFingerprint } from './lib/session-fingerprint.mjs';
 import { cmdUiProof } from './lib/ui-proof.mjs';
+import { cmdControlMap } from './lib/control-map.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
 
 const COMMANDS = {
@@ -57,6 +59,7 @@ const COMMANDS = {
   'phase-status': cmdPhaseStatus,
   'session-fingerprint': cmdSessionFingerprint,
   'ui-proof': cmdUiProof,
+  'control-map': cmdControlMap,
 };
 
 function printHelp() {
@@ -78,6 +81,8 @@ function printHelp() {
     '                               Validate UI proof metadata; use --claim for stronger proof uses',
     '  ui-proof compare <planned-slots-json> [observed-bundle-json ...]',
     '                               Compare planned UI proof slots against observed bundles',
+    '  control-map [--json] [--with-ignored] [--annotations <path>]',
+    '                               Report computed repo/worktree/planning state and local annotations',
     '',
     'Advanced option:',
     '  --workspace-root <path>     Override workspace root discovery before or after the subcommand',

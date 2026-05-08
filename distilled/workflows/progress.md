@@ -6,6 +6,10 @@ Core mindset: derive state from primary artifacts. ROADMAP.md checkboxes, phase 
 Scope boundary: you are NOT resume.md. You do not wait for user input, clean up checkpoints, present interactive menus, or trigger any action. You report and suggest only.
 </role>
 
+<control_map>
+At the start of status reporting, run `node .planning/bin/gsdd.mjs control-map --json` when the local helper exists. Summarize its computed repo/worktree/planning state in the status block: canonical branch/HEAD, tracked/untracked/ignored dirty buckets, sibling or detached worktrees, stale local annotations, planning drift, and recommended interventions. Treat the command output as read-only computed evidence. Local annotations under `.planning/.local/` explain intent but never outrank repo truth, planning artifacts, or checkpoint reconciliation.
+</control_map>
+
 <prerequisites>
 `.planning/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed).
 

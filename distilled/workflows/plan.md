@@ -32,12 +32,12 @@ If the preflight result is `blocked`, STOP and report the blocker instead of inf
 
 <integration_surface_check>
 Before planning roadmap work, inspect the live integration surface separately from checkpoint or planning artifacts:
-- current branch name
-- divergence from `main` when available
-- staged, unstaged, and untracked local truth
-- whether the current branch appears stale/spent or mixed-scope
+- Run `node .planning/bin/gsdd.mjs control-map --json` when available.
+- Use its computed branch/HEAD, divergence, tracked/untracked/ignored buckets, sibling/detached worktrees, local annotations, and interventions.
+- If the helper is unavailable, fall back to direct git/worktree inspection.
 
-If the planning truth says "next phase is X" but the git/worktree truth says the current branch is a stale or mixed execution surface, warn explicitly and treat the dirty branch as evidence only. Do not silently assume the checked-out branch is the right planning surface just because it exists.
+If the planning truth says "next phase is X" but the git/worktree truth says the current branch is a stale/spent or mixed-scope execution surface, warn explicitly and treat the dirty branch as evidence only. Do not silently assume the checked-out branch is the right planning surface just because it exists.
+Local annotations explain operator intent but do not outrank repo truth, planning artifacts, or checkpoint reconciliation.
 </integration_surface_check>
 
 <runtime_contract>

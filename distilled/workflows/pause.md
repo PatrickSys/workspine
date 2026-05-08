@@ -39,6 +39,8 @@ Store the detected work type as `$WORK_TYPE` (one of: `phase`, `quick`, `generic
 <gather_state>
 Build a draft checkpoint from artifact truth before asking the user to restate work. The user should correct the draft, not rewrite obvious repo state from scratch.
 
+When available, run `node .planning/bin/gsdd.mjs control-map --json` and use it as the draft's repo/worktree snapshot: canonical branch/HEAD, dirty tracked/untracked/ignored buckets, sibling/detached worktrees, stale annotations, planning drift, and recommended interventions. Include only a compact summary or pointer in `.planning/.continue-here.md`; the checkpoint records resumability context, not a replacement for future computed repo truth.
+
 Ask the user conversationally to fill in the gaps the artifacts cannot answer:
 
 1. **What was completed** this session

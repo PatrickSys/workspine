@@ -100,6 +100,7 @@ export function createCmdInit(ctx) {
       promptApi,
       preselectedConfig: interactiveSession.config,
     });
+    ensureGitignoreEntry(ctx.cwd, '.planning/.local/', '  - ensured .planning/.local/ is gitignored');
 
     if (briefSource) {
       cpSync(briefSource, join(ctx.planningDir, 'PROJECT_BRIEF.md'));
@@ -273,7 +274,7 @@ async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedCo
   if (preselectedConfig) {
     writeFileSync(configFile, JSON.stringify(preselectedConfig, null, 2));
     console.log('  - saved .planning/config.json (guided wizard)\n');
-    if (!preselectedConfig.commitDocs) ensureGitignoreEntry(cwd);
+    if (!preselectedConfig.commitDocs) ensureGitignoreEntry(cwd, '.planning/', '  - ensured .planning/ is gitignored');
     return;
   }
 
@@ -281,7 +282,7 @@ async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedCo
     const config = buildDefaultConfig({ autoAdvance: true });
     writeFileSync(configFile, JSON.stringify(config, null, 2));
     console.log('  - wrote .planning/config.json (auto defaults)\n');
-    if (!config.commitDocs) ensureGitignoreEntry(cwd);
+    if (!config.commitDocs) ensureGitignoreEntry(cwd, '.planning/', '  - ensured .planning/ is gitignored');
     return;
   }
 
@@ -289,7 +290,7 @@ async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedCo
     const config = buildDefaultConfig({ autoAdvance: false });
     writeFileSync(configFile, JSON.stringify(config, null, 2));
     console.log('  - wrote .planning/config.json (non-interactive defaults)\n');
-    if (!config.commitDocs) ensureGitignoreEntry(cwd);
+    if (!config.commitDocs) ensureGitignoreEntry(cwd, '.planning/', '  - ensured .planning/ is gitignored');
     return;
   }
 
@@ -303,18 +304,17 @@ async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedCo
 
   writeFileSync(configFile, JSON.stringify(selected, null, 2));
   console.log('  - saved .planning/config.json (guided wizard)\n');
-  if (!selected.commitDocs) ensureGitignoreEntry(cwd);
+  if (!selected.commitDocs) ensureGitignoreEntry(cwd, '.planning/', '  - ensured .planning/ is gitignored');
 }
 
-function ensureGitignoreEntry(cwd) {
+function ensureGitignoreEntry(cwd, entry, message) {
   const gitignorePath = join(cwd, '.gitignore');
-  const entry = '.planning/';
   const hasGitignore = existsSync(gitignorePath);
   const current = hasGitignore ? readFileSync(gitignorePath, 'utf-8') : '';
   if (!current.split(/\r?\n/).includes(entry)) {
     const next = current.trimEnd() ? `${current.trimEnd()}\n${entry}\n` : `${entry}\n`;
     writeFileSync(gitignorePath, next);
-    console.log('  - ensured .planning/ is gitignored');
+    console.log(message);
   }
 }
 

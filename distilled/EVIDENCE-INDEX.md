@@ -505,6 +505,17 @@
 - Long-term pitfalls carried forward: do not accept screenshot-free "looks good" claims, weak planned slots, unverified artifact paths, stale interactive refs after page mutation, partial/failed proof without failure classification, raw artifact publication without privacy metadata, browser contention in parallel checks, or semantic/selector-poor UI that forces fragile coordinate inspection.
 - Supporting spec/runtime docs: https://openspec.dev/, https://www.lean-spec.dev/docs/guide/first-principles, https://help.openai.com/en/articles/11369540-codex-in-chatgpt, https://docs.claude.com/en/docs/agents-and-tools/agent-skills, https://docs.github.com/en/copilot/concepts/prompting/response-customization
 
+## D63 — Computed-First Control Map
+- `bin/lib/control-map.mjs`, `bin/gsdd.mjs`, `bin/lib/rendering.mjs`
+- `distilled/workflows/progress.md`, `resume.md`, `pause.md`, `quick.md`, `plan.md`, `execute.md`, `verify.md`
+- `bin/lib/ui-proof.mjs`, `bin/lib/phase.mjs`
+- `tests/gsdd.control-map.test.cjs`, `tests/phase.test.cjs`
+- `.internal-research/gaps.md` Gap I52 and Gap I54
+- `.internal-research/lessons-learned.md` multi-worktree registry, clean-vs-editor-visible noise, checkpoint/worktree truth split, and subagent stop-condition lessons
+- GSD comparison: upstream GSD lifecycle rigor does not include a vendor-agnostic computed worktree/control-map helper
+- OpenSpec comparison: OpenSpec change archive flow does not own long-running multi-worktree local-state reconciliation as a portable harness surface
+- Harness sources: https://www.anthropic.com/engineering/harness-design-long-running-apps, https://code.claude.com/docs/en/worktrees, https://developers.openai.com/codex/cloud, https://developers.openai.com/api/docs/guides/agents/orchestration, https://developers.openai.com/api/docs/guides/agents/guardrails-approvals, https://developers.openai.com/api/docs/guides/agent-evals, https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent, https://agent-browser.dev/sessions, https://developer.chrome.com/docs/devtools/agents
+
 ---
 
 ## Maintenance
