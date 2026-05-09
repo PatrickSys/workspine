@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { output } from './cli-utils.mjs';
+import { buildControlMap } from './control-map.mjs';
 import {
   DELIVERY_POSTURES,
   EVIDENCE_KINDS,
@@ -74,12 +75,14 @@ const RELEASE_CONTRADICTION_CHECKS = Object.freeze([
 ]);
 
 const RELEASE_CONTRADICTION_STATUSES = Object.freeze(['passed', 'failed', 'not_applicable']);
+const PREFLIGHT_CONTROL_MAP_SKIP_CODES = Object.freeze(['planning_state_drift']);
 
 export function evaluateLifecyclePreflight({
   planningDir,
   surface,
   phaseNumber = null,
   expectsMutation = 'none',
+  controlMapReport = null,
 } = {}) {
   if (!planningDir) {
     throw new Error('planningDir is required');
@@ -184,6 +187,17 @@ export function evaluateLifecyclePreflight({
     }
   }
 
+  const controlMap = buildPreflightControlMap({
+    planningDir,
+    policy,
+    existingBlockerCodes: new Set(blockers.map((entry) => entry.code)),
+    controlMapReport,
+  });
+  for (const notice of controlMap.notices) {
+    if (notice.severity === 'block') blockers.push(notice);
+    else warnings.push(notice);
+  }
+
   if (lifecycle.phaseStatusAlignment.mismatches.length > 0) {
     warnings.push({
       code: 'roadmap_phase_status_mismatch',
@@ -206,12 +220,55 @@ export function evaluateLifecyclePreflight({
     blockers,
     warnings,
     planningState,
+    controlMap: controlMap.summary,
     lifecycle: {
       currentMilestone: lifecycle.currentMilestone,
       currentPhase: lifecycle.currentPhase ? lifecycle.currentPhase.number : null,
       nextPhase: lifecycle.nextPhase ? lifecycle.nextPhase.number : null,
       counts: lifecycle.counts,
     },
+  };
+}
+
+function buildPreflightControlMap({ planningDir, policy, existingBlockerCodes, controlMapReport = null }) {
+  const empty = {
+    summary: null,
+    notices: [],
+  };
+  if (policy.classification !== 'owned_write' || !existsSync(planningDir)) return empty;
+
+  const map = controlMapReport || buildControlMap({
+    workspaceRoot: resolve(planningDir, '..'),
+    planningDir,
+  });
+  const risks = (map.risks || []).filter((risk) => (
+    !PREFLIGHT_CONTROL_MAP_SKIP_CODES.includes(risk.code)
+    && !(existingBlockerCodes.has(risk.code) && risk.severity !== 'block')
+  ));
+  const notices = risks.map((risk) => ({
+    ...controlMapNotice(risk),
+    severity: risk.severity || 'info',
+  }));
+
+  return {
+    summary: {
+      riskCount: map.risks.length,
+      noticeCount: notices.length,
+      blockerCount: notices.filter((notice) => notice.severity === 'block').length,
+      warningCount: notices.filter((notice) => notice.severity !== 'block').length,
+      interventions: map.interventions || [],
+    },
+    notices,
+  };
+}
+
+function controlMapNotice(risk) {
+  return {
+    code: risk.code,
+    source: 'control-map',
+    message: risk.message,
+    artifacts: ['gsdd control-map --json'],
+    risk,
   };
 }
 

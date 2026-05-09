@@ -347,6 +347,8 @@ Workflows are agent skills or commands, not plain shell utilities. How you invok
 | `npx -y gsdd-cli update [--tools <platform>] [--templates]` | Regenerate skills/adapters and refresh the repo-local helper runtime; `--templates` refreshes `.planning/templates/` and role contracts |
 | `npx -y gsdd-cli health [--json]` | Check workspace integrity and generated-surface freshness (healthy/degraded/broken) |
 | `npx -y gsdd-cli control-map [--json] [--with-ignored]` | Report computed repo/worktree/planning state, dirty buckets, optional ignored-path scan, local annotations, and safe next interventions |
+| `npx -y gsdd-cli control-map annotate <set\|clear>` | Maintain optional local intent annotations; stale updates fail closed unless explicitly refreshed |
+| `npx -y gsdd-cli closeout-report [--json] [--phase <N>]` | Replay read-only closure status from control-map, health/preflight, verify, and UI-proof signals |
 | `npx -y gsdd-cli ui-proof validate <path> [--claim <public\|publication\|tracked\|delivery\|release>]` | Validate UI proof bundle metadata without requiring browser tooling; use `--claim` only when validating that stronger proof use |
 | `npx -y gsdd-cli file-op <copy\|delete\|regex-sub>` | Run deterministic workspace-confined file copy, delete, and regex substitution |
 | `npx -y gsdd-cli find-phase [N]` | Show phase info as JSON (for agent consumption) |
@@ -416,7 +418,7 @@ Model IDs pass through a two-layer injection guard: a regex whitelist (`/^[a-zA-
 | `.planning/research/` | Research outputs |
 | `.planning/codebase/` | Codebase maps (4 files) |
 | `.planning/quick/` | Quick task tracking |
-| `.planning/.local/` | Local-only operational annotations such as control-map intent; never product truth |
+| `.planning/.local/` | Local-only operational annotations such as control-map intent; `control-map annotate` can maintain them, but they are never product truth |
 | `.planning/.continue-here.md` | Session checkpoint (created by pause, consumed by resume) |
 
 ### Advisory Git Protocol

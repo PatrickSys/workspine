@@ -2818,7 +2818,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 ## D62 - Repo-Native UI Proof Contract
 
-**Decision (2026-04-28; revised 2026-05-08):** UI-sensitive work should carry a compact planned proof-slot contract and, when executed, an observed UI proof bundle that references artifacts by path or link while preserving the existing closure evidence kinds: `code`, `test`, `runtime`, `delivery`, and `human`. For live rendered UI proof, `agent-browser` is the default runtime evidence path for consumers, while existing Playwright tests remain the canonical repeatable browser-regression path when present. The deterministic `ui-proof` validator remains provider-agnostic structural validation, but it now validates planned slot specificity, concise tool provenance, local artifact path existence when validating from files, raw-artifact safety for paths and URLs, and failed/partial proof classification so the workflow cannot degrade back into unstructured "looks good" review.
+**Decision (2026-04-28; revised 2026-05-09):** UI-sensitive work should carry a compact planned proof-slot contract and, when executed, an observed UI proof bundle that references artifacts by path or link while preserving the existing closure evidence kinds: `code`, `test`, `runtime`, `delivery`, and `human`. For live rendered UI proof, `agent-browser` is the default runtime evidence path for consumers, while existing Playwright tests remain the canonical repeatable browser-regression path when present. The deterministic `ui-proof` validator remains provider-agnostic structural validation, but it now validates planned slot specificity, concise tool provenance, local artifact path existence when validating from files, raw-artifact safety for paths and URLs, and failed/partial proof classification so the workflow cannot degrade back into unstructured "looks good" review. Direct phase verification also treats plan frontmatter as the UI-proof declaration authority and fails closed on missing phase prerequisites, empty `ui_proof_slots: []` without `no_ui_proof_rationale`, and invalid required UI proof.
 
 **Context:**
 - UI proof targets the recurring failure mode where agents claim a UI works or looks good without rendered proof, matched observations, or explicit human judgment.
@@ -2828,6 +2828,9 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 **Decision:**
 - Planning must classify UI-sensitive work and require either `ui_proof_slots` or an explicit `no_ui_proof_rationale`.
+- Direct phase verification must read `ui_proof_slots` and `no_ui_proof_rationale` from plan frontmatter only; body prose, fenced examples, and stale sidecars are not declaration authority.
+- Direct phase verification must fail nonzero with structured blockers when no matching plan or summary exists, or when `ui_proof_slots: []` lacks a nonblank `no_ui_proof_rationale`.
+- When an explicit no-UI rationale exists, stale UI-proof sidecars are warning-level cleanup signals, not proof and not blockers.
 - Planned slots record claim, route/state, required evidence kinds, minimum observations, expected artifact types, runnable validation command, environment/viewport, manual-acceptance requirement, claim limit, and requirement IDs.
 - Observed proof bundles record claim, requirement/slot IDs, route/state, environment, viewport, evidence inputs, commands/manual steps, observations, artifacts, privacy metadata, result, and claim limits.
 - Planned slots must be tight enough for the plan checker to reject vague proof: specific route/state, viewport rationale or narrowed claim limit, minimum observations, expected artifact types, runnable validation, and matchability back to the exact UI claim.
@@ -2853,7 +2856,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - `distilled/templates/ui-proof.md`
 - `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/quick.md`, `distilled/workflows/verify.md`
 - `agents/planner.md`, `agents/executor.md`, `agents/verifier.md`, `distilled/templates/delegates/plan-checker.md`
-- `bin/lib/templates.mjs`, `bin/lib/ui-proof.mjs`, `bin/lib/health.mjs`, `bin/lib/rendering.mjs`
+- `bin/lib/templates.mjs`, `bin/lib/ui-proof.mjs`, `bin/lib/health.mjs`, `bin/lib/phase.mjs`, `bin/lib/rendering.mjs`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.init.test.cjs`
 - GSD comparison: the upstream planner, executor, and verifier role patterns preserve lifecycle rigor, but they do not define UI proof slots or planned-vs-observed UI proof bundles.
 - OneShot QC source: `https://github.com/oneshot-repo/OneShot/tree/main/skills`
@@ -2875,7 +2878,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 ## D63 - Computed-First Control Map
 
-**Decision (2026-05-08):** Long-running multi-agent and multi-worktree control uses a computed-first `gsdd control-map` helper rather than a new lifecycle workflow or a vendor session parser. The helper computes repo/worktree/planning truth live and overlays optional local annotations only for intent that git cannot know.
+**Decision (2026-05-08; revised 2026-05-09):** Long-running multi-agent and multi-worktree control uses a computed-first `gsdd control-map` helper rather than a new lifecycle workflow or a vendor session parser. The helper computes repo/worktree/planning truth live and overlays optional local annotations only for intent that git cannot know.
 
 **Context:**
 - Gap I52 showed that ordinary `git status` can be clean while sibling worktrees, detached runtime worktrees, ignored/generated surfaces, snapshots, dirty local WIP, and cleanup obligations remain unexplained.
@@ -2885,21 +2888,24 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 **Decision:**
 - Add `gsdd control-map [--json] [--with-ignored] [--annotations <path>]` to the main CLI and generated `.planning/bin/gsdd.mjs` helper runtime.
+- Add `gsdd control-map annotate set|clear` as the minimal mutation surface for local annotation intent. `set` creates or updates workspace-local annotation files with live branch/head snapshots, normalized write sets, cleanup state, owner/scope/next-step metadata, and stale-update refusal unless `--refresh` is explicit. `clear` removes an annotation by id or path, including stale or missing-worktree entries, without deleting branches, pruning worktrees, or cleaning files.
+- Add `gsdd closeout-report [--json] [--phase <N>]` as a read-only replay helper over the same local-state authority. It defaults to the latest completed phase and reports blockers, warnings, next safe action, control-map status, health/preflight status, direct phase verification, and UI-proof status without mutating ROADMAP status, fingerprints, annotations, branches, worktrees, generated surfaces, release state, or report files.
 - Compute authority from live git/worktree state first: canonical checkout, branch, HEAD, upstream divergence when comparable, tracked/untracked dirty buckets, optional ignored-path scans through `--with-ignored`, sibling git worktrees, detached/bare state, invalid git access, planning drift, checkpoint existence, lifecycle state, and repo-local runtime worktree directories.
-- Read optional annotations from `.planning/.local/control-map.annotations.json`. Annotations may record `runtime_owner`, intended scope, write set, cleanup state, proof state, next step, branch, and last known head.
+- Read optional annotations from `.planning/.local/control-map.annotations.json`. Annotations may record `runtime_owner`, intended scope, write set, cleanup state, next step, branch, last known head, and update timestamp.
 - Treat annotations as stale-checkable intent only. They never outrank repo truth, planning artifacts, or checkpoint reconciliation.
+- Emit explicit transition-risk semantics from computed truth: concrete annotation write-set overlap, live dirty-path/write-set overlap, upstream divergence, detached candidate worktrees, stale annotation mismatches, and tracked dirty canonical work behind upstream. Only concrete block-level risks should stop owned-write lifecycle transitions; ordinary dirty or detached local state remains warning-level guidance.
 - Keep transcript/session stores out of the helper. Vendor session evidence may support postmortems, but it is not live product truth.
 - Wire the control map into portable workflow behavior by having `progress`, `resume`, `pause`, `quick`, `plan`, and `execute` consult it when available. This is guidance plus deterministic helper output, not a new workflow lane.
 
 **Leverage:**
 - Lost: a pure zero-file model cannot preserve non-computable intent such as owner/runtime, intended scope, and cleanup obligation.
 - Kept: Workspine remains a lightweight repo-native spine; no new lifecycle workflow, no dashboard/control plane, no vendor session authority, and no change to the five evidence kinds.
-- Gained: agents can explain "clean" precisely across tracked, untracked, sibling, detached, stale, and annotated state by default, and across ignored/generated local surfaces when the caller requests the explicit `--with-ignored` scan before planning, execution, resume, cleanup, or milestone continuation.
+- Gained: agents can explain "clean" precisely across tracked, untracked, sibling, detached, stale, and annotated state by default, and across ignored/generated local surfaces when the caller requests the explicit `--with-ignored` scan before planning, execution, resume, cleanup, or milestone continuation. Owned-write preflight can also consume the same computed risk output, operators can update stale-aware local intent without hand-editing JSON, and closeout replay can join existing verification signals into one typed report without inventing a branch lease, control plane, or cleanup workflow.
 
 **Evidence:**
-- `bin/lib/control-map.mjs`, `bin/gsdd.mjs`, `bin/lib/rendering.mjs`
+- `bin/lib/control-map.mjs`, `bin/lib/closeout-report.mjs`, `bin/lib/health.mjs`, `bin/lib/phase.mjs`, `bin/lib/init-runtime.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/gsdd.mjs`, `bin/lib/rendering.mjs`
 - `distilled/workflows/progress.md`, `resume.md`, `pause.md`, `quick.md`, `plan.md`, `execute.md`
-- `tests/gsdd.control-map.test.cjs`
+- `tests/gsdd.control-map.test.cjs`, `tests/gsdd.closeout-report.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`
 - `.internal-research/gaps.md` Gap I52 and Gap I54
 - `.internal-research/lessons-learned.md` entries on multi-worktree registry, clean-vs-editor-visible noise, checkpoint/worktree truth split, and subagent stop conditions
 - GSD comparison: upstream GSD preserves lifecycle rigor but does not define a vendor-agnostic computed worktree/control-map helper.
@@ -2908,8 +2914,10 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 **Consequences:**
 - Future cleanup, resume, and parallel-worktree work should start from `gsdd control-map --json` rather than repeated ad hoc repo audits; use `--with-ignored` before making a clean-workspace claim that includes ignored or generated surfaces.
-- A future mutation command may update annotations, but the current helper intentionally stays computed/read-first and safe to call from status surfaces.
-- Future health or preflight hardening can consume the same helper output for stricter blocking, but must avoid turning local annotations into product truth.
+- Annotation mutation is intentionally confined to `control-map annotate`; ordinary `control-map` reads remain computed-first and safe to call from status surfaces.
+- Lifecycle preflight may consume block-level control-map risks for owned-write transitions, but read-only status surfaces must not turn warning-level local state into blockers.
+- `closeout-report` is a compact replay/report helper, not `progress`, `verify`, milestone audit, release automation, cleanup, or a dashboard. The source CLI path includes full health diagnostics; the generated helper reports health availability as a typed warning if the full health builder is not present in that helper runtime.
+- Future health hardening can consume the same helper output for stricter reporting, but must avoid turning local annotations into product truth.
 
 ---
 
