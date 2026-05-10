@@ -102,6 +102,9 @@ function summarizePhaseVerification(report) {
 
 function collectBlockers({ health, preflight, phaseReport }) {
   const blockers = [];
+  const uiProofErrors = phaseReport.result?.uiProof?.errors || [];
+  const uiProofGate = phaseReport.result?.ui_proof || {};
+
   blockers.push(...health.errors.map((entry) => notice('health', 'blocker', entry)));
   blockers.push(...preflight.blockers.map((entry) => notice('preflight', 'blocker', entry)));
 
@@ -123,8 +126,15 @@ function collectBlockers({ health, preflight, phaseReport }) {
         path: artifact.file,
       }));
     }
-    for (const entry of phaseReport.result.uiProof?.errors || []) {
+    for (const entry of uiProofErrors) {
       blockers.push(notice('ui_proof', entry.severity === 'warn' ? 'warn' : 'blocker', entry));
+    }
+    if (uiProofErrors.length === 0 && uiProofGate.blocks_verification) {
+      blockers.push(notice('ui_proof', 'blocker', {
+        code: uiProofGate.required_block || 'ui_proof_verification_failed',
+        message: `UI proof verification is required for phase ${phaseReport.result.phase} but reported status ${uiProofGate.status}.`,
+        fix_hint: 'Run the phase-specific UI proof checks and supply a passing observed proof bundle for each declared slot.',
+      }));
     }
   }
 
@@ -160,7 +170,7 @@ function nextSafeAction({ blockers, warnings, phaseNumber }) {
     };
   }
   return {
-    command: `/gsdd-verify ${phaseNumber}`,
+    command: `gsdd verify ${phaseNumber}`,
     reason: 'Phase implementation is replay-clean; run formal verification for closure if it has not already been recorded.',
   };
 }

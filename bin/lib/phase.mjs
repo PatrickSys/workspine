@@ -214,6 +214,30 @@ function stripInlineComment(value) {
   return String(value || '').replace(/\s+#.*$/, '').trim();
 }
 
+function stripOuterScalarQuotes(value) {
+  return String(value)
+    .trim()
+    .replace(/^(['"])([\s\S]*)\1$/g, '$2')
+    .trim();
+}
+
+function normalizeNullableFrontmatterValue(value) {
+  const stripped = stripOuterScalarQuotes(value);
+  if (!stripped) return '';
+  if (stripped === '~') return '';
+  if (/^null$/i.test(stripped)) return '';
+  return stripped;
+}
+
+function extractUiProofSlotIds(value) {
+  const ids = [];
+  const slotPattern = /['"]?slot_id['"]?\s*:\s*['"]?([^,'"\]\s}]+)['"]?/g;
+  for (const match of String(value || '').matchAll(slotPattern)) {
+    ids.push(match[1].replace(/^['"]|['"]$/g, ''));
+  }
+  return ids;
+}
+
 function readPlanFrontmatter(planContent) {
   const content = String(planContent || '');
   if (!content.startsWith('---')) return '';
@@ -257,7 +281,7 @@ function frontmatterScalar(frontmatter, key) {
 function readPlanUiProofContract(planContent) {
   const frontmatter = readPlanFrontmatter(planContent);
   const slotsEntry = frontmatterKeyBlock(frontmatter, 'ui_proof_slots');
-  const rationale = frontmatterScalar(frontmatter, 'no_ui_proof_rationale') || '';
+  const rationale = normalizeNullableFrontmatterValue(frontmatterScalar(frontmatter, 'no_ui_proof_rationale') || '');
   const result = {
     hasUiProofKey: Boolean(slotsEntry),
     declaresSlots: false,
@@ -275,8 +299,7 @@ function readPlanUiProofContract(planContent) {
       return result;
     }
     result.declaresSlots = true;
-    const inlineSlotMatch = slotsEntry.inline.match(/slot_id:\s*([^,\]\s}]+)/);
-    if (inlineSlotMatch) result.slotIds.push(inlineSlotMatch[1].replace(/^['"]|['"]$/g, ''));
+    result.slotIds.push(...extractUiProofSlotIds(slotsEntry.inline));
     return result;
   }
 
@@ -286,8 +309,7 @@ function readPlanUiProofContract(planContent) {
     if (!trimmed || trimmed.startsWith('#')) continue;
     sawMeaningfulLine = true;
     if (/^\s+-\s+/.test(line)) result.declaresSlots = true;
-    const slotMatch = trimmed.match(/(?:^-\s*)?slot_id:\s*([^#\s]+)/);
-    if (slotMatch) result.slotIds.push(slotMatch[1].replace(/^['"]|['"]$/g, ''));
+    result.slotIds.push(...extractUiProofSlotIds(trimmed));
   }
 
   result.explicitEmptySlots = !result.declaresSlots && !sawMeaningfulLine;

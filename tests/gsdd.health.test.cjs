@@ -1014,6 +1014,8 @@ describe('Health — human-readable output', () => {
   test('default output includes verdict line', async () => {
     await initWorkspace();
     const result = await runCliAsMain(tmpDir, ['health']);
+    assert.match(result.output, /gsdd health - workspace integrity check/);
+    assert.doesNotMatch(result.output, /â€”/);
     assert.match(result.output, /Verdict:/);
     assert.match(result.output, /HEALTHY/);
   });

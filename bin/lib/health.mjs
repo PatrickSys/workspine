@@ -294,7 +294,7 @@ export function createCmdHealth(ctx) {
     } else if (report.humanMessage) {
       console.log(report.humanMessage);
     } else {
-      console.log(`\ngsdd health â€” workspace integrity check\n`);
+      console.log(`\ngsdd health - workspace integrity check\n`);
       if (report.errors.length > 0) {
         for (const e of report.errors) console.log(`  ERROR: [${e.id}] ${e.message}\n    Fix: ${e.fix}`);
       }

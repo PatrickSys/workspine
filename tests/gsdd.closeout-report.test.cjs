@@ -71,6 +71,21 @@ function writeCompletedPhase(number, slug, planBody = '') {
   writeFile(`${phaseDir}/${String(number).padStart(2, '0')}-SUMMARY.md`, `# Phase ${number} Summary\n`);
 }
 
+function writePhaseWithMissingObservedUiProof(number, slug, slot) {
+  const phaseDir = `.planning/phases/${String(number).padStart(2, '0')}-${slug}`;
+  const phaseNumber = String(number).padStart(2, '0');
+  writeFile(`${phaseDir}/${phaseNumber}-PLAN.md`, [
+    '---',
+    'ui_proof_slots:',
+    '  - slot_id: ui-01-missing-bundle',
+    '---',
+    `# Phase ${number} Plan`,
+    '',
+  ].join('\n'));
+  writeFile(`${phaseDir}/ui-proof-slots.json`, JSON.stringify({ ui_proof_slots: [slot] }, null, 2));
+  writeFile(`${phaseDir}/${phaseNumber}-SUMMARY.md`, `# Phase ${number} Summary\n`);
+}
+
 describe('closeout-report helper', () => {
   test('defaults to the latest completed phase in the active roadmap', async () => {
     await initWorkspace();
@@ -85,6 +100,7 @@ describe('closeout-report helper', () => {
     assert.strictEqual(report.operation, 'closeout-report');
     assert.strictEqual(report.phase, '2');
     assert.strictEqual(report.scope.defaulted_to_latest_completed, true);
+    assert.ok(!report.next_safe_action.command.startsWith('/gsdd-'));
     assert.ok('control_map' in report);
     assert.ok('health' in report);
     assert.ok('preflight' in report);
@@ -148,6 +164,36 @@ describe('closeout-report helper', () => {
     const report = JSON.parse(result.output);
 
     assert.strictEqual(report.ui_proof.status, 'missing');
+    assert.ok(report.blockers.some((entry) => entry.source === 'ui_proof'));
+  });
+
+  test('treats required ui_proof failures as blockers even when uiProof.errors is empty', async () => {
+    await initWorkspace();
+    writeRoadmap();
+    writePhaseWithMissingObservedUiProof(1, 'first-closed-phase', {
+      slot_id: 'ui-01-missing-bundle',
+      requirement_id: 'CLOSE-01',
+      claim: 'A deterministic non-empty UI claim for closeout validation.',
+      route_state: '/closeout/test',
+      required_evidence_kinds: ['code', 'runtime'],
+      minimum_observations: [
+        'Capture deterministic evidence for route and viewport.',
+      ],
+      environment: { app_url: 'file://test', data_state: 'synthetic' },
+      viewport: { width: 1280, height: 720 },
+      expected_artifact_types: ['screenshot'],
+      validation_command: 'gsdd ui-proof validate .planning/phases/01-first-closed-phase/proof-bundle.json',
+      manual_acceptance_required: false,
+      claim_limit: 'Proof does not establish accessibility.',
+    });
+
+    const result = await runCliAsMain(tmpDir, ['closeout-report', '--json', '--phase', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const report = JSON.parse(result.output);
+
+    assert.strictEqual(report.phase, '1');
+    assert.strictEqual(report.ui_proof.status, 'missing');
+    assert.strictEqual(report.ui_proof.blocks_verification, true);
     assert.ok(report.blockers.some((entry) => entry.source === 'ui_proof'));
   });
 

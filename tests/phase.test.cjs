@@ -3711,6 +3711,56 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.ok(output.uiProof.errors.some((error) => error.code === 'missing_no_ui_proof_rationale'));
   });
 
+  test('phase verify treats null-like no_ui_proof_rationale values as missing', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const placeholderRationales = ['null', '~', '"null"', "'null'", '""', "''", '"~"'];
+    for (let index = 0; index < placeholderRationales.length; index += 1) {
+      const phase = String(10 + index).padStart(2, '0');
+      const phaseDir = path.join(tmpDir, '.planning', 'phases', `${phase}-empty-ui-proof-placeholder`);
+      fs.mkdirSync(phaseDir, { recursive: true });
+      fs.writeFileSync(path.join(phaseDir, `${phase}-PLAN.md`), [
+        '---',
+        'ui_proof_slots: []',
+        `no_ui_proof_rationale: ${placeholderRationales[index]}`,
+        '---',
+        '# Phase Plan',
+      ].join('\n'));
+      fs.writeFileSync(path.join(phaseDir, `${phase}-SUMMARY.md`), '# Phase Summary\n');
+
+      const result = await runCliAsMain(tmpDir, ['verify', String(parseInt(phase, 10))]);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      const output = JSON.parse(result.output);
+
+      assert.deepStrictEqual(output.blocked_on, ['ui_proof']);
+      assert.strictEqual(output.ui_proof.status, 'partial');
+      assert.ok(output.uiProof.errors.some((error) => error.code === 'missing_no_ui_proof_rationale'));
+      assert.ok(output.prerequisite_status.satisfied);
+    }
+  });
+
+  test('phase verify reads all inline ui proof slot ids before comparing planned slots', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-inline-ui-proof-slots');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), [
+      '---',
+      'ui_proof_slots: [{slot_id: ui-58-valid-scoped-proof}, {slot_id: ui-58-missing-or-botched-proof}]',
+      '---',
+      '# Phase 1 Plan',
+    ].join('\n'));
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    fs.writeFileSync(path.join(phaseDir, 'ui-proof-slots.json'), JSON.stringify({
+      ui_proof_slots: plannedSlots().slice(0, 2),
+    }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.ok(!output.uiProof.errors.some((error) => error.code === 'planned_ui_proof_slots_drift'));
+    assert.strictEqual(output.ui_proof.status, 'missing');
+  });
+
   test('phase verify blocks when planned file artifacts are unsatisfied', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-artifact-proof');
