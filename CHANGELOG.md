@@ -1,3 +1,15 @@
+# [0.25.0](https://github.com/PatrickSys/workspine/compare/v0.24.0...v0.25.0) (2026-05-10)
+
+
+### Bug Fixes
+
+* address closeout review feedback ([c20b8d1](https://github.com/PatrickSys/workspine/commit/c20b8d1f2acc74522ae7939bf66791468366f3f8))
+
+
+### Features
+
+* harden local state closeout checks ([7177816](https://github.com/PatrickSys/workspine/commit/7177816f13bd74d005e49acabb747066013c590f))
+
 # [0.24.0](https://github.com/PatrickSys/workspine/compare/v0.23.0...v0.24.0) (2026-05-08)
 
 
