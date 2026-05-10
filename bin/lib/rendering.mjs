@@ -7,6 +7,7 @@ const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', '..', 'distilled');
 const HELPER_LIB_FILES = Object.freeze([
   'cli-utils.mjs',
+  'closeout-report.mjs',
   'control-map.mjs',
   'evidence-contract.mjs',
   'file-ops.mjs',
@@ -47,19 +48,28 @@ function renderPlanningCliLauncher() {
 
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
-import { cmdPhaseStatus } from './lib/phase.mjs';
+import { cmdPhaseStatus, cmdVerify } from './lib/phase.mjs';
 import { cmdSessionFingerprint } from './lib/session-fingerprint.mjs';
 import { cmdUiProof } from './lib/ui-proof.mjs';
 import { cmdControlMap } from './lib/control-map.mjs';
+import { createCmdCloseoutReport } from './lib/closeout-report.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
+
+const HELPER_CONTEXT = {
+  workflows: [],
+  frameworkVersion: 'generated-helper',
+};
+const cmdCloseoutReport = createCmdCloseoutReport(HELPER_CONTEXT);
 
 const COMMANDS = {
   'file-op': cmdFileOp,
   'lifecycle-preflight': cmdLifecyclePreflight,
   'phase-status': cmdPhaseStatus,
+  verify: cmdVerify,
   'session-fingerprint': cmdSessionFingerprint,
   'ui-proof': cmdUiProof,
   'control-map': cmdControlMap,
+  'closeout-report': cmdCloseoutReport,
 };
 
 function printHelp() {
@@ -72,6 +82,8 @@ function printHelp() {
     '                               Example: node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok',
     '  phase-status <N> <status>   Update ROADMAP.md phase status ([ ] / [-] / [x])',
     '                               Example: node .planning/bin/gsdd.mjs phase-status 1 done',
+    '  verify <N>                  Run direct phase artifact and UI-proof gate checks',
+    '                               Example: node .planning/bin/gsdd.mjs verify 1',
     '  lifecycle-preflight <surface> [phase]',
     '                               Inspect lifecycle gate results for a workflow surface',
     '                               Example: node .planning/bin/gsdd.mjs lifecycle-preflight verify 1 --expects-mutation phase-status',
@@ -83,6 +95,8 @@ function printHelp() {
     '                               Compare planned UI proof slots against observed bundles',
     '  control-map [--json] [--with-ignored] [--annotations <path>]',
     '                               Report computed repo/worktree/planning state and local annotations',
+    '  closeout-report [--json] [--phase <N>]',
+    '                               Replay read-only closeout status from control-map, health, preflight, verify, and UI-proof signals',
     '',
     'Advanced option:',
     '  --workspace-root <path>     Override workspace root discovery before or after the subcommand',

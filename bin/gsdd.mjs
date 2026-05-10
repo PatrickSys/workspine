@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 import { realpathSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -21,8 +20,8 @@ import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
 import { cmdSessionFingerprint } from './lib/session-fingerprint.mjs';
 import { cmdUiProof } from './lib/ui-proof.mjs';
 import { cmdControlMap } from './lib/control-map.mjs';
+import { createCmdCloseoutReport } from './lib/closeout-report.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', 'distilled');
@@ -59,7 +58,6 @@ const WORKFLOWS = [
 ];
 
 const FRAMEWORK_VERSION = 'v1.4';
-
 function createCliContext(cwd = process.cwd()) {
   return {
     cwd,
@@ -89,6 +87,7 @@ function createCliContext(cwd = process.cwd()) {
 const INIT_CONTEXT = createCliContext(process.cwd());
 const cmdInit = createCmdInit(INIT_CONTEXT);
 const cmdHealth = createCmdHealth(INIT_CONTEXT);
+const cmdCloseoutReport = createCmdCloseoutReport(INIT_CONTEXT);
 
 const cmdUpdate = (...updateArgs) => {
   const { args: normalizedArgs, workspaceRoot, invalid, error } = resolveWorkspaceContext(updateArgs, { cwd: INIT_CONTEXT.cwd });
@@ -110,6 +109,7 @@ const COMMANDS = {
   'session-fingerprint': cmdSessionFingerprint,
   'ui-proof': cmdUiProof,
   'control-map': cmdControlMap,
+  'closeout-report': cmdCloseoutReport,
   'find-phase': cmdFindPhase,
   'phase-status': cmdPhaseStatus,
   verify: cmdVerify,
@@ -136,4 +136,4 @@ async function runCli(cliCommand = command, ...cliArgs) {
 }
 
 if (IS_MAIN) await runCli();
-export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdCloseoutReport, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

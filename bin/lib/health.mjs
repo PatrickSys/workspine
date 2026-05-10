@@ -14,21 +14,19 @@ import { findUiProofBundleFiles, readUiProofBundleFile, validateUiProofBundle } 
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 /**
- * Factory function returning the health command.
- * ctx should provide: { frameworkVersion, workflows }
+ * Build the structured health report without printing or mutating workspace
+ * state. ctx should provide: { frameworkVersion, workflows }.
  */
-export function createCmdHealth(ctx) {
-  return async function cmdHealth(...healthArgs) {
-    const jsonMode = healthArgs.includes('--json');
+export function buildHealthReport(ctx, healthArgs = []) {
     const { planningDir, workspaceRoot, invalid, error } = resolveWorkspaceContext(healthArgs);
     if (invalid) {
-      if (jsonMode) {
-        output({ status: 'broken', errors: [{ id: 'E1', severity: 'ERROR', message: error, fix: 'Pass --workspace-root with a real path or remove the flag.' }], warnings: [], info: [] });
-      } else {
-        console.log(error);
-      }
-      process.exitCode = 1;
-      return;
+      return {
+        status: 'broken',
+        errors: [{ id: 'E1', severity: 'ERROR', message: error, fix: 'Pass --workspace-root with a real path or remove the flag.' }],
+        warnings: [],
+        info: [],
+        humanMessage: error,
+      };
     }
     const cwd = workspaceRoot;
     const frameworkSourceMode = isFrameworkSourceRepo(cwd);
@@ -36,13 +34,13 @@ export function createCmdHealth(ctx) {
 
     // Pre-init guard
     if (!existsSync(join(planningDir, 'config.json'))) {
-      if (jsonMode) {
-        output({ status: 'broken', errors: [{ id: 'E1', severity: 'ERROR', message: '.planning/config.json missing', fix: 'Run `npx -y gsdd-cli init`' }], warnings: [], info: [] });
-      } else {
-        console.log('Not initialized. Run `npx -y gsdd-cli init`. If `gsdd` is installed globally, `gsdd init` is also fine.');
-      }
-      process.exitCode = 1;
-      return;
+      return {
+        status: 'broken',
+        errors: [{ id: 'E1', severity: 'ERROR', message: '.planning/config.json missing', fix: 'Run `npx -y gsdd-cli init`' }],
+        warnings: [],
+        info: [],
+        humanMessage: 'Not initialized. Run `npx -y gsdd-cli init`. If `gsdd` is installed globally, `gsdd init` is also fine.',
+      };
     }
 
     const errors = [];
@@ -272,22 +270,41 @@ export function createCmdHealth(ctx) {
     const hasWarnings = warnings.length > 0;
     const status = hasErrors ? 'broken' : hasWarnings ? 'degraded' : 'healthy';
 
-    if (hasErrors) process.exitCode = 1;
+    return { status, errors, warnings, info };
+}
+/**
+ * Factory function returning the health command.
+ * ctx should provide: { frameworkVersion, workflows }
+ */
+export function createCmdHealth(ctx) {
+  return async function cmdHealth(...healthArgs) {
+    const jsonMode = healthArgs.includes('--json');
+    const report = buildHealthReport(ctx, healthArgs);
+    const printableReport = {
+      status: report.status,
+      errors: report.errors,
+      warnings: report.warnings,
+      info: report.info,
+    };
+
+    if (report.status === 'broken') process.exitCode = 1;
 
     if (jsonMode) {
-      output({ status, errors, warnings, info });
+      output(printableReport);
+    } else if (report.humanMessage) {
+      console.log(report.humanMessage);
     } else {
-      console.log(`\ngsdd health — workspace integrity check\n`);
-      if (errors.length > 0) {
-        for (const e of errors) console.log(`  ERROR: [${e.id}] ${e.message}\n    Fix: ${e.fix}`);
+      console.log(`\ngsdd health - workspace integrity check\n`);
+      if (report.errors.length > 0) {
+        for (const e of report.errors) console.log(`  ERROR: [${e.id}] ${e.message}\n    Fix: ${e.fix}`);
       }
-      if (warnings.length > 0) {
-        for (const w of warnings) console.log(`  WARN:  [${w.id}] ${w.message}\n    Fix: ${w.fix}`);
+      if (report.warnings.length > 0) {
+        for (const w of report.warnings) console.log(`  WARN:  [${w.id}] ${w.message}\n    Fix: ${w.fix}`);
       }
-      if (info.length > 0) {
-        for (const i of info) console.log(`  INFO:  [${i.id}] ${i.message}${i.fix ? `\n    Fix: ${i.fix}` : ''}`);
+      if (report.info.length > 0) {
+        for (const i of report.info) console.log(`  INFO:  [${i.id}] ${i.message}${i.fix ? `\n    Fix: ${i.fix}` : ''}`);
       }
-      console.log(`\n  Verdict: ${status.toUpperCase()}\n`);
+      console.log(`\n  Verdict: ${report.status.toUpperCase()}\n`);
     }
   };
 }

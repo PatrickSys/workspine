@@ -14,6 +14,7 @@ const MODELS_MODULE = path.join(ROOT, 'bin', 'lib', 'models.mjs');
 const MANIFEST_MODULE = path.join(ROOT, 'bin', 'lib', 'manifest.mjs');
 const HEALTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health.mjs');
 const HEALTH_TRUTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health-truth.mjs');
+const CLOSEOUT_REPORT_MODULE = path.join(ROOT, 'bin', 'lib', 'closeout-report.mjs');
 const INIT_MODULE = path.join(ROOT, 'bin', 'lib', 'init.mjs');
 const INIT_RUNTIME_MODULE = path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs');
 const LIFECYCLE_STATE_MODULE = path.join(ROOT, 'bin', 'lib', 'lifecycle-state.mjs');
@@ -215,6 +216,8 @@ describe('G14 - Health Module Contract', () => {
     const mod = await import(`file://${HEALTH_MODULE.replace(/\\/g, '/')}`);
     assert.strictEqual(typeof mod.createCmdHealth, 'function',
       'health.mjs must export createCmdHealth. FIX: Add export for createCmdHealth.');
+    assert.strictEqual(typeof mod.buildHealthReport, 'function',
+      'health.mjs must export buildHealthReport. FIX: Extract a reusable builder for helper composition.');
   });
 
   test('gsdd.mjs registers health command', () => {
@@ -227,6 +230,22 @@ describe('G14 - Health Module Contract', () => {
     const gsddContent = fs.readFileSync(GSDD_PATH, 'utf-8');
     assert.match(gsddContent, /export.*cmdHealth/,
       'gsdd.mjs must export cmdHealth. FIX: Add cmdHealth to the export statement.');
+  });
+
+  test('closeout-report command is registered as a helper, not a workflow', async () => {
+    const gsddContent = fs.readFileSync(GSDD_PATH, 'utf-8');
+    const closeoutModule = await import(`file://${CLOSEOUT_REPORT_MODULE.replace(/\\/g, '/')}`);
+
+    assert.strictEqual(typeof closeoutModule.createCmdCloseoutReport, 'function',
+      'closeout-report module must export createCmdCloseoutReport. FIX: Keep report composition in bin/lib/closeout-report.mjs.');
+    assert.ok(gsddContent.includes("'closeout-report': cmdCloseoutReport"),
+      'gsdd.mjs must register closeout-report helper. FIX: Add closeout-report to COMMANDS.');
+    assert.match(gsddContent, /export.*cmdCloseoutReport/,
+      'gsdd.mjs must export cmdCloseoutReport. FIX: Add cmdCloseoutReport to the export statement.');
+
+    const workflowDir = path.join(ROOT, 'distilled', 'workflows');
+    assert.strictEqual(fs.existsSync(path.join(workflowDir, 'closeout-report.md')), false,
+      'closeout-report must not become a lifecycle workflow. FIX: Keep it as a helper command only.');
   });
 
   test('help text mentions health command', async () => {
@@ -2784,6 +2803,10 @@ describe('Phase 18 deterministic CLI guards', () => {
       'rendering.mjs must emit a PowerShell repo-local gsdd shim. FIX: Add the .planning/bin/gsdd.ps1 wrapper.');
     assert.match(renderingSource, /relativePath:\s*`bin\/lib\/\$\{fileName\}`/,
       'rendering.mjs must copy helper support modules into .planning/bin/lib/. FIX: Render helper lib entries together with the runtime entrypoint.');
+    assert.match(renderingSource, /'closeout-report\.mjs'/,
+      'rendering.mjs must copy closeout-report.mjs into the local helper runtime. FIX: Add it to HELPER_LIB_FILES.');
+    assert.match(renderingSource, /'closeout-report': cmdCloseoutReport/,
+      'rendering.mjs must register closeout-report in the local helper runtime. FIX: Add closeout-report to helper COMMANDS.');
   });
 
   test('affected workflows route checkpoint file ops through the repo-local helper launcher', () => {
@@ -3224,7 +3247,7 @@ describe('G37 - Launch Surface Consistency', () => {
 
     const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
     const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
-    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone|v1\.3\.0 Engine Contract Hardening|\/gsdd-verify 29|v1\.5\.0 Brownfield Change Continuity|\/gsdd-plan 39|v1\.6 Release Spine Hardening|\/gsdd-execute 44|v1\.8 UI Proof|\/gsdd-plan 58/i,
+    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone|v1\.3\.0 Engine Contract Hardening|\/gsdd-verify 29|v1\.5\.0 Brownfield Change Continuity|\/gsdd-plan 39|v1\.6 Release Spine Hardening|\/gsdd-execute 44|v1\.8 UI Proof|\/gsdd-plan 58|v1\.9 Tight SDD Closure|\/gsdd-verify 61/i,
       '.planning/SPEC.md must reflect honest milestone state after the v1.2.0 archive handoff, whether still between milestones or already in the next milestone. FIX: Keep Current State aligned to repo truth.');
     assert.match(roadmap, /Phase 24: Naming Contract Reconciliation/i,
       '.planning/ROADMAP.md must preserve the archived naming-surface reconciliation path. FIX: Keep the v1.2.0 phase chain visible after collapse.');
@@ -3539,6 +3562,10 @@ describe('G55 - UI Proof Contract', () => {
     assert.match(quickContent, /ui_proof_slots[\s\S]*closure_honesty/, 'quick.md must run closure_honesty checking for UI-sensitive quick plans.');
     assert.match(verifyContent, /<ui_proof_comparison>/, 'verify.md must include planned-vs-observed UI proof comparison.');
     assert.match(verifyContent, /gsdd ui-proof compare <planned-slots-json>/, 'verify.md must prefer the deterministic product-facing UI proof comparison command.');
+    assert.match(verifyContent, /plan frontmatter contract only/i, 'verify.md must make plan frontmatter the only UI proof declaration authority.');
+    assert.match(verifyContent, /body prose, fenced examples, stale sidecars/i, 'verify.md must reject prose/examples/sidecars as UI proof declaration authority.');
+    assert.match(verifyContent, /ui_proof_slots: \[\][\s\S]{0,140}no_ui_proof_rationale/i, 'verify.md must require a no-UI rationale for empty UI proof slots.');
+    assert.match(verifyContent, /no matching PLAN\.md or SUMMARY\.md/i, 'verify.md must fail closed on missing phase prerequisites.');
     assert.match(verifierRole, /For UI proof slots, fail closed/i, 'verifier role must fail closed on weak UI proof.');
   });
 

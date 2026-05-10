@@ -563,13 +563,14 @@ describe('gsdd init and update', () => {
 
     assert.match(launcher, /import \{ cmdFileOp \} from '\.\/lib\/file-ops\.mjs';/);
     assert.match(launcher, /import \{ cmdLifecyclePreflight \} from '\.\/lib\/lifecycle-preflight\.mjs';/);
-    assert.match(launcher, /import \{ cmdPhaseStatus \} from '\.\/lib\/phase\.mjs';/);
+    assert.match(launcher, /import \{ cmdPhaseStatus, cmdVerify \} from '\.\/lib\/phase\.mjs';/);
     assert.match(launcher, /import \{ bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext \} from '\.\/lib\/workspace-root\.mjs';/);
     assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\);/);
     assert.doesNotMatch(launcher, /from 'gsdd-cli'/);
     assert.doesNotMatch(launcher, /from 'gsdd'/);
     assert.match(launcher, /Usage: node \.planning\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
     assert.match(launcher, /file-op <copy\|delete\|regex-sub>/);
+    assert.match(launcher, /verify <N>\s+Run direct phase artifact and UI-proof gate checks/);
     assert.doesNotMatch(launcher, /\.agents\/bin\/gsdd\.mjs/);
     assert.doesNotMatch(launcher, /where\.exe/);
     assert.doesNotMatch(launcher, /gsdd\.cmd/);

@@ -210,42 +210,118 @@ function normalizeUiProofIssue(issue) {
   };
 }
 
-function planDeclaresUiProofSlots(planContent) {
-  const match = String(planContent || '').match(/(^|\n)ui_proof_slots:[ \t]*([^\n]*)/);
-  if (!match) return false;
-  const inlineValue = match[2].replace(/\s+#.*$/, '').trim();
-  if (inlineValue) return !['[]', 'null', '~'].includes(inlineValue);
-  const after = String(planContent || '').slice(match.index + match[0].length).split(/\r?\n/);
-  for (const line of after) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    if (trimmed === '---' || trimmed === '...') break;
-    if (/^\s+-\s+/.test(line)) return true;
-    if (/^\S[^:\n]*:\s*/.test(line) || /^\S/.test(line)) break;
-  }
-  return false;
+function stripInlineComment(value) {
+  return String(value || '').replace(/\s+#.*$/, '').trim();
 }
 
-function extractDeclaredUiProofSlotIds(planContent) {
-  const match = String(planContent || '').match(/(^|\n)ui_proof_slots:[ \t]*([^\n]*)/);
-  if (!match) return [];
-  const after = String(planContent || '').slice(match.index + match[0].length).split(/\r?\n/);
-  const slotIds = [];
-  for (const line of after) {
+function stripOuterScalarQuotes(value) {
+  return String(value)
+    .trim()
+    .replace(/^(['"])([\s\S]*)\1$/g, '$2')
+    .trim();
+}
+
+function normalizeNullableFrontmatterValue(value) {
+  const stripped = stripOuterScalarQuotes(value);
+  if (!stripped) return '';
+  if (stripped === '~') return '';
+  if (/^null$/i.test(stripped)) return '';
+  return stripped;
+}
+
+function extractUiProofSlotIds(value) {
+  const ids = [];
+  const slotPattern = /['"]?slot_id['"]?\s*:\s*['"]?([^,'"\]\s}]+)['"]?/g;
+  for (const match of String(value || '').matchAll(slotPattern)) {
+    ids.push(match[1].replace(/^['"]|['"]$/g, ''));
+  }
+  return ids;
+}
+
+function readPlanFrontmatter(planContent) {
+  const content = String(planContent || '');
+  if (!content.startsWith('---')) return '';
+  const lines = content.split(/\r?\n/);
+  const frontmatter = [];
+  for (let index = 1; index < lines.length; index += 1) {
+    if (lines[index].trim() === '---') return frontmatter.join('\n');
+    frontmatter.push(lines[index]);
+  }
+  return '';
+}
+
+function frontmatterKeyBlock(frontmatter, key) {
+  const lines = String(frontmatter || '').split(/\r?\n/);
+  const keyPattern = new RegExp(`^${key}:[ \\t]*(.*)$`);
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(keyPattern);
+    if (!match) continue;
+    const block = [];
+    for (let next = index + 1; next < lines.length; next += 1) {
+      const line = lines[next];
+      if (/^\S[^:\n]*:\s*/.test(line)) break;
+      block.push(line);
+    }
+    return { inline: stripInlineComment(match[1]), block };
+  }
+  return null;
+}
+
+function frontmatterScalar(frontmatter, key) {
+  const entry = frontmatterKeyBlock(frontmatter, key);
+  if (!entry) return null;
+  if (entry.inline && !['|', '>'].includes(entry.inline)) return entry.inline;
+  return entry.block
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+}
+
+function readPlanUiProofContract(planContent) {
+  const frontmatter = readPlanFrontmatter(planContent);
+  const slotsEntry = frontmatterKeyBlock(frontmatter, 'ui_proof_slots');
+  const rationale = normalizeNullableFrontmatterValue(frontmatterScalar(frontmatter, 'no_ui_proof_rationale') || '');
+  const result = {
+    hasUiProofKey: Boolean(slotsEntry),
+    declaresSlots: false,
+    explicitEmptySlots: false,
+    noUiProofRationale: rationale,
+    hasNoUiProofRationale: Boolean(rationale.trim()),
+    slotIds: [],
+  };
+
+  if (!slotsEntry) return result;
+
+  if (slotsEntry.inline) {
+    if (['[]', 'null', '~'].includes(slotsEntry.inline)) {
+      result.explicitEmptySlots = true;
+      return result;
+    }
+    result.declaresSlots = true;
+    result.slotIds.push(...extractUiProofSlotIds(slotsEntry.inline));
+    return result;
+  }
+
+  let sawMeaningfulLine = false;
+  for (const line of slotsEntry.block) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
-    if (trimmed === '---' || trimmed === '...') break;
-    if (/^\S[^:\n]*:\s*/.test(line) || /^\S/.test(line)) break;
-    const slotMatch = trimmed.match(/(?:^-\s*)?slot_id:\s*([^#\s]+)/);
-    if (slotMatch) slotIds.push(slotMatch[1].replace(/^['"]|['"]$/g, ''));
+    sawMeaningfulLine = true;
+    if (/^\s+-\s+/.test(line)) result.declaresSlots = true;
+    result.slotIds.push(...extractUiProofSlotIds(trimmed));
   }
-  return slotIds;
+
+  result.explicitEmptySlots = !result.declaresSlots && !sawMeaningfulLine;
+  return result;
 }
 
 function findUiProofSlotPlansAndFiles(planningDir, planDisplayPaths) {
   const candidates = new Set();
   const declaredPlans = [];
   const declaredSlotIds = [];
+  const noUiPlans = [];
+  const contractErrors = [];
   const names = new Set([
     'ui-proof-slots.json',
     'ui-proof-slots.md',
@@ -259,21 +335,45 @@ function findUiProofSlotPlansAndFiles(planningDir, planDisplayPaths) {
     const fullPlanPath = join(planningDir, 'phases', planDisplayPath);
     if (!existsSync(fullPlanPath)) continue;
     const planContent = readFileSync(fullPlanPath, 'utf-8');
-    if (!planDeclaresUiProofSlots(planContent)) continue;
     const relPlanPath = relative(planningDir, fullPlanPath).replace(/\\/g, '/');
+    const contract = readPlanUiProofContract(planContent);
+    const planDir = dirname(fullPlanPath);
+    const sidecars = [];
+    if (existsSync(planDir)) {
+      for (const entry of readdirSync(planDir, { withFileTypes: true })) {
+        if (entry.isFile() && names.has(entry.name)) {
+          sidecars.push(join(planDir, entry.name));
+        }
+      }
+    }
+
+    if (contract.hasUiProofKey && !contract.declaresSlots && !contract.hasNoUiProofRationale) {
+      contractErrors.push(normalizeUiProofIssue({
+        code: 'missing_no_ui_proof_rationale',
+        path: `${relPlanPath}.no_ui_proof_rationale`,
+        message: 'Plan declares empty ui_proof_slots but does not provide a no_ui_proof_rationale.',
+        fix: 'Add a nonblank no_ui_proof_rationale for non-UI work, or declare required UI proof slots and add a planned slots artifact.',
+      }));
+    }
+
+    if (contract.hasNoUiProofRationale && !contract.declaresSlots) {
+      noUiPlans.push({ plan: relPlanPath, sidecars });
+      continue;
+    }
+
+    if (!contract.declaresSlots) continue;
+
     declaredPlans.push(relPlanPath);
-    for (const slotId of extractDeclaredUiProofSlotIds(planContent)) {
+    for (const slotId of contract.slotIds) {
       declaredSlotIds.push({ plan: relPlanPath, slot_id: slotId });
     }
-    const planDir = dirname(fullPlanPath);
-    if (!existsSync(planDir)) continue;
     for (const entry of readdirSync(planDir, { withFileTypes: true })) {
       if (entry.isFile() && names.has(entry.name)) {
         candidates.add(join(planDir, entry.name));
       }
     }
   }
-  return { declaredPlans, declaredSlotIds, files: [...candidates].sort() };
+  return { declaredPlans, declaredSlotIds, noUiPlans, contractErrors, files: [...candidates].sort() };
 }
 
 function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
@@ -285,8 +385,22 @@ function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
 
   const plannedSlots = [];
   const errors = [];
+  const warnings = [];
   const planned = [];
   const observed = [];
+
+  errors.push(...plannedDiscovery.contractErrors);
+  for (const noUiPlan of plannedDiscovery.noUiPlans) {
+    for (const filePath of noUiPlan.sidecars) {
+      warnings.push({
+        code: 'stale_ui_proof_sidecar_ignored',
+        severity: 'warn',
+        path: relative(workspaceRoot, filePath).replace(/\\/g, '/'),
+        message: `Plan ${noUiPlan.plan} records no_ui_proof_rationale, so the UI proof sidecar is ignored for closure.`,
+        fix_hint: 'Remove or classify the stale sidecar if it no longer belongs to this non-UI phase.',
+      });
+    }
+  }
 
   for (const filePath of plannedFiles) {
     const rel = relative(workspaceRoot, filePath).replace(/\\/g, '/');
@@ -343,6 +457,7 @@ function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
       status: 'missing',
       comparison: { status: 'missing', slots: [], errors: [missingError] },
       errors: [missingError],
+      warnings,
     };
   }
 
@@ -350,9 +465,10 @@ function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
     return {
       planned,
       observed,
-      status: 'not_applicable',
+      status: errors.length > 0 ? 'partial' : 'not_applicable',
       comparison: null,
       errors,
+      warnings,
     };
   }
 
@@ -366,6 +482,7 @@ function comparePhaseUiProof({ planningDir, workspaceRoot, planDisplayPaths }) {
     status: comparison.status,
     comparison,
     errors: comparison.errors || errors,
+    warnings,
   };
 }
 
@@ -534,26 +651,41 @@ export function cmdFindPhase(...args) {
   });
 }
 
-export function cmdVerify(...args) {
+export function buildPhaseVerificationReport(...args) {
   const { args: normalizedArgs, workspaceRoot, planningDir, invalid, error } = resolveWorkspaceContext(args);
   if (invalid) {
-    console.error(error);
-    process.exitCode = 1;
-    return;
+    return { ok: false, error, exitCode: 1 };
   }
   const phaseNum = normalizedArgs[0];
   if (!phaseNum) {
-    console.error('Usage: gsdd verify <phase-number>');
-    process.exitCode = 1; return;
+    return { ok: false, error: 'Usage: gsdd verify <phase-number>', exitCode: 1 };
   }
 
   if (!existsSync(planningDir)) {
-    console.error('No .planning/ directory found.');
-    process.exitCode = 1; return;
+    return { ok: false, error: 'No .planning/ directory found.', exitCode: 1 };
   }
   const phasesDir = join(planningDir, 'phases');
   const matchingPlans = findFiles(phasesDir, `${padPhase(phaseNum)}-PLAN`);
   const matchingSummaries = findFiles(phasesDir, `${padPhase(phaseNum)}-SUMMARY`);
+  const prerequisiteBlockers = [];
+  if (matchingPlans.length === 0) {
+    prerequisiteBlockers.push({
+      code: 'missing_phase_plan',
+      severity: 'blocker',
+      path: `.planning/phases/${padPhase(phaseNum)}-*/${padPhase(phaseNum)}-PLAN.md`,
+      message: `No PLAN.md artifact was found for phase ${normalizePhaseToken(phaseNum)}.`,
+      fix_hint: `Run /gsdd-plan ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
+    });
+  }
+  if (matchingPlans.length > 0 && matchingSummaries.length === 0) {
+    prerequisiteBlockers.push({
+      code: 'missing_phase_summary',
+      severity: 'blocker',
+      path: `.planning/phases/${padPhase(phaseNum)}-*/${padPhase(phaseNum)}-SUMMARY.md`,
+      message: `No SUMMARY.md artifact was found for phase ${normalizePhaseToken(phaseNum)}.`,
+      fix_hint: `Run /gsdd-execute ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
+    });
+  }
   const artifacts = matchingPlans.flatMap((planPath) => {
     const fullPath = join(phasesDir, planPath);
     return existsSync(fullPath)
@@ -576,10 +708,11 @@ export function cmdVerify(...args) {
     required_block: uiProof.status !== 'not_applicable' && !uiProofSatisfied ? 'ui-proof-failed' : null,
   };
   const blockedOn = [
+    ...(prerequisiteBlockers.length > 0 ? ['prerequisites'] : []),
     ...(artifactStatus.satisfied ? [] : ['artifacts']),
     ...(uiProofGate.blocks_verification ? ['ui_proof'] : []),
   ];
-  const closureVerified = legacyVerified && artifactStatus.satisfied && uiProofSatisfied;
+  const closureVerified = legacyVerified && prerequisiteBlockers.length === 0 && artifactStatus.satisfied && uiProofSatisfied;
 
   const result = {
     phase: normalizePhaseToken(phaseNum),
@@ -593,12 +726,26 @@ export function cmdVerify(...args) {
     verified: closureVerified,
     legacy_verified: legacyVerified,
     phase_artifacts_present: legacyVerified,
+    prerequisite_status: {
+      satisfied: prerequisiteBlockers.length === 0,
+      blockers: prerequisiteBlockers,
+    },
     ui_proof: uiProofGate,
     blocked_on: blockedOn,
     blocks_verification: blockedOn.length > 0,
   };
-  output(result);
-  if (!closureVerified && legacyVerified) process.exitCode = 1;
+  return { ok: true, result, exitCode: closureVerified ? 0 : 1 };
+}
+
+export function cmdVerify(...args) {
+  const report = buildPhaseVerificationReport(...args);
+  if (!report.ok) {
+    console.error(report.error);
+    process.exitCode = report.exitCode;
+    return;
+  }
+  output(report.result);
+  if (report.exitCode !== 0) process.exitCode = report.exitCode;
 }
 
 export function cmdScaffold(...args) {

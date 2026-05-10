@@ -968,6 +968,17 @@ describe('Health — JSON output mode', () => {
     assert.ok(Array.isArray(json.warnings));
     assert.ok(Array.isArray(json.info));
   });
+
+  test('buildHealthReport matches JSON command output', async () => {
+    await initWorkspace();
+    const gsdd = await loadGsdd(tmpDir);
+    const healthModule = await import(`file://${path.join(__dirname, '..', 'bin', 'lib', 'health.mjs').replace(/\\/g, '/')}`);
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const built = healthModule.buildHealthReport(gsdd.createCliContext(tmpDir), ['--workspace-root', tmpDir]);
+
+    assert.deepStrictEqual(built, json);
+  });
 });
 
 describe('Health — verdict logic', () => {
@@ -1003,6 +1014,8 @@ describe('Health — human-readable output', () => {
   test('default output includes verdict line', async () => {
     await initWorkspace();
     const result = await runCliAsMain(tmpDir, ['health']);
+    assert.match(result.output, /gsdd health - workspace integrity check/);
+    assert.doesNotMatch(result.output, /â€”/);
     assert.match(result.output, /Verdict:/);
     assert.match(result.output, /HEALTHY/);
   });

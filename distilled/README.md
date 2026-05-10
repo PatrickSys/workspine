@@ -77,6 +77,8 @@ Helper command for long-running sessions:
 
 ```
 npx -y gsdd-cli control-map [--json] [--with-ignored] -> computed repo/worktree/planning state plus local annotations
+npx -y gsdd-cli control-map annotate set|clear -> optional stale-aware local intent maintenance
+npx -y gsdd-cli closeout-report [--json] [--phase <N>] -> read-only replay of closeout blockers, warnings, and next safe action
 ```
 
 ## Brownfield Entry Contract
@@ -109,7 +111,7 @@ Use the same three-way routing everywhere:
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
 - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.planning/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
-- `control-map` is a helper command, not a lifecycle workflow: it computes repo/worktree/planning truth first and treats `.planning/.local/` annotations as local intent only.
+- `control-map` is a helper command, not a lifecycle workflow: it computes repo/worktree/planning truth first and treats `.planning/.local/` annotations as local intent only. `control-map annotate` can maintain those annotations, but cannot create ownership, cleanup, or lifecycle authority.
 - Codex VS Code/app are separate surfaces from Codex CLI; do not claim the CLI proof for them unless they expose compatible skill discovery. Fallback is opening or pasting the generated `SKILL.md`.
 - `npx -y gsdd-cli health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `npx -y gsdd-cli update`.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.

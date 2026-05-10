@@ -18,6 +18,50 @@ function cleanup(tmpDir) {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 }
 
+function git(args, cwd) {
+  return execFileSync('git', args, { cwd, encoding: 'utf-8' }).trim();
+}
+
+function writeProjectFile(root, relativePath, content) {
+  const fullPath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  fs.writeFileSync(fullPath, content);
+}
+
+function initPreflightGitWorkspace(root) {
+  git(['init'], root);
+  git(['config', 'user.email', 'test@example.com'], root);
+  git(['config', 'user.name', 'Test User'], root);
+  git(['config', 'core.autocrlf', 'false'], root);
+  writeProjectFile(root, '.gitignore', '.planning/\n');
+  writeProjectFile(root, 'README.md', '# Test repo\n');
+  git(['add', '.gitignore', 'README.md'], root);
+  git(['commit', '-m', 'initial'], root);
+  try {
+    git(['branch', '-M', 'main'], root);
+  } catch {
+    // The preflight tests do not depend on the branch name.
+  }
+}
+
+function writePreflightPhase(root, phase = '30') {
+  const phaseDir = path.join(root, '.planning', 'phases', `${phase}-deterministic-lifecycle-gates`);
+  fs.mkdirSync(phaseDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(root, '.planning', 'ROADMAP.md'),
+    [
+      '# Roadmap',
+      '',
+      '### v1.3.0 Engine Contract Hardening',
+      '',
+      `- [ ] **Phase ${phase}: Deterministic Lifecycle Gates** - [ENGINE-02]`,
+    ].join('\n')
+  );
+  fs.writeFileSync(path.join(root, '.planning', 'SPEC.md'), '# Spec\n');
+  fs.writeFileSync(path.join(root, '.planning', 'config.json'), '{}\n');
+  fs.writeFileSync(path.join(phaseDir, `${phase}-PLAN.md`), '# plan\n');
+}
+
 async function importLifecycleStateModule() {
   return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'lifecycle-state.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 }
@@ -36,6 +80,10 @@ async function importRuntimeFreshnessModule() {
 
 async function importUiProofModule() {
   return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'ui-proof.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
+async function importPhaseModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'phase.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 }
 
 async function importSessionFingerprintModule() {
@@ -433,6 +481,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /file-op <copy\|delete\|regex-sub>/);
     assert.match(result.output, /phase-status <N> <status>/);
+    assert.match(result.output, /verify <N>/);
     assert.match(result.output, /lifecycle-preflight <surface> \[phase]/);
     assert.match(result.output, /ui-proof validate <path>/);
     assert.match(result.output, /ui-proof compare <planned-slots-json>/);
@@ -455,9 +504,47 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     const output = result.stdout;
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs file-op/);
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs phase-status/);
+    assert.match(output, /node \.planning\/bin\/gsdd\.mjs verify 1/);
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
     assert.match(output, /ui-proof compare <planned-slots-json>/);
     assert.doesNotMatch(output, /\.agents\/bin\/gsdd\.mjs/);
+  });
+
+  test('repo-local helper supports control-map annotation mutation from a nested cwd', async () => {
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(initResult.exitCode, 0, initResult.output);
+    initPreflightGitWorkspace(tmpDir);
+
+    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const nestedDir = path.join(tmpDir, 'apps', 'nested');
+    fs.mkdirSync(nestedDir, { recursive: true });
+
+    let result = spawnSync(process.execPath, [
+      helperPath,
+      'control-map',
+      'annotate',
+      'set',
+      '--id',
+      'canonical',
+      '--write-set',
+      'src/app.js',
+    ], {
+      cwd: nestedDir,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    let output = JSON.parse(result.stdout);
+    assert.strictEqual(output.operation, 'control-map annotate set');
+    assert.strictEqual(output.annotation.id, 'canonical');
+
+    result = spawnSync(process.execPath, [helperPath, 'control-map', '--json'], {
+      cwd: nestedDir,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    output = JSON.parse(result.stdout);
+    assert.strictEqual(output.canonical_worktree.annotation.id, 'canonical');
+    assert.deepStrictEqual(output.canonical_worktree.annotation.write_set, ['src/app.js']);
   });
 
   test('a later successful in-process CLI run clears an earlier phase-command failure exit code', async () => {
@@ -848,13 +935,14 @@ describe('Phase 29 lifecycle-state helper', () => {
     );
 
     const result = await runCliAsMain(tmpDir, ['verify', '47']);
-    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(result.exitCode, 1, result.output);
 
     const output = JSON.parse(result.output);
     assert.strictEqual(output.exists, false);
     assert.deepStrictEqual(output.plans, [],
       'phase CLI must not treat IMPLEMENTATION-PLAN handoff files as executable plans. FIX: keep phase.mjs classifier exact-name based.');
     assert.strictEqual(output.verified, false);
+    assert.ok(output.prerequisite_status.blockers.some((blocker) => blocker.code === 'missing_phase_plan'));
   });
 
   test('derives active brownfield change continuity from CHANGE.md and HANDOFF.md without a roadmap', async () => {
@@ -1094,6 +1182,102 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.explicitLifecycleMutation, 'phase-status');
     assert.deepStrictEqual(output.ownedWrites, ['summary']);
     assert.strictEqual(output.phase, '30');
+  });
+
+  test('owned-write preflight reports control-map warnings without blocking ordinary dirty state', async () => {
+    initPreflightGitWorkspace(tmpDir);
+    writePreflightPhase(tmpDir);
+    writeProjectFile(tmpDir, 'notes.md', 'local note\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.controlMap.blockerCount, 0);
+    assert.ok(output.controlMap.warningCount > 0);
+    assert.ok(output.warnings.some((warning) => warning.source === 'control-map' && warning.code === 'canonical_dirty'));
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'canonical_dirty'));
+  });
+
+  test('owned-write preflight blocks on block-level control-map overlap risks', async () => {
+    initPreflightGitWorkspace(tmpDir);
+    writePreflightPhase(tmpDir);
+    writeProjectFile(tmpDir, '.planning/.local/control-map.annotations.json', JSON.stringify({
+      schema_version: 1,
+      worktrees: [{
+        id: 'canonical',
+        path: '.',
+        cleanup_state: 'active',
+        write_set: ['src/app.js'],
+      }],
+    }, null, 2));
+    writeProjectFile(tmpDir, 'src/app.js', 'dirty implementation\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, false);
+    assert.strictEqual(output.reason, 'dirty_path_write_set_overlap');
+    assert.ok(output.controlMap.blockerCount > 0);
+    const blocker = output.blockers.find((entry) => entry.code === 'dirty_path_write_set_overlap');
+    assert.ok(blocker);
+    assert.strictEqual(blocker.source, 'control-map');
+    assert.strictEqual(blocker.severity, 'block');
+    assert.ok(blocker.risk.overlaps.some((overlap) => overlap.write_path === 'src/app.js' && overlap.dirty_path === 'src/app.js'));
+  });
+
+  test('read-only progress does not consume control-map risks as blockers', async () => {
+    initPreflightGitWorkspace(tmpDir);
+    writePreflightPhase(tmpDir);
+    writeProjectFile(tmpDir, '.planning/.local/control-map.annotations.json', JSON.stringify({
+      schema_version: 1,
+      worktrees: [{
+        id: 'canonical',
+        path: '.',
+        cleanup_state: 'active',
+        write_set: ['src/app.js'],
+      }],
+    }, null, 2));
+    writeProjectFile(tmpDir, 'src/app.js', 'dirty implementation\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'progress']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.classification, 'read_only');
+    assert.strictEqual(output.controlMap, null);
+    assert.ok(!output.blockers.some((blocker) => blocker.source === 'control-map'));
+  });
+
+  test('generated local helper lifecycle-preflight includes control-map risk consumption', async () => {
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(initResult.exitCode, 0, initResult.output);
+    initPreflightGitWorkspace(tmpDir);
+    writePreflightPhase(tmpDir);
+    writeProjectFile(tmpDir, '.planning/.local/control-map.annotations.json', JSON.stringify({
+      schema_version: 1,
+      worktrees: [{
+        id: 'canonical',
+        path: '.',
+        cleanup_state: 'active',
+        write_set: ['src/app.js'],
+      }],
+    }, null, 2));
+    writeProjectFile(tmpDir, 'src/app.js', 'dirty implementation\n');
+
+    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const result = spawnSync(process.execPath, [helperPath, 'lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status'], {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(result.status, 1, result.stderr || result.stdout);
+
+    const output = JSON.parse(result.stdout);
+    assert.strictEqual(output.reason, 'dirty_path_write_set_overlap');
+    assert.ok(output.blockers.some((blocker) => blocker.source === 'control-map' && blocker.code === 'dirty_path_write_set_overlap'));
   });
 
   test('allows plan when the target phase has no summary and no explicit lifecycle mutation', async () => {
@@ -2103,6 +2287,10 @@ describe('verify command nested phase plans', () => {
       path.join(tmpDir, 'src', 'example.js'),
       ['const a = 1;', 'const b = 2;', 'export const sum = a + b;'].join('\n')
     );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-SUMMARY.md'),
+      '# Phase 34 Summary\n'
+    );
 
     const result = await runCliAsMain(tmpDir, ['verify', '34']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -2127,6 +2315,10 @@ describe('verify command nested phase plans', () => {
     );
     fs.writeFileSync(path.join(tmpDir, 'src', 'new.js'), 'export const renamed = true;\n');
     fs.writeFileSync(path.join(tmpDir, 'src', 'b.js'), 'export const moved = true;\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-SUMMARY.md'),
+      '# Phase 34 Summary\n'
+    );
 
     const result = await runCliAsMain(tmpDir, ['verify', '34']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -3357,6 +3549,74 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.ok(output.slots.find((slot) => slot.slot_id === 'ui-58-human-bypass-blocked').issues.some((issue) => issue.code === 'human_evidence_cannot_bypass_required_non_human_evidence'));
   });
 
+  test('phase verify fails closed when no matching plan exists', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+
+    const result = await runCliAsMain(tmpDir, ['verify', '9999']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.strictEqual(output.exists, false);
+    assert.deepStrictEqual(output.blocked_on, ['prerequisites']);
+    assert.strictEqual(output.prerequisite_status.satisfied, false);
+    assert.ok(output.prerequisite_status.blockers.some((blocker) => blocker.code === 'missing_phase_plan'));
+  });
+
+  test('phase verify fails closed when summary is missing', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-summary-missing');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots: []\nno_ui_proof_rationale: CLI-only work.\n---\n# Phase 1 Plan\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.strictEqual(output.legacy_verified, false);
+    assert.deepStrictEqual(output.blocked_on, ['prerequisites']);
+    assert.ok(output.prerequisite_status.blockers.some((blocker) => blocker.code === 'missing_phase_summary'));
+  });
+
+  test('generated local helper runs direct phase verify checks', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-helper-verify');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots: []\nno_ui_proof_rationale: CLI-only helper verification.\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const result = spawnSync(process.execPath, [helperPath, 'verify', '1'], {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    const output = JSON.parse(result.stdout);
+
+    assert.strictEqual(output.verified, true);
+    assert.strictEqual(output.ui_proof.status, 'not_applicable');
+  });
+
+  test('phase verification builder matches direct verify result shape', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-builder-verify');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots: []\nno_ui_proof_rationale: CLI-only builder verification.\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const phase = await importPhaseModule();
+    const built = phase.buildPhaseVerificationReport('--workspace-root', tmpDir, '1');
+    const cli = await runCliAsMain(tmpDir, ['verify', '1']);
+    const output = JSON.parse(cli.output);
+
+    assert.strictEqual(built.ok, true);
+    assert.strictEqual(built.exitCode, 0);
+    assert.deepStrictEqual(built.result.ui_proof, output.ui_proof);
+    assert.strictEqual(built.result.verified, output.verified);
+    assert.deepStrictEqual(built.result.blocked_on, output.blocked_on);
+  });
+
   test('phase verify includes UI proof comparison and blocks closure when planned proof is missing', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-ui-proof');
@@ -3385,6 +3645,34 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.ok(output.uiProof.comparison.slots[0].issues.some((issue) => issue.code === 'missing_observed_bundle'));
   });
 
+  test('phase verify ignores body and fenced ui proof examples as declaration authority', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-fenced-example');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), [
+      '---',
+      'no_ui_proof_rationale: CLI-only verification helper work.',
+      '---',
+      '# Phase 1 Plan',
+      '',
+      'The example below must not declare UI proof intent.',
+      '```yaml',
+      'ui_proof_slots:',
+      '  - slot_id: ui-58-valid-scoped-proof',
+      '```',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, true);
+    assert.strictEqual(output.ui_proof.status, 'not_applicable');
+    assert.strictEqual(output.ui_proof.required, false);
+  });
+
   test('phase verify blocks when a plan declares UI proof slots without a planned slots artifact', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-ui-proof');
@@ -3404,6 +3692,73 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.ok(missingError);
     assert.strictEqual(missingError.severity, 'blocker');
     assert.match(missingError.fix_hint, /ui-proof-slots/);
+  });
+
+  test('phase verify blocks empty ui proof slots without a no-UI rationale', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-empty-ui-proof');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots: []\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.deepStrictEqual(output.blocked_on, ['ui_proof']);
+    assert.strictEqual(output.ui_proof.status, 'partial');
+    assert.ok(output.uiProof.errors.some((error) => error.code === 'missing_no_ui_proof_rationale'));
+  });
+
+  test('phase verify treats null-like no_ui_proof_rationale values as missing', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const placeholderRationales = ['null', '~', '"null"', "'null'", '""', "''", '"~"'];
+    for (let index = 0; index < placeholderRationales.length; index += 1) {
+      const phase = String(10 + index).padStart(2, '0');
+      const phaseDir = path.join(tmpDir, '.planning', 'phases', `${phase}-empty-ui-proof-placeholder`);
+      fs.mkdirSync(phaseDir, { recursive: true });
+      fs.writeFileSync(path.join(phaseDir, `${phase}-PLAN.md`), [
+        '---',
+        'ui_proof_slots: []',
+        `no_ui_proof_rationale: ${placeholderRationales[index]}`,
+        '---',
+        '# Phase Plan',
+      ].join('\n'));
+      fs.writeFileSync(path.join(phaseDir, `${phase}-SUMMARY.md`), '# Phase Summary\n');
+
+      const result = await runCliAsMain(tmpDir, ['verify', String(parseInt(phase, 10))]);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      const output = JSON.parse(result.output);
+
+      assert.deepStrictEqual(output.blocked_on, ['ui_proof']);
+      assert.strictEqual(output.ui_proof.status, 'partial');
+      assert.ok(output.uiProof.errors.some((error) => error.code === 'missing_no_ui_proof_rationale'));
+      assert.ok(output.prerequisite_status.satisfied);
+    }
+  });
+
+  test('phase verify reads all inline ui proof slot ids before comparing planned slots', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-inline-ui-proof-slots');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), [
+      '---',
+      'ui_proof_slots: [{slot_id: ui-58-valid-scoped-proof}, {slot_id: ui-58-missing-or-botched-proof}]',
+      '---',
+      '# Phase 1 Plan',
+    ].join('\n'));
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    fs.writeFileSync(path.join(phaseDir, 'ui-proof-slots.json'), JSON.stringify({
+      ui_proof_slots: plannedSlots().slice(0, 2),
+    }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.ok(!output.uiProof.errors.some((error) => error.code === 'planned_ui_proof_slots_drift'));
+    assert.strictEqual(output.ui_proof.status, 'missing');
   });
 
   test('phase verify blocks when planned file artifacts are unsatisfied', async () => {
@@ -3470,6 +3825,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.strictEqual(output.blocks_verification, false);
     assert.strictEqual(output.ui_proof.status, 'not_applicable');
     assert.deepStrictEqual(output.uiProof.planned, []);
+    assert.ok(output.uiProof.warnings.some((warning) => warning.code === 'stale_ui_proof_sidecar_ignored'));
   });
 
   test('phase verify blocks stale planned UI proof sidecars that drift from plan-declared slot ids', async () => {
