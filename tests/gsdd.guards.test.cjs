@@ -2580,7 +2580,7 @@ describe('G11b - Launch Claim Hardening', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     assert.doesNotMatch(readme, /\*\*Works with Claude Code, OpenCode, Codex CLI, Cursor, Copilot, and Gemini CLI\.\*\*/i,
       'README.md must not use the old broad all-runtime top-line claim. FIX: Replace it with proof-split wording.');
-    assert.match(readme, /Directly validated today:.*Claude Code.*Codex CLI.*OpenCode/i,
+    assert.match(readme, /Directly validated (?:today|in this release):.*Claude Code.*Codex CLI.*OpenCode/i,
       'README.md must name the directly validated runtimes. FIX: Add plain proof-split wording near the top.');
     assert.match(readme, /Qualified support:.*Cursor.*Copilot.*Gemini/i,
       'README.md must distinguish qualified support runtimes. FIX: Add the qualified-support line near the top.');

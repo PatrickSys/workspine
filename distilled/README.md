@@ -1,8 +1,26 @@
 # Workspine
 
-A repo-native delivery spine for planning, checking, execution, verification, and handoff of long-horizon AI-assisted work.
+A repo-native delivery spine for the part of AI coding that still needs human judgment: planning, checking, execution, verification, and handoff.
 
 Workspine keeps planning, execution, verification, handoff, and progress state in the repo so work survives cold starts, runtime switches, and session loss. The retained package and CLI contracts remain `gsdd-cli` / `gsdd`.
+
+## Why It Matters
+
+AI coding agents make code cheaper to produce. They do not make architecture, scope control, review, security, or release confidence disappear. In practice, they move more of the work into deciding what should happen, checking whether it happened, and preserving enough context for the next session or runtime to continue safely.
+
+Workspine is built for that pressure. It gives serious AI-assisted work one repo-native path:
+
+```
+new-project -> plan -> execute -> verify
+```
+
+The plan is a reviewed contract before implementation starts. Execution is a separate step. Verification records what passed, what failed, and what still needs human judgment.
+
+## When To Use It
+
+Use Workspine when a change spans multiple files, sessions, agents, or runtimes; when architecture, data, security, or release confidence matter; or when proof needs to live in the repo instead of only in a chat transcript.
+
+Skip the full lifecycle for tiny, obvious edits. Direct prompting in your usual coding agent is cheaper for low-risk work. Workspine is for the work where guessing gets expensive.
 
 ## What This Is
 
