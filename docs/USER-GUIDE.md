@@ -4,8 +4,22 @@ A detailed reference for Workspine workflows, troubleshooting, and configuration
 
 ---
 
+## Fast Path
+
+For a new project or a broad brownfield effort:
+
+1. Run `npx -y gsdd-cli init` from the repo root.
+2. Start with `gsdd-new-project` unless the change is already small and concrete.
+3. Review the plan from `gsdd-plan` before starting `gsdd-execute`.
+4. Run `gsdd-verify` before calling the phase done.
+
+For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky repo, use `gsdd-map-codebase` before choosing between `gsdd-quick` and `gsdd-new-project`.
+
+---
+
 ## Table of Contents
 
+- [Fast Path](#fast-path)
 - [Workflow Diagrams](#workflow-diagrams)
 - [Command Reference](#command-reference)
 - [Configuration Reference](#configuration-reference)

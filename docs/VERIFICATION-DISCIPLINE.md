@@ -2,6 +2,8 @@
 
 Workspine is not just a set of prompts. Its core delivery claim depends on explicit checking and verification loops that survive across runtimes.
 
+AI output is cheap enough that the scarce part is often proof: whether the change fits the codebase, whether the right behavior is wired in, and whether the remaining risk is visible to a human reviewer. Workspine treats that proof as part of the workflow, not as an optional cleanup note.
+
 ## The delivery contract
 
 The durable loop is:
@@ -46,7 +48,7 @@ See `docs/BROWNFIELD-PROOF.md` for the reader-facing narrative and `docs/proof/c
 
 ## What this note does and does not claim
 
-This note explains the release-floor discipline that Workspine can prove publicly today.
+This note explains the release-floor discipline that Workspine can prove publicly in this release.
 
 It does **not** claim:
 

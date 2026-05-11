@@ -2,7 +2,9 @@
 
 # Workspine
 
-**AI development that stays consistent across agents and sessions.** Plans are checked, work is verified, and progress is tracked in the repo.
+**For the moment after "the agent can write code" stops being enough.**
+
+Workspine keeps planning, checking, execution, verification, and handoff in your repo so AI-assisted work survives long sessions, tool switches, and cold starts.
 
 [![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
@@ -11,12 +13,41 @@
 npx -y gsdd-cli init
 ```
 
-**Directly validated today:** Claude Code, Codex CLI, and OpenCode.
+**Directly validated in this release:** Claude Code, Codex CLI, and OpenCode.
+
 **Qualified support:** Cursor, Copilot, and Gemini CLI can use the shared `.agents/skills/` surface when their skill or slash discovery sees it; this release does not claim the same runtime proof or ergonomics.
 
 </div>
 
-One repo-native spine for planning, checking, execution, verification, and handoff — so AI-assisted work survives cold starts, runtime switches, and session loss.
+---
+
+## Why Workspine Exists
+
+AI coding agents are getting good at producing code. That does not make software delivery easy. It moves the hard work into the parts humans still need to own: architecture, tradeoffs, scope, review, security, and proof that the change actually works.
+
+That pattern is showing up across the industry. Google's DORA 2025 report calls AI an amplifier of existing team strengths and weaknesses. Sonar's 2026 developer survey names a verification bottleneck around AI-generated code. OpenAI, GitHub, Kiro, OpenSpec, LeanSpec, Tessl, Cursor, and others are all moving toward the same basic answer: agents need clearer intent, better context, and stronger review loops.
+
+Workspine's answer is a repo-native delivery spine. It does not try to replace your coding agent, editor, issue tracker, or review process. It gives them one durable path:
+
+```
+new-project -> plan -> execute -> verify
+```
+
+The plan is reviewed before code changes begin. Execution is an explicit separate step. Verification runs after implementation and records what passed, what failed, and what still needs human judgment.
+
+---
+
+## When To Use It
+
+Use Workspine when:
+
+- the change spans multiple files, sessions, agents, or runtimes
+- architecture, security, data, migrations, or release confidence matter
+- you want a human-reviewed plan before the agent writes code
+- you need proof and handoff artifacts in the repo, not only in a chat thread
+- you are working in an existing codebase and want the agent to fit the codebase instead of inventing a new shape
+
+Skip the full lifecycle for tiny edits. If the diff is obvious and low-risk, a direct prompt in Claude Code, Codex, Cursor, OpenCode, Copilot, or your usual agent is cheaper than process. Workspine is for the work where guessing gets expensive.
 
 ---
 
