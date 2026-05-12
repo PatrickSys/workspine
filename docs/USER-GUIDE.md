@@ -200,6 +200,7 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 | `npx -y gsdd-cli update [--tools <platform>]` | Regenerate skills/adapters from latest sources |
 | `npx -y gsdd-cli update --templates` | Refresh role contracts and delegates (warns about user modifications) |
 | `npx -y gsdd-cli control-map [--json] [--with-ignored]` | Show computed repo/worktree/planning state, dirty buckets, optional ignored-path scan, local annotations, and safe next interventions |
+| `npx -y gsdd-cli closeout-report [--json] [--phase <N>]` | Read-only closeout replay: blockers, warnings, fixes, and next safe action (composed from control-map, health/preflight, verify, and UI-proof signals) |
 | `npx -y gsdd-cli find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `npx -y gsdd-cli verify <N>` | Run artifact checks for phase N |
 | `npx -y gsdd-cli scaffold phase <N> [name]` | Create a new phase plan file |

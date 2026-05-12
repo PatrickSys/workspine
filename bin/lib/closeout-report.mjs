@@ -21,7 +21,7 @@ function notice(source, severity, entry) {
     severity,
     code: entry.code || entry.id || 'unknown',
     message: entry.message,
-    fix: entry.fix || entry.fix_hint || null,
+    fix: entry.fix_hint || entry.fix || null,
     path: entry.path || null,
   };
 }
@@ -160,18 +160,38 @@ function nextSafeAction({ blockers, warnings, phaseNumber }) {
   if (blockers.length > 0) {
     return {
       command: `gsdd verify ${phaseNumber}`,
-      reason: 'Repair blockers before treating closeout as replayed.',
+      reason: 'Fix blockers first, then re-run closeout replay.',
+    };
+  }
+  const hasWarn = warnings.some((entry) => entry.severity === 'warn');
+  if (warnings.length > 0 && hasWarn) {
+    const sources = new Set(warnings.filter((entry) => entry.severity === 'warn').map((entry) => entry.source));
+    if (sources.has('health')) {
+      return {
+        command: 'gsdd health --json',
+        reason: 'Resolve workspace health warnings before claiming the environment is clean.',
+      };
+    }
+    if (sources.has('ui_proof') || sources.has('phase_verification')) {
+      return {
+        command: `gsdd verify ${phaseNumber}`,
+        reason: 'Resolve phase verification warnings before claiming closeout is replay-clean.',
+      };
+    }
+    return {
+      command: 'gsdd control-map --json',
+      reason: 'Resolve local state warnings before claiming the environment is clean.',
     };
   }
   if (warnings.length > 0) {
     return {
       command: 'gsdd control-map --json',
-      reason: 'Review warnings before claiming the local environment is clean.',
+      reason: 'Review the informational notices before claiming the local environment is clean.',
     };
   }
   return {
     command: `gsdd verify ${phaseNumber}`,
-    reason: 'Phase implementation is replay-clean; run formal verification for closure if it has not already been recorded.',
+    reason: 'Closeout replay is clean; run formal verification for closure if it has not already been recorded.',
   };
 }
 
@@ -266,11 +286,17 @@ function printHuman(report) {
   console.log(`Status: ${report.status}`);
   if (report.blockers.length > 0) {
     console.log('\nBlockers:');
-    for (const blocker of report.blockers) console.log(`  - [${blocker.source}] ${blocker.code}: ${blocker.message}`);
+    for (const blocker of report.blockers) {
+      console.log(`  - [${blocker.source}] ${blocker.code}: ${blocker.message}`);
+      if (blocker.fix) console.log(`    Fix: ${blocker.fix}`);
+    }
   }
   if (report.warnings.length > 0) {
     console.log('\nWarnings:');
-    for (const warning of report.warnings) console.log(`  - [${warning.source}] ${warning.code}: ${warning.message}`);
+    for (const warning of report.warnings) {
+      console.log(`  - [${warning.source}] ${warning.code}: ${warning.message}`);
+      if (warning.fix) console.log(`    Fix: ${warning.fix}`);
+    }
   }
   console.log(`\nNext safe action: ${report.next_safe_action.command}`);
   console.log(`Reason: ${report.next_safe_action.reason}`);

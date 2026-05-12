@@ -208,11 +208,12 @@ export function buildHealthReport(ctx, healthArgs = []) {
     // W5: Phase dir has PLAN but no SUMMARY (stale in-progress)
     if (lifecycle.incompletePlans.length > 0) {
       for (const plan of lifecycle.incompletePlans) {
+        const expectedSummary = `.planning/phases/${plan.dir}/${plan.baseId}-SUMMARY.md`;
         warnings.push({
           id: 'W5',
           severity: 'WARN',
           message: `${plan.displayPath} exists but no matching SUMMARY found (stale in-progress?)`,
-          fix: 'Resume or complete the phase',
+          fix: `Run \`gsdd execute ${plan.phaseToken}\` to write ${expectedSummary}.`,
         });
       }
     }
