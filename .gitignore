@@ -48,3 +48,4 @@ _bmad/
 tmp/
 distilled.zip
 test-gsdd/
+.worktrees

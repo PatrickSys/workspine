@@ -982,29 +982,73 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
   const writeSetOverlaps = findWriteSetOverlaps(writeEntries);
   const dirtyWriteSetOverlaps = findDirtyWriteSetOverlaps(writeEntries, dirtyEntries);
 
+  function fixHintForRisk(risk) {
+    const code = risk.code;
+    switch (code) {
+      case 'canonical_git_invalid':
+      case 'worktree_git_invalid': {
+        const targetPath = risk.worktree_id || canonical.path;
+        return `Run \`git config --global --add safe.directory ${targetPath}\`, then re-run \`gsdd control-map --json\`.`;
+      }
+      case 'canonical_dirty':
+        return 'Commit, stash, or checkpoint the canonical changes before planning, cleanup, merge, or broad execution.';
+      case 'canonical_dirty_behind_upstream':
+        return 'Commit/stash the canonical changes or sync the branch; do not mutate a dirty checkout that is behind upstream.';
+      case 'canonical_branch_behind_upstream':
+      case 'canonical_branch_diverged_upstream':
+      case 'worktree_branch_behind_upstream':
+      case 'worktree_branch_diverged_upstream':
+        return 'Review upstream divergence (fetch/merge/rebase) before treating this branch state as an execution surface.';
+      case 'detached_candidate_worktree':
+        return 'Classify the detached worktree intent (active vs abandoned) before using it for execution or cleanup decisions.';
+      case 'sibling_worktree_dirty':
+      case 'unannotated_candidate_worktree':
+        return 'Review sibling worktree ownership and write set before starting overlapping implementation.';
+      case 'write_set_overlap':
+        return 'Resolve overlapping local annotation write sets before starting another owned-write workflow.';
+      case 'dirty_path_write_set_overlap':
+        return 'Checkpoint or classify dirty paths that overlap annotated write sets before owned-write transitions.';
+      case 'planning_state_drift':
+        return 'Review drift and rebaseline with session-fingerprint only after confirming the planning changes are intentional.';
+      default:
+        return null;
+    }
+  }
+
   for (const error of gitErrors) {
     risks.push({ code: error.code, severity: 'warn', message: error.message });
   }
   if (!canonical.git_valid) {
-    risks.push({ code: 'canonical_git_invalid', severity: 'warn', message: `Canonical worktree git status failed: ${canonical.status_error || 'unknown error'}` });
+    const risk = {
+      code: 'canonical_git_invalid',
+      severity: 'warn',
+      path: normalizeSlashes(canonical.path),
+      message: `Canonical worktree git status failed: ${canonical.status_error || 'unknown error'}`,
+    };
+    risk.fix_hint = fixHintForRisk(risk);
+    risks.push(risk);
   }
   addBranchStateRisks(risks, canonical, { canonical: true });
   if (canonical.dirty.counts.tracked > 0 || canonical.dirty.counts.untracked > 0) {
-    risks.push({
+    const risk = {
       code: 'canonical_dirty',
       severity: 'warn',
       message: `Canonical worktree has tracked/untracked changes (${canonical.dirty.counts.tracked} tracked, ${canonical.dirty.counts.untracked} untracked).`,
-    });
+    };
+    risk.fix_hint = fixHintForRisk(risk);
+    risks.push(risk);
   }
   if (canonical.dirty.counts.tracked > 0 && (canonical.ahead_behind?.behind || 0) > 0) {
-    risks.push({
+    const risk = {
       code: 'canonical_dirty_behind_upstream',
       severity: 'block',
       branch: canonical.branch,
       ahead: canonical.ahead_behind?.ahead,
       behind: canonical.ahead_behind?.behind,
       message: `Canonical worktree has tracked changes while behind upstream by ${canonical.ahead_behind.behind} commit(s).`,
-    });
+    };
+    risk.fix_hint = fixHintForRisk(risk);
+    risks.push(risk);
   }
   if (canonical.dirty.counts.ignored > 0) {
     risks.push({
@@ -1015,51 +1059,68 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
   }
   for (const worktree of worktrees.filter((entry) => entry.path !== canonical.path)) {
     if (!worktree.git_valid) {
-      risks.push({ code: 'worktree_git_invalid', severity: 'warn', worktree_id: worktree.id, message: `Worktree ${worktree.id} could not be inspected by git.` });
+      const risk = {
+        code: 'worktree_git_invalid',
+        severity: 'warn',
+        worktree_id: worktree.id,
+        message: `Worktree ${worktree.id} could not be inspected by git.`,
+      };
+      risk.fix_hint = fixHintForRisk(risk);
+      risks.push(risk);
     }
     addBranchStateRisks(risks, worktree);
     if (worktree.detached) {
-      risks.push({
+      const risk = {
         code: 'detached_candidate_worktree',
         severity: 'warn',
         worktree_id: worktree.id,
         message: `Worktree ${worktree.id} is detached; classify its intent before treating it as an execution surface.`,
-      });
+      };
+      risk.fix_hint = fixHintForRisk(risk);
+      risks.push(risk);
     }
     if (worktree.dirty.counts.tracked > 0 || worktree.dirty.counts.untracked > 0) {
-      risks.push({
+      const risk = {
         code: 'sibling_worktree_dirty',
         severity: 'warn',
         worktree_id: worktree.id,
         message: `Sibling worktree ${worktree.id} has tracked/untracked changes.`,
-      });
+      };
+      risk.fix_hint = fixHintForRisk(risk);
+      risks.push(risk);
     }
     if (!worktree.annotation && (worktree.dirty.counts.tracked > 0 || worktree.dirty.counts.untracked > 0 || worktree.detached)) {
-      risks.push({
+      const risk = {
         code: 'unannotated_candidate_worktree',
         severity: 'info',
         worktree_id: worktree.id,
         message: `Worktree ${worktree.id} has candidate-work signals but no local control-map annotation.`,
-      });
+      };
+      risk.fix_hint = fixHintForRisk(risk);
+      risks.push(risk);
     }
   }
   if (writeSetOverlaps.length > 0) {
-    risks.push({
+    const risk = {
       code: 'write_set_overlap',
       severity: 'block',
       message: `Active control-map annotations have ${writeSetOverlaps.length} concrete write-set overlap(s).`,
       overlaps: writeSetOverlaps.slice(0, MAX_DIRTY_BUCKET_ENTRIES),
       omitted_count: Math.max(0, writeSetOverlaps.length - MAX_DIRTY_BUCKET_ENTRIES),
-    });
+    };
+    risk.fix_hint = fixHintForRisk(risk);
+    risks.push(risk);
   }
   if (dirtyWriteSetOverlaps.length > 0) {
-    risks.push({
+    const risk = {
       code: 'dirty_path_write_set_overlap',
       severity: 'block',
       message: `Live dirty paths overlap annotated write sets (${dirtyWriteSetOverlaps.length} overlap(s)).`,
       overlaps: dirtyWriteSetOverlaps.slice(0, MAX_DIRTY_BUCKET_ENTRIES),
       omitted_count: Math.max(0, dirtyWriteSetOverlaps.length - MAX_DIRTY_BUCKET_ENTRIES),
-    });
+    };
+    risk.fix_hint = fixHintForRisk(risk);
+    risks.push(risk);
   }
   for (const warning of annotations.warnings || []) risks.push(warning);
   for (const error of annotations.errors || []) {
@@ -1074,11 +1135,22 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
     });
   }
   if (workflowState.planning_drift.drifted) {
-    risks.push({
+    const risk = {
       code: 'planning_state_drift',
       severity: 'warn',
       message: `Planning state drifted since the last fingerprint: ${workflowState.planning_drift.details.join('; ')}`,
-    });
+    };
+    risk.fix_hint = fixHintForRisk(risk);
+    risks.push(risk);
+  }
+
+  // Ensure the common closure risks expose actionable fix guidance even when
+  // the originating helper (for example branch-state risks) didn't attach it.
+  for (const risk of risks) {
+    if (!risk.fix_hint) {
+      const hint = fixHintForRisk(risk);
+      if (hint) risk.fix_hint = hint;
+    }
   }
   return risks;
 }
@@ -1175,7 +1247,10 @@ function printHuman(map) {
   }
   if (map.risks.length > 0) {
     console.log('\nRisks:');
-    for (const risk of map.risks) console.log(`  - [${risk.severity || 'info'}] ${risk.code}: ${risk.message}`);
+    for (const risk of map.risks) {
+      console.log(`  - [${risk.severity || 'info'}] ${risk.code}: ${risk.message}`);
+      if (risk.fix_hint) console.log(`    Fix: ${risk.fix_hint}`);
+    }
   }
   console.log('\nInterventions:');
   for (const intervention of map.interventions) console.log(`  - ${intervention}`);
