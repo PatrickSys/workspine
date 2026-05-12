@@ -27,24 +27,18 @@ AI agents made code cheaper to produce. The scarce part is now the work around t
 
 Workspine keeps that delivery loop in the repo instead of in a chat transcript. It does not replace your coding agent, editor, issue tracker, or review process. It gives them one durable path:
 
-```mermaid
-flowchart LR
-  A[Intent] --> B[Plan]
-  B --> C[Check]
-  C --> D[Execute]
-  D --> E[Verify]
-  E --> F[Handoff]
-  F --> B
+```text
+Intent → Plan → Check → Execute → Verify → Pause / Resume ──┐
+           ▲                                                  │
+           └──────────── next phase ◄────────────────────────-┘
 
-  B -.writes.-> P[.planning/]
-  D -.records.-> P
-  E -.records proof.-> P
-  P -.survives.-> G[New session or runtime]
+Every step writes to .planning/, so the next session or runtime
+can pick up where the previous one stopped.
 ```
 
 Workspine is the product name. The package, CLI commands, workflow prefixes, and workspace directory remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/`; these are retained technical contracts, not rename residue.
 
-Workspine began as a fork of [Get Shit Done](https://github.com/gsd-build/get-shit-done). GSD proved the long-horizon delivery problem was real. Workspine keeps the delivery spine and narrows the surface around repo-native state, generated runtime entrypoints, and evidence-gated closure.
+Workspine began as a fork of [Get Shit Done](https://github.com/gsd-build/get-shit-done). GSD proved the long-horizon delivery problem was real and has since grown into a broad framework — GSD v1 documents 81 commands and 78 workflows across 33 agents (April 2026). Workspine took the other path: 14 public workflow surfaces, 10 roles, one CLI, generated runtime adapters, and evidence-gated closure. Narrower surface, stricter closure, fewer moving parts for the human operator.
 
 ---
 
@@ -58,28 +52,32 @@ Workspine began as a fork of [Get Shit Done](https://github.com/gsd-build/get-sh
 | [**LeanSpec**](https://www.lean-spec.dev/docs/guide/first-principles) | Minimal, maintainable specs that fit human and AI working memory | Small spec/status docs | Adding explicit workflow gates, runtime entrypoints, verification, and handoff when the work needs more structure |
 | [**GitHub Spec Kit**](https://github.com/github/spec-kit) | Spec-first creation of specs, plans, tasks, and implementation workflows | `.specify/` artifacts and generated workflow files | Favoring a smaller repo-native delivery spine over a broad spec-tooling ecosystem |
 | [**Kiro**](https://kiro.dev/docs/) | Native agentic IDE flow with specs, steering, hooks, chat, MCP, and privacy controls | Kiro project surfaces | Remaining tool-agnostic and usable across terminal/IDE agents that can read repo files |
-| [**Tessl**](https://tessl.io/enterprise/) | Enterprise agent skills, evaluated context, distribution, and continuous improvement | Tessl-managed skill/context platform | Staying local-first: no hosted control plane, no org-wide skill registry required |
+| [**Tessl**](https://tessl.io/enterprise/) | Agent enablement platform for teams: generate, evaluate, distribute, and improve agent skills and context | Tessl-hosted control plane | Staying local-first: no hosted control plane, no org-wide skill registry required |
 
 Use Workspine when the change spans files, sessions, agents, or runtimes; when architecture, security, data, migrations, or release confidence matter; or when proof needs to live in the repo. Skip the full lifecycle for tiny, obvious edits. Direct prompting is cheaper when the risk is genuinely small.
+
+<sub>Comparison rows are based on each tool's public docs as of May 2026. Open an issue if anything reads inaccurately and we will correct it.</sub>
 
 ---
 
 ## How It Works
 
-```mermaid
-flowchart TB
-  Init[npx -y gsdd-cli init] --> Surface[Generate repo surfaces]
-  Surface --> Skills[.agents/skills/gsdd-* workflow entrypoints]
-  Surface --> Helper[.planning/bin/gsdd.mjs helper runtime]
-  Surface --> Native[Optional Claude/OpenCode/Codex adapters]
+```text
+npx -y gsdd-cli init
+   │
+   ├─► .agents/skills/gsdd-*     portable workflow entrypoints (always)
+   ├─► .planning/bin/gsdd.mjs    deterministic helper runtime (always)
+   └─► .claude/ .opencode/ .codex/   native adapters (when selected)
 
-  Skills --> New[gsdd-new-project or gsdd-quick]
-  Native --> New
-  New --> Plan[gsdd-plan]
-  Plan --> Check[Plan checker]
-  Check --> Execute[gsdd-execute]
-  Execute --> Verify[gsdd-verify]
-  Verify --> Audit[gsdd-audit-milestone when needed]
+then:
+
+gsdd-new-project  or  gsdd-quick
+        │
+        ▼
+   gsdd-plan ─► plan checker ─► gsdd-execute ─► gsdd-verify
+                                                     │
+                                                     ▼
+                                       gsdd-audit-milestone (when needed)
 ```
 
 The core loop is intentionally small:
@@ -113,6 +111,14 @@ It creates:
 - optional native adapters for Claude Code, OpenCode, and Codex CLI
 - optional root `AGENTS.md` governance when you explicitly choose it
 
+### Choose Your Starting Workflow
+
+| Situation | Start here | Why |
+|-----------|------------|-----|
+| Greenfield project, or brownfield work that is fuzzy / broad / milestone-shaped | `gsdd-new-project` | Full initializer. Runs codebase mapping internally when the repo needs it. |
+| Brownfield repo, and the bounded change is already concrete | `gsdd-quick` | Bounded-change lane. Builds a just-enough inline baseline when no full map exists. |
+| Brownfield repo is unfamiliar, risky, or you want a deeper baseline first | `gsdd-map-codebase` | Deeper orientation pass before choosing `gsdd-quick` or `gsdd-new-project`. |
+
 ### Quickstart
 
 After init, invoke workflows through your agent runtime:
@@ -132,6 +138,16 @@ For a full project or broad brownfield effort:
 3. Review `gsdd-plan`.
 4. Start `gsdd-execute` only when implementation is explicitly approved.
 5. Run `gsdd-verify` before calling the phase done.
+
+If you already know which runtimes you want, scope the install directly:
+
+```bash
+npx -y gsdd-cli init --tools claude     # Claude Code skills, commands, agents
+npx -y gsdd-cli init --tools opencode   # OpenCode commands and agents
+npx -y gsdd-cli init --tools codex      # Codex CLI portable skill + checker agent
+npx -y gsdd-cli init --tools agents     # Root AGENTS.md governance only
+npx -y gsdd-cli init --tools all        # All of the above
+```
 
 Headless setup is available for CI or scripted bootstrap:
 
