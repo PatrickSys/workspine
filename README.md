@@ -2,7 +2,7 @@
 
 # Workspine
 
-AI agents forget when the session ends. Workspine writes plans, decisions, and verification to `.planning/` so any agent or runtime can pick up where the last one stopped.
+Spec-driven development for AI-assisted work. The spec, plan, and verification live as markdown files in your repo — so every session starts from the same ground truth instead of a blank chat window.
 
 [![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
@@ -19,7 +19,7 @@ npx -y gsdd-cli init
 
 ## How it works
 
-`init` places workflow skills in `.agents/skills/` and optionally native adapters for your runtime. Then you run workflows through your agent — each one writes files to the repo:
+`init` drops workflow skills as markdown files into `.agents/skills/` and optionally native adapters for your runtime. Then you run workflows through your agent — each one writes files to the repo:
 
 | Workflow | Writes | What for |
 |----------|--------|----------|
@@ -71,11 +71,11 @@ Commit `.planning/` so the team shares specs, roadmaps, phase plans, and verific
 
 ## Where it fits
 
-Use Workspine when a feature takes more than one session, or when you need to switch between Claude, Codex, and Cursor without losing the thread. Skip it for quick, obvious edits — direct prompting is cheaper when the risk is small.
+Use Workspine when a feature takes more than one session, or when you keep switching between Claude, Codex, and Cursor and losing the thread. Skip it for quick obvious edits — just prompting is faster.
 
 | Tool | Good for | vs Workspine |
 |------|----------|--------------|
-| **Workspine** | Work that spans sessions, agents, or runtimes where plans and proof need to stay in the repo | — |
+| **Workspine** | Projects where you want specs, plans, and verification as persistent markdown files that any agent or session can follow | — |
 | [GSD](https://github.com/gsd-build/get-shit-done) | Broad AI prompting suite — 81 commands, 78 workflows, 33 agents | Workspine is narrower: 14 workflows, fewer moving parts for the human in the loop |
 | [OpenSpec](https://openspec.dev/) | Living spec + change proposals in a lightweight format | Workspine adds the execution, verification, and handoff layer on top of planning |
 | [LeanSpec](https://www.lean-spec.dev/docs/guide/first-principles) | Minimal specs that fit LLM context | Workspine adds workflow gates and runtime entrypoints for when you need the full structure |
