@@ -96,7 +96,7 @@ Helper command for long-running sessions:
 ```
 npx -y gsdd-cli control-map [--json] [--with-ignored] -> computed repo/worktree/planning state plus local annotations
 npx -y gsdd-cli control-map annotate set|clear -> optional stale-aware local intent maintenance
-npx -y gsdd-cli closeout-report [--json] [--phase <N>] -> read-only replay of closeout blockers, warnings, and next safe action
+npx -y gsdd-cli closeout-report [--json] [--phase <N>] -> read-only replay of closeout blockers, warnings, fixes, and next safe action
 ```
 
 ## Brownfield Entry Contract

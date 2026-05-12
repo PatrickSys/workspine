@@ -83,6 +83,8 @@ describe('control-map command', () => {
     assert.strictEqual(map.canonical_worktree.dirty.ignored.length, 0);
     assert.strictEqual(map.canonical_worktree.dirty.omitted_counts.ignored, null);
     assert.ok(map.risks.some((risk) => risk.code === 'canonical_dirty'));
+    const canonicalDirty = map.risks.find((risk) => risk.code === 'canonical_dirty');
+    assert.ok(canonicalDirty.fix_hint, 'canonical_dirty should include fix_hint guidance');
     assert.ok(!map.risks.some((risk) => risk.code === 'ignored_local_surfaces_present'));
   });
 
@@ -538,11 +540,13 @@ describe('control-map command', () => {
 
   test('human output includes lifecycle checkpoint state', async () => {
     await initGitWorkspace();
+    writeFile('tracked.txt', 'tracked changed\n');
     const result = await runCliAsMain(tmpDir, ['control-map']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
     assert.match(result.output, /Workflow: /);
     assert.match(result.output, /Checkpoint: \.planning\/\.continue-here\.md \((present|missing)\)/);
+    assert.match(result.output, /Fix:\s+/);
   });
 
   test('generated local helper exposes control-map from nested directories', async () => {
