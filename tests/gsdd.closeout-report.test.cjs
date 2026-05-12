@@ -127,6 +127,21 @@ describe('closeout-report helper', () => {
     assert.strictEqual(report.ui_proof.status, 'not_applicable');
   });
 
+  test('next safe action routes to health when health warnings are present', async () => {
+    await initWorkspace();
+    writeRoadmap();
+    writeCompletedPhase(1, 'first-closed-phase');
+    // Emit a health warning without blocking preflight/phase verification.
+    fs.unlinkSync(path.join(tmpDir, '.planning', 'generation-manifest.json'));
+
+    const result = await runCliAsMain(tmpDir, ['closeout-report', '--json', '--phase', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const report = JSON.parse(result.output);
+
+    assert.ok(report.warnings.some((entry) => entry.source === 'health'));
+    assert.strictEqual(report.next_safe_action.command, 'gsdd health --json');
+  });
+
   test('aggregates typed blockers from direct phase verification', async () => {
     await initWorkspace();
     writeRoadmap();
@@ -234,6 +249,7 @@ describe('closeout-report helper', () => {
 
     assert.strictEqual(canonicalDirtyWarnings.length, 1);
     assert.strictEqual(canonicalDirtyWarnings[0].source, 'control_map');
+    assert.ok(canonicalDirtyWarnings[0].fix, 'control_map warnings should include fix guidance');
     assert.ok(report.preflight.warnings.some((entry) => entry.source === 'control-map' && entry.code === 'canonical_dirty'));
   });
 
