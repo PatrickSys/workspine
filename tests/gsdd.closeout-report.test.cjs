@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { pathToFileURL } = require('url');
 
 const { cleanup, createTempProject, runCliAsMain } = require('./gsdd.helpers.cjs');
 
@@ -270,5 +271,122 @@ describe('closeout-report helper', () => {
     assert.strictEqual(report.phase, '1');
     assert.ok(report.health.warnings.some((entry) => entry.id === 'W_CLOSEOUT_HEALTH_UNAVAILABLE'));
     assert.strictEqual(report.phase_verification.status, 'passed');
+  });
+
+  test('closeout-report omits registry key when no registry file exists', async () => {
+    await initWorkspace();
+    writeRoadmap();
+    writeCompletedPhase(1, 'first-closed-phase');
+
+    const result = await runCliAsMain(tmpDir, ['closeout-report', '--json', '--phase', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const report = JSON.parse(result.output);
+
+    assert.strictEqual('registry' in report, false, 'registry key must not be present when no registry file exists');
+  });
+
+  test('closeout-report includes registry key with active_leases when an open lease exists', async () => {
+    await initWorkspace();
+    writeRoadmap();
+    writeCompletedPhase(1, 'first-closed-phase');
+
+    // Seed one open lease in the temp project's registry.
+    const registryDir = path.join(tmpDir, '.planning', '.local');
+    fs.mkdirSync(registryDir, { recursive: true });
+    const registryFile = path.join(registryDir, 'registry.json');
+    const seedData = {
+      schema_version: 1,
+      leases: [{
+        phase_id: 'test-seed-99',
+        worktree_path: tmpDir,
+        agent_id: null,
+        branch_name: 'test/seed-99',
+        lease_state: 'open',
+        granted_at: new Date().toISOString(),
+        closed_at: null,
+        crash_reason: null,
+        write_set: [],
+        provenance_hash: null,
+      }],
+    };
+    fs.writeFileSync(registryFile, JSON.stringify(seedData, null, 2), 'utf8');
+
+    const result = await runCliAsMain(tmpDir, ['closeout-report', '--json', '--phase', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const report = JSON.parse(result.output);
+
+    assert.ok('registry' in report, 'registry key must be present when a lease exists');
+    assert.ok(Array.isArray(report.registry.active_leases), 'active_leases must be an array');
+    assert.ok(
+      report.registry.active_leases.some((l) => l.phase_id === 'test-seed-99'),
+      'active_leases must include the seeded open lease',
+    );
+    assert.ok(Array.isArray(report.registry.stale_leases), 'stale_leases must be an array');
+    assert.ok(Array.isArray(report.registry.closed_leases), 'closed_leases must be an array');
+  });
+
+  test('closeout-report tags only foreign-phase open leases as blocking when closing a specific phase', async () => {
+    await initWorkspace();
+    writeRoadmap();
+    writeCompletedPhase(1, 'first-closed-phase');
+
+    // Seed two open leases — one for the phase we're closing (1) and one for
+    // an unrelated phase (99). Only phase 99 should appear in blocking_leases.
+    const registryDir = path.join(tmpDir, '.planning', '.local');
+    fs.mkdirSync(registryDir, { recursive: true });
+    const registryFile = path.join(registryDir, 'registry.json');
+    const seedData = {
+      schema_version: 1,
+      leases: [
+        {
+          phase_id: '1',
+          worktree_path: tmpDir,
+          agent_id: null,
+          branch_name: 'feat/phase-1',
+          lease_state: 'open',
+          granted_at: new Date().toISOString(),
+          closed_at: null,
+          crashed_at: null,
+          crash_reason: null,
+          write_set: [],
+          provenance_hash: null,
+        },
+        {
+          phase_id: '99',
+          worktree_path: tmpDir,
+          agent_id: null,
+          branch_name: 'feat/phase-99',
+          lease_state: 'open',
+          granted_at: new Date().toISOString(),
+          closed_at: null,
+          crashed_at: null,
+          crash_reason: null,
+          write_set: [],
+          provenance_hash: null,
+        },
+      ],
+    };
+    fs.writeFileSync(registryFile, JSON.stringify(seedData, null, 2), 'utf8');
+
+    const result = await runCliAsMain(tmpDir, ['closeout-report', '--json', '--phase', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const report = JSON.parse(result.output);
+
+    assert.ok(Array.isArray(report.registry.blocking_leases), 'blocking_leases must be an array');
+    assert.ok(Array.isArray(report.registry.own_phase_leases), 'own_phase_leases must be an array');
+
+    const blockingIds = report.registry.blocking_leases.map((l) => String(l.phase_id));
+    const ownIds = report.registry.own_phase_leases.map((l) => String(l.phase_id));
+
+    assert.deepStrictEqual(
+      blockingIds.sort(),
+      ['99'],
+      `phase 99 (foreign) must be blocking; phase 1 (own) must not. Got: ${JSON.stringify(blockingIds)}`,
+    );
+    assert.deepStrictEqual(
+      ownIds.sort(),
+      ['1'],
+      `phase 1 (own) must be own_phase; got: ${JSON.stringify(ownIds)}`,
+    );
   });
 });

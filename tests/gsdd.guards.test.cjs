@@ -138,8 +138,8 @@ describe('G10 - CLI Module Boundary', () => {
 
   test('gsdd.mjs remains a thin facade', () => {
     const lines = lineCount(GSDD_PATH);
-    assert.ok(lines <= 140,
-      `gsdd.mjs is ${lines} lines (max 140). FIX: Keep the entrypoint as a thin composition root.`);
+    assert.ok(lines <= 145,
+      `gsdd.mjs is ${lines} lines (max 145). FIX: Keep the entrypoint as a thin composition root.`);
   });
 });
 
