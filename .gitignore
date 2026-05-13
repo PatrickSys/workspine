@@ -49,3 +49,10 @@ tmp/
 distilled.zip
 test-gsdd/
 .worktrees
+
+# Worktree coordination registry (local-only, never committed)
+# .tmp files are per-PID (registry.json.<pid>.tmp) to avoid concurrent-write truncation
+.planning/.local/registry.json
+.planning/.local/registry.json.*.tmp
+.planning/.local/registry.json.broken-*
+.planning/.local/registry.json.tmp

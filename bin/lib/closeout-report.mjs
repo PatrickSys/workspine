@@ -50,6 +50,36 @@ async function buildHealthReportSafe(ctx, args) {
   }
 }
 
+async function buildRegistrySectionSafe(workspaceRoot, closingPhaseId) {
+  try {
+    const { listLeases, registryExists } = await import('./registry.mjs');
+    if (!registryExists(workspaceRoot)) return null;
+    const leases = listLeases(workspaceRoot);
+    const active = leases.filter((l) => l.lease_state === 'open');
+    const closingId = closingPhaseId != null ? String(closingPhaseId) : null;
+    // An open lease only blocks closeout if it belongs to a phase OTHER than
+    // the one being closed. The own-phase active lease is expected during
+    // normal closeout (the phase is being verified). Parallel phases (P70+)
+    // will have multiple concurrent opens; we surface only the foreign ones
+    // as [BLOCK].
+    const blocking = closingId
+      ? active.filter((l) => String(l.phase_id) !== closingId)
+      : active;
+    const ownPhase = closingId
+      ? active.filter((l) => String(l.phase_id) === closingId)
+      : [];
+    return {
+      active_leases: active,
+      blocking_leases: blocking,
+      own_phase_leases: ownPhase,
+      stale_leases: leases.filter((l) => l.lease_state === 'crashed'),
+      closed_leases: leases.filter((l) => l.lease_state === 'closed'),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function summarizeControlMap(map) {
   return {
     status: map.risks.some((risk) => risk.severity === 'block')
@@ -237,6 +267,7 @@ export async function buildCloseoutReport(ctx = {}, args = []) {
     planningDir: context.planningDir,
   });
   const health = await buildHealthReportSafe(ctx, ['--workspace-root', context.workspaceRoot]);
+  const registrySection = await buildRegistrySectionSafe(context.workspaceRoot, selectedPhase);
   const preflight = evaluateLifecyclePreflight({
     planningDir: context.planningDir,
     surface: 'verify',
@@ -276,6 +307,7 @@ export async function buildCloseoutReport(ctx = {}, args = []) {
       preflight: summarizePreflight(preflight),
       phase_verification: summarizePhaseVerification(phaseReport),
       ui_proof: phaseReport.ok ? phaseReport.result.ui_proof : null,
+      ...(registrySection !== null ? { registry: registrySection } : {}),
     },
   };
 }
@@ -296,6 +328,26 @@ function printHuman(report) {
     for (const warning of report.warnings) {
       console.log(`  - [${warning.source}] ${warning.code}: ${warning.message}`);
       if (warning.fix) console.log(`    Fix: ${warning.fix}`);
+    }
+  }
+  if (report.registry) {
+    const {
+      blocking_leases = [],
+      own_phase_leases = [],
+      stale_leases = [],
+      closed_leases = [],
+    } = report.registry;
+    const hasAny =
+      blocking_leases.length > 0 ||
+      own_phase_leases.length > 0 ||
+      stale_leases.length > 0 ||
+      closed_leases.length > 0;
+    if (hasAny) {
+      console.log('\nRegistry:');
+      for (const l of blocking_leases) console.log(`  [BLOCK] ${l.phase_id}  ${l.branch_name}  open  ${l.granted_at}`);
+      for (const l of own_phase_leases) console.log(`  [INFO]  ${l.phase_id}  ${l.branch_name}  open  ${l.granted_at}  (closing phase)`);
+      for (const l of stale_leases) console.log(`  [WARN]  ${l.phase_id}  ${l.branch_name}  crashed  ${l.granted_at}`);
+      for (const l of closed_leases) console.log(`  [INFO]  ${l.phase_id}  ${l.branch_name}  closed  ${l.granted_at}`);
     }
   }
   console.log(`\nNext safe action: ${report.next_safe_action.command}`);

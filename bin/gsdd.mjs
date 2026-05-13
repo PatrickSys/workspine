@@ -21,6 +21,7 @@ import { cmdSessionFingerprint } from './lib/session-fingerprint.mjs';
 import { cmdUiProof } from './lib/ui-proof.mjs';
 import { cmdControlMap } from './lib/control-map.mjs';
 import { createCmdCloseoutReport } from './lib/closeout-report.mjs';
+import { cmdRegistryClear, cmdRegistryCrash, cmdRegistryList, cmdRegistryShow } from './lib/registry-commands.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -112,6 +113,10 @@ const COMMANDS = {
   'closeout-report': cmdCloseoutReport,
   'find-phase': cmdFindPhase,
   'phase-status': cmdPhaseStatus,
+  'registry-clear': cmdRegistryClear,
+  'registry-crash': cmdRegistryCrash,
+  'registry-list': cmdRegistryList,
+  'registry-show': cmdRegistryShow,
   verify: cmdVerify,
   scaffold: cmdScaffold,
   help: cmdHelp,

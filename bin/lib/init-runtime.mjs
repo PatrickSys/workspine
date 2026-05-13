@@ -198,6 +198,13 @@ Commands:
                               Maintain optional local intent annotations under .planning/.local/
   closeout-report [--json] [--phase <N>]
                               Replay read-only closeout status from control-map, health, preflight, verify, and UI-proof signals
+  registry-list [--json]      List all worktree coordination leases (phase, branch, state, granted_at)
+  registry-show <phase> [--json]
+                              Show the lease record for a specific phase
+  registry-clear <phase> [--force]
+                              Remove a lease record (--force required if lease is open)
+  registry-crash <phase> --reason <text>
+                              Mark a lease as crashed (P66; placeholder in P65)
   help                        Show this summary
 
 Platforms (for --tools):

@@ -90,11 +90,25 @@ Use Workspine when a feature takes more than one session, or when you need to sw
 ## CLI
 
 ```bash
+npx -y gsdd-cli init                    # guided install wizard
 npx -y gsdd-cli health                  # workspace integrity check
 npx -y gsdd-cli update                  # regenerate stale runtime surfaces
 npx -y gsdd-cli models profile quality  # maximize review rigor
 npx -y gsdd-cli models profile budget   # minimize cost
 npx -y gsdd-cli control-map             # repo and planning state at a glance
+npx -y gsdd-cli closeout-report         # read-only phase closeout replay
+npx -y gsdd-cli phase-status 5 done     # mark a phase status in ROADMAP.md
+npx -y gsdd-cli find-phase 5            # show phase info as JSON
+npx -y gsdd-cli verify 5                # run artifact checks for a phase
+npx -y gsdd-cli scaffold phase 5 name   # create a new phase plan file
+npx -y gsdd-cli file-op copy ...        # deterministic workspace file ops
+npx -y gsdd-cli session-fingerprint write   # rebaseline planning-state drift
+npx -y gsdd-cli ui-proof validate path  # validate UI proof metadata
+npx -y gsdd-cli registry-list           # list worktree coordination leases
+npx -y gsdd-cli registry-show 5         # show lease for a specific phase
+npx -y gsdd-cli registry-clear 5        # remove a lease record
+npx -y gsdd-cli registry-crash 5 ...    # mark a lease crashed (P66 placeholder)
+npx -y gsdd-cli help                    # show all commands
 ```
 
 Full reference: [User Guide](docs/USER-GUIDE.md) · [Runtime Support](docs/RUNTIME-SUPPORT.md) · [Verification Discipline](docs/VERIFICATION-DISCIPLINE.md)
