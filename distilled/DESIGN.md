@@ -74,6 +74,7 @@
 61. [Deliberate Subagent Contract](#d61---deliberate-subagent-contract)
 62. [Repo-Native UI Proof Contract](#d62---repo-native-ui-proof-contract)
 63. [Computed-First Control Map](#d63---computed-first-control-map)
+64. [JSON+Atomic-Rename for the Coordination Registry](#d64---jsonatomic-rename-for-the-coordination-registry)
 
 ---
 
@@ -2918,6 +2919,45 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - Lifecycle preflight may consume block-level control-map risks for owned-write transitions, but read-only status surfaces must not turn warning-level local state into blockers.
 - `closeout-report` is a compact replay/report helper, not `progress`, `verify`, milestone audit, release automation, cleanup, or a dashboard. The source CLI path includes full health diagnostics; the generated helper reports health availability as a typed warning if the full health builder is not present in that helper runtime.
 - Future health hardening can consume the same helper output for stricter reporting, but must avoid turning local annotations into product truth.
+
+---
+
+## D64 - JSON+Atomic-Rename for the Coordination Registry
+
+**Decision (2026-05-13):** The worktree coordination registry uses JSON+atomic-rename (write to a per-PID `.planning/.local/registry.json.<pid>.tmp` then `fs.renameSync` over target) rather than SQLite WAL. Per-PID tmp filenames eliminate the truncation race between concurrent CLI invocations; the final renameSync is last-writer-wins with a read-after-write fingerprint warning that surfaces lost updates on stderr.
+
+**Context:**
+- An earlier decision locked the registry to "WAL-mode SQLite" citing OpenHands as the production analog. Direct repo inspection (see §2 evidence below) confirmed OpenHands uses per-event JSON files for session and coordination state; SQLite exists in OpenHands only in the enterprise tier for billing/OAuth/user management. The earlier lock was corrected on this evidence.
+- The decision space evaluated three tracks:
+  - **Track A (`better-sqlite3`):** introduces a native runtime dependency, requires ABI rebuild per Node minor version, and `--ignore-scripts` installs silently crash at runtime. Conflicts with the zero-dependency invariant.
+  - **Track B (`node:sqlite`):** zero external deps but requires `engines >=22.13.0`, raising the floor above Node 20 LTS; binary file format produces irrecoverable git conflicts; Stability 1.2 RC has already shipped one breaking change.
+  - **Track C (JSON + atomic rename):** zero deps, Node >=20 preserved, copyable with `cp`, git-mergeable line-by-line, inspectable/recoverable in any text editor or `jq`. Validated by §2 evidence below.
+- v2.0.0 ships MANUAL orchestration (sequential writes by one human orchestrator). Concurrent multi-writer scenarios are explicitly deferred to v2.1+ automated orchestration; the per-PID tmp + fingerprint warning is the v2.0 surface signal for the v2.1 lock-or-CAS work.
+
+**Decision details:**
+- Registry file: `.planning/.local/registry.json` (gitignored, local-only).
+- Write pattern: parse existing → modify in memory → `writeFileSync` to `.planning/.local/registry.json.<pid>.tmp` → `safeRename(tmp, target)` with Windows EPERM/EBUSY retry. Per-PID tmp filenames prevent the .tmp truncation race between two concurrent writers; concurrent renames remain last-writer-wins.
+- Read-after-write fingerprint: after rename, re-read the registry and emit a stderr `WARN: write-collision suspected` if the lease count does not match what we wrote. Diagnostic only; operators can re-run on warning.
+- Corrupt-JSON handling: `readRegistry` quarantines unparseable or wrong-shape files to `registry.json.broken-<timestamp>`, emits a stderr warning, and returns an empty registry. Forensic evidence preserved.
+- Fields per lease: `phase_id`, `worktree_path`, `agent_id`, `branch_name`, `lease_state` (open|closed|crashed; `merging` reserved for P68 phase-close CLI), `granted_at`, `closed_at`, `crashed_at`, `crash_reason`, `write_set` (schema seam owned by P65; advisory logic owned by P69), `provenance_hash` (reserved: SHA-256 of phase plan file; null until plan-file integrity wiring lands in a later phase).
+- State machine: `closeLease` hard-errors on closing a non-open lease (audit-trail integrity); callers must use `crashLease` or `clearLease` for non-open transitions.
+- Upgrade path: revisit `node:sqlite` when v2.1+ ships automated orchestration with concurrent multi-writer requirements, or `gsdd report` introduces multi-milestone aggregation queries.
+
+**Evidence:** Three §2 research streams (Sonnet-4.6 subagent, 2026-05-13) inspecting actual upstream sources. Persisted artifacts: `.internal-research/p65-section2-spec-framework.md`, `p65-section2-orchestrator.md`, `p65-section2-industry.md`.
+
+**Spec framework category (§2.1):** Confirmed negative. GSD has no parallel-execution, worktree, lease, or registry concept; phase state lives in `.planning/STATE.md` and `.planning/ROADMAP.md` as plain Markdown. OpenSpec ships a workspace *discovery* YAML registry, not an execution-coordination registry; its "parallel changes" is sequential context-switching. LeanSpec has no coordination state. Track C is therefore novel scope relative to all spec frameworks.
+
+**Orchestrator category (§2.2):** OpenHands (commit `cae76e54`) stores session/event state as per-event JSON files under `{persistence_dir}/{user_id}/v1_conversations/{conversation_id.hex}/{event_id.hex}.json` (`filesystem_event_service.py:24-36`, `event_service_base.py:70,162`). SQLite is present only in `enterprise/` for billing/OAuth — zero SQLite for session state in either tier. MetaGPT writes cross-run coordination to `{workspace}/storage/team/team.json` via `write_json_file()` (`team.py:59-79`); live coordination is in-process. Conductor OSS uses JSON-blob serialization throughout — Redis is the production backend (`RedisExecutionDAO.java`), SQLite appears only in the scheduler sub-module (`SqliteSchedulerDAO.java`), with JSON as the wire format in every backend. Synthesis: JSON is the universal orchestrator serialization format; backend choice (filesystem, Redis, SQLite) varies by operational tier. GSDD's filesystem JSON sits in the OpenHands-OSS / MetaGPT tier.
+
+**Industry guidance category (§2.3):** Anthropic Claude Code stores per-session transcripts as append-only JSONL at `~/.claude/projects/<hash>/sessions/<uuid>.jsonl` (no database, crash-safe by append). Shared mutable state lives in `~/.claude.json`, which has a documented race condition under concurrent writes — 8+ filed GitHub issues converge on `write-tmp + rename()` as the correct fix (https://github.com/anthropics/claude-code/issues — search "claude.json race"). This is the strongest direct industry endorsement of Track C's pattern. Cursor 2.0 ships `.cursor/worktrees.json` plus per-task claim files plus atomic `mkdir`-based locking — structurally identical to D64's design intent. OpenAI Codex CLI uses SQLite (`sqlite_home`) for "agent jobs and other resumable runtime state" — an honest counter-example that validates SQLite as the upgrade target for v2.1+, not as the v2.0 starting point. GitHub Copilot Coding Agent delegates coordination to git worktrees and branches; there is no client-side registry, leaving no queryable in-progress state — a gap D64 fills for CLI tooling.
+
+**Artifacts:** `bin/lib/registry.mjs`, `bin/lib/registry-commands.mjs`, `tests/gsdd.registry.test.cjs`, `bin/gsdd.mjs` (registry-list/show/clear/crash placeholder), `bin/lib/closeout-report.mjs` (registry section with blocking-lease threading).
+
+**Consequences:**
+- Zero-dependency invariant (package.json `dependencies: {}`) preserved.
+- Concurrent multi-writer safety: per-PID tmp eliminates truncation; rename is last-writer-wins; fingerprint warning surfaces lost updates. Strong-consistency multi-writer is deferred to v2.1+.
+- Upgrade path to SQLite remains open and is the right call when (a) automated orchestration with concurrent rename frequency >10/s, (b) multi-milestone aggregation queries land, or (c) the registry crosses ~10MB.
+- The write_set field is shipped as a schema seam only; consumer logic is owned by a later advisory-layer phase (P69 in v2.0.0).
 
 ---
 

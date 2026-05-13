@@ -517,6 +517,40 @@
 
 ---
 
+## D64 — JSON+Atomic-Rename for the Coordination Registry
+- `bin/lib/registry.mjs`, `bin/lib/registry-commands.mjs`, `bin/gsdd.mjs`, `bin/lib/closeout-report.mjs`
+- `tests/gsdd.registry.test.cjs`, `tests/gsdd.closeout-report.test.cjs`
+- Persisted §2 research streams (2026-05-13):
+  - `.internal-research/p65-section2-spec-framework.md`
+  - `.internal-research/p65-section2-orchestrator.md`
+  - `.internal-research/p65-section2-industry.md`
+
+### §2.1 Spec framework (negative-citation confirmed)
+- GSD: confirmed no parallel/worktree/lease/registry concept by direct inspection of `agents/_archive/gsd-*.md` (11 archived role files); phase state lives in `.planning/STATE.md` and `.planning/ROADMAP.md` only. `agents/_archive/gsd-plan-checker.md:160` and `distilled/workflows/map-codebase.md:25,88` are the only "parallel" references and both are intra-phase task waves, not cross-phase coordination.
+- OpenSpec: https://github.com/Fission-AI/OpenSpec — workspace discovery YAML registry (`getGlobalDataDir()/workspaces/registry.yaml`); not an execution-coordination surface.
+- LeanSpec: https://github.com/codervisor/lean-spec — no coordination-state concept. (Note: peakwave-ai/leanspec does not exist; codervisor/lean-spec is the actual repo.)
+
+### §2.2 Orchestrator
+- OpenHands (https://github.com/All-Hands-AI/OpenHands, commit `cae76e54`): per-event JSON files at `{persistence_dir}/{user_id}/v1_conversations/{conversation_id.hex}/{event_id.hex}.json` via `filesystem_event_service.py:24-36` and `event_service_base.py:70,162`. SQLite present only in `enterprise/` for billing/OAuth (100+ Alembic migrations) — zero SQLite for session/event state.
+- MetaGPT (https://github.com/geekan/MetaGPT or FoundationAgents/MetaGPT): cross-run team state at `{workspace}/storage/team/team.json` (`team.py:59-79`, blob `5a983888`); live coordination via in-process message bus.
+- Conductor OSS (Netflix): `RedisExecutionDAO.java` (Jackson JSON in Redis hashes) is the production backend; `SqliteSchedulerDAO.java` (blob `fe0ec389`) only for scheduler sub-module. JSON wire format in every backend.
+
+### §2.3 Industry guidance
+- Anthropic Claude Code: session transcripts JSONL append-only at `~/.claude/projects/<hash>/sessions/<uuid>.jsonl`; shared mutable state `~/.claude.json` has a documented race condition under concurrent writes — 8+ filed GitHub issues converge on `write-tmp + rename()` as the correct fix. Strongest direct endorsement of Track C's pattern by the harness vendor.
+- Cursor 2.0: `.cursor/worktrees.json` + per-task JSON claim files + atomic `mkdir`-based locking — structurally identical to D64.
+- OpenAI Codex CLI (https://github.com/openai/codex): uses SQLite (`sqlite_home`) for "agent jobs and other resumable runtime state"; JSONL for conversation history; TOML for config. Honest counter-example: SQLite is the correct upgrade target for v2.1+ when concurrent multi-writer requirements land, not for v2.0 starting state.
+- GitHub Copilot Coding Agent: per-agent isolation via named git worktrees (`<task-slug>--<agent-name>`); no client-side coordination registry. The gap that D64 fills for CLI tooling: a queryable local in-progress state.
+
+### Production patterns confirmed
+- npm/write-file-atomic: https://github.com/npm/write-file-atomic — same tmp+rename pattern in widespread use.
+- Git lockfile API: `LockFile.register()` (git/lockfile.h).
+- pnpm/yarn: same tmp+rename for `node_modules/.package-lock.json`.
+
+### Synthesis
+JSON-with-atomic-rename for state files is the community-validated standard in 2026 for single-writer or low-frequency multi-writer state. SQLite is the industry choice when concurrent reads/queries or multi-writer locking matters (Codex CLI). Pure git delegation is viable only with server infrastructure (Copilot). No-protection JSON writes are universally identified as a bug (Claude Code race condition). D64 sits in the correct tier for GSDD's v2.0 constraints; upgrade to SQLite remains the documented v2.1+ path.
+
+---
+
 ## Maintenance
 
 Update this file when:
