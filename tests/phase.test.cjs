@@ -3918,5 +3918,139 @@ describe('Phase 32 runtime-freshness helper', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// §1.17 phase-closure artifact gate
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('phase-status §1.17 phase-closure artifact gate', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  function setupPhase(phaseNumber, slug, { withPlanCheck = false, withVerification = false } = {}) {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', `${String(phaseNumber).padStart(2, '0')}-${slug}`);
+    fs.mkdirSync(phaseDir, { recursive: true });
+    const padded = String(phaseNumber).padStart(2, '0');
+    fs.writeFileSync(path.join(phaseDir, `${padded}-PLAN.md`), '# plan\n');
+    fs.writeFileSync(path.join(phaseDir, `${padded}-SUMMARY.md`), '# summary\n');
+    if (withPlanCheck) fs.writeFileSync(path.join(phaseDir, `${padded}-PLAN-CHECK.md`), '# plan-check\n');
+    if (withVerification) fs.writeFileSync(path.join(phaseDir, `${padded}-VERIFICATION.md`), '# verification\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      `# Roadmap\n\n- [-] **Phase ${phaseNumber}: Test Phase** - goal\n`,
+    );
+  }
+
+  function seedLessonsLearned(mtimeOffsetMs = 0) {
+    const dir = path.join(tmpDir, '.internal-research');
+    fs.mkdirSync(dir, { recursive: true });
+    const lessons = path.join(dir, 'lessons-learned.md');
+    fs.writeFileSync(lessons, '# lessons-learned\n');
+    if (mtimeOffsetMs) {
+      const stamp = new Date(Date.now() - mtimeOffsetMs);
+      fs.utimesSync(lessons, stamp, stamp);
+    }
+    return lessons;
+  }
+
+  test('refuses done when PLAN-CHECK.md is missing', async () => {
+    setupPhase(65, 'reg', { withPlanCheck: false, withVerification: true });
+    seedLessonsLearned();
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '65', 'done']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /§1\.17 artifacts missing/);
+    assert.match(result.output, /65-PLAN-CHECK\.md/);
+    const roadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    assert.match(roadmap, /\[-\]/, 'ROADMAP must NOT be mutated when gate refuses');
+  });
+
+  test('refuses done when VERIFICATION.md is missing', async () => {
+    setupPhase(65, 'reg', { withPlanCheck: true, withVerification: false });
+    seedLessonsLearned();
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '65', 'done']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /65-VERIFICATION\.md/);
+  });
+
+  test('refuses done when lessons-learned.md is stale (>7d)', async () => {
+    setupPhase(65, 'reg', { withPlanCheck: true, withVerification: true });
+    seedLessonsLearned(10 * 86_400_000); // 10 days old
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '65', 'done']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /lessons-learned\.md/);
+    assert.match(result.output, /days ago/);
+  });
+
+  test('refuses --force without --reason', async () => {
+    setupPhase(65, 'reg', { withPlanCheck: false, withVerification: false });
+    seedLessonsLearned();
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '65', 'done', '--force']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /--force requires --reason/);
+  });
+
+  test('--force --reason bypasses gate and appends LL entry', async () => {
+    setupPhase(65, 'reg', { withPlanCheck: false, withVerification: false });
+    const lessons = seedLessonsLearned();
+
+    const result = await runCliAsMain(tmpDir, [
+      'phase-status', '65', 'done',
+      '--force', '--reason', 'CI environment cannot run verify; gate bypassed deliberately',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const roadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    assert.match(roadmap, /\[x\] \*\*Phase 65/, 'ROADMAP marker must update on successful --force');
+
+    const lessonsContent = fs.readFileSync(lessons, 'utf-8');
+    assert.match(lessonsContent, /LL-PHASE-STATUS-FORCE-OVERRIDE-65-/);
+    assert.match(lessonsContent, /CI environment cannot run verify/);
+  });
+
+  test('skips gate when no phase folder exists (roadmap-only entry)', async () => {
+    // No setupPhase call — only roadmap exists.
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '# Roadmap\n\n- [-] **Phase 99: Roadmap Only** - goal\n',
+    );
+    seedLessonsLearned();
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '99', 'done']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const roadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    assert.match(roadmap, /\[x\] \*\*Phase 99/);
+  });
+
+  test('skips gate when no .internal-research/ exists (consumer project)', async () => {
+    setupPhase(65, 'reg', { withPlanCheck: false, withVerification: false });
+    // No .internal-research/ directory — consumer-project scenario.
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '65', 'done']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+  });
+
+  test('passes when all required artifacts exist and lessons-learned is fresh', async () => {
+    setupPhase(65, 'reg', { withPlanCheck: true, withVerification: true });
+    seedLessonsLearned();
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '65', 'done']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const roadmap = fs.readFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), 'utf-8');
+    assert.match(roadmap, /\[x\] \*\*Phase 65/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // milestone complete command
 // ─────────────────────────────────────────────────────────────────────────────

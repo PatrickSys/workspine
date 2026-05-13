@@ -3,7 +3,7 @@
 // IMPORTANT: No module-scope process.cwd() — ESM caching means sub-modules
 // evaluate once, so CWD must be computed inside function bodies.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { output } from './cli-utils.mjs';
 import { writeFingerprint } from './session-fingerprint.mjs';
@@ -560,18 +560,101 @@ export function updateRoadmapPhaseStatus(roadmap, phaseNumber, status) {
   return updatedLines.join('\n');
 }
 
+// AGENTS.md §1.17 — phase-closure artifact gate. A phase cannot transition to
+// `done` unless NN-PLAN-CHECK.md and NN-VERIFICATION.md exist in the phase
+// folder, and .internal-research/lessons-learned.md has been touched within
+// the staleness window (default 7 days). `--force` overrides the gate but
+// requires `--reason <text>` which is auto-appended as an LL-* entry.
+const PHASE_CLOSURE_LESSONS_STALENESS_DAYS = 7;
+
+function findPhaseFolder(planningDir, phaseNumber) {
+  const phasesDir = join(planningDir, 'phases');
+  if (!existsSync(phasesDir)) return null;
+  const padded = padPhase(phaseNumber);
+  for (const entry of readdirSync(phasesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(`${padded}-`)) {
+      return { dir: join(phasesDir, entry.name), padded };
+    }
+  }
+  return null;
+}
+
+function checkPhaseClosureGate(workspaceRoot, planningDir, phaseNumber) {
+  const folder = findPhaseFolder(planningDir, phaseNumber);
+  if (!folder) {
+    // No phase folder exists for this phase number. §1.17 enforces artifacts
+    // for *real* phase closures; a roadmap-only mutation (no plan/summary
+    // structure under .planning/phases/) is out of scope. Skip the gate.
+    return { ok: true, missing: [], gate_skipped: 'no phase folder' };
+  }
+  // Also skip the gate if .internal-research/ does not exist — consumer
+  // projects do not have this directory; §1.17 is internal-GSDD governance.
+  const internalResearchDir = join(workspaceRoot, '.internal-research');
+  if (!existsSync(internalResearchDir)) {
+    return { ok: true, missing: [], gate_skipped: 'no .internal-research/ directory (consumer project)' };
+  }
+  const missing = [];
+  const planCheck = join(folder.dir, `${folder.padded}-PLAN-CHECK.md`);
+  const verification = join(folder.dir, `${folder.padded}-VERIFICATION.md`);
+  if (!existsSync(planCheck)) missing.push(planCheck);
+  if (!existsSync(verification)) missing.push(verification);
+  const lessons = join(internalResearchDir, 'lessons-learned.md');
+  if (!existsSync(lessons)) {
+    missing.push(`${lessons} (file not found; §6 doc-sync evidence required)`);
+  } else {
+    const ageDays = (Date.now() - statSync(lessons).mtimeMs) / 86_400_000;
+    if (ageDays > PHASE_CLOSURE_LESSONS_STALENESS_DAYS) {
+      missing.push(
+        `${lessons} (last touched ${ageDays.toFixed(1)} days ago; must be within ${PHASE_CLOSURE_LESSONS_STALENESS_DAYS} days per §1.17)`,
+      );
+    }
+  }
+  return { ok: missing.length === 0, missing };
+}
+
+function appendForceOverrideLessonsEntry(workspaceRoot, phaseNumber, reason) {
+  const lessons = join(workspaceRoot, '.internal-research', 'lessons-learned.md');
+  if (!existsSync(lessons)) return;
+  const sanitizedReason = String(reason || '').trim();
+  const escapedPhase = String(phaseNumber).toUpperCase().replace(/[^A-Z0-9-]/g, '-');
+  const entry = [
+    '',
+    '---',
+    '',
+    `## LL-PHASE-STATUS-FORCE-OVERRIDE-${escapedPhase}-${new Date().toISOString().slice(0, 10)}`,
+    '',
+    `\`gsdd phase-status ${phaseNumber} done --force\` was invoked; the §1.17 phase-closure artifact gate was bypassed.`,
+    `**Why:** ${sanitizedReason}`,
+    `**Rule:** Force-overrides are appended here automatically so the gap is auditable. Future maintainers should treat the named phase as having an artifact gap that needs follow-up. The gate exists to prevent silent drift; \`--force\` is the explicit, auditable escape hatch, not a routine option.`,
+    '',
+  ].join('\n');
+  const current = readFileSync(lessons, 'utf-8');
+  const trimmed = current.endsWith('\n') ? current : `${current}\n`;
+  writeFileSync(lessons, trimmed + entry);
+}
+
 export function cmdPhaseStatus(...args) {
-  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  const { args: normalizedArgs, workspaceRoot, planningDir, invalid, error } = resolveWorkspaceContext(args);
   if (invalid) {
     console.error(error);
     process.exitCode = 1;
     return;
   }
+  const force = normalizedArgs.includes('--force');
+  const reasonIdx = normalizedArgs.indexOf('--reason');
+  const reason = reasonIdx !== -1 ? normalizedArgs[reasonIdx + 1] : null;
+  const positional = normalizedArgs.filter((arg, idx) => {
+    if (arg === '--force') return false;
+    if (arg === '--reason') return false;
+    if (idx > 0 && normalizedArgs[idx - 1] === '--reason') return false;
+    return true;
+  });
+  const [phaseNumber, status] = positional;
   const roadmapPath = join(planningDir, 'ROADMAP.md');
-  const [phaseNumber, status] = normalizedArgs;
 
   if (!phaseNumber || !status) {
-    console.error('Usage: gsdd phase-status <phase-number> <not_started|todo|in_progress|done>');
+    console.error('Usage: gsdd phase-status <phase-number> <not_started|todo|in_progress|done> [--force --reason <text>]');
     process.exitCode = 1;
     return;
   }
@@ -582,6 +665,33 @@ export function cmdPhaseStatus(...args) {
     return;
   }
 
+  // §1.17 phase-closure artifact gate — only fires when transitioning to `done`.
+  if (status === 'done') {
+    const gate = checkPhaseClosureGate(workspaceRoot, planningDir, phaseNumber);
+    if (!gate.ok && !force) {
+      console.error(`Refused: phase ${phaseNumber} cannot be marked done — §1.17 artifacts missing:`);
+      for (const item of gate.missing) console.error(`  - ${item}`);
+      console.error('');
+      console.error('Resolve by creating the missing artifacts, or pass `--force --reason <text>` to override.');
+      console.error('Force-overrides are auto-recorded as LL-* entries in .internal-research/lessons-learned.md.');
+      process.exitCode = 1;
+      return;
+    }
+    if (force && (!reason || !String(reason).trim())) {
+      console.error('Refused: --force requires --reason <text> describing why the gate is being bypassed.');
+      console.error('The reason will be appended as an LL-* entry to .internal-research/lessons-learned.md.');
+      process.exitCode = 1;
+      return;
+    }
+    if (force && !gate.ok) {
+      try {
+        appendForceOverrideLessonsEntry(workspaceRoot, phaseNumber, reason);
+      } catch (err) {
+        console.error(`Warning: --force succeeded but failed to append LL entry (${err.message}).`);
+      }
+    }
+  }
+
   try {
     const roadmap = readFileSync(roadmapPath, 'utf-8');
     const updated = updateRoadmapPhaseStatus(roadmap, phaseNumber, status);
@@ -590,7 +700,7 @@ export function cmdPhaseStatus(...args) {
       writeFileSync(roadmapPath, updated);
       try { writeFingerprint(planningDir); } catch { /* best-effort */ }
     }
-    output({ phase: phaseNumber, status, roadmap: '.planning/ROADMAP.md', changed });
+    output({ phase: phaseNumber, status, roadmap: '.planning/ROADMAP.md', changed, gate_overridden: status === 'done' && force });
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
