@@ -320,6 +320,34 @@ describe('gsdd models and model propagation', () => {
       assert.strictEqual(config.modelProfile, 'quality');
     });
 
+    test('rigor <level> sets rigorProfile and rewrites the resolved workflow flags', async () => {
+      writePlanningConfig(tmpDir, {});
+      const result = await runCliAsMain(tmpDir, ['rigor', 'max']);
+      assert.strictEqual(result.exitCode, 0);
+
+      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+      assert.strictEqual(config.rigorProfile, 'max');
+      assert.strictEqual(config.researchDepth, 'deep');
+      assert.strictEqual(config.workflow.showCode, true);
+      assert.strictEqual(config.workflow.askBeforeDecide, true);
+    });
+
+    test('rigor <step> <level> writes a per-step override without touching the base level', async () => {
+      writePlanningConfig(tmpDir, { rigorProfile: 'medium' });
+      const result = await runCliAsMain(tmpDir, ['rigor', 'verify', 'low']);
+      assert.strictEqual(result.exitCode, 0);
+
+      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+      assert.strictEqual(config.rigorProfile, 'medium');
+      assert.strictEqual(config.rigorOverrides.verify, 'low');
+    });
+
+    test('rigor rejects an invalid argument with a nonzero exit', async () => {
+      writePlanningConfig(tmpDir, {});
+      const result = await runCliAsMain(tmpDir, ['rigor', 'bogus']);
+      assert.strictEqual(result.exitCode, 1);
+    });
+
     test('models agent-profile writes semantic agent override', async () => {
       writePlanningConfig(tmpDir, {});
       const result = await runCliAsMain(tmpDir, ['models', 'agent-profile', '--agent', 'plan-checker', '--profile', 'quality']);
@@ -628,9 +656,36 @@ describe('gsdd models and model propagation', () => {
   });
 
   describe('rigor and cost resolvers', () => {
-    test('RIGOR_PROFILES has exactly keys quick, balanced, thorough', async () => {
+    test('RIGOR_PROFILES has the four canonical levels with the six-flag workflow shape', async () => {
       const models = await import('../bin/lib/models.mjs');
-      assert.deepStrictEqual(Object.keys(models.RIGOR_PROFILES), ['quick', 'balanced', 'thorough']);
+      assert.deepStrictEqual(Object.keys(models.RIGOR_PROFILES), ['low', 'medium', 'high', 'max']);
+      for (const level of ['low', 'medium', 'high', 'max']) {
+        const w = models.RIGOR_PROFILES[level].workflow;
+        for (const flag of ['research', 'discuss', 'planCheck', 'verifier', 'showCode', 'askBeforeDecide']) {
+          assert.ok(flag in w, `${level}.workflow.${flag} present`);
+        }
+      }
+      assert.strictEqual(models.RIGOR_PROFILES.low.workflow.showCode, false);
+      assert.strictEqual(models.RIGOR_PROFILES.medium.workflow.askBeforeDecide, false);
+      assert.strictEqual(models.RIGOR_PROFILES.high.workflow.showCode, true);
+      assert.strictEqual(models.RIGOR_PROFILES.max.workflow.askBeforeDecide, true);
+    });
+
+    test('legacy rigor names alias to the new levels', async () => {
+      const models = await import('../bin/lib/models.mjs');
+      assert.strictEqual(models.resolveRigor('quick'), models.RIGOR_PROFILES.low);
+      assert.strictEqual(models.resolveRigor('balanced'), models.RIGOR_PROFILES.medium);
+      assert.strictEqual(models.resolveRigor('thorough'), models.RIGOR_PROFILES.high);
+    });
+
+    test('resolveStepRigor honors per-step overrides then the base profile', async () => {
+      const models = await import('../bin/lib/models.mjs');
+      const config = { rigorProfile: 'low', rigorOverrides: { verify: 'max' } };
+      assert.strictEqual(models.resolveStepRigor(config, 'plan'), models.RIGOR_PROFILES.low);
+      assert.strictEqual(models.resolveStepRigor(config, 'verify'), models.RIGOR_PROFILES.max);
+      assert.strictEqual(models.effectiveRigorLevel(config, 'plan'), 'low');
+      assert.strictEqual(models.effectiveRigorLevel(config, 'verify'), 'max');
+      assert.strictEqual(models.resolveStepRigor({}, 'plan'), models.RIGOR_PROFILES.medium);
     });
 
     test('COST_PROFILES has exactly keys budget, balanced, quality', async () => {
@@ -668,13 +723,17 @@ describe('gsdd models and model propagation', () => {
       assert.ok('commitDocs' in config);
       assert.ok('modelProfile' in config);
       assert.ok('workflow' in config);
+      assert.ok('rigorProfile' in config);
       assert.ok('research' in config.workflow);
       assert.ok('discuss' in config.workflow);
       assert.ok('planCheck' in config.workflow);
       assert.ok('verifier' in config.workflow);
+      assert.ok('showCode' in config.workflow);
+      assert.ok('askBeforeDecide' in config.workflow);
       assert.ok('gitProtocol' in config);
       assert.ok('initVersion' in config);
       assert.strictEqual(config.workflow.verifier, true);
+      assert.strictEqual(config.rigorProfile, 'medium');
     });
   });
 });

@@ -11,7 +11,7 @@ import {
   upsertBoundedBlock,
   getDelegateContent,
 } from './lib/rendering.mjs';
-import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels } from './lib/models.mjs';
+import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels, cmdRigor } from './lib/models.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
 import { cmdFileOp } from './lib/file-ops.mjs';
@@ -103,6 +103,7 @@ const COMMANDS = {
   init: cmdInit,
   update: cmdUpdate,
   models: cmdModels,
+  rigor: cmdRigor,
   health: cmdHealth,
   'file-op': cmdFileOp,
   'lifecycle-preflight': cmdLifecyclePreflight,
@@ -136,4 +137,4 @@ async function runCli(cliCommand = command, ...cliArgs) {
 }
 
 if (IS_MAIN) await runCli();
-export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdCloseoutReport, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdCloseoutReport, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
