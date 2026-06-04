@@ -54,11 +54,12 @@ export async function promptForConfig(cwd, { input = process.stdin, output = pro
   const rigor = await promptSingleSelect({
     input,
     output,
-    title: 'Rigor',
+    title: 'Rigor - how much the assistant does on its own vs. shows you and asks',
     choices: [
-      { value: 'quick', label: 'quick', description: 'Faster setup with lighter planning rigor' },
-      { value: 'balanced', label: 'balanced', description: 'Recommended default for most projects' },
-      { value: 'thorough', label: 'thorough', description: 'Maximum research and plan review rigor' },
+      { value: 'low', label: 'low', description: 'Autopilot. Skips research, plan-check, and asking - it proceeds on its best guess.' },
+      { value: 'medium', label: 'medium', description: 'Recommended default. Research + a fresh-context plan-check. No helpers, no extra asking.' },
+      { value: 'high', label: 'high', description: 'Helpers propose options; shows you the code before writing; asks when something is genuinely unclear.' },
+      { value: 'max', label: 'max', description: 'Most hands-on. Asks before deciding and shows the running screen. Pick low if you just want it to go.' },
     ],
     defaultIndex: 1,
   });
@@ -88,6 +89,7 @@ export async function promptForConfig(cwd, { input = process.stdin, output = pro
   const costConfig = resolveCost(cost);
 
   return {
+    rigorProfile: rigor,
     ...rigorConfig,
     ...costConfig,
     commitDocs,

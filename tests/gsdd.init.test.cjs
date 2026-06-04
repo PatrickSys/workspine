@@ -151,6 +151,8 @@ describe('gsdd init and update', () => {
       discuss: false,
       planCheck: true,
       verifier: true,
+      showCode: false,
+      askBeforeDecide: false,
     });
 
     const launcher = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'), 'utf-8');
@@ -1197,7 +1199,7 @@ describe('gsdd init and update', () => {
       assert.strictEqual(config.autoAdvance, true);
       assert.strictEqual(config.researchDepth, 'balanced');
       assert.strictEqual(config.parallelization, true);
-      assert.deepStrictEqual(config.workflow, { research: true, discuss: false, planCheck: true, verifier: true });
+      assert.deepStrictEqual(config.workflow, { research: true, discuss: false, planCheck: true, verifier: true, showCode: false, askBeforeDecide: false });
     });
 
     test('--auto --tools all generates shared, helper, and native runtime surfaces', async () => {

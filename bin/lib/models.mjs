@@ -15,11 +15,24 @@ export const DEFAULT_GIT_PROTOCOL = {
   pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
 };
 
+// The rigor knob: one setting that decides how much the assistant does on its own
+// versus how much it shows you and asks. low = autopilot; max = most hands-on.
+// showCode + askBeforeDecide are read by the workflow markdown (=== true means on,
+// a missing key means off), so existing projects whose config predates these flags
+// are unaffected.
 export const RIGOR_PROFILES = {
-  quick:    { researchDepth: 'fast',     workflow: { research: false, discuss: false, planCheck: false, verifier: true } },
-  balanced: { researchDepth: 'balanced', workflow: { research: true,  discuss: false, planCheck: true,  verifier: true } },
-  thorough: { researchDepth: 'deep',     workflow: { research: true,  discuss: true,  planCheck: true,  verifier: true } },
+  low:    { researchDepth: 'fast',     workflow: { research: false, discuss: false, planCheck: false, verifier: true, showCode: false, askBeforeDecide: false } },
+  medium: { researchDepth: 'balanced', workflow: { research: true,  discuss: false, planCheck: true,  verifier: true, showCode: false, askBeforeDecide: false } },
+  high:   { researchDepth: 'deep',     workflow: { research: true,  discuss: true,  planCheck: true,  verifier: true, showCode: true,  askBeforeDecide: false } },
+  max:    { researchDepth: 'deep',     workflow: { research: true,  discuss: true,  planCheck: true,  verifier: true, showCode: true,  askBeforeDecide: true  } },
 };
+
+// Legacy rigor names map silently to the new levels so old configs and callers keep
+// working. medium is behaviorally identical to the old balanced default.
+export const RIGOR_ALIASES = { quick: 'low', balanced: 'medium', thorough: 'high' };
+
+export const RIGOR_LEVELS = ['low', 'medium', 'high', 'max'];
+export const RIGOR_STEPS = ['plan', 'execute', 'verify'];
 
 export const COST_PROFILES = {
   budget:   { modelProfile: 'budget',   parallelization: false },
@@ -27,8 +40,23 @@ export const COST_PROFILES = {
   quality:  { modelProfile: 'quality',  parallelization: true  },
 };
 
-export function resolveRigor(id) { return RIGOR_PROFILES[id] ?? RIGOR_PROFILES.balanced; }
+export function resolveRigor(id) {
+  const key = RIGOR_ALIASES[id] ?? id;
+  return RIGOR_PROFILES[key] ?? RIGOR_PROFILES.medium;
+}
 export function resolveCost(id)  { return COST_PROFILES[id]  ?? COST_PROFILES.balanced;  }
+
+// Per-step rigor: an explicit rigorOverrides[step] wins, else the project rigorProfile,
+// else medium. A missing override is not "off" — it just means "follow the main knob".
+export function resolveStepRigor(config, step) {
+  const overrideName = config?.rigorOverrides?.[step];
+  const baseName = config?.rigorProfile;
+  return resolveRigor(overrideName ?? baseName ?? 'medium');
+}
+
+export function effectiveRigorLevel(config, step) {
+  return config?.rigorOverrides?.[step] ?? config?.rigorProfile ?? 'medium';
+}
 
 export const VALID_MODEL_PROFILES = ['quality', 'balanced', 'budget'];
 export const PORTABLE_AGENT_IDS = ['plan-checker', 'approach-explorer'];
@@ -40,9 +68,10 @@ export function normalizeModelProfile(value) {
 }
 
 export function buildDefaultConfig({ autoAdvance = false } = {}) {
-  const rigor = resolveRigor('balanced');
+  const rigor = resolveRigor('medium');
   const cost = resolveCost('balanced');
   const config = {
+    rigorProfile: 'medium',
     ...rigor,
     ...cost,
     commitDocs: true,
@@ -408,4 +437,106 @@ function cmdModelsClearRuntimeOverride(args) {
   writeProjectConfig(result.config);
   console.log(`  - cleared ${runtime} runtime override for ${agent}`);
   console.log('  Run gsdd update to regenerate adapter files.');
+}
+
+// --- The rigor knob ---------------------------------------------------------
+// gsdd rigor                      -> show the current level + per-step overrides
+// gsdd rigor <low|medium|high|max>-> set the project-wide level
+// gsdd rigor <plan|execute|verify> <level> -> override a single step
+
+function describeRigorFlags(config) {
+  const w = config.workflow ?? {};
+  return {
+    researchDepth: config.researchDepth,
+    research: w.research,
+    discuss: w.discuss,
+    planCheck: w.planCheck,
+    verifier: w.verifier,
+    showCode: w.showCode,
+    askBeforeDecide: w.askBeforeDecide,
+  };
+}
+
+function printChangedFlags(before, after) {
+  for (const key of Object.keys(after)) {
+    if (before[key] !== after[key]) {
+      console.log(`    ${key}: ${before[key]} -> ${after[key]}`);
+    }
+  }
+}
+
+export function cmdRigor(...rigorArgs) {
+  const [first, second] = rigorArgs;
+  if (!first || first === 'show') return cmdRigorShow();
+  if (RIGOR_STEPS.includes(first)) return cmdRigorSetStep(first, second);
+  if (RIGOR_LEVELS.includes(first)) return cmdRigorSetProfile(first);
+  console.error(
+    `ERROR: Invalid rigor argument "${first}". Usage: gsdd rigor [show | ${RIGOR_LEVELS.join('|')} | <${RIGOR_STEPS.join('|')}> <level>]`,
+  );
+  process.exitCode = 1;
+}
+
+function cmdRigorShow() {
+  const config = loadProjectModelConfig(process.cwd());
+  const base = config.rigorProfile ?? 'medium';
+  output({
+    rigorProfile: base,
+    rigorOverrides: config.rigorOverrides ?? {},
+    effective: {
+      plan: effectiveRigorLevel(config, 'plan'),
+      execute: effectiveRigorLevel(config, 'execute'),
+      verify: effectiveRigorLevel(config, 'verify'),
+    },
+    workflow: config.workflow ?? resolveRigor(base).workflow,
+  });
+}
+
+function cmdRigorSetProfile(level) {
+  if (!isProjectInitialized()) {
+    console.error('ERROR: Project not initialized. Run gsdd init first.');
+    process.exitCode = 1;
+    return;
+  }
+  const result = loadConfigForMutation();
+  if (!result.ok) {
+    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running rigor mutations.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const before = describeRigorFlags(result.config);
+  const resolved = resolveRigor(level);
+  result.config.rigorProfile = level;
+  result.config.researchDepth = resolved.researchDepth;
+  result.config.workflow = { ...resolved.workflow };
+  const after = describeRigorFlags(result.config);
+  writeProjectConfig(result.config);
+
+  console.log(`  - set rigor to ${level}`);
+  printChangedFlags(before, after);
+}
+
+function cmdRigorSetStep(step, level) {
+  if (!RIGOR_LEVELS.includes(level)) {
+    console.error(`ERROR: Invalid rigor level "${level}". Valid levels: ${RIGOR_LEVELS.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!isProjectInitialized()) {
+    console.error('ERROR: Project not initialized. Run gsdd init first.');
+    process.exitCode = 1;
+    return;
+  }
+  const result = loadConfigForMutation();
+  if (!result.ok) {
+    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running rigor mutations.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  result.config.rigorOverrides = result.config.rigorOverrides || {};
+  const previous = result.config.rigorOverrides[step] ?? `(follows ${result.config.rigorProfile ?? 'medium'})`;
+  result.config.rigorOverrides[step] = level;
+  writeProjectConfig(result.config);
+  console.log(`  - set ${step} rigor override: ${previous} -> ${level}`);
 }

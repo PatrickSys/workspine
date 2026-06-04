@@ -320,6 +320,7 @@ function ensureGitignoreEntry(cwd, entry, message) {
 
 function printInitSummary(config) {
   console.log('Config summary:');
+  console.log(`  - rigorProfile: ${config.rigorProfile}`);
   console.log(`  - researchDepth: ${config.researchDepth}`);
   console.log(`  - parallelization: ${config.parallelization}`);
   console.log(`  - commitDocs: ${config.commitDocs}`);
@@ -330,6 +331,8 @@ function printInitSummary(config) {
     console.log(`  - workflow.discuss: ${config.workflow.discuss}`);
     console.log(`  - workflow.planCheck: ${config.workflow.planCheck}`);
     console.log(`  - workflow.verifier: ${config.workflow.verifier}`);
+    console.log(`  - workflow.showCode: ${config.workflow.showCode}`);
+    console.log(`  - workflow.askBeforeDecide: ${config.workflow.askBeforeDecide}`);
   }
   console.log('');
 }
