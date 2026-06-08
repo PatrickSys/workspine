@@ -2699,6 +2699,93 @@ describe('Phase 57 UI proof validation helper', () => {
     assert.strictEqual(result.valid, true, JSON.stringify(result.errors));
   });
 
+  test('optional runtime capture benchmark metadata validates when provider neutral and artifact-linked', async () => {
+    const mod = await importUiProofModule();
+    const bundle = validBundle({
+      evidence_inputs: { kinds: ['test', 'runtime'], tools_used: ['agent-browser'] },
+    });
+    bundle.artifacts.push({
+      path: 'artifacts/example-1280.png',
+      type: 'screenshot',
+      visibility: 'local_only',
+      retention: 'temporary_review',
+      sensitivity: 'synthetic',
+      safe_to_publish: false,
+    });
+    bundle.observations[0].artifact_refs.push('artifacts/example-1280.png');
+    bundle.runtime_capture = {
+      provider: {
+        primary: 'agent-browser',
+        selected: 'agent-browser',
+        fallback_chain: ['agent-browser', 'direct-cdp'],
+        availability: [{ provider: 'agent-browser', status: 'available' }],
+      },
+      captures: [{
+        mode: 'screenshot',
+        slot_ids: ['quick-001-ui-01'],
+        artifact_refs: ['artifacts/example-1280.png'],
+        latency_ms: 420,
+        raw_bytes: 184224,
+        text_bytes: 0,
+        estimated_tokens: 0,
+        token_estimate_method: 'not_applicable',
+        result: 'passed',
+      }, {
+        mode: 'interactive_snapshot',
+        slot_ids: ['quick-001-ui-01'],
+        latency_ms: 180,
+        text_bytes: 2200,
+        estimated_tokens: 550,
+        token_estimate_method: 'rough_char_div_4',
+        result: 'passed',
+      }],
+      fidelity: {
+        sees_pixels: true,
+        includes_accessibility_tree: true,
+        includes_dom_subset: false,
+        includes_computed_styles: false,
+        includes_framework_state: false,
+        claim_limits: ['No selected-element computed style capture was required.'],
+      },
+    };
+
+    const result = mod.validateUiProofBundle(bundle);
+    assert.strictEqual(result.valid, true, JSON.stringify(result.errors));
+  });
+
+  test('runtime capture benchmark metadata rejects malformed modes provider status metrics and artifact refs', async () => {
+    const mod = await importUiProofModule();
+    const bundle = validBundle({
+      runtime_capture: {
+        provider: {
+          primary: 'agent browser',
+          selected: 'agent-browser',
+          fallback_chain: ['agent-browser'],
+          availability: [{ provider: 'agent-browser', status: 'maybe' }],
+        },
+        captures: [{
+          mode: 'full_dom_dump',
+          slot_ids: ['quick-001-ui-01'],
+          artifact_refs: ['artifacts/missing.png'],
+          latency_ms: -1,
+          raw_bytes: 1,
+          text_bytes: 1,
+          estimated_tokens: 1,
+          result: 'ok',
+        }],
+      },
+    });
+
+    const result = mod.validateUiProofBundle(bundle);
+    assert.strictEqual(result.valid, false);
+    assert.ok(result.errors.some((error) => error.code === 'invalid_runtime_capture_provider_id'));
+    assert.ok(result.errors.some((error) => error.code === 'invalid_runtime_capture_availability_status'));
+    assert.ok(result.errors.some((error) => error.code === 'unsupported_runtime_capture_mode'));
+    assert.ok(result.errors.some((error) => error.code === 'invalid_runtime_capture_metric'));
+    assert.ok(result.errors.some((error) => error.code === 'invalid_runtime_capture_result'));
+    assert.ok(result.errors.some((error) => error.code === 'unknown_runtime_capture_artifact_ref'));
+  });
+
   test('fenced JSON in markdown parses but YAML-only bundles fail', async () => {
     const mod = await importUiProofModule();
     const bundle = validBundle();
@@ -2728,6 +2815,53 @@ describe('Phase 57 UI proof validation helper', () => {
     assert.ok(result.errors.some((error) => error.code === 'invalid_comparison_status'));
     assert.ok(result.errors.some((error) => error.code === 'missing_claim_limits'));
     assert.ok(result.errors.some((error) => error.path === 'artifacts[0].safe_to_publish'));
+  });
+
+  test('planned runtime capture requirements are optional but validated when present', async () => {
+    const mod = await importUiProofModule();
+    const baseSlot = {
+      slot_id: 'quick-001-ui-01',
+      claim: 'Local reviewer can inspect the changed UI proof metadata.',
+      route_state: { route: '/example', state: 'synthetic user' },
+      required_evidence_kinds: ['runtime'],
+      minimum_observations: ['Changed state is visible.'],
+      expected_artifact_types: ['screenshot'],
+      validation_command: 'gsdd ui-proof compare .planning/ui-proof-slots.json .planning/ui-proof.json',
+      environment: { app_url: 'http://localhost:3000', data_state: 'synthetic' },
+      viewport: { width: 1280, height: 720 },
+      manual_acceptance_required: false,
+      claim_limit: 'Does not prove unrelated UI states.',
+    };
+
+    const valid = mod.validateUiProofSlots([{
+      ...baseSlot,
+      runtime_capture_requirements: {
+        provider_preference: ['agent-browser', 'direct-cdp'],
+        fallback_policy: 'record_availability_and_narrow_claim',
+        required_modes: ['screenshot', 'interactive_snapshot'],
+        optional_modes: ['computed_style'],
+        budgets: {
+          text_bytes_max: 24000,
+          estimated_tokens_max: 6000,
+          raw_artifact_bytes_max: 5000000,
+          screenshot_count_max: 4,
+        },
+      },
+    }]);
+    assert.strictEqual(valid.valid, true, JSON.stringify(valid.errors));
+
+    const invalid = mod.validateUiProofSlots([{
+      ...baseSlot,
+      runtime_capture_requirements: {
+        provider_preference: ['agent browser'],
+        required_modes: ['full_dom_dump'],
+        budgets: { estimated_tokens_max: -1 },
+      },
+    }]);
+    assert.strictEqual(invalid.valid, false);
+    assert.ok(invalid.errors.some((error) => error.code === 'invalid_runtime_capture_provider_id'));
+    assert.ok(invalid.errors.some((error) => error.code === 'unsupported_runtime_capture_mode'));
+    assert.ok(invalid.errors.some((error) => error.code === 'invalid_runtime_capture_budget'));
   });
 
   test('tool provenance must use concise tool identifiers', async () => {
@@ -3210,6 +3344,85 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     return slotsPath;
   }
 
+  function runtimeCaptureSlot(overrides = {}) {
+    return {
+      ...plannedSlots()[0],
+      expected_artifact_types: ['source', 'metadata', 'screenshot'],
+      runtime_capture_requirements: {
+        provider_preference: ['agent-browser'],
+        fallback_policy: 'record_availability_and_narrow_claim',
+        required_modes: ['screenshot', 'interactive_snapshot'],
+        optional_modes: ['computed_style'],
+        budgets: {
+          text_bytes_max: 24000,
+          estimated_tokens_max: 6000,
+          raw_artifact_bytes_max: 5000000,
+          screenshot_count_max: 4,
+        },
+      },
+      ...overrides,
+    };
+  }
+
+  function runtimeCaptureBundle(overrides = {}) {
+    const bundle = dogfoodBundle();
+    const screenshotPath = '.planning/phases/58-dogfood-ui-proof-loop/artifacts/dogfood-1280.png';
+    bundle.evidence_inputs = { kinds: ['code', 'test', 'runtime'], tools_used: ['node:test', 'agent-browser'] };
+    bundle.artifacts = [
+      ...bundle.artifacts,
+      {
+        path: screenshotPath,
+        type: 'screenshot',
+        visibility: 'local_only',
+        retention: 'temporary_review',
+        sensitivity: 'synthetic',
+        safe_to_publish: false,
+      },
+    ];
+    bundle.observations = bundle.observations.map((observation) => ({
+      ...observation,
+      artifact_refs: [...observation.artifact_refs, screenshotPath],
+    }));
+    bundle.runtime_capture = {
+      provider: {
+        primary: 'agent-browser',
+        selected: 'agent-browser',
+        fallback_chain: ['agent-browser', 'direct-cdp', 'chrome-devtools-mcp', 'playwright-mcp', 'manual'],
+        fallback_reason: null,
+        availability: [{ provider: 'agent-browser', status: 'available' }],
+      },
+      captures: [{
+        mode: 'screenshot',
+        slot_ids: ['ui-58-valid-scoped-proof'],
+        artifact_refs: [screenshotPath],
+        latency_ms: 420,
+        raw_bytes: 184224,
+        text_bytes: 0,
+        estimated_tokens: 0,
+        token_estimate_method: 'not_applicable',
+        result: 'passed',
+      }, {
+        mode: 'interactive_snapshot',
+        slot_ids: ['ui-58-valid-scoped-proof'],
+        latency_ms: 180,
+        raw_bytes: 0,
+        text_bytes: 2200,
+        estimated_tokens: 550,
+        token_estimate_method: 'rough_char_div_4',
+        result: 'passed',
+      }],
+      fidelity: {
+        sees_pixels: true,
+        includes_accessibility_tree: true,
+        includes_dom_subset: false,
+        includes_computed_styles: false,
+        includes_framework_state: false,
+        claim_limits: ['No selected-element computed style capture was required for this slot.'],
+      },
+    };
+    return { ...bundle, ...overrides };
+  }
+
   test('planned-vs-observed comparison satisfies valid scoped proof and fails closed on missing proof', async () => {
     const mod = await importUiProofModule();
     const slots = plannedSlots();
@@ -3224,6 +3437,83 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     const missingIssue = result.slots[1].issues.find((issue) => issue.code === 'missing_observed_bundle');
     assert.strictEqual(missingIssue.severity, 'blocker');
     assert.match(missingIssue.fix_hint, /observed UI proof bundle/);
+  });
+
+  test('planned runtime capture requirements compare against observed benchmark captures', async () => {
+    const mod = await importUiProofModule();
+    const result = mod.compareUiProofSlots([runtimeCaptureSlot()], [runtimeCaptureBundle()]);
+
+    assert.strictEqual(result.status, 'satisfied', JSON.stringify(result));
+    assert.strictEqual(result.slots[0].status, 'satisfied');
+  });
+
+  test('direct-cdp fallback can satisfy runtime capture when availability and claim narrowing are explicit', async () => {
+    const mod = await importUiProofModule();
+    const result = mod.compareUiProofSlots([runtimeCaptureSlot()], [runtimeCaptureBundle({
+      evidence_inputs: { kinds: ['code', 'test', 'runtime'], tools_used: ['node:test', 'direct-cdp'] },
+      runtime_capture: {
+        ...runtimeCaptureBundle().runtime_capture,
+        provider: {
+          primary: 'agent-browser',
+          selected: 'direct-cdp',
+          fallback_chain: ['agent-browser', 'direct-cdp'],
+          fallback_reason: 'agent-browser unavailable in this runtime; direct-cdp attached to an approved local browser for scoped proof.',
+          availability: [
+            { provider: 'agent-browser', status: 'unavailable' },
+            { provider: 'direct-cdp', status: 'available' },
+          ],
+        },
+      },
+      claim_limits: [
+        ...runtimeCaptureBundle().claim_limits,
+        'direct-cdp fallback proves scoped local runtime capture only; it does not make direct-cdp the default provider.',
+      ],
+    })]);
+
+    assert.strictEqual(result.status, 'satisfied', JSON.stringify(result));
+  });
+
+  test('runtime capture comparison reports missing required modes budget overflow and unexplained fallback', async () => {
+    const mod = await importUiProofModule();
+    const observed = runtimeCaptureBundle({
+      runtime_capture: {
+        ...runtimeCaptureBundle().runtime_capture,
+        provider: {
+          primary: 'agent-browser',
+          selected: 'direct-cdp',
+          fallback_chain: ['agent-browser', 'direct-cdp'],
+          availability: [{ provider: 'direct-cdp', status: 'available' }],
+        },
+        captures: [{
+          mode: 'screenshot',
+          slot_ids: ['ui-58-valid-scoped-proof'],
+          artifact_refs: ['.planning/phases/58-dogfood-ui-proof-loop/artifacts/dogfood-1280.png'],
+          latency_ms: 420,
+          raw_bytes: 184224,
+          text_bytes: 26000,
+          estimated_tokens: 7000,
+          result: 'passed',
+        }],
+      },
+    });
+
+    const result = mod.compareUiProofSlots([runtimeCaptureSlot({
+      runtime_capture_requirements: {
+        ...runtimeCaptureSlot().runtime_capture_requirements,
+        required_modes: ['screenshot', 'interactive_snapshot', 'computed_style'],
+        budgets: {
+          text_bytes_max: 24000,
+          estimated_tokens_max: 6000,
+          raw_artifact_bytes_max: 5000000,
+        },
+      },
+    })], [observed]);
+
+    assert.strictEqual(result.status, 'partial');
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'missing_runtime_capture_mode' && /interactive_snapshot/.test(issue.message)));
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'missing_runtime_capture_mode' && /computed_style/.test(issue.message)));
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'runtime_capture_budget_exceeded'));
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'runtime_capture_fallback_missing_reason'));
   });
 
   test('planned-vs-observed comparison fails closed on weak planned slots', async () => {
@@ -3448,6 +3738,30 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.strictEqual(output.planned, '.planning/phases/58-dogfood-ui-proof-loop/ui-proof-slots.json');
     assert.deepStrictEqual(output.observed, ['.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json']);
     assert.deepStrictEqual(output.slots.map((slot) => [slot.slot_id, slot.status]), [['ui-58-valid-scoped-proof', 'satisfied']]);
+  });
+
+  test('fixture runtime capture slots and bundle compare as satisfied without live browser tooling', async () => {
+    const mod = await importUiProofModule();
+    const slots = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'ui-proof', 'browser-runtime-capture-slots.json'), 'utf-8'));
+    const bundle = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'ui-proof', 'browser-runtime-capture-bundle.json'), 'utf-8'));
+
+    const result = mod.compareUiProofSlots(slots.ui_proof_slots, [bundle]);
+    assert.strictEqual(result.status, 'satisfied', JSON.stringify(result));
+    assert.deepStrictEqual(result.slots.map((slot) => [slot.slot_id, slot.status]), [
+      ['ui-browser-agent-primary', 'satisfied'],
+      ['ui-browser-direct-cdp-fallback', 'satisfied'],
+    ]);
+  });
+
+  test('fixture runtime capture comparison fails when required screenshot capture is absent', async () => {
+    const mod = await importUiProofModule();
+    const slots = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'ui-proof', 'browser-runtime-capture-slots.json'), 'utf-8'));
+    const bundle = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'ui-proof', 'browser-runtime-capture-bundle.json'), 'utf-8'));
+    bundle.runtime_capture.captures = bundle.runtime_capture.captures.filter((capture) => capture.mode !== 'screenshot');
+
+    const result = mod.compareUiProofSlots([slots.ui_proof_slots[0]], [bundle]);
+    assert.strictEqual(result.status, 'partial');
+    assert.ok(result.slots[0].issues.some((issue) => issue.code === 'missing_runtime_capture_mode'));
   });
 
   test('Phase 59 ui-proof compare command rejects weak planned slots deterministically', async () => {
@@ -3807,6 +4121,28 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.strictEqual(output.ui_proof.satisfied, true);
     assert.strictEqual(output.uiProof.status, 'satisfied');
     assert.deepStrictEqual(output.uiProof.observed, ['.planning/phases/01-ui-proof/proof-bundle.json']);
+  });
+
+  test('phase verify blocks when planned runtime capture requirements lack observed capture metadata', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-ui-proof-capture');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots:\n  - slot_id: ui-58-valid-scoped-proof\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+    fs.writeFileSync(path.join(phaseDir, 'ui-proof-slots.json'), JSON.stringify({ ui_proof_slots: [runtimeCaptureSlot()] }, null, 2));
+    writeDogfoodFixture();
+    fs.copyFileSync(
+      path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'proof-bundle.json'),
+      path.join(phaseDir, 'proof-bundle.json')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.verified, false);
+    assert.deepStrictEqual(output.blocked_on, ['ui_proof']);
+    assert.strictEqual(output.uiProof.status, 'partial');
+    assert.ok(output.uiProof.comparison.slots[0].issues.some((issue) => issue.code === 'missing_runtime_capture'));
   });
 
   test('phase verify ignores stale UI proof sidecars when the plan records no-UI rationale', async () => {

@@ -1,0 +1,78 @@
+{
+  "ui_proof_slots": [
+    {
+      "slot_id": "ui-browser-agent-primary",
+      "requirement_id": "UIPROOF-BROWSER-01",
+      "claim": "Browser runtime capture metadata can support scoped local UI proof without installing browser infrastructure.",
+      "route_state": {
+        "route": "/synthetic-browser-proof",
+        "state": "seeded synthetic browser capture fixture"
+      },
+      "required_evidence_kinds": ["test", "runtime"],
+      "minimum_observations": [
+        "Rendered state has a screenshot capture linked to a local-only artifact.",
+        "Interactive snapshot capture stays within the planned budget."
+      ],
+      "expected_artifact_types": ["screenshot", "metadata"],
+      "validation_command": "gsdd ui-proof compare fixtures/ui-proof/browser-runtime-capture-slots.json fixtures/ui-proof/browser-runtime-capture-bundle.json",
+      "environment": {
+        "app_url": "http://localhost:3000/synthetic-browser-proof",
+        "data_state": "synthetic"
+      },
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "manual_acceptance_required": false,
+      "claim_limit": "Proves benchmark metadata comparison only; does not prove live browser rendering, cross-browser behavior, or public release proof.",
+      "runtime_capture_requirements": {
+        "provider_preference": ["agent-browser"],
+        "fallback_policy": "record_availability_and_narrow_claim",
+        "required_modes": ["screenshot", "interactive_snapshot"],
+        "optional_modes": ["console_delta", "network_delta"],
+        "budgets": {
+          "text_bytes_max": 24000,
+          "estimated_tokens_max": 6000,
+          "raw_artifact_bytes_max": 5000000,
+          "screenshot_count_max": 4
+        }
+      }
+    },
+    {
+      "slot_id": "ui-browser-direct-cdp-fallback",
+      "requirement_id": "UIPROOF-BROWSER-02",
+      "claim": "Browser runtime capture metadata can support scoped local UI proof without installing browser infrastructure.",
+      "route_state": {
+        "route": "/synthetic-browser-proof",
+        "state": "seeded synthetic browser capture fixture"
+      },
+      "required_evidence_kinds": ["test", "runtime"],
+      "minimum_observations": [
+        "Selected element computed-style capture is represented as bounded metadata."
+      ],
+      "expected_artifact_types": ["screenshot", "metadata"],
+      "validation_command": "gsdd ui-proof compare fixtures/ui-proof/browser-runtime-capture-slots.json fixtures/ui-proof/browser-runtime-capture-bundle.json",
+      "environment": {
+        "app_url": "http://localhost:3000/synthetic-browser-proof",
+        "data_state": "synthetic"
+      },
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "manual_acceptance_required": false,
+      "claim_limit": "Proves bounded selected-element CSS metadata only; direct-cdp remains an escalation path, not the default provider.",
+      "runtime_capture_requirements": {
+        "provider_preference": ["agent-browser", "direct-cdp"],
+        "fallback_policy": "record_availability_and_narrow_claim",
+        "required_modes": ["computed_style"],
+        "optional_modes": ["selected_element_dom"],
+        "budgets": {
+          "text_bytes_max": 24000,
+          "estimated_tokens_max": 6000,
+          "computed_style_properties_max": 80
+        }
+      }
+    }
+  ]
+}

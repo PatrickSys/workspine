@@ -1,0 +1,203 @@
+{
+  "proof_bundle_version": 1,
+  "scope": {
+    "work_item": "browser-runtime-capture-fixture",
+    "requirement_ids": ["UIPROOF-BROWSER-01", "UIPROOF-BROWSER-02"],
+    "slot_ids": ["ui-browser-agent-primary", "ui-browser-direct-cdp-fallback"],
+    "claim": "Browser runtime capture metadata can support scoped local UI proof without installing browser infrastructure."
+  },
+  "route_state": {
+    "route": "/synthetic-browser-proof",
+    "state": "seeded synthetic browser capture fixture"
+  },
+  "environment": {
+    "app_url": "http://localhost:3000/synthetic-browser-proof",
+    "data_state": "synthetic"
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "evidence_inputs": {
+    "kinds": ["test", "runtime"],
+    "tools_used": ["agent-browser", "direct-cdp"]
+  },
+  "commands_or_manual_steps": [
+    {
+      "command": "gsdd ui-proof compare fixtures/ui-proof/browser-runtime-capture-slots.json fixtures/ui-proof/browser-runtime-capture-bundle.json",
+      "result": "passed",
+      "attempts": 1
+    }
+  ],
+  "observations": [
+    {
+      "observation": "Rendered state has a screenshot capture linked to a local-only artifact.",
+      "claim": "Browser runtime capture metadata can support scoped local UI proof without installing browser infrastructure.",
+      "route_state": {
+        "route": "/synthetic-browser-proof",
+        "state": "seeded synthetic browser capture fixture"
+      },
+      "evidence_kind": "runtime",
+      "artifact_refs": ["fixtures/ui-proof/artifacts/synthetic-browser-1280.png", "fixtures/ui-proof/browser-runtime-capture-bundle.json"],
+      "privacy": {
+        "data_classification": "synthetic",
+        "raw_artifacts_safe_to_publish": false,
+        "retention": "temporary_review"
+      },
+      "result": "passed",
+      "claim_limit": "Proves benchmark metadata comparison only; does not prove live browser rendering, cross-browser behavior, or public release proof."
+    },
+    {
+      "observation": "Interactive snapshot capture stays within the planned budget.",
+      "claim": "Browser runtime capture metadata can support scoped local UI proof without installing browser infrastructure.",
+      "route_state": {
+        "route": "/synthetic-browser-proof",
+        "state": "seeded synthetic browser capture fixture"
+      },
+      "evidence_kind": "runtime",
+      "artifact_refs": ["fixtures/ui-proof/browser-runtime-capture-bundle.json"],
+      "privacy": {
+        "data_classification": "synthetic",
+        "raw_artifacts_safe_to_publish": false,
+        "retention": "temporary_review"
+      },
+      "result": "passed",
+      "claim_limit": "Proves benchmark metadata comparison only; does not prove live browser rendering, cross-browser behavior, or public release proof."
+    },
+    {
+      "observation": "Selected element computed-style capture is represented as bounded metadata.",
+      "claim": "Browser runtime capture metadata can support scoped local UI proof without installing browser infrastructure.",
+      "route_state": {
+        "route": "/synthetic-browser-proof",
+        "state": "seeded synthetic browser capture fixture"
+      },
+      "evidence_kind": "runtime",
+      "artifact_refs": ["fixtures/ui-proof/browser-runtime-capture-bundle.json"],
+      "privacy": {
+        "data_classification": "synthetic",
+        "raw_artifacts_safe_to_publish": false,
+        "retention": "temporary_review"
+      },
+      "result": "passed",
+      "claim_limit": "Proves bounded selected-element CSS metadata only; direct-cdp remains an escalation path, not the default provider."
+    },
+    {
+      "observation": "Fixture comparison is covered by deterministic node:test assertions.",
+      "claim": "Browser runtime capture metadata can support scoped local UI proof without installing browser infrastructure.",
+      "route_state": {
+        "route": "/synthetic-browser-proof",
+        "state": "seeded synthetic browser capture fixture"
+      },
+      "evidence_kind": "test",
+      "artifact_refs": ["fixtures/ui-proof/browser-runtime-capture-bundle.json"],
+      "privacy": {
+        "data_classification": "synthetic",
+        "raw_artifacts_safe_to_publish": false,
+        "retention": "temporary_review"
+      },
+      "result": "passed",
+      "claim_limit": "Proves benchmark metadata comparison only; does not prove live browser rendering, cross-browser behavior, or public release proof."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "fixtures/ui-proof/artifacts/synthetic-browser-1280.png",
+      "type": "screenshot",
+      "visibility": "local_only",
+      "retention": "temporary_review",
+      "sensitivity": "synthetic",
+      "safe_to_publish": false,
+      "notes": "Synthetic local screenshot reference; raw artifact is not tracked and is not public proof."
+    },
+    {
+      "path": "fixtures/ui-proof/browser-runtime-capture-bundle.json",
+      "type": "metadata",
+      "visibility": "local_only",
+      "retention": "temporary_review",
+      "sensitivity": "synthetic",
+      "safe_to_publish": false
+    }
+  ],
+  "runtime_capture": {
+    "provider": {
+      "primary": "agent-browser",
+      "selected": "agent-browser",
+      "fallback_chain": ["agent-browser", "direct-cdp", "chrome-devtools-mcp", "playwright-mcp", "manual"],
+      "fallback_reason": null,
+      "availability": [
+        {
+          "provider": "agent-browser",
+          "status": "available"
+        },
+        {
+          "provider": "direct-cdp",
+          "status": "available"
+        }
+      ]
+    },
+    "captures": [
+      {
+        "mode": "screenshot",
+        "slot_ids": ["ui-browser-agent-primary"],
+        "artifact_refs": ["fixtures/ui-proof/artifacts/synthetic-browser-1280.png"],
+        "latency_ms": 420,
+        "raw_bytes": 184224,
+        "text_bytes": 0,
+        "estimated_tokens": 0,
+        "token_estimate_method": "not_applicable",
+        "result": "passed"
+      },
+      {
+        "mode": "interactive_snapshot",
+        "slot_ids": ["ui-browser-agent-primary"],
+        "latency_ms": 180,
+        "raw_bytes": 0,
+        "text_bytes": 2200,
+        "estimated_tokens": 550,
+        "token_estimate_method": "rough_char_div_4",
+        "result": "passed"
+      },
+      {
+        "mode": "computed_style",
+        "provider": "direct-cdp",
+        "slot_ids": ["ui-browser-direct-cdp-fallback"],
+        "latency_ms": 95,
+        "raw_bytes": 0,
+        "text_bytes": 1800,
+        "estimated_tokens": 450,
+        "computed_style_properties": 34,
+        "token_estimate_method": "rough_char_div_4",
+        "result": "passed"
+      }
+    ],
+    "fidelity": {
+      "sees_pixels": true,
+      "includes_accessibility_tree": true,
+      "includes_dom_subset": false,
+      "includes_computed_styles": true,
+      "includes_framework_state": false,
+      "claim_limits": [
+        "No raw DOM dump is included.",
+        "Computed-style evidence is bounded to the selected element."
+      ]
+    }
+  },
+  "privacy": {
+    "data_classification": "synthetic",
+    "redactions": [],
+    "raw_artifacts_safe_to_publish": false,
+    "retention": "Keep metadata bundle; keep raw artifacts only while needed for local review."
+  },
+  "result": {
+    "claim_status": "passed",
+    "comparison_status_by_slot": {
+      "ui-browser-agent-primary": "satisfied",
+      "ui-browser-direct-cdp-fallback": "satisfied"
+    },
+    "failure_classification": null
+  },
+  "claim_limits": [
+    "Proves benchmark metadata comparison only; does not prove live browser rendering, cross-browser behavior, or public release proof.",
+    "Proves bounded selected-element CSS metadata only; direct-cdp remains an escalation path, not the default provider."
+  ]
+}

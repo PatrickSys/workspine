@@ -11,6 +11,38 @@ const RAW_ARTIFACT_TYPES = Object.freeze(['screenshot', 'trace', 'video', 'dom_s
 const PUBLIC_CLAIM_USES = Object.freeze(['public', 'publication', 'tracked', 'delivery', 'release']);
 const CLAIM_USES = Object.freeze([...PUBLIC_CLAIM_USES, 'local', 'local_only']);
 const FAILURE_CLASSIFICATIONS = Object.freeze(['product_bug', 'missing_infra', 'flaky_harness', 'ambiguous_spec']);
+const RUNTIME_CAPTURE_MODES = Object.freeze([
+  'screenshot',
+  'interactive_snapshot',
+  'accessibility_snapshot',
+  'dom_subset',
+  'selected_element_dom',
+  'computed_style',
+  'console_delta',
+  'network_delta',
+  'framework_state',
+  'manual_observation',
+]);
+const RUNTIME_CAPTURE_AVAILABILITY_STATUSES = Object.freeze(['available', 'unavailable', 'not_configured', 'skipped', 'failed']);
+const RUNTIME_CAPTURE_METRIC_FIELDS = Object.freeze([
+  'latency_ms',
+  'raw_bytes',
+  'text_bytes',
+  'estimated_tokens',
+  'screenshot_count',
+  'computed_style_properties',
+  'console_event_count',
+  'network_event_count',
+]);
+const RUNTIME_CAPTURE_BUDGET_FIELD_MAP = Object.freeze({
+  text_bytes_max: 'text_bytes',
+  estimated_tokens_max: 'estimated_tokens',
+  raw_artifact_bytes_max: 'raw_bytes',
+  screenshot_count_max: 'screenshot_count',
+  computed_style_properties_max: 'computed_style_properties',
+  console_event_count_max: 'console_event_count',
+  network_event_count_max: 'network_event_count',
+});
 const TOOL_ID_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/;
 const REQUIRED_BUNDLE_FIELDS = Object.freeze([
   'proof_bundle_version',
@@ -265,6 +297,63 @@ function validateClaimLimits(bundle, errors) {
   }
 }
 
+function validateRuntimeCaptureProviderId(value, path, errors) {
+  if (!hasValue(value)) return;
+  if (typeof value !== 'string' || !TOOL_ID_PATTERN.test(value)) {
+    addError(errors, 'invalid_runtime_capture_provider_id', path, `Invalid runtime capture provider identifier: ${value}`, 'Use a concise lowercase provider identifier without spaces; do not encode provider-specific schema in the validator.');
+  }
+}
+
+function validateNonNegativeNumber(value, path, errors, code, label) {
+  if (!hasValue(value)) return;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    addError(errors, code, path, `${label} must be a non-negative number.`, 'Record numeric runtime capture costs as non-negative numbers, or omit the field when unknown.');
+  }
+}
+
+function validateRuntimeCaptureModes(values, path, errors) {
+  for (const [index, mode] of normalizeArray(values).entries()) {
+    if (!RUNTIME_CAPTURE_MODES.includes(mode)) {
+      addError(errors, 'unsupported_runtime_capture_mode', `${path}[${index}]`, `Unsupported runtime capture mode: ${mode}`, `Use only: ${RUNTIME_CAPTURE_MODES.join(', ')}.`);
+    }
+  }
+}
+
+function runtimeCaptureRequirements(slot) {
+  return slot?.runtime_capture_requirements || slot?.runtimeCaptureRequirements;
+}
+
+function validateRuntimeCaptureRequirements(requirements, path, errors) {
+  if (!hasValue(requirements)) return;
+  if (!isPlainObject(requirements)) {
+    addError(errors, 'invalid_runtime_capture_requirements', path, 'Runtime capture requirements must be an object.', 'Record provider preferences, capture modes, and budgets as structured metadata.');
+    return;
+  }
+
+  for (const [index, provider] of normalizeArray(requirements.provider_preference || requirements.providerPreference).entries()) {
+    validateRuntimeCaptureProviderId(provider, `${path}.provider_preference[${index}]`, errors);
+  }
+  if (hasValue(requirements.fallback_policy || requirements.fallbackPolicy) && typeof (requirements.fallback_policy || requirements.fallbackPolicy) !== 'string') {
+    addError(errors, 'invalid_runtime_capture_fallback_policy', `${path}.fallback_policy`, 'Runtime capture fallback policy must be a string.', 'Record a concise fallback policy such as record_availability_and_narrow_claim.');
+  }
+  validateRuntimeCaptureModes(requirements.required_modes || requirements.requiredModes, `${path}.required_modes`, errors);
+  validateRuntimeCaptureModes(requirements.optional_modes || requirements.optionalModes, `${path}.optional_modes`, errors);
+
+  const budgets = requirements.budgets;
+  if (!hasValue(budgets)) return;
+  if (!isPlainObject(budgets)) {
+    addError(errors, 'invalid_runtime_capture_budget', `${path}.budgets`, 'Runtime capture budgets must be an object.', 'Record runtime capture budgets as named non-negative numeric limits.');
+    return;
+  }
+  for (const [field, value] of Object.entries(budgets)) {
+    if (!Object.prototype.hasOwnProperty.call(RUNTIME_CAPTURE_BUDGET_FIELD_MAP, field)) {
+      addError(errors, 'unsupported_runtime_capture_budget', `${path}.budgets.${field}`, `Unsupported runtime capture budget field: ${field}`, `Use only: ${Object.keys(RUNTIME_CAPTURE_BUDGET_FIELD_MAP).join(', ')}.`);
+      continue;
+    }
+    validateNonNegativeNumber(value, `${path}.budgets.${field}`, errors, 'invalid_runtime_capture_budget', 'Runtime capture budget');
+  }
+}
+
 function artifactReference(artifact) {
   if (!isPlainObject(artifact)) return null;
   if (typeof artifact.path === 'string' && artifact.path.trim()) return artifact.path.trim();
@@ -366,6 +455,7 @@ export function validateUiProofSlots(slots) {
     if (normalizeArray(slot.expected_artifact_types || slot.expectedArtifactTypes).length === 0) {
       addError(errors, 'missing_expected_artifact_types', `${slotPath}.expected_artifact_types`, 'Planned UI proof slot must include expected artifact types.', 'List expected artifact types such as screenshot, trace, report, or dom_snapshot.');
     }
+    validateRuntimeCaptureRequirements(runtimeCaptureRequirements(slot), `${slotPath}.runtime_capture_requirements`, errors);
   }
 
   return { valid: errors.length === 0, errors, warnings: [] };
@@ -395,6 +485,121 @@ function validateObservationArtifactRefs(bundle, artifactRefs, errors) {
       if (!artifactRefs.has(ref)) {
         addError(errors, 'unknown_artifact_ref', `observations[${index}].artifact_refs[${refIndex}]`, `Observation references undeclared UI proof artifact: ${ref}`, 'Add the artifact to artifacts[] or correct the observation artifact reference.');
       }
+    }
+  }
+}
+
+function validateRuntimeCaptureProvider(provider, path, errors) {
+  if (!hasValue(provider)) return;
+  if (!isPlainObject(provider)) {
+    addError(errors, 'invalid_runtime_capture_provider', path, 'runtime_capture.provider must be an object.', 'Record selected provider, fallback chain, and availability as structured metadata.');
+    return;
+  }
+
+  validateRuntimeCaptureProviderId(provider.primary, `${path}.primary`, errors);
+  validateRuntimeCaptureProviderId(provider.selected, `${path}.selected`, errors);
+
+  const fallbackChain = provider.fallback_chain || provider.fallbackChain;
+  if (hasValue(fallbackChain) && !Array.isArray(fallbackChain)) {
+    addError(errors, 'invalid_runtime_capture_fallback_chain', `${path}.fallback_chain`, 'runtime_capture.provider.fallback_chain must be an array.', 'Record provider fallback order as concise provider identifiers.');
+  }
+  for (const [index, providerId] of normalizeArray(fallbackChain).entries()) {
+    validateRuntimeCaptureProviderId(providerId, `${path}.fallback_chain[${index}]`, errors);
+  }
+
+  if (hasValue(provider.fallback_reason || provider.fallbackReason) && typeof (provider.fallback_reason || provider.fallbackReason) !== 'string') {
+    addError(errors, 'invalid_runtime_capture_fallback_reason', `${path}.fallback_reason`, 'runtime_capture.provider.fallback_reason must be a string.', 'Record why the selected provider differs from the preferred/default provider.');
+  }
+
+  const availability = provider.availability;
+  if (hasValue(availability) && !Array.isArray(availability)) {
+    addError(errors, 'invalid_runtime_capture_availability', `${path}.availability`, 'runtime_capture.provider.availability must be an array.', 'Record provider availability entries as objects with provider and status.');
+    return;
+  }
+  for (const [index, entry] of normalizeArray(availability).entries()) {
+    const entryPath = `${path}.availability[${index}]`;
+    if (!isPlainObject(entry)) {
+      addError(errors, 'invalid_runtime_capture_availability', entryPath, 'Runtime capture provider availability entry must be an object.', 'Record provider availability entries as objects with provider and status.');
+      continue;
+    }
+    validateRuntimeCaptureProviderId(entry.provider, `${entryPath}.provider`, errors);
+    if (!RUNTIME_CAPTURE_AVAILABILITY_STATUSES.includes(entry.status)) {
+      addError(errors, 'invalid_runtime_capture_availability_status', `${entryPath}.status`, `Invalid runtime capture provider availability status: ${entry.status}`, `Use only: ${RUNTIME_CAPTURE_AVAILABILITY_STATUSES.join(', ')}.`);
+    }
+  }
+}
+
+function validateRuntimeCapture(bundle, artifactRefs, errors) {
+  const runtimeCapture = bundle?.runtime_capture || bundle?.runtimeCapture;
+  if (!hasValue(runtimeCapture)) return;
+  if (!isPlainObject(runtimeCapture)) {
+    addError(errors, 'invalid_runtime_capture', 'runtime_capture', 'runtime_capture must be an object.', 'Record runtime capture provider, captures, fidelity, and budget metadata as structured JSON.');
+    return;
+  }
+
+  validateRuntimeCaptureProvider(runtimeCapture.provider, 'runtime_capture.provider', errors);
+
+  const captures = runtimeCapture.captures;
+  if (!Array.isArray(captures) || captures.length === 0) {
+    addError(errors, 'missing_runtime_capture_captures', 'runtime_capture.captures', 'runtime_capture must include at least one capture entry.', 'Record claim-scoped capture entries such as screenshot, interactive_snapshot, or computed_style.');
+    return;
+  }
+
+  const declaredSlotIds = new Set(normalizeArray(bundle?.scope?.slot_ids));
+  for (const [index, capture] of captures.entries()) {
+    const capturePath = `runtime_capture.captures[${index}]`;
+    if (!isPlainObject(capture)) {
+      addError(errors, 'invalid_runtime_capture_capture', capturePath, 'Runtime capture entry must be an object.', 'Record capture mode, slot IDs, result, and cost metadata as an object.');
+      continue;
+    }
+
+    if (!hasValue(capture.mode)) {
+      addError(errors, 'missing_runtime_capture_mode', `${capturePath}.mode`, 'Runtime capture entry must include mode.', `Use one of: ${RUNTIME_CAPTURE_MODES.join(', ')}.`);
+    } else if (!RUNTIME_CAPTURE_MODES.includes(capture.mode)) {
+      addError(errors, 'unsupported_runtime_capture_mode', `${capturePath}.mode`, `Unsupported runtime capture mode: ${capture.mode}`, `Use only: ${RUNTIME_CAPTURE_MODES.join(', ')}.`);
+    }
+
+    validateRuntimeCaptureProviderId(capture.provider, `${capturePath}.provider`, errors);
+
+    const captureSlotIds = normalizeArray(capture.slot_ids || capture.slotIds);
+    if (captureSlotIds.length === 0) {
+      addError(errors, 'missing_runtime_capture_slot_ids', `${capturePath}.slot_ids`, 'Runtime capture entry must declare the slot IDs it supports.', 'Attach each capture to the planned UI proof slot IDs it supports.');
+    }
+    for (const [slotIndex, captureSlotId] of captureSlotIds.entries()) {
+      if (declaredSlotIds.size > 0 && !declaredSlotIds.has(captureSlotId)) {
+        addError(errors, 'unknown_runtime_capture_slot', `${capturePath}.slot_ids[${slotIndex}]`, `Runtime capture references undeclared slot: ${captureSlotId}`, 'Use only slot IDs declared in scope.slot_ids.');
+      }
+    }
+
+    if (!hasValue(capture.result)) {
+      addError(errors, 'missing_runtime_capture_result', `${capturePath}.result`, 'Runtime capture entry must include result.', `Record result using: ${CLAIM_STATUSES.join(', ')}.`);
+    } else if (!CLAIM_STATUSES.includes(capture.result)) {
+      addError(errors, 'invalid_runtime_capture_result', `${capturePath}.result`, `Invalid runtime capture result: ${capture.result}`, `Use only: ${CLAIM_STATUSES.join(', ')}.`);
+    }
+
+    for (const field of RUNTIME_CAPTURE_METRIC_FIELDS) {
+      validateNonNegativeNumber(capture[field], `${capturePath}.${field}`, errors, 'invalid_runtime_capture_metric', 'Runtime capture metric');
+    }
+    if (hasValue(capture.token_estimate_method) && typeof capture.token_estimate_method !== 'string') {
+      addError(errors, 'invalid_runtime_capture_token_estimate_method', `${capturePath}.token_estimate_method`, 'Runtime capture token_estimate_method must be a string.', 'Record the token estimation method as concise text, or omit it when unknown.');
+    }
+
+    for (const [refIndex, ref] of normalizeArray(capture.artifact_refs || capture.artifactRefs).entries()) {
+      if (!artifactRefs.has(ref)) {
+        addError(errors, 'unknown_runtime_capture_artifact_ref', `${capturePath}.artifact_refs[${refIndex}]`, `Runtime capture references undeclared UI proof artifact: ${ref}`, 'Add the artifact to artifacts[] or correct the runtime capture artifact reference.');
+      }
+    }
+  }
+
+  const fidelity = runtimeCapture.fidelity;
+  if (!hasValue(fidelity)) return;
+  if (!isPlainObject(fidelity)) {
+    addError(errors, 'invalid_runtime_capture_fidelity', 'runtime_capture.fidelity', 'runtime_capture.fidelity must be an object.', 'Record runtime capture fidelity flags as structured metadata.');
+    return;
+  }
+  for (const field of ['sees_pixels', 'includes_accessibility_tree', 'includes_dom_subset', 'includes_computed_styles', 'includes_framework_state']) {
+    if (hasValue(fidelity[field]) && typeof fidelity[field] !== 'boolean') {
+      addError(errors, 'invalid_runtime_capture_fidelity_flag', `runtime_capture.fidelity.${field}`, 'Runtime capture fidelity flags must be boolean.', 'Use true or false for fidelity capability flags.');
     }
   }
 }
@@ -469,6 +674,11 @@ function comparisonFixHint(code) {
     missing_claim_limit: 'Preserve the planned claim limit in the observed proof bundle.',
     missing_expected_artifact_type: 'Attach the planned artifact type, such as screenshot, report, trace, or DOM snapshot.',
     missing_observed_bundle: 'Create an observed UI proof bundle for the planned slot, or explicitly waive/defer the slot with claim narrowing.',
+    missing_runtime_capture: 'Add observed runtime_capture metadata for the planned browser capture requirements, or narrow/defer the capture claim.',
+    missing_runtime_capture_mode: 'Capture the required browser evidence mode for this slot, or remove it from the planned runtime capture requirements.',
+    runtime_capture_budget_exceeded: 'Reduce the captured text/artifact scope, split the proof, or raise the planned budget with rationale before claiming the slot is satisfied.',
+    runtime_capture_fallback_missing_reason: 'Record why the selected browser provider differed from the planned preference and narrow the claim as needed.',
+    missing_runtime_capture_provider: 'Record the runtime capture provider selected for this proof bundle.',
   };
   return hints[code] || 'Fix the proof issue, rerun the comparison, and keep the slot partial until evidence matches the plan.';
 }
@@ -479,6 +689,101 @@ function decorateComparisonIssue(issue) {
     fix_hint: issue.fix_hint || issue.fix || comparisonFixHint(issue.code),
     ...issue,
   };
+}
+
+function captureSlotIds(capture) {
+  return normalizeArray(capture?.slot_ids || capture?.slotIds);
+}
+
+function slotCaptures(bundle, slotIdValue) {
+  return normalizeArray(bundle?.runtime_capture?.captures || bundle?.runtimeCapture?.captures)
+    .filter(isPlainObject)
+    .filter((capture) => captureSlotIds(capture).includes(slotIdValue));
+}
+
+function runtimeCaptureProvider(bundle) {
+  return bundle?.runtime_capture?.provider || bundle?.runtimeCapture?.provider;
+}
+
+function runtimeCaptureProviderSelected(bundle) {
+  const provider = runtimeCaptureProvider(bundle);
+  return provider?.selected;
+}
+
+function runtimeCaptureFallbackReason(bundle) {
+  const provider = runtimeCaptureProvider(bundle);
+  return provider?.fallback_reason || provider?.fallbackReason;
+}
+
+function runtimeCaptureBudgetTotal(captures, budgetField) {
+  const metric = RUNTIME_CAPTURE_BUDGET_FIELD_MAP[budgetField];
+  if (!metric) return 0;
+  if (metric === 'screenshot_count') {
+    const explicitCount = captures.reduce((sum, capture) => sum + (typeof capture.screenshot_count === 'number' ? capture.screenshot_count : 0), 0);
+    return explicitCount > 0 ? explicitCount : captures.filter((capture) => capture.mode === 'screenshot').length;
+  }
+  return captures.reduce((sum, capture) => sum + (typeof capture[metric] === 'number' ? capture[metric] : 0), 0);
+}
+
+function compareRuntimeCaptureRequirements(slot, slotIdValue, bundle, issues) {
+  const requirements = runtimeCaptureRequirements(slot);
+  if (!hasValue(requirements)) return;
+
+  const captures = slotCaptures(bundle, slotIdValue);
+  if (!hasValue(bundle?.runtime_capture || bundle?.runtimeCapture) || captures.length === 0) {
+    issues.push({
+      code: 'missing_runtime_capture',
+      path: 'runtime_capture',
+      message: `Observed UI proof for slot ${slotIdValue} is missing runtime_capture metadata linked to the slot.`,
+    });
+    return;
+  }
+
+  const passedModes = new Set(captures.filter((capture) => capture.result === 'passed').map((capture) => capture.mode).filter(Boolean));
+  for (const mode of normalizeArray(requirements.required_modes || requirements.requiredModes)) {
+    if (!passedModes.has(mode)) {
+      issues.push({
+        code: 'missing_runtime_capture_mode',
+        path: 'runtime_capture.captures[].mode',
+        message: `Observed UI proof for slot ${slotIdValue} is missing required runtime capture mode: ${mode}.`,
+      });
+    }
+  }
+
+  const budgets = requirements.budgets;
+  if (isPlainObject(budgets)) {
+    for (const [field, max] of Object.entries(budgets)) {
+      if (!Object.prototype.hasOwnProperty.call(RUNTIME_CAPTURE_BUDGET_FIELD_MAP, field)) continue;
+      if (typeof max !== 'number' || !Number.isFinite(max)) continue;
+      const total = runtimeCaptureBudgetTotal(captures, field);
+      if (total > max) {
+        issues.push({
+          code: 'runtime_capture_budget_exceeded',
+          path: `runtime_capture.captures.${field}`,
+          message: `Observed UI proof for slot ${slotIdValue} exceeds runtime capture budget ${field}: ${total} > ${max}.`,
+        });
+      }
+    }
+  }
+
+  const providerPreference = normalizeArray(requirements.provider_preference || requirements.providerPreference);
+  if (providerPreference.length === 0) return;
+  const selected = runtimeCaptureProviderSelected(bundle);
+  if (!selected) {
+    issues.push({
+      code: 'missing_runtime_capture_provider',
+      path: 'runtime_capture.provider.selected',
+      message: `Observed UI proof for slot ${slotIdValue} does not record the selected runtime capture provider.`,
+    });
+    return;
+  }
+  if (!providerPreference.includes(selected) && !hasValue(runtimeCaptureFallbackReason(bundle))) {
+    issues.push({
+      code: 'runtime_capture_fallback_missing_reason',
+      path: 'runtime_capture.provider.fallback_reason',
+      message: `Observed UI proof for slot ${slotIdValue} selected runtime capture provider ${selected} outside the planned preference without fallback rationale.`,
+    });
+  }
 }
 
 function compareSlotToBundle(slot, slotIdValue, observed) {
@@ -682,6 +987,8 @@ function compareSlotToBundle(slot, slotIdValue, observed) {
     });
   }
 
+  compareRuntimeCaptureRequirements(slot, slotIdValue, bundle, issues);
+
   const status = issues.length === 0 ? 'satisfied' : (bundleStatus === 'missing' ? 'missing' : 'partial');
   return { status, issues: issues.map(decorateComparisonIssue), source: observed.source };
 }
@@ -769,6 +1076,7 @@ export function validateUiProofBundle(bundle, options = {}) {
   validatePublicObservationPrivacy(bundle, errors, publicClaim);
   const artifactRefs = validateArtifacts(bundle, errors, publicClaim, options);
   validateObservationArtifactRefs(bundle, artifactRefs, errors);
+  validateRuntimeCapture(bundle, artifactRefs, errors);
 
   return { valid: errors.length === 0, errors, warnings };
 }
@@ -1004,4 +1312,8 @@ export {
   COMPARISON_STATUSES as UI_PROOF_COMPARISON_STATUSES,
   EVIDENCE_KINDS as UI_PROOF_EVIDENCE_KINDS,
   RAW_ARTIFACT_TYPES as UI_PROOF_RAW_ARTIFACT_TYPES,
+  RUNTIME_CAPTURE_AVAILABILITY_STATUSES as UI_PROOF_RUNTIME_CAPTURE_AVAILABILITY_STATUSES,
+  RUNTIME_CAPTURE_BUDGET_FIELD_MAP as UI_PROOF_RUNTIME_CAPTURE_BUDGET_FIELD_MAP,
+  RUNTIME_CAPTURE_METRIC_FIELDS as UI_PROOF_RUNTIME_CAPTURE_METRIC_FIELDS,
+  RUNTIME_CAPTURE_MODES as UI_PROOF_RUNTIME_CAPTURE_MODES,
 };

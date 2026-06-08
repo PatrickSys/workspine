@@ -189,9 +189,9 @@ Commands:
   session-fingerprint write [--allow-changed <ROADMAP.md,SPEC.md,config.json>]
                               Rebaseline planning-state drift after reviewing changed planning files
   ui-proof validate <path> [--claim <public|publication|tracked|delivery|release>]
-                              Validate UI proof metadata; use --claim for stronger proof uses
+                              Validate UI proof metadata, including optional runtime capture annotations
   ui-proof compare <planned-slots-json> [observed-bundle-json ...]
-                              Compare planned UI proof slots against observed bundles
+                              Compare planned UI proof slots and runtime capture requirements against observed bundles
   control-map [--json] [--with-ignored] [--annotations <path>]
                               Report computed repo/worktree/planning state and local annotations
   control-map annotate <set|clear>
@@ -270,7 +270,7 @@ Advanced/internal helpers (kept available, but not the primary first-run user st
   lifecycle-preflight       Inspect deterministic lifecycle gate results for a workflow surface
   session-fingerprint       Rebaseline the local planning-state fingerprint after review
   phase-status              Update ROADMAP.md phase status through the local helper surface
-  ui-proof                  Validate UI proof metadata and compare planned slots to observed bundles
+  ui-proof                  Validate UI proof metadata and compare planned slots/capture requirements to observed bundles
   control-map               Report computed repo/worktree/planning state; annotate only records local intent
   closeout-report           Read-only post-merge closure replay; reports blockers, warnings, and next safe action
   file-op                   Deterministic workspace-confined file copy/delete/text mutation

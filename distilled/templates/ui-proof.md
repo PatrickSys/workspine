@@ -34,6 +34,17 @@ ui_proof_slots:
       notes: "State why this viewport is enough for the claim, or add separate slots/observations for mobile, desktop, or responsive states."
     manual_acceptance_required: false
     claim_limit: "Does not prove cross-browser layout, full accessibility conformance, production delivery, or unrelated UI states."
+    runtime_capture_requirements:
+      provider_preference: [agent-browser, direct-cdp]
+      fallback_policy: "record_availability_and_narrow_claim"
+      required_modes: [screenshot, interactive_snapshot]
+      optional_modes: [selected_element_dom, computed_style, console_delta, network_delta, framework_state]
+      budgets:
+        text_bytes_max: 24000
+        estimated_tokens_max: 6000
+        raw_artifact_bytes_max: 5000000
+        screenshot_count_max: 4
+        computed_style_properties_max: 80
 no_ui_proof_rationale: null
 ```
 
@@ -44,6 +55,7 @@ Slot rules:
 - The planner chooses the viewport set, but the slot must explain the choice. Include desktop and mobile proof when the claim covers responsive layout or when the changed surface is likely to behave differently across those sizes; otherwise narrow the claim limit.
 - Source annotations, AST/cAST findings, semantic search hits, comments, and Semble-like retrieval may help discover proof obligations. They are discovery hints only; they do not satisfy proof slots.
 - Do not add Playwright, Cypress, Storybook, Cucumber, CI, browser MCP, or visual-regression tooling by default.
+- Add optional `runtime_capture_requirements` only when the slot needs benchmarkable browser-provider or capture-cost proof; omit it for ordinary UI proof that can be compared by the base slot fields.
 - Human approval is required for visual taste, accessibility judgment, baseline acceptance, subjective polish/layout quality, and privacy publication decisions.
 - Human approval does not replace required non-human evidence when the slot requires `code`, `test`, `runtime`, or `delivery` evidence.
 
@@ -138,6 +150,49 @@ Replace placeholders such as `{work_item_dir}` with the current phase, quick-tas
       "notes": "Local screenshot only; not public proof unless sanitized and reclassified."
     }
   ],
+  "runtime_capture": {
+    "provider": {
+      "primary": "agent-browser",
+      "selected": "agent-browser",
+      "fallback_chain": ["agent-browser", "direct-cdp", "chrome-devtools-mcp", "playwright-mcp", "manual"],
+      "fallback_reason": null,
+      "availability": [
+        { "provider": "agent-browser", "status": "available" }
+      ]
+    },
+    "captures": [
+      {
+        "mode": "screenshot",
+        "slot_ids": ["ui-01"],
+        "artifact_refs": ["{work_item_dir}/artifacts/example-1280.png"],
+        "latency_ms": 420,
+        "raw_bytes": 184224,
+        "text_bytes": 0,
+        "estimated_tokens": 0,
+        "screenshot_count": 1,
+        "token_estimate_method": "not_applicable",
+        "result": "passed"
+      },
+      {
+        "mode": "interactive_snapshot",
+        "slot_ids": ["ui-01"],
+        "latency_ms": 180,
+        "raw_bytes": 0,
+        "text_bytes": 2200,
+        "estimated_tokens": 550,
+        "token_estimate_method": "rough_char_div_4",
+        "result": "passed"
+      }
+    ],
+    "fidelity": {
+      "sees_pixels": true,
+      "includes_accessibility_tree": true,
+      "includes_dom_subset": false,
+      "includes_computed_styles": false,
+      "includes_framework_state": false,
+      "claim_limits": ["No selected-element computed style capture was required for this slot."]
+    }
+  },
   "privacy": {
     "data_classification": "synthetic",
     "redactions": [],
@@ -176,9 +231,25 @@ Bundle rules:
 - Quick-mode UI proof should use deterministic synthetic IDs such as `quick-001` and `quick-001-ui-01` when roadmap requirement IDs do not exist.
 - Classify failed UI proof using existing GSDD gap/proof-debt language: `product_bug`, `missing_infra`, `flaky_harness`, or `ambiguous_spec`. Do not add new result statuses or evidence kinds for those causes.
 
+## Runtime Capture Benchmarks
+
+Use `runtime_capture_requirements` on planned slots and `runtime_capture` on observed bundles to benchmark browser evidence only when the claim needs provider choice, capture fidelity, or cost to be measurable. These fields are optional and metadata-only; existing proof bundles remain valid without them.
+
+Provider chain:
+- Default live UI proof remains `agent-browser`.
+- Use direct-CDP only as an explicit escalation for selected-element DOM, CSS, computed-style, console, network, or framework-state claims that the default path cannot prove cleanly.
+- Chrome DevTools MCP and Playwright MCP are optional only when already configured, scoped to the claim, and recorded as fallback metadata.
+- Do not add browser tooling, browser installs, CI, Storybook, browser MCP, or visual-regression infrastructure just to fill these fields.
+
+Stable capture modes are `screenshot`, `interactive_snapshot`, `accessibility_snapshot`, `dom_subset`, `selected_element_dom`, `computed_style`, `console_delta`, `network_delta`, `framework_state`, and `manual_observation`. Provider availability statuses are `available`, `unavailable`, `not_configured`, `skipped`, and `failed`.
+
+Budget fields are `text_bytes_max`, `estimated_tokens_max`, `raw_artifact_bytes_max`, `screenshot_count_max`, `computed_style_properties_max`, `console_event_count_max`, and `network_event_count_max`. The comparator enforces them only when a planned slot declares them.
+
+Keep raw screenshots, traces, videos, DOM, reports, console/network logs, and framework-state captures referenced as local artifacts or summarized metadata; do not inline raw sensitive state. Claims that a research, deepening, or document-review pass used a pinned model such as `gpt-5.4-high` need runtime model-routing evidence before the proof bundle can claim that review actually ran.
+
 ## Deterministic Validation
 
-Use `gsdd ui-proof validate <path>` on JSON proof-bundle metadata or markdown fenced JSON before relying on a bundle for closure; add `--claim <public|publication|tracked|delivery|release>` only when validating that stronger proof use. Use `gsdd ui-proof compare <planned-slots-json> [observed-bundle-json ...]` when verifying planned proof slots against observed bundles through the deterministic product-facing path. Required planned-slot fields are `slot_id`, `claim`, `route_state`, `required_evidence_kinds`, `minimum_observations`, `expected_artifact_types`, `validation_command`, `environment`, `viewport`, `manual_acceptance_required`, and `claim_limit`. Required observed-bundle top-level fields are `proof_bundle_version`, `scope`, `route_state`, `environment`, `viewport`, `evidence_inputs`, `commands_or_manual_steps`, `observations`, `artifacts`, `privacy`, `result`, and `claim_limits`. The validator checks planned-slot specificity, required bundle and observation fields, structured command/manual-step entries, fixed evidence kinds, concise `tools_used` IDs, `result.claim_status`, observation `result`, comparison statuses, failure classification for failed/partial proof, non-empty claim limits, locked artifact and observation privacy fields, observation-to-artifact references, workspace-relative/http(s) artifact references, existing local artifact paths when validating from files, and explicit public/tracked/delivery proof claims that rely on local-only, unsafe, unsanitized, or privacy-contradictory artifacts. `claim_status`, observation `result`, and command/manual-step `result` use `passed`, `failed`, `partial`, `waived`, `deferred`, or `not_applicable`; failed/partial proof uses `product_bug`, `missing_infra`, `flaky_harness`, or `ambiguous_spec`. It does not inspect raw screenshot, trace, video, DOM, or report contents and does not require any specific browser provider such as `agent-browser`.
+Use `gsdd ui-proof validate <path>` on JSON proof-bundle metadata or markdown fenced JSON before relying on a bundle for closure; add `--claim <public|publication|tracked|delivery|release>` only when validating that stronger proof use. Use `gsdd ui-proof compare <planned-slots-json> [observed-bundle-json ...]` when verifying planned proof slots against observed bundles through the deterministic product-facing path. Required planned-slot fields are `slot_id`, `claim`, `route_state`, `required_evidence_kinds`, `minimum_observations`, `expected_artifact_types`, `validation_command`, `environment`, `viewport`, `manual_acceptance_required`, and `claim_limit`. Required observed-bundle top-level fields are `proof_bundle_version`, `scope`, `route_state`, `environment`, `viewport`, `evidence_inputs`, `commands_or_manual_steps`, `observations`, `artifacts`, `privacy`, `result`, and `claim_limits`. Optional `runtime_capture_requirements` and `runtime_capture` metadata is validated when present and compared only for slots that opt in. The validator checks planned-slot specificity, runtime capture modes, provider availability statuses, budget metric fields, required bundle and observation fields, structured command/manual-step entries, fixed evidence kinds, concise `tools_used` IDs, `result.claim_status`, observation `result`, comparison statuses, failure classification for failed/partial proof, non-empty claim limits, locked artifact and observation privacy fields, observation-to-artifact references, workspace-relative/http(s) artifact references, existing local artifact paths when validating from files, and explicit public/tracked/delivery proof claims that rely on local-only, unsafe, unsanitized, or privacy-contradictory artifacts. `claim_status`, observation `result`, runtime capture `result`, and command/manual-step `result` use `passed`, `failed`, `partial`, `waived`, `deferred`, or `not_applicable`; failed/partial proof uses `product_bug`, `missing_infra`, `flaky_harness`, or `ambiguous_spec`. It does not inspect raw screenshot, trace, video, DOM, or report contents and does not require any specific browser provider such as `agent-browser`.
 
 ## Comparison Statuses
 

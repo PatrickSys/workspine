@@ -3507,6 +3507,13 @@ describe('G55 - UI Proof Contract', () => {
   const verifierRole = fs.readFileSync(path.join(ROOT, 'agents', 'verifier.md'), 'utf-8');
   const planChecker = fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'delegates', 'plan-checker.md'), 'utf-8');
   const uiProofSource = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'ui-proof.mjs'), 'utf-8');
+  const designRecord = fs.readFileSync(path.join(ROOT, 'distilled', 'DESIGN.md'), 'utf-8');
+  const evidenceIndex = fs.readFileSync(path.join(ROOT, 'distilled', 'EVIDENCE-INDEX.md'), 'utf-8');
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
+  const userGuide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+  const initRuntime = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs'), 'utf-8');
+  const rendering = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'rendering.mjs'), 'utf-8');
+  const healthSource = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'health.mjs'), 'utf-8');
 
   function parseObservedBundleExample() {
     const match = template.match(/```json\s*\n([\s\S]*?)\n```/);
@@ -3538,6 +3545,8 @@ describe('G55 - UI Proof Contract', () => {
       'result',
       'claim_status',
       'claim_limits',
+      'runtime_capture_requirements',
+      'runtime_capture',
     ]) {
       assert.match(template, new RegExp(token), `ui-proof.md must include ${token}. FIX: Restore the locked UI proof schema field.`);
     }
@@ -3620,6 +3629,102 @@ describe('G55 - UI Proof Contract', () => {
       'ui-proof.md must keep deterministic validation provider-agnostic.');
     assert.doesNotMatch(uiProofSource, /agent-browser/i,
       'bin/lib/ui-proof.mjs must remain provider-agnostic metadata validation, not an agent-browser schema gate.');
+  });
+
+  test('runtime capture benchmarks stay optional provider-neutral and budgeted', () => {
+    const combined = [
+      template,
+      planContent,
+      executeContent,
+      quickContent,
+      verifyContent,
+      plannerRole,
+      executorRole,
+      verifierRole,
+      planChecker,
+      designRecord,
+      evidenceIndex,
+      readme,
+      userGuide,
+      initRuntime,
+      rendering,
+      healthSource
+    ].join('\n');
+
+    assert.match(template, /runtime_capture_requirements/i,
+      'ui-proof.md must document planned runtime capture requirements.');
+    assert.match(template, /runtime_capture/i,
+      'ui-proof.md must document observed runtime capture metadata.');
+    assert.match(combined, /provider-neutral|provider-agnostic/i,
+      'Runtime capture annotations must remain provider-neutral metadata.');
+    assert.match(combined, /metadata-only|metadata-focused|does not inspect raw/i,
+      'Runtime capture validation must stay metadata-focused.');
+    assert.match(combined, /agent-browser[\s\S]{0,220}(default|first)/i,
+      'Runtime capture guidance must keep agent-browser as the default/first live UI proof path.');
+    assert.match(combined, /(direct-CDP|direct-cdp)[\s\S]{0,220}escalation/i,
+      'Runtime capture guidance must describe direct-CDP as escalation, not the default.');
+    assert.match(combined, /Chrome DevTools MCP[\s\S]{0,220}Playwright MCP[\s\S]{0,220}optional only when already configured/i,
+      'Runtime capture guidance must keep Chrome DevTools MCP and Playwright MCP optional and preconfigured.');
+    assert.match(combined, /Do not (add|plan|install|scaffold)[\s\S]{0,240}(browser tooling|browser installs|browser MCP|CI|Storybook|visual-regression)/i,
+      'Runtime capture guidance must not introduce default browser infrastructure.');
+    assert.match(combined, /raw screenshots[\s\S]{0,260}(local-only|local_only|safe_to_publish: false)/i,
+      'Runtime capture guidance must preserve raw artifact local-only privacy defaults.');
+    assert.match(combined, /gpt-5\.4-high[\s\S]{0,180}(runtime model-routing evidence|model-routing evidence|prove)/i,
+      'Runtime capture planning must not claim model-pinned research without runtime routing proof.');
+
+    for (const mode of [
+      'screenshot',
+      'interactive_snapshot',
+      'accessibility_snapshot',
+      'dom_subset',
+      'selected_element_dom',
+      'computed_style',
+      'console_delta',
+      'network_delta',
+      'framework_state',
+      'manual_observation'
+    ]) {
+      assert.match(template, new RegExp('`' + mode + '`'), `ui-proof.md must document runtime capture mode ${mode}.`);
+      assert.match(uiProofSource, new RegExp(`'${mode}'`), `ui-proof validator must define runtime capture mode ${mode}.`);
+    }
+
+    for (const status of ['available', 'unavailable', 'not_configured', 'skipped', 'failed']) {
+      assert.match(template, new RegExp('`' + status + '`'), `ui-proof.md must document runtime capture provider status ${status}.`);
+      assert.match(uiProofSource, new RegExp(`'${status}'`), `ui-proof validator must define runtime capture provider status ${status}.`);
+    }
+
+    for (const budget of [
+      'text_bytes_max',
+      'estimated_tokens_max',
+      'raw_artifact_bytes_max',
+      'screenshot_count_max',
+      'computed_style_properties_max',
+      'console_event_count_max',
+      'network_event_count_max'
+    ]) {
+      assert.match(template, new RegExp('`' + budget + '`'), `ui-proof.md must document runtime capture budget ${budget}.`);
+      assert.match(uiProofSource, new RegExp(budget), `ui-proof validator must define runtime capture budget ${budget}.`);
+    }
+
+    for (const exportName of [
+      'UI_PROOF_RUNTIME_CAPTURE_AVAILABILITY_STATUSES',
+      'UI_PROOF_RUNTIME_CAPTURE_BUDGET_FIELD_MAP',
+      'UI_PROOF_RUNTIME_CAPTURE_METRIC_FIELDS',
+      'UI_PROOF_RUNTIME_CAPTURE_MODES'
+    ]) {
+      assert.match(uiProofSource, new RegExp(exportName), `ui-proof.mjs must export ${exportName}.`);
+    }
+
+    assert.match(healthSource, /runtime capture benchmark fields when present/i,
+      'health E10 repair guidance must mention optional runtime capture metadata.');
+    assert.match(initRuntime, /runtime capture annotations/i,
+      'init help must mention optional runtime capture annotations.');
+    assert.match(rendering, /runtime capture annotations/i,
+      'rendered helper help must mention optional runtime capture annotations.');
+    assert.match(readme, /without installing browser tooling by default/i,
+      'README must keep runtime capture annotations non-infrastructural.');
+    assert.match(userGuide, /agent-browser` remains the default live UI proof path/i,
+      'User guide must keep agent-browser default wording.');
   });
 
   test('observed bundle example keeps runtime artifacts traceable', () => {

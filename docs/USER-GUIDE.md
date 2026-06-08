@@ -203,6 +203,8 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 | `npx -y gsdd-cli closeout-report [--json] [--phase <N>]` | Read-only closeout replay: blockers, warnings, fixes, and next safe action (composed from control-map, health/preflight, verify, and UI-proof signals) |
 | `npx -y gsdd-cli find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `npx -y gsdd-cli verify <N>` | Run artifact checks for phase N |
+| `npx -y gsdd-cli ui-proof validate <path>` | Validate UI proof metadata, including optional browser runtime capture annotations |
+| `npx -y gsdd-cli ui-proof compare <planned-slots-json> [observed-bundle-json ...]` | Compare planned UI proof slots and runtime capture requirements against observed bundles |
 | `npx -y gsdd-cli scaffold phase <N> [name]` | Create a new phase plan file |
 | `npx -y gsdd-cli models show` | Display effective model state across all runtimes |
 | `npx -y gsdd-cli models profile <tier>` | Set global model profile (`quality`/`balanced`/`budget`) |
@@ -212,6 +214,8 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 | `npx -y gsdd-cli help` | Show all commands |
 
 If `gsdd-cli` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .planning/bin/gsdd.mjs ...` from the repo root.
+
+Runtime capture annotations are optional UI proof metadata for benchmarking provider choice, screenshot/snapshot modes, budgets, and fallback reasons. They do not install or require browser tooling by default; `agent-browser` remains the default live UI proof path, direct-CDP is an escalation for selected DOM/CSS/computed-style proof, and Chrome DevTools MCP or Playwright MCP should be recorded only when already configured.
 
 Normal user flow:
 
@@ -239,6 +243,8 @@ Other CLI commands that remain available outside the first-run path:
 |---------|---------|
 | `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `gsdd verify <N>` | Run phase artifact and UI-proof closure checks for phase N; exits nonzero when verification is blocked |
+| `gsdd ui-proof validate <path>` | Validate UI proof metadata, including optional browser runtime capture annotations |
+| `gsdd ui-proof compare <planned-slots-json> [observed-bundle-json ...]` | Compare planned UI proof slots and runtime capture requirements against observed bundles |
 | `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
 
 ### Platform flags for `--tools`

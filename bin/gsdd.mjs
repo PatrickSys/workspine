@@ -28,7 +28,6 @@ const DISTILLED_DIR = join(__dirname, '..', 'distilled');
 const AGENTS_DIR = join(__dirname, '..', 'agents');
 const PACKAGE_JSON = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
 const IS_MAIN = process.argv[1] ? realpathSync(process.argv[1]) === realpathSync(__filename) : false;
-
 const [,, command, ...args] = process.argv;
 
 function defineWorkflow({ mutatesArtifacts = true, ...workflow }) {
