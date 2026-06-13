@@ -19,4 +19,3 @@ Rules:
 6. Git guidance in `.planning/config.json` -> `gitProtocol` is advisory; follow the repo's own conventions first.
 
 If `.planning/` is missing, run `npx -y gsdd-cli init` then `gsdd-new-project`; bare `gsdd init` is equivalent only when globally installed.
-

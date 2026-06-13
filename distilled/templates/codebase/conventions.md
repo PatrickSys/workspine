@@ -190,4 +190,3 @@ If no single file exemplifies multiple conventions, list the best per-category f
 ---
 
 *Convention analysis: [date]*
-

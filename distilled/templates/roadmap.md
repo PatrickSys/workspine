@@ -71,4 +71,3 @@ For each v1 requirement in .planning/SPEC.md:
 
 If a requirement doesn't map to any phase: add a phase or expand an existing one.
 If a requirement maps to multiple phases: clarify which phase owns it.
-

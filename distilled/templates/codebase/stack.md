@@ -93,4 +93,3 @@ Example (good):
 ---
 
 *Stack analysis: [date]*
-
