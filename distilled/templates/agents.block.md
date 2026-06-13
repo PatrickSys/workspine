@@ -6,6 +6,7 @@ Lifecycle: `new-project -> plan -> execute -> verify -> audit-milestone`.
 
 Core skills: `gsdd-new-project`, `gsdd-plan`, `gsdd-execute`, `gsdd-verify`, `gsdd-progress`.
 Planning state: `.planning/`. Portable workflows: `.agents/skills/gsdd-*/SKILL.md`.
+Install/repair: `npx -y gsdd-cli init` creates skills with no global install; `npx -y gsdd-cli health` verifies them; `npx -y gsdd-cli update` repairs drift.
 
 Invoke: `/gsdd-plan` (Claude, OpenCode; Cursor/Copilot/Gemini when skill discovery is available) · `$gsdd-plan` (Codex CLI, plan-only until `$gsdd-execute`) · open SKILL.md directly elsewhere.
 

@@ -13,6 +13,8 @@ For a new project or a broad brownfield effort:
 3. Review the plan from `gsdd-plan` before starting `gsdd-execute`.
 4. Run `gsdd-verify` before calling the phase done.
 
+No global install is required. Use `npx -y gsdd-cli ...` for first run, health checks, and repairs; bare `gsdd ...` is only shorthand after an optional global install.
+
 For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky repo, use `gsdd-map-codebase` before choosing between `gsdd-quick` and `gsdd-new-project`.
 
 ---

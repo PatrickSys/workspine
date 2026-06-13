@@ -211,6 +211,7 @@ Platforms (for --tools):
   all       Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)
 
 Notes:
+  - no global install is required; prefer \`npx -y gsdd-cli ...\` for first run, health checks, and repair
   - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
   - init also generates a local .planning/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/

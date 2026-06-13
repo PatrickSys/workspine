@@ -98,7 +98,6 @@ const cmdUpdate = (...updateArgs) => {
   }
   return createCmdUpdate(createCliContext(workspaceRoot))(...normalizedArgs);
 };
-
 const COMMANDS = {
   init: cmdInit,
   update: cmdUpdate,

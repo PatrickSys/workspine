@@ -6,6 +6,8 @@ This matrix is the release-floor truth surface.
 
 Human setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine.
 
+The install contract is deliberately skills-first: `npx -y gsdd-cli init` always creates `.agents/skills/gsdd-*` and `.planning/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
+
 ## Support tiers
 
 ### Directly validated
