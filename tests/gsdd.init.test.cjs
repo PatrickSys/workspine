@@ -18,6 +18,7 @@ const {
   runCliAsMain,
   runCliViaJunction,
   setNonInteractiveStdin,
+  withEnv,
 } = require('./gsdd.helpers.cjs');
 
 function extractSection(content, startMarker, endMarker) {
@@ -1380,6 +1381,101 @@ describe('gsdd init and update', () => {
       }
 
       assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
+    });
+  });
+
+  describe('global install', () => {
+    test('install --global --tools all writes global skills and native agent surfaces without bootstrapping the repo', async () => {
+      const homeDir = createTempProject();
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+          const gsdd = await loadGsdd(tmpDir);
+          await gsdd.cmdInstall('--global', '--tools', 'all');
+        });
+
+        assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')),
+          'global install must not create repo-local planning state');
+        assert.ok(!fs.existsSync(path.join(tmpDir, '.agents')),
+          'global install must not create repo-local portable skills');
+
+        const expectedFiles = [
+          '.claude/skills/gsdd-plan/SKILL.md',
+          '.claude/commands/gsdd-plan.md',
+          '.claude/agents/gsdd-plan-checker.md',
+          '.claude/agents/gsdd-approach-explorer.md',
+          '.config/opencode/skills/gsdd-plan/SKILL.md',
+          '.config/opencode/commands/gsdd-plan.md',
+          '.config/opencode/agents/gsdd-plan-checker.md',
+          '.config/opencode/agents/gsdd-approach-explorer.md',
+          '.codex/skills/gsdd-plan/SKILL.md',
+          '.codex/agents/gsdd-plan-checker.toml',
+          '.codex/agents/gsdd-approach-explorer.toml',
+          '.copilot/skills/gsdd-plan/SKILL.md',
+          '.copilot/agents/gsdd-plan-checker.agent.md',
+          '.copilot/agents/gsdd-approach-explorer.agent.md',
+        ];
+
+        for (const rel of expectedFiles) {
+          assert.ok(fs.existsSync(path.join(homeDir, rel)), `missing global install file: ${rel}`);
+        }
+
+        for (const manifestPath of [
+          '.claude/workspine-file-manifest.json',
+          '.config/opencode/workspine-file-manifest.json',
+          '.codex/workspine-file-manifest.json',
+          '.copilot/workspine-file-manifest.json',
+        ]) {
+          const manifest = readJson(path.join(homeDir, manifestPath));
+          assert.strictEqual(manifest.product, 'Workspine');
+          assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track gsdd-plan skill`);
+        }
+      } finally {
+        cleanup(homeDir);
+      }
+    });
+
+    test('install --global refuses to overwrite unmanaged user files', async () => {
+      const homeDir = createTempProject();
+      const customSkill = path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md');
+      fs.mkdirSync(path.dirname(customSkill), { recursive: true });
+      fs.writeFileSync(customSkill, 'user-owned skill\n');
+
+      const previousExitCode = process.exitCode;
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+          const gsdd = await loadGsdd(tmpDir);
+          await gsdd.cmdInstall('--global', '--tools', 'claude');
+        });
+        assert.strictEqual(process.exitCode, 1);
+        assert.strictEqual(fs.readFileSync(customSkill, 'utf-8'), 'user-owned skill\n');
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'commands', 'gsdd-plan.md')),
+          'blocked global install must not partially write sibling surfaces');
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'agents', 'gsdd-plan-checker.md')),
+          'blocked global install must not partially write native agents');
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'workspine-file-manifest.json')),
+          'manifest must not claim ownership when unmanaged files block install');
+      } finally {
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
+    test('install --global without --tools fails in non-interactive shells', async () => {
+      const homeDir = createTempProject();
+      const previousExitCode = process.exitCode;
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+          const gsdd = await loadGsdd(tmpDir);
+          await gsdd.cmdInstall('--global');
+        });
+        assert.strictEqual(process.exitCode, 1);
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude')));
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
     });
   });
 

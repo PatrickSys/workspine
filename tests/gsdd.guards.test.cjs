@@ -727,8 +727,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must describe the init command as a guided install wizard. FIX: Update the Platform Adapters or Getting Started section.');
     assert.match(readme, /npx -y gsdd-cli init/i,
       'README.md must prefer npx -y gsdd-cli init for humans. FIX: Replace primary bare gsdd init guidance.');
-    assert.match(readme, /No global install is required/i,
-      'README.md must state that npx is the no-global-install path. FIX: Add explicit install contract text.');
+    assert.match(readme, /gsdd install --global/i,
+      'README.md must describe the global agent install path. FIX: Add explicit global/local install contract text.');
+    assert.match(readme, /does not create `.planning\/`/i,
+      'README.md must state that global install does not bootstrap repo-local planning state. FIX: Add global install boundary wording.');
   });
 
   test('public docs distinguish skills entrypoints from the internal helper runtime', () => {

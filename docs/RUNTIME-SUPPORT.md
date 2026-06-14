@@ -4,9 +4,11 @@ Workspine is a repo-native delivery spine with portable multi-runtime workflow s
 
 This matrix is the release-floor truth surface.
 
-Human setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine.
+Human repo setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine. For cross-repo personal use, `gsdd install --global` installs reusable Workspine skills and native runtime surfaces into selected agent homes.
 
 The install contract is deliberately skills-first: `npx -y gsdd-cli init` always creates `.agents/skills/gsdd-*` and `.planning/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
+
+Global install is separate from repo bootstrap. It does not create `.planning/`; it writes selected runtime surfaces under user-level agent homes and records Workspine ownership in per-runtime manifests.
 
 ## Support tiers
 
@@ -50,6 +52,17 @@ Two surfaces matter for users:
 | Cursor | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally, but the runtime is not claimed as parity-validated |
 | GitHub Copilot | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally, but the runtime is not claimed as parity-validated |
 | Gemini CLI | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; governance is optional, generated skill files are freshness-checked locally, and parity is not claimed |
+
+## Global install surfaces
+
+`gsdd install --global` can install personal cross-repo surfaces for these targets:
+
+| Target | Global surfaces |
+| --- | --- |
+| Claude Code | `~/.claude/skills`, `~/.claude/commands`, `~/.claude/agents` |
+| OpenCode | `~/.config/opencode/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
+| Codex CLI | `~/.codex/skills`, `~/.codex/agents` |
+| GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
 
 ## Generated-surface freshness
 

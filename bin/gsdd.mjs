@@ -13,6 +13,7 @@ import {
 } from './lib/rendering.mjs';
 import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels, cmdRigor } from './lib/models.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
+import { createCmdInstall } from './lib/global-install.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { createCmdHealth } from './lib/health.mjs';
@@ -22,6 +23,7 @@ import { cmdUiProof } from './lib/ui-proof.mjs';
 import { cmdControlMap } from './lib/control-map.mjs';
 import { createCmdCloseoutReport } from './lib/closeout-report.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
+import { FRAMEWORK_VERSION, WORKFLOWS } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', 'distilled');
@@ -31,33 +33,6 @@ const IS_MAIN = process.argv[1] ? realpathSync(process.argv[1]) === realpathSync
 
 const [,, command, ...args] = process.argv;
 
-function defineWorkflow({ mutatesArtifacts = true, ...workflow }) {
-  return {
-    ...workflow,
-    mutatesArtifacts,
-    agent: mutatesArtifacts ? 'Code' : 'Plan',
-    opencodeType: mutatesArtifacts ? 'edit' : 'plan',
-  };
-}
-
-const WORKFLOWS = [
-  defineWorkflow({ name: 'gsdd-new-project', workflow: 'new-project.md', description: 'New project - questioning, codebase audit, research, spec, roadmap' }),
-  defineWorkflow({ name: 'gsdd-map-codebase', workflow: 'map-codebase.md', description: 'Map or refresh codebase - 4 parallel mappers, staleness check, secrets scan' }),
-  defineWorkflow({ name: 'gsdd-plan', workflow: 'plan.md', description: 'Plan a phase - research check, backward planning, task creation' }),
-  defineWorkflow({ name: 'gsdd-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, verify changes, follow repo git conventions' }),
-  defineWorkflow({ name: 'gsdd-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan' }),
-  defineWorkflow({ name: 'gsdd-verify-work', workflow: 'verify-work.md', description: 'Conversational UAT testing - validate user-facing behavior with structured gap tracking' }),
-  defineWorkflow({ name: 'gsdd-audit-milestone', workflow: 'audit-milestone.md', description: 'Audit a completed milestone - cross-phase integration, requirements coverage, E2E flows' }),
-  defineWorkflow({ name: 'gsdd-complete-milestone', workflow: 'complete-milestone.md', description: 'Complete milestone - archive, evolve spec, collapse roadmap' }),
-  defineWorkflow({ name: 'gsdd-new-milestone', workflow: 'new-milestone.md', description: 'New milestone - gather goals, define requirements, create roadmap phases' }),
-  defineWorkflow({ name: 'gsdd-plan-milestone-gaps', workflow: 'plan-milestone-gaps.md', description: 'Plan gap closure phases from audit results' }),
-  defineWorkflow({ name: 'gsdd-quick', workflow: 'quick.md', description: 'Quick task - plan and execute a sub-hour task outside the phase cycle' }),
-  defineWorkflow({ name: 'gsdd-pause', workflow: 'pause.md', description: 'Pause work - save session context for seamless resumption' }),
-  defineWorkflow({ name: 'gsdd-resume', workflow: 'resume.md', description: 'Resume work - restore context and route to next action' }),
-  defineWorkflow({ name: 'gsdd-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', mutatesArtifacts: false }),
-];
-
-const FRAMEWORK_VERSION = 'v1.4';
 function createCliContext(cwd = process.cwd()) {
   return {
     cwd,
@@ -68,6 +43,9 @@ function createCliContext(cwd = process.cwd()) {
     packageVersion: PACKAGE_JSON.version,
     workflows: WORKFLOWS,
     frameworkVersion: FRAMEWORK_VERSION,
+    loadProjectModelConfig,
+    getRuntimeModelOverride,
+    resolveRuntimeAgentModel,
     adapters: createAdapterRegistry({
       cwd,
       workflows: WORKFLOWS,
@@ -86,6 +64,7 @@ function createCliContext(cwd = process.cwd()) {
 
 const INIT_CONTEXT = createCliContext(process.cwd());
 const cmdInit = createCmdInit(INIT_CONTEXT);
+const cmdInstall = createCmdInstall(INIT_CONTEXT);
 const cmdHealth = createCmdHealth(INIT_CONTEXT);
 const cmdCloseoutReport = createCmdCloseoutReport(INIT_CONTEXT);
 
@@ -100,6 +79,7 @@ const cmdUpdate = (...updateArgs) => {
 };
 const COMMANDS = {
   init: cmdInit,
+  install: cmdInstall,
   update: cmdUpdate,
   models: cmdModels,
   rigor: cmdRigor,
@@ -136,4 +116,4 @@ async function runCli(cliCommand = command, ...cliArgs) {
 }
 
 if (IS_MAIN) await runCli();
-export { cmdHelp, cmdInit, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdCloseoutReport, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdCloseoutReport, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

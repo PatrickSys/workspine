@@ -13,7 +13,7 @@ For a new project or a broad brownfield effort:
 3. Review the plan from `gsdd-plan` before starting `gsdd-execute`.
 4. Run `gsdd-verify` before calling the phase done.
 
-No global install is required. Use `npx -y gsdd-cli ...` for first run, health checks, and repairs; bare `gsdd ...` is only shorthand after an optional global install.
+Use `npx -y gsdd-cli init` for repo-local setup. If you installed `gsdd-cli` globally, `gsdd install --global` installs reusable Workspine skills and native runtime surfaces into selected agent homes without creating `.planning/` in the current repo.
 
 For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky repo, use `gsdd-map-codebase` before choosing between `gsdd-quick` and `gsdd-new-project`.
 
@@ -174,6 +174,24 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 ---
 
 ## Command Reference
+
+### Install Modes
+
+Use local repo install when the project should own `.planning/`, `.agents/skills`, and optional repo-local runtime adapters:
+
+```bash
+npx -y gsdd-cli init
+npx -y gsdd-cli init --auto --tools all
+```
+
+Use global agent install when you want Workspine workflows available across repos from your personal agent home:
+
+```bash
+gsdd install --global
+gsdd install --global --tools claude,opencode,codex,copilot
+```
+
+Global install writes Workspine-managed files under selected agent homes and records per-runtime manifests. It does not bootstrap project planning state.
 
 ### Workflows (run via generated skills or adapters)
 

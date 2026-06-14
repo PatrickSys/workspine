@@ -15,7 +15,7 @@ The public product name is Workspine. The retained technical contracts remain `g
 npx -y gsdd-cli init
 ```
 
-No global install is required. `npx -y gsdd-cli ...` is the canonical first-run and repair path; bare `gsdd ...` is only shorthand after an optional global install.
+Use `npx -y gsdd-cli init` for repo-local setup. If you install the package globally, `gsdd install --global` installs reusable Workspine skills and native runtime surfaces into your agent homes so they are available across repos.
 
 </div>
 
@@ -46,6 +46,8 @@ Workspine gives coding agents a durable workflow spine for work that spans sessi
 
 Workspine began as a fork of Get Shit Done and keeps the verification-first delivery spine while stripping runtime lock-in.
 
+---
+
 ## Getting Started
 
 ### Quickstart
@@ -54,7 +56,7 @@ Workspine began as a fork of Get Shit Done and keeps the verification-first deli
 npx -y gsdd-cli init
 ```
 
-`init` is a guided install wizard in terminals. It always creates `.agents/skills/gsdd-*` and `.planning/bin/gsdd*`; optional runtime adapters improve native discovery.
+`init` is the guided install wizard for repo-local setup. It creates `.agents/skills/gsdd-*` workflow entrypoints and the `.planning/bin/gsdd*` helper runtime in the current repo; optional runtime adapters improve native discovery.
 
 Invoke workflows through your agent:
 
@@ -74,40 +76,23 @@ npx -y gsdd-cli init --auto --tools all
 npx -y gsdd-cli init --auto --tools codex --brief path/to/brief.md
 ```
 
-### Team Use
+### Global Agent Install
 
-Commit `.planning/` and `.agents/skills/` when the team should share workflow state. Use `commitDocs` in `.planning/config.json` to control whether documentation changes are expected as part of workflow execution.
-
-### What to Track in Git
-
-Track `.planning/`, `.agents/skills/`, and any selected runtime adapters that are part of the team workflow. Do not track `.planning/.local/`; it is local intent and runtime scratch state.
-
-## Configuration
-
-Use model profiles to tune cost and rigor:
+If `gsdd-cli` is installed globally, install reusable Workspine surfaces into your agent homes:
 
 ```bash
-npx -y gsdd-cli models profile quality   # maximize rigor
-npx -y gsdd-cli models profile balanced  # default balance
-npx -y gsdd-cli models profile budget    # minimize cost
+gsdd install --global
+gsdd install --global --tools claude,opencode,codex,copilot
 ```
 
-## Troubleshooting
+When run in a TTY without `--tools`, `install --global` lets you select which agents to install. It does not create `.planning/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
 
-Start with `npx -y gsdd-cli health`. It checks generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. For details, see the [User Guide](docs/USER-GUIDE.md).
-
----
-
-## Get started
-
-```bash
-npx -y gsdd-cli init                     # guided wizard
-npx -y gsdd-cli init --tools claude      # Claude Code only
-npx -y gsdd-cli init --tools opencode    # OpenCode only
-npx -y gsdd-cli init --tools codex       # Codex CLI only
-npx -y gsdd-cli init --tools all         # all runtimes
-npx -y gsdd-cli init --auto --tools all  # headless / CI
-```
+| Target | Global surfaces |
+|--------|-----------------|
+| Claude Code | `~/.claude/skills`, `~/.claude/commands`, `~/.claude/agents` |
+| OpenCode | `~/.config/opencode/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
+| Codex CLI | `~/.codex/skills`, `~/.codex/agents` |
+| GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
 
 ### Which workflow to start with
 
@@ -127,9 +112,29 @@ npx -y gsdd-cli init --auto --tools all  # headless / CI
 | Cursor / Copilot / Gemini | `/gsdd-plan` when skill/slash discovery is available; otherwise open `.agents/skills/gsdd-<workflow>/SKILL.md` |
 | Any other agent | Open `.agents/skills/gsdd-plan/SKILL.md` |
 
-### Team use
+### Team Use
 
-Commit `.planning/` so the team shares specs, roadmaps, phase plans, and verification reports. Each developer runs `init --tools <their-tool>` for their own runtime adapters without changing the shared delivery artifacts.
+Commit `.planning/` so the team shares specs, roadmaps, phase plans, and verification reports. Use `commitDocs` in `.planning/config.json` to control whether documentation changes are expected as part of workflow execution. Each developer runs `init --tools <their-tool>` for their own repo-local runtime adapters without changing the shared delivery artifacts.
+
+### What to Track in Git
+
+Track `.planning/`, `.agents/skills/`, and any selected runtime adapters that are part of the team workflow. Do not track `.planning/.local/`; it is local intent and runtime scratch state.
+
+---
+
+## Configuration
+
+Use model profiles to tune cost and rigor:
+
+```bash
+npx -y gsdd-cli models profile quality   # maximize rigor
+npx -y gsdd-cli models profile balanced  # default balance
+npx -y gsdd-cli models profile budget    # minimize cost
+```
+
+## Troubleshooting
+
+Start with `npx -y gsdd-cli health`. It checks generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. For details, see the [User Guide](docs/USER-GUIDE.md).
 
 ---
 
@@ -155,7 +160,8 @@ Use Workspine when a feature takes more than one session, or when you need to sw
 
 ```bash
 npx -y gsdd-cli health                  # workspace integrity check
-npx -y gsdd-cli update --templates      # regenerate stale runtime surfaces and template payloads
+npx -y gsdd-cli update                  # regenerate stale runtime surfaces
+npx -y gsdd-cli update --templates      # refresh runtime surfaces and template payloads
 npx -y gsdd-cli rigor                   # run planning/document guardrails
 npx -y gsdd-cli file-op                 # deterministic repo-local copy/delete helper
 npx -y gsdd-cli models profile quality  # maximize review rigor
