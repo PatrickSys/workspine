@@ -36,7 +36,20 @@ ${delegateContent.trim()}
 `;
 }
 
-function renderClaudePlanSkill() {
+function renderClaudePlanSkill({ portableContractPath = '.agents/skills/gsdd-plan/SKILL.md' } = {}) {
+  const contractSection = portableContractPath
+    ? `Portable contract:
+- Read \`${portableContractPath}\` first. That file remains the canonical vendor-agnostic plan contract.
+- Keep the portable contract honest: it defines the workflow, but it does not by itself prove fresh-context checker orchestration across runtimes.
+- If the portable skill says plan is still a stub, treat that as a portability-status warning for the generic surface, not as a stop signal for this Claude-native adapter path.`
+    : `Workflow contract:
+- This globally installed skill is the canonical Claude-native \`gsdd-plan\` workflow contract.
+- Keep the workflow portable: use repo-local \`.planning/\` artifacts for project state and do not require repo-local \`.agents/skills/\` files to exist.
+- Do not claim that other runtimes have the same behavior unless their own adapters explicitly implement and prove it.`;
+  const planningContract = portableContractPath
+    ? `\`${portableContractPath}\``
+    : 'this skill';
+
   return `---
 name: gsdd-plan
 description: Claude-native Phase planning with fresh-context plan checking for GSDD
@@ -45,10 +58,7 @@ argument-hint: [phase-number]
 
 You are the Claude-native \`/gsdd-plan\` skill for GSDD phase planning.
 
-Portable contract:
-- Read \`.agents/skills/gsdd-plan/SKILL.md\` first. That file remains the canonical vendor-agnostic plan contract.
-- Keep the portable contract honest: it defines the workflow, but it does not by itself prove fresh-context checker orchestration across runtimes.
-- If the portable skill says plan is still a stub, treat that as a portability-status warning for the generic surface, not as a stop signal for this Claude-native adapter path.
+${contractSection}
 
 Native Claude adapter rule:
 - This skill is the canonical Claude-native entry surface for \`/gsdd-plan\`.
@@ -66,7 +76,7 @@ Execution flow:
    d. The explorer runs a GSD-style interactive conversation with the user (gray areas, research, deep-dive questions, assumptions) and writes APPROACH.md.
    e. Before planning, confirm APPROACH.md records all canonical proof fields: \`alignment_status\`, \`alignment_method\`, \`user_confirmed_at\`, \`explicit_skip_approved\`, \`skip_scope\`, \`skip_rationale\`, and \`confirmed_decisions\`. For \`alignment_status: user_confirmed\`, \`confirmed_decisions\` must name the locked decisions and skip fields may be \`false\`/\`N/A\`; for \`alignment_status: approved_skip\`, \`explicit_skip_approved: true\`, \`skip_scope\`, and \`skip_rationale\` must be substantive. Agent-only "No questions needed" is not valid proof under \`workflow.discuss: true\`.
    f. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
-4. Produce the initial phase plan according to \`.agents/skills/gsdd-plan/SKILL.md\`. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
+4. Produce the initial phase plan according to ${planningContract}. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
 5. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the step 3 alignment-proof gate when \`workflow.discuss: true\`.
 6. If \`workflow.planCheck: true\`, invoke the native \`gsdd-plan-checker\` subagent with fresh context.
 7. Pass only explicit inputs to the checker:

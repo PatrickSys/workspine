@@ -213,9 +213,17 @@ describe('global install pressure loop', () => {
       assertIncludesDisplayPath(claudeCommand, path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'));
       assert.doesNotMatch(claudeCommand, /Read `\.claude\/skills\/gsdd-plan\/SKILL\.md`/);
 
+      const claudePlanSkill = fs.readFileSync(path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'), 'utf-8');
+      assert.match(claudePlanSkill, /globally installed skill is the canonical Claude-native/);
+      assert.doesNotMatch(claudePlanSkill, /\.agents\/skills\/gsdd-plan\/SKILL\.md/);
+
       const opencodeCommand = fs.readFileSync(path.join(homeDir, '.config', 'opencode', 'commands', 'gsdd-plan.md'), 'utf-8');
       assertIncludesDisplayPath(opencodeCommand, path.join(homeDir, '.config', 'opencode', 'skills', 'gsdd-plan', 'SKILL.md'));
       assert.doesNotMatch(opencodeCommand, /Read `\.agents\/skills\/gsdd-plan\/SKILL\.md`/);
+      assert.doesNotMatch(opencodeCommand, /according to `\.agents\/skills\/gsdd-plan\/SKILL\.md`/);
+
+      const globalNewProjectSkill = fs.readFileSync(path.join(homeDir, '.codex', 'skills', 'gsdd-new-project', 'SKILL.md'), 'utf-8');
+      assert.match(globalNewProjectSkill, /otherwise use the globally installed `gsdd-map-codebase` skill/);
     } finally {
       restoreStdin();
       process.exitCode = previousExitCode;

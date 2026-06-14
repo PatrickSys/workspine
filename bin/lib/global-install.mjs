@@ -60,12 +60,12 @@ function getHomeDir() {
   return process.env.GSDD_TEST_HOME || os.homedir();
 }
 
-function getConfigHome(homeDir) {
-  return process.env.XDG_CONFIG_HOME || join(homeDir, '.config');
+function getConfigHome(homeDir, env = process.env) {
+  return env.XDG_CONFIG_HOME || join(homeDir, '.config');
 }
 
 export function resolveGlobalInstallRoots({ homeDir = getHomeDir(), env = process.env } = {}) {
-  const configHome = env.XDG_CONFIG_HOME || getConfigHome(homeDir);
+  const configHome = getConfigHome(homeDir, env);
   return {
     claude: env.CLAUDE_CONFIG_DIR || join(homeDir, '.claude'),
     opencode: join(configHome, 'opencode'),
@@ -133,7 +133,7 @@ function buildClaudeGlobalEntries(ctx, rootDir) {
 
   const entries = ctx.workflows.map((workflow) => ({
     relativePath: `skills/${workflow.name}/SKILL.md`,
-    content: workflow.name === 'gsdd-plan' ? renderClaudePlanSkill() : renderSkillContent(workflow),
+    content: workflow.name === 'gsdd-plan' ? renderClaudePlanSkill({ portableContractPath: null }) : renderSkillContent(workflow),
   }));
 
   entries.push(

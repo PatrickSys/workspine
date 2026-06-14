@@ -1385,6 +1385,25 @@ describe('gsdd init and update', () => {
   });
 
   describe('global install', () => {
+    test('resolveGlobalInstallRoots honors explicit env without leaking process env', async () => {
+      const previousXdg = process.env.XDG_CONFIG_HOME;
+      process.env.XDG_CONFIG_HOME = path.join(tmpDir, 'ambient-config');
+      try {
+        const { resolveGlobalInstallRoots } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}`);
+        const roots = resolveGlobalInstallRoots({
+          homeDir: path.join(tmpDir, 'home'),
+          env: {},
+        });
+        assert.strictEqual(roots.opencode, path.join(tmpDir, 'home', '.config', 'opencode'));
+      } finally {
+        if (previousXdg === undefined) {
+          delete process.env.XDG_CONFIG_HOME;
+        } else {
+          process.env.XDG_CONFIG_HOME = previousXdg;
+        }
+      }
+    });
+
     test('install --global --tools all writes global skills and native agent surfaces without bootstrapping the repo', async () => {
       const homeDir = createTempProject();
       try {
