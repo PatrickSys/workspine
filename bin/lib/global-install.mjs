@@ -92,6 +92,10 @@ function validateGlobalTools(tools) {
   return `ERROR: unsupported global install target(s): ${invalid.join(', ')}. Use --tools claude,opencode,codex,copilot or --tools all.`;
 }
 
+function displayPath(filePath) {
+  return filePath.replace(/\\/g, '/');
+}
+
 async function resolveGlobalInstallTargets({ args, promptApi, output }) {
   const parsedTools = normalizeGlobalTools(parseGlobalToolsFlag(args));
   if (parsedTools.length > 0) return parsedTools;
@@ -113,7 +117,7 @@ async function resolveGlobalInstallTargets({ args, promptApi, output }) {
   });
 }
 
-function buildClaudeGlobalEntries(ctx) {
+function buildClaudeGlobalEntries(ctx, rootDir) {
   const checkerModelAlias = ctx.resolveRuntimeAgentModel({
     cwd: ctx.cwd,
     runtime: 'claude',
@@ -133,7 +137,7 @@ function buildClaudeGlobalEntries(ctx) {
   }));
 
   entries.push(
-    { relativePath: 'commands/gsdd-plan.md', content: renderClaudePlanCommand({ skillPath: '~/.claude/skills/gsdd-plan/SKILL.md' }) },
+    { relativePath: 'commands/gsdd-plan.md', content: renderClaudePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'gsdd-plan', 'SKILL.md')) }) },
     { relativePath: 'agents/gsdd-plan-checker.md', content: renderClaudePlanChecker(getDelegateContent('plan-checker.md'), checkerModelAlias) },
     { relativePath: 'agents/gsdd-approach-explorer.md', content: renderClaudeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelAlias) }
   );
@@ -141,7 +145,7 @@ function buildClaudeGlobalEntries(ctx) {
   return entries;
 }
 
-function buildOpenCodeGlobalEntries(ctx) {
+function buildOpenCodeGlobalEntries(ctx, rootDir) {
   const config = ctx.loadProjectModelConfig(ctx.cwd);
   const checkerModelId = ctx.getRuntimeModelOverride(config, 'opencode', 'plan-checker');
   const explorerModelId = ctx.getRuntimeModelOverride(config, 'opencode', 'approach-explorer');
@@ -151,7 +155,7 @@ function buildOpenCodeGlobalEntries(ctx) {
     {
       relativePath: `commands/${workflow.name}.md`,
       content: workflow.name === 'gsdd-plan'
-        ? renderOpenCodePlanCommand({ skillPath: '~/.config/opencode/skills/gsdd-plan/SKILL.md' })
+        ? renderOpenCodePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'gsdd-plan', 'SKILL.md')) })
         : renderOpenCodeCommandContent(workflow),
     },
   ]));
@@ -220,9 +224,9 @@ function buildCopilotGlobalEntries(ctx) {
   ];
 }
 
-function buildGlobalEntries(target, ctx) {
-  if (target === 'claude') return buildClaudeGlobalEntries(ctx);
-  if (target === 'opencode') return buildOpenCodeGlobalEntries(ctx);
+function buildGlobalEntries(target, ctx, rootDir) {
+  if (target === 'claude') return buildClaudeGlobalEntries(ctx, rootDir);
+  if (target === 'opencode') return buildOpenCodeGlobalEntries(ctx, rootDir);
   if (target === 'codex') return buildCodexGlobalEntries(ctx);
   if (target === 'copilot') return buildCopilotGlobalEntries(ctx);
   return [];
@@ -230,7 +234,7 @@ function buildGlobalEntries(target, ctx) {
 
 function installTarget({ target, rootDir, ctx, dryRun }) {
   const previousManifest = readGlobalManifest(rootDir);
-  const entries = buildGlobalEntries(target, ctx);
+  const entries = buildGlobalEntries(target, ctx, rootDir);
   const preflightFiles = {};
   const preflightResults = entries.map((entry) => writeManifestTrackedFile({
     rootDir,

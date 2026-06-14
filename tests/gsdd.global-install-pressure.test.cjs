@@ -76,6 +76,18 @@ function assertGlobalAgentSurface(homeDir, target, files) {
   assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${target} manifest must track the plan skill`);
 }
 
+function displayPath(filePath) {
+  return filePath.replace(/\\/g, '/');
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function assertIncludesDisplayPath(content, filePath) {
+  assert.match(content, new RegExp(escapeRegex(displayPath(filePath))));
+}
+
 describe('global install pressure loop', () => {
   test('README-driven first-time user loop works through the public CLI surface', async () => {
     const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf-8');
@@ -198,11 +210,11 @@ describe('global install pressure loop', () => {
       }
 
       const claudeCommand = fs.readFileSync(path.join(homeDir, '.claude', 'commands', 'gsdd-plan.md'), 'utf-8');
-      assert.match(claudeCommand, /~\/\.claude\/skills\/gsdd-plan\/SKILL\.md/);
+      assertIncludesDisplayPath(claudeCommand, path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'));
       assert.doesNotMatch(claudeCommand, /Read `\.claude\/skills\/gsdd-plan\/SKILL\.md`/);
 
       const opencodeCommand = fs.readFileSync(path.join(homeDir, '.config', 'opencode', 'commands', 'gsdd-plan.md'), 'utf-8');
-      assert.match(opencodeCommand, /~\/\.config\/opencode\/skills\/gsdd-plan\/SKILL\.md/);
+      assertIncludesDisplayPath(opencodeCommand, path.join(homeDir, '.config', 'opencode', 'skills', 'gsdd-plan', 'SKILL.md'));
       assert.doesNotMatch(opencodeCommand, /Read `\.agents\/skills\/gsdd-plan\/SKILL\.md`/);
     } finally {
       restoreStdin();
@@ -245,6 +257,38 @@ describe('global install pressure loop', () => {
       process.exitCode = previousExitCode;
       cleanup(homeDir);
       cleanup(parent);
+    }
+  });
+
+  test('global command files reference custom install roots with Windows-safe display paths', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const claudeRoot = path.join(homeDir, 'Claude Home With Spaces');
+    const configHome = path.join(homeDir, 'Config Home With Spaces');
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+
+    try {
+      await withEnv({
+        GSDD_TEST_HOME: homeDir,
+        CLAUDE_CONFIG_DIR: claudeRoot,
+        XDG_CONFIG_HOME: configHome,
+      }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude,opencode'));
+      });
+
+      const claudeCommand = fs.readFileSync(path.join(claudeRoot, 'commands', 'gsdd-plan.md'), 'utf-8');
+      assertIncludesDisplayPath(claudeCommand, path.join(claudeRoot, 'skills', 'gsdd-plan', 'SKILL.md'));
+
+      const opencodeRoot = path.join(configHome, 'opencode');
+      const opencodeCommand = fs.readFileSync(path.join(opencodeRoot, 'commands', 'gsdd-plan.md'), 'utf-8');
+      assertIncludesDisplayPath(opencodeCommand, path.join(opencodeRoot, 'skills', 'gsdd-plan', 'SKILL.md'));
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
     }
   });
 
