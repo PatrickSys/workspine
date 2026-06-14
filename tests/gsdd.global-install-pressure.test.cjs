@@ -16,6 +16,7 @@ const {
   createTempProject,
   loadGsdd,
   readJson,
+  runCliAsMain,
   setNonInteractiveStdin,
   withEnv,
 } = require('./gsdd.helpers.cjs');
@@ -76,6 +77,70 @@ function assertGlobalAgentSurface(homeDir, target, files) {
 }
 
 describe('global install pressure loop', () => {
+  test('README-driven first-time user loop works through the public CLI surface', async () => {
+    const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf-8');
+    assert.match(readme, /npx -y gsdd-cli init/);
+    assert.match(readme, /gsdd install --global --tools claude,opencode,codex,copilot/);
+
+    const homeDir = createTempProject();
+    const { parent, repos } = createFixtureRepos();
+    const restoreStdin = setNonInteractiveStdin();
+
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const globalInstall = await runCliAsMain(repos[0], [
+          'install',
+          '--global',
+          '--tools',
+          'claude,opencode,codex,copilot',
+        ]);
+
+        assert.strictEqual(globalInstall.exitCode, 0);
+        assert.match(globalInstall.output, /Global install complete/);
+
+        for (const repo of repos) {
+          assertNoRepoBootstrap(repo);
+        }
+
+        for (const [target, files] of Object.entries({
+          claude: [
+            'skills/gsdd-plan/SKILL.md',
+            'commands/gsdd-plan.md',
+            'agents/gsdd-plan-checker.md',
+          ],
+          opencode: [
+            'skills/gsdd-plan/SKILL.md',
+            'commands/gsdd-plan.md',
+            'agents/gsdd-plan-checker.md',
+          ],
+          codex: [
+            'skills/gsdd-plan/SKILL.md',
+            'agents/gsdd-plan-checker.toml',
+          ],
+          copilot: [
+            'skills/gsdd-plan/SKILL.md',
+            'agents/gsdd-plan-checker.agent.md',
+          ],
+        })) {
+          assertGlobalAgentSurface(homeDir, target, files);
+        }
+
+        const localInstall = await runCliAsMain(repos[1], ['init', '--auto', '--tools', 'codex']);
+        assert.strictEqual(localInstall.exitCode, 0);
+        assert.match(localInstall.output, /GSDD initialized/i);
+      });
+
+      assertNoRepoBootstrap(repos[0]);
+      assert.ok(fs.existsSync(path.join(repos[1], '.planning', 'config.json')));
+      assert.ok(fs.existsSync(path.join(repos[1], '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
+      assertNoRepoBootstrap(repos[2]);
+    } finally {
+      restoreStdin();
+      cleanup(homeDir);
+      cleanup(parent);
+    }
+  });
+
   test('one global install gives mock agents usable surfaces across unrelated fixture repos', async () => {
     const homeDir = createTempProject();
     const { parent, repos } = createFixtureRepos();
