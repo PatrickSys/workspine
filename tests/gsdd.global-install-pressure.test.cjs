@@ -196,6 +196,14 @@ describe('global install pressure loop', () => {
         assert.match(skill, /gsdd-plan/);
         assert.match(skill, /Plan a phase|PLAN\.md/i);
       }
+
+      const claudeCommand = fs.readFileSync(path.join(homeDir, '.claude', 'commands', 'gsdd-plan.md'), 'utf-8');
+      assert.match(claudeCommand, /~\/\.claude\/skills\/gsdd-plan\/SKILL\.md/);
+      assert.doesNotMatch(claudeCommand, /Read `\.claude\/skills\/gsdd-plan\/SKILL\.md`/);
+
+      const opencodeCommand = fs.readFileSync(path.join(homeDir, '.config', 'opencode', 'commands', 'gsdd-plan.md'), 'utf-8');
+      assert.match(opencodeCommand, /~\/\.config\/opencode\/skills\/gsdd-plan\/SKILL\.md/);
+      assert.doesNotMatch(opencodeCommand, /Read `\.agents\/skills\/gsdd-plan\/SKILL\.md`/);
     } finally {
       restoreStdin();
       process.exitCode = previousExitCode;

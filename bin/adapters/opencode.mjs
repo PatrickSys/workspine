@@ -145,7 +145,7 @@ ${delegateContent.trim()}
 `;
 }
 
-function renderOpenCodePlanCommand() {
+function renderOpenCodePlanCommand({ skillPath = '.agents/skills/gsdd-plan/SKILL.md' } = {}) {
   return `---
 description: OpenCode-native phase planning with fresh-context plan checking for GSDD
 subtask: false
@@ -154,7 +154,7 @@ subtask: false
 You are the OpenCode-native \`/gsdd-plan\` command for GSDD phase planning.
 
 Portable contract:
-- Read \`.agents/skills/gsdd-plan/SKILL.md\` first. That file remains the canonical vendor-agnostic plan contract.
+- Read \`${skillPath}\` first. That file remains the canonical vendor-agnostic plan contract.
 - Keep the portable contract honest: it defines the workflow, but it does not by itself prove fresh-context checker orchestration across runtimes.
 - If the portable skill says plan is still a stub, treat that as a portability-status warning for the generic surface, not as a stop signal for this OpenCode-native adapter path.
 

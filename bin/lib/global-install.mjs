@@ -133,7 +133,7 @@ function buildClaudeGlobalEntries(ctx) {
   }));
 
   entries.push(
-    { relativePath: 'commands/gsdd-plan.md', content: renderClaudePlanCommand() },
+    { relativePath: 'commands/gsdd-plan.md', content: renderClaudePlanCommand({ skillPath: '~/.claude/skills/gsdd-plan/SKILL.md' }) },
     { relativePath: 'agents/gsdd-plan-checker.md', content: renderClaudePlanChecker(getDelegateContent('plan-checker.md'), checkerModelAlias) },
     { relativePath: 'agents/gsdd-approach-explorer.md', content: renderClaudeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelAlias) }
   );
@@ -151,7 +151,7 @@ function buildOpenCodeGlobalEntries(ctx) {
     {
       relativePath: `commands/${workflow.name}.md`,
       content: workflow.name === 'gsdd-plan'
-        ? renderOpenCodePlanCommand()
+        ? renderOpenCodePlanCommand({ skillPath: '~/.config/opencode/skills/gsdd-plan/SKILL.md' })
         : renderOpenCodeCommandContent(workflow),
     },
   ]));

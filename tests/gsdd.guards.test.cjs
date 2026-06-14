@@ -709,10 +709,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must not contain custom_command_aware. FIX: Replace custom_command_aware with governance_only in adapter tables.');
   });
 
-  test('README invocation table qualifies Cursor/Copilot/Gemini slash guidance', () => {
+  test('README qualifies Cursor/Copilot/Gemini slash guidance', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /Cursor \/ Copilot \/ Gemini \| .*\/gsdd-plan.*when skill\/slash discovery is available/i,
-      'README invocation table must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording plus SKILL.md fallback.');
+    assert.match(readme, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers `.agents\/skills`; if it does not, open `.agents\/skills\/gsdd-<workflow>\/SKILL\.md`/i,
+      'README must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording plus SKILL.md fallback.');
   });
 
   test('README contains a Quickstart section', () => {

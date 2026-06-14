@@ -58,16 +58,11 @@ npx -y gsdd-cli init
 
 `init` is the guided install wizard for repo-local setup. It creates `.agents/skills/gsdd-*` workflow entrypoints and the `.planning/bin/gsdd*` helper runtime in the current repo; optional runtime adapters improve native discovery.
 
-Invoke workflows through your agent:
+Invoke after init:
 
-| Runtime | Invocation |
-|---------|------------|
-| Claude Code / OpenCode | Use slash command workflows such as `/gsdd-plan` |
-| Codex CLI | Use skill reference workflows such as `$gsdd-plan` |
-| Cursor / Copilot / Gemini | Use slash commands if your tool discovers `.agents/skills`; if it does not, open `.agents/skills/gsdd-<workflow>/SKILL.md` |
-| Any other agent | Open `.agents/skills/gsdd-<workflow>/SKILL.md` directly |
-
-Codex CLI uses the portable `gsdd-plan` skill entry plus `.codex/agents/gsdd-plan-checker.toml` for native checker isolation.
+- Claude Code / OpenCode: slash commands such as `/gsdd-plan`.
+- Codex CLI: portable `gsdd-plan` skill reference (`$gsdd-plan`), with `.codex/agents/gsdd-plan-checker.toml` for native checker isolation.
+- Cursor / Copilot / Gemini: Use slash commands if your tool discovers `.agents/skills`; if it does not, open `.agents/skills/gsdd-<workflow>/SKILL.md`.
 
 Headless setup is available for CI or scripted installs:
 
@@ -101,16 +96,6 @@ When run in a TTY without `--tools`, `install --global` lets you select which ag
 | New project, or brownfield work that's broad / milestone-shaped | `gsdd-new-project` — full initializer, runs codebase mapping internally when needed |
 | Existing repo, and the change you want to make is already concrete | `gsdd-quick` — bounded-change lane, lighter ceremony |
 | Existing repo is unfamiliar or risky and you want a baseline first | `gsdd-map-codebase` — orientation pass before choosing the above |
-
-### Invoke through your agent
-
-| Runtime | How |
-|---------|-----|
-| Claude Code / OpenCode | `/gsdd-plan` slash command |
-| Codex CLI | `$gsdd-plan` skill reference |
-| Codex VS Code / app | Native discovery if available |
-| Cursor / Copilot / Gemini | `/gsdd-plan` when skill/slash discovery is available; otherwise open `.agents/skills/gsdd-<workflow>/SKILL.md` |
-| Any other agent | Open `.agents/skills/gsdd-plan/SKILL.md` |
 
 ### Team Use
 

@@ -107,14 +107,14 @@ Never return raw checker JSON without summarizing it.
 `;
 }
 
-function renderClaudePlanCommand() {
+function renderClaudePlanCommand({ skillPath = '.claude/skills/gsdd-plan/SKILL.md' } = {}) {
   return `---
 description: Compatibility alias for the Claude-native \`/gsdd-plan\` skill
 argument-hint: [phase-number]
 allowed-tools: Read
 ---
 
-Read \`.claude/skills/gsdd-plan/SKILL.md\` and execute that skill as the canonical Claude-native \`/gsdd-plan\` entry.
+Read \`${skillPath}\` and execute that skill as the canonical Claude-native \`/gsdd-plan\` entry.
 
 Rules:
 - Do NOT duplicate orchestration logic here.
