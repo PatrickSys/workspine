@@ -1404,6 +1404,19 @@ describe('gsdd init and update', () => {
       }
     });
 
+    test('resolveGlobalInstallRoots honors Copilot CLI home override', async () => {
+      const { resolveGlobalInstallRoots } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}`);
+      const roots = resolveGlobalInstallRoots({
+        homeDir: path.join(tmpDir, 'home'),
+        env: {
+          COPILOT_HOME: path.join(tmpDir, 'copilot-home'),
+          COPILOT_CONFIG_DIR: path.join(tmpDir, 'legacy-copilot-home'),
+        },
+      });
+
+      assert.strictEqual(roots.copilot, path.join(tmpDir, 'copilot-home'));
+    });
+
     test('install --global --tools all writes global skills and native agent surfaces without bootstrapping the repo', async () => {
       const homeDir = createTempProject();
       try {

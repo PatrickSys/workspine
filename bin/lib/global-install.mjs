@@ -70,7 +70,7 @@ export function resolveGlobalInstallRoots({ homeDir = getHomeDir(), env = proces
     claude: env.CLAUDE_CONFIG_DIR || join(homeDir, '.claude'),
     opencode: join(configHome, 'opencode'),
     codex: env.CODEX_HOME || join(homeDir, '.codex'),
-    copilot: env.COPILOT_CONFIG_DIR || join(homeDir, '.copilot'),
+    copilot: env.COPILOT_HOME || env.COPILOT_CONFIG_DIR || join(homeDir, '.copilot'),
   };
 }
 
