@@ -6,7 +6,7 @@ Lifecycle: `new-project -> plan -> execute -> verify -> audit-milestone`.
 
 Core skills: `gsdd-new-project`, `gsdd-plan`, `gsdd-execute`, `gsdd-verify`, `gsdd-progress`.
 Planning state: `.planning/`. Portable workflows: `.agents/skills/gsdd-*/SKILL.md`.
-Install/repair: `npx -y gsdd-cli init` creates repo-local skills and planning state; `npx -y gsdd-cli health` verifies them; `npx -y gsdd-cli update` repairs drift. Global personal skills use `npx -y gsdd-cli install --global`.
+Install/repair: `npx -y gsdd-cli init` creates repo-local skills and planning state; `npx -y gsdd-cli health` verifies repo-local generated surfaces; `npx -y gsdd-cli update` repairs repo-local drift. Global personal skills use `npx -y gsdd-cli install --global` and are repaired by rerunning that install for the selected targets.
 
 Invoke: `/gsdd-plan` (Claude, OpenCode; Cursor/Copilot/Gemini when skill discovery is available) · `$gsdd-plan` (Codex CLI, plan-only until `$gsdd-execute`) · open SKILL.md directly elsewhere.
 

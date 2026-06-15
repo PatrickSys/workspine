@@ -1,7 +1,7 @@
 import os from 'os';
 import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { promptMultiSelect } from './init-prompts.mjs';
 import {
   buildPortableSkillEntries,
@@ -27,6 +27,7 @@ import {
 } from '../adapters/codex.mjs';
 import {
   GLOBAL_MANIFEST_FILENAME,
+  pruneStaleManifestTrackedFiles,
   readGlobalManifest,
   writeGlobalManifest,
   writeManifestTrackedFile,
@@ -42,17 +43,17 @@ export const GLOBAL_AGENT_OPTIONS = [
   {
     id: 'opencode',
     label: 'OpenCode',
-    description: 'Install global skills, slash commands, and native GSDD agents under ~/.config/opencode.',
+    description: 'Install shared global skills under ~/.agents plus slash commands and native GSDD agents under ~/.config/opencode.',
   },
   {
     id: 'codex',
     label: 'Codex CLI',
-    description: 'Install global skills under ~/.agents and native GSDD agents under ~/.codex.',
+    description: 'Install shared global skills under ~/.agents and native GSDD agents under ~/.codex.',
   },
   {
     id: 'copilot',
     label: 'GitHub Copilot CLI',
-    description: 'Install global skills and Copilot agent profiles under ~/.copilot.',
+    description: 'Install shared global skills under ~/.agents and Copilot agent profiles under ~/.copilot.',
   },
 ];
 
@@ -68,13 +69,18 @@ function getConfigHome(homeDir, env = process.env) {
 
 export function resolveGlobalInstallRoots({ homeDir = getHomeDir(), env = process.env } = {}) {
   const configHome = getConfigHome(homeDir, env);
+  const agentSkills = join(homeDir, '.agents');
   return {
+    home: homeDir,
+    configHome,
     claude: env.CLAUDE_CONFIG_DIR || join(homeDir, '.claude'),
     opencode: env.OPENCODE_CONFIG_DIR || join(configHome, 'opencode'),
-    opencodeSkills: join(configHome, 'opencode'),
+    agentSkills,
+    opencodeSkills: agentSkills,
     codex: env.CODEX_HOME || join(homeDir, '.codex'),
-    codexSkills: join(homeDir, '.agents'),
+    codexSkills: agentSkills,
     copilot: env.COPILOT_HOME || env.COPILOT_CONFIG_DIR || join(homeDir, '.copilot'),
+    copilotSkills: agentSkills,
   };
 }
 
@@ -139,13 +145,6 @@ function buildClaudeGlobalEntries(ctx, rootDir) {
   return entries;
 }
 
-function buildOpenCodeGlobalSkillEntries(ctx) {
-  return ctx.workflows.map((workflow) => ({
-    relativePath: `skills/${workflow.name}/SKILL.md`,
-    content: renderSkillContent(workflow),
-  }));
-}
-
 function buildOpenCodeGlobalCommandEntries(ctx, rootDir) {
   return ctx.workflows.map((workflow) => ({
     relativePath: `commands/${workflow.name}.md`,
@@ -164,13 +163,12 @@ function buildOpenCodeGlobalAgentEntries() {
 
 function buildOpenCodeGlobalEntries(ctx, rootDir) {
   return [
-    ...buildOpenCodeGlobalSkillEntries(ctx),
     ...buildOpenCodeGlobalCommandEntries(ctx, rootDir),
     ...buildOpenCodeGlobalAgentEntries(ctx),
   ];
 }
 
-function buildCodexGlobalSkillEntries(ctx) {
+function buildAgentCompatibleGlobalSkillEntries(ctx) {
   return buildPortableSkillEntries(ctx.workflows).map((entry) => ({
     relativePath: entry.relativePath.replace(/^\.agents\/skills\//, 'skills/'),
     content: entry.content,
@@ -198,12 +196,8 @@ ${body.trim()}
 `;
 }
 
-function buildCopilotGlobalEntries(ctx) {
+function buildCopilotGlobalAgentEntries() {
   return [
-    ...buildPortableSkillEntries(ctx.workflows).map((entry) => ({
-      relativePath: entry.relativePath.replace(/^\.agents\/skills\//, 'skills/'),
-      content: entry.content,
-    })),
     {
       relativePath: 'agents/gsdd-plan-checker.agent.md',
       content: renderCopilotAgent({
@@ -228,7 +222,7 @@ function buildCopilotGlobalEntries(ctx) {
 function buildGlobalEntries(target, ctx, rootDir) {
   if (target === 'claude') return buildClaudeGlobalEntries(ctx, rootDir);
   if (target === 'opencode') return buildOpenCodeGlobalEntries(ctx, rootDir);
-  if (target === 'copilot') return buildCopilotGlobalEntries(ctx);
+  if (target === 'copilot') return buildCopilotGlobalAgentEntries();
   return [];
 }
 
@@ -236,9 +230,9 @@ function buildGlobalInstallSpecs(target, roots, ctx) {
   if (target === 'codex') {
     return [
       {
-        runtime: 'codex-skills',
+        runtime: 'agent-skills',
         rootDir: roots.codexSkills,
-        entries: buildCodexGlobalSkillEntries(ctx),
+        entries: buildAgentCompatibleGlobalSkillEntries(ctx),
       },
       {
         runtime: 'codex',
@@ -251,9 +245,9 @@ function buildGlobalInstallSpecs(target, roots, ctx) {
   if (target === 'opencode' && roots.opencode !== roots.opencodeSkills) {
     return [
       {
-        runtime: 'opencode-skills',
+        runtime: 'agent-skills',
         rootDir: roots.opencodeSkills,
-        entries: buildOpenCodeGlobalSkillEntries(ctx),
+        entries: buildAgentCompatibleGlobalSkillEntries(ctx),
       },
       {
         runtime: 'opencode',
@@ -262,6 +256,21 @@ function buildGlobalInstallSpecs(target, roots, ctx) {
           ...buildOpenCodeGlobalCommandEntries(ctx, roots.opencodeSkills),
           ...buildOpenCodeGlobalAgentEntries(ctx),
         ],
+      },
+    ];
+  }
+
+  if (target === 'copilot' && roots.copilot !== roots.copilotSkills) {
+    return [
+      {
+        runtime: 'agent-skills',
+        rootDir: roots.copilotSkills,
+        entries: buildAgentCompatibleGlobalSkillEntries(ctx),
+      },
+      {
+        runtime: 'copilot',
+        rootDir: roots.copilot,
+        entries: buildCopilotGlobalAgentEntries(),
       },
     ];
   }
@@ -278,7 +287,7 @@ function buildGlobalInstallSpecs(target, roots, ctx) {
 function preflightInstallSpec(spec) {
   const previousManifest = readGlobalManifest(spec.rootDir);
   const nextFiles = {};
-  const results = spec.entries.map((entry) => writeManifestTrackedFile({
+  const fileResults = spec.entries.map((entry) => writeManifestTrackedFile({
     rootDir: spec.rootDir,
     relativePath: entry.relativePath,
     content: entry.content,
@@ -286,6 +295,13 @@ function preflightInstallSpec(spec) {
     nextFiles,
     dryRun: true,
   }));
+  const pruneResults = pruneStaleManifestTrackedFiles({
+    rootDir: spec.rootDir,
+    previousManifest,
+    nextFiles,
+    dryRun: true,
+  });
+  const results = [...fileResults, ...pruneResults];
 
   return {
     ...spec,
@@ -297,12 +313,19 @@ function preflightInstallSpec(spec) {
 }
 
 function writeInstallSpec(plan, ctx) {
+  const nextFiles = {};
   const results = plan.entries.map((entry) => writeManifestTrackedFile({
     rootDir: plan.rootDir,
     relativePath: entry.relativePath,
     content: entry.content,
     previousManifest: plan.previousManifest,
-    nextFiles: {},
+    nextFiles,
+    dryRun: false,
+  }));
+  results.push(...pruneStaleManifestTrackedFiles({
+    rootDir: plan.rootDir,
+    previousManifest: plan.previousManifest,
+    nextFiles,
     dryRun: false,
   }));
 
@@ -313,7 +336,7 @@ function writeInstallSpec(plan, ctx) {
     frameworkVersion: ctx.frameworkVersion,
     runtime: plan.runtime,
     generatedAt: new Date().toISOString(),
-    files: plan.nextFiles,
+    files: nextFiles,
   });
 
   return results;
@@ -337,6 +360,8 @@ function installTarget({ target, roots, ctx, dryRun }) {
     writtenCount: results.filter((result) => result.status === 'written').length,
     unchangedCount: results.filter((result) => result.status === 'unchanged').length,
     wouldWriteCount: results.filter((result) => result.status === 'would_write').length,
+    removedCount: results.filter((result) => result.status === 'removed_stale' || result.status === 'removed_missing').length,
+    wouldRemoveCount: results.filter((result) => result.status === 'would_remove').length,
   };
 }
 
@@ -398,11 +423,12 @@ function checkLayout({ target, roots, ctx }) {
 }
 
 function checkOpenCodeRuntime({ roots, cwd, probeRunner }) {
-  const configHome = dirname(roots.opencodeSkills);
   const result = runProbe('opencode', ['debug', 'skill'], {
     cwd,
     env: makeEnv({
-      XDG_CONFIG_HOME: configHome,
+      HOME: roots.home,
+      USERPROFILE: roots.home,
+      XDG_CONFIG_HOME: roots.configHome,
       OPENCODE_CONFIG_DIR: roots.opencode,
     }),
     probeRunner,
@@ -435,14 +461,14 @@ function liveProbeCommand(target, roots) {
     return {
       command: 'codex',
       args: ['exec', '-c', 'model_reasoning_effort="high"', '--ephemeral', '--sandbox', 'read-only', '--skip-git-repo-check', prompt],
-      env: makeEnv({ CODEX_HOME: roots.codex }),
+      env: makeEnv({ HOME: roots.home, USERPROFILE: roots.home, CODEX_HOME: roots.codex }),
     };
   }
   if (target === 'copilot') {
     return {
       command: 'copilot',
       args: ['-p', prompt, '--effort', 'high', '--config-dir', roots.copilot, '--silent', '--no-custom-instructions'],
-      env: makeEnv({ COPILOT_HOME: roots.copilot }),
+      env: makeEnv({ HOME: roots.home, USERPROFILE: roots.home, COPILOT_HOME: roots.copilot }),
     };
   }
   return null;
@@ -564,7 +590,10 @@ export function createCmdInstall(ctx) {
 
     let hasBlocked = false;
     for (const report of reports) {
-      console.log(`  - ${report.target}: ${dryRun ? `${report.wouldWriteCount} file(s) would be written` : `${report.writtenCount} written, ${report.unchangedCount} unchanged`} (${report.rootDir})`);
+      const actionSummary = dryRun
+        ? `${report.wouldWriteCount} file(s) would be written, ${report.wouldRemoveCount} stale file(s) would be removed`
+        : `${report.writtenCount} written, ${report.unchangedCount} unchanged, ${report.removedCount} stale removed`;
+      console.log(`  - ${report.target}: ${actionSummary} (${report.rootDir})`);
       if (report.blocked.length > 0) {
         hasBlocked = true;
         for (const blocked of report.blocked.slice(0, 5)) {

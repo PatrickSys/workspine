@@ -1435,14 +1435,12 @@ describe('gsdd init and update', () => {
           '.claude/commands/gsdd-plan.md',
           '.claude/agents/gsdd-plan-checker.md',
           '.claude/agents/gsdd-approach-explorer.md',
-          '.config/opencode/skills/gsdd-plan/SKILL.md',
           '.config/opencode/commands/gsdd-plan.md',
           '.config/opencode/agents/gsdd-plan-checker.md',
           '.config/opencode/agents/gsdd-approach-explorer.md',
           '.agents/skills/gsdd-plan/SKILL.md',
           '.codex/agents/gsdd-plan-checker.toml',
           '.codex/agents/gsdd-approach-explorer.toml',
-          '.copilot/skills/gsdd-plan/SKILL.md',
           '.copilot/agents/gsdd-plan-checker.agent.md',
           '.copilot/agents/gsdd-approach-explorer.agent.md',
         ];
@@ -1460,8 +1458,15 @@ describe('gsdd init and update', () => {
         ]) {
           const manifest = readJson(path.join(homeDir, manifestPath));
           assert.strictEqual(manifest.product, 'Workspine');
-          if (manifestPath === '.codex/workspine-file-manifest.json') {
+          if (manifestPath === '.agents/workspine-file-manifest.json') {
+            assert.strictEqual(manifest.runtime, 'agent-skills');
+            assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track shared gsdd-plan skill`);
+          } else if (manifestPath === '.codex/workspine-file-manifest.json') {
             assert.ok(manifest.files['agents/gsdd-plan-checker.toml'], `${manifestPath} must track native Codex agents`);
+          } else if (manifestPath === '.copilot/workspine-file-manifest.json') {
+            assert.ok(manifest.files['agents/gsdd-plan-checker.agent.md'], `${manifestPath} must track native Copilot agents`);
+          } else if (manifestPath === '.config/opencode/workspine-file-manifest.json') {
+            assert.ok(manifest.files['commands/gsdd-plan.md'], `${manifestPath} must track native OpenCode commands`);
           } else {
             assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track gsdd-plan skill`);
           }

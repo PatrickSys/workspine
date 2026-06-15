@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join, relative } from 'path';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { dirname, join, relative, resolve } from 'path';
 
 export const GLOBAL_MANIFEST_FILENAME = 'workspine-file-manifest.json';
 
@@ -75,3 +75,48 @@ export function writeManifestTrackedFile({
   return { relativePath: normalizedRelativePath, status: dryRun ? 'would_write' : 'written' };
 }
 
+export function pruneStaleManifestTrackedFiles({
+  rootDir,
+  previousManifest,
+  nextFiles,
+  dryRun = false,
+}) {
+  if (!previousManifest?.files) return [];
+
+  const root = resolve(rootDir);
+  const results = [];
+  for (const [relativePath, previousHash] of Object.entries(previousManifest.files)) {
+    const normalizedRelativePath = relativePath.replace(/\\/g, '/');
+    if (nextFiles[normalizedRelativePath]) continue;
+
+    const absolutePath = resolve(rootDir, normalizedRelativePath);
+    if (absolutePath !== root && !absolutePath.startsWith(`${root}\\`) && !absolutePath.startsWith(`${root}/`)) {
+      results.push({
+        relativePath: normalizedRelativePath,
+        status: 'skipped_unsafe',
+        message: 'previous manifest path resolves outside the install root',
+      });
+      continue;
+    }
+
+    if (!existsSync(absolutePath)) {
+      results.push({ relativePath: normalizedRelativePath, status: 'removed_missing' });
+      continue;
+    }
+
+    const currentHash = fileHash(absolutePath);
+    if (currentHash !== previousHash) {
+      results.push({
+        relativePath: normalizedRelativePath,
+        status: 'skipped_modified',
+        message: 'stale Workspine-managed file was modified by the user',
+      });
+      continue;
+    }
+
+    if (!dryRun) rmSync(absolutePath, { force: true });
+    results.push({ relativePath: normalizedRelativePath, status: dryRun ? 'would_remove' : 'removed_stale' });
+  }
+
+  return results;
+}

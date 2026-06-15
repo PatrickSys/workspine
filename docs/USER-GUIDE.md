@@ -235,10 +235,11 @@ If `gsdd-cli` is globally installed, you can use the shorter `gsdd ...` form for
 
 Normal user flow:
 
-1. Run `npx gsdd-cli init`.
+1. Run `npx -y gsdd-cli init`.
 2. Enter workflows through your runtime surface: `/gsdd-*` or `$gsdd-*`.
-3. Use `gsdd health` to check installed generated surfaces.
-4. Use `npx gsdd-cli update` when generated surfaces drift or you want the latest shipped output.
+3. Use `npx -y gsdd-cli health` to check repo-local generated surfaces.
+4. Use `npx -y gsdd-cli update` when repo-local generated surfaces drift or you want the latest shipped output.
+5. For personal global installs, rerun `npx -y gsdd-cli install --global --tools <targets>` to repair or refresh selected agent homes.
 
 Surface split:
 
@@ -445,7 +446,7 @@ If you've modified any templates, the generation manifest detects this and warns
 
 ### Generated Surfaces Drift Or A Runtime Command Goes Missing
 
-Start with `gsdd health`. If it reports drift or missing installed generated surfaces, run `npx gsdd-cli update` for the whole workspace or `npx gsdd-cli update --tools <runtime>` for a specific runtime.
+In a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. If it reports drift or missing installed generated surfaces, run `npx -y gsdd-cli update` for the whole workspace or `npx -y gsdd-cli update --tools <runtime>` for a specific runtime. For global personal installs, rerun `npx -y gsdd-cli install --global --tools <targets>`.
 
 That repair path is deterministic for generated files. It does not imply that every runtime has equal native ergonomics or equal validation depth.
 

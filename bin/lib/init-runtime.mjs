@@ -215,9 +215,9 @@ Platforms (for --tools):
 
 Global install targets:
   claude    Install ~/.claude skills, commands, and agents
-  opencode  Install ~/.config/opencode skills, commands, and agents
-  codex     Install ~/.agents skills and ~/.codex agents
-  copilot   Install ~/.copilot skills and agent profiles
+  opencode  Install ~/.agents skills plus ~/.config/opencode commands and agents
+  codex     Install ~/.agents skills plus ~/.codex agents
+  copilot   Install ~/.agents skills plus ~/.copilot agent profiles
   all       Install all global targets above
 
 Notes:
@@ -225,17 +225,17 @@ Notes:
   - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
   - init also generates a local .planning/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - install --global never creates .planning/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
-  - global install is intentionally a write-only setup command; use health/update for ordinary repair and keep runtime probes in test harnesses
+  - repair or refresh a global install by rerunning \`npx -y gsdd-cli install --global --tools <targets>\`; runtime probes stay in test harnesses
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
   - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
-  - \`npx -y gsdd-cli health\` compares any installed generated runtime surfaces against current render output and points back to \`npx -y gsdd-cli update\` when they drift
+  - \`npx -y gsdd-cli health\` is for repo-local .planning/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift
   - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
-  - normal user path: npx -y gsdd-cli init -> run /gsdd-* or $gsdd-* -> npx -y gsdd-cli health -> npx -y gsdd-cli update when repair or refresh is needed
+  - normal repo path: npx -y gsdd-cli init -> run /gsdd-* or $gsdd-* -> npx -y gsdd-cli health -> npx -y gsdd-cli update when local repair or refresh is needed
   - post-init, choose your starting lane honestly: new-project for greenfield or fuzzy/milestone work, quick for a concrete bounded change, map-codebase first when the repo needs deeper orientation
 
 Examples:

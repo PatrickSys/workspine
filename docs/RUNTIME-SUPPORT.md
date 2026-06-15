@@ -60,23 +60,24 @@ Two surfaces matter for users:
 | Target | Global surfaces |
 | --- | --- |
 | Claude Code | `~/.claude/skills`, `~/.claude/commands`, `~/.claude/agents` |
-| OpenCode | `~/.config/opencode/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
+| OpenCode | `~/.agents/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
 | Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
-| GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
+| GitHub Copilot CLI | `~/.agents/skills`, `~/.copilot/agents` |
 
 Install availability is not a parity claim. GitHub Copilot CLI can receive global Workspine surfaces, but it remains in the qualified-support tier unless the release-floor proof for Copilot is raised deliberately.
 
-When `OPENCODE_CONFIG_DIR` is set, OpenCode commands and agents are installed under that custom config root. Skills remain under OpenCode's documented global skill root (`~/.config/opencode/skills`) because the custom config-dir override is not documented as a skills discovery root.
+When `OPENCODE_CONFIG_DIR` is set, OpenCode commands and agents are installed under that custom config root. Skills remain under the shared agent-compatible global root (`~/.agents/skills`), which OpenCode, Codex CLI, and GitHub Copilot CLI can all discover.
 
-## Generated-surface freshness
+## Repo-Local Generated-Surface Freshness
 
 The authored source contract stays in `distilled/workflows/*`. Generated runtime-facing files are trusted only through deterministic rendering:
 
-- `npx -y gsdd-cli health` compares any installed generated surfaces under `.agents/skills/`, `.planning/bin/`, `.claude/`, `.opencode/`, and `.codex/` against current render output.
+- `npx -y gsdd-cli health` compares generated surfaces in the current repo-local `.planning/` workspace under `.agents/skills/`, `.planning/bin/`, `.claude/`, `.opencode/`, and `.codex/` against current render output.
 - Workflow-internal deterministic helper commands run through `node .planning/bin/gsdd.mjs ...`.
 - `npx -y gsdd-cli update` regenerates drifted generated surfaces from the authored workflow and delegate sources.
 - Bare `gsdd health` and `gsdd update` are equivalent only when `gsdd-cli` is globally installed.
 - Missing generated surfaces are not treated as drift unless the corresponding runtime surface is actually installed locally.
+- Global user-home installs are refreshed by rerunning `npx -y gsdd-cli install --global --tools <targets>`; global runtime probes remain an internal pressure-harness concern, not a public install flag.
 
 ## Entry and helper surfaces
 

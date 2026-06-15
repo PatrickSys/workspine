@@ -9,6 +9,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
+const { createHash } = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -25,6 +26,10 @@ const {
 function writeFile(filePath, content) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content);
+}
+
+function sha256(content) {
+  return createHash('sha256').update(content).digest('hex');
 }
 
 async function captureLogs(fn) {
@@ -69,7 +74,7 @@ function assertGlobalAgentSurface(homeDir, target, files) {
   };
 
   const rootFor = (relativePath) => {
-    if (target === 'codex' && relativePath.startsWith('skills/')) return path.join(homeDir, '.agents');
+    if (['codex', 'opencode', 'copilot'].includes(target) && relativePath.startsWith('skills/')) return path.join(homeDir, '.agents');
     if (target === 'codex') return path.join(homeDir, '.codex');
     return rootMap[target];
   };
@@ -78,21 +83,27 @@ function assertGlobalAgentSurface(homeDir, target, files) {
     assert.ok(fs.existsSync(path.join(rootFor(relativePath), relativePath)), `${target} missing ${relativePath}`);
   }
 
-  if (target === 'codex') {
+  if (['codex', 'opencode', 'copilot'].includes(target)) {
     const skillFiles = files.filter((relativePath) => relativePath.startsWith('skills/'));
     const agentFiles = files.filter((relativePath) => relativePath.startsWith('agents/'));
     if (skillFiles.length > 0) {
       const manifest = readJson(path.join(homeDir, '.agents', 'workspine-file-manifest.json'));
-      assert.strictEqual(manifest.runtime, 'codex-skills');
+      assert.strictEqual(manifest.runtime, 'agent-skills');
       for (const relativePath of skillFiles) {
-        assert.ok(manifest.files[relativePath], `codex skill manifest must track ${relativePath}`);
+        assert.ok(manifest.files[relativePath], `${target} shared skill manifest must track ${relativePath}`);
       }
     }
-    if (agentFiles.length > 0) {
+    if (agentFiles.length > 0 && target !== 'opencode' && target !== 'copilot') {
       const manifest = readJson(path.join(homeDir, '.codex', 'workspine-file-manifest.json'));
-      assert.strictEqual(manifest.runtime, 'codex');
+      assert.strictEqual(manifest.runtime, target);
       for (const relativePath of agentFiles) {
-        assert.ok(manifest.files[relativePath], `codex agent manifest must track ${relativePath}`);
+        assert.ok(manifest.files[relativePath], `${target} agent manifest must track ${relativePath}`);
+      }
+    } else if (agentFiles.length > 0) {
+      const manifest = readJson(path.join(rootMap[target], 'workspine-file-manifest.json'));
+      assert.strictEqual(manifest.runtime, target);
+      for (const relativePath of agentFiles) {
+        assert.ok(manifest.files[relativePath], `${target} native manifest must track ${relativePath}`);
       }
     }
     return;
@@ -230,14 +241,16 @@ describe('global install pressure loop', () => {
 
       for (const skillPath of [
         path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'),
-        path.join(homeDir, '.config', 'opencode', 'skills', 'gsdd-plan', 'SKILL.md'),
         path.join(homeDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
-        path.join(homeDir, '.copilot', 'skills', 'gsdd-plan', 'SKILL.md'),
       ]) {
         const skill = fs.readFileSync(skillPath, 'utf-8');
         assert.match(skill, /gsdd-plan/);
         assert.match(skill, /Plan a phase|PLAN\.md/i);
       }
+      assert.ok(!fs.existsSync(path.join(homeDir, '.config', 'opencode', 'skills', 'gsdd-plan', 'SKILL.md')),
+        'OpenCode should use the shared agent-compatible skill root instead of a duplicate private skill copy');
+      assert.ok(!fs.existsSync(path.join(homeDir, '.copilot', 'skills', 'gsdd-plan', 'SKILL.md')),
+        'Copilot should use the shared agent-compatible skill root instead of a duplicate private skill copy');
 
       const claudeCommand = fs.readFileSync(path.join(homeDir, '.claude', 'commands', 'gsdd-plan.md'), 'utf-8');
       assertIncludesDisplayPath(claudeCommand, path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'));
@@ -248,9 +261,7 @@ describe('global install pressure loop', () => {
       assert.doesNotMatch(claudePlanSkill, /\.agents\/skills\/gsdd-plan\/SKILL\.md/);
 
       const opencodeCommand = fs.readFileSync(path.join(homeDir, '.config', 'opencode', 'commands', 'gsdd-plan.md'), 'utf-8');
-      assertIncludesDisplayPath(opencodeCommand, path.join(homeDir, '.config', 'opencode', 'skills', 'gsdd-plan', 'SKILL.md'));
-      assert.doesNotMatch(opencodeCommand, /Read `\.agents\/skills\/gsdd-plan\/SKILL\.md`/);
-      assert.doesNotMatch(opencodeCommand, /according to `\.agents\/skills\/gsdd-plan\/SKILL\.md`/);
+      assertIncludesDisplayPath(opencodeCommand, path.join(homeDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'));
 
       const globalNewProjectSkill = fs.readFileSync(path.join(homeDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md'), 'utf-8');
       assert.match(globalNewProjectSkill, /otherwise use the globally installed `gsdd-map-codebase` skill/);
@@ -321,7 +332,7 @@ describe('global install pressure loop', () => {
 
       const opencodeRoot = path.join(configHome, 'opencode');
       const opencodeCommand = fs.readFileSync(path.join(opencodeRoot, 'commands', 'gsdd-plan.md'), 'utf-8');
-      assertIncludesDisplayPath(opencodeCommand, path.join(opencodeRoot, 'skills', 'gsdd-plan', 'SKILL.md'));
+      assertIncludesDisplayPath(opencodeCommand, path.join(homeDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'));
     } finally {
       restoreStdin();
       process.exitCode = previousExitCode;
@@ -330,7 +341,7 @@ describe('global install pressure loop', () => {
     }
   });
 
-  test('OpenCode honors custom config root for commands and agents while keeping documented skill root', async () => {
+  test('OpenCode honors custom config root for commands and agents while keeping shared skill root', async () => {
     const homeDir = createTempProject();
     const repoDir = createTempProject();
     const configHome = path.join(homeDir, 'Config Home With Spaces');
@@ -348,16 +359,18 @@ describe('global install pressure loop', () => {
         await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'opencode'));
       });
 
-      const skillRoot = path.join(configHome, 'opencode');
+      const skillRoot = path.join(homeDir, '.agents');
       assert.ok(fs.existsSync(path.join(skillRoot, 'skills', 'gsdd-plan', 'SKILL.md')));
       assert.ok(fs.existsSync(path.join(opencodeConfigDir, 'commands', 'gsdd-plan.md')));
       assert.ok(fs.existsSync(path.join(opencodeConfigDir, 'agents', 'gsdd-plan-checker.md')));
       assert.ok(!fs.existsSync(path.join(opencodeConfigDir, 'skills', 'gsdd-plan', 'SKILL.md')),
-        'OPENCODE_CONFIG_DIR is not the documented global skill root');
+        'OPENCODE_CONFIG_DIR is not the shared agent-compatible skill root');
+      assert.ok(!fs.existsSync(path.join(configHome, 'opencode', 'skills', 'gsdd-plan', 'SKILL.md')),
+        'OpenCode should not get a duplicate private skill copy when the shared root is available');
 
       const skillsManifest = readJson(path.join(skillRoot, 'workspine-file-manifest.json'));
       const configManifest = readJson(path.join(opencodeConfigDir, 'workspine-file-manifest.json'));
-      assert.strictEqual(skillsManifest.runtime, 'opencode-skills');
+      assert.strictEqual(skillsManifest.runtime, 'agent-skills');
       assert.strictEqual(configManifest.runtime, 'opencode');
       assert.ok(skillsManifest.files['skills/gsdd-plan/SKILL.md']);
       assert.ok(configManifest.files['commands/gsdd-plan.md']);
@@ -365,6 +378,87 @@ describe('global install pressure loop', () => {
 
       const opencodeCommand = fs.readFileSync(path.join(opencodeConfigDir, 'commands', 'gsdd-plan.md'), 'utf-8');
       assertIncludesDisplayPath(opencodeCommand, path.join(skillRoot, 'skills', 'gsdd-plan', 'SKILL.md'));
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global install prunes stale Workspine-managed private skill copies after shared-root migration', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const oldSkill = 'old Workspine-managed duplicate skill\n';
+
+    try {
+      const staleOpenCodeSkill = path.join(homeDir, '.config', 'opencode', 'skills', 'gsdd-plan', 'SKILL.md');
+      const staleCopilotSkill = path.join(homeDir, '.copilot', 'skills', 'gsdd-plan', 'SKILL.md');
+      writeFile(staleOpenCodeSkill, oldSkill);
+      writeFile(staleCopilotSkill, oldSkill);
+      writeFile(path.join(homeDir, '.config', 'opencode', 'workspine-file-manifest.json'), JSON.stringify({
+        product: 'Workspine',
+        runtime: 'opencode',
+        files: {
+          'skills/gsdd-plan/SKILL.md': sha256(oldSkill),
+        },
+      }, null, 2));
+      writeFile(path.join(homeDir, '.copilot', 'workspine-file-manifest.json'), JSON.stringify({
+        product: 'Workspine',
+        runtime: 'copilot',
+        files: {
+          'skills/gsdd-plan/SKILL.md': sha256(oldSkill),
+        },
+      }, null, 2));
+
+      const output = await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        return captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'opencode,copilot'));
+      });
+
+      assert.match(output, /stale removed/);
+      assert.ok(!fs.existsSync(staleOpenCodeSkill), 'old OpenCode private skill copy should be pruned');
+      assert.ok(!fs.existsSync(staleCopilotSkill), 'old Copilot private skill copy should be pruned');
+      assert.ok(fs.existsSync(path.join(homeDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
+      assert.ok(!readJson(path.join(homeDir, '.config', 'opencode', 'workspine-file-manifest.json')).files['skills/gsdd-plan/SKILL.md']);
+      assert.ok(!readJson(path.join(homeDir, '.copilot', 'workspine-file-manifest.json')).files['skills/gsdd-plan/SKILL.md']);
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global install refuses to prune user-modified stale private skill copies', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const oldSkill = 'old Workspine-managed duplicate skill\n';
+    const modifiedSkill = 'user edited duplicate skill\n';
+
+    try {
+      const staleOpenCodeSkill = path.join(homeDir, '.config', 'opencode', 'skills', 'gsdd-plan', 'SKILL.md');
+      writeFile(staleOpenCodeSkill, modifiedSkill);
+      writeFile(path.join(homeDir, '.config', 'opencode', 'workspine-file-manifest.json'), JSON.stringify({
+        product: 'Workspine',
+        runtime: 'opencode',
+        files: {
+          'skills/gsdd-plan/SKILL.md': sha256(oldSkill),
+        },
+      }, null, 2));
+
+      const output = await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        return captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'opencode'));
+      });
+
+      assert.match(output, /stale Workspine-managed file was modified by the user/);
+      assert.strictEqual(process.exitCode, 1);
+      assert.strictEqual(fs.readFileSync(staleOpenCodeSkill, 'utf-8'), modifiedSkill);
     } finally {
       restoreStdin();
       process.exitCode = previousExitCode;
@@ -503,6 +597,8 @@ describe('global install pressure loop', () => {
       assert.deepStrictEqual(calls.map((call) => [call.command, call.args.join(' ')]), [['opencode', 'debug skill']]);
       assert.strictEqual(calls[0].env.XDG_CONFIG_HOME, path.join(homeDir, '.config'));
       assert.strictEqual(calls[0].env.OPENCODE_CONFIG_DIR, path.join(homeDir, '.config', 'opencode'));
+      assert.strictEqual(calls[0].env.HOME, homeDir);
+      assert.strictEqual(calls[0].env.USERPROFILE, homeDir);
     } finally {
       restoreStdin();
       process.exitCode = previousExitCode;
@@ -564,7 +660,11 @@ describe('global install pressure loop', () => {
       assert.ok(!commands[2].args.includes('gpt-5.4'));
       assert.strictEqual(commands[0].env.CLAUDE_CONFIG_DIR, path.join(homeDir, '.claude'));
       assert.strictEqual(commands[1].env.CODEX_HOME, path.join(homeDir, '.codex'));
+      assert.strictEqual(commands[1].env.HOME, homeDir);
+      assert.strictEqual(commands[1].env.USERPROFILE, homeDir);
       assert.strictEqual(commands[2].env.COPILOT_HOME, path.join(homeDir, '.copilot'));
+      assert.strictEqual(commands[2].env.HOME, homeDir);
+      assert.strictEqual(commands[2].env.USERPROFILE, homeDir);
     } finally {
       restoreStdin();
       process.exitCode = previousExitCode;

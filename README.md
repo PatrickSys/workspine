@@ -85,13 +85,13 @@ When run in a TTY without `--tools`, `install --global` lets you select which ag
 | Target | Global surfaces |
 |--------|-----------------|
 | Claude Code | `~/.claude/skills`, `~/.claude/commands`, `~/.claude/agents` |
-| OpenCode | `~/.config/opencode/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
+| OpenCode | `~/.agents/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
 | Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
-| GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
+| GitHub Copilot CLI | `~/.agents/skills`, `~/.copilot/agents` |
 
 Install availability is not a parity claim. Claude Code, OpenCode, and Codex CLI remain the directly validated runtimes; GitHub Copilot CLI is available as a qualified global target.
 
-OpenCode honors `OPENCODE_CONFIG_DIR` for commands and agents; skills stay in the documented global skill root.
+OpenCode honors `OPENCODE_CONFIG_DIR` for commands and agents; Workspine installs portable skills once in the shared agent-compatible global root.
 
 ### Which workflow to start with
 
@@ -123,7 +123,7 @@ npx -y gsdd-cli models profile budget    # minimize cost
 
 ## Troubleshooting
 
-Start with `npx -y gsdd-cli health`. It checks generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. For details, see the [User Guide](docs/USER-GUIDE.md).
+Inside a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. It checks local generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. To repair or refresh a personal global install, rerun `npx -y gsdd-cli install --global --tools <targets>`. For details, see the [User Guide](docs/USER-GUIDE.md).
 
 ---
 
