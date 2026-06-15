@@ -122,7 +122,7 @@ describe('global install pressure loop', () => {
   test('README-driven first-time user loop works through the public CLI surface', async () => {
     const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf-8');
     assert.match(readme, /npx -y gsdd-cli init/);
-    assert.match(readme, /gsdd install --global --tools claude,opencode,codex,copilot/);
+    assert.match(readme, /npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot/);
 
     const homeDir = createTempProject();
     const { parent, repos } = createFixtureRepos();
@@ -373,6 +373,62 @@ describe('global install pressure loop', () => {
     }
   });
 
+  test('global install ignores repo-local model overrides', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+
+    try {
+      writeFile(path.join(repoDir, '.planning', 'config.json'), JSON.stringify({
+        modelProfile: 'budget',
+        agentModelProfiles: {
+          'plan-checker': 'budget',
+          'approach-explorer': 'budget',
+        },
+        runtimeModelOverrides: {
+          claude: {
+            'plan-checker': 'repo-claude-checker',
+            'approach-explorer': 'repo-claude-explorer',
+          },
+          opencode: {
+            'plan-checker': 'vendor/repo-opencode-checker',
+            'approach-explorer': 'vendor/repo-opencode-explorer',
+          },
+          codex: {
+            'plan-checker': 'repo-codex-checker',
+            'approach-explorer': 'repo-codex-explorer',
+          },
+        },
+      }, null, 2));
+
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude,opencode,codex'));
+      });
+
+      const generated = [
+        path.join(homeDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
+        path.join(homeDir, '.claude', 'agents', 'gsdd-approach-explorer.md'),
+        path.join(homeDir, '.config', 'opencode', 'agents', 'gsdd-plan-checker.md'),
+        path.join(homeDir, '.config', 'opencode', 'agents', 'gsdd-approach-explorer.md'),
+        path.join(homeDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+        path.join(homeDir, '.codex', 'agents', 'gsdd-approach-explorer.toml'),
+      ].map((filePath) => fs.readFileSync(filePath, 'utf-8')).join('\n');
+
+      assert.doesNotMatch(generated, /repo-claude-checker|repo-claude-explorer/);
+      assert.doesNotMatch(generated, /repo-opencode-checker|repo-opencode-explorer/);
+      assert.doesNotMatch(generated, /repo-codex-checker|repo-codex-explorer/);
+      assert.match(generated, /model: sonnet/);
+      assert.match(generated, /model: opus/);
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
   test('mock user conflict in one global target does not partially install that target', async () => {
     const homeDir = createTempProject();
     const { parent, repos } = createFixtureRepos();
@@ -504,8 +560,8 @@ describe('global install pressure loop', () => {
       assert.ok(commands[0].args.includes('Read'));
       assert.match(commands[0].args.join('\n'), /^-p\n\/gsdd-plan Verification mode/m);
       assert.ok(!commands[1].args.includes('--ask-for-approval'));
-      assert.ok(commands[1].args.includes('gpt-5.4'));
-      assert.ok(commands[2].args.includes('gpt-5.4'));
+      assert.ok(!commands[1].args.includes('gpt-5.4'));
+      assert.ok(!commands[2].args.includes('gpt-5.4'));
       assert.strictEqual(commands[0].env.CLAUDE_CONFIG_DIR, path.join(homeDir, '.claude'));
       assert.strictEqual(commands[1].env.CODEX_HOME, path.join(homeDir, '.codex'));
       assert.strictEqual(commands[2].env.COPILOT_HOME, path.join(homeDir, '.copilot'));

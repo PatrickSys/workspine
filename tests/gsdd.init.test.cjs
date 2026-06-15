@@ -1514,6 +1514,67 @@ describe('gsdd init and update', () => {
         cleanup(homeDir);
       }
     });
+
+    test('install --global rejects runtime probing flags from the public CLI', async () => {
+      const homeDir = createTempProject();
+      const previousExitCode = process.exitCode;
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        for (const flag of ['--verify-runtime', '--live-runtime']) {
+          await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+            const result = await runCliAsMain(tmpDir, ['install', '--global', '--tools', 'claude', flag]);
+            assert.strictEqual(result.exitCode, 1);
+            assert.match(result.output, /runtime probing is not part of the public install command/);
+          });
+        }
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude')));
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
+    test('interactive global install picker does not preselect every agent home', async () => {
+      const homeDir = createTempProject();
+      let promptedOptions = null;
+      const previousExitCode = process.exitCode;
+      const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+      try {
+        Object.defineProperty(process.stdin, 'isTTY', {
+          configurable: true,
+          value: true,
+        });
+        await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+          const [{ createCliContext }, { createCmdInstall }] = await Promise.all([
+            importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs')),
+            importModule(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')),
+          ]);
+          const ctx = createCliContext(tmpDir);
+          ctx.globalInstallPromptApi = {
+            selectGlobalInstallTargets(options) {
+              promptedOptions = options;
+              return ['claude'];
+            },
+          };
+          await createCmdInstall(ctx)('--global');
+        });
+
+        assert.ok(promptedOptions);
+        assert.ok(promptedOptions.every((option) => option.selected === false),
+          'global install must not default to writing every supported agent home');
+        assert.ok(fs.existsSync(path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.copilot')));
+      } finally {
+        if (stdinDescriptor) {
+          Object.defineProperty(process.stdin, 'isTTY', stdinDescriptor);
+        } else {
+          delete process.stdin.isTTY;
+        }
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
   });
 
   describe('partial .planning/ resilience', () => {

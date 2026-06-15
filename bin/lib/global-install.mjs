@@ -109,7 +109,7 @@ async function resolveGlobalInstallTargets({ args, promptApi, output }) {
   }
 
   if (promptApi?.selectGlobalInstallTargets) {
-    return promptApi.selectGlobalInstallTargets(GLOBAL_AGENT_OPTIONS);
+    return promptApi.selectGlobalInstallTargets(GLOBAL_AGENT_OPTIONS.map((option) => ({ ...option, selected: false, detected: false })));
   }
 
   return promptMultiSelect({
@@ -117,23 +117,13 @@ async function resolveGlobalInstallTargets({ args, promptApi, output }) {
     output,
     title: 'Select global agent installs',
     hint: 'Space toggles, Enter confirms.',
-    choices: GLOBAL_AGENT_OPTIONS.map((option) => ({ ...option, selected: true, detected: false })),
+    choices: GLOBAL_AGENT_OPTIONS.map((option) => ({ ...option, selected: false, detected: false })),
   });
 }
 
 function buildClaudeGlobalEntries(ctx, rootDir) {
-  const checkerModelAlias = ctx.resolveRuntimeAgentModel({
-    cwd: ctx.cwd,
-    runtime: 'claude',
-    agentId: 'plan-checker',
-    profileMap: CLAUDE_MODEL_PROFILES,
-  });
-  const explorerModelAlias = ctx.resolveRuntimeAgentModel({
-    cwd: ctx.cwd,
-    runtime: 'claude',
-    agentId: 'approach-explorer',
-    profileMap: CLAUDE_MODEL_PROFILES,
-  });
+  const checkerModelAlias = CLAUDE_MODEL_PROFILES.balanced;
+  const explorerModelAlias = CLAUDE_MODEL_PROFILES.quality;
 
   const entries = ctx.workflows.map((workflow) => ({
     relativePath: `skills/${workflow.name}/SKILL.md`,
@@ -165,14 +155,10 @@ function buildOpenCodeGlobalCommandEntries(ctx, rootDir) {
   }));
 }
 
-function buildOpenCodeGlobalAgentEntries(ctx) {
-  const config = ctx.loadProjectModelConfig(ctx.cwd);
-  const checkerModelId = ctx.getRuntimeModelOverride(config, 'opencode', 'plan-checker');
-  const explorerModelId = ctx.getRuntimeModelOverride(config, 'opencode', 'approach-explorer');
-
+function buildOpenCodeGlobalAgentEntries() {
   return [
-    { relativePath: 'agents/gsdd-plan-checker.md', content: renderOpenCodePlanChecker(getDelegateContent('plan-checker.md'), checkerModelId) },
-    { relativePath: 'agents/gsdd-approach-explorer.md', content: renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId) },
+    { relativePath: 'agents/gsdd-plan-checker.md', content: renderOpenCodePlanChecker(getDelegateContent('plan-checker.md')) },
+    { relativePath: 'agents/gsdd-approach-explorer.md', content: renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md')) },
   ];
 }
 
@@ -191,14 +177,10 @@ function buildCodexGlobalSkillEntries(ctx) {
   }));
 }
 
-function buildCodexGlobalAgentEntries(ctx) {
-  const config = ctx.loadProjectModelConfig(ctx.cwd);
-  const checkerModelId = ctx.getRuntimeModelOverride(config, 'codex', 'plan-checker');
-  const explorerModelId = ctx.getRuntimeModelOverride(config, 'codex', 'approach-explorer');
-
+function buildCodexGlobalAgentEntries() {
   return [
-    { relativePath: 'agents/gsdd-plan-checker.toml', content: renderCodexPlanChecker(getDelegateContent('plan-checker.md'), checkerModelId) },
-    { relativePath: 'agents/gsdd-approach-explorer.toml', content: renderCodexApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId) },
+    { relativePath: 'agents/gsdd-plan-checker.toml', content: renderCodexPlanChecker(getDelegateContent('plan-checker.md')) },
+    { relativePath: 'agents/gsdd-approach-explorer.toml', content: renderCodexApproachExplorer(getDelegateContent('approach-explorer.md')) },
   ];
 }
 
@@ -261,7 +243,7 @@ function buildGlobalInstallSpecs(target, roots, ctx) {
       {
         runtime: 'codex',
         rootDir: roots.codex,
-        entries: buildCodexGlobalAgentEntries(ctx),
+        entries: buildCodexGlobalAgentEntries(),
       },
     ];
   }
@@ -452,14 +434,14 @@ function liveProbeCommand(target, roots) {
   if (target === 'codex') {
     return {
       command: 'codex',
-      args: ['exec', '-m', 'gpt-5.4', '-c', 'model_reasoning_effort="high"', '--ephemeral', '--sandbox', 'read-only', '--skip-git-repo-check', prompt],
+      args: ['exec', '-c', 'model_reasoning_effort="high"', '--ephemeral', '--sandbox', 'read-only', '--skip-git-repo-check', prompt],
       env: makeEnv({ CODEX_HOME: roots.codex }),
     };
   }
   if (target === 'copilot') {
     return {
       command: 'copilot',
-      args: ['-p', prompt, '--model', 'gpt-5.4', '--effort', 'high', '--config-dir', roots.copilot, '--silent', '--no-custom-instructions'],
+      args: ['-p', prompt, '--effort', 'high', '--config-dir', roots.copilot, '--silent', '--no-custom-instructions'],
       env: makeEnv({ COPILOT_HOME: roots.copilot }),
     };
   }
@@ -506,7 +488,7 @@ export function verifyGlobalRuntimeInstall({ targets, roots, ctx, liveRuntime = 
         target,
         check: 'runtime_discovery',
         status: 'unproven',
-        message: 'no model-free runtime discovery probe is available; rerun with --live-runtime to spend auth/quota on a real CLI session',
+        message: 'no model-free runtime discovery probe is available; use the internal liveRuntime pressure harness for authenticated CLI sessions',
       });
   }
 
@@ -516,14 +498,6 @@ export function verifyGlobalRuntimeInstall({ targets, roots, ctx, liveRuntime = 
     unproven: checks.filter((check) => check.status === 'unproven'),
     skipped: checks.filter((check) => check.status === 'skipped'),
   };
-}
-
-function printRuntimeVerification(report) {
-  console.log('\nRuntime verification:');
-  for (const check of report.checks) {
-    const label = check.status.toUpperCase();
-    console.log(`  - ${check.target} ${check.check}: ${label} - ${check.message}`);
-  }
 }
 
 export function createCmdInstall(ctx) {
@@ -536,25 +510,25 @@ export function createCmdInstall(ctx) {
     const toolsFlag = parseFlagValue(installArgs, '--tools');
 
     if (toolsFlag.invalid) {
-      console.error('ERROR: --tools requires a value. Example: gsdd install --global --tools claude,opencode');
+      console.error('ERROR: --tools requires a value. Example: npx -y gsdd-cli install --global --tools claude,opencode');
       process.exitCode = 1;
       return;
     }
 
     if (localFlag) {
-      console.error('ERROR: local project installation is `gsdd init`. Global installation is `gsdd install --global`.');
+      console.error('ERROR: local project installation is `npx -y gsdd-cli init`. Global installation is `npx -y gsdd-cli install --global`.');
       process.exitCode = 1;
       return;
     }
 
     if (!globalFlag) {
-      console.error('ERROR: install currently requires --global. For repo-local setup, run `gsdd init`.');
+      console.error('ERROR: install currently requires --global. For repo-local setup, run `npx -y gsdd-cli init`.');
       process.exitCode = 1;
       return;
     }
 
-    if (dryRun && verifyRuntime) {
-      console.error('ERROR: --verify-runtime requires a real global install. Run without --dry after reviewing the preview.');
+    if (verifyRuntime || liveRuntime) {
+      console.error('ERROR: runtime probing is not part of the public install command. Use `npx -y gsdd-cli health` for repo-local setup checks; runtime pressure probes live in tests.');
       process.exitCode = 1;
       return;
     }
@@ -579,7 +553,7 @@ export function createCmdInstall(ctx) {
     }
 
     const roots = resolveGlobalInstallRoots();
-    console.log(`gsdd install --global - installing Workspine runtime surfaces${dryRun ? ' (dry run)' : ''}\n`);
+    console.log(`Workspine global install - installing runtime surfaces${dryRun ? ' (dry run)' : ''}\n`);
 
     const reports = targets.map((target) => installTarget({
       target,
@@ -606,22 +580,6 @@ export function createCmdInstall(ctx) {
       console.error('\nGlobal install finished with skipped files. Review them before re-running or deleting local modifications.');
       process.exitCode = 1;
       return;
-    }
-
-    if (verifyRuntime) {
-      const verification = verifyGlobalRuntimeInstall({
-        targets,
-        roots,
-        ctx,
-        liveRuntime,
-        probeRunner: ctx.globalRuntimeProbeRunner,
-      });
-      printRuntimeVerification(verification);
-      if (verification.failed.length > 0) {
-        console.error('\nGlobal install verification failed.');
-        process.exitCode = 1;
-        return;
-      }
     }
 
     console.log('\nGlobal install complete.');

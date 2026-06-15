@@ -4,7 +4,7 @@ Workspine is a repo-native delivery spine with portable multi-runtime workflow s
 
 This matrix is the release-floor truth surface.
 
-Human repo setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine. For cross-repo personal use, `gsdd install --global` installs reusable Workspine skills and native runtime surfaces into selected agent homes.
+Human repo setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine. For cross-repo personal use, `npx -y gsdd-cli install --global` installs reusable Workspine skills and native runtime surfaces into selected agent homes.
 
 The install contract is deliberately skills-first: `npx -y gsdd-cli init` always creates `.agents/skills/gsdd-*` and `.planning/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
 
@@ -55,7 +55,7 @@ Two surfaces matter for users:
 
 ## Global install surfaces
 
-`gsdd install --global` can install personal cross-repo surfaces for these targets:
+`npx -y gsdd-cli install --global` can install personal cross-repo surfaces for these targets:
 
 | Target | Global surfaces |
 | --- | --- |
@@ -64,7 +64,7 @@ Two surfaces matter for users:
 | Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
 | GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
 
-`gsdd install --global --verify-runtime` verifies the generated files, Workspine manifests, and any model-free runtime discovery probes exposed by the vendor CLI. Today OpenCode has a model-free `opencode debug skill` path. Claude Code, Codex CLI, and GitHub Copilot CLI require `--live-runtime` for stronger runtime discovery because their practical probes go through authenticated CLI sessions that may spend model quota.
+Install availability is not a parity claim. GitHub Copilot CLI can receive global Workspine surfaces, but it remains in the qualified-support tier unless the release-floor proof for Copilot is raised deliberately.
 
 When `OPENCODE_CONFIG_DIR` is set, OpenCode commands and agents are installed under that custom config root. Skills remain under OpenCode's documented global skill root (`~/.config/opencode/skills`) because the custom config-dir override is not documented as a skills discovery root.
 

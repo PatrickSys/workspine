@@ -15,7 +15,7 @@ The public product name is Workspine. The retained technical contracts remain `g
 npx -y gsdd-cli init
 ```
 
-Use `npx -y gsdd-cli init` for repo-local setup. If you install the package globally, `gsdd install --global` installs reusable Workspine skills and native runtime surfaces into your agent homes so they are available across repos.
+Use `npx -y gsdd-cli init` for repo-local setup. Use `npx -y gsdd-cli install --global` to install reusable Workspine skills and native runtime surfaces into your agent homes so they are available across repos.
 
 </div>
 
@@ -76,9 +76,8 @@ npx -y gsdd-cli init --auto --tools codex --brief path/to/brief.md
 If `gsdd-cli` is installed globally, install reusable Workspine surfaces into your agent homes:
 
 ```bash
-gsdd install --global
-gsdd install --global --tools claude,opencode,codex,copilot
-gsdd install --global --tools opencode --verify-runtime
+npx -y gsdd-cli install --global
+npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 ```
 
 When run in a TTY without `--tools`, `install --global` lets you select which agents to install. It does not create `.planning/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
@@ -90,7 +89,7 @@ When run in a TTY without `--tools`, `install --global` lets you select which ag
 | Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
 | GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
 
-Add `--verify-runtime` to check the installed files, manifests, and any model-free runtime discovery probes available for the selected target. Add `--live-runtime` only when you want Workspine to run authenticated vendor CLI sessions; those probes can consume model quota and are reported separately from layout proof.
+Install availability is not a parity claim. Claude Code, OpenCode, and Codex CLI remain the directly validated runtimes; GitHub Copilot CLI is available as a qualified global target.
 
 OpenCode honors `OPENCODE_CONFIG_DIR` for commands and agents; skills stay in the documented global skill root.
 

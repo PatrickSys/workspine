@@ -172,11 +172,9 @@ Commands:
                               Launch guided install wizard in TTYs, or use --tools for manual/headless setup
                               --auto: non-interactive mode with smart defaults (requires --tools)
                               --brief <file>: copy project brief to .planning/PROJECT_BRIEF.md
-  install --global [--tools <platform>] [--dry] [--verify-runtime] [--live-runtime]
+  install --global [--tools <platform>] [--dry]
                               Install reusable Workspine skills and native runtime surfaces into agent home directories
                               In TTYs, omitting --tools opens an agent picker
-                              --verify-runtime: verify files/manifests and any model-free runtime discovery probes
-                              --live-runtime: with --verify-runtime, run opt-in vendor CLI sessions that may consume auth/quota
   update [--tools <platform>] [--templates] [--dry]
                               Regenerate adapters from latest framework sources
                               --templates: also refresh .planning/templates/ and roles
@@ -223,11 +221,11 @@ Global install targets:
   all       Install all global targets above
 
 Notes:
-  - use \`npx -y gsdd-cli init\` for repo-local setup; use \`gsdd install --global\` after global package installation when you want reusable skills in agent homes
+  - use \`npx -y gsdd-cli init\` for repo-local setup; use \`npx -y gsdd-cli install --global\` when you want reusable skills in agent homes
   - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
   - init also generates a local .planning/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - install --global never creates .planning/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
-  - install --global --verify-runtime separates layout proof from runtime discovery; --live-runtime is explicit because Claude/Codex/Copilot probes may spend authenticated model quota
+  - global install is intentionally a write-only setup command; use health/update for ordinary repair and keep runtime probes in test harnesses
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
   - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
@@ -253,9 +251,8 @@ Examples:
   npx -y gsdd-cli models clear --runtime opencode --agent plan-checker
   npx -y gsdd-cli init --tools agents
   npx -y gsdd-cli init --tools all
-  gsdd install --global
-  gsdd install --global --tools claude,opencode,codex,copilot
-  gsdd install --global --tools opencode --verify-runtime
+  npx -y gsdd-cli install --global
+  npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
   npx -y gsdd-cli update
   npx -y gsdd-cli find-phase
   npx -y gsdd-cli verify 1

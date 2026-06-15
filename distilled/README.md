@@ -52,11 +52,11 @@ npx -y gsdd-cli init
 
 In a TTY, `npx -y gsdd-cli init` opens a guided install wizard: choose runtimes first, then decide separately whether repo-wide `AGENTS.md` governance is worth installing. If `gsdd-cli` is globally installed, `gsdd init` is the equivalent shorthand.
 
-For personal cross-repo availability after installing the package globally, run:
+For personal cross-repo availability, run:
 
 ```bash
-gsdd install --global
-gsdd install --global --tools claude,opencode,codex,copilot
+npx -y gsdd-cli install --global
+npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 ```
 
 Global install writes selected Workspine skills and native agent surfaces into user-level agent homes. It does not create `.planning/` in the current repo.
