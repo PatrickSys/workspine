@@ -64,16 +64,45 @@ function assertGlobalAgentSurface(homeDir, target, files) {
   const rootMap = {
     claude: path.join(homeDir, '.claude'),
     opencode: path.join(homeDir, '.config', 'opencode'),
-    codex: path.join(homeDir, '.codex'),
     copilot: path.join(homeDir, '.copilot'),
   };
-  const root = rootMap[target];
+
+  const rootFor = (relativePath) => {
+    if (target === 'codex' && relativePath.startsWith('skills/')) return path.join(homeDir, '.agents');
+    if (target === 'codex') return path.join(homeDir, '.codex');
+    return rootMap[target];
+  };
+
   for (const relativePath of files) {
-    assert.ok(fs.existsSync(path.join(root, relativePath)), `${target} missing ${relativePath}`);
+    assert.ok(fs.existsSync(path.join(rootFor(relativePath), relativePath)), `${target} missing ${relativePath}`);
   }
+
+  if (target === 'codex') {
+    const skillFiles = files.filter((relativePath) => relativePath.startsWith('skills/'));
+    const agentFiles = files.filter((relativePath) => relativePath.startsWith('agents/'));
+    if (skillFiles.length > 0) {
+      const manifest = readJson(path.join(homeDir, '.agents', 'workspine-file-manifest.json'));
+      assert.strictEqual(manifest.runtime, 'codex-skills');
+      for (const relativePath of skillFiles) {
+        assert.ok(manifest.files[relativePath], `codex skill manifest must track ${relativePath}`);
+      }
+    }
+    if (agentFiles.length > 0) {
+      const manifest = readJson(path.join(homeDir, '.codex', 'workspine-file-manifest.json'));
+      assert.strictEqual(manifest.runtime, 'codex');
+      for (const relativePath of agentFiles) {
+        assert.ok(manifest.files[relativePath], `codex agent manifest must track ${relativePath}`);
+      }
+    }
+    return;
+  }
+
+  const root = rootMap[target];
   const manifest = readJson(path.join(root, 'workspine-file-manifest.json'));
   assert.strictEqual(manifest.runtime, target);
-  assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${target} manifest must track the plan skill`);
+  for (const relativePath of files) {
+    assert.ok(manifest.files[relativePath], `${target} manifest must track ${relativePath}`);
+  }
 }
 
 function displayPath(filePath) {
@@ -201,7 +230,7 @@ describe('global install pressure loop', () => {
       for (const skillPath of [
         path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'),
         path.join(homeDir, '.config', 'opencode', 'skills', 'gsdd-plan', 'SKILL.md'),
-        path.join(homeDir, '.codex', 'skills', 'gsdd-plan', 'SKILL.md'),
+        path.join(homeDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
         path.join(homeDir, '.copilot', 'skills', 'gsdd-plan', 'SKILL.md'),
       ]) {
         const skill = fs.readFileSync(skillPath, 'utf-8');
@@ -222,7 +251,7 @@ describe('global install pressure loop', () => {
       assert.doesNotMatch(opencodeCommand, /Read `\.agents\/skills\/gsdd-plan\/SKILL\.md`/);
       assert.doesNotMatch(opencodeCommand, /according to `\.agents\/skills\/gsdd-plan\/SKILL\.md`/);
 
-      const globalNewProjectSkill = fs.readFileSync(path.join(homeDir, '.codex', 'skills', 'gsdd-new-project', 'SKILL.md'), 'utf-8');
+      const globalNewProjectSkill = fs.readFileSync(path.join(homeDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md'), 'utf-8');
       assert.match(globalNewProjectSkill, /otherwise use the globally installed `gsdd-map-codebase` skill/);
     } finally {
       restoreStdin();

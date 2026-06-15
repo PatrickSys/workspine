@@ -61,7 +61,7 @@ Two surfaces matter for users:
 | --- | --- |
 | Claude Code | `~/.claude/skills`, `~/.claude/commands`, `~/.claude/agents` |
 | OpenCode | `~/.config/opencode/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
-| Codex CLI | `~/.codex/skills`, `~/.codex/agents` |
+| Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
 | GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
 
 ## Generated-surface freshness

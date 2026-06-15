@@ -45,7 +45,7 @@ export const GLOBAL_AGENT_OPTIONS = [
   {
     id: 'codex',
     label: 'Codex CLI',
-    description: 'Install global skills and native GSDD agents under ~/.codex.',
+    description: 'Install global skills under ~/.agents and native GSDD agents under ~/.codex.',
   },
   {
     id: 'copilot',
@@ -70,6 +70,7 @@ export function resolveGlobalInstallRoots({ homeDir = getHomeDir(), env = proces
     claude: env.CLAUDE_CONFIG_DIR || join(homeDir, '.claude'),
     opencode: join(configHome, 'opencode'),
     codex: env.CODEX_HOME || join(homeDir, '.codex'),
+    codexSkills: join(homeDir, '.agents'),
     copilot: env.COPILOT_HOME || env.COPILOT_CONFIG_DIR || join(homeDir, '.copilot'),
   };
 }
@@ -168,16 +169,19 @@ function buildOpenCodeGlobalEntries(ctx, rootDir) {
   return entries;
 }
 
-function buildCodexGlobalEntries(ctx) {
+function buildCodexGlobalSkillEntries(ctx) {
+  return buildPortableSkillEntries(ctx.workflows).map((entry) => ({
+    relativePath: entry.relativePath.replace(/^\.agents\/skills\//, 'skills/'),
+    content: entry.content,
+  }));
+}
+
+function buildCodexGlobalAgentEntries(ctx) {
   const config = ctx.loadProjectModelConfig(ctx.cwd);
   const checkerModelId = ctx.getRuntimeModelOverride(config, 'codex', 'plan-checker');
   const explorerModelId = ctx.getRuntimeModelOverride(config, 'codex', 'approach-explorer');
 
   return [
-    ...buildPortableSkillEntries(ctx.workflows).map((entry) => ({
-      relativePath: entry.relativePath.replace(/^\.agents\/skills\//, 'skills/'),
-      content: entry.content,
-    })),
     { relativePath: 'agents/gsdd-plan-checker.toml', content: renderCodexPlanChecker(getDelegateContent('plan-checker.md'), checkerModelId) },
     { relativePath: 'agents/gsdd-approach-explorer.toml', content: renderCodexApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId) },
   ];
@@ -227,52 +231,92 @@ function buildCopilotGlobalEntries(ctx) {
 function buildGlobalEntries(target, ctx, rootDir) {
   if (target === 'claude') return buildClaudeGlobalEntries(ctx, rootDir);
   if (target === 'opencode') return buildOpenCodeGlobalEntries(ctx, rootDir);
-  if (target === 'codex') return buildCodexGlobalEntries(ctx);
   if (target === 'copilot') return buildCopilotGlobalEntries(ctx);
   return [];
 }
 
-function installTarget({ target, rootDir, ctx, dryRun }) {
-  const previousManifest = readGlobalManifest(rootDir);
-  const entries = buildGlobalEntries(target, ctx, rootDir);
-  const preflightFiles = {};
-  const preflightResults = entries.map((entry) => writeManifestTrackedFile({
-    rootDir,
+function buildGlobalInstallSpecs(target, roots, ctx) {
+  if (target === 'codex') {
+    return [
+      {
+        runtime: 'codex-skills',
+        rootDir: roots.codexSkills,
+        entries: buildCodexGlobalSkillEntries(ctx),
+      },
+      {
+        runtime: 'codex',
+        rootDir: roots.codex,
+        entries: buildCodexGlobalAgentEntries(ctx),
+      },
+    ];
+  }
+
+  return [
+    {
+      runtime: target,
+      rootDir: roots[target],
+      entries: buildGlobalEntries(target, ctx, roots[target]),
+    },
+  ];
+}
+
+function preflightInstallSpec(spec) {
+  const previousManifest = readGlobalManifest(spec.rootDir);
+  const nextFiles = {};
+  const results = spec.entries.map((entry) => writeManifestTrackedFile({
+    rootDir: spec.rootDir,
     relativePath: entry.relativePath,
     content: entry.content,
     previousManifest,
-    nextFiles: preflightFiles,
+    nextFiles,
     dryRun: true,
   }));
 
-  const blocked = preflightResults.filter((result) => result.status.startsWith('skipped_'));
-  const results = dryRun || blocked.length > 0
-    ? preflightResults
-    : entries.map((entry) => writeManifestTrackedFile({
-      rootDir,
-      relativePath: entry.relativePath,
-      content: entry.content,
-      previousManifest,
-      nextFiles: {},
-      dryRun: false,
-    }));
+  return {
+    ...spec,
+    previousManifest,
+    nextFiles,
+    results,
+    blocked: results.filter((result) => result.status.startsWith('skipped_')),
+  };
+}
 
-  if (!dryRun && blocked.length === 0) {
-    writeGlobalManifest(rootDir, {
-      product: 'Workspine',
-      packageName: ctx.packageName,
-      packageVersion: ctx.packageVersion,
-      frameworkVersion: ctx.frameworkVersion,
-      runtime: target,
-      generatedAt: new Date().toISOString(),
-      files: preflightFiles,
-    });
-  }
+function writeInstallSpec(plan, ctx) {
+  const results = plan.entries.map((entry) => writeManifestTrackedFile({
+    rootDir: plan.rootDir,
+    relativePath: entry.relativePath,
+    content: entry.content,
+    previousManifest: plan.previousManifest,
+    nextFiles: {},
+    dryRun: false,
+  }));
+
+  writeGlobalManifest(plan.rootDir, {
+    product: 'Workspine',
+    packageName: ctx.packageName,
+    packageVersion: ctx.packageVersion,
+    frameworkVersion: ctx.frameworkVersion,
+    runtime: plan.runtime,
+    generatedAt: new Date().toISOString(),
+    files: plan.nextFiles,
+  });
+
+  return results;
+}
+
+function installTarget({ target, roots, ctx, dryRun }) {
+  const plans = buildGlobalInstallSpecs(target, roots, ctx).map(preflightInstallSpec);
+  const blocked = plans.flatMap((plan) => plan.blocked);
+  const results = dryRun || blocked.length > 0
+    ? plans.flatMap((plan) => plan.results)
+    : plans.flatMap((plan) => writeInstallSpec(plan, ctx));
+
+  const rootDir = plans.map((plan) => plan.rootDir).join(', ');
 
   return {
     target,
     rootDir,
-    manifest: `${rootDir}/${GLOBAL_MANIFEST_FILENAME}`,
+    manifest: plans.map((plan) => `${plan.rootDir}/${GLOBAL_MANIFEST_FILENAME}`).join(', '),
     results,
     blocked,
     writtenCount: results.filter((result) => result.status === 'written').length,
@@ -330,7 +374,7 @@ export function createCmdInstall(ctx) {
 
     const reports = targets.map((target) => installTarget({
       target,
-      rootDir: roots[target],
+      roots,
       ctx,
       dryRun,
     }));

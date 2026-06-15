@@ -1439,7 +1439,7 @@ describe('gsdd init and update', () => {
           '.config/opencode/commands/gsdd-plan.md',
           '.config/opencode/agents/gsdd-plan-checker.md',
           '.config/opencode/agents/gsdd-approach-explorer.md',
-          '.codex/skills/gsdd-plan/SKILL.md',
+          '.agents/skills/gsdd-plan/SKILL.md',
           '.codex/agents/gsdd-plan-checker.toml',
           '.codex/agents/gsdd-approach-explorer.toml',
           '.copilot/skills/gsdd-plan/SKILL.md',
@@ -1454,12 +1454,17 @@ describe('gsdd init and update', () => {
         for (const manifestPath of [
           '.claude/workspine-file-manifest.json',
           '.config/opencode/workspine-file-manifest.json',
+          '.agents/workspine-file-manifest.json',
           '.codex/workspine-file-manifest.json',
           '.copilot/workspine-file-manifest.json',
         ]) {
           const manifest = readJson(path.join(homeDir, manifestPath));
           assert.strictEqual(manifest.product, 'Workspine');
-          assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track gsdd-plan skill`);
+          if (manifestPath === '.codex/workspine-file-manifest.json') {
+            assert.ok(manifest.files['agents/gsdd-plan-checker.toml'], `${manifestPath} must track native Codex agents`);
+          } else {
+            assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track gsdd-plan skill`);
+          }
         }
       } finally {
         cleanup(homeDir);

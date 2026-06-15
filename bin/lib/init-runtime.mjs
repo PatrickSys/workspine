@@ -216,7 +216,7 @@ Platforms (for --tools):
 Global install targets:
   claude    Install ~/.claude skills, commands, and agents
   opencode  Install ~/.config/opencode skills, commands, and agents
-  codex     Install ~/.codex skills and agents
+  codex     Install ~/.agents skills and ~/.codex agents
   copilot   Install ~/.copilot skills and agent profiles
   all       Install all global targets above
 

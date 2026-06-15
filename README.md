@@ -86,7 +86,7 @@ When run in a TTY without `--tools`, `install --global` lets you select which ag
 |--------|-----------------|
 | Claude Code | `~/.claude/skills`, `~/.claude/commands`, `~/.claude/agents` |
 | OpenCode | `~/.config/opencode/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
-| Codex CLI | `~/.codex/skills`, `~/.codex/agents` |
+| Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
 | GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
 
 ### Which workflow to start with
