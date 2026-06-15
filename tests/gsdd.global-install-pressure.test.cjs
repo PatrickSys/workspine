@@ -11,6 +11,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const {
   cleanup,
   createTempProject,
@@ -329,6 +330,49 @@ describe('global install pressure loop', () => {
     }
   });
 
+  test('OpenCode honors custom config root for commands and agents while keeping documented skill root', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const configHome = path.join(homeDir, 'Config Home With Spaces');
+    const opencodeConfigDir = path.join(homeDir, 'OpenCode Config With Spaces');
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+
+    try {
+      await withEnv({
+        GSDD_TEST_HOME: homeDir,
+        XDG_CONFIG_HOME: configHome,
+        OPENCODE_CONFIG_DIR: opencodeConfigDir,
+      }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'opencode'));
+      });
+
+      const skillRoot = path.join(configHome, 'opencode');
+      assert.ok(fs.existsSync(path.join(skillRoot, 'skills', 'gsdd-plan', 'SKILL.md')));
+      assert.ok(fs.existsSync(path.join(opencodeConfigDir, 'commands', 'gsdd-plan.md')));
+      assert.ok(fs.existsSync(path.join(opencodeConfigDir, 'agents', 'gsdd-plan-checker.md')));
+      assert.ok(!fs.existsSync(path.join(opencodeConfigDir, 'skills', 'gsdd-plan', 'SKILL.md')),
+        'OPENCODE_CONFIG_DIR is not the documented global skill root');
+
+      const skillsManifest = readJson(path.join(skillRoot, 'workspine-file-manifest.json'));
+      const configManifest = readJson(path.join(opencodeConfigDir, 'workspine-file-manifest.json'));
+      assert.strictEqual(skillsManifest.runtime, 'opencode-skills');
+      assert.strictEqual(configManifest.runtime, 'opencode');
+      assert.ok(skillsManifest.files['skills/gsdd-plan/SKILL.md']);
+      assert.ok(configManifest.files['commands/gsdd-plan.md']);
+      assert.ok(configManifest.files['agents/gsdd-plan-checker.md']);
+
+      const opencodeCommand = fs.readFileSync(path.join(opencodeConfigDir, 'commands', 'gsdd-plan.md'), 'utf-8');
+      assertIncludesDisplayPath(opencodeCommand, path.join(skillRoot, 'skills', 'gsdd-plan', 'SKILL.md'));
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
   test('mock user conflict in one global target does not partially install that target', async () => {
     const homeDir = createTempProject();
     const { parent, repos } = createFixtureRepos();
@@ -357,6 +401,119 @@ describe('global install pressure loop', () => {
       process.exitCode = previousExitCode;
       cleanup(homeDir);
       cleanup(parent);
+    }
+  });
+
+  test('runtime verification separates layout proof from model-free runtime discovery', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'opencode,codex'));
+      });
+
+      const [{ createCliContext }, { resolveGlobalInstallRoots, verifyGlobalRuntimeInstall }] = await Promise.all([
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'gsdd.mjs')).href}?t=${Date.now()}-ctx`),
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-verify`),
+      ]);
+      const roots = resolveGlobalInstallRoots({
+        homeDir,
+        env: {
+          XDG_CONFIG_HOME: path.join(homeDir, '.config'),
+          OPENCODE_CONFIG_DIR: path.join(homeDir, '.config', 'opencode'),
+        },
+      });
+      const ctx = createCliContext(repoDir);
+      const calls = [];
+      const report = verifyGlobalRuntimeInstall({
+        targets: ['opencode', 'codex'],
+        roots,
+        ctx,
+        probeRunner: (command, args, options) => {
+          calls.push({ command, args, env: options.env });
+          return { status: 0, stdout: '<available_skills><name>gsdd-plan</name></available_skills>', stderr: '' };
+        },
+      });
+
+      assert.strictEqual(report.failed.length, 0);
+      assert.ok(report.checks.some((check) => check.target === 'opencode' && check.check === 'layout' && check.status === 'passed'));
+      assert.ok(report.checks.some((check) => check.target === 'opencode' && check.check === 'runtime_discovery' && check.status === 'passed'));
+      assert.ok(report.checks.some((check) => check.target === 'codex' && check.check === 'layout' && check.status === 'passed'));
+      assert.ok(report.checks.some((check) => check.target === 'codex' && check.check === 'runtime_discovery' && check.status === 'unproven'));
+      assert.deepStrictEqual(calls.map((call) => [call.command, call.args.join(' ')]), [['opencode', 'debug skill']]);
+      assert.strictEqual(calls[0].env.XDG_CONFIG_HOME, path.join(homeDir, '.config'));
+      assert.strictEqual(calls[0].env.OPENCODE_CONFIG_DIR, path.join(homeDir, '.config', 'opencode'));
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('live runtime verification is explicit and uses vendor CLI probes', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+
+    try {
+      await withEnv({
+        GSDD_TEST_HOME: homeDir,
+        XDG_CONFIG_HOME: path.join(homeDir, '.config'),
+        CLAUDE_CONFIG_DIR: path.join(homeDir, '.claude'),
+        CODEX_HOME: path.join(homeDir, '.codex'),
+        COPILOT_HOME: path.join(homeDir, '.copilot'),
+      }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude,codex,copilot'));
+      });
+
+      const [{ createCliContext }, { resolveGlobalInstallRoots, verifyGlobalRuntimeInstall }] = await Promise.all([
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'gsdd.mjs')).href}?t=${Date.now()}-ctx-live`),
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-verify-live`),
+      ]);
+      const roots = resolveGlobalInstallRoots({
+        homeDir,
+        env: {
+          XDG_CONFIG_HOME: path.join(homeDir, '.config'),
+          CLAUDE_CONFIG_DIR: path.join(homeDir, '.claude'),
+          CODEX_HOME: path.join(homeDir, '.codex'),
+          COPILOT_HOME: path.join(homeDir, '.copilot'),
+        },
+      });
+      const commands = [];
+      const report = verifyGlobalRuntimeInstall({
+        targets: ['claude', 'codex', 'copilot'],
+        roots,
+        ctx: createCliContext(repoDir),
+        liveRuntime: true,
+        probeRunner: (command, args, options) => {
+          commands.push({ command, args, env: options.env });
+          return { status: 0, stdout: 'GSDD_SKILL_OK', stderr: '' };
+        },
+      });
+
+      assert.strictEqual(report.failed.length, 0);
+      assert.strictEqual(report.unproven.length, 0);
+      assert.deepStrictEqual(commands.map((call) => call.command), ['claude', 'codex', 'copilot']);
+      assert.ok(commands[0].args.includes('Read'));
+      assert.match(commands[0].args.join('\n'), /^-p\n\/gsdd-plan Verification mode/m);
+      assert.ok(!commands[1].args.includes('--ask-for-approval'));
+      assert.ok(commands[1].args.includes('gpt-5.4'));
+      assert.ok(commands[2].args.includes('gpt-5.4'));
+      assert.strictEqual(commands[0].env.CLAUDE_CONFIG_DIR, path.join(homeDir, '.claude'));
+      assert.strictEqual(commands[1].env.CODEX_HOME, path.join(homeDir, '.codex'));
+      assert.strictEqual(commands[2].env.COPILOT_HOME, path.join(homeDir, '.copilot'));
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
     }
   });
 });

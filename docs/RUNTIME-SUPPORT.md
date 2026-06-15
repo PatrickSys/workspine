@@ -64,6 +64,10 @@ Two surfaces matter for users:
 | Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
 | GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
 
+`gsdd install --global --verify-runtime` verifies the generated files, Workspine manifests, and any model-free runtime discovery probes exposed by the vendor CLI. Today OpenCode has a model-free `opencode debug skill` path. Claude Code, Codex CLI, and GitHub Copilot CLI require `--live-runtime` for stronger runtime discovery because their practical probes go through authenticated CLI sessions that may spend model quota.
+
+When `OPENCODE_CONFIG_DIR` is set, OpenCode commands and agents are installed under that custom config root. Skills remain under OpenCode's documented global skill root (`~/.config/opencode/skills`) because the custom config-dir override is not documented as a skills discovery root.
+
 ## Generated-surface freshness
 
 The authored source contract stays in `distilled/workflows/*`. Generated runtime-facing files are trusted only through deterministic rendering:

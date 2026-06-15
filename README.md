@@ -78,6 +78,7 @@ If `gsdd-cli` is installed globally, install reusable Workspine surfaces into yo
 ```bash
 gsdd install --global
 gsdd install --global --tools claude,opencode,codex,copilot
+gsdd install --global --tools opencode --verify-runtime
 ```
 
 When run in a TTY without `--tools`, `install --global` lets you select which agents to install. It does not create `.planning/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
@@ -88,6 +89,10 @@ When run in a TTY without `--tools`, `install --global` lets you select which ag
 | OpenCode | `~/.config/opencode/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
 | Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
 | GitHub Copilot CLI | `~/.copilot/skills`, `~/.copilot/agents` |
+
+Add `--verify-runtime` to check the installed files, manifests, and any model-free runtime discovery probes available for the selected target. Add `--live-runtime` only when you want Workspine to run authenticated vendor CLI sessions; those probes can consume model quota and are reported separately from layout proof.
+
+OpenCode honors `OPENCODE_CONFIG_DIR` for commands and agents; skills stay in the documented global skill root.
 
 ### Which workflow to start with
 

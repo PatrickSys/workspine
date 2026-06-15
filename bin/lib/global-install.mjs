@@ -1,5 +1,7 @@
 import os from 'os';
-import { join } from 'path';
+import { spawnSync } from 'child_process';
+import { existsSync } from 'fs';
+import { dirname, join } from 'path';
 import { promptMultiSelect } from './init-prompts.mjs';
 import {
   buildPortableSkillEntries,
@@ -68,7 +70,8 @@ export function resolveGlobalInstallRoots({ homeDir = getHomeDir(), env = proces
   const configHome = getConfigHome(homeDir, env);
   return {
     claude: env.CLAUDE_CONFIG_DIR || join(homeDir, '.claude'),
-    opencode: join(configHome, 'opencode'),
+    opencode: env.OPENCODE_CONFIG_DIR || join(configHome, 'opencode'),
+    opencodeSkills: join(configHome, 'opencode'),
     codex: env.CODEX_HOME || join(homeDir, '.codex'),
     codexSkills: join(homeDir, '.agents'),
     copilot: env.COPILOT_HOME || env.COPILOT_CONFIG_DIR || join(homeDir, '.copilot'),
@@ -146,27 +149,39 @@ function buildClaudeGlobalEntries(ctx, rootDir) {
   return entries;
 }
 
-function buildOpenCodeGlobalEntries(ctx, rootDir) {
+function buildOpenCodeGlobalSkillEntries(ctx) {
+  return ctx.workflows.map((workflow) => ({
+    relativePath: `skills/${workflow.name}/SKILL.md`,
+    content: renderSkillContent(workflow),
+  }));
+}
+
+function buildOpenCodeGlobalCommandEntries(ctx, rootDir) {
+  return ctx.workflows.map((workflow) => ({
+    relativePath: `commands/${workflow.name}.md`,
+    content: workflow.name === 'gsdd-plan'
+      ? renderOpenCodePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'gsdd-plan', 'SKILL.md')) })
+      : renderOpenCodeCommandContent(workflow),
+  }));
+}
+
+function buildOpenCodeGlobalAgentEntries(ctx) {
   const config = ctx.loadProjectModelConfig(ctx.cwd);
   const checkerModelId = ctx.getRuntimeModelOverride(config, 'opencode', 'plan-checker');
   const explorerModelId = ctx.getRuntimeModelOverride(config, 'opencode', 'approach-explorer');
 
-  const entries = ctx.workflows.flatMap((workflow) => ([
-    { relativePath: `skills/${workflow.name}/SKILL.md`, content: renderSkillContent(workflow) },
-    {
-      relativePath: `commands/${workflow.name}.md`,
-      content: workflow.name === 'gsdd-plan'
-        ? renderOpenCodePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'gsdd-plan', 'SKILL.md')) })
-        : renderOpenCodeCommandContent(workflow),
-    },
-  ]));
-
-  entries.push(
+  return [
     { relativePath: 'agents/gsdd-plan-checker.md', content: renderOpenCodePlanChecker(getDelegateContent('plan-checker.md'), checkerModelId) },
-    { relativePath: 'agents/gsdd-approach-explorer.md', content: renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId) }
-  );
+    { relativePath: 'agents/gsdd-approach-explorer.md', content: renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId) },
+  ];
+}
 
-  return entries;
+function buildOpenCodeGlobalEntries(ctx, rootDir) {
+  return [
+    ...buildOpenCodeGlobalSkillEntries(ctx),
+    ...buildOpenCodeGlobalCommandEntries(ctx, rootDir),
+    ...buildOpenCodeGlobalAgentEntries(ctx),
+  ];
 }
 
 function buildCodexGlobalSkillEntries(ctx) {
@@ -251,6 +266,24 @@ function buildGlobalInstallSpecs(target, roots, ctx) {
     ];
   }
 
+  if (target === 'opencode' && roots.opencode !== roots.opencodeSkills) {
+    return [
+      {
+        runtime: 'opencode-skills',
+        rootDir: roots.opencodeSkills,
+        entries: buildOpenCodeGlobalSkillEntries(ctx),
+      },
+      {
+        runtime: 'opencode',
+        rootDir: roots.opencode,
+        entries: [
+          ...buildOpenCodeGlobalCommandEntries(ctx, roots.opencodeSkills),
+          ...buildOpenCodeGlobalAgentEntries(ctx),
+        ],
+      },
+    ];
+  }
+
   return [
     {
       runtime: target,
@@ -325,11 +358,181 @@ function installTarget({ target, roots, ctx, dryRun }) {
   };
 }
 
+function makeEnv(overrides = {}) {
+  return Object.fromEntries(Object.entries({
+    ...process.env,
+    ...overrides,
+  }).filter(([, value]) => value !== undefined && value !== null));
+}
+
+function quoteShellPart(value) {
+  const text = String(value);
+  if (/^[A-Za-z0-9_./:=@-]+$/.test(text)) return text;
+  return `"${text.replace(/"/g, '\\"')}"`;
+}
+
+function runProbe(command, args, { cwd, env, timeoutMs = 30000, probeRunner } = {}) {
+  if (probeRunner) return probeRunner(command, args, { cwd, env, timeoutMs });
+  const commandLine = [command, ...args].map(quoteShellPart).join(' ');
+  const result = process.platform === 'win32'
+    ? spawnSync(commandLine, { cwd, env, encoding: 'utf-8', shell: true, timeout: timeoutMs })
+    : spawnSync(command, args, { cwd, env, encoding: 'utf-8', shell: false, timeout: timeoutMs });
+  return {
+    status: result.status,
+    signal: result.signal,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+    error: result.error ? String(result.error.message || result.error) : null,
+  };
+}
+
+function checkLayout({ target, roots, ctx }) {
+  const issues = [];
+  const specs = buildGlobalInstallSpecs(target, roots, ctx);
+
+  for (const spec of specs) {
+    const manifest = readGlobalManifest(spec.rootDir);
+    if (!manifest) {
+      issues.push(`${spec.runtime}: missing ${GLOBAL_MANIFEST_FILENAME} under ${spec.rootDir}`);
+      continue;
+    }
+    if (manifest.runtime !== spec.runtime) {
+      issues.push(`${spec.runtime}: manifest runtime is ${manifest.runtime}`);
+    }
+    for (const entry of spec.entries) {
+      const absolutePath = join(spec.rootDir, entry.relativePath);
+      if (!existsSync(absolutePath)) {
+        issues.push(`${spec.runtime}: missing ${entry.relativePath}`);
+      }
+      if (!manifest.files?.[entry.relativePath]) {
+        issues.push(`${spec.runtime}: manifest does not track ${entry.relativePath}`);
+      }
+    }
+  }
+
+  return issues.length === 0
+    ? { target, check: 'layout', status: 'passed', message: 'documented files and manifests exist' }
+    : { target, check: 'layout', status: 'failed', message: issues.join('; ') };
+}
+
+function checkOpenCodeRuntime({ roots, cwd, probeRunner }) {
+  const configHome = dirname(roots.opencodeSkills);
+  const result = runProbe('opencode', ['debug', 'skill'], {
+    cwd,
+    env: makeEnv({
+      XDG_CONFIG_HOME: configHome,
+      OPENCODE_CONFIG_DIR: roots.opencode,
+    }),
+    probeRunner,
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+
+  if (result.error) {
+    return { target: 'opencode', check: 'runtime_discovery', status: 'skipped', message: `opencode probe could not start: ${result.error}` };
+  }
+  if (result.status !== 0) {
+    return { target: 'opencode', check: 'runtime_discovery', status: 'failed', message: `opencode debug skill exited ${result.status}: ${output.trim()}` };
+  }
+  if (!/\bgsdd-plan\b/.test(output)) {
+    return { target: 'opencode', check: 'runtime_discovery', status: 'failed', message: 'opencode debug skill did not list gsdd-plan' };
+  }
+  return { target: 'opencode', check: 'runtime_discovery', status: 'passed', message: 'opencode debug skill listed gsdd-plan' };
+}
+
+function liveProbeCommand(target, roots) {
+  const prompt = 'Do not edit files or run tools. If a Workspine skill named gsdd-plan is available in this session, answer exactly GSDD_SKILL_OK. Otherwise answer GSDD_SKILL_MISSING.';
+  if (target === 'claude') {
+    const claudePrompt = '/gsdd-plan Verification mode only. Do not edit files, do not invoke subagents, and do not run shell commands. If this Workspine gsdd-plan command resolved successfully, answer exactly GSDD_SKILL_OK. Otherwise answer exactly GSDD_SKILL_MISSING.';
+    return {
+      command: 'claude',
+      args: ['-p', claudePrompt, '--no-session-persistence', '--max-budget-usd', '0.25', '--output-format', 'text', '--tools', 'Read'],
+      env: makeEnv({ CLAUDE_CONFIG_DIR: roots.claude }),
+    };
+  }
+  if (target === 'codex') {
+    return {
+      command: 'codex',
+      args: ['exec', '-m', 'gpt-5.4', '-c', 'model_reasoning_effort="high"', '--ephemeral', '--sandbox', 'read-only', '--skip-git-repo-check', prompt],
+      env: makeEnv({ CODEX_HOME: roots.codex }),
+    };
+  }
+  if (target === 'copilot') {
+    return {
+      command: 'copilot',
+      args: ['-p', prompt, '--model', 'gpt-5.4', '--effort', 'high', '--config-dir', roots.copilot, '--silent', '--no-custom-instructions'],
+      env: makeEnv({ COPILOT_HOME: roots.copilot }),
+    };
+  }
+  return null;
+}
+
+function checkLiveRuntime({ target, roots, cwd, probeRunner }) {
+  const probe = liveProbeCommand(target, roots);
+  if (!probe) {
+    return { target, check: 'runtime_discovery', status: 'unproven', message: 'no live probe is defined for this target' };
+  }
+  const result = runProbe(probe.command, probe.args, {
+    cwd,
+    env: probe.env,
+    timeoutMs: 120000,
+    probeRunner,
+  });
+  const output = `${result.stdout}\n${result.stderr}`;
+
+  if (result.error) {
+    return { target, check: 'runtime_discovery', status: 'failed', message: `${target} live probe could not start: ${result.error}` };
+  }
+  if (result.status !== 0) {
+    return { target, check: 'runtime_discovery', status: 'failed', message: `${target} live probe exited ${result.status}: ${output.trim()}` };
+  }
+  if (!/GSDD_SKILL_OK/.test(output)) {
+    return { target, check: 'runtime_discovery', status: 'failed', message: `${target} live probe did not confirm gsdd-plan: ${output.trim()}` };
+  }
+  return { target, check: 'runtime_discovery', status: 'passed', message: `${target} live probe confirmed gsdd-plan` };
+}
+
+export function verifyGlobalRuntimeInstall({ targets, roots, ctx, liveRuntime = false, probeRunner } = {}) {
+  const checks = [];
+
+  for (const target of targets) {
+    checks.push(checkLayout({ target, roots, ctx }));
+    if (target === 'opencode') {
+      checks.push(checkOpenCodeRuntime({ roots, cwd: ctx.cwd, probeRunner }));
+      continue;
+    }
+    checks.push(liveRuntime
+      ? checkLiveRuntime({ target, roots, cwd: ctx.cwd, probeRunner })
+      : {
+        target,
+        check: 'runtime_discovery',
+        status: 'unproven',
+        message: 'no model-free runtime discovery probe is available; rerun with --live-runtime to spend auth/quota on a real CLI session',
+      });
+  }
+
+  return {
+    checks,
+    failed: checks.filter((check) => check.status === 'failed'),
+    unproven: checks.filter((check) => check.status === 'unproven'),
+    skipped: checks.filter((check) => check.status === 'skipped'),
+  };
+}
+
+function printRuntimeVerification(report) {
+  console.log('\nRuntime verification:');
+  for (const check of report.checks) {
+    const label = check.status.toUpperCase();
+    console.log(`  - ${check.target} ${check.check}: ${label} - ${check.message}`);
+  }
+}
+
 export function createCmdInstall(ctx) {
   return async function cmdInstall(...installArgs) {
     const globalFlag = installArgs.includes('--global') || installArgs.includes('-g');
     const localFlag = installArgs.includes('--local');
     const dryRun = installArgs.includes('--dry');
+    const verifyRuntime = installArgs.includes('--verify-runtime');
+    const liveRuntime = installArgs.includes('--live-runtime');
     const toolsFlag = parseFlagValue(installArgs, '--tools');
 
     if (toolsFlag.invalid) {
@@ -346,6 +549,12 @@ export function createCmdInstall(ctx) {
 
     if (!globalFlag) {
       console.error('ERROR: install currently requires --global. For repo-local setup, run `gsdd init`.');
+      process.exitCode = 1;
+      return;
+    }
+
+    if (dryRun && verifyRuntime) {
+      console.error('ERROR: --verify-runtime requires a real global install. Run without --dry after reviewing the preview.');
       process.exitCode = 1;
       return;
     }
@@ -397,6 +606,22 @@ export function createCmdInstall(ctx) {
       console.error('\nGlobal install finished with skipped files. Review them before re-running or deleting local modifications.');
       process.exitCode = 1;
       return;
+    }
+
+    if (verifyRuntime) {
+      const verification = verifyGlobalRuntimeInstall({
+        targets,
+        roots,
+        ctx,
+        liveRuntime,
+        probeRunner: ctx.globalRuntimeProbeRunner,
+      });
+      printRuntimeVerification(verification);
+      if (verification.failed.length > 0) {
+        console.error('\nGlobal install verification failed.');
+        process.exitCode = 1;
+        return;
+      }
     }
 
     console.log('\nGlobal install complete.');
