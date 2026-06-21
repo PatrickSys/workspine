@@ -172,11 +172,16 @@ Commands:
                               Launch guided install wizard in TTYs, or use --tools for manual/headless setup
                               --auto: non-interactive mode with smart defaults (requires --tools)
                               --brief <file>: copy project brief to .planning/PROJECT_BRIEF.md
+  install --global [--tools <platform>] [--dry]
+                              Install reusable Workspine skills and native runtime surfaces into agent home directories
+                              In TTYs, omitting --tools opens an agent picker
   update [--tools <platform>] [--templates] [--dry]
                               Regenerate adapters from latest framework sources
                               --templates: also refresh .planning/templates/ and roles
                               --dry: preview changes without writing files
   health [--json]             Check workspace integrity (healthy/degraded/broken)
+  next [--json] [--format auto|json|human] [--init]
+                              Read \`.work\` continuity state and emit the next coherent agent action
   models [subcommand]         Inspect or update model profile / runtime overrides
   find-phase [N]              Show phase info as JSON (for agent consumption)
   verify <N>                  Run artifact checks for phase N
@@ -210,19 +215,31 @@ Platforms (for --tools):
   gemini    Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
   all       Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)
 
+Global install targets:
+  claude    Install ~/.claude skills, commands, and agents
+  opencode  Install ~/.agents skills plus ~/.config/opencode commands and agents
+  codex     Install ~/.agents skills plus ~/.codex agents
+  copilot   Install ~/.agents skills plus ~/.copilot agent profiles
+  all       Install all global targets above
+
 Notes:
+  - use \`npx -y gsdd-cli init\` for repo-local setup; use \`npx -y gsdd-cli install --global\` when you want reusable skills in agent homes
   - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
   - init also generates a local .planning/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
+  - install --global never creates .planning/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
+  - repair or refresh a global install by rerunning \`npx -y gsdd-cli install --global --tools <targets>\`; runtime probes stay in test harnesses
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
   - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
-  - \`npx -y gsdd-cli health\` compares any installed generated runtime surfaces against current render output and points back to \`npx -y gsdd-cli update\` when they drift
+  - \`npx -y gsdd-cli health\` is for repo-local .planning/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift
+  - \`npx -y gsdd-cli next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed next-action packet
+  - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
   - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
-  - normal user path: npx -y gsdd-cli init -> run /gsdd-* or $gsdd-* -> npx -y gsdd-cli health -> npx -y gsdd-cli update when repair or refresh is needed
+  - normal repo path: npx -y gsdd-cli init -> run /gsdd-* or $gsdd-* -> npx -y gsdd-cli health -> npx -y gsdd-cli update when local repair or refresh is needed
   - post-init, choose your starting lane honestly: new-project for greenfield or fuzzy/milestone work, quick for a concrete bounded change, map-codebase first when the repo needs deeper orientation
 
 Examples:
@@ -238,7 +255,12 @@ Examples:
   npx -y gsdd-cli models clear --runtime opencode --agent plan-checker
   npx -y gsdd-cli init --tools agents
   npx -y gsdd-cli init --tools all
+  npx -y gsdd-cli install --global
+  npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
   npx -y gsdd-cli update
+  npx -y gsdd-cli next --json
+  npx -y gsdd-cli next --format human
+  npx -y gsdd-cli next --init
   npx -y gsdd-cli find-phase
   npx -y gsdd-cli verify 1
   npx -y gsdd-cli control-map annotate set --id canonical --write-set src/app.ts
@@ -273,6 +295,7 @@ Advanced/internal helpers (kept available, but not the primary first-run user st
   ui-proof                  Validate UI proof metadata and compare planned slots to observed bundles
   control-map               Report computed repo/worktree/planning state; annotate only records local intent
   closeout-report           Read-only post-merge closure replay; reports blockers, warnings, and next safe action
+  next                      Read-only \`.work\` continuity router for the next coherent agent action
   file-op                   Deterministic workspace-confined file copy/delete/text mutation
 `;
 }

@@ -99,7 +99,7 @@ This is an internal prerequisite of `new-project`, not a user-facing routing req
 
 If `.planning/brownfield-change/CHANGE.md` exists, keep it as the current bounded continuity anchor while you do this work. Do not treat its presence as evidence that the user should have used another command instead. The only question is whether they intentionally want to widen that bounded brownfield change into full milestone planning.
 
-Read and follow `.agents/skills/gsdd-map-codebase/SKILL.md` now. Execute its full flow (check existing, spawn mappers, validate, secrets scan). When map-codebase completes, return here and continue from Brownfield Validated Requirements Inference below.
+Read and follow the `gsdd-map-codebase` skill now. Prefer the repo-local `.agents/skills/gsdd-map-codebase/SKILL.md` when it exists; otherwise use the globally installed `gsdd-map-codebase` skill available in the current runtime. Execute its full flow (check existing, spawn mappers, validate, secrets scan). When map-codebase completes, return here and continue from Brownfield Validated Requirements Inference below.
 
 ### Brownfield Validated Requirements Inference
 

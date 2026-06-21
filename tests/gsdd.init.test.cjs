@@ -18,6 +18,7 @@ const {
   runCliAsMain,
   runCliViaJunction,
   setNonInteractiveStdin,
+  withEnv,
 } = require('./gsdd.helpers.cjs');
 
 function extractSection(content, startMarker, endMarker) {
@@ -1380,6 +1381,204 @@ describe('gsdd init and update', () => {
       }
 
       assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
+    });
+  });
+
+  describe('global install', () => {
+    test('resolveGlobalInstallRoots honors explicit env without leaking process env', async () => {
+      const previousXdg = process.env.XDG_CONFIG_HOME;
+      process.env.XDG_CONFIG_HOME = path.join(tmpDir, 'ambient-config');
+      try {
+        const { resolveGlobalInstallRoots } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}`);
+        const roots = resolveGlobalInstallRoots({
+          homeDir: path.join(tmpDir, 'home'),
+          env: {},
+        });
+        assert.strictEqual(roots.opencode, path.join(tmpDir, 'home', '.config', 'opencode'));
+      } finally {
+        if (previousXdg === undefined) {
+          delete process.env.XDG_CONFIG_HOME;
+        } else {
+          process.env.XDG_CONFIG_HOME = previousXdg;
+        }
+      }
+    });
+
+    test('resolveGlobalInstallRoots honors Copilot CLI home override', async () => {
+      const { resolveGlobalInstallRoots } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}`);
+      const roots = resolveGlobalInstallRoots({
+        homeDir: path.join(tmpDir, 'home'),
+        env: {
+          COPILOT_HOME: path.join(tmpDir, 'copilot-home'),
+          COPILOT_CONFIG_DIR: path.join(tmpDir, 'legacy-copilot-home'),
+        },
+      });
+
+      assert.strictEqual(roots.copilot, path.join(tmpDir, 'copilot-home'));
+    });
+
+    test('install --global --tools all writes global skills and native agent surfaces without bootstrapping the repo', async () => {
+      const homeDir = createTempProject();
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+          const gsdd = await loadGsdd(tmpDir);
+          await gsdd.cmdInstall('--global', '--tools', 'all');
+        });
+
+        assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')),
+          'global install must not create repo-local planning state');
+        assert.ok(!fs.existsSync(path.join(tmpDir, '.agents')),
+          'global install must not create repo-local portable skills');
+
+        const expectedFiles = [
+          '.claude/skills/gsdd-plan/SKILL.md',
+          '.claude/commands/gsdd-plan.md',
+          '.claude/agents/gsdd-plan-checker.md',
+          '.claude/agents/gsdd-approach-explorer.md',
+          '.config/opencode/commands/gsdd-plan.md',
+          '.config/opencode/agents/gsdd-plan-checker.md',
+          '.config/opencode/agents/gsdd-approach-explorer.md',
+          '.agents/skills/gsdd-plan/SKILL.md',
+          '.codex/agents/gsdd-plan-checker.toml',
+          '.codex/agents/gsdd-approach-explorer.toml',
+          '.copilot/agents/gsdd-plan-checker.agent.md',
+          '.copilot/agents/gsdd-approach-explorer.agent.md',
+        ];
+
+        for (const rel of expectedFiles) {
+          assert.ok(fs.existsSync(path.join(homeDir, rel)), `missing global install file: ${rel}`);
+        }
+
+        for (const manifestPath of [
+          '.claude/workspine-file-manifest.json',
+          '.config/opencode/workspine-file-manifest.json',
+          '.agents/workspine-file-manifest.json',
+          '.codex/workspine-file-manifest.json',
+          '.copilot/workspine-file-manifest.json',
+        ]) {
+          const manifest = readJson(path.join(homeDir, manifestPath));
+          assert.strictEqual(manifest.product, 'Workspine');
+          if (manifestPath === '.agents/workspine-file-manifest.json') {
+            assert.strictEqual(manifest.runtime, 'agent-skills');
+            assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track shared gsdd-plan skill`);
+          } else if (manifestPath === '.codex/workspine-file-manifest.json') {
+            assert.ok(manifest.files['agents/gsdd-plan-checker.toml'], `${manifestPath} must track native Codex agents`);
+          } else if (manifestPath === '.copilot/workspine-file-manifest.json') {
+            assert.ok(manifest.files['agents/gsdd-plan-checker.agent.md'], `${manifestPath} must track native Copilot agents`);
+          } else if (manifestPath === '.config/opencode/workspine-file-manifest.json') {
+            assert.ok(manifest.files['commands/gsdd-plan.md'], `${manifestPath} must track native OpenCode commands`);
+          } else {
+            assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track gsdd-plan skill`);
+          }
+        }
+      } finally {
+        cleanup(homeDir);
+      }
+    });
+
+    test('install --global refuses to overwrite unmanaged user files', async () => {
+      const homeDir = createTempProject();
+      const customSkill = path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md');
+      fs.mkdirSync(path.dirname(customSkill), { recursive: true });
+      fs.writeFileSync(customSkill, 'user-owned skill\n');
+
+      const previousExitCode = process.exitCode;
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+          const gsdd = await loadGsdd(tmpDir);
+          await gsdd.cmdInstall('--global', '--tools', 'claude');
+        });
+        assert.strictEqual(process.exitCode, 1);
+        assert.strictEqual(fs.readFileSync(customSkill, 'utf-8'), 'user-owned skill\n');
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'commands', 'gsdd-plan.md')),
+          'blocked global install must not partially write sibling surfaces');
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'agents', 'gsdd-plan-checker.md')),
+          'blocked global install must not partially write native agents');
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'workspine-file-manifest.json')),
+          'manifest must not claim ownership when unmanaged files block install');
+      } finally {
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
+    test('install --global without --tools fails in non-interactive shells', async () => {
+      const homeDir = createTempProject();
+      const previousExitCode = process.exitCode;
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+          const gsdd = await loadGsdd(tmpDir);
+          await gsdd.cmdInstall('--global');
+        });
+        assert.strictEqual(process.exitCode, 1);
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude')));
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
+    test('install --global rejects runtime probing flags from the public CLI', async () => {
+      const homeDir = createTempProject();
+      const previousExitCode = process.exitCode;
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        for (const flag of ['--verify-runtime', '--live-runtime']) {
+          await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+            const result = await runCliAsMain(tmpDir, ['install', '--global', '--tools', 'claude', flag]);
+            assert.strictEqual(result.exitCode, 1);
+            assert.match(result.output, /runtime probing is not part of the public install command/);
+          });
+        }
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude')));
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
+    test('interactive global install picker does not preselect every agent home', async () => {
+      const homeDir = createTempProject();
+      let promptedOptions = null;
+      const previousExitCode = process.exitCode;
+      const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+      try {
+        Object.defineProperty(process.stdin, 'isTTY', {
+          configurable: true,
+          value: true,
+        });
+        await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+          const [{ createCliContext }, { createCmdInstall }] = await Promise.all([
+            importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs')),
+            importModule(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')),
+          ]);
+          const ctx = createCliContext(tmpDir);
+          ctx.globalInstallPromptApi = {
+            selectGlobalInstallTargets(options) {
+              promptedOptions = options;
+              return ['claude'];
+            },
+          };
+          await createCmdInstall(ctx)('--global');
+        });
+
+        assert.ok(promptedOptions);
+        assert.ok(promptedOptions.every((option) => option.selected === false),
+          'global install must not default to writing every supported agent home');
+        assert.ok(fs.existsSync(path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.copilot')));
+      } finally {
+        if (stdinDescriptor) {
+          Object.defineProperty(process.stdin, 'isTTY', stdinDescriptor);
+        } else {
+          delete process.stdin.isTTY;
+        }
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
     });
   });
 

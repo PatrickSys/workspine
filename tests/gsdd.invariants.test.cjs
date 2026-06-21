@@ -1652,6 +1652,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
   const DISTILLED_README = path.join(__dirname, '..', 'distilled', 'README.md');
   const AGENTS_README = path.join(__dirname, '..', 'agents', 'README.md');
   const CLI_ENTRY = path.join(__dirname, '..', 'bin', 'gsdd.mjs');
+  const WORKFLOWS_REGISTRY = path.join(__dirname, '..', 'bin', 'lib', 'workflows.mjs');
   const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
 
   const rootReadme = fs.readFileSync(ROOT_README, 'utf-8');
@@ -1659,6 +1660,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
   const agentsReadme = fs.readFileSync(AGENTS_README, 'utf-8');
   const designContent = fs.readFileSync(DESIGN_MD, 'utf-8');
   const cliContent = fs.readFileSync(CLI_ENTRY, 'utf-8');
+  const workflowsContent = fs.readFileSync(WORKFLOWS_REGISTRY, 'utf-8');
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf-8'));
 
   // G12.1: Public README surfaces avoid stale hard-coded DESIGN.md decision counts.
@@ -1680,10 +1682,10 @@ describe('G12 — Documentation Accuracy Guards', () => {
 
   // G12.2: Workflow count matches WORKFLOWS array length
   test('root README workflow count matches WORKFLOWS array length', () => {
-    const workflowArrayMatch = cliContent.match(/const WORKFLOWS = \[/);
-    assert.ok(workflowArrayMatch, 'bin/gsdd.mjs must define WORKFLOWS array');
+    const workflowArrayMatch = workflowsContent.match(/export const WORKFLOWS = \[/);
+    assert.ok(workflowArrayMatch, 'bin/lib/workflows.mjs must define WORKFLOWS array');
     // Count workflow entries by counting `{ name:` lines
-    const workflowEntries = (cliContent.match(/\{\s*name:\s*'/g) || []).length;
+    const workflowEntries = (workflowsContent.match(/\{\s*name:\s*'/g) || []).length;
     assert.ok(
       rootReadme.includes(`${workflowEntries} workflows`),
       `Root README claims wrong workflow count. Actual: ${workflowEntries}. FIX: Update root README to say "${workflowEntries} workflows".`
@@ -1719,7 +1721,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
     const diagramCommands = [...diagram.matchAll(/\/gsdd-([a-z-]+)/g)].map(m => m[1]);
 
     // Get valid workflow names (strip 'gsdd-' prefix to get the command part)
-    const workflowNames = (cliContent.match(/name:\s*'gsdd-([a-z-]+)'/g) || [])
+    const workflowNames = (workflowsContent.match(/name:\s*'gsdd-([a-z-]+)'/g) || [])
       .map(m => m.match(/name:\s*'gsdd-([a-z-]+)'/)[1]);
 
     for (const cmd of diagramCommands) {

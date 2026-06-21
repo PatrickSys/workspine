@@ -145,7 +145,7 @@ ${delegateContent.trim()}
 `;
 }
 
-function renderOpenCodePlanCommand() {
+function renderOpenCodePlanCommand({ skillPath = '.agents/skills/gsdd-plan/SKILL.md' } = {}) {
   return `---
 description: OpenCode-native phase planning with fresh-context plan checking for GSDD
 subtask: false
@@ -154,7 +154,7 @@ subtask: false
 You are the OpenCode-native \`/gsdd-plan\` command for GSDD phase planning.
 
 Portable contract:
-- Read \`.agents/skills/gsdd-plan/SKILL.md\` first. That file remains the canonical vendor-agnostic plan contract.
+- Read \`${skillPath}\` first. That file remains the canonical vendor-agnostic plan contract.
 - Keep the portable contract honest: it defines the workflow, but it does not by itself prove fresh-context checker orchestration across runtimes.
 - If the portable skill says plan is still a stub, treat that as a portability-status warning for the generic surface, not as a stop signal for this OpenCode-native adapter path.
 
@@ -174,7 +174,7 @@ Execution flow:
    d. The explorer runs a GSD-style interactive conversation with the user (gray areas, research, deep-dive questions, assumptions) and writes APPROACH.md.
    e. Before planning, confirm APPROACH.md records all canonical proof fields: \`alignment_status\`, \`alignment_method\`, \`user_confirmed_at\`, \`explicit_skip_approved\`, \`skip_scope\`, \`skip_rationale\`, and \`confirmed_decisions\`. For \`alignment_status: user_confirmed\`, \`confirmed_decisions\` must name the locked decisions and skip fields may be \`false\`/\`N/A\`; for \`alignment_status: approved_skip\`, \`explicit_skip_approved: true\`, \`skip_scope\`, and \`skip_rationale\` must be substantive. Agent-only "No questions needed" is not valid proof under \`workflow.discuss: true\`.
    f. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
-4. Produce the initial phase plan according to \`.agents/skills/gsdd-plan/SKILL.md\`. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
+4. Produce the initial phase plan according to \`${skillPath}\`. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
 5. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the step 3 alignment-proof gate when \`workflow.discuss: true\`.
 6. If \`workflow.planCheck: true\`, invoke the hidden \`gsdd-plan-checker\` subagent with fresh context.
 7. Pass only explicit inputs to the checker:

@@ -709,10 +709,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must not contain custom_command_aware. FIX: Replace custom_command_aware with governance_only in adapter tables.');
   });
 
-  test('README invocation table qualifies Cursor/Copilot/Gemini slash guidance', () => {
+  test('README qualifies Cursor/Copilot/Gemini slash guidance', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /Cursor \/ Copilot \/ Gemini \| .*\/gsdd-plan.*when skill\/slash discovery is available/i,
-      'README invocation table must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording plus SKILL.md fallback.');
+    assert.match(readme, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers `.agents\/skills`; if it does not, open `.agents\/skills\/gsdd-<workflow>\/SKILL\.md`/i,
+      'README must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording plus SKILL.md fallback.');
   });
 
   test('README contains a Quickstart section', () => {
@@ -727,6 +727,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must describe the init command as a guided install wizard. FIX: Update the Platform Adapters or Getting Started section.');
     assert.match(readme, /npx -y gsdd-cli init/i,
       'README.md must prefer npx -y gsdd-cli init for humans. FIX: Replace primary bare gsdd init guidance.');
+    assert.match(readme, /npx -y gsdd-cli install --global/i,
+      'README.md must describe the global agent install path. FIX: Add explicit global/local install contract text.');
+    assert.match(readme, /does not create `.planning\/`/i,
+      'README.md must state that global install does not bootstrap repo-local planning state. FIX: Add global install boundary wording.');
   });
 
   test('public docs distinguish skills entrypoints from the internal helper runtime', () => {
@@ -753,6 +757,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'Generated AGENTS block must not describe adapters as generated under bin/. FIX: Describe .agents/skills, .planning/bin, and native adapter directories.');
     assert.match(agentsBlock, /npx -y gsdd-cli init/i,
       'Generated AGENTS block must prefer npx -y gsdd-cli init. FIX: Qualify bare gsdd as global-only.');
+    assert.match(agentsBlock, /npx -y gsdd-cli health/i,
+      'Generated AGENTS block must tell agents how to verify installed skill surfaces. FIX: Add health guidance.');
+    assert.match(agentsBlock, /npx -y gsdd-cli update/i,
+      'Generated AGENTS block must tell agents how to repair generated-surface drift. FIX: Add update guidance.');
     assert.match(agentsBlock, /Codex CLI/i,
       'Generated AGENTS block must distinguish Codex CLI from Codex VS Code/app. FIX: Use Codex CLI in the $gsdd-plan invocation guidance.');
     assert.doesNotMatch(newProject, /`gsdd init --auto --brief <path>`/,

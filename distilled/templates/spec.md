@@ -107,4 +107,3 @@ When a major milestone completes:
 1. The SPEC.md "Current State" section reflects the new state
 2. Completed phases have summaries in `.planning/phases/{N}-SUMMARY.md`
 3. SPEC.md itself stays lean - don't accumulate history here
-
