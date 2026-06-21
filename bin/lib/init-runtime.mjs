@@ -180,6 +180,8 @@ Commands:
                               --templates: also refresh .planning/templates/ and roles
                               --dry: preview changes without writing files
   health [--json]             Check workspace integrity (healthy/degraded/broken)
+  next [--json] [--format auto|json|human] [--init]
+                              Read \`.work\` continuity state and emit the next coherent agent action
   models [subcommand]         Inspect or update model profile / runtime overrides
   find-phase [N]              Show phase info as JSON (for agent consumption)
   verify <N>                  Run artifact checks for phase N
@@ -230,6 +232,8 @@ Notes:
   - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
   - \`npx -y gsdd-cli health\` is for repo-local .planning/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift
+  - \`npx -y gsdd-cli next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed next-action packet
+  - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
   - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
@@ -254,6 +258,9 @@ Examples:
   npx -y gsdd-cli install --global
   npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
   npx -y gsdd-cli update
+  npx -y gsdd-cli next --json
+  npx -y gsdd-cli next --format human
+  npx -y gsdd-cli next --init
   npx -y gsdd-cli find-phase
   npx -y gsdd-cli verify 1
   npx -y gsdd-cli control-map annotate set --id canonical --write-set src/app.ts
@@ -288,6 +295,7 @@ Advanced/internal helpers (kept available, but not the primary first-run user st
   ui-proof                  Validate UI proof metadata and compare planned slots to observed bundles
   control-map               Report computed repo/worktree/planning state; annotate only records local intent
   closeout-report           Read-only post-merge closure replay; reports blockers, warnings, and next safe action
+  next                      Read-only \`.work\` continuity router for the next coherent agent action
   file-op                   Deterministic workspace-confined file copy/delete/text mutation
 `;
 }

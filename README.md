@@ -36,6 +36,10 @@ Tracked consumer proof pack: [docs/proof/consumer-node-cli/README.md](docs/proof
 
 The discipline: plan first, execute only what's approved, verify before closing. Each phase summary carries forward what was decided, so the next session starts with context instead of from scratch.
 
+For agent continuity across long sessions, `gsdd next` reads `.work/` plus repo truth and emits the next coherent action as a structured packet. Use `gsdd next --init` to bootstrap `.work`; plain `gsdd next` is read-only. Captured stdout defaults to JSON; use `gsdd next --format human` for the compact supervisor card.
+
+`gsdd next` keeps the human surface tight and the agent surface structured. JSON packets include typed `next_action` values for CLI commands, workflow skills, manual review, and user-question gates. Blocking questions, decisions, graph rebuilds, and dogfood findings use explicit subcommands; duplicate question, decision, and dogfood IDs replay as unchanged when the content matches and fail unless `--replace` is passed when the content differs. The continuity graph records answer and supersession edges so future agents can reconstruct decision history without rereading raw transcripts.
+
 Workspine ships 14 workflows. The package and CLI are `gsdd-cli` / `gsdd-*` — retained as the technical contract under the Workspine product name.
 
 ---
@@ -107,7 +111,7 @@ Commit `.planning/` so the team shares specs, roadmaps, phase plans, and verific
 
 ### What to Track in Git
 
-Track `.planning/`, `.agents/skills/`, and any selected runtime adapters that are part of the team workflow. Do not track `.planning/.local/`; it is local intent and runtime scratch state.
+Track `.planning/`, `.agents/skills/`, and any selected runtime adapters that are part of the team workflow. Track durable `.work/` contract and research files when they define shared milestone truth. Do not track `.planning/.local/` or mutable `.work` runtime files such as `state.json`, graph logs, open questions, evidence manifests, handoff notes, or raw dogfood drafts unless you deliberately export or sanitize them.
 
 ---
 
@@ -151,6 +155,9 @@ Use Workspine when a feature takes more than one session, or when you need to sw
 npx -y gsdd-cli health                  # workspace integrity check
 npx -y gsdd-cli update                  # regenerate stale runtime surfaces
 npx -y gsdd-cli update --templates      # refresh runtime surfaces and template payloads
+npx -y gsdd-cli next --json             # read .work continuity and emit the next action packet
+npx -y gsdd-cli next --format human     # show the compact supervisor card
+npx -y gsdd-cli next --init             # bootstrap .work continuity state explicitly
 npx -y gsdd-cli rigor                   # run planning/document guardrails
 npx -y gsdd-cli file-op                 # deterministic repo-local copy/delete helper
 npx -y gsdd-cli models profile quality  # maximize review rigor

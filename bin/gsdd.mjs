@@ -22,6 +22,7 @@ import { cmdSessionFingerprint } from './lib/session-fingerprint.mjs';
 import { cmdUiProof } from './lib/ui-proof.mjs';
 import { cmdControlMap } from './lib/control-map.mjs';
 import { createCmdCloseoutReport } from './lib/closeout-report.mjs';
+import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
 import { FRAMEWORK_VERSION, WORKFLOWS } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
@@ -67,6 +68,7 @@ const cmdInit = createCmdInit(INIT_CONTEXT);
 const cmdInstall = createCmdInstall(INIT_CONTEXT);
 const cmdHealth = createCmdHealth(INIT_CONTEXT);
 const cmdCloseoutReport = createCmdCloseoutReport(INIT_CONTEXT);
+const cmdNext = createCmdNext(INIT_CONTEXT);
 
 const cmdUpdate = (...updateArgs) => {
   const { args: normalizedArgs, workspaceRoot, invalid, error } = resolveWorkspaceContext(updateArgs, { cwd: INIT_CONTEXT.cwd });
@@ -84,6 +86,7 @@ const COMMANDS = {
   models: cmdModels,
   rigor: cmdRigor,
   health: cmdHealth,
+  next: cmdNext,
   'file-op': cmdFileOp,
   'lifecycle-preflight': cmdLifecyclePreflight,
   'session-fingerprint': cmdSessionFingerprint,
@@ -116,4 +119,4 @@ async function runCli(cliCommand = command, ...cliArgs) {
 }
 
 if (IS_MAIN) await runCli();
-export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdCloseoutReport, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdCloseoutReport, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
