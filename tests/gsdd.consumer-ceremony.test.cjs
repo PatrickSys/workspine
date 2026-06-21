@@ -116,13 +116,13 @@ describe('consumer ceremony reduction', () => {
     }
   });
 
-  test('consumer AGENTS.md stays within 15-25 lines and keeps routing hints', async () => {
+  test('consumer AGENTS.md stays within 15-27 lines and keeps routing hints', async () => {
     await runWizardInit(tmpDir, { selectedRuntimes: ['cursor'], adapterTargets: ['agents'] });
     const agents = fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf8');
     const lines = agents.split('\n').length;
 
-    assert.ok(lines >= 15 && lines <= 25, `expected 15-25 lines, got ${lines}`);
-    for (const token of ['gsdd-new-project', 'gsdd-plan', 'gsdd-execute', 'gsdd-verify', 'gsdd-progress', '/gsdd-plan', '$gsdd-plan']) {
+    assert.ok(lines >= 15 && lines <= 27, `expected 15-27 lines, got ${lines}`);
+    for (const token of ['gsdd-new-project', 'gsdd-plan', 'gsdd-execute', 'gsdd-verify', 'gsdd-progress', '/gsdd-plan', '$gsdd-plan', 'npx -y gsdd-cli init', 'npx -y gsdd-cli health', 'npx -y gsdd-cli update']) {
       assert.match(agents, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
     assert.match(agents, /plan-only|execution begins only after an explicit .*gsdd-execute/i);

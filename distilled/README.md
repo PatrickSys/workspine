@@ -40,7 +40,7 @@ Launch proof posture:
 - Directly validated in repo truth: Claude Code, Codex CLI, OpenCode
 - Qualified support only: Cursor, Copilot, Gemini CLI can use the shared `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it; proof and ergonomics differ from the directly validated runtimes
 - Codex CLI validation does not automatically cover Codex VS Code or the Codex app; use native discovery there when available, otherwise open or paste `.agents/skills/gsdd-*/SKILL.md`
-- Installed generated runtime surfaces are renderer-checked locally through `npx -y gsdd-cli health`, with deterministic repair through `npx -y gsdd-cli update` (bare `gsdd ...` is equivalent only when globally installed)
+- Repo-local generated runtime surfaces are renderer-checked through `npx -y gsdd-cli health`, with deterministic repair through `npx -y gsdd-cli update` (bare `gsdd ...` is equivalent only when globally installed)
 - Public proof entrypoints: `docs/BROWNFIELD-PROOF.md`, `docs/proof/consumer-node-cli/README.md`, `docs/RUNTIME-SUPPORT.md`, `docs/VERIFICATION-DISCIPLINE.md`
 
 ## Quick Start
@@ -51,6 +51,15 @@ npx -y gsdd-cli init
 ```
 
 In a TTY, `npx -y gsdd-cli init` opens a guided install wizard: choose runtimes first, then decide separately whether repo-wide `AGENTS.md` governance is worth installing. If `gsdd-cli` is globally installed, `gsdd init` is the equivalent shorthand.
+
+For personal cross-repo availability, run:
+
+```bash
+npx -y gsdd-cli install --global
+npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
+```
+
+Global install writes selected Workspine skills and native agent surfaces into user-level agent homes. It does not create `.planning/` in the current repo.
 
 Optional adapters:
 ```bash
