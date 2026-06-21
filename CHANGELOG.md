@@ -1,3 +1,12 @@
+# [0.26.0](https://github.com/PatrickSys/workspine/compare/v0.25.0...v0.26.0) (2026-06-21)
+
+
+### Features
+
+* add rigor knob (low/medium/high/max) with per-step overrides ([ac1c180](https://github.com/PatrickSys/workspine/commit/ac1c180169e778ca9d542038afcb79f5e902ec3d))
+* add Workspine next continuity router ([#115](https://github.com/PatrickSys/workspine/issues/115)) ([a94325e](https://github.com/PatrickSys/workspine/commit/a94325e02f8c68f81c834db187b3ae2235b7eea2))
+* close v1.9 phase 64 — regression sweep with LF normalization ([6dd2b6a](https://github.com/PatrickSys/workspine/commit/6dd2b6afb0be900061b7d61d54cc0afdd1ec24a2))
+
 # [0.25.0](https://github.com/PatrickSys/workspine/compare/v0.24.0...v0.25.0) (2026-05-10)
 
 
