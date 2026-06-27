@@ -172,8 +172,9 @@ Commands:
                               Launch guided install wizard in TTYs, or use --tools for manual/headless setup
                               --auto: non-interactive mode with smart defaults (requires --tools)
                               --brief <file>: copy project brief to .planning/PROJECT_BRIEF.md
-  install --global [--tools <platform>] [--dry]
+  install --global [--auto] [--tools <platform>] [--dry]
                               Install reusable Workspine skills and native runtime surfaces into agent home directories
+                              --auto: non-interactive mode that installs detected local agent targets
                               In TTYs, omitting --tools opens an agent picker
   update [--tools <platform>] [--templates] [--dry]
                               Regenerate adapters from latest framework sources
@@ -223,11 +224,12 @@ Global install targets:
   all       Install all global targets above
 
 Notes:
-  - use \`npx -y gsdd-cli init\` for repo-local setup; use \`npx -y gsdd-cli install --global\` when you want reusable skills in agent homes
+  - use \`npx -y gsdd-cli init\` for repo-local setup; use \`npx -y gsdd-cli install --global --auto\` when you want reusable skills in detected agent homes
   - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
   - init also generates a local .planning/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - install --global never creates .planning/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
-  - repair or refresh a global install by rerunning \`npx -y gsdd-cli install --global --tools <targets>\`; runtime probes stay in test harnesses
+  - use \`npx -y gsdd-cli install --global --auto\` for non-interactive global install into detected agent homes; use \`--tools <targets>\` to override detection explicitly
+  - repair or refresh a global install by rerunning \`npx -y gsdd-cli install --global --auto\` or \`npx -y gsdd-cli install --global --tools <targets>\`; runtime probes stay in test harnesses
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
   - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
@@ -256,6 +258,7 @@ Examples:
   npx -y gsdd-cli init --tools agents
   npx -y gsdd-cli init --tools all
   npx -y gsdd-cli install --global
+  npx -y gsdd-cli install --global --auto
   npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
   npx -y gsdd-cli update
   npx -y gsdd-cli next --json
