@@ -102,13 +102,21 @@ function validateGlobalTools(tools) {
   return `ERROR: unsupported global install target(s): ${invalid.join(', ')}. Use --tools claude,opencode,codex,copilot or --tools all.`;
 }
 
+function detectGlobalInstallTargets(roots) {
+  return GLOBAL_AGENT_IDS.filter((target) => existsSync(roots[target]));
+}
+
 function displayPath(filePath) {
   return filePath.replace(/\\/g, '/');
 }
 
-async function resolveGlobalInstallTargets({ args, promptApi, output }) {
+async function resolveGlobalInstallTargets({ args, promptApi, output, roots }) {
   const parsedTools = normalizeGlobalTools(parseGlobalToolsFlag(args));
   if (parsedTools.length > 0) return parsedTools;
+
+  if (args.includes('--auto')) {
+    return detectGlobalInstallTargets(roots);
+  }
 
   if (!process.stdin.isTTY) {
     return [];
@@ -530,6 +538,7 @@ export function createCmdInstall(ctx) {
   return async function cmdInstall(...installArgs) {
     const globalFlag = installArgs.includes('--global') || installArgs.includes('-g');
     const localFlag = installArgs.includes('--local');
+    const autoFlag = installArgs.includes('--auto');
     const dryRun = installArgs.includes('--dry');
     const verifyRuntime = installArgs.includes('--verify-runtime');
     const liveRuntime = installArgs.includes('--live-runtime');
@@ -559,14 +568,19 @@ export function createCmdInstall(ctx) {
       return;
     }
 
+    const roots = resolveGlobalInstallRoots();
     const targets = await resolveGlobalInstallTargets({
       args: installArgs,
       promptApi: ctx.globalInstallPromptApi,
       output: process.stdout,
+      roots,
     });
 
     if (targets.length === 0) {
-      console.error('ERROR: no global install targets selected. Use --tools claude,opencode,codex,copilot or run interactively.');
+      const autoHint = autoFlag
+        ? 'No supported agent homes were detected for --auto. Create an agent config home first or use --tools claude,opencode,codex,copilot explicitly.'
+        : 'Use --tools claude,opencode,codex,copilot or run interactively.';
+      console.error(`ERROR: no global install targets selected. ${autoHint}`);
       process.exitCode = 1;
       return;
     }
@@ -578,7 +592,6 @@ export function createCmdInstall(ctx) {
       return;
     }
 
-    const roots = resolveGlobalInstallRoots();
     console.log(`Workspine global install - installing runtime surfaces${dryRun ? ' (dry run)' : ''}\n`);
 
     const reports = targets.map((target) => installTarget({

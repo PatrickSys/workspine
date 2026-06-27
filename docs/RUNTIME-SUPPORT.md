@@ -4,7 +4,7 @@ Workspine is a repo-native delivery spine with portable multi-runtime workflow s
 
 This matrix is the release-floor truth surface.
 
-Human repo setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine. For cross-repo personal use, `npx -y gsdd-cli install --global` installs reusable Workspine skills and native runtime surfaces into selected agent homes.
+Human repo setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine. For cross-repo personal use, `npx -y gsdd-cli install --global --auto` installs reusable Workspine skills and native runtime surfaces into detected agent homes.
 
 The install contract is deliberately skills-first: `npx -y gsdd-cli init` always creates `.agents/skills/gsdd-*` and `.planning/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
 
@@ -55,7 +55,7 @@ Two surfaces matter for users:
 
 ## Global install surfaces
 
-`npx -y gsdd-cli install --global` can install personal cross-repo surfaces for these targets:
+`npx -y gsdd-cli install --global --auto` can install personal cross-repo surfaces for detected agent homes. Use `npx -y gsdd-cli install --global --tools <targets>` to override detection explicitly. Supported targets:
 
 | Target | Global surfaces |
 | --- | --- |
@@ -77,7 +77,7 @@ The authored source contract stays in `distilled/workflows/*`. Generated runtime
 - `npx -y gsdd-cli update` regenerates drifted generated surfaces from the authored workflow and delegate sources.
 - Bare `gsdd health` and `gsdd update` are equivalent only when `gsdd-cli` is globally installed.
 - Missing generated surfaces are not treated as drift unless the corresponding runtime surface is actually installed locally.
-- Global user-home installs are refreshed by rerunning `npx -y gsdd-cli install --global --tools <targets>`; global runtime probes remain an internal pressure-harness concern, not a public install flag.
+- Global user-home installs are refreshed by rerunning `npx -y gsdd-cli install --global --auto` or explicitly scoped with `npx -y gsdd-cli install --global --tools <targets>`; global runtime probes remain an internal pressure-harness concern, not a public install flag.
 
 ## Entry and helper surfaces
 

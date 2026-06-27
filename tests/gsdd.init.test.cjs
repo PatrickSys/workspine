@@ -1520,6 +1520,101 @@ describe('gsdd init and update', () => {
       }
     });
 
+    test('install --global --auto detects existing agent homes and does not bootstrap the repo', async () => {
+      const homeDir = createTempProject();
+      const previousExitCode = process.exitCode;
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        fs.mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
+        await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+          const result = await runCliAsMain(tmpDir, ['install', '--global', '--auto']);
+          assert.strictEqual(result.exitCode, 0);
+          assert.match(result.output, /codex:/);
+          assert.match(result.output, /Global install complete/);
+        });
+
+        assert.ok(fs.existsSync(path.join(homeDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
+        assert.ok(fs.existsSync(path.join(homeDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.copilot')));
+        assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')),
+          'global --auto must not create repo-local planning state');
+        assert.ok(!fs.existsSync(path.join(tmpDir, '.agents')),
+          'global --auto must not create repo-local portable skills');
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
+    test('install --global --auto --tools keeps explicit target scope', async () => {
+      const homeDir = createTempProject();
+      const previousExitCode = process.exitCode;
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        fs.mkdirSync(path.join(homeDir, '.claude'), { recursive: true });
+        fs.mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
+        await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+          const result = await runCliAsMain(tmpDir, ['install', '--global', '--auto', '--tools', 'codex']);
+          assert.strictEqual(result.exitCode, 0);
+          assert.match(result.output, /codex:/);
+          assert.doesNotMatch(result.output, /claude:/);
+        });
+
+        assert.ok(fs.existsSync(path.join(homeDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md')));
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
+    test('install --global --auto without detected agent homes fails closed', async () => {
+      const homeDir = createTempProject();
+      const previousExitCode = process.exitCode;
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+          const result = await runCliAsMain(tmpDir, ['install', '--global', '--auto']);
+          assert.strictEqual(result.exitCode, 1);
+          assert.match(result.output, /No supported agent homes were detected for --auto/);
+          assert.match(result.output, /--tools claude,opencode,codex,copilot/);
+        });
+
+        assert.ok(!fs.existsSync(path.join(homeDir, '.agents')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.codex')));
+        assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')));
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
+    test('install --global --auto rejects invalid explicit targets before writes', async () => {
+      const homeDir = createTempProject();
+      const previousExitCode = process.exitCode;
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        fs.mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
+        await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+          const result = await runCliAsMain(tmpDir, ['install', '--global', '--auto', '--tools', 'bogus']);
+          assert.strictEqual(result.exitCode, 1);
+          assert.match(result.output, /unsupported global install target/);
+        });
+
+        assert.ok(!fs.existsSync(path.join(homeDir, '.agents')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.codex', 'agents')));
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+      }
+    });
+
     test('install --global rejects runtime probing flags from the public CLI', async () => {
       const homeDir = createTempProject();
       const previousExitCode = process.exitCode;

@@ -15,7 +15,7 @@ The public product name is Workspine. The retained technical contracts remain `g
 npx -y gsdd-cli init
 ```
 
-Use `npx -y gsdd-cli init` for repo-local setup. Use `npx -y gsdd-cli install --global` to install reusable Workspine skills and native runtime surfaces into your agent homes so they are available across repos.
+Use `npx -y gsdd-cli init` for repo-local setup. Use `npx -y gsdd-cli install --global --auto` to install reusable Workspine skills and native runtime surfaces into detected agent homes so they are available across repos.
 
 </div>
 
@@ -81,10 +81,11 @@ If `gsdd-cli` is installed globally, install reusable Workspine surfaces into yo
 
 ```bash
 npx -y gsdd-cli install --global
+npx -y gsdd-cli install --global --auto
 npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 ```
 
-When run in a TTY without `--tools`, `install --global` lets you select which agents to install. It does not create `.planning/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
+Use `--auto` for non-interactive install into detected local agent homes. Use `--tools <targets>` when you want to override detection explicitly. When run in a TTY without `--tools` or `--auto`, `install --global` lets you select which agents to install. It does not create `.planning/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
 
 | Target | Global surfaces |
 |--------|-----------------|
@@ -127,7 +128,7 @@ npx -y gsdd-cli models profile budget    # minimize cost
 
 ## Troubleshooting
 
-Inside a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. It checks local generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. To repair or refresh a personal global install, rerun `npx -y gsdd-cli install --global --tools <targets>`. For details, see the [User Guide](docs/USER-GUIDE.md).
+Inside a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. It checks local generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. To repair or refresh a personal global install, rerun `npx -y gsdd-cli install --global --auto` or explicitly scope it with `npx -y gsdd-cli install --global --tools <targets>`. For details, see the [User Guide](docs/USER-GUIDE.md).
 
 ---
 
