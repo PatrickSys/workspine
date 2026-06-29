@@ -273,6 +273,43 @@ describe('global install pressure loop', () => {
     }
   });
 
+  test('auto global install detects existing agent homes across unrelated fixture repos', async () => {
+    const homeDir = createTempProject();
+    const { parent, repos } = createFixtureRepos();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+
+    try {
+      fs.mkdirSync(path.join(homeDir, '.codex'), { recursive: true });
+      const installOutput = await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repos[0]);
+        return captureLogs(() => gsdd.cmdInstall('--global', '--auto'));
+      });
+
+      assert.match(installOutput, /codex:/);
+      assert.doesNotMatch(installOutput, /claude:/);
+      assert.match(installOutput, /Global install complete/);
+
+      for (const repo of repos) {
+        assertNoRepoBootstrap(repo);
+      }
+
+      assertGlobalAgentSurface(homeDir, 'codex', [
+        'skills/gsdd-plan/SKILL.md',
+        'agents/gsdd-plan-checker.toml',
+      ]);
+      assert.ok(!fs.existsSync(path.join(homeDir, '.claude')),
+        'auto global install must not create undetected Claude home');
+      assert.ok(!fs.existsSync(path.join(homeDir, '.copilot')),
+        'auto global install must not create undetected Copilot home');
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(parent);
+    }
+  });
+
   test('mock user can later choose repo-local install in one fixture without changing global install scope', async () => {
     const homeDir = createTempProject();
     const { parent, repos } = createFixtureRepos();

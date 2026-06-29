@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
@@ -76,6 +76,7 @@ const RELEASE_CONTRADICTION_CHECKS = Object.freeze([
 
 const RELEASE_CONTRADICTION_STATUSES = Object.freeze(['passed', 'failed', 'not_applicable']);
 const PREFLIGHT_CONTROL_MAP_SKIP_CODES = Object.freeze(['planning_state_drift']);
+const WORK_PHASE_LINE_RE = /^\s*[-*]\s*\[([ x-])\]\s*\*\*Phase\s+(\d+(?:\.\d+)*[A-Za-z]?):\s*(.+?)\*\*/i;
 
 export function evaluateLifecyclePreflight({
   planningDir,
@@ -95,7 +96,12 @@ export function evaluateLifecyclePreflight({
 
   const lifecycle = evaluateLifecycleState({ planningDir });
   const normalizedPhase = phaseNumber ? normalizePhaseToken(phaseNumber) : null;
+  const workMilestone = normalizedPhase ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase }) : null;
   const checkpointPath = join(planningDir, '.continue-here.md');
+  const resumeWorkCheckpoint = surface === 'resume'
+    ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath })
+    : null;
+  const usesWorkAuthority = Boolean(workMilestone?.phaseEntry || resumeWorkCheckpoint);
   const specPath = join(planningDir, 'SPEC.md');
   const milestonesPath = join(planningDir, 'MILESTONES.md');
   const blockers = [];
@@ -119,7 +125,11 @@ export function evaluateLifecyclePreflight({
   }
 
   if (normalizedPhase) {
-    blockers.push(...buildPhaseBlockers({ lifecycle, phaseToken: normalizedPhase, surface }));
+    blockers.push(
+      ...(usesWorkAuthority
+        ? buildWorkPhaseBlockers({ workMilestone, phaseToken: normalizedPhase, surface })
+        : buildPhaseBlockers({ lifecycle, phaseToken: normalizedPhase, surface }))
+    );
   }
 
   if (surface === 'audit-milestone') {
@@ -176,12 +186,17 @@ export function evaluateLifecyclePreflight({
         details: drift.details,
         files: drift.files,
       };
-      if (policy.classification === 'owned_write') {
+      if (policy.classification === 'owned_write' && !usesWorkAuthority) {
         blockers.push(driftNotice);
       } else {
+        const workWarningContext = resumeWorkCheckpoint
+          ? 'because the checkpoint points at .work/milestone continuity'
+          : `by .work/milestone for Phase ${normalizedPhase}`;
         warnings.push({
           ...driftNotice,
-          message: `Planning state has drifted since the last recorded session: ${drift.details.join('; ')}`,
+          message: usesWorkAuthority
+            ? `Planning state has drifted since the last recorded session, but ${surface} is using work_milestone authority ${workWarningContext}: ${drift.details.join('; ')}`
+            : `Planning state has drifted since the last recorded session: ${drift.details.join('; ')}`,
         });
       }
     }
@@ -198,7 +213,7 @@ export function evaluateLifecyclePreflight({
     else warnings.push(notice);
   }
 
-  if (lifecycle.phaseStatusAlignment.mismatches.length > 0) {
+  if (!usesWorkAuthority && lifecycle.phaseStatusAlignment.mismatches.length > 0) {
     warnings.push({
       code: 'roadmap_phase_status_mismatch',
       message: `ROADMAP.md overview/detail phase statuses disagree: ${lifecycle.phaseStatusAlignment.mismatches.join('; ')}`,
@@ -214,6 +229,7 @@ export function evaluateLifecyclePreflight({
     explicitLifecycleMutation: policy.explicitLifecycleMutation,
     closureEvidence: describeEvidenceSurface(surface),
     mutationRequest: expectsMutation,
+    authority: usesWorkAuthority ? 'work_milestone' : 'planning',
     allowed: blockers.length === 0,
     status: blockers.length === 0 ? 'allowed' : 'blocked',
     reason: blockers[0]?.code ?? null,
@@ -222,10 +238,20 @@ export function evaluateLifecyclePreflight({
     planningState,
     controlMap: controlMap.summary,
     lifecycle: {
+      authority: usesWorkAuthority ? 'work_milestone' : 'planning',
       currentMilestone: lifecycle.currentMilestone,
       currentPhase: lifecycle.currentPhase ? lifecycle.currentPhase.number : null,
       nextPhase: lifecycle.nextPhase ? lifecycle.nextPhase.number : null,
       counts: lifecycle.counts,
+      workMilestone: usesWorkAuthority
+        ? {
+            phase: workMilestone?.phaseEntry?.number ?? null,
+            status: workMilestone?.phaseEntry?.status ?? null,
+            roadmapPath: '.work/milestone/ROADMAP.md',
+            milestoneDir: '.work/milestone',
+            source: resumeWorkCheckpoint ? 'checkpoint' : 'phase',
+          }
+        : null,
     },
   };
 }
@@ -338,6 +364,186 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface }) {
           'missing_summary',
           `Phase ${phaseToken} cannot be verified because no SUMMARY artifact exists yet.`,
           ['.planning/phases/']
+        )
+      );
+    }
+  }
+
+  return blockers;
+}
+
+function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
+  const workspaceRoot = resolve(planningDir, '..');
+  const milestoneDir = join(workspaceRoot, '.work', 'milestone');
+  const roadmapPath = join(milestoneDir, 'ROADMAP.md');
+  const phasesDir = join(milestoneDir, 'phases');
+
+  if (!existsSync(roadmapPath)) {
+    return null;
+  }
+
+  const phases = parseWorkRoadmapPhases(readFileSync(roadmapPath, 'utf-8'));
+  const phaseEntry = phases.find((phase) => phase.number === phaseToken);
+  if (!phaseEntry) {
+    return null;
+  }
+
+  return {
+    milestoneDir,
+    roadmapPath,
+    phasesDir,
+    phases,
+    phaseEntry,
+    phaseArtifacts: collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken }),
+  };
+}
+
+function parseWorkRoadmapPhases(content) {
+  return String(content || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => {
+      const match = line.match(WORK_PHASE_LINE_RE);
+      if (!match) return null;
+      return {
+        status: parseWorkPhaseStatus(match[1]),
+        number: normalizePhaseToken(match[2]),
+        title: match[3].trim(),
+      };
+    })
+    .filter(Boolean);
+}
+
+function parseWorkPhaseStatus(rawStatus) {
+  const status = String(rawStatus || '').trim().toLowerCase();
+  if (status === 'x') return 'done';
+  if (status === '-') return 'in_progress';
+  return 'pending';
+}
+
+function evaluateResumeWorkCheckpoint({ planningDir, checkpointPath }) {
+  if (!existsSync(checkpointPath)) return null;
+
+  const workspaceRoot = resolve(planningDir, '..');
+  const milestoneDir = join(workspaceRoot, '.work', 'milestone');
+  const roadmapPath = join(milestoneDir, 'ROADMAP.md');
+  if (!existsSync(roadmapPath)) return null;
+
+  let content = '';
+  try {
+    content = readFileSync(checkpointPath, 'utf-8');
+  } catch {
+    return null;
+  }
+
+  if (!/(^|[`"'(\s])\.work[\\/]+milestone([`"')\s/]|$)/i.test(content)) {
+    return null;
+  }
+
+  return {
+    milestoneDir,
+    roadmapPath,
+  };
+}
+
+function collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken }) {
+  if (!existsSync(phasesDir)) return [];
+
+  return collectMarkdownFiles(phasesDir)
+    .map((filePath) => {
+      const filename = filePath.split(/[\\/]/).pop();
+      const match = filename.match(/^(\d+(?:\.\d+)*[A-Za-z]?)-(.+?)\.md$/i);
+      if (!match || normalizePhaseToken(match[1]) !== phaseToken) return null;
+
+      const kind = parseWorkArtifactKind(match[2]);
+      if (!kind) return null;
+
+      return {
+        phaseToken,
+        kind,
+        path: filePath,
+        displayPath: relativeDisplayPath(workspaceRoot, filePath),
+      };
+    })
+    .filter(Boolean);
+}
+
+function collectMarkdownFiles(dir) {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectMarkdownFiles(fullPath));
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function parseWorkArtifactKind(rawKind) {
+  const kind = String(rawKind || '').toLowerCase();
+  if (kind === 'plan') return 'plan';
+  if (kind === 'execute') return 'execute';
+  if (kind === 'verify' || kind === 'verification') return 'verification';
+  return null;
+}
+
+function relativeDisplayPath(root, filePath) {
+  return filePath.slice(root.length + 1).replace(/\\/g, '/');
+}
+
+function buildWorkPhaseBlockers({ workMilestone, phaseToken, surface }) {
+  const blockers = [];
+  const planArtifacts = workMilestone.phaseArtifacts.filter((artifact) => artifact.kind === 'plan');
+  const executeArtifacts = workMilestone.phaseArtifacts.filter((artifact) => artifact.kind === 'execute');
+
+  if (surface === 'execute') {
+    if (planArtifacts.length === 0) {
+      blockers.push(
+        blocker(
+          'missing_plan',
+          `Phase ${phaseToken} cannot execute because no .work PLAN artifact exists.`,
+          ['.work/milestone/phases/']
+        )
+      );
+    } else if (executeArtifacts.length > 0) {
+      blockers.push(
+        blocker(
+          'no_pending_plan',
+          `Phase ${phaseToken} has already been executed in .work/milestone.`,
+          executeArtifacts.map((artifact) => artifact.displayPath)
+        )
+      );
+    }
+  }
+
+  if (surface === 'plan' && workMilestone.phaseEntry.status === 'done') {
+    blockers.push(
+      blocker(
+        'phase_already_complete',
+        `Phase ${phaseToken} is already complete in .work/milestone and should not be planned again.`,
+        ['.work/milestone/ROADMAP.md']
+      )
+    );
+  }
+
+  if (surface === 'verify') {
+    if (planArtifacts.length === 0) {
+      blockers.push(
+        blocker(
+          'missing_plan',
+          `Phase ${phaseToken} cannot be verified because no .work PLAN artifact exists.`,
+          ['.work/milestone/phases/']
+        )
+      );
+    }
+    if (executeArtifacts.length === 0) {
+      blockers.push(
+        blocker(
+          'missing_execute',
+          `Phase ${phaseToken} cannot be verified because no .work EXECUTE artifact exists yet.`,
+          ['.work/milestone/phases/']
         )
       );
     }

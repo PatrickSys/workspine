@@ -62,6 +62,24 @@ function writePreflightPhase(root, phase = '30') {
   fs.writeFileSync(path.join(phaseDir, `${phase}-PLAN.md`), '# plan\n');
 }
 
+function writeWorkMilestonePhase(root, phase = '7', { execute = false, verify = false } = {}) {
+  const phaseDir = path.join(root, '.work', 'milestone', 'phases', `${phase}-easy-global-install-auto-mode`);
+  fs.mkdirSync(phaseDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(root, '.work', 'milestone', 'ROADMAP.md'),
+    [
+      '# Work Milestone',
+      '',
+      '## Phases',
+      '',
+      `- [ ] **Phase ${phase}: Easy Global Install Auto Mode**`,
+    ].join('\n')
+  );
+  fs.writeFileSync(path.join(phaseDir, `${phase}-PLAN.md`), '# plan\n');
+  if (execute) fs.writeFileSync(path.join(phaseDir, `${phase}-EXECUTE.md`), '# execute\n');
+  if (verify) fs.writeFileSync(path.join(phaseDir, `${phase}-VERIFY.md`), '# verify\n');
+}
+
 async function importLifecycleStateModule() {
   return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'lifecycle-state.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 }
@@ -1506,6 +1524,161 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(output.blockers.some((blocker) => blocker.code === 'planning_state_drift'));
     assert.strictEqual(output.planningState.classification, 'planning_state_drift');
     assert.strictEqual(output.planningState.files.find((file) => file.file === 'SPEC.md').status, 'changed');
+  });
+
+  test('allows resume from a work-milestone checkpoint when planning state is unrelated and drifted', async () => {
+    writePreflightPhase(tmpDir, '30');
+    writeWorkMilestonePhase(tmpDir, '7', { execute: true, verify: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', '.continue-here.md'),
+      [
+        '---',
+        'workflow: generic',
+        'phase: null',
+        'runtime: codex-cli',
+        '---',
+        '',
+        '<current_state>',
+        'Paused in branch-local `.work/milestone` continuity for installability follow-up.',
+        '</current_state>',
+        '',
+        '<next_action>',
+        'Prepare commit and PR.',
+        '</next_action>',
+      ].join('\n')
+    );
+
+    const fp = await importSessionFingerprintModule();
+    fp.writeFingerprint(path.join(tmpDir, '.planning'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec v2\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'resume']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.authority, 'work_milestone');
+    assert.strictEqual(output.lifecycle.authority, 'work_milestone');
+    assert.strictEqual(output.lifecycle.workMilestone.source, 'checkpoint');
+    assert.strictEqual(output.lifecycle.workMilestone.phase, null);
+    assert.strictEqual(output.planningState.classification, 'planning_state_drift');
+    assert.ok(output.warnings.some((warning) => warning.code === 'planning_state_drift'));
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'planning_state_drift'));
+  });
+
+  test('blocks resume from an ordinary checkpoint when planning drift is present', async () => {
+    writePreflightPhase(tmpDir, '30');
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', '.continue-here.md'),
+      [
+        '---',
+        'workflow: generic',
+        'phase: null',
+        'runtime: codex-cli',
+        '---',
+        '',
+        '<current_state>',
+        'Paused on ordinary planning work.',
+        '</current_state>',
+        '',
+        '<next_action>',
+        'Continue normal planning cleanup.',
+        '</next_action>',
+      ].join('\n')
+    );
+
+    const fp = await importSessionFingerprintModule();
+    fp.writeFingerprint(path.join(tmpDir, '.planning'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec v2\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'resume']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, false);
+    assert.strictEqual(output.authority, 'planning');
+    assert.strictEqual(output.reason, 'planning_state_drift');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'planning_state_drift'));
+  });
+
+  test('allows work-milestone execute when planning state is unrelated and drifted', async () => {
+    writePreflightPhase(tmpDir, '30');
+    writeWorkMilestonePhase(tmpDir, '7');
+
+    const fp = await importSessionFingerprintModule();
+    fp.writeFingerprint(path.join(tmpDir, '.planning'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec v2\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.authority, 'work_milestone');
+    assert.strictEqual(output.lifecycle.authority, 'work_milestone');
+    assert.strictEqual(output.lifecycle.workMilestone.phase, '7');
+    assert.strictEqual(output.planningState.classification, 'planning_state_drift');
+    assert.ok(output.warnings.some((warning) => warning.code === 'planning_state_drift'));
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'planning_state_drift'));
+  });
+
+  test('blocks work-milestone execute after the execute artifact exists', async () => {
+    writePreflightPhase(tmpDir, '30');
+    writeWorkMilestonePhase(tmpDir, '7', { execute: true });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.authority, 'work_milestone');
+    assert.strictEqual(output.reason, 'no_pending_plan');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'no_pending_plan'));
+  });
+
+  test('allows work-milestone verify after plan and execute artifacts exist', async () => {
+    writePreflightPhase(tmpDir, '30');
+    writeWorkMilestonePhase(tmpDir, '7', { execute: true });
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.authority, 'work_milestone');
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_summary'));
+  });
+
+  test('blocks work-milestone verify before execute artifact exists', async () => {
+    writePreflightPhase(tmpDir, '30');
+    writeWorkMilestonePhase(tmpDir, '7');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.authority, 'work_milestone');
+    assert.strictEqual(output.reason, 'missing_execute');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_execute'));
+  });
+
+  test('generated local helper lifecycle-preflight supports work-milestone authority', async () => {
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(initResult.exitCode, 0, initResult.output);
+    writePreflightPhase(tmpDir, '30');
+    writeWorkMilestonePhase(tmpDir, '7', { execute: true });
+
+    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const result = spawnSync(process.execPath, [helperPath, 'lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status'], {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+
+    const output = JSON.parse(result.stdout);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.authority, 'work_milestone');
+    assert.strictEqual(output.lifecycle.workMilestone.phase, '7');
   });
 
   test('does not block owned-write execute preflight without a fingerprint baseline', async () => {

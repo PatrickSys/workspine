@@ -1,7 +1,7 @@
 # Milestone Audit: `gsdd next` Continuity
 
 Date: 2026-06-20
-Status: passed after PR hardening loops, with follow-up hardening candidates
+Status: passed after PR hardening and installability dogfood loops
 
 ## Audit Basis
 
@@ -12,6 +12,12 @@ Status: passed after PR hardening loops, with follow-up hardening candidates
 - `tests/gsdd.next.test.cjs`
 - Real repo `gsdd next` packets
 - Full `rtk npm test`
+
+## Installability Follow-Up
+
+Phase 7 added `install --global --auto` as a detected-target global install path through the existing manifest-safe writer. It is covered by execute and verify packets plus init, install pressure, guard, full-suite, help, and package dry-run evidence.
+
+The Phase 7 hardening also fixed the downstream lifecycle authority clash found during dogfood: matching `.work/milestone` phases and checkpoints now pass through `work_milestone` preflight authority instead of being blocked by unrelated `.planning` phase numbers or planning drift.
 
 ## Findings
 
@@ -59,3 +65,5 @@ Residual hardening candidates:
 ## Closure
 
 The implemented local v1 is now more coherent with the current milestone because the router consumes the `.work/milestone` lifecycle surface it asked the agent to create, emits a typed agent action contract, and keeps the human supervisor surface compact. The remaining items are deeper durability/eval hardening follow-ups, not blockers for the scoped v1.
+
+The expanded milestone scope is closed for the local `.work` surface. `.planning` lifecycle drift is still reported, but matching `.work/milestone` packets are no longer governed by `.planning` phase ownership.
