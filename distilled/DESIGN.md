@@ -74,6 +74,7 @@
 61. [Deliberate Subagent Contract](#d61---deliberate-subagent-contract)
 62. [Repo-Native UI Proof Contract](#d62---repo-native-ui-proof-contract)
 63. [Computed-First Control Map](#d63---computed-first-control-map)
+64. [Work-Native Continuity Authority](#d64---work-native-continuity-authority)
 
 ---
 
@@ -2918,6 +2919,55 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - Lifecycle preflight may consume block-level control-map risks for owned-write transitions, but read-only status surfaces must not turn warning-level local state into blockers.
 - `closeout-report` is a compact replay/report helper, not `progress`, `verify`, milestone audit, release automation, cleanup, or a dashboard. The source CLI path includes full health diagnostics; the generated helper reports health availability as a typed warning if the full health builder is not present in that helper runtime.
 - Future health hardening can consume the same helper output for stricter reporting, but must avoid turning local annotations into product truth.
+
+## D64 - Work-Native Continuity Authority
+
+**Decision (2026-06-29):** `.work` becomes the canonical continuity surface for `gsdd next` and future work-native state, while `.planning` remains readable legacy lifecycle input during migration and for existing workflows that still own their write paths. The authority used by routing, preflight, verification, and auto-gate packets must be explicit in machine-readable output. Repo policy, not Workspine itself, decides whether `.work` is committed or local-only; in the Workspine framework repo, `.work` is local dogfood/runtime state and should not be tracked.
+
+**Context:**
+- PR #116 merged the first `gsdd next` / `.work` continuity slice, but the framework repo still had split truth: `.work/milestone` described a locally implemented continuity milestone while `.planning` still described v2.0.0 parallel orchestration and P65/P66.
+- Old v2.0.0 parallel orchestration is too distant to migrate wholesale. Its useful ideas are partial extraction candidates: write ownership and closeout truth gates move into work-native auto-gate safety now; the PR #113 registry material remains parked for later extraction or rescue.
+- OpenSpec's change/archive model and LeanSpec's compact spec guidance both reinforce that long-lived state needs clear ownership and small, reviewable truth surfaces rather than scattered status prose.
+- The cited OpenAI and Anthropic agent-orchestration guidance favors manager-owned orchestration, explicit handoffs, guardrails, evaluator loops, and bounded tool authority rather than an unbounded agent loop.
+- MCP and agent-tooling security guidance reinforce that tool/resource outputs and local memory surfaces are untrusted inputs unless their provenance, privacy posture, and authority boundary are explicit.
+
+**Decision:**
+- Treat `.work` as the source of truth for `gsdd next` continuity routing, focus packets, work-native milestone state, decisions, questions, evidence pointers, dogfood findings, and bounded auto-gate state.
+- Keep `.planning` readable as legacy lifecycle input. Existing `gsdd-plan`, `gsdd-execute`, `gsdd-verify`, audit, complete-milestone, phase-status, and helper write paths continue to work against `.planning` until each surface is deliberately bridged or migrated.
+- Require routing and preflight output to report authority explicitly, using scoped values such as `work_milestone`, `planning`, or `blocked/conflict`; `.work` authority must not silently mask repo truth, PR truth, or unrelated `.planning` blockers.
+- Preserve repo/control-map truth as the highest authority for branch, PR, worktree, dirty-state, and delivery claims. `.work` can carry intent and continuity; it cannot convert local prose into integrated repo truth.
+- Define execute-until-gate as task-bounded automation, not session-bounded autonomy. Auto mode may run typed, reviewed, `type=auto` tasks and bounded verification/repair cycles only until a human gate, verification gap, repeated blocker, authority conflict, trust boundary, or scope expansion stops it.
+- Keep milestone completion user-owned. `gsdd next` may route to completion approval, but it must not mark a milestone complete autonomously.
+- Treat `.work` tracking as repo policy. Consumer projects may commit `.work` if that fits their privacy and collaboration model. The Workspine framework repo keeps `.work` local-only because it is dogfooding its own runtime state while developing the framework.
+- Reframe the old v2.0.0 parallel-orchestration milestone as legacy input rather than the active next milestone. Preserve write-set ownership and closeout truth gates in the new work-native authority milestone; park PR #113/P65 registry material as extract-later.
+
+**Leverage:**
+- Lost: the old clean "v2.0.0 parallel PR orchestration next" story and the convenience of treating `.planning` as the only lifecycle state root.
+- Kept: repo-native files, plain markdown workflow contracts, existing `.planning` compatibility, computed-first control-map authority, plan/execute/verify separation, and human-owned completion.
+- Gained: a clear continuity authority for `gsdd next`, explicit migration semantics, safer execute-until-gate foundations, repo-policy-driven tracking, and a typed authority boundary that prevents future auto mode from running on stale or contradictory state.
+
+**Evidence:**
+- `bin/lib/next.mjs`, `bin/lib/work-context.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `tests/gsdd.next.test.cjs` and `tests/phase.test.cjs`
+- `README.md` for the public `.work` tracking policy
+- PR #116, merged 2026-06-29 with merge commit `b91a138c42f2ab3ff7376317031208c7a716decd`: `https://github.com/PatrickSys/workspine/pull/116`
+- PR #113, still open as the parked registry extraction candidate: `https://github.com/PatrickSys/workspine/pull/113`
+- GSD comparison sources: `agents/_archive/gsd-roadmapper.md`, `agents/_archive/gsd-planner.md`, `agents/_archive/gsd-executor.md`, and `agents/_archive/gsd-verifier.md`. These preserve lifecycle rigor around requirements, plans, state, execution, and verification, but they do not define a separate work-native `next` authority root; GSDD preserves the rigor while moving agent-facing continuity into `.work`.
+- OpenSpec docs: `https://openspec.dev/`
+- LeanSpec docs: `https://www.lean-spec.dev/docs/guide/first-principles`
+- OpenAI Agents SDK orchestration docs: `https://developers.openai.com/api/docs/guides/agents/orchestration`
+- OpenAI guardrails and approvals docs: `https://developers.openai.com/api/docs/guides/agents/guardrails-approvals`
+- OpenAI agent evals docs: `https://developers.openai.com/api/docs/guides/agent-evals`
+- Anthropic agent engineering guidance: `https://www.anthropic.com/engineering/building-effective-agents`
+- Anthropic long-running harness guidance: `https://www.anthropic.com/engineering/harness-design-long-running-apps`
+- Model Context Protocol security guidance: `https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices`
+- GitHub Copilot repository instructions docs: `https://docs.github.com/en/copilot/concepts/prompting/response-customization`
+
+**Consequences:**
+- Future `gsdd next` and auto-gate work should start by reconciling `.work`, `.planning`, repo/control-map, and PR truth into one conservative next action or one explicit blocker.
+- Future milestones must not say "P65 shipped, start P66" unless repo, PR, `.work`, and legacy `.planning` truth agree.
+- Future auto mode must expose typed gates, loop guards, evidence requirements, stop reasons, and authority source in JSON. It must never rely on prose such as "continue autonomously" as execution permission.
+- Future framework work should not add tracked `.work` runtime state by default. Durable product changes belong in source/design/workflow/test files; `.work` dogfood state remains local unless explicitly promoted.
 
 ---
 
