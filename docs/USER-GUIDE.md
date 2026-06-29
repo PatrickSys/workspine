@@ -13,7 +13,7 @@ For a new project or a broad brownfield effort:
 3. Review the plan from `gsdd-plan` before starting `gsdd-execute`.
 4. Run `gsdd-verify` before calling the phase done.
 
-Use `npx -y gsdd-cli init` for repo-local setup. Use `npx -y gsdd-cli install --global` to install reusable Workspine skills and native runtime surfaces into selected agent homes without creating `.planning/` in the current repo.
+Use `npx -y gsdd-cli init` for repo-local setup. Use `npx -y gsdd-cli install --global --auto` to install reusable Workspine skills and native runtime surfaces into detected agent homes without creating `.planning/` in the current repo.
 
 For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky repo, use `gsdd-map-codebase` before choosing between `gsdd-quick` and `gsdd-new-project`.
 
@@ -188,8 +188,11 @@ Use global agent install when you want Workspine workflows available across repo
 
 ```bash
 npx -y gsdd-cli install --global
+npx -y gsdd-cli install --global --auto
 npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 ```
+
+Use `--auto` for non-interactive global install into detected local agent homes. Use `--tools <targets>` when you want to install a specific target set regardless of detection.
 
 Global install writes Workspine-managed files under selected agent homes and records per-runtime manifests. It does not bootstrap project planning state.
 
@@ -239,7 +242,7 @@ Normal user flow:
 2. Enter workflows through your runtime surface: `/gsdd-*` or `$gsdd-*`.
 3. Use `npx -y gsdd-cli health` to check repo-local generated surfaces.
 4. Use `npx -y gsdd-cli update` when repo-local generated surfaces drift or you want the latest shipped output.
-5. For personal global installs, rerun `npx -y gsdd-cli install --global --tools <targets>` to repair or refresh selected agent homes.
+5. For personal global installs, rerun `npx -y gsdd-cli install --global --auto` to repair or refresh detected agent homes, or use `npx -y gsdd-cli install --global --tools <targets>` to scope the target set explicitly.
 
 Surface split:
 
@@ -446,7 +449,7 @@ If you've modified any templates, the generation manifest detects this and warns
 
 ### Generated Surfaces Drift Or A Runtime Command Goes Missing
 
-In a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. If it reports drift or missing installed generated surfaces, run `npx -y gsdd-cli update` for the whole workspace or `npx -y gsdd-cli update --tools <runtime>` for a specific runtime. For global personal installs, rerun `npx -y gsdd-cli install --global --tools <targets>`.
+In a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. If it reports drift or missing installed generated surfaces, run `npx -y gsdd-cli update` for the whole workspace or `npx -y gsdd-cli update --tools <runtime>` for a specific runtime. For global personal installs, rerun `npx -y gsdd-cli install --global --auto` or scope it explicitly with `npx -y gsdd-cli install --global --tools <targets>`.
 
 That repair path is deterministic for generated files. It does not imply that every runtime has equal native ergonomics or equal validation depth.
 

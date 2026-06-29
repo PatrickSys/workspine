@@ -1,7 +1,7 @@
 # Milestone: `gsdd next` Continuity
 
 Date: 2026-06-20
-Status: implementation complete, awaiting human steering for commit/release posture
+Status: implementation and verification complete for Phases 1-7
 Canonical goal: `.work/goal.md`
 Research grounding: `.work/research/2026-06-20-long-term-agent-harness-consistency.md`
 
@@ -22,6 +22,7 @@ In scope:
 - Fixture-style routing coverage for all allowed states.
 - Trust gate routing before execution-like states.
 - Durable phase packets under `.work/milestone/phases`.
+- Easy global install auto mode that routes through the existing `install --global` path.
 
 Out of scope:
 
@@ -30,6 +31,7 @@ Out of scope:
 - SQLite, vector databases, graph databases, or MCP memory servers.
 - Browser-provider implementation.
 - Auto-running workflow commands from `gsdd next`.
+- Remote installer manifests, handoff-file parsers, shell script execution, or unmanaged user-home writes.
 
 ## Done-When
 
@@ -40,6 +42,8 @@ Out of scope:
 - Evidence trust gates outrank optimistic state routing.
 - Tests cover the route surface and representative failure modes.
 - This milestone has per-phase plan, execute, and verify packets under `.work/milestone/phases`.
+- `gsdd install --global --auto` lets a user install detected global agent surfaces in one command, while `--tools <targets>` remains the explicit override for scoped installs.
+- Lifecycle preflight treats matching `.work/milestone` phases as work-native authority, preventing branch-local phase packets from colliding with unrelated `.planning` milestones downstream.
 
 ## Current Evidence
 
@@ -47,11 +51,8 @@ Out of scope:
 - `rtk node --test --test-reporter=spec tests/gsdd.guards.test.cjs`: passed.
 - `rtk npm test`: passed.
 - `rtk npm pack --dry-run --json`: passed before the final durable phase packet addition.
+- Phase 7 execute and verify packets prove the detected global install auto path, scoped `--tools` override, no-detection failure, work-native lifecycle preflight, guard tests, full suite, generated-helper behavior, and package dry-run.
 
 ## Next Human Steering
 
-Decide whether this should now become:
-
-- a commit/PR,
-- another hardening pass on silent overwrite and graph-edge semantics,
-- or a follow-up milestone for codebase-context and ideaspine adapters.
+Run a final package dry-run after any additional durable milestone packet changes before treating this exact tree as release-ready.
