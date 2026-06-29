@@ -515,6 +515,17 @@
 - OpenSpec comparison: OpenSpec change archive flow does not own long-running multi-worktree local-state reconciliation as a portable harness surface
 - Harness sources: https://www.anthropic.com/engineering/harness-design-long-running-apps, https://code.claude.com/docs/en/worktrees, https://developers.openai.com/codex/cloud, https://developers.openai.com/api/docs/guides/agents/orchestration, https://developers.openai.com/api/docs/guides/agents/guardrails-approvals, https://developers.openai.com/api/docs/guides/agent-evals, https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent, https://agent-browser.dev/sessions, https://developer.chrome.com/docs/devtools/agents
 
+## D64 — Work-Native Continuity Authority
+- `bin/lib/next.mjs`, `bin/lib/work-context.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `tests/gsdd.next.test.cjs`, `tests/phase.test.cjs`
+- `README.md` for the public `.work` tracking policy
+- PR #116 merged 2026-06-29, merge commit `b91a138c42f2ab3ff7376317031208c7a716decd`: https://github.com/PatrickSys/workspine/pull/116
+- PR #113 remains open as parked registry extraction input: https://github.com/PatrickSys/workspine/pull/113
+- GSD comparison sources: `agents/_archive/gsd-roadmapper.md`, `agents/_archive/gsd-planner.md`, `agents/_archive/gsd-executor.md`, `agents/_archive/gsd-verifier.md`; upstream GSD lifecycle rigor does not define a separate work-native `next` authority root, so GSDD keeps the lifecycle rigor while moving agent-facing continuity into `.work`
+- Spec framework sources: https://openspec.dev/, https://www.lean-spec.dev/docs/guide/first-principles
+- Orchestrator sources: https://developers.openai.com/api/docs/guides/agents/orchestration, https://www.anthropic.com/engineering/building-effective-agents
+- Industry guidance sources: https://developers.openai.com/api/docs/guides/agents/guardrails-approvals, https://developers.openai.com/api/docs/guides/agent-evals, https://www.anthropic.com/engineering/harness-design-long-running-apps, https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices, https://docs.github.com/en/copilot/concepts/prompting/response-customization
+
 ---
 
 ## Maintenance
