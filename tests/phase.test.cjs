@@ -1090,6 +1090,30 @@ describe('Phase 29 lifecycle-state helper', () => {
     assert.strictEqual(state.brownfieldChange.currentStatus, 'ready_for_verification');
   });
 
+  test('closed brownfield change is historical context, not active non-phase state', async () => {
+    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    fs.mkdirSync(changeDir, { recursive: true });
+    fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
+      '---',
+      'change: CLOSED-001',
+      'status: active',
+      '---',
+      '',
+      '# Brownfield Change: Closed Work',
+      '',
+      '## Current Status',
+      '- Current posture: closed',
+      '',
+    ].join('\n'));
+
+    const { evaluateLifecycleState } = await importLifecycleStateModule();
+    const state = evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+
+    assert.strictEqual(state.brownfieldChange.exists, true);
+    assert.strictEqual(state.brownfieldChange.currentStatus, 'closed');
+    assert.notStrictEqual(state.nonPhaseState, 'active_brownfield_change');
+  });
+
   test('reports overview and Phase Details status mismatches in lifecycle state', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'ROADMAP.md'),
@@ -1623,6 +1647,28 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(!output.blockers.some((blocker) => blocker.code === 'planning_state_drift'));
   });
 
+  test('allows work-milestone plan when planning state is unrelated and drifted', async () => {
+    writePreflightPhase(tmpDir, '30');
+    writeWorkMilestonePhase(tmpDir, '7');
+
+    const fp = await importSessionFingerprintModule();
+    fp.writeFingerprint(path.join(tmpDir, '.planning'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec v2\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '7']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.authority, 'work_milestone');
+    assert.strictEqual(output.lifecycle.authority, 'work_milestone');
+    assert.strictEqual(output.lifecycle.workMilestone.phase, '7');
+    assert.strictEqual(output.planningState.classification, 'planning_state_drift');
+    assert.ok(output.warnings.some((warning) => warning.code === 'planning_state_drift'));
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'planning_state_drift'));
+  });
+
   test('blocks work-milestone execute after the execute artifact exists', async () => {
     writePreflightPhase(tmpDir, '30');
     writeWorkMilestonePhase(tmpDir, '7', { execute: true });
@@ -1755,6 +1801,149 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.allowed, true);
     assert.strictEqual(output.status, 'allowed');
     assert.strictEqual(output.reason, null);
+  });
+
+  test('closed brownfield CHANGE.md does not bypass missing resume checkpoint preflight', async () => {
+    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    fs.mkdirSync(changeDir, { recursive: true });
+    fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
+      '# Brownfield Change: Closed Work',
+      '',
+      '## Current Status',
+      '- Current posture: closed',
+      '',
+    ].join('\n'));
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'resume']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, false);
+    assert.strictEqual(output.reason, 'missing_checkpoint');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_checkpoint'));
+  });
+
+  test('allows explicit brownfield-change plan preflight without roadmap phase membership', async () => {
+    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    fs.mkdirSync(changeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      [
+        '# Roadmap',
+        '',
+        '### v9.9.9 Unrelated Active Work',
+        '',
+        '- [ ] **Phase 425589: Unrelated Roadmap Item** — [OTHER-01]',
+        '',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
+      '---',
+      'change: PBI-425589',
+      'status: active',
+      '---',
+      '',
+      '# Brownfield Change: PBI 425589 Approval Plan',
+      '',
+      '## Current Status',
+      '- Current posture: active',
+      '- Current branch / integration surface: feature/pbi-425589',
+      '',
+      '## Next Action',
+      '- Create the approval plan in the bounded brownfield lane.',
+      '',
+    ].join('\n'));
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'brownfield-change']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.authority, 'brownfield_change');
+    assert.strictEqual(output.phase, 'brownfield-change');
+    assert.strictEqual(output.lifecycle.brownfieldChange.path, '.planning/brownfield-change/CHANGE.md');
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
+  });
+
+  test('blocks brownfield-change plan preflight on material SPEC or config drift', async () => {
+    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    fs.mkdirSync(changeDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+    fs.writeFileSync(
+      path.join(changeDir, 'CHANGE.md'),
+      [
+        '# Brownfield Change: PBI 425589',
+        '',
+        '## Goal',
+        'Plan a bounded consumer approval change.',
+        '',
+        '## In Scope',
+        '- Approval plan.',
+        '',
+        '## Out of Scope',
+        '- Roadmap promotion.',
+        '',
+        '## Done When',
+        '- Plan is approved.',
+        '',
+        '## Current Status',
+        '- Current posture: active',
+        '',
+        '## Next Action',
+        '- Plan the bounded approval change.',
+        '',
+      ].join('\n')
+    );
+
+    const fp = await importSessionFingerprintModule();
+    fp.writeFingerprint(path.join(tmpDir, '.planning'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec v2\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'brownfield-change']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, false);
+    assert.strictEqual(output.authority, 'brownfield_change');
+    assert.strictEqual(output.reason, 'planning_state_drift');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'planning_state_drift'));
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
+  });
+
+  test('blocks explicit brownfield-change plan preflight when CHANGE.md is missing or closed', async () => {
+    let result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'brownfield-change']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    let output = JSON.parse(result.output);
+    assert.strictEqual(output.authority, 'brownfield_change');
+    assert.strictEqual(output.lifecycle.authority, 'brownfield_change');
+    assert.strictEqual(output.reason, 'missing_brownfield_change');
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
+
+    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    fs.mkdirSync(changeDir, { recursive: true });
+    fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
+      '---',
+      'change: PBI-425589',
+      'status: active',
+      '---',
+      '',
+      '# Brownfield Change: Closed PBI',
+      '',
+      '## Current Status',
+      '- Current posture: closed',
+      '',
+    ].join('\n'));
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'brownfield-change']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    output = JSON.parse(result.output);
+    assert.strictEqual(output.authority, 'brownfield_change');
+    assert.strictEqual(output.lifecycle.authority, 'brownfield_change');
+    assert.strictEqual(output.reason, 'brownfield_change_closed');
+    assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
   });
 
   test('warns when lifecycle preflight sees overview/detail status mismatch', async () => {
