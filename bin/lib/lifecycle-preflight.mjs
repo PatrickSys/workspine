@@ -96,12 +96,14 @@ export function evaluateLifecyclePreflight({
 
   const lifecycle = evaluateLifecycleState({ planningDir });
   const normalizedPhase = phaseNumber ? normalizePhaseToken(phaseNumber) : null;
+  const usesBrownfieldAuthority = surface === 'plan' && normalizedPhase === 'brownfield-change';
   const workMilestone = normalizedPhase ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase }) : null;
   const checkpointPath = join(planningDir, '.continue-here.md');
   const resumeWorkCheckpoint = surface === 'resume'
     ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath })
     : null;
   const usesWorkAuthority = Boolean(workMilestone?.phaseEntry || resumeWorkCheckpoint);
+  const usesAlternateAuthority = usesWorkAuthority || usesBrownfieldAuthority;
   const specPath = join(planningDir, 'SPEC.md');
   const milestonesPath = join(planningDir, 'MILESTONES.md');
   const blockers = [];
@@ -124,7 +126,27 @@ export function evaluateLifecyclePreflight({
     blockers.push(blocker('missing_phase_argument', `${surface} requires an explicit phase number.`, []));
   }
 
-  if (normalizedPhase) {
+  if (usesBrownfieldAuthority) {
+    if (!lifecycle.brownfieldChange?.exists) {
+      blockers.push(
+        blocker(
+          'missing_brownfield_change',
+          'Brownfield-change planning requires an active .planning/brownfield-change/CHANGE.md continuity anchor.',
+          ['.planning/brownfield-change/CHANGE.md']
+        )
+      );
+    } else if (String(lifecycle.brownfieldChange.currentStatus || '').toLowerCase() === 'closed') {
+      blockers.push(
+        blocker(
+          'brownfield_change_closed',
+          'Brownfield-change planning cannot continue because CHANGE.md marks the change closed.',
+          ['.planning/brownfield-change/CHANGE.md']
+        )
+      );
+    }
+  }
+
+  if (normalizedPhase && !usesBrownfieldAuthority) {
     blockers.push(
       ...(usesWorkAuthority
         ? buildWorkPhaseBlockers({ workMilestone, phaseToken: normalizedPhase, surface })
@@ -186,16 +208,22 @@ export function evaluateLifecyclePreflight({
         details: drift.details,
         files: drift.files,
       };
-      if (policy.classification === 'owned_write' && !usesWorkAuthority) {
+      if (policy.classification === 'owned_write' && !usesAlternateAuthority) {
+        blockers.push(driftNotice);
+      } else if (policy.classification === 'owned_write' && usesBrownfieldAuthority && hasMaterialBrownfieldPlanningDrift(drift)) {
         blockers.push(driftNotice);
       } else {
-        const workWarningContext = resumeWorkCheckpoint
+        const workWarningContext = usesBrownfieldAuthority
+          ? 'by the active bounded brownfield-change lane'
+          : resumeWorkCheckpoint
           ? 'because the checkpoint points at .work/milestone continuity'
           : `by .work/milestone for Phase ${normalizedPhase}`;
         warnings.push({
           ...driftNotice,
           message: usesWorkAuthority
             ? `Planning state has drifted since the last recorded session, but ${surface} is using work_milestone authority ${workWarningContext}: ${drift.details.join('; ')}`
+            : usesBrownfieldAuthority
+            ? `Planning state has drifted since the last recorded session, but ${surface} is using brownfield_change authority ${workWarningContext}: ${drift.details.join('; ')}`
             : `Planning state has drifted since the last recorded session: ${drift.details.join('; ')}`,
         });
       }
@@ -213,7 +241,7 @@ export function evaluateLifecyclePreflight({
     else warnings.push(notice);
   }
 
-  if (!usesWorkAuthority && lifecycle.phaseStatusAlignment.mismatches.length > 0) {
+  if (!usesAlternateAuthority && lifecycle.phaseStatusAlignment.mismatches.length > 0) {
     warnings.push({
       code: 'roadmap_phase_status_mismatch',
       message: `ROADMAP.md overview/detail phase statuses disagree: ${lifecycle.phaseStatusAlignment.mismatches.join('; ')}`,
@@ -229,7 +257,7 @@ export function evaluateLifecyclePreflight({
     explicitLifecycleMutation: policy.explicitLifecycleMutation,
     closureEvidence: describeEvidenceSurface(surface),
     mutationRequest: expectsMutation,
-    authority: usesWorkAuthority ? 'work_milestone' : 'planning',
+    authority: usesBrownfieldAuthority ? 'brownfield_change' : usesWorkAuthority ? 'work_milestone' : 'planning',
     allowed: blockers.length === 0,
     status: blockers.length === 0 ? 'allowed' : 'blocked',
     reason: blockers[0]?.code ?? null,
@@ -238,7 +266,7 @@ export function evaluateLifecyclePreflight({
     planningState,
     controlMap: controlMap.summary,
     lifecycle: {
-      authority: usesWorkAuthority ? 'work_milestone' : 'planning',
+      authority: usesBrownfieldAuthority ? 'brownfield_change' : usesWorkAuthority ? 'work_milestone' : 'planning',
       currentMilestone: lifecycle.currentMilestone,
       currentPhase: lifecycle.currentPhase ? lifecycle.currentPhase.number : null,
       nextPhase: lifecycle.nextPhase ? lifecycle.nextPhase.number : null,
@@ -250,6 +278,14 @@ export function evaluateLifecyclePreflight({
             roadmapPath: '.work/milestone/ROADMAP.md',
             milestoneDir: '.work/milestone',
             source: resumeWorkCheckpoint ? 'checkpoint' : 'phase',
+          }
+        : null,
+      brownfieldChange: usesBrownfieldAuthority
+        ? {
+            path: '.planning/brownfield-change/CHANGE.md',
+            status: lifecycle.brownfieldChange.currentStatus,
+            title: lifecycle.brownfieldChange.title,
+            nextAction: lifecycle.brownfieldChange.nextAction,
           }
         : null,
     },
@@ -1037,4 +1073,12 @@ export function cmdLifecyclePreflight(...args) {
     console.error(error.message);
     process.exitCode = 1;
   }
+}
+
+function hasMaterialBrownfieldPlanningDrift(drift) {
+  const changedFiles = Array.isArray(drift?.files) ? drift.files : [];
+  return changedFiles.some((file) => (
+    ['SPEC.md', 'config.json'].includes(file.file)
+    && file.status !== 'unchanged'
+  ));
 }

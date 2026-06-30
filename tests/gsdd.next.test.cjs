@@ -522,10 +522,193 @@ describe('next command routing', () => {
     const result = await runJson(['next', '--json']);
 
     assert.strictEqual(result.state, 'plan');
+    assert.strictEqual(result.authority, 'work');
+    assert.strictEqual(result.route_kind, 'work_native_plan');
     assert.match(result.reason, /canonical `.planning` lifecycle truth is incomplete/);
     assert.ok(result.inputs_skipped.includes('.planning/SPEC.md: missing'));
     assert.ok(result.inputs_skipped.includes('.planning/ROADMAP.md: missing'));
     assert.ok(result.inputs_skipped.includes('.planning/MILESTONES.md: missing'));
+  });
+
+  test('active brownfield change routes to brownfield planning before unrelated roadmap phase preflight', async () => {
+    await initWork();
+    writeFile('.planning/SPEC.md', '# Spec\n');
+    writeFile('.planning/MILESTONES.md', '# Milestones\n');
+    writeFile('.planning/ROADMAP.md', [
+      '# Roadmap',
+      '',
+      '### v9.9.9 Unrelated Active Work',
+      '',
+      '- [ ] **Phase 425589: Unrelated Roadmap Item** — [OTHER-01]',
+      '',
+    ].join('\n'));
+    writeFile('.planning/brownfield-change/CHANGE.md', [
+      '---',
+      'change: PBI-425589',
+      'status: active',
+      '---',
+      '',
+      '# Brownfield Change: PBI 425589 Approval Plan',
+      '',
+      '## Goal',
+      'Plan the bounded consumer approval change.',
+      '',
+      '## Current Status',
+      '- Current posture: active',
+      '- Current branch / integration surface: feature/pbi-425589',
+      '',
+      '## Next Action',
+      '- Create the bounded approval plan without adding the PBI to the unrelated roadmap.',
+      '',
+    ].join('\n'));
+
+    const result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'plan');
+    assert.strictEqual(result.authority, 'brownfield_change');
+    assert.strictEqual(result.route_kind, 'brownfield_change');
+    assert.strictEqual(result.next_command, 'gsdd-plan');
+    assert.match(result.reason, /bounded brownfield change/i);
+    assert.ok(result.artifacts_to_read.includes('.planning/brownfield-change/CHANGE.md'));
+    assert.ok(result.artifacts_to_write.includes('.planning/brownfield-change/HANDOFF.md'));
+
+    const preflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'brownfield-change']);
+    assert.strictEqual(preflight.exitCode, 0, preflight.output);
+    const parsedPreflight = JSON.parse(preflight.output);
+    assert.strictEqual(parsedPreflight.allowed, true);
+    assert.strictEqual(parsedPreflight.authority, 'brownfield_change');
+    assert.strictEqual(parsedPreflight.phase, 'brownfield-change');
+  });
+
+  test('brownfield status controls routing without treating every non-closed change as planning', async () => {
+    await initWork();
+    writeFile('.planning/SPEC.md', '# Spec\n');
+    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
+    writeFile('.planning/MILESTONES.md', '# Milestones\n');
+    writeFile('.planning/brownfield-change/CHANGE.md', [
+      '---',
+      'change: PBI-425589',
+      'status: active',
+      '---',
+      '',
+      '# Brownfield Change: Verification Ready PBI',
+      '',
+      '## Current Status',
+      '- Current posture: ready_for_verification',
+      '',
+      '## Next Action',
+      '- Verify the bounded approval plan.',
+      '',
+    ].join('\n'));
+
+    let result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'verify');
+    assert.strictEqual(result.authority, 'brownfield_change');
+    assert.strictEqual(result.route_kind, 'brownfield_change_verification');
+    assert.strictEqual(result.next_command, null);
+    assert.ok(result.artifacts_to_write.includes('.planning/brownfield-change/VERIFICATION.md'));
+
+    writeFile('.planning/brownfield-change/CHANGE.md', [
+      '---',
+      'change: PBI-425589',
+      'status: active',
+      '---',
+      '',
+      '# Brownfield Change: Blocked PBI',
+      '',
+      '## Current Status',
+      '- Current posture: blocked',
+      '',
+      '## Next Action',
+      '- Wait for product approval.',
+      '',
+    ].join('\n'));
+
+    result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'blocked');
+    assert.strictEqual(result.authority, 'brownfield_change');
+    assert.strictEqual(result.route_kind, 'brownfield_change_blocked');
+    assert.ok(result.blocked_by.includes('brownfield_change'));
+  });
+
+  test('active brownfield change blocks instead of silently choosing over work-milestone authority', async () => {
+    await initWork();
+    writeFile('.planning/SPEC.md', '# Spec\n');
+    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
+    writeFile('.planning/MILESTONES.md', '# Milestones\n');
+    writeFile('.planning/brownfield-change/CHANGE.md', [
+      '# Brownfield Change: PBI Conflict',
+      '',
+      '## Current Status',
+      '- Current posture: active',
+      '',
+      '## Next Action',
+      '- Continue bounded PBI planning.',
+      '',
+    ].join('\n'));
+    writeFile('.work/milestone/MILESTONE.md', '# Work Milestone\n');
+    writeFile('.work/milestone/ROADMAP.md', [
+      '# Work Milestone Roadmap',
+      '',
+      '- [ ] **Phase 1: Work Native Follow-Up**',
+      '',
+    ].join('\n'));
+
+    const result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'blocked');
+    assert.strictEqual(result.authority, 'blocked');
+    assert.strictEqual(result.route_kind, 'authority_conflict');
+    assert.ok(result.blocked_by.includes('brownfield_change'));
+    assert.ok(result.blocked_by.includes('work_milestone'));
+  });
+
+  test('active brownfield change precedence over legacy unverified phase residue is explicit', async () => {
+    await initWork();
+    writeFile('.planning/SPEC.md', '# Spec\n');
+    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
+    writeFile('.planning/MILESTONES.md', '# Milestones\n');
+    writeFile('.planning/phases/01-stale/01-SUMMARY.md', '# stale summary\n');
+    writeFile('.planning/brownfield-change/CHANGE.md', [
+      '# Brownfield Change: Active PBI',
+      '',
+      '## Current Status',
+      '- Current posture: active',
+      '',
+      '## Next Action',
+      '- Plan the bounded PBI.',
+      '',
+    ].join('\n'));
+
+    const result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'plan');
+    assert.strictEqual(result.authority, 'brownfield_change');
+    assert.strictEqual(result.route_kind, 'brownfield_change');
+    assert.match(result.reason, /bounded brownfield change/i);
+  });
+
+  test('closed brownfield change does not hijack normal legacy verification routing', async () => {
+    await initWork();
+    writeFile('.planning/SPEC.md', '# Spec\n');
+    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
+    writeFile('.planning/MILESTONES.md', '# Milestones\n');
+    writeFile('.planning/phases/01-foundation/01-SUMMARY.md', '# Summary\n');
+    writeFile('.planning/brownfield-change/CHANGE.md', [
+      '---',
+      'change: PBI-425589',
+      'status: active',
+      '---',
+      '',
+      '# Brownfield Change: Closed PBI',
+      '',
+      '## Current Status',
+      '- Current posture: closed',
+      '',
+    ].join('\n'));
+
+    const result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'verify');
+    assert.strictEqual(result.authority, 'planning');
+    assert.notStrictEqual(result.route_kind, 'brownfield_change');
+    assert.match(result.reason, /summaries exist without matching verification/);
   });
 
   test('work-native milestone audit prevents routing backward to plan', async () => {

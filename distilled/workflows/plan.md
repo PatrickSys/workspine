@@ -8,14 +8,19 @@ Your plans are specific enough that an executor can follow them without guessing
 <load_context>
 Before starting, read these files:
 1. `.planning/SPEC.md` - requirements, constraints, key decisions, current state
-2. `.planning/ROADMAP.md` - find the target phase, its goal, requirements, success criteria, explicit out-of-scope, and stop/replan conditions
-3. `.planning/research/*.md` - if research exists and is relevant to this phase
-4. `.planning/phases/*-APPROACH.md` - approach decisions from user discussion (if exists)
-5. `.planning/phases/*-PLAN.md` - any previous plans that affect this phase
-6. Relevant source code - if this phase builds on existing code, read the key files
-7. `.planning/phases/*-SUMMARY.md` for the prior completed phase - if a `<judgment>` section is present, read all four sub-sections. The `<judgment>` carries forward active constraints, unresolved uncertainty, decision posture, and anti-regression rules from the prior phase. Honor these as input context alongside SPEC.md decisions and APPROACH.md choices.
-8. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 7, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section and honor the same four sub-sections as input context. After reading, run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean: the judgment has been absorbed into this session's context).
-Identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
+2. `.planning/ROADMAP.md` - find the target phase, its goal, requirements, success criteria, explicit out-of-scope, and stop/replan conditions when this is phase planning
+3. `.planning/brownfield-change/CHANGE.md`, `.planning/brownfield-change/HANDOFF.md`, and `.planning/brownfield-change/VERIFICATION.md` - if an active bounded brownfield change exists, classify whether the user request belongs to that lane before phase preflight
+4. `.planning/research/*.md` - if research exists and is relevant to this phase or bounded change
+5. `.planning/phases/*-APPROACH.md` - approach decisions from user discussion (if exists)
+6. `.planning/phases/*-PLAN.md` - any previous plans that affect this phase
+7. Relevant source code - if this phase or change builds on existing code, read the key files
+8. `.planning/phases/*-SUMMARY.md` for the prior completed phase - if a `<judgment>` section is present, read all four sub-sections. The `<judgment>` carries forward active constraints, unresolved uncertainty, decision posture, and anti-regression rules from the prior phase. Honor these as input context alongside SPEC.md decisions and APPROACH.md choices.
+9. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 8, check whether `.planning/.continue-here.bak` exists. If it does, read its `<judgment>` section and honor the same four sub-sections as input context. After reading, run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean: the judgment has been absorbed into this session's context).
+
+Classify the target before preflight:
+- If `.planning/brownfield-change/CHANGE.md` exists and the requested work fits its single active goal, scope, done-when, next action, or declared write scope, select `brownfield-change` as the planning target.
+- If the work no longer fits one active brownfield stream, stop and route widening through `/gsdd-new-project` or `/gsdd-new-milestone` using the brownfield artifact family as preserved input.
+- Otherwise identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>
 
 <repo_root_helper_contract>
@@ -23,11 +28,13 @@ All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current w
 </repo_root_helper_contract>
 
 <lifecycle_preflight>
-Before writing or rewriting phase planning artifacts, run:
+Before writing or rewriting planning artifacts, run the preflight for the selected authority:
 
-- `node .planning/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`
+- Phase planning: `node .planning/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`
+- Bounded brownfield-change planning: `node .planning/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift.
+Do not run phase preflight before target classification. An unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
 
 <integration_surface_check>
@@ -120,7 +127,9 @@ Trigger questions per item:
 </spec_quality_check>
 
 <phase_contract_gate>
-Before goal_backward_planning, verify that the target phase contract in `ROADMAP.md` is strong enough to support execution planning.
+Before goal_backward_planning, verify that the selected authority has a strong enough contract to support execution planning.
+
+If the selected target is a roadmap phase, verify that the target phase contract in `ROADMAP.md` is strong enough to support execution planning.
 
 The phase entry must provide all of:
 - assigned requirement IDs
@@ -133,6 +142,15 @@ Also verify milestone truth is not self-contradictory across the planning surfac
 - the target phase number/name must match across SPEC current state and ROADMAP next-step guidance when both are present
 
 If any of these are missing or contradictory, STOP. Report the exact missing contract field or contradiction. Do not improvise a stronger phase contract from chat context alone.
+
+If the selected target is `brownfield-change`, do not require ROADMAP phase membership, phase success criteria, phase numbering, or roadmap checkboxes. Instead verify that `.planning/brownfield-change/CHANGE.md` provides:
+- one single active goal
+- clear in-scope and out-of-scope boundaries
+- concrete Done When criteria
+- a current next action
+- a closeout path through `.planning/brownfield-change/VERIFICATION.md`
+
+Also verify that `HANDOFF.md` is judgment-only context and does not contradict the operational status, scope, or next action in `CHANGE.md`. If any brownfield contract field is missing or contradictory, STOP and repair the brownfield contract before planning.
 </phase_contract_gate>
 
 <ui_proof_planning>
@@ -144,8 +162,10 @@ For live rendered UI proof, plan `agent-browser` as the default runtime evidence
 Plan backward from success criteria.
 
 ### Step 1: State the must-haves
-From `ROADMAP.md`, list the success criteria for this phase. These are your non-negotiable targets.
+For a roadmap phase, list the success criteria from `ROADMAP.md`. These are your non-negotiable targets.
 Also list the phase out-of-scope boundaries and stop/replan conditions. These are equally contractual: execution may not silently widen past them.
+
+For `brownfield-change`, list the Done When criteria, in-scope boundaries, out-of-scope boundaries, current next action, and closeout path from `CHANGE.md`. These replace ROADMAP phase success criteria for this lane.
 
 ### Step 2: Derive artifacts
 For each success criterion, what concrete artifacts must exist?
@@ -608,12 +628,14 @@ For each task:
 Planning is done when all of these are true:
 
 - [ ] Target phase identified from `ROADMAP.md`
+- [ ] Or selected target is `brownfield-change` and `CHANGE.md` provides goal, scope, done-when, next action, and closeout path without ROADMAP phase membership
 - [ ] Approach exploration completed or explicitly skipped with `reduced_alignment` reported
 - [ ] When `workflow.discuss: true`: user alignment confirmed via APPROACH.md before planning
 - [ ] Research check completed where needed
 - [ ] Roadmap phase contract includes requirements, success criteria, explicit out-of-scope, and explicit stop/replan conditions
+- [ ] Or brownfield contract includes in-scope, out-of-scope, concrete Done When criteria, current next action, and `VERIFICATION.md` closeout path
 - [ ] Plan self-check passed
-- [ ] Success criteria from `ROADMAP.md` are represented as must-haves
+- [ ] Success criteria from `ROADMAP.md`, or Done When criteria from `CHANGE.md`, are represented as must-haves
 - [ ] Goal-backward derivation from criteria to artifacts to key links to tasks is explicit
 - [ ] Every plan has frontmatter with `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `non_goals`, `hard_boundaries`, `escalation_triggers`, `approval_gates`, `anti_regression_targets`, `ui_proof_slots` or `no_ui_proof_rationale`, `closure_claim_limit`, `parallelism_budget`, `leverage`, and `must_haves`
 - [ ] Every plan frontmatter records `runtime` and `assurance`

@@ -43,7 +43,8 @@ Before routing from a checkpoint, run `node .planning/bin/gsdd.mjs control-map -
 Check for project artifacts in order:
 
 1. **No `.planning/` directory** — route user to run `npx -y gsdd-cli init`. Stop.
-2. **If `.planning/brownfield-change/CHANGE.md` exists** — this repo has an active medium-scope brownfield change. Proceed to load brownfield continuity state even if there is no active roadmap.
+2. **If `.planning/brownfield-change/CHANGE.md` exists and `Current posture` is not `closed`** — this repo has an active medium-scope brownfield change. Proceed to load brownfield continuity state even if there is no active roadmap.
+   - If `Current posture` is `closed`, treat the file as historical context only; it does not replace a checkpoint or active roadmap.
 3. **No `.planning/SPEC.md` or no `.planning/ROADMAP.md`** — `.planning/` exists but the project is not fully initialized (partial init). Route user to run the `/gsdd-new-project` workflow. Stop.
 4. **Both exist** — proceed to load state.
 </detect_state>
@@ -73,7 +74,7 @@ When present, extract:
 - Current state summary if present
 
 **Active brownfield change:**
-If `.planning/brownfield-change/CHANGE.md` exists, read it first as the canonical operational continuity anchor and extract:
+If `.planning/brownfield-change/CHANGE.md` exists and is not closed, read it first as the canonical operational continuity anchor and extract:
 - change title from the first heading
 - current posture from `## Current Status`
 - current branch / integration surface from `## Current Status`

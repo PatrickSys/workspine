@@ -567,6 +567,7 @@ describe('gsdd init and update', () => {
     assert.match(launcher, /import \{ cmdFileOp \} from '\.\/lib\/file-ops\.mjs';/);
     assert.match(launcher, /import \{ cmdLifecyclePreflight \} from '\.\/lib\/lifecycle-preflight\.mjs';/);
     assert.match(launcher, /import \{ cmdPhaseStatus, cmdVerify \} from '\.\/lib\/phase\.mjs';/);
+    assert.match(launcher, /import \{ createCmdNext \} from '\.\/lib\/next\.mjs';/);
     assert.match(launcher, /import \{ bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext \} from '\.\/lib\/workspace-root\.mjs';/);
     assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\);/);
     assert.doesNotMatch(launcher, /from 'gsdd-cli'/);
@@ -574,10 +575,105 @@ describe('gsdd init and update', () => {
     assert.match(launcher, /Usage: node \.planning\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
     assert.match(launcher, /file-op <copy\|delete\|regex-sub>/);
     assert.match(launcher, /verify <N>\s+Run direct phase artifact and UI-proof gate checks/);
+    assert.match(launcher, /next \[--json\] \[--init\]/);
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'lib', 'next.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'lib', 'work-context.mjs')));
     assert.doesNotMatch(launcher, /\.agents\/bin\/gsdd\.mjs/);
     assert.doesNotMatch(launcher, /where\.exe/);
     assert.doesNotMatch(launcher, /gsdd\.cmd/);
     assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'bin')), '.agents/bin must not be generated');
+  });
+
+  test('repo-local helper exposes next routing from nested cwd', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    const nestedDir = path.join(tmpDir, 'src', 'feature');
+    fs.mkdirSync(nestedDir, { recursive: true });
+
+    const result = spawnSync(process.execPath, [
+      path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'),
+      'next',
+      '--json',
+    ], { cwd: nestedDir, encoding: 'utf-8' });
+
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const parsed = JSON.parse(result.stdout);
+    assert.strictEqual(parsed.operation, 'next');
+    assert.ok(parsed.next_action);
+    assert.ok(parsed.inputs_considered.includes('repo truth: control-map'));
+  });
+
+  test('repo-local helper supports brownfield-change plan preflight from nested cwd', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'brownfield-change'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), [
+      '# Roadmap',
+      '',
+      '- [ ] **Phase 425589: Unrelated Roadmap Item** - [OTHER-01]',
+      '',
+    ].join('\n'));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'), [
+      '# Brownfield Change: PBI 425589',
+      '',
+      '## Current Status',
+      '- Current posture: active',
+      '',
+      '## Next Action',
+      '- Plan the bounded change.',
+      '',
+    ].join('\n'));
+
+    const nestedDir = path.join(tmpDir, 'src', 'feature');
+    fs.mkdirSync(nestedDir, { recursive: true });
+
+    let result = spawnSync(process.execPath, [
+      path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'),
+      'lifecycle-preflight',
+      'plan',
+      'brownfield-change',
+    ], { cwd: nestedDir, encoding: 'utf-8' });
+
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    let parsed = JSON.parse(result.stdout);
+    assert.strictEqual(parsed.allowed, true);
+    assert.strictEqual(parsed.authority, 'brownfield_change');
+    assert.ok(!parsed.blockers.some((blocker) => blocker.code === 'missing_phase'));
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'), [
+      '# Brownfield Change: Closed PBI',
+      '',
+      '## Current Status',
+      '- Current posture: closed',
+      '',
+    ].join('\n'));
+
+    result = spawnSync(process.execPath, [
+      path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'),
+      'lifecycle-preflight',
+      'plan',
+      'brownfield-change',
+    ], { cwd: nestedDir, encoding: 'utf-8' });
+
+    assert.strictEqual(result.status, 1, `${result.stdout}\n${result.stderr}`);
+    parsed = JSON.parse(result.stdout);
+    assert.strictEqual(parsed.authority, 'brownfield_change');
+    assert.strictEqual(parsed.reason, 'brownfield_change_closed');
+    assert.ok(!parsed.blockers.some((blocker) => blocker.code === 'missing_phase'));
   });
 
   test('repo-local helper works from nested cwd through helper bootstrap', async () => {
