@@ -843,7 +843,11 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
 
   test('transition-sensitive portable skills route lifecycle eligibility through the repo-local helper launcher', () => {
     const expectations = new Map([
-      ['gsdd-plan', ['node .planning/bin/gsdd.mjs lifecycle-preflight plan {phase_num}']],
+      ['gsdd-plan', [
+        'node .planning/bin/gsdd.mjs lifecycle-preflight plan {phase_num}',
+        'node .planning/bin/gsdd.mjs lifecycle-preflight plan brownfield-change',
+        'Do not run phase preflight before target classification',
+      ]],
       ['gsdd-execute', ['node .planning/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'node .planning/bin/gsdd.mjs phase-status']],
       ['gsdd-verify', ['node .planning/bin/gsdd.mjs lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'node .planning/bin/gsdd.mjs phase-status']],
       ['gsdd-audit-milestone', ['node .planning/bin/gsdd.mjs lifecycle-preflight audit-milestone']],

@@ -43,6 +43,7 @@ MILESTONES.md
 .codebase-context/
 _bmad/
 .cursor/
+.work/
 
 # Local temp files (slides, previews, scratch)
 tmp/

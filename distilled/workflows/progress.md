@@ -34,7 +34,8 @@ All `node .planning/bin/gsdd.mjs ...` helper references below assume the current
 Check for project artifacts in order:
 
 1. **No `.planning/` directory** — tell the user to run `npx -y gsdd-cli init`. Stop.
-2. **If `.planning/brownfield-change/CHANGE.md` exists** — treat this as the active medium-scope brownfield continuity state. Go to Branch F.
+2. **If `.planning/brownfield-change/CHANGE.md` exists and `Current posture` is not `closed`** — treat this as the active medium-scope brownfield continuity state. Go to Branch F.
+   - If `Current posture` is `closed`, keep the file as historical context only and continue checking ROADMAP/SPEC state.
 3. **No `.planning/ROADMAP.md` AND no `.planning/SPEC.md`** — check for non-phase brownfield artifacts:
    - if `.planning/codebase/` has substantive map documents, or `.planning/quick/` has LOG/task artifacts, treat this as a non-phase brownfield state. Go to Branch F.
    - otherwise the project has no artifacts. Suggest running the `/gsdd-new-project` workflow. Stop.
@@ -51,7 +52,7 @@ Read the following and extract state:
 
 **Non-phase brownfield state:**
 If `.planning/ROADMAP.md` does not exist, determine whether the repo is currently in one of these Branch F states:
-- `active_brownfield_change` — `.planning/brownfield-change/CHANGE.md` exists; read `CHANGE.md` first as the canonical operational anchor, then read `HANDOFF.md` for judgment-only context
+- `active_brownfield_change` — `.planning/brownfield-change/CHANGE.md` exists and `Current posture` is not `closed`; read `CHANGE.md` first as the canonical operational anchor, then read `HANDOFF.md` for judgment-only context
 - `between_milestones` — `.planning/SPEC.md` exists
 - `codebase_only` — `.planning/codebase/` has substantive map documents but `.planning/SPEC.md` does not exist
 - `quick_lane` — `.planning/quick/LOG.md` or quick task directories exist but `.planning/SPEC.md` and `.planning/ROADMAP.md` do not
@@ -59,7 +60,7 @@ If `.planning/ROADMAP.md` does not exist, determine whether the repo is currentl
 For `active_brownfield_change`, `codebase_only`, and `quick_lane`, there is no active phase count. Record the non-phase state instead of trying to infer current milestone progress.
 
 **Active brownfield change:**
-If `.planning/brownfield-change/CHANGE.md` exists, extract:
+If `.planning/brownfield-change/CHANGE.md` exists and is not closed, extract:
 - change title from the first heading
 - current posture from `## Current Status`
 - current branch / integration surface from `## Current Status`
