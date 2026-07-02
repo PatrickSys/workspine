@@ -12,6 +12,7 @@ import {
   writeSync,
 } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
+import { evaluateLifecycleState } from './lifecycle-state.mjs';
 
 export const WORK_DIR_NAME = '.work';
 
@@ -658,12 +659,19 @@ export function inspectWorkContext(cwd = process.cwd()) {
   const evidence = readJsonIfExists(paths.evidenceManifest);
   const graph = readGraphEvents(paths.workDir);
   const planningDir = join(paths.root, '.planning');
+  const lifecycle = evaluateLifecycleState({ planningDir });
   const planning = {
     exists: existsSync(planningDir),
     has_spec: existsSync(join(planningDir, 'SPEC.md')),
     has_roadmap: existsSync(join(planningDir, 'ROADMAP.md')),
     has_milestones: existsSync(join(planningDir, 'MILESTONES.md')),
     has_config: existsSync(join(planningDir, 'config.json')),
+    has_brownfield_change: lifecycle.brownfieldChange.exists,
+    non_phase_state: lifecycle.nonPhaseState,
+    brownfield_change: lifecycle.brownfieldChange,
+    current_phase: lifecycle.currentPhase?.number || null,
+    next_phase: lifecycle.nextPhase?.number || null,
+    counts: lifecycle.counts,
     phases: scanPhaseEvidence(planningDir),
   };
   return {

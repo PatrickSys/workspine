@@ -13,9 +13,11 @@ const HELPER_LIB_FILES = Object.freeze([
   'file-ops.mjs',
   'lifecycle-preflight.mjs',
   'lifecycle-state.mjs',
+  'next.mjs',
   'phase.mjs',
   'session-fingerprint.mjs',
   'ui-proof.mjs',
+  'work-context.mjs',
   'workspace-root.mjs',
 ]);
 
@@ -53,13 +55,16 @@ import { cmdSessionFingerprint } from './lib/session-fingerprint.mjs';
 import { cmdUiProof } from './lib/ui-proof.mjs';
 import { cmdControlMap } from './lib/control-map.mjs';
 import { createCmdCloseoutReport } from './lib/closeout-report.mjs';
+import { createCmdNext } from './lib/next.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
 
 const HELPER_CONTEXT = {
+  cwd: process.cwd(),
   workflows: [],
   frameworkVersion: 'generated-helper',
 };
 const cmdCloseoutReport = createCmdCloseoutReport(HELPER_CONTEXT);
+const cmdNext = createCmdNext(HELPER_CONTEXT);
 
 const COMMANDS = {
   'file-op': cmdFileOp,
@@ -70,6 +75,7 @@ const COMMANDS = {
   'ui-proof': cmdUiProof,
   'control-map': cmdControlMap,
   'closeout-report': cmdCloseoutReport,
+  next: cmdNext,
 };
 
 function printHelp() {
@@ -97,6 +103,8 @@ function printHelp() {
     '                               Report computed repo/worktree/planning state and local annotations',
     '  closeout-report [--json] [--phase <N>]',
     '                               Replay read-only closeout status from control-map, health, preflight, verify, and UI-proof signals',
+    '  next [--json] [--init]',
+    '                               Route to the next safe Workspine action from .work, brownfield, planning, and repo truth',
     '',
     'Advanced option:',
     '  --workspace-root <path>     Override workspace root discovery before or after the subcommand',
@@ -106,6 +114,7 @@ function printHelp() {
 function applyWorkspaceRootOverride(workspaceRootArg) {
   if (!workspaceRootArg) {
     bootstrapHelperWorkspace(import.meta.url);
+    HELPER_CONTEXT.cwd = process.cwd();
     return true;
   }
 
@@ -117,6 +126,7 @@ function applyWorkspaceRootOverride(workspaceRootArg) {
   }
 
   process.env.GSDD_WORKSPACE_ROOT = context.workspaceRoot;
+  HELPER_CONTEXT.cwd = context.workspaceRoot;
   try {
     process.chdir(context.workspaceRoot);
   } catch {

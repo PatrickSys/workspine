@@ -3998,6 +3998,7 @@ describe('G44 - Engine Contract Hardening', () => {
     const workflowsDir = path.join(ROOT, 'distilled', 'workflows');
     const checks = [
       ['plan.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight plan \{phase_num\}/],
+      ['plan.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight plan brownfield-change/],
       ['execute.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
       ['verify.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight verify \{phase_num\} --expects-mutation phase-status/],
       ['audit-milestone.md', /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight audit-milestone/],
@@ -4013,6 +4014,15 @@ describe('G44 - Engine Contract Hardening', () => {
     }
 
     const progress = fs.readFileSync(path.join(workflowsDir, 'progress.md'), 'utf-8');
+    const plan = fs.readFileSync(path.join(workflowsDir, 'plan.md'), 'utf-8');
+    assert.match(plan, /Do not run phase preflight before target classification/i,
+      'plan.md must route bounded brownfield work before phase preflight. FIX: Add route-before-preflight language.');
+    assert.match(plan, /unrelated active roadmap must not force a bounded brownfield\/PBI change to be added to `ROADMAP\.md`/i,
+      'plan.md must protect consumer PBI plans from unrelated ROADMAP insertion. FIX: Add explicit brownfield/PBI routing language.');
+    assert.match(plan, /If the selected target is `brownfield-change`, do not require ROADMAP phase membership/i,
+      'plan.md must split brownfield-change contract checks from ROADMAP phase checks. FIX: Restore brownfield-specific phase_contract_gate wording.');
+    assert.match(plan, /Done When criteria from `CHANGE\.md`, are represented as must-haves/i,
+      'plan.md success criteria must allow brownfield CHANGE.md Done When criteria instead of only ROADMAP criteria. FIX: Restore brownfield success criteria wording.');
     assert.match(progress, /progress` stays read-only|progress stays read-only/i,
       'progress.md must preserve the read-only lifecycle boundary. FIX: Keep the lifecycle_boundary read-only language.');
     assert.match(progress, /Do not call `node \.planning\/bin\/gsdd\.mjs phase-status` here\./,

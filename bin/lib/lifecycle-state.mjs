@@ -293,7 +293,8 @@ export function readBrownfieldChangeState(planningDir) {
 }
 
 export function deriveNonPhaseState({ planningDir, hasSpec, hasRoadmap, brownfieldChange } = {}) {
-  if (brownfieldChange?.exists) return 'active_brownfield_change';
+  const brownfieldStatus = String(brownfieldChange?.currentStatus || '').trim().toLowerCase();
+  if (brownfieldChange?.exists && brownfieldStatus !== 'closed') return 'active_brownfield_change';
   if (hasRoadmap) return null;
   if (hasSpec) return 'between_milestones';
   if (hasSubstantiveCodebaseMaps(planningDir)) return 'codebase_only';
