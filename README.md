@@ -60,7 +60,47 @@ Workspine began as a fork of Get Shit Done and keeps the verification-first deli
 npx -y gsdd-cli init
 ```
 
+<<<<<<< ours
 `init` is the guided install wizard for repo-local setup. It creates `.agents/skills/gsdd-*` workflow entrypoints and the `.planning/bin/gsdd*` helper runtime in the current repo; optional runtime adapters improve native discovery.
+=======
+This creates:
+
+1. `.planning/` — durable workspace with templates, role contracts, and config
+2. `.agents/skills/gsdd-*` — compact open-standard workflow entrypoints for agents
+3. `.planning/bin/gsdd.mjs` — repo-local helper runtime for deterministic workflow commands inside generated skills (run helper commands from the repo root)
+4. Optional tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex CLI agents, optional governance)
+
+Then pick the first workflow lane that matches your situation:
+
+- `gsdd-new-project` for greenfield work, fuzzy brownfield work, or milestone-shaped work
+- `gsdd-quick` for a concrete bounded brownfield change
+- `gsdd-map-codebase` first when the repo is unfamiliar, risky, or needs a deeper baseline before choosing a lane
+
+In a terminal, `npx -y gsdd-cli init` opens a guided install wizard. If you installed the package globally, `gsdd init` is the equivalent shorthand:
+
+- Step 1: select the runtimes/vendors you want to support
+- Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing
+- Step 3: configure planning defaults in the same guided flow
+
+Portable `.agents/skills/gsdd-*` skills and the repo-local `.planning/bin/gsdd.mjs` helper runtime are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands assume the repo root as the current working directory.
+When those generated surfaces exist locally, `npx -y gsdd-cli health` checks them against current render output instead of asking you to trust manual review. If installed globally, `gsdd health` is equivalent.
+
+### Launch Proof Status
+
+- **Directly validated:** Claude Code, Codex CLI, and OpenCode have recorded `plan -> execute -> verify` evidence for the core lifecycle.
+- **Qualified support:** Cursor, Copilot, and Gemini CLI can use the shared `.agents/skills/` surface when their skill or slash discovery sees it; this release does not claim the same runtime proof or ergonomics.
+- **Runtime-surface freshness:** Installed generated skills and native adapters are renderer-checked locally; repair stays deterministic through `npx -y gsdd-cli update` or, when globally installed, `gsdd update`.
+
+Start with the public proof pack:
+
+- [Brownfield proof](docs/BROWNFIELD-PROOF.md)
+- [Exported consumer proof pack](docs/proof/consumer-node-cli/README.md)
+- [Runtime support matrix](docs/RUNTIME-SUPPORT.md)
+- [Verification discipline](docs/VERIFICATION-DISCIPLINE.md)
+- [Agentic research MVP harness](docs/AGENTIC-RESEARCH-MVP.md)
+
+### Quickstart (after init)
+>>>>>>> theirs
 
 Invoke after init:
 
