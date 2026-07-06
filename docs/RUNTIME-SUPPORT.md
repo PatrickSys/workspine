@@ -1,6 +1,6 @@
 # Runtime Support Matrix
 
-Workspine is a repo-native delivery spine with portable multi-runtime workflow surfaces, but the proof bar is not the same for every runtime today.
+Workspine is a Spec Driven Development framework with portable multi-runtime workflow surfaces, but the proof bar is not the same for every runtime today.
 
 This matrix is the release-floor truth surface.
 
