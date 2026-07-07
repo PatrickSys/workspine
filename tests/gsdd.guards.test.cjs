@@ -733,10 +733,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
     assert.match(docs, /\.agents\/skills.*workflow entry/i,
       'Public docs must describe .agents/skills as the workflow entry surface. FIX: Add entry-surface wording.');
-    assert.match(docs, /\.planning\/bin.*helper runtime/i,
-      'Public docs must describe .planning/bin as the helper runtime. FIX: Add helper-runtime wording.');
+    assert.match(docs, /\.work\/bin.*helper runtime/i,
+      'Public docs must describe .work/bin as the helper runtime. FIX: Add helper-runtime wording.');
     assert.doesNotMatch(docs, /\.agents[\\/]bin/i,
-      'Public docs must not reference stale .agents/bin paths. FIX: Replace with .planning/bin/gsdd.mjs.');
+      'Public docs must not reference stale .agents/bin paths. FIX: Replace with .work/bin/gsdd.mjs.');
   });
 
   test('generated governance and workflow guidance avoids stale helper and bare init paths', () => {

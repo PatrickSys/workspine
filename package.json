@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "npm run test:gsdd",
-    "test:gsdd": "node tests/run-all.cjs",
+    "test:gsdd": "node tests/run-all.cjs --covers=gsdd.next-card.test.cjs",
     "prepublishOnly": "node -e \"const ok=process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REF_NAME==='main'&&process.env.GITHUB_WORKFLOW==='Release'; if(!ok){console.error('Refusing to publish gsdd-cli outside the GitHub Actions Release workflow on main.'); process.exit(1)}\""
   },
   "devDependencies": {
