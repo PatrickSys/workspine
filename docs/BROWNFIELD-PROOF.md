@@ -40,7 +40,7 @@ The exported proof pack comes from a new non-framework project that used the shi
 The generated surface included:
 
 - portable `.agents/skills/gsdd-*`
-- consumer `.planning/` state
+- consumer `.work/` state
 - a Codex-native checker adapter
 - a compact consumer `AGENTS.md`
 
