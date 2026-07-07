@@ -30,7 +30,7 @@ The proof pack shows one full release-floor loop:
 
 - Exported from the Phase 22 launch-proof consumer run.
 - This is the tracked reader-facing release-floor proof surface.
-- The local `.planning/live-proof/consumer-node-cli` tree remains evidence-only source material and is intentionally not the public entry surface.
+- The legacy `.planning/live-proof/consumer-node-cli` tree (still read as old folder source material; new projects use `.work/`) remains evidence-only source material and is intentionally not the public entry surface.
 
 ## Why this pack exists
 

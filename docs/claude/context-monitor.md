@@ -58,7 +58,7 @@ The bridge file is a simple JSON object:
 
 ## Integration with GSDD
 
-GSDD's `gsdd-pause` workflow saves execution state to `.planning/.continue-here.md`. The WARNING message suggests using it. The CRITICAL message instructs immediate state save.
+GSDD's `gsdd-pause` workflow saves execution state to `.work/.continue-here.md`. The WARNING message suggests using it. The CRITICAL message instructs immediate state save.
 
 ## Setup
 

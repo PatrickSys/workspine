@@ -1,0 +1,16 @@
+┌──────────────────────────────────────────────────────────────┐
+│  Where things stand                                          │
+├──────────────────────────────────────────────────────────────┤
+│  Now: Plan the next piece of work                            │
+│  Why: A goal exists but there is no plan yet.                │
+│                                                              │
+│  Do this next:                                               │
+│    gsdd-plan                                                 │
+│                                                              │
+│  Waiting on you:  no                                         │
+│                                                              │
+│  Stuck?  Run: gsdd next --format human                       │
+│                                                              │
+│  Safety checks — this computer: not set up yet ·             │
+│                 server: not set up yet                       │
+└──────────────────────────────────────────────────────────────┘

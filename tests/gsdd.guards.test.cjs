@@ -48,6 +48,13 @@ function introBeforeWhatThisIs(markdown) {
   return idx === -1 ? markdown : markdown.slice(0, idx);
 }
 
+function sectionByHeading(markdown, heading) {
+  const start = markdown.indexOf(heading);
+  if (start === -1) return '';
+  const next = markdown.indexOf('\n### ', start + heading.length);
+  return markdown.slice(start, next > -1 ? next : start + 800);
+}
+
 describe('G9 - Generation Manifest Contract', () => {
   test('bin/lib/manifest.mjs exists', () => {
     assert.ok(fs.existsSync(MANIFEST_MODULE),
@@ -726,10 +733,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
     assert.match(docs, /\.agents\/skills.*workflow entry/i,
       'Public docs must describe .agents/skills as the workflow entry surface. FIX: Add entry-surface wording.');
-    assert.match(docs, /\.planning\/bin.*helper runtime/i,
-      'Public docs must describe .planning/bin as the helper runtime. FIX: Add helper-runtime wording.');
+    assert.match(docs, /\.work\/bin.*helper runtime/i,
+      'Public docs must describe .work/bin as the helper runtime. FIX: Add helper-runtime wording.');
     assert.doesNotMatch(docs, /\.agents[\\/]bin/i,
-      'Public docs must not reference stale .agents/bin paths. FIX: Replace with .planning/bin/gsdd.mjs.');
+      'Public docs must not reference stale .agents/bin paths. FIX: Replace with .work/bin/gsdd.mjs.');
   });
 
   test('generated governance and workflow guidance avoids stale helper and bare init paths', () => {
@@ -770,9 +777,7 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
   test('README quickstart mentions all 3 platform invocation patterns', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    const quickstartStart = readme.indexOf('### Quickstart');
-    const quickstartEnd = readme.indexOf('###', quickstartStart + 1);
-    const quickstart = readme.slice(quickstartStart, quickstartEnd > -1 ? quickstartEnd : quickstartStart + 800);
+    const quickstart = sectionByHeading(readme, '### Quickstart (after init)');
     assert.match(quickstart, /slash command/i,
       'Quickstart must mention slash commands. FIX: Add slash command invocation pattern to Quickstart.');
     assert.match(quickstart, /skill reference/i,
@@ -783,9 +788,7 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
   test('README quickstart qualifies Cursor/Copilot/Gemini slash guidance before SKILL.md fallback', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    const quickstartStart = readme.indexOf('### Quickstart');
-    const quickstartEnd = readme.indexOf('###', quickstartStart + 1);
-    const quickstart = readme.slice(quickstartStart, quickstartEnd > -1 ? quickstartEnd : quickstartStart + 800);
+    const quickstart = sectionByHeading(readme, '### Quickstart (after init)');
     assert.match(quickstart, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers/i,
       'Quickstart must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording.');
     assert.match(quickstart, /if it does not, open `.agents\/skills\/gsdd-<workflow>\/SKILL\.md`/i,
@@ -2571,8 +2574,10 @@ describe('G11b - Launch Claim Hardening', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     assert.doesNotMatch(readme, /\*\*Works with Claude Code, OpenCode, Codex CLI, Cursor, Copilot, and Gemini CLI\.\*\*/i,
       'README.md must not use the old broad all-runtime top-line claim. FIX: Replace it with proof-split wording.');
-    assert.match(readme, /Directly validated (?:today|in this release):.*Claude Code.*Codex CLI.*OpenCode/i,
-      'README.md must name the directly validated runtimes. FIX: Add plain proof-split wording near the top.');
+    assert.match(readme, /Proof status: one real consumer lifecycle with Codex checker support/i,
+      'README.md must keep the recorded proof status visible near the top.');
+    assert.match(readme, /Claude Code, OpenCode, and Codex CLI remain the directly validated runtimes/i,
+      'README.md must name the directly validated runtimes without broad parity copy.');
     assert.match(readme, /Qualified support:.*Cursor.*Copilot.*Gemini/i,
       'README.md must distinguish qualified support runtimes. FIX: Add the qualified-support line near the top.');
   });
@@ -3184,13 +3189,13 @@ describe('G36 - Git Branch Safety', () => {
 });
 
 describe('G37 - Launch Surface Consistency', () => {
-  test('README and distilled README use repo-native delivery spine framing', () => {
+  test('README and distilled README use repo-resident SDD framing', () => {
     const rootReadme = fs.readFileSync(README_MD, 'utf-8');
     const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
-    assert.match(rootReadme, /repo-native delivery spine/i,
-      'README.md must describe Workspine as a repo-native delivery spine. FIX: Use the repo-native delivery spine framing in the public intro.');
-    assert.match(distilledReadme, /repo-native delivery spine/i,
-      'distilled/README.md must describe Workspine as a repo-native delivery spine. FIX: Align the distilled intro with the repo-native delivery spine launch framing.');
+    assert.match(rootReadme, /Spec Driven Development framework.*planning, checking, execution, verification, and handoff live in the repo/i,
+      'README.md must describe Workspine as repo-resident SDD workflow without delivery-spine jargon.');
+    assert.match(distilledReadme, /keeps planning, execution, verification, handoff, and progress state in the repo/i,
+      'distilled/README.md must describe Workspine as repo-resident planning and proof state.');
   });
 
   test('lead launch copy is product-first instead of origin-first', () => {

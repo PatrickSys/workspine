@@ -198,10 +198,6 @@ npx -y gsdd-cli rigor                   # run planning/document guardrails
 npx -y gsdd-cli file-op                 # deterministic repo-local copy/delete helper
 npx -y gsdd-cli models profile quality  # maximize review rigor
 npx -y gsdd-cli models profile budget   # minimize cost
-npx -y gsdd-cli session-fingerprint     # capture session continuity metadata
-npx -y gsdd-cli ui-proof                # collect UI proof artifacts
-npx -y gsdd-cli control-map             # repo and planning state at a glance
-npx -y gsdd-cli closeout-report         # summarize closeout evidence
 npx -y gsdd-cli find-phase              # locate a roadmap phase
 npx -y gsdd-cli phase-status            # inspect or update phase status
 npx -y gsdd-cli verify                  # run verification discipline checks
