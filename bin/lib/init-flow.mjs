@@ -3,7 +3,7 @@ import { dirname, join, isAbsolute } from 'path';
 import { buildPlanningCliHelperEntries, renderSkillContent } from './rendering.mjs';
 import { buildManifest, readManifest, writeManifest } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
-import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './models.mjs';
+import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs';
 import { installProjectTemplates, refreshTemplates } from './templates.mjs';
 import {
   detectPlatforms,

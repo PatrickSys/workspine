@@ -5,16 +5,12 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { spawnSync } from 'child_process';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
-import { checkDrift } from './session-fingerprint.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const DEFAULT_ANNOTATIONS_RELATIVE_PATH = '.planning/.local/control-map.annotations.json';
 const MAX_DIRTY_BUCKET_ENTRIES = 200;
 const CLEANUP_STATES = Object.freeze(['active', 'paused', 'merged', 'abandoned', 'superseded', 'cleanup_deferred']);
 const ACTIVE_ANNOTATION_STATES = Object.freeze(['active', 'paused', 'cleanup_deferred']);
-const CONTROL_MAP_USAGE = 'Usage: gsdd control-map [--json] [--with-ignored] [--annotations <path>]';
-const CONTROL_MAP_ANNOTATE_SET_USAGE = 'Usage: gsdd control-map annotate set [--id <id>] [--path <worktree>] --write-set <paths> [--owner <runtime>] [--scope <text>] [--cleanup-state <state>] [--next-step <text>] [--refresh] [--annotations <path>]';
-const CONTROL_MAP_ANNOTATE_CLEAR_USAGE = 'Usage: gsdd control-map annotate clear (--id <id> | --path <worktree>) [--annotations <path>]';
 const AUTHORITY_ORDER = Object.freeze([
   'repo_truth',
   'planning_artifacts',
@@ -241,7 +237,7 @@ function findDirtyWriteSetOverlaps(writeEntries, dirtyEntries) {
       if (!pathsIntersect(writeEntry.repo_path, dirtyEntry.repo_path)) continue;
       overlaps.push({
         annotation_id: writeEntry.annotation_id,
-        annotated_worktree_id: writeEntry.worktree_id,
+        classified_worktree_id: writeEntry.worktree_id,
         write_path: writeEntry.repo_path,
         dirty_worktree_id: dirtyEntry.worktree_id,
         dirty_path: dirtyEntry.repo_path,
@@ -497,383 +493,6 @@ function loadAnnotations(workspaceRoot, planningDir, annotationPathArg = null) {
   };
 }
 
-function parseAnnotationMutationFlags(args, usage, { valueFlags, booleanFlags = [] }) {
-  const allowedValueFlags = new Set(valueFlags);
-  const allowedBooleanFlags = new Set(booleanFlags);
-  const values = new Map();
-  const listValues = new Map([['--write-set', []]]);
-  const booleans = new Set();
-  const unknown = [];
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (allowedBooleanFlags.has(arg)) {
-      booleans.add(arg);
-      continue;
-    }
-    if (!allowedValueFlags.has(arg)) {
-      unknown.push(arg);
-      continue;
-    }
-
-    const value = args[index + 1];
-    if (!value || value.startsWith('--')) {
-      return { valid: false, usage, error: `Missing value for ${arg}.` };
-    }
-    if (arg === '--write-set') listValues.get(arg).push(value);
-    else values.set(arg, value);
-    index += 1;
-  }
-
-  if (unknown.length > 0) {
-    return { valid: false, usage, error: `Unsupported argument(s): ${unknown.join(', ')}` };
-  }
-
-  return {
-    valid: true,
-    values,
-    listValues,
-    booleans,
-  };
-}
-
-function parseWriteSet(values, worktreePath) {
-  const entries = [];
-  for (const rawValue of values || []) {
-    for (const part of String(rawValue).split(',')) {
-      const normalized = normalizeRepoPath(part, worktreePath);
-      if (normalized && !entries.includes(normalized)) entries.push(normalized);
-    }
-  }
-  return entries;
-}
-
-function annotationPathLabelForWrite(workspaceRoot, worktreePath) {
-  return workspacePathLabel(workspaceRoot, worktreePath);
-}
-
-function annotationIdForWorktree(worktree) {
-  if (worktree.id === '.') return 'canonical';
-  return worktree.id;
-}
-
-function serializeAnnotationEntry(workspaceRoot, entry) {
-  const serialized = {
-    id: entry.id,
-    path: entry.path || annotationPathLabelForWrite(workspaceRoot, entry.normalized_path),
-    cleanup_state: entry.cleanup_state || 'active',
-  };
-  if (entry.runtime_owner) serialized.runtime_owner = entry.runtime_owner;
-  if (entry.branch) serialized.branch = entry.branch;
-  if (entry.last_known_head) serialized.last_known_head = entry.last_known_head;
-  if (entry.intended_scope) serialized.intended_scope = entry.intended_scope;
-  if (Array.isArray(entry.write_set) && entry.write_set.length > 0) serialized.write_set = entry.write_set;
-  if (entry.next_step) serialized.next_step = entry.next_step;
-  if (entry.updated_at) serialized.updated_at = entry.updated_at;
-  return serialized;
-}
-
-function writeAnnotationsDocument(workspaceRoot, annotationFile, worktrees) {
-  mkdirSync(dirname(annotationFile.path), { recursive: true });
-  const document = {
-    schema_version: 1,
-    worktrees: worktrees.map((entry) => serializeAnnotationEntry(workspaceRoot, entry)),
-  };
-  writeFileSync(annotationFile.path, `${JSON.stringify(document, null, 2)}\n`);
-}
-
-function buildMutationContext(context, annotationPathArg) {
-  const annotationFile = resolveAnnotationFilePath(context.workspaceRoot, context.planningDir, annotationPathArg);
-  if (!annotationFile.inside_workspace) {
-    return {
-      ok: false,
-      result: {
-        status: 'blocked',
-        reason: 'annotations_path_outside_workspace',
-        annotations_path: annotationFile.label,
-        message: 'Control-map annotations path must stay inside the workspace.',
-      },
-    };
-  }
-
-  const annotations = loadAnnotations(context.workspaceRoot, context.planningDir, annotationPathArg);
-  if (!annotations.valid) {
-    return {
-      ok: false,
-      result: {
-        status: 'blocked',
-        reason: 'invalid_annotations',
-        annotations_path: annotations.path,
-        errors: annotations.errors,
-      },
-    };
-  }
-
-  const discovered = discoverGitWorktrees(context.workspaceRoot);
-  return {
-    ok: true,
-    annotationFile,
-    annotations,
-    worktrees: discovered.worktrees,
-  };
-}
-
-function findWorktreeByPath(worktrees, pathValue) {
-  const normalized = normalizeSlashes(resolve(pathValue));
-  return worktrees.find((worktree) => normalizeSlashes(resolve(worktree.path)) === normalized) || null;
-}
-
-function findAnnotationIndex(annotations, { id = null, normalizedPath = null } = {}) {
-  if (id) {
-    const byId = annotations.worktrees.findIndex((entry) => entry.id === id);
-    if (byId !== -1) return byId;
-  }
-  if (normalizedPath) {
-    return annotations.worktrees.findIndex((entry) => (
-      entry.normalized_path && normalizeSlashes(resolve(entry.normalized_path)) === normalizeSlashes(resolve(normalizedPath))
-    ));
-  }
-  return -1;
-}
-
-function staleAnnotationIssues(annotation, worktree) {
-  const issues = [];
-  if (annotation.branch && worktree.branch && annotation.branch !== worktree.branch) {
-    issues.push({
-      code: 'branch_mismatch',
-      saved: annotation.branch,
-      live: worktree.branch,
-    });
-  }
-  if (annotation.last_known_head && worktree.head && annotation.last_known_head !== worktree.head) {
-    issues.push({
-      code: 'head_mismatch',
-      saved: annotation.last_known_head,
-      live: worktree.head,
-    });
-  }
-  return issues;
-}
-
-function annotationMutationSummary(annotation) {
-  return {
-    id: annotation.id,
-    path: annotation.path,
-    runtime_owner: annotation.runtime_owner || null,
-    branch: annotation.branch || null,
-    last_known_head: annotation.last_known_head || null,
-    intended_scope: annotation.intended_scope || null,
-    write_set: annotation.write_set || [],
-    cleanup_state: annotation.cleanup_state || 'active',
-    next_step: annotation.next_step || null,
-    updated_at: annotation.updated_at || null,
-  };
-}
-
-function setAnnotation(context, args) {
-  const parsed = parseAnnotationMutationFlags(args, CONTROL_MAP_ANNOTATE_SET_USAGE, {
-    valueFlags: [
-      '--annotations',
-      '--cleanup-state',
-      '--id',
-      '--next-step',
-      '--owner',
-      '--path',
-      '--runtime-owner',
-      '--scope',
-      '--write-set',
-    ],
-    booleanFlags: ['--refresh'],
-  });
-  if (!parsed.valid) return { ok: false, result: { status: 'blocked', reason: 'invalid_arguments', message: parsed.error, usage: parsed.usage } };
-
-  const annotationPathArg = parsed.values.get('--annotations') || null;
-  const mutation = buildMutationContext(context, annotationPathArg);
-  if (!mutation.ok) return mutation;
-
-  const explicitId = parsed.values.get('--id') || null;
-  const pathValue = parsed.values.get('--path') || '.';
-  const targetPath = resolve(context.workspaceRoot, pathValue);
-  const worktree = findWorktreeByPath(mutation.worktrees, targetPath);
-  if (!worktree || !worktree.git_valid) {
-    return {
-      ok: false,
-      result: {
-        status: 'blocked',
-        reason: 'worktree_not_found',
-        message: `No live git worktree found for ${pathValue}.`,
-        path: workspacePathLabel(context.workspaceRoot, targetPath),
-      },
-    };
-  }
-
-  const writeSet = parseWriteSet(parsed.listValues.get('--write-set'), worktree.path);
-  if (writeSet.length === 0) {
-    return {
-      ok: false,
-      result: {
-        status: 'blocked',
-        reason: 'missing_write_set',
-        message: 'Annotation set requires at least one --write-set value.',
-        usage: CONTROL_MAP_ANNOTATE_SET_USAGE,
-      },
-    };
-  }
-
-  const normalizedPath = normalizeSlashes(resolve(worktree.path));
-  const existingIndex = findAnnotationIndex(mutation.annotations, { id: explicitId, normalizedPath });
-  const existing = existingIndex === -1 ? null : mutation.annotations.worktrees[existingIndex];
-
-  const cleanupState = parsed.values.get('--cleanup-state') || existing?.cleanup_state || 'active';
-  if (!CLEANUP_STATES.includes(cleanupState)) {
-    return {
-      ok: false,
-      result: {
-        status: 'blocked',
-        reason: 'invalid_cleanup_state',
-        message: `Unsupported cleanup_state: ${cleanupState}`,
-        supported_cleanup_states: CLEANUP_STATES,
-      },
-    };
-  }
-
-  const staleIssues = existing ? staleAnnotationIssues(existing, worktree) : [];
-  const refresh = parsed.booleans.has('--refresh');
-  if (staleIssues.length > 0 && !refresh) {
-    return {
-      ok: false,
-      result: {
-        operation: 'control-map annotate set',
-        status: 'blocked',
-        reason: 'stale_annotation',
-        annotations_path: mutation.annotationFile.label,
-        annotation_id: existing.id,
-        stale_issues: staleIssues,
-        message: 'Existing annotation is stale against live worktree truth; rerun with --refresh to update it or use annotate clear to remove it.',
-      },
-    };
-  }
-
-  const now = new Date().toISOString();
-  const annotation = {
-    id: explicitId || existing?.id || annotationIdForWorktree(worktree),
-    path: annotationPathLabelForWrite(context.workspaceRoot, worktree.path),
-    runtime_owner: parsed.values.get('--runtime-owner') || parsed.values.get('--owner') || existing?.runtime_owner || null,
-    branch: worktree.branch,
-    last_known_head: worktree.head,
-    intended_scope: parsed.values.get('--scope') || existing?.intended_scope || null,
-    write_set: writeSet,
-    cleanup_state: cleanupState,
-    next_step: parsed.values.get('--next-step') || existing?.next_step || null,
-    updated_at: now,
-  };
-  const nextWorktrees = mutation.annotations.worktrees.slice();
-  if (existingIndex === -1) nextWorktrees.push(annotation);
-  else nextWorktrees[existingIndex] = annotation;
-  writeAnnotationsDocument(context.workspaceRoot, mutation.annotationFile, nextWorktrees);
-
-  return {
-    ok: true,
-    result: {
-      operation: 'control-map annotate set',
-      changed: true,
-      status: existing ? (refresh && staleIssues.length > 0 ? 'refreshed' : 'updated') : 'created',
-      annotations_path: mutation.annotationFile.label,
-      annotation: annotationMutationSummary(annotation),
-      stale_check: {
-        status: staleIssues.length > 0 ? 'refreshed' : 'passed',
-        issues: staleIssues,
-      },
-    },
-  };
-}
-
-function clearAnnotation(context, args) {
-  const parsed = parseAnnotationMutationFlags(args, CONTROL_MAP_ANNOTATE_CLEAR_USAGE, {
-    valueFlags: ['--annotations', '--id', '--path'],
-  });
-  if (!parsed.valid) return { ok: false, result: { status: 'blocked', reason: 'invalid_arguments', message: parsed.error, usage: parsed.usage } };
-
-  const id = parsed.values.get('--id') || null;
-  const pathValue = parsed.values.get('--path') || null;
-  if (!id && !pathValue) {
-    return {
-      ok: false,
-      result: {
-        status: 'blocked',
-        reason: 'missing_selector',
-        message: 'Annotation clear requires --id or --path.',
-        usage: CONTROL_MAP_ANNOTATE_CLEAR_USAGE,
-      },
-    };
-  }
-
-  const annotationPathArg = parsed.values.get('--annotations') || null;
-  const mutation = buildMutationContext(context, annotationPathArg);
-  if (!mutation.ok) return mutation;
-  if (!mutation.annotations.exists) {
-    return {
-      ok: true,
-      result: {
-        operation: 'control-map annotate clear',
-        changed: false,
-        status: 'missing',
-        annotations_path: mutation.annotationFile.label,
-      },
-    };
-  }
-
-  const normalizedPath = pathValue ? normalizeSlashes(resolve(context.workspaceRoot, pathValue)) : null;
-  const existingIndex = findAnnotationIndex(mutation.annotations, { id, normalizedPath });
-  if (existingIndex === -1) {
-    return {
-      ok: true,
-      result: {
-        operation: 'control-map annotate clear',
-        changed: false,
-        status: 'not_found',
-        annotations_path: mutation.annotationFile.label,
-        selector: id ? { id } : { path: workspacePathLabel(context.workspaceRoot, normalizedPath) },
-      },
-    };
-  }
-
-  const removed = mutation.annotations.worktrees[existingIndex];
-  const nextWorktrees = mutation.annotations.worktrees.filter((_, index) => index !== existingIndex);
-  writeAnnotationsDocument(context.workspaceRoot, mutation.annotationFile, nextWorktrees);
-
-  return {
-    ok: true,
-    result: {
-      operation: 'control-map annotate clear',
-      changed: true,
-      status: 'cleared',
-      annotations_path: mutation.annotationFile.label,
-      annotation: annotationMutationSummary(removed),
-    },
-  };
-}
-
-function cmdControlMapAnnotate(context, args) {
-  const [operation, ...operationArgs] = args;
-  let result;
-  if (operation === 'set') result = setAnnotation(context, operationArgs);
-  else if (operation === 'clear') result = clearAnnotation(context, operationArgs);
-  else {
-    result = {
-      ok: false,
-      result: {
-        status: 'blocked',
-        reason: 'invalid_operation',
-        message: 'Usage: gsdd control-map annotate <set|clear> ...',
-      },
-    };
-  }
-
-  output(result.result);
-  if (!result.ok) process.exitCode = 1;
-}
-
 function reconcileAnnotations(worktrees, annotations) {
   const warnings = [];
   const byPath = new Map(worktrees.map((entry) => [normalizeSlashes(resolve(entry.path)), entry]));
@@ -923,7 +542,6 @@ function reconcileAnnotations(worktrees, annotations) {
 function classifyWorkflowState(planningDir) {
   const lifecycle = evaluateLifecycleState({ planningDir });
   const checkpointPath = join(planningDir, '.continue-here.md');
-  const drift = existsSync(planningDir) ? checkDrift(planningDir) : { drifted: false, details: [] };
   const milestoneVersion = lifecycle.currentMilestone?.version || null;
   const milestoneTitle = lifecycle.currentMilestone?.title || null;
   const milestone = milestoneVersion || milestoneTitle
@@ -937,10 +555,6 @@ function classifyWorkflowState(planningDir) {
     checkpoint: {
       exists: existsSync(checkpointPath),
       path: '.planning/.continue-here.md',
-    },
-    planning_drift: {
-      drifted: drift.drifted,
-      details: drift.details || [],
     },
   };
 }
@@ -1002,14 +616,12 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
       case 'detached_candidate_worktree':
         return 'Classify the detached worktree intent (active vs abandoned) before using it for execution or cleanup decisions.';
       case 'sibling_worktree_dirty':
-      case 'unannotated_candidate_worktree':
+      case 'unclassified_candidate_worktree':
         return 'Review sibling worktree ownership and write set before starting overlapping implementation.';
       case 'write_set_overlap':
         return 'Resolve overlapping local annotation write sets before starting another owned-write workflow.';
       case 'dirty_path_write_set_overlap':
-        return 'Checkpoint or classify dirty paths that overlap annotated write sets before owned-write transitions.';
-      case 'planning_state_drift':
-        return 'Review drift and rebaseline with session-fingerprint only after confirming the planning changes are intentional.';
+        return 'Checkpoint or classify dirty paths that overlap classified write sets before owned-write transitions.';
       default:
         return null;
     }
@@ -1091,7 +703,7 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
     }
     if (!worktree.annotation && (worktree.dirty.counts.tracked > 0 || worktree.dirty.counts.untracked > 0 || worktree.detached)) {
       const risk = {
-        code: 'unannotated_candidate_worktree',
+        code: 'unclassified_candidate_worktree',
         severity: 'info',
         worktree_id: worktree.id,
         message: `Worktree ${worktree.id} has candidate-work signals but no local control-map annotation.`,
@@ -1115,7 +727,7 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
     const risk = {
       code: 'dirty_path_write_set_overlap',
       severity: 'block',
-      message: `Live dirty paths overlap annotated write sets (${dirtyWriteSetOverlaps.length} overlap(s)).`,
+      message: `Live dirty paths overlap classified write sets (${dirtyWriteSetOverlaps.length} overlap(s)).`,
       overlaps: dirtyWriteSetOverlaps.slice(0, MAX_DIRTY_BUCKET_ENTRIES),
       omitted_count: Math.max(0, dirtyWriteSetOverlaps.length - MAX_DIRTY_BUCKET_ENTRIES),
     };
@@ -1134,16 +746,6 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
       path: runtimeDir.path_relative,
     });
   }
-  if (workflowState.planning_drift.drifted) {
-    const risk = {
-      code: 'planning_state_drift',
-      severity: 'warn',
-      message: `Planning state drifted since the last fingerprint: ${workflowState.planning_drift.details.join('; ')}`,
-    };
-    risk.fix_hint = fixHintForRisk(risk);
-    risks.push(risk);
-  }
-
   // Ensure the common closure risks expose actionable fix guidance even when
   // the originating helper (for example branch-state risks) didn't attach it.
   for (const risk of risks) {
@@ -1160,14 +762,13 @@ function buildInterventions(risks) {
   const interventions = [];
   if (codes.has('canonical_git_invalid')) interventions.push('Fix git/safe.directory access before mutating this checkout.');
   if (codes.has('write_set_overlap')) interventions.push('Resolve overlapping local annotation write sets before starting another owned-write workflow.');
-  if (codes.has('dirty_path_write_set_overlap')) interventions.push('Checkpoint, commit, stash, or explicitly classify dirty paths that overlap annotated write sets before owned-write transitions.');
+  if (codes.has('dirty_path_write_set_overlap')) interventions.push('Checkpoint, commit, stash, or explicitly classify dirty paths that overlap classified write sets before owned-write transitions.');
   if (codes.has('canonical_dirty_behind_upstream')) interventions.push('Sync the canonical branch or preserve dirty canonical work before mutating a stale checkout.');
   if (codes.has('canonical_branch_behind_upstream') || codes.has('canonical_branch_diverged_upstream') || codes.has('worktree_branch_behind_upstream') || codes.has('worktree_branch_diverged_upstream')) interventions.push('Review upstream divergence before relying on stale branch state for implementation decisions.');
   if (codes.has('detached_candidate_worktree')) interventions.push('Classify detached worktree intent before using it for execution or cleanup decisions.');
   if (codes.has('canonical_dirty')) interventions.push('Checkpoint or classify canonical dirty work before planning, cleanup, merge, or broad execution.');
-  if (codes.has('sibling_worktree_dirty') || codes.has('unannotated_candidate_worktree')) interventions.push('Review sibling worktree ownership and write set before starting overlapping implementation.');
+  if (codes.has('sibling_worktree_dirty') || codes.has('unclassified_candidate_worktree')) interventions.push('Review sibling worktree ownership and write set before starting overlapping implementation.');
   if (codes.has('stale_annotation_missing_worktree') || codes.has('stale_annotation_branch_mismatch') || codes.has('stale_annotation_head_mismatch')) interventions.push('Refresh or remove stale local control-map annotations after reviewing repo truth.');
-  if (codes.has('planning_state_drift')) interventions.push('Review planning drift and rebaseline with session-fingerprint only after confirming the changes are intentional.');
   if (interventions.length === 0) interventions.push('No control-map intervention required before read-only status work.');
   return interventions;
 }
@@ -1222,80 +823,4 @@ export function buildControlMap({
     risks,
     interventions: buildInterventions(risks),
   };
-}
-
-function printHuman(map) {
-  const milestone = map.workflow_state.current_milestone
-    ? [map.workflow_state.current_milestone.version, map.workflow_state.current_milestone.title].filter(Boolean).join(' ')
-    : 'none';
-  const ignoredLabel = map.canonical_worktree.dirty.ignored_count_included
-    ? String(map.canonical_worktree.dirty.counts.ignored)
-    : 'not scanned';
-  console.log('gsdd control-map - computed workspace control map\n');
-  console.log(`Workspace: ${map.workspace_root}`);
-  console.log(`Authority: ${map.authority.join(' > ')}`);
-  console.log(`Canonical: ${map.canonical_worktree.branch || 'unknown'} @ ${map.canonical_worktree.head || 'unknown'}`);
-  console.log(`Workflow: milestone=${milestone}, phase=${map.workflow_state.current_phase || 'none'}, next=${map.workflow_state.next_phase || 'none'}`);
-  console.log(`Checkpoint: ${map.workflow_state.checkpoint.path} (${map.workflow_state.checkpoint.exists ? 'present' : 'missing'})`);
-  console.log(`Dirty buckets: ${map.canonical_worktree.dirty.counts.tracked} tracked, ${map.canonical_worktree.dirty.counts.untracked} untracked, ${ignoredLabel} ignored`);
-  console.log(`Worktrees: ${map.worktrees.length}`);
-  for (const worktree of map.worktrees) {
-    const marker = worktree.path === map.canonical_worktree.path ? '*' : '-';
-    const annotation = worktree.annotation ? ` owner=${worktree.annotation.runtime_owner || 'unspecified'} cleanup=${worktree.annotation.cleanup_state}` : '';
-    const ignoredCount = worktree.dirty.ignored_count_included ? String(worktree.dirty.counts.ignored) : 'not-scanned';
-    console.log(`  ${marker} ${worktree.id} branch=${worktree.branch || 'unknown'} dirty=${worktree.dirty.counts.tracked}/${worktree.dirty.counts.untracked}/${ignoredCount}${annotation}`);
-  }
-  if (map.risks.length > 0) {
-    console.log('\nRisks:');
-    for (const risk of map.risks) {
-      console.log(`  - [${risk.severity || 'info'}] ${risk.code}: ${risk.message}`);
-      if (risk.fix_hint) console.log(`    Fix: ${risk.fix_hint}`);
-    }
-  }
-  console.log('\nInterventions:');
-  for (const intervention of map.interventions) console.log(`  - ${intervention}`);
-}
-
-export function cmdControlMap(...args) {
-  const jsonMode = args.includes('--json');
-  const contextArgs = args.filter((arg) => arg !== '--json');
-  const context = resolveWorkspaceContext(contextArgs);
-  if (context.invalid) {
-    console.error(context.error);
-    process.exitCode = 1;
-    return;
-  }
-
-  if (context.args[0] === 'annotate') {
-    cmdControlMapAnnotate(context, context.args.slice(1));
-    return;
-  }
-
-  const annotations = parseFlagValue(context.args, '--annotations');
-  if (annotations.invalid) {
-    console.error(CONTROL_MAP_USAGE);
-    process.exitCode = 1;
-    return;
-  }
-  const filteredArgs = context.args.filter((arg, index) => {
-    if (arg === '--annotations') return false;
-    if (index > 0 && context.args[index - 1] === '--annotations') return false;
-    if (arg === '--with-ignored') return false;
-    return true;
-  });
-  if (filteredArgs.length > 0) {
-    console.error(CONTROL_MAP_USAGE);
-    process.exitCode = 1;
-    return;
-  }
-
-  const includeIgnoredPaths = context.args.includes('--with-ignored');
-  const map = buildControlMap({
-    workspaceRoot: context.workspaceRoot,
-    planningDir: context.planningDir,
-    annotationPath: annotations.value,
-    includeIgnoredPaths,
-  });
-  if (jsonMode) output(map);
-  else printHuman(map);
 }

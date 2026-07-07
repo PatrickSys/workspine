@@ -28,7 +28,7 @@ import {
   getRuntimeModelOverride,
   loadProjectModelConfig,
   resolveRuntimeAgentModel,
-} from './models.mjs';
+} from './config.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

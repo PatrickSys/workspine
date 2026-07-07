@@ -5,9 +5,8 @@ import {
   getRuntimeFreshnessRepairGuidance,
   summarizeRuntimeFreshnessIssues,
 } from './runtime-freshness.mjs';
-import { checkDrift } from './session-fingerprint.mjs';
 
-export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10', 'W11', 'W12'];
+export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10', 'W11'];
 
 export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, options = {}) {
   const warnings = [];
@@ -97,16 +96,6 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, option
       message: `Renderer-backed generated runtime and workflow-helper surfaces drift from current render output (${summarizeRuntimeFreshnessIssues(options.runtimeFreshnessReport)})`,
       fix: getRuntimeFreshnessRepairGuidance(options.runtimeFreshnessReport),
     });
-  }
-
-  const drift = checkDrift(planningDir);
-  if (drift.drifted) {
-    warnings.push({
-      id: 'W12',
-      severity: 'WARN',
-      message: `Planning state drifted since last recorded session (${drift.details.join('; ')})`,
-        fix: 'Review the changed planning files. If the drift is intentional, rebaseline with `node .planning/bin/gsdd.mjs session-fingerprint write`, then rerun the blocked lifecycle preflight.',
-      });
   }
 
   return warnings;

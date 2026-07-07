@@ -1,5 +1,5 @@
 import * as readline from 'readline';
-import { DEFAULT_GIT_PROTOCOL, resolveCost, resolveRigor } from './models.mjs';
+import { DEFAULT_GIT_PROTOCOL, resolveCost, resolveRigor } from './config.mjs';
 import { buildRuntimeChoices, INIT_VERSION, resolveWizardAdapterTargets } from './init-runtime.mjs';
 
 const ANSI = {
