@@ -6,7 +6,7 @@ Workspine is a Spec Driven Development framework for AI-assisted software work: 
 
 Proof status: one real consumer lifecycle with Codex checker support. Qualified support: Cursor, Copilot, Gemini.
 
-The public product name is Workspine. The retained technical contracts remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/`.
+The public product name is Workspine. The retained technical contracts remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.work/`.
 
 [![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
@@ -29,10 +29,10 @@ Tracked consumer proof pack: [docs/proof/consumer-node-cli/README.md](docs/proof
 
 | Workflow | Writes | What for |
 |----------|--------|----------|
-| `gsdd-new-project` | `.planning/SPEC.md`, `ROADMAP.md` | Define the project and phases |
-| `gsdd-plan` | `.planning/phases/N/PLAN.md` | Research and review before any code gets written |
-| `gsdd-execute` | `.planning/phases/N/SUMMARY.md` | Implement the approved plan, nothing more |
-| `gsdd-verify` | `.planning/phases/N/VERIFICATION.md` | Confirm the plan's claims are actually true |
+| `gsdd-new-project` | `.work/SPEC.md`, `ROADMAP.md` | Define the project and phases |
+| `gsdd-plan` | `.work/phases/N/PLAN.md` | Research and review before any code gets written |
+| `gsdd-execute` | `.work/phases/N/SUMMARY.md` | Implement the approved plan, nothing more |
+| `gsdd-verify` | `.work/phases/N/VERIFICATION.md` | Confirm the plan's claims are actually true |
 
 The discipline: plan first, execute only what's approved, verify before closing. Each phase summary carries forward what was decided, so the next session starts with context instead of from scratch.
 
@@ -62,9 +62,9 @@ npx -y gsdd-cli init
 
 This creates:
 
-1. `.planning/` — durable workspace with templates, role contracts, and config
+1. `.work/` — durable workspace with templates, role contracts, and config
 2. `.agents/skills/gsdd-*` — compact open-standard workflow entrypoints for agents
-3. `.planning/bin/gsdd.mjs` — repo-local helper runtime for deterministic workflow commands inside generated skills (run helper commands from the repo root)
+3. `.work/bin/gsdd.mjs` — repo-local helper runtime for deterministic workflow commands inside generated skills (run helper commands from the repo root)
 4. Optional tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex CLI agents, optional governance)
 
 Then pick the first workflow lane that matches your situation:
@@ -79,7 +79,7 @@ In a terminal, `npx -y gsdd-cli init` opens a guided install wizard. If you inst
 - Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing
 - Step 3: configure planning defaults in the same guided flow
 
-Portable `.agents/skills/gsdd-*` skills and the repo-local `.planning/bin/gsdd.mjs` helper runtime are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands assume the repo root as the current working directory.
+Portable `.agents/skills/gsdd-*` skills and the repo-local `.work/bin/gsdd.mjs` helper runtime are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands assume the repo root as the current working directory.
 When those generated surfaces exist locally, `npx -y gsdd-cli health` checks them against current render output instead of asking you to trust manual review. If installed globally, `gsdd health` is equivalent.
 
 ### Launch Proof Status
@@ -120,7 +120,7 @@ npx -y gsdd-cli install --global --auto
 npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 ```
 
-Use `--auto` for non-interactive install into detected local agent homes. Use `--tools <targets>` when you want to override detection explicitly. When run in a TTY without `--tools` or `--auto`, `install --global` lets you select which agents to install. It does not create `.planning/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
+Use `--auto` for non-interactive install into detected local agent homes. Use `--tools <targets>` when you want to override detection explicitly. When run in a TTY without `--tools` or `--auto`, `install --global` lets you select which agents to install. It does not create `.work/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
 
 | Target | Global surfaces |
 |--------|-----------------|
@@ -143,11 +143,11 @@ OpenCode honors `OPENCODE_CONFIG_DIR` for commands and agents; Workspine install
 
 ### Team Use
 
-Commit `.planning/` so the team shares specs, roadmaps, phase plans, and verification reports. Use `commitDocs` in `.planning/config.json` to control whether documentation changes are expected as part of workflow execution. Each developer runs `init --tools <their-tool>` for their own repo-local runtime adapters without changing the shared delivery artifacts.
+Commit `.work/` so the team shares specs, roadmaps, phase plans, and verification reports. Use `commitDocs` in `.work/config.json` to control whether documentation changes are expected as part of workflow execution. Each developer runs `init --tools <their-tool>` for their own repo-local runtime adapters without changing the shared delivery artifacts.
 
 ### What to Track in Git
 
-Track `.planning/`, `.agents/skills/`, and any selected runtime adapters that are part of the team workflow. Track durable `.work/` contract and research files when they define shared milestone truth. Do not track `.planning/.local/` or mutable `.work` runtime files such as `state.json`, graph logs, open questions, evidence manifests, handoff notes, or raw dogfood drafts unless you deliberately export or sanitize them.
+Track `.work/`, `.agents/skills/`, and any selected runtime adapters that are part of the team workflow. Track durable `.work/` contract and research files when they define shared milestone truth. Do not track `.work/.local/` or mutable `.work` runtime files such as `state.json`, graph logs, open questions, evidence manifests, handoff notes, or raw dogfood drafts unless you deliberately export or sanitize them.
 
 ---
 
@@ -163,7 +163,7 @@ npx -y gsdd-cli models profile budget    # minimize cost
 
 ## Troubleshooting
 
-Inside a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. It checks local generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. To repair or refresh a personal global install, rerun `npx -y gsdd-cli install --global --auto` or explicitly scope it with `npx -y gsdd-cli install --global --tools <targets>`. For details, see the [User Guide](docs/USER-GUIDE.md).
+Inside a repo-local `.work/` workspace, start with `npx -y gsdd-cli health`. It checks local generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. To repair or refresh a personal global install, rerun `npx -y gsdd-cli install --global --auto` or explicitly scope it with `npx -y gsdd-cli install --global --tools <targets>`. For details, see the [User Guide](docs/USER-GUIDE.md).
 
 ---
 
