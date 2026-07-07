@@ -237,7 +237,7 @@ function findDirtyWriteSetOverlaps(writeEntries, dirtyEntries) {
       if (!pathsIntersect(writeEntry.repo_path, dirtyEntry.repo_path)) continue;
       overlaps.push({
         annotation_id: writeEntry.annotation_id,
-        annotated_worktree_id: writeEntry.worktree_id,
+        classified_worktree_id: writeEntry.worktree_id,
         write_path: writeEntry.repo_path,
         dirty_worktree_id: dirtyEntry.worktree_id,
         dirty_path: dirtyEntry.repo_path,
@@ -616,12 +616,12 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
       case 'detached_candidate_worktree':
         return 'Classify the detached worktree intent (active vs abandoned) before using it for execution or cleanup decisions.';
       case 'sibling_worktree_dirty':
-      case 'unannotated_candidate_worktree':
+      case 'unclassified_candidate_worktree':
         return 'Review sibling worktree ownership and write set before starting overlapping implementation.';
       case 'write_set_overlap':
         return 'Resolve overlapping local annotation write sets before starting another owned-write workflow.';
       case 'dirty_path_write_set_overlap':
-        return 'Checkpoint or classify dirty paths that overlap annotated write sets before owned-write transitions.';
+        return 'Checkpoint or classify dirty paths that overlap classified write sets before owned-write transitions.';
       default:
         return null;
     }
@@ -703,7 +703,7 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
     }
     if (!worktree.annotation && (worktree.dirty.counts.tracked > 0 || worktree.dirty.counts.untracked > 0 || worktree.detached)) {
       const risk = {
-        code: 'unannotated_candidate_worktree',
+        code: 'unclassified_candidate_worktree',
         severity: 'info',
         worktree_id: worktree.id,
         message: `Worktree ${worktree.id} has candidate-work signals but no local control-map annotation.`,
@@ -727,7 +727,7 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
     const risk = {
       code: 'dirty_path_write_set_overlap',
       severity: 'block',
-      message: `Live dirty paths overlap annotated write sets (${dirtyWriteSetOverlaps.length} overlap(s)).`,
+      message: `Live dirty paths overlap classified write sets (${dirtyWriteSetOverlaps.length} overlap(s)).`,
       overlaps: dirtyWriteSetOverlaps.slice(0, MAX_DIRTY_BUCKET_ENTRIES),
       omitted_count: Math.max(0, dirtyWriteSetOverlaps.length - MAX_DIRTY_BUCKET_ENTRIES),
     };
@@ -762,12 +762,12 @@ function buildInterventions(risks) {
   const interventions = [];
   if (codes.has('canonical_git_invalid')) interventions.push('Fix git/safe.directory access before mutating this checkout.');
   if (codes.has('write_set_overlap')) interventions.push('Resolve overlapping local annotation write sets before starting another owned-write workflow.');
-  if (codes.has('dirty_path_write_set_overlap')) interventions.push('Checkpoint, commit, stash, or explicitly classify dirty paths that overlap annotated write sets before owned-write transitions.');
+  if (codes.has('dirty_path_write_set_overlap')) interventions.push('Checkpoint, commit, stash, or explicitly classify dirty paths that overlap classified write sets before owned-write transitions.');
   if (codes.has('canonical_dirty_behind_upstream')) interventions.push('Sync the canonical branch or preserve dirty canonical work before mutating a stale checkout.');
   if (codes.has('canonical_branch_behind_upstream') || codes.has('canonical_branch_diverged_upstream') || codes.has('worktree_branch_behind_upstream') || codes.has('worktree_branch_diverged_upstream')) interventions.push('Review upstream divergence before relying on stale branch state for implementation decisions.');
   if (codes.has('detached_candidate_worktree')) interventions.push('Classify detached worktree intent before using it for execution or cleanup decisions.');
   if (codes.has('canonical_dirty')) interventions.push('Checkpoint or classify canonical dirty work before planning, cleanup, merge, or broad execution.');
-  if (codes.has('sibling_worktree_dirty') || codes.has('unannotated_candidate_worktree')) interventions.push('Review sibling worktree ownership and write set before starting overlapping implementation.');
+  if (codes.has('sibling_worktree_dirty') || codes.has('unclassified_candidate_worktree')) interventions.push('Review sibling worktree ownership and write set before starting overlapping implementation.');
   if (codes.has('stale_annotation_missing_worktree') || codes.has('stale_annotation_branch_mismatch') || codes.has('stale_annotation_head_mismatch')) interventions.push('Refresh or remove stale local control-map annotations after reviewing repo truth.');
   if (interventions.length === 0) interventions.push('No control-map intervention required before read-only status work.');
   return interventions;
@@ -824,4 +824,3 @@ export function buildControlMap({
     interventions: buildInterventions(risks),
   };
 }
-
