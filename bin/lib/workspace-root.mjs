@@ -1,13 +1,14 @@
 import { existsSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { hasStateMarker, resolveStateDir } from './state-dir.mjs';
 
 function normalizePath(value, cwd) {
   return resolve(cwd, String(value));
 }
 
 function hasPlanningMarker(root) {
-  return existsSync(join(root, '.planning', 'config.json')) || existsSync(join(root, '.planning'));
+  return hasStateMarker(root);
 }
 
 export function consumeWorkspaceRootArg(rawArgs = []) {
@@ -71,7 +72,7 @@ export function resolveWorkspaceContext(rawArgs = [], { cwd = process.cwd(), env
       invalid: true,
       error: 'Usage: --workspace-root <path>',
       workspaceRoot: resolve(cwd),
-      planningDir: join(resolve(cwd), '.planning'),
+      planningDir: resolveStateDir(resolve(cwd)).dir,
     };
   }
 
@@ -81,9 +82,9 @@ export function resolveWorkspaceContext(rawArgs = [], { cwd = process.cwd(), env
       return {
         args,
         invalid: true,
-        error: `Workspace root does not contain .planning/: ${workspaceRootArg}`,
+        error: `Workspace root does not contain .work/ or .planning/: ${workspaceRootArg}`,
         workspaceRoot: explicitRoot,
-        planningDir: join(explicitRoot, '.planning'),
+        planningDir: resolveStateDir(explicitRoot).dir,
       };
     }
   }
@@ -105,7 +106,9 @@ export function resolveWorkspaceContext(rawArgs = [], { cwd = process.cwd(), env
         args,
         invalid: false,
         workspaceRoot: candidate,
-        planningDir: join(candidate, '.planning'),
+        planningDir: resolveStateDir(candidate).dir,
+        stateDirName: resolveStateDir(candidate).name,
+        migrationNotice: resolveStateDir(candidate).migrationNotice,
       };
     }
   }
@@ -115,7 +118,9 @@ export function resolveWorkspaceContext(rawArgs = [], { cwd = process.cwd(), env
     args,
     invalid: false,
     workspaceRoot: fallbackRoot,
-    planningDir: join(fallbackRoot, '.planning'),
+    planningDir: resolveStateDir(fallbackRoot).dir,
+    stateDirName: resolveStateDir(fallbackRoot).name,
+    migrationNotice: resolveStateDir(fallbackRoot).migrationNotice,
   };
 }
 

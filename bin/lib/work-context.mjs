@@ -13,6 +13,7 @@ import {
 } from 'fs';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
+import { resolveStateDir } from './state-dir.mjs';
 
 export const WORK_DIR_NAME = '.work';
 
@@ -658,7 +659,7 @@ export function inspectWorkContext(cwd = process.cwd()) {
   const questions = readOpenQuestions(paths.workDir);
   const evidence = readJsonIfExists(paths.evidenceManifest);
   const graph = readGraphEvents(paths.workDir);
-  const planningDir = join(paths.root, '.planning');
+  const { dir: planningDir, name: stateDirName, migrationNotice } = resolveStateDir(paths.root);
   const lifecycle = evaluateLifecycleState({ planningDir });
   const planning = {
     exists: existsSync(planningDir),
@@ -673,6 +674,7 @@ export function inspectWorkContext(cwd = process.cwd()) {
     next_phase: lifecycle.nextPhase?.number || null,
     counts: lifecycle.counts,
     phases: scanPhaseEvidence(planningDir),
+    state_dir_name: stateDirName,
   };
   return {
     paths,
@@ -684,6 +686,7 @@ export function inspectWorkContext(cwd = process.cwd()) {
     evidence,
     graph,
     planning,
+    migration_notice: migrationNotice,
     milestone: inspectWorkMilestone(paths.workDir),
     focus_exists: existsSync(paths.focus),
     handoff_exists: existsSync(paths.handoff),
