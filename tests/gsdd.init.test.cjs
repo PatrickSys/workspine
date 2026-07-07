@@ -159,8 +159,6 @@ describe('gsdd init and update', () => {
     const launcher = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'), 'utf-8');
     assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\)/);
     assert.match(launcher, /import \{ cmdFileOp \} from '\.\/lib\/file-ops\.mjs';/);
-    assert.match(launcher, /import \{ cmdUiProof \} from '\.\/lib\/ui-proof\.mjs';/);
-    assert.match(launcher, /'ui-proof': cmdUiProof/);
     assert.doesNotMatch(launcher, /npm(?:\.cmd)?'.*exec.*--package=/s);
     assert.doesNotMatch(launcher, new RegExp(tmpDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.doesNotMatch(launcher, /Repos[\\/].+get-shit-done-distilled/i);
@@ -574,7 +572,7 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(launcher, /from 'gsdd'/);
     assert.match(launcher, /Usage: node \.planning\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
     assert.match(launcher, /file-op <copy\|delete\|regex-sub>/);
-    assert.match(launcher, /verify <N>\s+Run direct phase artifact and UI-proof gate checks/);
+    assert.match(launcher, /verify <N>\s+Run direct phase artifact checks/);
     assert.match(launcher, /next \[--json\] \[--init\]/);
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'lib', 'next.mjs')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'lib', 'work-context.mjs')));
