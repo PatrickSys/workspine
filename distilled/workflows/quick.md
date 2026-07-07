@@ -16,13 +16,13 @@ They reuse the same planner, executor, and verifier roles but skip research and 
 </anti_patterns>
 
 <prerequisites>
-`.planning/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed). ROADMAP.md is NOT required -- quick tasks work during any project phase.
+`.work/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed). ROADMAP.md is NOT required -- quick tasks work during any project phase.
 
-If `.planning/` does not exist, stop and tell the user to run `npx -y gsdd-cli init` first.
+If `.work/` does not exist, stop and tell the user to run `npx -y gsdd-cli init` first.
 </prerequisites>
 
 <repo_root_helper_contract>
-All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <process>
@@ -37,17 +37,17 @@ Store the response as `$DESCRIPTION`. If empty, re-prompt.
 
 ## Step 2: Initialize
 
-1. Read `.planning/config.json` for workflow toggles and git protocol.
-2. Scan `.planning/quick/` for existing task directories. Calculate `$NEXT_NUM` as the next 3-digit number (001, 002, ...).
+1. Read `.work/config.json` for workflow toggles and git protocol.
+2. Scan `.work/quick/` for existing task directories. Calculate `$NEXT_NUM` as the next 3-digit number (001, 002, ...).
 3. Generate `$SLUG` from `$DESCRIPTION` (lowercase, hyphens, max 40 chars).
-4. Create `.planning/quick/$NEXT_NUM-$SLUG/`.
-5. If `.planning/brownfield-change/CHANGE.md` exists, read it first as the current bounded brownfield continuity anchor. Capture the active goal, current posture, next action, and declared write scope as `$BROWNFIELD_CONTEXT`. If `.planning/brownfield-change/HANDOFF.md` exists, read it as supporting judgment context only. Do not let `/gsdd-new-project` become the default fallback when this active change already defines a concrete bounded lane.
-6. If `.planning/codebase/` exists, read whichever of `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STACK.md`, `.planning/codebase/CONVENTIONS.md`, and `.planning/codebase/CONCERNS.md` are present. Summarize key findings from available docs in <=500 words as `$CODEBASE_CONTEXT`, emphasizing: safest surfaces to touch, risky zones to avoid, must-know conventions/traps, and what must be re-verified after change. Note any missing docs in the summary.
-7. If `.planning/codebase/` does not exist, build a just-enough inline brownfield baseline instead of stopping. Read the repo root guidance that is cheap and stable (`README.md`, root manifest such as `package.json` / `pyproject.toml` / `Cargo.toml` when present, top-level app entrypoints, and any obviously relevant config or module files surfaced by `$DESCRIPTION`). Summarize the findings in <=500 words as `$CODEBASE_CONTEXT`, explicitly labeling it as a provisional baseline and calling out unknowns. Emphasize: likely implementation surface, likely dependency boundaries, conventions already visible, risky areas to avoid touching blindly, and what must be re-verified after the change. If the repo is still too unclear after this pass, keep that uncertainty explicit so Step 3.6 can recommend `/gsdd-map-codebase`.
-8. **Session-boundary fallback:** If `.planning/.continue-here.bak` exists, read its `<judgment>` section. Use `<active_constraints>` and `<anti_regression>` rules as task-scoping context (do not violate active constraints; do not regress on listed invariants). After reading, run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (auto-clean).
-9. Inspect the live branch/worktree surface separately from checkpoint or planning artifacts. Run `node .planning/bin/gsdd.mjs control-map --json` when available and use its computed repo/worktree/planning truth to identify stale/spent branches, dirty tracked/untracked/ignored buckets, sibling or detached worktrees, local annotations, and cleanup obligations. This is advisory for quick tasks unless the mismatch makes the task description materially misleading; local annotations are intent hints, not product truth.
+4. Create `.work/quick/$NEXT_NUM-$SLUG/`.
+5. If `.work/brownfield-change/CHANGE.md` exists, read it first as the current bounded brownfield continuity anchor. Capture the active goal, current posture, next action, and declared write scope as `$BROWNFIELD_CONTEXT`. If `.work/brownfield-change/HANDOFF.md` exists, read it as supporting judgment context only. Do not let `/gsdd-new-project` become the default fallback when this active change already defines a concrete bounded lane.
+6. If `.work/codebase/` exists, read whichever of `.work/codebase/ARCHITECTURE.md`, `.work/codebase/STACK.md`, `.work/codebase/CONVENTIONS.md`, and `.work/codebase/CONCERNS.md` are present. Summarize key findings from available docs in <=500 words as `$CODEBASE_CONTEXT`, emphasizing: safest surfaces to touch, risky zones to avoid, must-know conventions/traps, and what must be re-verified after change. Note any missing docs in the summary.
+7. If `.work/codebase/` does not exist, build a just-enough inline brownfield baseline instead of stopping. Read the repo root guidance that is cheap and stable (`README.md`, root manifest such as `package.json` / `pyproject.toml` / `Cargo.toml` when present, top-level app entrypoints, and any obviously relevant config or module files surfaced by `$DESCRIPTION`). Summarize the findings in <=500 words as `$CODEBASE_CONTEXT`, explicitly labeling it as a provisional baseline and calling out unknowns. Emphasize: likely implementation surface, likely dependency boundaries, conventions already visible, risky areas to avoid touching blindly, and what must be re-verified after the change. If the repo is still too unclear after this pass, keep that uncertainty explicit so Step 3.6 can recommend `/gsdd-map-codebase`.
+8. **Session-boundary fallback:** If `.work/.continue-here.bak` exists, read its `<judgment>` section. Use `<active_constraints>` and `<anti_regression>` rules as task-scoping context (do not violate active constraints; do not regress on listed invariants). After reading, run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` (auto-clean).
+9. Inspect the live branch/worktree surface separately from checkpoint or planning artifacts. Run `node .work/bin/gsdd.mjs control-map --json` when available and use its computed repo/worktree/planning truth to identify stale/spent branches, dirty tracked/untracked/ignored buckets, sibling or detached worktrees, local annotations, and cleanup obligations. This is advisory for quick tasks unless the mismatch makes the task description materially misleading; local annotations are intent hints, not product truth.
 
-If `.planning/quick/` does not exist, create it along with an empty `LOG.md`:
+If `.work/quick/` does not exist, create it along with an empty `LOG.md`:
 
 ```markdown
 # Quick Task Log
@@ -60,7 +60,7 @@ If `.planning/quick/` does not exist, create it along with an empty `LOG.md`:
 
 ## Step 2.5: Approach clarification (conditional)
 
-Read `.planning/config.json`.
+Read `.work/config.json`.
 - If `workflow.discuss` is `false` (or key missing): set `$APPROACH_CONTEXT` to empty, skip to Step 3.
 - If `workflow.discuss` is `true`: evaluate `$DESCRIPTION` for ambiguity signals.
 
@@ -102,14 +102,14 @@ Delegate to the planner role in quick mode.
 
 <delegate>
 **Identity:** Planner (quick mode)
-**Instruction:** Read `.planning/templates/roles/planner.md` for your role contract, then create a plan for this quick task.
+**Instruction:** Read `.work/templates/roles/planner.md` for your role contract, then create a plan for this quick task.
 
 **Context to provide:**
 - Task description: `$DESCRIPTION`
 - Approach context: `$APPROACH_CONTEXT` (user-confirmed decisions from Step 2.5 — treat as locked constraints, do not revisit)
 - Codebase context: `$CODEBASE_CONTEXT` (existing brownfield codebase summary from codebase maps when they exist, otherwise the inline brownfield baseline from Step 2 — use for orientation and risk awareness, not as hard constraints)
 - Mode: quick (single plan, 1-3 tasks, no research phase)
-- Output path: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
+- Output path: `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
 
 **Constraints:**
 - If `$APPROACH_CONTEXT` is non-empty, implement the user's confirmed choices — do not substitute alternatives
@@ -126,13 +126,13 @@ Delegate to the planner role in quick mode.
 - Ignore <planning_process> Step 1 requirement extraction; use inline goal-backward planning only
 - Target minimal context usage
 
-**Output:** `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
+**Output:** `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
 **Return:** Plan file path and task count.
 </delegate>
 
 After the planner returns:
 
-**STOP. Verify that `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md` exists on disk before proceeding to execution. If the file does not exist, report the error to the user and do NOT proceed. A plan that exists only in conversation context will be lost.**
+**STOP. Verify that `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md` exists on disk before proceeding to execution. If the file does not exist, report the error to the user and do NOT proceed. A plan that exists only in conversation context will be lost.**
 
 ### Quick Plan Self-Check
 
@@ -147,17 +147,17 @@ This is a self-check, not an independent plan-check. Failures are noted but do N
 
 ## Step 3.5: Independent plan check (conditional)
 
-Read `.planning/config.json`.
+Read `.work/config.json`.
 - If `workflow.planCheck` is `false` (or key missing): skip to Step 3.6.
 - If `workflow.planCheck` is `true`: delegate to the plan-checker with quick-scoped dimensions.
 
 <delegate>
 **Identity:** Plan Checker (quick mode)
-**Instruction:** Read `.planning/templates/delegates/plan-checker.md` for your role contract, then check this quick task plan.
+**Instruction:** Read `.work/templates/delegates/plan-checker.md` for your role contract, then check this quick task plan.
 
 **Context to provide:**
 - Task description: `$DESCRIPTION` (treat as the phase goal equivalent)
-- Plan: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
+- Plan: `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
 - Mode: quick
 
 **Constraints:**
@@ -190,8 +190,8 @@ Evaluate the plan against quick-scope boundaries. Read the plan file and check:
 | Files modified | >8 distinct files in plan | "This task touches {N} files — consider `/gsdd-plan` for full ceremony." |
 | Architecture keywords in `$DESCRIPTION` | contains: `refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database` | "This looks like architectural work — consider `/gsdd-plan` for approach exploration." |
 | New public APIs | Plan tasks create new route files, API endpoints, or exported interfaces | "New public surface area detected — consider `/gsdd-plan` for approach exploration." |
-| Orientation gap | No `.planning/codebase/` exists AND the inline brownfield baseline still cannot name a clear implementation surface, dependency boundary, or safe-to-touch module | "This repo still needs deeper orientation — consider `/gsdd-map-codebase` before changing code." |
-| Undefined bounded change | `$DESCRIPTION` still does not identify a concrete bug, feature, target surface, or observable outcome after clarification | "This does not yet describe a bounded change — use `/gsdd-new-project` to define the work first. If `.planning/brownfield-change/CHANGE.md` already defines a concrete bounded lane, treat `/gsdd-new-project` as an intentional widen path rather than the default fallback." |
+| Orientation gap | No `.work/codebase/` exists AND the inline brownfield baseline still cannot name a clear implementation surface, dependency boundary, or safe-to-touch module | "This repo still needs deeper orientation — consider `/gsdd-map-codebase` before changing code." |
+| Undefined bounded change | `$DESCRIPTION` still does not identify a concrete bug, feature, target surface, or observable outcome after clarification | "This does not yet describe a bounded change — use `/gsdd-new-project` to define the work first. If `.work/brownfield-change/CHANGE.md` already defines a concrete bounded lane, treat `/gsdd-new-project` as an intentional widen path rather than the default fallback." |
 
 If any signals fire, concatenate the matching advisory text in the listed order as `$SCOPE_WARNING`. If the undefined bounded change signal fires, keep that advisory first so the routing recommendation stays explicit.
 If no signals fire, `$SCOPE_WARNING` is empty.
@@ -256,11 +256,11 @@ Delegate to the executor role.
 
 <delegate>
 **Identity:** Executor
-**Instruction:** Read `.planning/templates/roles/executor.md` for your role contract, then execute the quick task plan.
+**Instruction:** Read `.work/templates/roles/executor.md` for your role contract, then execute the quick task plan.
 
 **Context to provide:**
-- Plan file: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
-- Project conventions: `.planning/config.json` (git protocol section)
+- Plan file: `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
+- Project conventions: `.work/config.json` (git protocol section)
 - Quick task -- do NOT update ROADMAP.md
 
 **Constraints:**
@@ -268,52 +268,52 @@ Delegate to the executor role.
 - Follow advisory git protocol from config.json
 - Skip the <state_updates> section of your role contract entirely
 - Do NOT update ROADMAP.md phase status or SPEC.md current state
-- Create summary at: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md`
-- If the quick plan defines `ui_proof_slots`, create or update `.planning/quick/$NEXT_NUM-$SLUG/UI-PROOF.md` with fenced JSON containing required top-level fields: `proof_bundle_version`, `scope`, `route_state`, `environment`, `viewport`, `evidence_inputs`, `commands_or_manual_steps`, `observations`, `artifacts`, `privacy`, `result`, and `claim_limits`
+- Create summary at: `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md`
+- If the quick plan defines `ui_proof_slots`, create or update `.work/quick/$NEXT_NUM-$SLUG/UI-PROOF.md` with fenced JSON containing required top-level fields: `proof_bundle_version`, `scope`, `route_state`, `environment`, `viewport`, `evidence_inputs`, `commands_or_manual_steps`, `observations`, `artifacts`, `privacy`, `result`, and `claim_limits`
 - For live UI proof, record `agent-browser` in `evidence_inputs.tools_used` when used, the exact commands or manual ref-based steps, screenshot/report artifact paths, and any relevant console/network observations. If `agent-browser` was unavailable, record that availability constraint and fallback tool explicitly. If existing Playwright tests supplied regression evidence, record the package command and result separately from the `agent-browser` runtime observation.
 - Human approval for visual taste, accessibility judgment, baseline acceptance, subjective polish/layout quality, or privacy publication does not replace required `code`, `test`, `runtime`, or `delivery` evidence
 
-**Output:** `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md`
+**Output:** `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md`
 **Return:** Summary file path and completion status.
 </delegate>
 
 After the executor returns:
 
-**STOP. Verify the SUMMARY file exists at `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md` on disk. If it does not exist, report the write failure. Do NOT proceed to verification or LOG.md update without a persisted summary.**
+**STOP. Verify the SUMMARY file exists at `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md` on disk. If it does not exist, report the write failure. Do NOT proceed to verification or LOG.md update without a persisted summary.**
 
 ---
 
 ## Step 5: Verify (conditional)
 
-Read `.planning/config.json`.
+Read `.work/config.json`.
 - If `workflow.verifier` is `false`, skip to Step 6.
 - If `workflow.verifier` is `true`, delegate to the verifier role:
 
 <delegate>
 **Identity:** Verifier (quick mode)
-**Instruction:** Read `.planning/templates/roles/verifier.md` for your role contract, then verify the quick task.
+**Instruction:** Read `.work/templates/roles/verifier.md` for your role contract, then verify the quick task.
 
 **Context to provide:**
 - Task description: `$DESCRIPTION`
-- Plan: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
-- Summary: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md`
+- Plan: `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-PLAN.md`
+- Summary: `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-SUMMARY.md`
 
 **Constraints:**
 - Verify goal achievement against the task description
 - Quick scope -- do not check ROADMAP alignment or cross-phase integration
-- Write report to: `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-VERIFICATION.md`
+- Write report to: `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-VERIFICATION.md`
 
-**Output:** `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-VERIFICATION.md`
+**Output:** `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-VERIFICATION.md`
 **Return:** Verification status (passed | gaps_found | human_needed).
 </delegate>
 
-**STOP. Verify the VERIFICATION file exists at `.planning/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-VERIFICATION.md` on disk (when verifier ran). If it does not exist, report the write failure. Do NOT proceed to LOG.md update without a persisted verification report.**
+**STOP. Verify the VERIFICATION file exists at `.work/quick/$NEXT_NUM-$SLUG/$NEXT_NUM-VERIFICATION.md` on disk (when verifier ran). If it does not exist, report the write failure. Do NOT proceed to LOG.md update without a persisted verification report.**
 
 ---
 
 ## Step 6: Update LOG.md
 
-Append a row to `.planning/quick/LOG.md`:
+Append a row to `.work/quick/LOG.md`:
 
 ```markdown
 | $NEXT_NUM | $DESCRIPTION | $DATE | $STATUS | [$NEXT_NUM-$SLUG](./$NEXT_NUM-$SLUG/) |
@@ -339,8 +339,8 @@ Report to the user:
 <success_criteria>
 - [ ] User provided a task description
 - [ ] Approach clarification ran (only if workflow.discuss is true AND ambiguity detected)
-- [ ] `.planning/quick/` directory exists (created if needed)
-- [ ] Task directory created at `.planning/quick/NNN-slug/`
+- [ ] `.work/quick/` directory exists (created if needed)
+- [ ] Task directory created at `.work/quick/NNN-slug/`
 - [ ] `NNN-PLAN.md` created by planner (1-3 tasks)
 - [ ] Independent plan check ran (only if workflow.planCheck is true)
 - [ ] Plan preview presented to user before execution
@@ -358,10 +358,10 @@ Report to the user what was accomplished, then present the next step:
 **Completed:** Quick task #{next_num} — {description}
 
 Created:
-- `.planning/quick/{next_num}-{slug}/{next_num}-PLAN.md`
-- `.planning/quick/{next_num}-{slug}/{next_num}-SUMMARY.md`
-- `.planning/quick/{next_num}-{slug}/{next_num}-VERIFICATION.md` (if verifier enabled)
-- Updated `.planning/quick/LOG.md`
+- `.work/quick/{next_num}-{slug}/{next_num}-PLAN.md`
+- `.work/quick/{next_num}-{slug}/{next_num}-SUMMARY.md`
+- `.work/quick/{next_num}-{slug}/{next_num}-VERIFICATION.md` (if verifier enabled)
+- Updated `.work/quick/LOG.md`
 
 **Next step:** `/gsdd-progress` — check project status and continue phase work
 

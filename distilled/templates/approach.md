@@ -1,12 +1,12 @@
 # Phase Approach Template
 
-Template for `.planning/phases/XX-name/{phase_num}-APPROACH.md` — captures implementation decisions and validated assumptions for a phase.
+Template for `.work/phases/XX-name/{phase_num}-APPROACH.md` — captures implementation decisions and validated assumptions for a phase.
 
 **Purpose:** Document decisions that downstream agents need. Planner uses this to know WHAT choices are locked vs flexible. Plan-checker verifies plans honor these decisions.
 
 **Key principle:** The top-level structure (`<domain>`, `<decisions>`, `<assumptions>`, `<deferred>`) is fixed. Section names WITHIN `<decisions>` emerge from what was actually discussed for THIS phase — a CLI phase has CLI-relevant sections, a UI phase has UI-relevant sections.
 
-**Alignment proof:** When `.planning/config.json` has `workflow.discuss: true`, every APPROACH artifact must include an `## Alignment Proof` section before `<domain>`. It must record the canonical fields `alignment_status`, `alignment_method`, `user_confirmed_at`, `explicit_skip_approved`, `skip_scope`, `skip_rationale`, and `confirmed_decisions`. `Agent's Discretion` and agent-only "No questions needed" are not valid proof.
+**Alignment proof:** When `.work/config.json` has `workflow.discuss: true`, every APPROACH artifact must include an `## Alignment Proof` section before `<domain>`. It must record the canonical fields `alignment_status`, `alignment_method`, `user_confirmed_at`, `explicit_skip_approved`, `skip_scope`, `skip_rationale`, and `confirmed_decisions`. `Agent's Discretion` and agent-only "No questions needed" are not valid proof.
 
 **Downstream consumers:**
 - `planner` — Reads decisions to constrain implementation choices. Locked decisions must be implemented. Agent's Discretion items allow planner flexibility.
@@ -266,7 +266,7 @@ Users can register and log in with email/password. Session management via JWT. O
 The output should answer: "What choices are locked for the planner? Where does the planner have discretion?"
 
 **After creation:**
-- File lives in phase directory: `.planning/phases/XX-name/{phase_num}-APPROACH.md`
+- File lives in phase directory: `.work/phases/XX-name/{phase_num}-APPROACH.md`
 - Planner reads decisions to constrain implementation tasks
 - Plan-checker verifies approach_alignment: plans must implement chosen approaches
 - Downstream agents should NOT need to ask the user again about captured decisions

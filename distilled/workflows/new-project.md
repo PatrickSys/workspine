@@ -6,11 +6,11 @@ Your output: SPEC.md (the single source of truth) and ROADMAP.md (the execution 
 </role>
 
 <auto_mode>
-Check `.planning/config.json` for `autoAdvance: true`. If NOT set, skip this section entirely.
+Check `.work/config.json` for `autoAdvance: true`. If NOT set, skip this section entirely.
 
 When `autoAdvance: true`, this workflow runs non-interactively:
 
-1. **Input:** Read `.planning/PROJECT_BRIEF.md`. If it does not exist, stop with a clear error: "Auto mode requires a project brief. Provide one via `npx -y gsdd-cli init --auto --tools <runtime> --brief <path>` or place it at `.planning/PROJECT_BRIEF.md`."
+1. **Input:** Read `.work/PROJECT_BRIEF.md`. If it does not exist, stop with a clear error: "Auto mode requires a project brief. Provide one via `npx -y gsdd-cli init --auto --tools <runtime> --brief <path>` or place it at `.work/PROJECT_BRIEF.md`."
 
 2. **Extract context from brief:** Parse the brief document to understand the project goal, target users, constraints, requirements, and out-of-scope items. Apply the same requirement categorization as `<questioning>` (Table Stakes / Differentiators / Out of Scope). Do NOT ask interactive questions.
 
@@ -28,10 +28,10 @@ All other sections (`<detect_mode>`, `<codebase_context>`, `<research>`, `<spec_
 <load_context>
 Before starting, read these files (if they exist):
 1. `AGENTS.md` (root) — understand the full SDD workflow and governance rules.
-2. `.planning/templates/spec.md` — template for creating SPEC.md
-3. `.planning/templates/roadmap.md` — template for creating ROADMAP.md
+2. `.work/templates/spec.md` — template for creating SPEC.md
+3. `.work/templates/roadmap.md` — template for creating ROADMAP.md
 4. Project root files: `package.json`, `README.md`, main entry point, `.gitignore`
-5. `.planning/config.json` — The deterministic project settings. Key fields:
+5. `.work/config.json` — The deterministic project settings. Key fields:
    - `researchDepth`: balanced | fast | deep — controls research thoroughness
    - `parallelization`: true | false - whether to run delegate work in parallel when the platform supports it; when false, run the same delegates sequentially
    - `workflow.research`: true | false - whether to do domain research before spec
@@ -39,13 +39,13 @@ Before starting, read these files (if they exist):
    - `workflow.verifier`: true | false — whether verifier runs after execution
    - `modelProfile`: balanced | quality | budget — model selection hint
    - `gitProtocol`: advisory git guidance only — follow repo/user conventions first and never invent phase/plan/task git naming by default
-6. Any existing `.planning/SPEC.md` or `.planning/ROADMAP.md` (if resuming)
-7. `.planning/brownfield-change/CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` (when present as the widening input from an active bounded change)
+6. Any existing `.work/SPEC.md` or `.work/ROADMAP.md` (if resuming)
+7. `.work/brownfield-change/CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` (when present as the widening input from an active bounded change)
 </load_context>
 
 <project_principles>
 Before diving into technical specifications, establish the core governing principles of the project.
-If `autoAdvance: true` in `.planning/config.json`, skip this question. Infer core principles
+If `autoAdvance: true` in `.work/config.json`, skip this question. Infer core principles
 from the project brief (code quality signals, constraint language, scope decisions) and note
 the inferred principles in the completion report. Otherwise:
 Ask the user: "What are the core principles for this project regarding code quality, UI consistency, or performance?"
@@ -57,23 +57,23 @@ Determine the situation:
 
 - **Greenfield**: No existing code. Empty or minimal project. Skip codebase audit, go to questioning.
 - **Brownfield**: Existing codebase. You MUST audit before questioning.
-- **Resuming**: `.planning/SPEC.md` already exists. Read it, confirm current state with developer, continue from where things left off.
-- **Concrete brownfield continuity already exists**: if `.planning/brownfield-change/CHANGE.md` exists, treat `/gsdd-new-project` as an explicit widen path into full milestone setup, not as the default resume route for that bounded change. Preserve the current bounded context unless the user clearly wants to widen scope.
+- **Resuming**: `.work/SPEC.md` already exists. Read it, confirm current state with developer, continue from where things left off.
+- **Concrete brownfield continuity already exists**: if `.work/brownfield-change/CHANGE.md` exists, treat `/gsdd-new-project` as an explicit widen path into full milestone setup, not as the default resume route for that bounded change. Preserve the current bounded context unless the user clearly wants to widen scope.
 </detect_mode>
 
 <brownfield_widening_context>
-If `.planning/brownfield-change/CHANGE.md` exists, treat it as an explicit widening input rather than as noise to rediscover:
+If `.work/brownfield-change/CHANGE.md` exists, treat it as an explicit widening input rather than as noise to rediscover:
 
 1. Read `CHANGE.md` for the active goal, in-scope/out-of-scope, done-when, next action, and declared write scope.
 2. Read `HANDOFF.md` for preserved constraints, unresolved uncertainty, decision posture, and anti-regression rules.
 3. Read `VERIFICATION.md` for existing proof, open gaps, and any partial validation that the first milestone should inherit honestly.
 
 Do not create a new promotion artifact. Reuse the existing brownfield folder directly when widening into milestone setup.
-If `.planning/MILESTONES.md` already contains shipped milestone history, stop and route this widen request to `/gsdd-new-milestone` instead of reopening first-milestone initialization here.
+If `.work/MILESTONES.md` already contains shipped milestone history, stop and route this widen request to `/gsdd-new-milestone` instead of reopening first-milestone initialization here.
 </brownfield_widening_context>
 
 <milestone_context>
-Determine research context before spawning researchers. Check if `.planning/SPEC.md` has existing Validated requirements:
+Determine research context before spawning researchers. Check if `.work/SPEC.md` has existing Validated requirements:
 
 - **Greenfield**: No SPEC.md, or SPEC.md has no "Validated" items → Research from scratch for this domain.
 - **Subsequent milestone**: SPEC.md exists with Validated items → Research what's needed to ADD the new feature set — do NOT re-research the existing system.
@@ -87,7 +87,7 @@ Before asking ANY questions, you must understand what exists.
 
 ### Check for Existing Codebase Maps
 
-Check whether `.planning/codebase/STACK.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/CONVENTIONS.md`, or `.planning/codebase/CONCERNS.md` already exist and contain substantive content.
+Check whether `.work/codebase/STACK.md`, `.work/codebase/ARCHITECTURE.md`, `.work/codebase/CONVENTIONS.md`, or `.work/codebase/CONCERNS.md` already exist and contain substantive content.
 
 **If codebase maps exist:** Use them directly. Skip to Brownfield Validated Requirements Inference below.
 
@@ -97,7 +97,7 @@ Inform the user: "No codebase maps found. Running codebase mapping before contin
 
 This is an internal prerequisite of `new-project`, not a user-facing routing requirement. If the user started with `/gsdd-new-project` on a brownfield repo, do not bounce them out and tell them to restart with `/gsdd-map-codebase`. Run the mapping dependency, then continue this workflow.
 
-If `.planning/brownfield-change/CHANGE.md` exists, keep it as the current bounded continuity anchor while you do this work. Do not treat its presence as evidence that the user should have used another command instead. The only question is whether they intentionally want to widen that bounded brownfield change into full milestone planning.
+If `.work/brownfield-change/CHANGE.md` exists, keep it as the current bounded continuity anchor while you do this work. Do not treat its presence as evidence that the user should have used another command instead. The only question is whether they intentionally want to widen that bounded brownfield change into full milestone planning.
 
 Read and follow the `gsdd-map-codebase` skill now. Prefer the repo-local `.agents/skills/gsdd-map-codebase/SKILL.md` when it exists; otherwise use the globally installed `gsdd-map-codebase` skill available in the current runtime. Execute its full flow (check existing, spawn mappers, validate, secrets scan). When map-codebase completes, return here and continue from Brownfield Validated Requirements Inference below.
 
@@ -105,8 +105,8 @@ Read and follow the `gsdd-map-codebase` skill now. Prefer the repo-local `.agent
 
 Read the completed codebase map and infer what the project already does. These become **Validated** requirements in SPEC.md -- existing capabilities the new work must not break.
 
-1. Read `.planning/codebase/ARCHITECTURE.md` -- identify existing components and their responsibilities
-2. Read `.planning/codebase/STACK.md` -- identify what's already integrated
+1. Read `.work/codebase/ARCHITECTURE.md` -- identify existing components and their responsibilities
+2. Read `.work/codebase/STACK.md` -- identify what's already integrated
 3. For each existing capability: add as a Validated requirement in SPEC.md later
 
 Example format (for SPEC.md requirements section):
@@ -199,7 +199,7 @@ YOU: "So two views: today and someday. What happens to completed tasks — archi
 <research>
 MANDATORY STEP. After the goal is clarified but BEFORE writing any specs.
 
-**Check config first:** Read `.planning/config.json`.
+**Check config first:** Read `.work/config.json`.
 - If `workflow.research: false` → skip this section entirely, go to `<spec_creation>`.
 - If `researchDepth: "fast"` - use the same 4 specialists below, then synthesize `SUMMARY.md` inline. Faster and cheaper; acceptable for well-known domains.
 - If `researchDepth: "balanced"` or `"deep"` - use the same 4 specialists below plus the synthesizer (default).
@@ -218,50 +218,50 @@ Use the same 4 specialized researchers every time. The difference is execution o
 
 ```
 Spawning 4 researchers...
-  -> Stack research        -> .planning/research/STACK.md
-  -> Features research     -> .planning/research/FEATURES.md
-  -> Architecture research -> .planning/research/ARCHITECTURE.md
-  -> Pitfalls research     -> .planning/research/PITFALLS.md
+  -> Stack research        -> .work/research/STACK.md
+  -> Features research     -> .work/research/FEATURES.md
+  -> Architecture research -> .work/research/ARCHITECTURE.md
+  -> Pitfalls research     -> .work/research/PITFALLS.md
 ```
 
-Ensure `.planning/research/` directory exists before spawning.
+Ensure `.work/research/` directory exists before spawning.
 
 <delegate>
 Agent: StackResearcher
-Parallel: (use parallelization value from .planning/config.json)
+Parallel: (use parallelization value from .work/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/researcher-stack.md` for full task instructions. Apply the project goal and milestone context provided above.
-Output: `.planning/research/STACK.md`
+Instruction: Read `.work/templates/delegates/researcher-stack.md` for full task instructions. Apply the project goal and milestone context provided above.
+Output: `.work/research/STACK.md`
 Return: Human-read structured summary to Orchestrator (300-500 tokens); full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3.
 </delegate>
 
 <delegate>
 Agent: FeaturesResearcher
-Parallel: (use parallelization value from .planning/config.json)
+Parallel: (use parallelization value from .work/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/researcher-features.md` for full task instructions. Apply the project goal and milestone context provided above.
-Output: `.planning/research/FEATURES.md`
+Instruction: Read `.work/templates/delegates/researcher-features.md` for full task instructions. Apply the project goal and milestone context provided above.
+Output: `.work/research/FEATURES.md`
 Return: Human-read structured summary to Orchestrator (300-500 tokens); full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3.
 </delegate>
 
 <delegate>
 Agent: ArchitectureResearcher
-Parallel: (use parallelization value from .planning/config.json)
+Parallel: (use parallelization value from .work/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/researcher-architecture.md` for full task instructions. Apply the project goal and milestone context provided above.
-Output: `.planning/research/ARCHITECTURE.md`
+Instruction: Read `.work/templates/delegates/researcher-architecture.md` for full task instructions. Apply the project goal and milestone context provided above.
+Output: `.work/research/ARCHITECTURE.md`
 Return: Human-read structured summary to Orchestrator (300-500 tokens); full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3.
 </delegate>
 
 <delegate>
 Agent: PitfallsResearcher
-Parallel: (use parallelization value from .planning/config.json)
+Parallel: (use parallelization value from .work/config.json)
 Context: Project goal: [user's stated goal]. Milestone context: [greenfield|subsequent]. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/researcher-pitfalls.md` for full task instructions. Apply the project goal and milestone context provided above.
-Output: `.planning/research/PITFALLS.md`
+Instruction: Read `.work/templates/delegates/researcher-pitfalls.md` for full task instructions. Apply the project goal and milestone context provided above.
+Output: `.work/research/PITFALLS.md`
 Return: Human-read structured summary to Orchestrator (300-500 tokens); full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3.
 </delegate>
@@ -269,7 +269,7 @@ Guardrails: Max Agent Hops = 3.
 **After all 4 researchers complete**, synthesize based on `researchDepth`:
 
 **If `researchDepth: "fast"`:** Synthesize inline.
-You hold 4 human-read structured summaries. Write `.planning/research/SUMMARY.md` directly using `.planning/templates/research/summary.md`. Cross-reference the summaries. Do NOT spawn another agent.
+You hold 4 human-read structured summaries. Write `.work/research/SUMMARY.md` directly using `.work/templates/research/summary.md`. Cross-reference the summaries. Do NOT spawn another agent.
 
 **If `researchDepth: "balanced"` or `"deep"`:** Spawn synthesizer to read the full research files.
 
@@ -277,8 +277,8 @@ You hold 4 human-read structured summaries. Write `.planning/research/SUMMARY.md
 Agent: ResearchSynthesizer
 Parallel: false
 Context: Researcher summaries returned above. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/researcher-synthesizer.md` for full task instructions.
-Output: `.planning/research/SUMMARY.md`
+Instruction: Read `.work/templates/delegates/researcher-synthesizer.md` for full task instructions.
+Output: `.work/research/SUMMARY.md`
 Return: Agent-mediated structured summary to Orchestrator (500-800 tokens); full synthesis stays in the output artifact.
 Guardrails: Max Agent Hops = 2. Do not do new research — synthesize only.
 </delegate>
@@ -288,7 +288,7 @@ Guardrails: Max Agent Hops = 2. Do not do new research — synthesize only.
 Display key findings before moving to spec creation.
 
 ### Research Quality Gate — All of These Must Be True:
-- [ ] All 4 specialist files written to `.planning/research/`
+- [ ] All 4 specialist files written to `.work/research/`
 - [ ] SUMMARY.md written with "Implications for Roadmap" section populated
 - [ ] Negative claims verified with current web docs (not training data)
 - [ ] Confidence levels assigned: verified | likely | uncertain
@@ -305,7 +305,7 @@ Before writing SPEC.md, define core Data Models/Typed Schemas. Multi-agent hando
 <spec_creation>
 After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
 
-1. **Use the template** from `.planning/templates/spec.md`.
+1. **Use the template** from `.work/templates/spec.md`.
 2. **Requirements are testable**: "User can X" not "System does Y"
 3. **Requirements have IDs**: `AUTH-01`, `DATA-02`, `UI-03`
 4. **Requirements are ordered** by priority within each category
@@ -314,7 +314,7 @@ After the subagent research completes, synthesize EVERYTHING into `SPEC.md`:
 7. **Typed Data Schemas**: explicitly define the core Data Models/Typed Schemas the project will use (e.g., `type UserProfile = { id: number; plan: 'free' | 'pro' }`). Multi-agent handoffs require typed schemas to pass reliable state; natural language instructions fail across agent handoffs. *SPEC.md defines WHAT, not HOW - do not include implementation tasks.*
 8. **Done-When Verification Chain**: For EVERY requirement in the "Must Have (v1)" section, define a clear, verifiable `[Done-When: ...]` criterion. "User can log in" must become "User can log in [Done-When: Login form submits, JWT is received, and User is redirected to Dashboard]". No exceptions.
 9. **Capability & Security Gates**: Handle per the `<capability_gates>` section at the end of this `<spec_creation>` block.
-10. **Authorization Matrix (optional)**: For projects with multiple user roles or protected resources, create `.planning/AUTH_MATRIX.md` using the template at `.planning/templates/auth-matrix.md`. The integration checker will use this matrix for systematic auth verification during milestone audits.
+10. **Authorization Matrix (optional)**: For projects with multiple user roles or protected resources, create `.work/AUTH_MATRIX.md` using the template at `.work/templates/auth-matrix.md`. The integration checker will use this matrix for systematic auth verification during milestone audits.
 11. **ROADMAP phase status is initialized** with Phase 1 marked `[ ]` / not started using the roadmap template's phase-status language.
 
 <capability_gates>
@@ -341,7 +341,7 @@ Do NOT proceed to roadmap creation until the developer explicitly approves.
 **Commit**: `docs: initialize project spec`
 </spec_creation>
 
-**STOP. Spec creation is complete. Verify that `.planning/SPEC.md` exists on disk with the approved content before creating the roadmap. Do NOT create ROADMAP.md from memory — read the persisted SPEC.md as input.**
+**STOP. Spec creation is complete. Verify that `.work/SPEC.md` exists on disk with the approved content before creating the roadmap. Do NOT create ROADMAP.md from memory — read the persisted SPEC.md as input.**
 
 <roadmap_creation>
 After `SPEC.md` is approved, you must create `ROADMAP.md`.
@@ -395,7 +395,7 @@ Do NOT proceed to planning until the developer explicitly approves.
 </roadmap_creation>
 
 <persistence>
-MANDATORY: Both `.planning/SPEC.md` and `.planning/ROADMAP.md` must exist on disk before reporting completion.
+MANDATORY: Both `.work/SPEC.md` and `.work/ROADMAP.md` must exist on disk before reporting completion.
 
 If either file was not written (permissions issue, path problem), STOP and report the blocker to the user. Do NOT report success without persisted artifacts.
 
@@ -424,8 +424,8 @@ Report to the user what was accomplished, then present the next step:
 
 ---
 **Completed:** Project initialization — created:
-- `.planning/SPEC.md` — living specification (requirements, constraints, decisions)
-- `.planning/ROADMAP.md` — phased execution plan with success criteria
+- `.work/SPEC.md` — living specification (requirements, constraints, decisions)
+- `.work/ROADMAP.md` — phased execution plan with success criteria
 
 **Next step:** `/gsdd-plan` — create a detailed plan for Phase 1
 

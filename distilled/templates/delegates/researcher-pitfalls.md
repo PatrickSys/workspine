@@ -1,4 +1,4 @@
-**Role contract:** Read `.planning/templates/roles/researcher.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/researcher.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 You are researching ONE dimension: what goes wrong in projects in this domain.
 
@@ -24,7 +24,7 @@ Your output prevents mistakes in roadmap and planning. For each pitfall:
 - [ ] Sources cited for non-obvious claims
 </quality_gate>
 
-Write to: `.planning/research/PITFALLS.md`
-Use template: `.planning/templates/research/pitfalls.md` (if it exists)
+Write to: `.work/research/PITFALLS.md`
+Use template: `.work/templates/research/pitfalls.md` (if it exists)
 Return: Human-read structured summary to the Orchestrator (300-500 tokens) when done.
 Guardrails: Max Agent Hops = 3.

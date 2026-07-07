@@ -1,10 +1,10 @@
-**Role contract:** Read `.planning/templates/roles/mapper.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/mapper.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 Map the technical debt, security concerns, and risks in this codebase.
 
-**Security check first (hard stop):** Follow the Hard stop directive in `.planning/templates/roles/mapper.md` — grep for secrets before writing anything. If found: STOP and report to Orchestrator immediately.
+**Security check first (hard stop):** Follow the Hard stop directive in `.work/templates/roles/mapper.md` — grep for secrets before writing anything. If found: STOP and report to Orchestrator immediately.
 
-If no secrets found, write CONCERNS.md to `.planning/codebase/` using the template at `.planning/templates/codebase/concerns.md`.
+If no secrets found, write CONCERNS.md to `.work/codebase/` using the template at `.work/templates/codebase/concerns.md`.
 
 Include:
 - Known bugs or fragile areas (with file references where possible)
@@ -22,6 +22,6 @@ Include:
 - [ ] Downstream impact table ranks at least top 3 concerns with Blocks column populated
 </quality_gate>
 
-Write to: `.planning/codebase/CONCERNS.md`
+Write to: `.work/codebase/CONCERNS.md`
 Return: Routing summary to the Orchestrator (100-200 tokens) when done. If secrets found, STOP and report immediately.
 Guardrails: Max Agent Hops = 3. Hard stop on secrets.

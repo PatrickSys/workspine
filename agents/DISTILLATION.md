@@ -135,12 +135,12 @@ Evidence map from each of the 10 canonical GSDD roles to their GSD sources, with
 - Checklist-driven completion
 
 **Stripped from GSD:**
-- Template-path references (output lives in `.planning/ROADMAP.md`)
+- Template-path references (output lives in `.work/ROADMAP.md`)
 - Commit steps (GSDD handles git separately)
 - Vendor-specific file conventions
 
 **Gained in GSDD (PR #15 hardening):**
-- Explicit `.planning/ROADMAP.md` ownership contract
+- Explicit `.work/ROADMAP.md` ownership contract
 - Explicit `[ ]` / `[-]` / `[x]` status grammar
 - Concrete `ROADMAP CREATED` artifact example
 - Hard boundary: "this role does not settle the separate ROADMAP/STATE lifecycle seam"

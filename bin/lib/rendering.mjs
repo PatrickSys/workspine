@@ -17,6 +17,17 @@ const HELPER_LIB_FILES = Object.freeze([
   'work-context.mjs',
   'workspace-root.mjs',
 ]);
+const DEFAULT_STATE_DIR_NAME = '.work';
+
+function normalizeStateDirName(stateDirName = DEFAULT_STATE_DIR_NAME) {
+  return stateDirName || DEFAULT_STATE_DIR_NAME;
+}
+
+function localizeStateDirReferences(content, { stateDirName = DEFAULT_STATE_DIR_NAME } = {}) {
+  const normalized = normalizeStateDirName(stateDirName);
+  if (normalized === DEFAULT_STATE_DIR_NAME) return content;
+  return String(content).replace(/\.work(?=\/|\\|`|'|"|\)|\]|\}|,|\.|:|;|\s|$)/g, normalized);
+}
 
 function getWorkflowContent(workflowFile) {
   const filePath = join(DISTILLED_DIR, 'workflows', workflowFile);
@@ -30,8 +41,8 @@ function getDelegateContent(delegateFile) {
   return `<!-- Delegate file not found: ${delegateFile} -->\n`;
 }
 
-function renderSkillContent(workflow) {
-  const workflowContent = getWorkflowContent(workflow.workflow);
+function renderSkillContent(workflow, options = {}) {
+  const workflowContent = localizeStateDirReferences(getWorkflowContent(workflow.workflow), options);
   return `---
 name: ${workflow.name}
 description: ${workflow.description}
@@ -42,12 +53,15 @@ agent: ${workflow.agent}
 ${workflowContent}`;
 }
 
-function renderPlanningCliLauncher() {
+function renderPlanningCliLauncher({ stateDirName = DEFAULT_STATE_DIR_NAME } = {}) {
+  const helperPath = `${normalizeStateDirName(stateDirName)}/bin/gsdd.mjs`;
+  const checkpointBackupPath = `${normalizeStateDirName(stateDirName)}/.continue-here.bak`;
   return `#!/usr/bin/env node
 
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
 import { cmdPhaseStatus, cmdVerify } from './lib/phase.mjs';
+import { buildControlMap } from './lib/control-map.mjs';
 import { createCmdNext } from './lib/next.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
 
@@ -58,7 +72,18 @@ const HELPER_CONTEXT = {
 };
 const cmdNext = createCmdNext(HELPER_CONTEXT);
 
+function cmdControlMap(...controlArgs) {
+  const context = resolveWorkspaceContext([], { cwd: HELPER_CONTEXT.cwd });
+  const report = buildControlMap({
+    workspaceRoot: context.workspaceRoot,
+    planningDir: context.planningDir,
+    includeIgnoredPaths: controlArgs.includes('--with-ignored'),
+  });
+  console.log(JSON.stringify(report, null, 2));
+}
+
 const COMMANDS = {
+  'control-map': cmdControlMap,
   'file-op': cmdFileOp,
   'lifecycle-preflight': cmdLifecyclePreflight,
   'phase-status': cmdPhaseStatus,
@@ -68,21 +93,23 @@ const COMMANDS = {
 
 function printHelp() {
   console.log([
-    'Usage: node .planning/bin/gsdd.mjs [--workspace-root <path>] <command> [args]',
+    'Usage: node ${helperPath} [--workspace-root <path>] <command> [args]',
     '',
     'Local workflow helper commands:',
+    '  control-map [--json] [--with-ignored]',
+    '                               Print computed repo/worktree/workflow state for workflow-internal checks',
     '  file-op <copy|delete|regex-sub>',
     '                               Run deterministic workspace-confined file operations',
-    '                               Example: node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok',
+    '                               Example: node ${helperPath} file-op delete ${checkpointBackupPath} --missing ok',
     '  phase-status <N> <status>   Update ROADMAP.md phase status ([ ] / [-] / [x])',
-    '                               Example: node .planning/bin/gsdd.mjs phase-status 1 done',
+    '                               Example: node ${helperPath} phase-status 1 done',
     '  verify <N>                  Run direct phase artifact checks',
-    '                               Example: node .planning/bin/gsdd.mjs verify 1',
+    '                               Example: node ${helperPath} verify 1',
     '  lifecycle-preflight <surface> [phase]',
     '                               Inspect lifecycle gate results for a workflow surface',
-    '                               Example: node .planning/bin/gsdd.mjs lifecycle-preflight verify 1 --expects-mutation phase-status',
+    '                               Example: node ${helperPath} lifecycle-preflight verify 1 --expects-mutation phase-status',
     '  next [--json] [--init]',
-    '                               Route to the next safe Workspine action from .work, brownfield, planning, and repo truth',
+    '                               Route to the next safe Workspine action from ${normalizeStateDirName(stateDirName)}, brownfield, planning, and repo truth',
     '',
     'Advanced option:',
     '  --workspace-root <path>     Override workspace root discovery before or after the subcommand',
@@ -171,11 +198,11 @@ function readHelperLibContent(fileName) {
   return readFileSync(join(__dirname, fileName), 'utf-8');
 }
 
-function buildPlanningCliHelperEntries() {
+function buildPlanningCliHelperEntries(options = {}) {
   return [
     {
       relativePath: 'bin/gsdd.mjs',
-      content: renderPlanningCliLauncher(),
+      content: renderPlanningCliLauncher(options),
     },
     {
       relativePath: 'bin/gsdd',
@@ -196,15 +223,15 @@ function buildPlanningCliHelperEntries() {
   ];
 }
 
-function buildPortableSkillEntries(workflows) {
+function buildPortableSkillEntries(workflows, options = {}) {
   return workflows.map((workflow) => ({
     relativePath: `.agents/skills/${workflow.name}/SKILL.md`,
-    content: renderSkillContent(workflow),
+    content: renderSkillContent(workflow, options),
   }));
 }
 
-function renderOpenCodeCommandContent(workflow) {
-  const workflowContent = getWorkflowContent(workflow.workflow);
+function renderOpenCodeCommandContent(workflow, options = {}) {
+  const workflowContent = localizeStateDirReferences(getWorkflowContent(workflow.workflow), options);
   return `---
 description: ${workflow.description}
 ---
@@ -212,19 +239,23 @@ description: ${workflow.description}
 ${workflowContent}`;
 }
 
-function renderAgentsBoundedBlock() {
+function renderAgentsBoundedBlock(options = {}) {
   const blockPath = join(DISTILLED_DIR, 'templates', 'agents.block.md');
-  if (existsSync(blockPath)) return readFileSync(blockPath, 'utf-8').trim();
-  return '## GSDD Governance (Generated)\n\n- Framework: GSDD\n- Planning: .planning/\n- Workflows: .agents/skills/gsdd-*/SKILL.md';
+  if (existsSync(blockPath)) return localizeStateDirReferences(readFileSync(blockPath, 'utf-8'), options).trim();
+  const stateDirName = normalizeStateDirName(options.stateDirName);
+  const planningLine = stateDirName === DEFAULT_STATE_DIR_NAME
+    ? 'Planning state: `.work/` (legacy `.planning/` workspaces are still read).'
+    : 'Planning state: `.planning/` (legacy workspace; new Workspine projects use `.work/`).';
+  return `## GSDD Governance (Generated)\n\n- Framework: GSDD\n- ${planningLine}\n- Workflows: .agents/skills/gsdd-*/SKILL.md`;
 }
 
-function renderAgentsFileContent() {
+function renderAgentsFileContent(options = {}) {
   const templatePath = join(DISTILLED_DIR, 'templates', 'agents.md');
   if (existsSync(templatePath)) {
     const template = readFileSync(templatePath, 'utf-8');
-    return template.replace('{{GSDD_BLOCK}}', renderAgentsBoundedBlock()).trimEnd() + '\n';
+    return template.replace('{{GSDD_BLOCK}}', renderAgentsBoundedBlock(options)).trimEnd() + '\n';
   }
-  const block = renderAgentsBoundedBlock();
+  const block = renderAgentsBoundedBlock(options);
   return `# AGENTS.md - GSDD Governance\n\n<!-- BEGIN GSDD -->\n${block}\n<!-- END GSDD -->\n`;
 }
 
@@ -262,6 +293,7 @@ export {
   buildPortableSkillEntries,
   getDelegateContent,
   getWorkflowContent,
+  localizeStateDirReferences,
   renderAgentsBoundedBlock,
   renderAgentsFileContent,
   renderOpenCodeCommandContent,

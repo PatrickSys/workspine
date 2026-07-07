@@ -69,7 +69,7 @@ function compareGeneratedFile({ cwd, runtime, relativePath, expectedContent, rep
   };
 }
 
-function buildClaudeEntries({ cwd, workflows }) {
+function buildClaudeEntries({ cwd, workflows, stateDirName = '.work' }) {
   const checkerModelAlias = resolveRuntimeAgentModel({
     cwd,
     runtime: 'claude',
@@ -86,8 +86,8 @@ function buildClaudeEntries({ cwd, workflows }) {
   const entries = workflows.map((workflow) => ({
     relativePath: `.claude/skills/${workflow.name}/SKILL.md`,
     expectedContent: workflow.name === 'gsdd-plan'
-      ? renderClaudePlanSkill()
-      : renderSkillContent(workflow),
+      ? renderClaudePlanSkill({ stateDirName })
+      : renderSkillContent(workflow, { stateDirName }),
   }));
 
   entries.push(
@@ -108,7 +108,7 @@ function buildClaudeEntries({ cwd, workflows }) {
   return entries;
 }
 
-function buildOpenCodeEntries({ cwd, workflows }) {
+function buildOpenCodeEntries({ cwd, workflows, stateDirName = '.work' }) {
   const config = loadProjectModelConfig(cwd);
   const checkerModelId = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
   const explorerModelId = getRuntimeModelOverride(config, 'opencode', 'approach-explorer');
@@ -116,8 +116,8 @@ function buildOpenCodeEntries({ cwd, workflows }) {
   const entries = workflows.map((workflow) => ({
     relativePath: `.opencode/commands/${workflow.name}.md`,
     expectedContent: workflow.name === 'gsdd-plan'
-      ? renderOpenCodePlanCommand()
-      : renderOpenCodeCommandContent(workflow),
+      ? renderOpenCodePlanCommand({ stateDirName })
+      : renderOpenCodeCommandContent(workflow, { stateDirName }),
   }));
 
   entries.push(
@@ -155,6 +155,7 @@ function buildWorkspaceHelperEntries(stateDirName) {
   return buildPlanningCliHelperEntries({
     packageName: PACKAGE_JSON.name,
     packageVersion: PACKAGE_JSON.version,
+    stateDirName,
   }).map((entry) => ({
     relativePath: `${stateDirName}/${entry.relativePath}`,
     expectedContent: entry.content,
@@ -176,7 +177,7 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
       label: 'portable skills',
       root: '.agents/skills',
       repairCommand: 'npx -y gsdd-cli update',
-      entries: buildPortableSkillEntries(workflows).map((entry) => ({
+      entries: buildPortableSkillEntries(workflows, { stateDirName }).map((entry) => ({
         relativePath: entry.relativePath,
         expectedContent: entry.content,
       })),
@@ -186,14 +187,14 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
       label: 'Claude Code native surfaces',
       root: '.claude',
       repairCommand: 'npx -y gsdd-cli update --tools claude',
-      entries: buildClaudeEntries({ cwd, workflows }),
+      entries: buildClaudeEntries({ cwd, workflows, stateDirName }),
     },
     {
       runtime: 'opencode',
       label: 'OpenCode native surfaces',
       root: '.opencode',
       repairCommand: 'npx -y gsdd-cli update --tools opencode',
-      entries: buildOpenCodeEntries({ cwd, workflows }),
+      entries: buildOpenCodeEntries({ cwd, workflows, stateDirName }),
     },
     {
       runtime: 'codex',

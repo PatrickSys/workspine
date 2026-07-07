@@ -45,7 +45,7 @@ Optional but useful context:
 
 - expected cross-phase dependencies from the roadmap
 - likely sensitive routes, pages, or flows that should enforce auth
-- `.planning/AUTH_MATRIX.md` (if it exists — enables matrix-driven auth verification in Step 4a)
+- `.work/AUTH_MATRIX.md` (if it exists — enables matrix-driven auth verification in Step 4a)
 
 Rules:
 
@@ -130,7 +130,7 @@ If a route or flow touches account, billing, admin, profile, or user-scoped data
 
 ## Step 4a: Matrix-Driven Auth Verification
 
-If `.planning/AUTH_MATRIX.md` does not exist, skip this sub-step. Step 4 narrative checking always runs regardless.
+If `.work/AUTH_MATRIX.md` does not exist, skip this sub-step. Step 4 narrative checking always runs regardless.
 
 When the matrix exists:
 

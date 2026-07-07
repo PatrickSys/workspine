@@ -1,17 +1,19 @@
 // templates.mjs - Project template and role installation/refresh helpers
 
-import { existsSync, mkdirSync, readdirSync, cpSync, unlinkSync } from 'fs';
+import { createHash } from 'crypto';
+import { existsSync, mkdirSync, readdirSync, cpSync, unlinkSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { fileHash, readManifest } from './manifest.mjs';
+import { localizeStateDirReferences } from './rendering.mjs';
 
-export function installProjectTemplates({ planningDir, distilledDir, agentsDir }) {
+export function installProjectTemplates({ planningDir, distilledDir, agentsDir, stateDirName = '.work' }) {
   const localTemplatesDir = join(planningDir, 'templates');
   const globalTemplatesDir = join(distilledDir, 'templates');
   const stateName = basename(planningDir);
 
   if (!existsSync(localTemplatesDir)) {
     if (existsSync(globalTemplatesDir)) {
-      cpSync(globalTemplatesDir, localTemplatesDir, { recursive: true });
+      copyTemplateTree(globalTemplatesDir, localTemplatesDir, { stateDirName });
       console.log(`  - copied templates to ${stateName}/templates/`);
       // Warn-only by design: init should not fail on missing templates because
       // the user may still proceed and fix later. The hard gate lives in
@@ -42,7 +44,7 @@ export function installProjectTemplates({ planningDir, distilledDir, agentsDir }
     if (existsSync(agentsDir)) {
       mkdirSync(localRolesDir, { recursive: true });
       for (const file of listRoleFiles(agentsDir)) {
-        cpSync(join(agentsDir, file), join(localRolesDir, file));
+        copyTemplateFile(join(agentsDir, file), join(localRolesDir, file), { stateDirName });
       }
       console.log(`  - copied role contracts to ${stateName}/templates/roles/`);
     } else {
@@ -53,7 +55,7 @@ export function installProjectTemplates({ planningDir, distilledDir, agentsDir }
   }
 }
 
-export function refreshTemplates({ planningDir, distilledDir, agentsDir, isDry = false }) {
+export function refreshTemplates({ planningDir, distilledDir, agentsDir, isDry = false, stateDirName = '.work' }) {
   const existingManifest = readManifest(planningDir);
   const globalTemplatesDir = join(distilledDir, 'templates');
   const localTemplatesDir = join(planningDir, 'templates');
@@ -66,11 +68,45 @@ export function refreshTemplates({ planningDir, distilledDir, agentsDir, isDry =
   ];
 
   for (const category of categories) {
-    refreshCategory(category, existingManifest, isDry);
+    refreshCategory(category, existingManifest, isDry, { stateDirName });
   }
 
-  refreshRootTemplates(globalTemplatesDir, localTemplatesDir, existingManifest, isDry);
-  refreshRoles(agentsDir, join(localTemplatesDir, 'roles'), existingManifest, isDry);
+  refreshRootTemplates(globalTemplatesDir, localTemplatesDir, existingManifest, isDry, { stateDirName });
+  refreshRoles(agentsDir, join(localTemplatesDir, 'roles'), existingManifest, isDry, { stateDirName });
+}
+
+function contentHash(content) {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function localizedTemplateContent(srcPath, { stateDirName = '.work' } = {}) {
+  return localizeStateDirReferences(readFileSync(srcPath, 'utf-8'), { stateDirName });
+}
+
+function sourceTemplateHash(srcPath, { stateDirName = '.work' } = {}) {
+  if (!srcPath.endsWith('.md')) return fileHash(srcPath);
+  return contentHash(localizedTemplateContent(srcPath, { stateDirName }));
+}
+
+function copyTemplateFile(srcPath, destPath, { stateDirName = '.work' } = {}) {
+  if (!srcPath.endsWith('.md')) {
+    cpSync(srcPath, destPath);
+    return;
+  }
+  writeFileSync(destPath, localizedTemplateContent(srcPath, { stateDirName }));
+}
+
+function copyTemplateTree(srcDir, destDir, { stateDirName = '.work' } = {}) {
+  mkdirSync(destDir, { recursive: true });
+  for (const entry of readdirSync(srcDir)) {
+    const srcPath = join(srcDir, entry);
+    const destPath = join(destDir, entry);
+    if (statSync(srcPath).isDirectory()) {
+      copyTemplateTree(srcPath, destPath, { stateDirName });
+    } else {
+      copyTemplateFile(srcPath, destPath, { stateDirName });
+    }
+  }
 }
 
 function listRoleFiles(agentsDir) {
@@ -79,7 +115,7 @@ function listRoleFiles(agentsDir) {
   );
 }
 
-function refreshCategory({ name, src, dest, manifestKey }, existingManifest, isDry) {
+function refreshCategory({ name, src, dest, manifestKey }, existingManifest, isDry, { stateDirName = '.work' } = {}) {
   if (!existsSync(src)) return;
   if (!existsSync(dest) && !isDry) {
     mkdirSync(dest, { recursive: true });
@@ -92,7 +128,7 @@ function refreshCategory({ name, src, dest, manifestKey }, existingManifest, isD
   for (const file of sourceFiles) {
     const srcPath = join(src, file);
     const destPath = join(dest, file);
-    const srcHash = fileHash(srcPath);
+    const srcHash = sourceTemplateHash(srcPath, { stateDirName });
 
     if (existsSync(destPath)) {
       const destHash = fileHash(destPath);
@@ -107,7 +143,7 @@ function refreshCategory({ name, src, dest, manifestKey }, existingManifest, isD
     if (isDry) {
       console.log(`  - would refresh ${name}/${file}`);
     } else {
-      cpSync(srcPath, destPath);
+      copyTemplateFile(srcPath, destPath, { stateDirName });
       console.log(`  - refreshed ${name}/${file}`);
     }
   }
@@ -127,7 +163,7 @@ function refreshCategory({ name, src, dest, manifestKey }, existingManifest, isD
   }
 }
 
-function refreshRootTemplates(globalTemplatesDir, localTemplatesDir, existingManifest, isDry) {
+function refreshRootTemplates(globalTemplatesDir, localTemplatesDir, existingManifest, isDry, { stateDirName = '.work' } = {}) {
   if (!existsSync(globalTemplatesDir)) return;
 
   const manifestHashes = existingManifest?.templates?.root || null;
@@ -136,7 +172,7 @@ function refreshRootTemplates(globalTemplatesDir, localTemplatesDir, existingMan
   for (const file of sourceFiles) {
     const srcPath = join(globalTemplatesDir, file);
     const destPath = join(localTemplatesDir, file);
-    const srcHash = fileHash(srcPath);
+    const srcHash = sourceTemplateHash(srcPath, { stateDirName });
 
     if (existsSync(destPath)) {
       const destHash = fileHash(destPath);
@@ -151,7 +187,7 @@ function refreshRootTemplates(globalTemplatesDir, localTemplatesDir, existingMan
     if (isDry) {
       console.log(`  - would refresh templates/${file}`);
     } else {
-      cpSync(srcPath, destPath);
+      copyTemplateFile(srcPath, destPath, { stateDirName });
       console.log(`  - refreshed templates/${file}`);
     }
   }
@@ -175,7 +211,7 @@ function refreshRootTemplates(globalTemplatesDir, localTemplatesDir, existingMan
   }
 }
 
-function refreshRoles(agentsDir, localRolesDir, existingManifest, isDry) {
+function refreshRoles(agentsDir, localRolesDir, existingManifest, isDry, { stateDirName = '.work' } = {}) {
   if (!existsSync(agentsDir)) return;
   if (!existsSync(localRolesDir) && !isDry) {
     mkdirSync(localRolesDir, { recursive: true });
@@ -190,7 +226,7 @@ function refreshRoles(agentsDir, localRolesDir, existingManifest, isDry) {
   for (const file of sourceFiles) {
     const srcPath = join(agentsDir, file);
     const destPath = join(localRolesDir, file);
-    const srcHash = fileHash(srcPath);
+    const srcHash = sourceTemplateHash(srcPath, { stateDirName });
 
     if (existsSync(destPath)) {
       const destHash = fileHash(destPath);
@@ -205,7 +241,7 @@ function refreshRoles(agentsDir, localRolesDir, existingManifest, isDry) {
     if (isDry) {
       console.log(`  - would refresh roles/${file}`);
     } else {
-      cpSync(srcPath, destPath);
+      copyTemplateFile(srcPath, destPath, { stateDirName });
       console.log(`  - refreshed roles/${file}`);
     }
   }

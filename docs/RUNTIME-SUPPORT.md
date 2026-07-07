@@ -12,15 +12,15 @@ Global install is separate from repo bootstrap. It does not create `.work/`; it 
 
 ## Support tiers
 
-### Directly validated
+### Recorded proof
 
-The workflow contract has direct repo proof for these runtimes:
+The workflow contract has recorded repo proof for these runtimes:
 
 - **Claude Code**
 - **Codex CLI**
 - **OpenCode**
 
-These are the strongest public runtime claims.
+These are the strongest public runtime claims, but they are not broad parity claims across every related app or extension surface.
 
 ### Qualified support
 
@@ -45,9 +45,9 @@ Two surfaces matter for users:
 
 | Runtime | Current claim | Entry surface | Notes |
 | --- | --- | --- | --- |
-| Claude Code | Directly validated | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | Native surface has direct lifecycle evidence; installed generated files are freshness-checked locally |
-| OpenCode | Directly validated | `.opencode/commands/`, `.opencode/agents/` | Native command and checker path; installed generated files are freshness-checked locally |
-| Codex CLI | Directly validated | `.agents/skills/gsdd-*` plus `.codex/agents/gsdd-plan-checker.toml` | Portable skill entry, native checker adapter, direct lifecycle evidence, and generated-surface freshness checks |
+| Claude Code | Recorded proof | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | Native surface has recorded lifecycle evidence; installed generated files are freshness-checked locally |
+| OpenCode | Recorded proof | `.opencode/commands/`, `.opencode/agents/` | Native command and checker path; installed generated files are freshness-checked locally |
+| Codex CLI | Recorded proof | `.agents/skills/gsdd-*` plus `.codex/agents/gsdd-plan-checker.toml` | Portable skill entry, native checker adapter, recorded lifecycle evidence, and generated-surface freshness checks |
 | Codex VS Code / app | Fallback only | `.agents/skills/gsdd-*` opened or pasted manually unless discovery is available | Separate product surface from Codex CLI; no equal runtime-proof claim |
 | Cursor | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally, but the runtime is not claimed as parity-validated |
 | GitHub Copilot | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally, but the runtime is not claimed as parity-validated |

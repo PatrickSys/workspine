@@ -7,22 +7,22 @@ Scope boundary: you create gap closure phases in ROADMAP.md. You do not plan the
 </role>
 
 <prerequisites>
-`.planning/ROADMAP.md` must exist.
-`.planning/SPEC.md` must exist.
-A `.planning/v*-MILESTONE-AUDIT.md` file must exist with `status: gaps_found`.
+`.work/ROADMAP.md` must exist.
+`.work/SPEC.md` must exist.
+A `.work/v*-MILESTONE-AUDIT.md` file must exist with `status: gaps_found`.
 
 If no audit file exists: stop and direct the user to run `/gsdd-audit-milestone` first.
 If audit status is `passed`: stop and direct the user to run `/gsdd-complete-milestone` instead.
 </prerequisites>
 
 <repo_root_helper_contract>
-All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <lifecycle_preflight>
 Before writing ROADMAP gap-closure phases or phase directories, run:
 
-- `node .planning/bin/gsdd.mjs lifecycle-preflight plan-milestone-gaps`
+- `node .work/bin/gsdd.mjs lifecycle-preflight plan-milestone-gaps`
 
 If the preflight result is `blocked`, STOP and report the blocker. This workflow intentionally mutates planning truth, so it must not proceed through pre-existing planning-state drift.
 </lifecycle_preflight>
@@ -30,9 +30,9 @@ If the preflight result is `blocked`, STOP and report the blocker. This workflow
 <load_context>
 Before starting, read these files:
 
-1. `.planning/v*-MILESTONE-AUDIT.md` (most recent) — gap details, requirement failures, integration issues, broken flows
-2. `.planning/SPEC.md` — requirement priorities (v1/v2), requirement descriptions
-3. `.planning/ROADMAP.md` — existing phases (to determine phase numbering continuation)
+1. `.work/v*-MILESTONE-AUDIT.md` (most recent) — gap details, requirement failures, integration issues, broken flows
+2. `.work/SPEC.md` — requirement priorities (v1/v2), requirement descriptions
+3. `.work/ROADMAP.md` — existing phases (to determine phase numbering continuation)
 </load_context>
 
 <process>
@@ -151,18 +151,18 @@ If the current ROADMAP.md already has a milestone section for this version, add 
 Create a directory for each gap closure phase:
 
 ```
-.planning/phases/[NN]-[phase-name-kebab]/
+.work/phases/[NN]-[phase-name-kebab]/
 ```
 
 No files inside — `/gsdd-plan` populates them.
 
-## 8. Rebaseline Planning Fingerprint
+## 8. Confirm Next Planning Route
 
 After confirming the ROADMAP update and phase directories exist, run:
 
-- `node .planning/bin/gsdd.mjs session-fingerprint write --allow-changed ROADMAP.md`
+- `node .work/bin/gsdd.mjs next --json`
 
-This records the user-confirmed ROADMAP mutation so the recommended `/gsdd-plan [N]` handoff does not immediately block on expected `planning_state_drift`. The `--allow-changed ROADMAP.md` guard must fail if `SPEC.md` or `config.json` also drifted after preflight; stop and reconcile that unexpected drift instead of rebaselining it. Do not run this if the ROADMAP write failed or the phase directories are missing.
+This confirms the user-reviewed ROADMAP mutation routes to the expected `/gsdd-plan [N]` handoff. Stop and reconcile if the next-action packet points somewhere else, reports blockers unrelated to the intended ROADMAP update, or the ROADMAP write failed.
 
 </process>
 
@@ -175,10 +175,10 @@ This records the user-confirmed ROADMAP mutation so the recommended `/gsdd-plan 
 - [ ] User confirmed gap closure plan before ROADMAP.md was updated
 - [ ] ROADMAP.md updated with new gap closure phases
 - [ ] Phase directories created
-- [ ] `session-fingerprint write` ran after the reviewed ROADMAP update so `/gsdd-plan [N]` is not stranded by expected planning drift
+- [ ] `node .work/bin/gsdd.mjs next --json` ran after the reviewed ROADMAP update and points to the expected `/gsdd-plan [N]` route
 </success_criteria>
 
-**MANDATORY: `.planning/ROADMAP.md` must be updated on disk before this workflow is complete. If the write fails, STOP and report the failure. Without the updated ROADMAP, the phase cycle cannot begin.**
+**MANDATORY: `.work/ROADMAP.md` must be updated on disk before this workflow is complete. If the write fails, STOP and report the failure. Without the updated ROADMAP, the phase cycle cannot begin.**
 
 <completion>
 Report to the user what was created, then present the next step:
@@ -188,7 +188,7 @@ Report to the user what was created, then present the next step:
 
 Created:
 - [N] gap closure phases in `ROADMAP.md` (Phases [start]–[end])
-- Phase directories in `.planning/phases/`
+- Phase directories in `.work/phases/`
 
 Gaps addressed:
 - [brief summary of what the phases close]

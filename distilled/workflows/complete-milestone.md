@@ -7,39 +7,39 @@ Scope boundary: you archive the current milestone. You do not start the next one
 </role>
 
 <prerequisites>
-`.planning/ROADMAP.md` must exist with phases.
-`.planning/SPEC.md` must exist.
-If `.planning/MILESTONES.md` does not exist, create it now (this is the first milestone completion — Step 8 will write the first entry).
+`.work/ROADMAP.md` must exist with phases.
+`.work/SPEC.md` must exist.
+If `.work/MILESTONES.md` does not exist, create it now (this is the first milestone completion — Step 8 will write the first entry).
 
-If `.planning/milestones/` does not exist, create it before writing archive files.
+If `.work/milestones/` does not exist, create it before writing archive files.
 </prerequisites>
 
 <load_context>
 Before starting, read these files:
 
-1. `.planning/ROADMAP.md` — phase statuses, milestone name, phase range
-2. `.planning/SPEC.md` — requirements, validated capabilities, current state section
-3. `.planning/MILESTONES.md` — previous milestone entries (for format reference); if this is the first milestone, skip — no previous entries exist yet
-4. `.planning/config.json` — `gitProtocol`, `mode` (for STOP gate behavior)
-5. All phase SUMMARY.md files in `.planning/phases/` — accomplishments, task counts
-6. Most recent `.planning/v*-MILESTONE-AUDIT.md` — audit status (passed / gaps_found)
+1. `.work/ROADMAP.md` — phase statuses, milestone name, phase range
+2. `.work/SPEC.md` — requirements, validated capabilities, current state section
+3. `.work/MILESTONES.md` — previous milestone entries (for format reference); if this is the first milestone, skip — no previous entries exist yet
+4. `.work/config.json` — `gitProtocol`, `mode` (for STOP gate behavior)
+5. All phase SUMMARY.md files in `.work/phases/` — accomplishments, task counts
+6. Most recent `.work/v*-MILESTONE-AUDIT.md` — audit status (passed / gaps_found)
 </load_context>
 
 <repo_root_helper_contract>
-All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <lifecycle_preflight>
 Before verifying readiness or gathering archive stats, run:
 
-- `node .planning/bin/gsdd.mjs lifecycle-preflight complete-milestone`
+- `node .work/bin/gsdd.mjs lifecycle-preflight complete-milestone`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone-close eligibility from workflow-local prose.
 
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject milestone completion
 - it does not mutate lifecycle state by itself
-- owned writes remain the archive artifacts, `MILESTONES.md`, `.planning/SPEC.md`, and the retained `ROADMAP.md` collapse
+- owned writes remain the archive artifacts, `MILESTONES.md`, `.work/SPEC.md`, and the retained `ROADMAP.md` collapse
 </lifecycle_preflight>
 
 <evidence_contract>
@@ -74,7 +74,7 @@ Shared closure rules:
 - inherited `delivery_posture` and `release_claim_posture` must be compatible: `repo_closeout` and `runtime_validated_closeout` use `repo_only`; `delivery_supported_closeout` uses `delivery_sensitive`
 - waivers are valid only when they narrow the release claim or defer an unsupported claim. Deferrals must name the unsupported claim, missing evidence kind(s), and later workflow or milestone candidate when known. STOP if a waiver preserves a stronger claim while required evidence is missing.
 - STOP if `release_claim_contract.unsupported_claims` remain without downgrade or deferral, if unsupported claims, invalid waivers, or failed contradiction checks remain, or if completion wording would claim more than the audit evidence supports. Failed contradiction checks are claim-scoped: generated-surface failures block only runtime/generated freshness claims, not unrelated `repo_closeout` completion.
-- local-only `.planning/` proof can support repo closeout, but cannot become public release proof by itself.
+- local-only `.work/` proof can support repo closeout, but cannot become public release proof by itself.
 </evidence_contract>
 
 <process>
@@ -122,7 +122,7 @@ Present 4-8 accomplishments for review. Trim or adjust with user before writing 
 
 ## 5. Archive Roadmap
 
-Create `.planning/milestones/v[X.Y]-ROADMAP.md` with full milestone details:
+Create `.work/milestones/v[X.Y]-ROADMAP.md` with full milestone details:
 
 ```markdown
 # Milestone v[X.Y]: [Name]
@@ -173,19 +173,19 @@ Plans:
 
 ---
 
-*For current project status, see `.planning/ROADMAP.md`*
+*For current project status, see `.work/ROADMAP.md`*
 ```
 
 ## 6. Archive Requirements
 
-Create `.planning/milestones/v[X.Y]-REQUIREMENTS.md`:
+Create `.work/milestones/v[X.Y]-REQUIREMENTS.md`:
 
 ```markdown
 # Requirements Archive: v[X.Y] Milestone
 
 **Archived:** [date]
 **Milestone:** [name]
-**Source:** `.planning/SPEC.md` requirements section at milestone completion
+**Source:** `.work/SPEC.md` requirements section at milestone completion
 
 ---
 
@@ -211,17 +211,17 @@ Create `.planning/milestones/v[X.Y]-REQUIREMENTS.md`:
 
 ---
 
-*Source: `.planning/SPEC.md` as of [date]*
+*Source: `.work/SPEC.md` as of [date]*
 *Next milestone requirements: defined via `/gsdd-new-milestone`*
 ```
 
 ## 7. Move Audit File
 
-If `.planning/v[X.Y]-MILESTONE-AUDIT.md` exists, note its location in the MILESTONES.md entry. (Leave the file in `.planning/` — it is already in the gitignored planning directory. No move required unless you prefer to co-locate it with the other archives.)
+If `.work/v[X.Y]-MILESTONE-AUDIT.md` exists, note its location in the MILESTONES.md entry. (Leave the file in `.work/` — it is already in the gitignored planning directory. No move required unless you prefer to co-locate it with the other archives.)
 
 ## 8. Update MILESTONES.md
 
-Append an entry to `.planning/MILESTONES.md`:
+Append an entry to `.work/MILESTONES.md`:
 
 ```markdown
 ## ✅ v[X.Y] — [Name] ([date])
@@ -239,8 +239,8 @@ Append an entry to `.planning/MILESTONES.md`:
 3. [Accomplishment 3]
 4. [Accomplishment 4]
 
-**Archive:** `.planning/milestones/v[X.Y]-ROADMAP.md`
-**Requirements:** `.planning/milestones/v[X.Y]-REQUIREMENTS.md`
+**Archive:** `.work/milestones/v[X.Y]-ROADMAP.md`
+**Requirements:** `.work/milestones/v[X.Y]-REQUIREMENTS.md`
 **Suggested tag:** `v[X.Y]` (advisory; omit or mark not created unless git confirms it exists)
 ```
 
@@ -259,7 +259,7 @@ Update SPEC.md to reflect the completed milestone:
 
 - **Milestone:** v[X.Y] [Name] — COMPLETED [date]
 - **Phases:** [N]–[M] complete, all requirements verified ([N]/[N]), [test count] tests passing
-- **Archive:** `.planning/milestones/v[X.Y]-ROADMAP.md`
+- **Archive:** `.work/milestones/v[X.Y]-ROADMAP.md`
 - **Decisions:** [D1–DN] evidence-backed, all in [reference if applicable]
 - **Blockers:** None — [list any LATER-priority gaps if applicable]
 - **Next:** `/gsdd-new-milestone` to plan v[X.next] work
@@ -288,7 +288,7 @@ Replace the active milestone phases in ROADMAP.md with a collapsed `<details>` b
 - [x] **Phase [N+1]: [Name]** — completed [date]
 [...]
 
-Full details: [`.planning/milestones/v[X.Y]-ROADMAP.md`](milestones/v[X.Y]-ROADMAP.md)
+Full details: [`.work/milestones/v[X.Y]-ROADMAP.md`](milestones/v[X.Y]-ROADMAP.md)
 
 </details>
 
@@ -315,9 +315,9 @@ Advisory: Tag this milestone in git:
 - [ ] Version confirmed
 - [ ] Stats gathered from SUMMARY.md files and git
 - [ ] Accomplishments extracted and reviewed
-- [ ] `.planning/milestones/v[X.Y]-ROADMAP.md` created with full phase details
-- [ ] `.planning/milestones/v[X.Y]-REQUIREMENTS.md` created with all requirement statuses
-- [ ] `.planning/MILESTONES.md` updated with new entry
+- [ ] `.work/milestones/v[X.Y]-ROADMAP.md` created with full phase details
+- [ ] `.work/milestones/v[X.Y]-REQUIREMENTS.md` created with all requirement statuses
+- [ ] `.work/MILESTONES.md` updated with new entry
 - [ ] SPEC.md Must Have requirements moved to Validated section
 - [ ] SPEC.md Current State updated to reflect completed status
 - [ ] ROADMAP.md collapsed with `<details>` block pointing to archive
@@ -333,11 +333,11 @@ Report to the user what was archived, then present the next step:
 **Completed:** Milestone v[X.Y] [Name] archived.
 
 Archived:
-- `.planning/milestones/v[X.Y]-ROADMAP.md` — full phase details
-- `.planning/milestones/v[X.Y]-REQUIREMENTS.md` — requirements at milestone completion
-- `.planning/MILESTONES.md` — updated milestone history
-- `.planning/SPEC.md` — requirements evolved, current state updated
-- `.planning/ROADMAP.md` — active phases collapsed to `<details>`
+- `.work/milestones/v[X.Y]-ROADMAP.md` — full phase details
+- `.work/milestones/v[X.Y]-REQUIREMENTS.md` — requirements at milestone completion
+- `.work/MILESTONES.md` — updated milestone history
+- `.work/SPEC.md` — requirements evolved, current state updated
+- `.work/ROADMAP.md` — active phases collapsed to `<details>`
 
 **Next step:** `/gsdd-new-milestone` — start the next milestone cycle
 

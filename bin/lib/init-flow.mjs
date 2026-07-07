@@ -109,7 +109,7 @@ export function createCmdInit(ctx) {
       console.log(`  - copied project brief to ${stateDirName}/PROJECT_BRIEF.md`);
     }
 
-    generateOpenStandardSkills(ctx.cwd, ctx.workflows);
+    generateOpenStandardSkills(ctx.cwd, ctx.workflows, { stateDirName });
     console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
 
     generatePlanningCliHelpers(ctx);
@@ -156,7 +156,7 @@ export function createCmdUpdate(ctx) {
       if (isDry) {
         console.log('  - would update open-standard skills (.agents/skills/gsdd-*)');
       } else {
-        generateOpenStandardSkills(ctx.cwd, ctx.workflows);
+        generateOpenStandardSkills(ctx.cwd, ctx.workflows, { stateDirName });
         console.log('  - updated open-standard skills (.agents/skills/gsdd-*)');
       }
       updated = true;
@@ -219,18 +219,19 @@ function hasGeneratedOpenStandardSkills(cwd) {
   }
 }
 
-function generateOpenStandardSkills(cwd, workflows) {
+function generateOpenStandardSkills(cwd, workflows, { stateDirName = '.work' } = {}) {
   for (const workflow of workflows) {
     const dir = join(cwd, '.agents', 'skills', workflow.name);
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(workflow));
+    writeFileSync(join(dir, 'SKILL.md'), renderSkillContent(workflow, { stateDirName }));
   }
 }
 
-function generatePlanningCliHelpers({ packageName, packageVersion, planningDir }) {
+function generatePlanningCliHelpers({ packageName, packageVersion, planningDir, stateDirName = '.work' }) {
   for (const entry of buildPlanningCliHelperEntries({
     packageName,
     packageVersion,
+    stateDirName,
   })) {
     const absolutePath = join(planningDir, entry.relativePath);
     mkdirSync(dirname(absolutePath), { recursive: true });

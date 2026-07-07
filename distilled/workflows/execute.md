@@ -8,34 +8,34 @@ You follow the plan, verify before reporting completion, document deviations, an
 Load only the context needed for the next safe action. Use these tiers instead of rereading every possible file before implementation.
 
 ### mandatory_now
-Read before mutation: target `PLAN.md` frontmatter/current task/boundaries; bounded `.planning/SPEC.md` current state, active requirement IDs, and relevant constraints; `.planning/ROADMAP.md` phase goal/status/success criteria; immediately prior `.planning/phases/*-SUMMARY.md` `<judgment>` when present; and the preflight result from `<lifecycle_preflight>`.
-If no immediately prior SUMMARY `<judgment>` exists, check whether `.planning/.continue-here.bak` exists before mutation. If it exists, read its `<judgment>`, honor `<anti_regression>`, `<active_constraints>`, and `<decision_posture>`, then run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` (workflow-owned auto-clean).
+Read before mutation: target `PLAN.md` frontmatter/current task/boundaries; bounded `.work/SPEC.md` current state, active requirement IDs, and relevant constraints; `.work/ROADMAP.md` phase goal/status/success criteria; immediately prior `.work/phases/*-SUMMARY.md` `<judgment>` when present; and the preflight result from `<lifecycle_preflight>`.
+If no immediately prior SUMMARY `<judgment>` exists, check whether `.work/.continue-here.bak` exists before mutation. If it exists, read its `<judgment>`, honor `<anti_regression>`, `<active_constraints>`, and `<decision_posture>`, then run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` (workflow-owned auto-clean).
 
 ### task_scoped
 Read before editing each task, not all at startup: current task `<files>` entries, relevant source needed for current symbols/callers/tests/generated surfaces, and focused neighboring references found by targeted search.
 
 ### reference_only
-Consult deeper `.planning/SPEC.md` and `.planning/ROADMAP.md` sections only for the specific decision, requirement, or status being validated.
+Consult deeper `.work/SPEC.md` and `.work/ROADMAP.md` sections only for the specific decision, requirement, or status being validated.
 
 ### deferred_or_conditional
 Read only when the current task or a deviation needs them: older phase summaries and broader historical context beyond the mandatory-now handoff.
 </load_context>
 
 <repo_root_helper_contract>
-All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <lifecycle_preflight>
 Before implementing or mutating any lifecycle artifact, run:
-- `node .planning/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
+- `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
 If the preflight result is `blocked`, STOP and surface the blocker instead of inferring eligibility from workflow-local prose.
 
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject execution
-- it does not mutate `.planning/ROADMAP.md` by itself
-- owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `node .planning/bin/gsdd.mjs phase-status`
+- it does not mutate `.work/ROADMAP.md` by itself
+- owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `node .work/bin/gsdd.mjs phase-status`
 </lifecycle_preflight>
-<control_map_check>Before code mutation, run `node .planning/bin/gsdd.mjs control-map --json` when available. Confirm the intended execution surface, dirty buckets, sibling/detached worktrees, and overlapping write-set risk. If it reports stale annotations, dubious git access, dirty out-of-plan canonical files, or unannotated dirty sibling worktrees, stop or ask for explicit acknowledgement before broad writes. Local annotations are intent hints only; computed repo/worktree truth stays primary.
+<control_map_check>Before code mutation, run `node .work/bin/gsdd.mjs control-map --json` when available. Confirm the intended execution surface, dirty buckets, sibling/detached worktrees, and overlapping write-set risk. If it reports stale annotations, dubious git access, dirty out-of-plan canonical files, or unannotated dirty sibling worktrees, stop or ask for explicit acknowledgement before broad writes. Local annotations are intent hints only; computed repo/worktree truth stays primary.
 </control_map_check>
 <runtime_contract>
 Execution uses the same `Runtime` and `Assurance` types as planning and verification.
@@ -55,7 +55,7 @@ If plan runtime/assurance is missing, use `status: unknown`.
 A phase often contains multiple plans. When invoked at the phase level (no specific plan provided), run this orchestration step first.
 
 ### Discover Plans and Group by Wave
-1. Scan `.planning/phases/{phase_dir}/` for all `*-PLAN.md` files.
+1. Scan `.work/phases/{phase_dir}/` for all `*-PLAN.md` files.
 2. For each plan, read its frontmatter `wave` field (default: `wave: 1` if absent).
 3. Group plans by wave number. Collect the set of distinct wave numbers and sort them ascending.
 4. Check for `*-SUMMARY.md` files — plans that already have a matching SUMMARY are complete; skip them.
@@ -119,8 +119,8 @@ Checkpoint tasks are contract boundaries. Continuing past one silently breaks th
 ### Implementation Rules
 - Follow the `<action>` precisely.
 - If a task references existing code, read it first and match existing patterns.
-- If you are unsure about something, check `.planning/SPEC.md` decisions first, then ask if still unclear.
-- Do not run destructive git, broad cleanup, or file deletion actions without explicit human approval, except explicitly named workflow-owned housekeeping commands such as `.planning/.continue-here.bak` auto-clean.
+- If you are unsure about something, check `.work/SPEC.md` decisions first, then ask if still unclear.
+- Do not run destructive git, broad cleanup, or file deletion actions without explicit human approval, except explicitly named workflow-owned housekeeping commands such as `.work/.continue-here.bak` auto-clean.
 
 ### Change-Impact Discipline
 Before modifying any existing behavior, run a targeted ripple check for the current task:
@@ -195,7 +195,7 @@ git commit -m "feat: wire users page to real route"
 
 Git rules:
 - **Repo and user conventions win first.** This table is a reference, not a mandate.
-- `.planning/config.json -> gitProtocol` is advisory only.
+- `.work/config.json -> gitProtocol` is advisory only.
 - **Stage only files listed in the plan's `files-modified` frontmatter.** Never use `git add .` or `git add -A`. If you need to stage a file not in `files-modified`, record it as a deviation.
 - **Wrong-branch check:** Before significant implementation begins, verify HEAD is not `main` or `master` if repo convention expects a feature branch; if it is, STOP and hard-warn the user before proceeding.
 - **Transition-safety warning pass:** Before significant implementation begins, inspect staged, unstaged, untracked, unpushed, PR-less, stale/spent, and mixed-scope branch signals. Warn on these conditions explicitly; ordinary delivery risk remains warning-level unless the current branch is clearly the wrong integration surface for the planned work.
@@ -279,7 +279,7 @@ If a task fails verification 3 times after fixes, STOP and report the failure to
 <state_updates>
 After completing all tasks in the plan:
 
-### 1. Update `.planning/SPEC.md` "Current State"
+### 1. Update `.work/SPEC.md` "Current State"
 Keep the update factual and compact:
 
 ```markdown
@@ -292,18 +292,18 @@ Keep the update factual and compact:
 
 ### 2. Update ROADMAP.md Phase Status
 Do not hand-edit the ROADMAP checkbox line. Use the status-aware helper instead:
-- Run `node .planning/bin/gsdd.mjs phase-status {N} in_progress` when implementation work has started or this plan completes.
-- Do NOT run `node .planning/bin/gsdd.mjs phase-status {N} done` from execute. Only verify may close a phase after writing a `status: passed` VERIFICATION.md.
+- Run `node .work/bin/gsdd.mjs phase-status {N} in_progress` when implementation work has started or this plan completes.
+- Do NOT run `node .work/bin/gsdd.mjs phase-status {N} done` from execute. Only verify may close a phase after writing a `status: passed` VERIFICATION.md.
 
-The helper owns the `[ ]` / `[-]` / `[x]` mutation for `.planning/ROADMAP.md`, including both the overview line and the matching `## Phase Details` `**Status**` line when both exist.
+The helper owns the `[ ]` / `[-]` / `[x]` mutation for `.work/ROADMAP.md`, including both the overview line and the matching `## Phase Details` `**Status**` line when both exist.
 
-### 3. Rebaseline Reviewed Planning State
-After `.planning/SPEC.md` and `phase-status` updates are complete and reviewed as intentional, run:
-- `node .planning/bin/gsdd.mjs session-fingerprint write`
-This is the explicit planning-state handoff. Do not rely on a no-op `phase-status` command to rebaseline SPEC drift.
+### 3. Confirm Reviewed Planning State
+After `.work/SPEC.md` and `phase-status` updates are complete and reviewed as intentional, run:
+- `node .work/bin/gsdd.mjs next --json`
+This is the explicit routing-state handoff. Do not rely on a no-op `phase-status` command to prove the next action reflects reviewed SPEC or ROADMAP changes.
 
 ### 4. Write Phase Summary
-Create `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md` with:
+Create `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md` with:
 
 ```markdown
 ---
@@ -377,7 +377,7 @@ Write the structured sections honestly:
 Do not invent an inline PLAN task-state mutation scheme if the plan does not define one.
 Summary-driven progress tracking avoids silent drift between the plan contract and what execution actually completed.
 
-**MANDATORY: You MUST write SUMMARY.md to disk at `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md`. Output to conversation alone is NOT sufficient. If this file is not written to disk, execution is NOT complete.**
+**MANDATORY: You MUST write SUMMARY.md to disk at `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`. Output to conversation alone is NOT sufficient. If this file is not written to disk, execution is NOT complete.**
 </state_updates>
 
 <checkpoint_protocol>
@@ -414,9 +414,9 @@ For each completed task:
   [ ] Local verification passed
 
 For state updates:
-  [ ] .planning/SPEC.md "Current State" is accurate
+  [ ] .work/SPEC.md "Current State" is accurate
   [ ] ROADMAP.md status remains open (`[-]` if status was updated) until verification passes
-  [ ] `node .planning/bin/gsdd.mjs session-fingerprint write` ran after reviewed SPEC and phase-status updates
+  [ ] `node .work/bin/gsdd.mjs next --json` ran after reviewed SPEC and phase-status updates
   [ ] SUMMARY.md exists with `<checks>`, `<handoff>`, `<deltas>`, and `<judgment>` and reflects the actual work
 
 Overall:
@@ -435,21 +435,21 @@ Execution is done when all of these are true:
 - [ ] Deviation rules were followed
 - [ ] Mandatory-now context and task-scoped files read at the correct execution point
 - [ ] Authentication gates handled with the auth-gate protocol
-- [ ] `.planning/SPEC.md` current state is updated accurately
+- [ ] `.work/SPEC.md` current state is updated accurately
 - [ ] `ROADMAP.md` uses `[ ]`, `[-]`, `[x]` consistently and is not marked `[x]` by execute
-- [ ] `node .planning/bin/gsdd.mjs session-fingerprint write` was run after reviewed planning-state updates
+- [ ] `node .work/bin/gsdd.mjs next --json` was run after reviewed planning-state updates
 - [ ] `SUMMARY.md` is written
 - [ ] `SUMMARY.md` frontmatter records `runtime` and `assurance`
 - [ ] `SUMMARY.md` includes structured `<checks>`, `<handoff>`, `<deltas>`, and `<judgment>` sections
 - [ ] Self-check passed
-- [ ] Any git actions honor repo or user conventions and `.planning/config.json`
+- [ ] Any git actions honor repo or user conventions and `.work/config.json`
 </success_criteria>
 
 <completion>
 Report what was accomplished, then present the next step:
 ---
-**Completed:** Plan execution — created `.planning/phases/{phase_dir}/{plan_id}-SUMMARY.md`.
-**Next step:** Check `.planning/config.json` → `workflow.verifier`:
+**Completed:** Plan execution — created `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`.
+**Next step:** Check `.work/config.json` → `workflow.verifier`:
 - If `true`: run `/gsdd-verify` — verify that the phase goal was achieved
 - If `false` (or key missing): run `/gsdd-progress` — check status and route to the next phase
 

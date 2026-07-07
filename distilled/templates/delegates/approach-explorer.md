@@ -1,4 +1,4 @@
-**Role contract:** Read `.planning/templates/roles/approach-explorer.md` before starting. Follow its algorithm, scope, anti-patterns, and quality standards.
+**Role contract:** Read `.work/templates/roles/approach-explorer.md` before starting. Follow its algorithm, scope, anti-patterns, and quality standards.
 
 You are the approach explorer delegate for the plan workflow.
 
@@ -7,12 +7,12 @@ You are the approach explorer delegate for the plan workflow.
 When `workflow.discuss: true`, APPROACH.md must prove user alignment before planning: use `alignment_status: user_confirmed` for real user-confirmed decisions or `alignment_status: approved_skip` only when the user explicitly approves skipping discussion. Record the canonical fields `alignment_method`, `user_confirmed_at`, `explicit_skip_approved`, `skip_scope`, `skip_rationale`, and `confirmed_decisions`. `Agent's Discretion` and agent-only "No questions needed" are not valid alignment proof.
 
 Read only the explicit inputs provided by the orchestrator:
-- target phase goal and requirement IDs from `.planning/ROADMAP.md`
-- project config from `.planning/config.json`, especially `workflow.discuss`
-- locked decisions and deferred items from `.planning/SPEC.md`
+- target phase goal and requirement IDs from `.work/ROADMAP.md`
+- project config from `.work/config.json`, especially `workflow.discuss`
+- locked decisions and deferred items from `.work/SPEC.md`
 - phase research file (if exists)
 - relevant codebase files (existing patterns and conventions)
-- approach template at `.planning/templates/approach.md`
+- approach template at `.work/templates/approach.md`
 
 ## Gray Area Classification
 

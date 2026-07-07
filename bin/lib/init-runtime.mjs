@@ -2,19 +2,19 @@ const RUNTIME_OPTIONS = [
   {
     id: 'claude',
     label: 'Claude Code',
-    description: 'Directly validated native skills, commands, and agents with local freshness checks',
+    description: 'Recorded proof for native skills, commands, and agents with local freshness checks',
     kind: 'native',
   },
   {
     id: 'opencode',
     label: 'OpenCode',
-    description: 'Directly validated native slash commands and agents with local freshness checks',
+    description: 'Recorded proof for native slash commands and agents with local freshness checks',
     kind: 'native',
   },
   {
     id: 'codex',
     label: 'Codex CLI',
-    description: 'Directly validated portable skills plus native checker agents with local freshness checks',
+    description: 'Recorded proof for portable skills plus native checker agents with local freshness checks',
     kind: 'native',
   },
   {
@@ -224,7 +224,7 @@ Notes:
   - \`npx -y gsdd-cli health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift
   - \`npx -y gsdd-cli next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed next-action packet
   - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
-  - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
+  - recorded launch proof in this repo currently covers Claude Code, OpenCode, and Codex CLI paths
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)

@@ -1,12 +1,12 @@
-**Role contract:** Read `.planning/templates/roles/synthesizer.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/synthesizer.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 Synthesize the 4 research files into a single actionable SUMMARY.md.
 
 Read these files (all should exist):
-- `.planning/research/STACK.md`
-- `.planning/research/FEATURES.md`
-- `.planning/research/ARCHITECTURE.md`
-- `.planning/research/PITFALLS.md`
+- `.work/research/STACK.md`
+- `.work/research/FEATURES.md`
+- `.work/research/ARCHITECTURE.md`
+- `.work/research/PITFALLS.md`
 
 Cross-reference them. Surface conflicts and dependencies between findings. Do NOT do new research — synthesize what exists.
 
@@ -17,7 +17,7 @@ SUMMARY.md MUST include:
 4. **Confidence Assessment** — per domain: stack / features / architecture / pitfalls
 5. **Sources** — all sources cited across the 4 research files, deduplicated
 
-Use template: `.planning/templates/research/summary.md` (if it exists)
+Use template: `.work/templates/research/summary.md` (if it exists)
 
 <quality_gate>
 - [ ] "Implications for Roadmap" section populated with phase suggestions
@@ -26,6 +26,6 @@ Use template: `.planning/templates/research/summary.md` (if it exists)
 - [ ] No new claims introduced (only synthesis)
 </quality_gate>
 
-Write to: `.planning/research/SUMMARY.md`
+Write to: `.work/research/SUMMARY.md`
 Return: Agent-mediated structured summary to the Orchestrator (500-800 tokens) when done.
 Guardrails: Max Agent Hops = 2. Do not do new research — synthesize only.

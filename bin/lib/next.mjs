@@ -2,6 +2,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
+import { resolveStateDir } from './state-dir.mjs';
 import {
   NEXT_STATES,
   addOpenQuestion,
@@ -113,6 +114,15 @@ function manualReviewAction(targets, description) {
   };
 }
 
+function stateDirName(context) {
+  return context?.planning?.state_dir_name || '.work';
+}
+
+function statePath(context, relativePath = '') {
+  const dirName = stateDirName(context);
+  return relativePath ? `${dirName}/${relativePath}` : dirName;
+}
+
 function userQuestionAction(questionIds, description) {
   return {
     type: 'user_question',
@@ -123,9 +133,10 @@ function userQuestionAction(questionIds, description) {
 
 function summarizeControlMap(cwd) {
   try {
+    const stateDir = resolveStateDir(cwd).dir;
     return buildControlMap({
       workspaceRoot: cwd,
-      planningDir: join(cwd, '.planning'),
+      planningDir: stateDir,
     });
   } catch (error) {
     return {
@@ -299,7 +310,7 @@ function routeNext(ctx) {
   if (context.milestone?.has_audit) inputsConsidered.push('.work/milestone/AUDIT.md');
   else inputsSkipped.push('.work/milestone/AUDIT.md: missing');
   if (context.milestone?.phase_packet_count > 0) inputsConsidered.push('.work/milestone/phases/*');
-  if (context.planning.has_brownfield_change) inputsConsidered.push('.planning/brownfield-change/CHANGE.md');
+  if (context.planning.has_brownfield_change) inputsConsidered.push(statePath(context, 'brownfield-change/CHANGE.md'));
 
   if (context.graph.invalid.length > 0) {
     return packet({
@@ -453,14 +464,14 @@ function routeNext(ctx) {
       reason: 'Active brownfield-change authority and .work/milestone authority both exist; continuing would silently choose between two continuity roots.',
       confidence: 'high',
       next_command: null,
-      next_action: manualReviewAction(['.planning/brownfield-change/CHANGE.md', '.work/milestone/MILESTONE.md', '.work/milestone/ROADMAP.md'], 'Resolve the authority conflict before routing to plan, execute, or verify.'),
+      next_action: manualReviewAction([statePath(context, 'brownfield-change/CHANGE.md'), '.work/milestone/MILESTONE.md', '.work/milestone/ROADMAP.md'], 'Resolve the authority conflict before routing to plan, execute, or verify.'),
       authority: 'blocked',
       route_kind: 'authority_conflict',
       blocked_by: ['brownfield_change', 'work_milestone'],
       requires_user: false,
       constraints,
       evidence_required: ['One continuity authority must be selected or archived before continuing.'],
-      artifacts_to_read: ['.planning/brownfield-change/CHANGE.md', '.work/milestone/MILESTONE.md', '.work/milestone/ROADMAP.md'],
+      artifacts_to_read: [statePath(context, 'brownfield-change/CHANGE.md'), '.work/milestone/MILESTONE.md', '.work/milestone/ROADMAP.md'],
       repo_warnings: repoWarningsFromControlMap(controlMap),
       privacy_notes: privacyNotes,
       inputs_considered: inputsConsidered,
@@ -475,14 +486,14 @@ function routeNext(ctx) {
       reason: 'Active bounded brownfield change is marked blocked; resolve the blocker recorded in CHANGE.md before planning or execution.',
       confidence: 'high',
       next_command: null,
-      next_action: manualReviewAction(['.planning/brownfield-change/CHANGE.md', '.planning/brownfield-change/HANDOFF.md'], 'Resolve the blocker and update the brownfield change status before continuing.'),
+      next_action: manualReviewAction([statePath(context, 'brownfield-change/CHANGE.md'), statePath(context, 'brownfield-change/HANDOFF.md')], 'Resolve the blocker and update the brownfield change status before continuing.'),
       authority: 'brownfield_change',
       route_kind: 'brownfield_change_blocked',
       blocked_by: ['brownfield_change'],
       requires_user: false,
       constraints,
-      artifacts_to_read: ['.planning/brownfield-change/CHANGE.md', '.planning/brownfield-change/HANDOFF.md'],
-      artifacts_to_write: ['.planning/brownfield-change/CHANGE.md', '.planning/brownfield-change/HANDOFF.md'],
+      artifacts_to_read: [statePath(context, 'brownfield-change/CHANGE.md'), statePath(context, 'brownfield-change/HANDOFF.md')],
+      artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md'), statePath(context, 'brownfield-change/HANDOFF.md')],
       repo_warnings: repoWarningsFromControlMap(controlMap),
       privacy_notes: privacyNotes,
       inputs_considered: inputsConsidered,
@@ -497,18 +508,18 @@ function routeNext(ctx) {
       reason: 'Active bounded brownfield change is ready for verification; verify the bounded closeout proof before more planning.',
       confidence: 'high',
       next_command: null,
-      next_action: manualReviewAction(['.planning/brownfield-change/CHANGE.md', '.planning/brownfield-change/VERIFICATION.md'], 'Verify the bounded brownfield change and update VERIFICATION.md.'),
+      next_action: manualReviewAction([statePath(context, 'brownfield-change/CHANGE.md'), statePath(context, 'brownfield-change/VERIFICATION.md')], 'Verify the bounded brownfield change and update VERIFICATION.md.'),
       authority: 'brownfield_change',
       route_kind: 'brownfield_change_verification',
       requires_user: false,
       constraints,
       evidence_required: ['VERIFICATION.md must prove the CHANGE.md done-when and closeout path or record concrete gaps.'],
       artifacts_to_read: [
-        '.planning/brownfield-change/CHANGE.md',
-        '.planning/brownfield-change/HANDOFF.md',
-        '.planning/brownfield-change/VERIFICATION.md',
+        statePath(context, 'brownfield-change/CHANGE.md'),
+        statePath(context, 'brownfield-change/HANDOFF.md'),
+        statePath(context, 'brownfield-change/VERIFICATION.md'),
       ],
-      artifacts_to_write: ['.planning/brownfield-change/VERIFICATION.md'],
+      artifacts_to_write: [statePath(context, 'brownfield-change/VERIFICATION.md')],
       repo_warnings: repoWarningsFromControlMap(controlMap),
       privacy_notes: privacyNotes,
       inputs_considered: inputsConsidered,
@@ -529,20 +540,20 @@ function routeNext(ctx) {
       requires_user: false,
       constraints: [
         ...constraints,
-        'Bounded brownfield changes use `.planning/brownfield-change/`, not `.planning/phases/` or ROADMAP checkboxes.',
+        `Bounded brownfield changes use \`${statePath(context, 'brownfield-change/')}\`, not \`${statePath(context, 'phases/')}\` or ROADMAP checkboxes.`,
         'Promote to `gsdd-new-project` or `gsdd-new-milestone` only when the change no longer fits one active stream.',
       ],
       evidence_required: ['Plan must preserve the bounded CHANGE.md goal, scope, done-when, next action, and closeout path.'],
       artifacts_to_read: [
-        '.planning/brownfield-change/CHANGE.md',
-        '.planning/brownfield-change/HANDOFF.md',
-        '.planning/brownfield-change/VERIFICATION.md',
-        '.planning/SPEC.md',
-        '.planning/ROADMAP.md',
+        statePath(context, 'brownfield-change/CHANGE.md'),
+        statePath(context, 'brownfield-change/HANDOFF.md'),
+        statePath(context, 'brownfield-change/VERIFICATION.md'),
+        statePath(context, 'SPEC.md'),
+        statePath(context, 'ROADMAP.md'),
       ],
       artifacts_to_write: [
-        '.planning/brownfield-change/CHANGE.md',
-        '.planning/brownfield-change/HANDOFF.md',
+        statePath(context, 'brownfield-change/CHANGE.md'),
+        statePath(context, 'brownfield-change/HANDOFF.md'),
       ],
       repo_warnings: repoWarningsFromControlMap(controlMap),
       privacy_notes: privacyNotes,
@@ -553,7 +564,7 @@ function routeNext(ctx) {
   }
 
   if (hasUnverifiedSummaries(context.planning.phases)) {
-    return enrichRoute({ state: 'verify', reason: 'Legacy `.planning` phase summaries exist without matching verification reports.' }, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
+    return enrichRoute({ state: 'verify', reason: `${statePath(context)} phase summaries exist without matching verification reports.` }, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
   }
 
   const workMilestoneRoute = routeFromWorkMilestone(context, manifest);
@@ -565,7 +576,7 @@ function routeNext(ctx) {
   if (!legacyComplete) {
     return packet({
       state: 'plan',
-      reason: '`.work/goal.md` exists, but canonical `.planning` lifecycle truth is incomplete; create or refresh the Workspine-native plan from `.work`.',
+      reason: `\`.work/goal.md\` exists, but canonical ${statePath(context)} lifecycle truth is incomplete; create or refresh the Workspine-native plan from \`.work\`.`,
       confidence: context.planning.exists ? 'medium' : 'high',
       next_command: 'gsdd-plan',
       next_action: workflowAction('gsdd-plan', 'Plan the Workspine-native milestone from `.work` truth.'),
@@ -576,7 +587,7 @@ function routeNext(ctx) {
       requires_user: false,
       constraints: [
         ...constraints,
-        'Do not infer normal `.planning` milestone progress when SPEC.md, ROADMAP.md, or MILESTONES.md are missing.',
+        `Do not infer normal ${statePath(context)} milestone progress when SPEC.md, ROADMAP.md, or MILESTONES.md are missing.`,
       ],
       evidence_required: ['Plan must map `.work/goal.md` requirements to implementation and verification artifacts.'],
       artifacts_to_read: ['.work/goal.md', '.work/research/2026-06-20-long-term-agent-harness-consistency.md'],
@@ -585,9 +596,9 @@ function routeNext(ctx) {
       inputs_considered: inputsConsidered,
       inputs_skipped: [
         ...inputsSkipped,
-        !context.planning.has_spec ? '.planning/SPEC.md: missing' : null,
-        !context.planning.has_roadmap ? '.planning/ROADMAP.md: missing' : null,
-        !context.planning.has_milestones ? '.planning/MILESTONES.md: missing' : null,
+        !context.planning.has_spec ? `${statePath(context, 'SPEC.md')}: missing` : null,
+        !context.planning.has_roadmap ? `${statePath(context, 'ROADMAP.md')}: missing` : null,
+        !context.planning.has_milestones ? `${statePath(context, 'MILESTONES.md')}: missing` : null,
       ].filter(Boolean),
       trace_refs: traceRefs,
     });
@@ -605,7 +616,7 @@ function routeNext(ctx) {
     repo_warnings: repoWarningsFromControlMap(controlMap),
     requires_user: false,
     constraints,
-    artifacts_to_read: ['.work/goal.md', '.planning/SPEC.md', '.planning/ROADMAP.md', '.planning/MILESTONES.md'],
+    artifacts_to_read: ['.work/goal.md', statePath(context, 'SPEC.md'), statePath(context, 'ROADMAP.md'), statePath(context, 'MILESTONES.md')],
     artifacts_to_write: ['.work/focus/current.md'],
     privacy_notes: privacyNotes,
     inputs_considered: inputsConsidered,
@@ -709,10 +720,10 @@ function defaultReadArtifacts(state, context) {
   if (state === 'execute') return ['.work/goal.md', '.work/focus/current.md'];
   if (state === 'verify') return context.milestone?.has_roadmap
     ? ['.work/goal.md', '.work/milestone/ROADMAP.md', '.work/milestone/phases/*/*-VERIFY.md']
-    : ['.work/goal.md', '.work/evidence/manifest.json', '.planning/phases/*/*-SUMMARY.md'];
+    : ['.work/goal.md', '.work/evidence/manifest.json', statePath(context, 'phases/*/*-SUMMARY.md')];
   if (state === 'audit') return context.milestone?.has_roadmap
     ? ['.work/goal.md', '.work/milestone/ROADMAP.md', '.work/milestone/phases/*/*-VERIFY.md']
-    : ['.work/goal.md', '.work/evidence/manifest.json', '.planning/phases/**/*-VERIFICATION.md'];
+    : ['.work/goal.md', '.work/evidence/manifest.json', statePath(context, 'phases/**/*-VERIFICATION.md')];
   if (state === 'fix_gaps') return ['.work/evidence/manifest.json'];
   if (state === 'dogfood') return ['.work/goal.md', '.work/evidence/manifest.json'];
   if (state === 'pause') return ['.work/handoff/current.md'];

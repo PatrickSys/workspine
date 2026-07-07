@@ -37,7 +37,7 @@ Read only the file for the phase you are in:
 
 <governance>
 Mandatory:
-- Read before you write. If `.planning/` exists, read `.planning/SPEC.md`, `.planning/ROADMAP.md`, `.planning/config.json`.
+- Read before you write. If `.work/` exists, read `.work/SPEC.md`, `.work/ROADMAP.md`, `.work/config.json`; use matching `.planning/` paths only in legacy workspaces.
 - Stay in scope. Implement only what the current phase plan describes.
 - Never hallucinate. Confirm paths and APIs from repo or docs before use.
 - Research-first when unfamiliar. Log evidence, then plan.
@@ -45,10 +45,10 @@ Mandatory:
 </governance>
 
 <project_structure>
-Workspine uses `.planning/` as the durable workspace:
+Workspine uses `.work/` as the durable workspace. Legacy `.planning/` workspaces are still read and supported.
 
 ```
-.planning/
+.work/
   SPEC.md
   ROADMAP.md
   config.json
@@ -69,22 +69,22 @@ npx -y gsdd-cli init --tools agents
 ```
 
 Behavior:
-- Always: generates open-standard skills at `.agents/skills/gsdd-*/SKILL.md` by embedding `distilled/workflows/*.md`, plus repo-local deterministic helpers at `.planning/bin/gsdd.mjs`.
+- Always: generates open-standard skills at `.agents/skills/gsdd-*/SKILL.md` by embedding `distilled/workflows/*.md`, plus repo-local deterministic helpers at `.work/bin/gsdd.mjs` (or `.planning/bin/gsdd.mjs` in legacy workspaces).
 - Optional: generates tool adapters (root `AGENTS.md`, Claude `.claude/skills` + `.claude/commands` alias + `.claude/agents`, OpenCode `.opencode/commands` + `.opencode/agents`, Codex CLI `.codex/agents/gsdd-plan-checker.toml`).
 - Codex CLI: uses the portable skill entry surface and the generated `.codex/agents/` checker/approach-explorer agents; it does not use `.codex/AGENTS.md` as the primary integration path.
 - Root `AGENTS.md` is only written when explicitly requested (so we do not pollute existing user governance).
 </adapters>
 
 <templates>
-Use templates from `.planning/templates/` (copied from `distilled/templates/`) when producing planning artifacts.
+Use templates from `.work/templates/` (copied from `distilled/templates/`) when producing planning artifacts; use `.planning/templates/` only in legacy workspaces.
 
 Core:
-- `.planning/templates/spec.md` -> `.planning/SPEC.md`
-- `.planning/templates/roadmap.md` -> `.planning/ROADMAP.md`
+- `.work/templates/spec.md` -> `.work/SPEC.md`
+- `.work/templates/roadmap.md` -> `.work/ROADMAP.md`
 
 Research:
-- `.planning/templates/research/*.md` -> `.planning/research/*.md`
+- `.work/templates/research/*.md` -> `.work/research/*.md`
 
 Brownfield codebase mapping:
-- `.planning/templates/codebase/*.md` -> `.planning/codebase/*.md`
+- `.work/templates/codebase/*.md` -> `.work/codebase/*.md`
 </templates>

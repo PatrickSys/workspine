@@ -109,7 +109,7 @@ describe('next command bootstrap', () => {
     assert.match(result.output, /Waiting on you:/);
     assert.match(result.output, /Evidence required:/);
     assert.match(result.output, /Skipped inputs:/);
-    assert.match(result.output, /\.planning\/SPEC\.md: missing/);
+    assert.match(result.output, /\.work\/SPEC\.md: missing/);
   });
 });
 
@@ -516,7 +516,7 @@ describe('next command questions and decisions', () => {
 });
 
 describe('next command routing', () => {
-  test('missing legacy planning truth routes to Workspine-native planning, not false lifecycle progress', async () => {
+  test('missing Workspine lifecycle truth routes to Workspine-native planning, not false lifecycle progress', async () => {
     await initWork();
     fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
 
@@ -525,10 +525,10 @@ describe('next command routing', () => {
     assert.strictEqual(result.state, 'plan');
     assert.strictEqual(result.authority, 'work');
     assert.strictEqual(result.route_kind, 'work_native_plan');
-    assert.match(result.reason, /canonical `.planning` lifecycle truth is incomplete/);
-    assert.ok(result.inputs_skipped.includes('.planning/SPEC.md: missing'));
-    assert.ok(result.inputs_skipped.includes('.planning/ROADMAP.md: missing'));
-    assert.ok(result.inputs_skipped.includes('.planning/MILESTONES.md: missing'));
+    assert.match(result.reason, /canonical .work lifecycle truth is incomplete/);
+    assert.ok(result.inputs_skipped.includes('.work/SPEC.md: missing'));
+    assert.ok(result.inputs_skipped.includes('.work/ROADMAP.md: missing'));
+    assert.ok(result.inputs_skipped.includes('.work/MILESTONES.md: missing'));
   });
 
   test('active brownfield change routes to brownfield planning before unrelated roadmap phase preflight', async () => {

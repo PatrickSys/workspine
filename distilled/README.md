@@ -37,8 +37,8 @@ Workspine is the product name. The package, CLI commands, workflow prefixes, and
 Workspine began as a fork of Get Shit Done, whose long-horizon workflow proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native tool with fewer public workflows, generated runtime surfaces from a portable core, proof required before closing work, and decisions that keep their why.
 
 Launch proof posture:
-- Directly validated in repo truth: Claude Code, Codex CLI, OpenCode
-- Qualified support only: Cursor, Copilot, Gemini CLI can use the shared `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it; proof and ergonomics differ from the directly validated runtimes
+- Recorded launch proof in repo truth currently covers Claude Code, Codex CLI, and OpenCode paths
+- Qualified support only: Cursor, Copilot, Gemini CLI can use the shared `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it; proof and ergonomics differ from the recorded paths above
 - Codex CLI validation does not automatically cover Codex VS Code or the Codex app; use native discovery there when available, otherwise open or paste `.agents/skills/gsdd-*/SKILL.md`
 - Repo-local generated runtime surfaces are renderer-checked through `npx -y gsdd-cli health`, with deterministic repair through `npx -y gsdd-cli update` (bare `gsdd ...` is equivalent only when globally installed)
 - Public proof entrypoints: `docs/BROWNFIELD-PROOF.md`, `docs/proof/consumer-node-cli/README.md`, `docs/RUNTIME-SUPPORT.md`, `docs/VERIFICATION-DISCIPLINE.md`
@@ -100,14 +100,6 @@ npx -y gsdd-cli init       -> bootstrap (create .work/, copy templates, generate
 
 The main operator spine is four workflow moves after bootstrap: `new-project -> plan -> execute -> verify`. The other public workflow surfaces are support lanes for milestone closeout, quick work, progress, pause/resume, and brownfield orientation.
 
-Helper command for long-running sessions:
-
-```
-npx -y gsdd-cli control-map [--json] [--with-ignored] -> computed repo/worktree/planning state plus local annotations
-npx -y gsdd-cli control-map annotate set|clear -> optional stale-aware local intent maintenance
-npx -y gsdd-cli closeout-report [--json] [--phase <N>] -> read-only replay of closeout blockers, warnings, fixes, and next safe action
-```
-
 ## Brownfield Entry Contract
 
 Use the same three-way routing everywhere:
@@ -138,7 +130,7 @@ Use the same three-way routing everywhere:
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
 - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.work/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
-- `control-map` is a helper command, not a lifecycle workflow: it computes repo/worktree/planning truth first and treats `.work/.local/` annotations as local intent only. `control-map annotate` can maintain those annotations, but cannot create ownership, cleanup, or lifecycle authority.
+- Repo/worktree status helpers compute from git and local workflow state first; local annotations are intent hints only and cannot create ownership, cleanup, or lifecycle authority.
 - Codex VS Code/app are separate surfaces from Codex CLI; do not claim the CLI proof for them unless they expose compatible skill discovery. Fallback is opening or pasting the generated `SKILL.md`.
 - `npx -y gsdd-cli health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `npx -y gsdd-cli update`.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.

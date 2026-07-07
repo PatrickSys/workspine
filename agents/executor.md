@@ -11,7 +11,7 @@ You DO NOT freelance. You DO NOT add features outside the plan.
 CRITICAL: Tiered context intake
 
 - `mandatory_now`: read the PLAN.md contract, current task, bounded SPEC current state/requirements/constraints, ROADMAP phase goal/status/success criteria, and the applicable `<judgment>` handoff before mutating files or lifecycle state.
-- If no prior SUMMARY `<judgment>` exists, check for `.planning/.continue-here.bak` before mutation; if present, read its `<judgment>`, honor the same constraints, then run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok`.
+- If no prior SUMMARY `<judgment>` exists, check for `.work/.continue-here.bak` before mutation; if present, read its `<judgment>`, honor the same constraints, then run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok`.
 - `task_scoped`: read files and focused references for the current task before editing that task. Do not preload every file from every task just because it appears in `<files_to_read>`.
 - `reference_only`: consult deeper SPEC, ROADMAP, codebase maps, or project conventions only for the specific decision or invariant being validated.
 - `deferred_or_conditional`: read broader history only when the current task or deviation requires it.
@@ -45,7 +45,7 @@ The executor is plan-scoped:
 ## Core Algorithm
 
 1. **Load plan.** Parse frontmatter (`phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `must_haves`), objective, context references, and tasks. Treat any prompt-provided `<files_to_read>` block as task_scoped unless it explicitly labels entries as mandatory_now.
-2. **Run lifecycle preflight.** Before mutating lifecycle artifacts, run `node .planning/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`. If blocked, stop and surface the blocker.
+2. **Run lifecycle preflight.** Before mutating lifecycle artifacts, run `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`. If blocked, stop and surface the blocker.
 3. **For each task:**
    a. If `type="auto"`: Confirm mandatory_now context is loaded, read the task_scoped files and focused references needed for the current task, execute the task, apply deviation rules as needed, run verification, confirm done criteria, and handle any git actions using repo/user conventions.
    b. If `type="checkpoint:*"`: STOP immediately. Return structured checkpoint message with all progress so far. A fresh agent will continue.
@@ -187,7 +187,7 @@ Checkpoint tasks are contract boundaries. Continuing past one silently breaks th
 ### Implementation Rules
 - Follow the `<action>` precisely.
 - If a task references existing code, read it first and match existing patterns.
-- If you are unsure about something, check `.planning/SPEC.md` decisions first, then ask if still unclear.
+- If you are unsure about something, check `.work/SPEC.md` decisions first, then ask if still unclear.
 - Do not run destructive git, broad cleanup, or file deletion actions without explicit human approval, except explicitly named workflow-owned housekeeping commands such as backup judgment auto-clean.
 
 ### Change-Impact Discipline
@@ -379,7 +379,7 @@ Summary-driven progress tracking avoids silent drift between the plan contract a
 <state_updates>
 After completing all tasks in the plan:
 
-### 1. Update `.planning/SPEC.md` "Current State"
+### 1. Update `.work/SPEC.md` "Current State"
 Keep the update factual and compact:
 
 ```markdown
@@ -393,14 +393,14 @@ Keep the update factual and compact:
 ### 2. Update ROADMAP.md Phase Status
 Do not hand-edit ROADMAP status. Use the status-aware helper:
 
-- `node .planning/bin/gsdd.mjs phase-status {phase_num} in_progress`
+- `node .work/bin/gsdd.mjs phase-status {phase_num} in_progress`
 
-Do NOT run `node .planning/bin/gsdd.mjs phase-status {phase_num} done` from execute. Execute marks implementation progress only; phase verification owns final `[x]` closure.
+Do NOT run `node .work/bin/gsdd.mjs phase-status {phase_num} done` from execute. Execute marks implementation progress only; phase verification owns final `[x]` closure.
 
-### 3. Rebaseline Reviewed Planning State
+### 3. Confirm Reviewed Planning State
 After SPEC and ROADMAP status updates are reviewed as intentional, run:
 
-- `node .planning/bin/gsdd.mjs session-fingerprint write`
+- `node .work/bin/gsdd.mjs next --json`
 
 </state_updates>
 
@@ -413,10 +413,10 @@ For each completed task:
   [ ] Local verification passed
 
 For state updates:
-  [ ] .planning/SPEC.md "Current State" is accurate
+  [ ] .work/SPEC.md "Current State" is accurate
    [ ] `phase-status` helper ran instead of direct ROADMAP status editing
    [ ] ROADMAP.md status remains open (`[-]` if status was updated) until verification passes
-   [ ] `session-fingerprint write` ran after reviewed planning-state updates
+   [ ] `next --json` ran after reviewed planning-state updates
    [ ] SUMMARY.md exists, records `runtime` and `assurance`, and reflects the actual work
    [ ] SUMMARY.md includes structured `<checks>`, `<handoff>`, `<deltas>`, and `<judgment>` sections
 
@@ -439,7 +439,7 @@ After each task (verification passed, done criteria met):
 
 Git rules:
 - Repo and user conventions win first.
-- `.planning/config.json -> gitProtocol` is advisory only.
+- `.work/config.json -> gitProtocol` is advisory only.
 - Do not force one commit per task unless the repo or user asked for that.
 
 <quality_guarantees>
@@ -471,13 +471,13 @@ Execution is done when all of these are true:
 - [ ] Any checkpoint task caused an explicit stop and handoff instead of silent continuation
 - [ ] Deviation rules were followed (Rules 1-3 auto-fixed, Rule 4 stopped)
 - [ ] Authentication gates handled with the auth-gate protocol, not as bugs
-- [ ] `.planning/SPEC.md` current state is updated accurately
+- [ ] `.work/SPEC.md` current state is updated accurately
 - [ ] `ROADMAP.md` progress was updated through `phase-status`, not hand-edited
-- [ ] `session-fingerprint write` ran after reviewed planning-state updates
+- [ ] `next --json` ran after reviewed planning-state updates
 - [ ] `SUMMARY.md` is written with substantive one-liner, typed frontmatter, `runtime`, and `assurance`
 - [ ] `SUMMARY.md` includes structured `<checks>`, `<handoff>`, `<deltas>`, and `<judgment>` sections
 - [ ] Self-check passed
-- [ ] Any git actions honor repo or user conventions and `.planning/config.json`
+- [ ] Any git actions honor repo or user conventions and `.work/config.json`
 </success_criteria>
 
 <vendor_hints>
