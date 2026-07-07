@@ -105,7 +105,8 @@ describe('next command bootstrap', () => {
 
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /Why:/);
-    assert.match(result.output, /Approval:/);
+    assert.match(result.output, /Where things stand/);
+    assert.match(result.output, /Waiting on you:/);
     assert.match(result.output, /Evidence required:/);
     assert.match(result.output, /Skipped inputs:/);
     assert.match(result.output, /\.planning\/SPEC\.md: missing/);

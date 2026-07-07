@@ -748,13 +748,78 @@ function findTrustGate(manifest) {
   };
 }
 
+const CARD_WIDTH = 62;
+
+const STATE_LABELS = {
+  research: 'Look into the problem before planning',
+  plan: 'Plan the next piece of work',
+  execute: 'Build the planned work',
+  verify: 'Prove the last piece of work is done',
+  audit: 'Check the whole milestone holds together',
+  fix_gaps: 'Close the gaps that checking found',
+  dogfood: 'Use the result and record one honest finding',
+  complete: 'Finish and archive the milestone',
+  ask_user: 'Answer a question before work can continue',
+  pause: 'Work is paused; pick it back up when ready',
+  blocked: 'Work is stuck; clear the blocker below',
+};
+
+function cardFrame(text) {
+  return `│${text.padEnd(CARD_WIDTH)}│`;
+}
+
+function pushCardLine(rows, indent, hang, text) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    rows.push(cardFrame(' '.repeat(indent)));
+    return;
+  }
+  let prefix = ' '.repeat(indent);
+  let line = prefix;
+  for (const word of words) {
+    const candidate = line === prefix ? line + word : `${line} ${word}`;
+    if (candidate.length <= CARD_WIDTH) {
+      line = candidate;
+    } else {
+      rows.push(cardFrame(line));
+      prefix = ' '.repeat(hang);
+      line = prefix + word;
+    }
+  }
+  rows.push(cardFrame(line));
+}
+
+export function renderNextCard(packetValue) {
+  const top = `┌${'─'.repeat(CARD_WIDTH)}┐`;
+  const rule = `├${'─'.repeat(CARD_WIDTH)}┤`;
+  const bottom = `└${'─'.repeat(CARD_WIDTH)}┘`;
+  const label = STATE_LABELS[packetValue.state] || packetValue.state;
+  const action = (packetValue.next_action ? renderAction(packetValue.next_action) : null)
+    || packetValue.next_command
+    || '(nothing queued)';
+  const waiting = packetValue.requires_user ? 'yes' : 'no';
+
+  const rows = [top];
+  rows.push(cardFrame('  Where things stand'));
+  rows.push(rule);
+  pushCardLine(rows, 2, 7, `Now: ${label}`);
+  pushCardLine(rows, 2, 7, `Why: ${packetValue.reason || ''}`);
+  rows.push(cardFrame(''));
+  rows.push(cardFrame('  Do this next:'));
+  pushCardLine(rows, 4, 4, action);
+  rows.push(cardFrame(''));
+  rows.push(cardFrame(`  Waiting on you:  ${waiting}`));
+  rows.push(cardFrame(''));
+  rows.push(cardFrame('  Stuck?  Run: gsdd next --format human'));
+  rows.push(cardFrame(''));
+  rows.push(cardFrame('  Safety checks — this computer: not set up yet ·'));
+  rows.push(cardFrame('                 server: not set up yet'));
+  rows.push(bottom);
+  return rows.join('\n');
+}
+
 function printHuman(packetValue) {
-  console.log(`gsdd next: ${packetValue.state}`);
-  console.log(`Why: ${packetValue.reason}`);
-  if (packetValue.next_action) console.log(`Next: ${renderAction(packetValue.next_action)}`);
-  else if (packetValue.next_command) console.log(`Next: ${packetValue.next_command}`);
-  if (packetValue.requires_user) console.log('Approval: required');
-  else console.log('Approval: not required');
+  console.log(renderNextCard(packetValue));
   if (packetValue.questions.length > 0) {
     console.log('\nQuestions:');
     for (const question of packetValue.questions) {
