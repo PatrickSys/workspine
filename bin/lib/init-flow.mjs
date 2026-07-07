@@ -89,8 +89,8 @@ export function createCmdInit(ctx) {
     mkdirSync(join(ctx.planningDir, 'phases'), { recursive: true });
     mkdirSync(join(ctx.planningDir, 'research'), { recursive: true });
     console.log(existed
-      ? '  - .planning/ already exists (ensured subdirectories)'
-      : '  - created .planning/ directory structure');
+      ? `  - ${ctx.stateDirName}/ already exists (ensured subdirectories)`
+      : `  - created ${ctx.stateDirName}/ directory structure`);
 
     installProjectTemplates(ctx);
     await ensureConfig({
@@ -99,8 +99,9 @@ export function createCmdInit(ctx) {
       isAuto,
       promptApi,
       preselectedConfig: interactiveSession.config,
+      stateDirName: ctx.stateDirName,
     });
-    ensureGitignoreEntry(ctx.cwd, '.planning/.local/', '  - ensured .planning/.local/ is gitignored');
+    ensureGitignoreEntry(ctx.cwd, `${ctx.stateDirName}/.local/`, `  - ensured ${ctx.stateDirName}/.local/ is gitignored`);
 
     if (briefSource) {
       cpSync(briefSource, join(ctx.planningDir, 'PROJECT_BRIEF.md'));
@@ -264,33 +265,35 @@ function stripManifestTimestamp(manifest) {
   return rest;
 }
 
-async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedConfig = null }) {
+async function ensureConfig({ cwd, planningDir, stateDirName = '.work', isAuto, promptApi, preselectedConfig = null }) {
   const configFile = join(planningDir, 'config.json');
+  const ignoreEntry = `${stateDirName}/`;
+  const ignoreMsg = `  - ensured ${stateDirName}/ is gitignored`;
   if (existsSync(configFile)) {
-    console.log('  - .planning/config.json already exists');
+    console.log(`  - ${stateDirName}/config.json already exists`);
     return;
   }
 
   if (preselectedConfig) {
     writeFileSync(configFile, JSON.stringify(preselectedConfig, null, 2));
-    console.log('  - saved .planning/config.json (guided wizard)\n');
-    if (!preselectedConfig.commitDocs) ensureGitignoreEntry(cwd, '.planning/', '  - ensured .planning/ is gitignored');
+    console.log(`  - saved ${stateDirName}/config.json (guided wizard)\n`);
+    if (!preselectedConfig.commitDocs) ensureGitignoreEntry(cwd, ignoreEntry, ignoreMsg);
     return;
   }
 
   if (isAuto) {
     const config = buildDefaultConfig({ autoAdvance: true });
     writeFileSync(configFile, JSON.stringify(config, null, 2));
-    console.log('  - wrote .planning/config.json (auto defaults)\n');
-    if (!config.commitDocs) ensureGitignoreEntry(cwd, '.planning/', '  - ensured .planning/ is gitignored');
+    console.log(`  - wrote ${stateDirName}/config.json (auto defaults)\n`);
+    if (!config.commitDocs) ensureGitignoreEntry(cwd, ignoreEntry, ignoreMsg);
     return;
   }
 
   if (!process.stdin.isTTY) {
     const config = buildDefaultConfig({ autoAdvance: false });
     writeFileSync(configFile, JSON.stringify(config, null, 2));
-    console.log('  - wrote .planning/config.json (non-interactive defaults)\n');
-    if (!config.commitDocs) ensureGitignoreEntry(cwd, '.planning/', '  - ensured .planning/ is gitignored');
+    console.log(`  - wrote ${stateDirName}/config.json (non-interactive defaults)\n`);
+    if (!config.commitDocs) ensureGitignoreEntry(cwd, ignoreEntry, ignoreMsg);
     return;
   }
 
@@ -303,8 +306,8 @@ async function ensureConfig({ cwd, planningDir, isAuto, promptApi, preselectedCo
   }
 
   writeFileSync(configFile, JSON.stringify(selected, null, 2));
-  console.log('  - saved .planning/config.json (guided wizard)\n');
-  if (!selected.commitDocs) ensureGitignoreEntry(cwd, '.planning/', '  - ensured .planning/ is gitignored');
+  console.log(`  - saved ${stateDirName}/config.json (guided wizard)\n`);
+  if (!selected.commitDocs) ensureGitignoreEntry(cwd, ignoreEntry, ignoreMsg);
 }
 
 function ensureGitignoreEntry(cwd, entry, message) {
