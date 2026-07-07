@@ -2,9 +2,9 @@
 
 # Workspine
 
-Workspine is a repo-native delivery spine for AI-assisted software work: planning, checking, execution, verification, and handoff live in the repo so any agent or runtime can pick up where the last one stopped.
+Workspine is a Spec Driven Development framework for AI-assisted software work: planning, checking, execution, verification, and handoff live in the repo, so any agent or runtime can pick up where the last one stopped. Decisions keep their why.
 
-Directly validated today: Claude Code, Codex CLI, OpenCode. Qualified support: Cursor, Copilot, Gemini.
+Proof status: one real consumer lifecycle with Codex checker support. Qualified support: Cursor, Copilot, Gemini.
 
 The public product name is Workspine. The retained technical contracts remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/`.
 
@@ -46,9 +46,9 @@ Workspine ships 14 workflows. The package and CLI are `gsdd-cli` / `gsdd-*` — 
 
 ## What This Is
 
-Workspine gives coding agents a durable workflow spine for work that spans sessions, agents, or runtimes. It does not host a control plane; it writes portable planning and proof artifacts into the repo.
+Workspine gives coding agents a durable workflow for work that spans sessions, agents, or runtimes. There is no hosted service; it writes portable planning and proof artifacts into the repo.
 
-Workspine began as a fork of Get Shit Done and keeps the verification-first delivery spine while stripping runtime lock-in.
+Workspine began as a fork of Get Shit Done and keeps the verification-first workflow while stripping runtime lock-in.
 
 ---
 
@@ -60,7 +60,42 @@ Workspine began as a fork of Get Shit Done and keeps the verification-first deli
 npx -y gsdd-cli init
 ```
 
-`init` is the guided install wizard for repo-local setup. It creates `.agents/skills/gsdd-*` workflow entrypoints and the `.planning/bin/gsdd*` helper runtime in the current repo; optional runtime adapters improve native discovery.
+This creates:
+
+1. `.planning/` — durable workspace with templates, role contracts, and config
+2. `.agents/skills/gsdd-*` — compact open-standard workflow entrypoints for agents
+3. `.planning/bin/gsdd.mjs` — repo-local helper runtime for deterministic workflow commands inside generated skills (run helper commands from the repo root)
+4. Optional tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex CLI agents, optional governance)
+
+Then pick the first workflow lane that matches your situation:
+
+- `gsdd-new-project` for greenfield work, fuzzy brownfield work, or milestone-shaped work
+- `gsdd-quick` for a concrete bounded brownfield change
+- `gsdd-map-codebase` first when the repo is unfamiliar, risky, or needs a deeper baseline before choosing a lane
+
+In a terminal, `npx -y gsdd-cli init` opens a guided install wizard. If you installed the package globally, `gsdd init` is the equivalent shorthand:
+
+- Step 1: select the runtimes/vendors you want to support
+- Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing
+- Step 3: configure planning defaults in the same guided flow
+
+Portable `.agents/skills/gsdd-*` skills and the repo-local `.planning/bin/gsdd.mjs` helper runtime are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands assume the repo root as the current working directory.
+When those generated surfaces exist locally, `npx -y gsdd-cli health` checks them against current render output instead of asking you to trust manual review. If installed globally, `gsdd health` is equivalent.
+
+### Launch Proof Status
+
+- **Recorded proof:** the proof pack below records a full plan -> execute -> verify lifecycle on a real consumer project, including Codex checker support. Claude Code and OpenCode run the same generated workflow surface.
+- **Qualified support:** Cursor, Copilot, and Gemini CLI can use the shared `.agents/skills/` surface when their skill or slash discovery sees it; this release does not claim the same runtime proof or ergonomics.
+- **Runtime-surface freshness:** Installed generated skills and native adapters are renderer-checked locally; repair stays deterministic through `npx -y gsdd-cli update` or, when globally installed, `gsdd update`.
+
+Start with the public proof pack:
+
+- [Brownfield proof](docs/BROWNFIELD-PROOF.md)
+- [Exported consumer proof pack](docs/proof/consumer-node-cli/README.md)
+- [Runtime support matrix](docs/RUNTIME-SUPPORT.md)
+- [Verification discipline](docs/VERIFICATION-DISCIPLINE.md)
+
+### Quickstart (after init)
 
 Invoke after init:
 
@@ -144,7 +179,7 @@ Use Workspine when a feature takes more than one session, or when you need to sw
 | [LeanSpec](https://www.lean-spec.dev/docs/guide/first-principles) | Minimal specs that fit LLM context | Workspine adds workflow gates and runtime entrypoints for when you need the full structure |
 | [GitHub Spec Kit](https://github.com/github/spec-kit) | Spec-first planning workflows in `.specify/` | Similar space; Workspine is one CLI with one delivery loop instead of a broader ecosystem |
 | [Kiro](https://kiro.dev/docs/) | IDE-native agent dev with specs, steering, hooks, and MCP | Kiro is IDE-only; Workspine works across terminal and IDE agents that can read repo files |
-| [Tessl](https://tessl.io/enterprise/) | Hosted platform for distributing agent skills across teams | Tessl needs a control plane; Workspine is local-first with no hosted infrastructure |
+| [Tessl](https://tessl.io/enterprise/) | Hosted platform for distributing agent skills across teams | Tessl needs a hosted service; Workspine is local-first with no hosted infrastructure |
 
 <sub>Based on each tool's public docs as of May 2026. Open an issue if anything reads inaccurately.</sub>
 
