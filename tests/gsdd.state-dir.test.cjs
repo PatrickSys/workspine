@@ -75,4 +75,11 @@ describe('state-dir resolution (.planning -> .work migration)', () => {
     assert.strictEqual(ctx.planning.state_dir_name, '.planning');
     assert.ok(typeof ctx.migration_notice === 'string' && ctx.migration_notice.length > 0);
   });
+
+  test('init writes the single .work folder in a brand-new repo (not .planning)', async () => {
+    const result = await runCliAsMain(tmp, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(fs.existsSync(path.join(tmp, '.work', 'config.json')), true);
+    assert.strictEqual(fs.existsSync(path.join(tmp, '.planning', 'config.json')), false);
+  });
 });

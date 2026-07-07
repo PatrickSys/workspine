@@ -20,6 +20,7 @@ import { createCmdHealth } from './lib/health.mjs';
 import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
 import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
+import { resolveStateDir } from './lib/state-dir.mjs';
 import { FRAMEWORK_VERSION, WORKFLOWS } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,9 +32,11 @@ const IS_MAIN = process.argv[1] ? realpathSync(process.argv[1]) === realpathSync
 const [,, command, ...args] = process.argv;
 
 function createCliContext(cwd = process.cwd()) {
+  const state = resolveStateDir(cwd);
   return {
     cwd,
-    planningDir: join(cwd, '.planning'),
+    planningDir: state.dir,
+    stateDirName: state.name,
     distilledDir: DISTILLED_DIR,
     agentsDir: AGENTS_DIR,
     packageName: PACKAGE_JSON.name,
