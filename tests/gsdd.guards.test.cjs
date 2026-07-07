@@ -3288,8 +3288,8 @@ describe('G37 - Launch Surface Consistency', () => {
       'README.md must keep one brief appreciative lineage note. FIX: Add a concise lineage note that acknowledges GSD/GSDD without making it the active product identity.');
     assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
       'distilled/README.md must keep the same brief appreciative lineage note. FIX: Mirror the concise lineage note in the distilled public surface.');
-    assert.match(helpText, /Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-\*, and \.planning\//i,
-      'init-runtime help text must explain the retained technical contracts explicitly. FIX: Add the Workspine-plus-retained-contract note to the help text.');
+    assert.match(helpText, /Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-\*, and \.work\/.*legacy planning workspaces are still read/i,
+      'init-runtime help text must explain the retained technical contracts without advertising the legacy folder. FIX: Keep the Workspine-plus-retained-contract note aligned to .work/.');
     assert.match(pkg.description, /^Workspine\b/,
       'package.json description must be Workspine-led after Phase 24. FIX: Align package metadata with the public product name.');
   });
@@ -3747,8 +3747,10 @@ describe('G43 - Release Packaging Audit', () => {
   test('package metadata stays on the verified release floor and trims internal tarball drift', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
 
-    assert.match(pkg.description, /^Workspine\b.*Claude Code, Codex CLI, and OpenCode/i,
-      'package.json description must stay Workspine-led and name only the directly validated runtimes. FIX: Keep the description on the release-floor proof boundary.');
+    assert.match(pkg.description, /^Workspine\b.*plan, execute, and verify/i,
+      'package.json description must stay Workspine-led and use the plain proof-first framing. FIX: Keep the description on the proof-first package boundary.');
+    assert.doesNotMatch(pkg.description, /delivery spine|directly validated|Claude Code|Codex CLI|OpenCode/i,
+      'package.json description must not carry banned jargon or launch-proof overclaims. FIX: Keep runtime proof posture out of package metadata.');
     for (const keyword of ['cursor', 'copilot', 'gemini', 'gemini-cli']) {
       assert.ok(!pkg.keywords.includes(keyword),
         `package.json keywords must not imply parity for ${keyword}. FIX: Keep unvalidated runtimes out of package-facing metadata.`);
