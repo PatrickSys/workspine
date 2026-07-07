@@ -1,6 +1,6 @@
 # Workspine User Guide
 
-A detailed reference for Workspine workflows, troubleshooting, and configuration. Workspine is the public product name; the package, CLI, workflow names, and workspace remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` as retained technical contracts. Runtime floor: Node 20+. For quick-start setup and the public proof pack, start with the [README](../README.md). Human install/update commands use `npx -y gsdd-cli ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
+A detailed reference for Workspine workflows, troubleshooting, and configuration. Workspine is the public product name; the package, CLI, workflow names, and workspace remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.work/` as retained technical contracts. Runtime floor: Node 20+. For quick-start setup and the public proof pack, start with the [README](../README.md). Human install/update commands use `npx -y gsdd-cli ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
 
 ---
 
@@ -13,7 +13,7 @@ For a new project or a broad brownfield effort:
 3. Review the plan from `gsdd-plan` before starting `gsdd-execute`.
 4. Run `gsdd-verify` before calling the phase done.
 
-Use `npx -y gsdd-cli init` for repo-local setup. Use `npx -y gsdd-cli install --global --auto` to install reusable Workspine skills and native runtime surfaces into detected agent homes without creating `.planning/` in the current repo.
+Use `npx -y gsdd-cli init` for repo-local setup. Use `npx -y gsdd-cli install --global --auto` to install reusable Workspine skills and native runtime surfaces into detected agent homes without creating `.work/` in the current repo.
 
 For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky repo, use `gsdd-map-codebase` before choosing between `gsdd-quick` and `gsdd-new-project`.
 
@@ -177,7 +177,7 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 
 ### Install Modes
 
-Use local repo install when the project should own `.planning/`, `.agents/skills`, and optional repo-local runtime adapters:
+Use local repo install when the project should own `.work/`, `.agents/skills`, and optional repo-local runtime adapters:
 
 ```bash
 npx -y gsdd-cli init
@@ -219,11 +219,9 @@ Global install writes Workspine-managed files under selected agent homes and rec
 
 | Command | Purpose |
 |---------|---------|
-| `npx -y gsdd-cli init [--tools <platform>]` | Set up `.planning/`, generate skills/adapters |
+| `npx -y gsdd-cli init [--tools <platform>]` | Set up `.work/`, generate skills/adapters |
 | `npx -y gsdd-cli update [--tools <platform>]` | Regenerate skills/adapters from latest sources |
 | `npx -y gsdd-cli update --templates` | Refresh role contracts and delegates (warns about user modifications) |
-| `npx -y gsdd-cli control-map [--json] [--with-ignored]` | Show computed repo/worktree/planning state, dirty buckets, optional ignored-path scan, local annotations, and safe next interventions |
-| `npx -y gsdd-cli closeout-report [--json] [--phase <N>]` | Read-only closeout replay: blockers, warnings, fixes, and next safe action (composed from control-map, health/preflight, verify, and UI-proof signals) |
 | `npx -y gsdd-cli find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `npx -y gsdd-cli verify <N>` | Run artifact checks for phase N |
 | `npx -y gsdd-cli scaffold phase <N> [name]` | Create a new phase plan file |
@@ -234,7 +232,7 @@ Global install writes Workspine-managed files under selected agent homes and rec
 | `npx -y gsdd-cli models clear --runtime <rt> --agent <id>` | Remove runtime override |
 | `npx -y gsdd-cli help` | Show all commands |
 
-If `gsdd-cli` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .planning/bin/gsdd.mjs ...` from the repo root.
+If `gsdd-cli` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .work/bin/gsdd.mjs ...` from the repo root.
 
 Normal user flow:
 
@@ -247,7 +245,7 @@ Normal user flow:
 Surface split:
 
 - `.agents/skills/gsdd-*` is the workflow entry surface.
-- `.planning/bin/gsdd*` is an internal local helper surface used by workflow-embedded lifecycle mechanics. It is kept available, but it is not the normal first-run user entrypoint.
+- `.work/bin/gsdd*` is an internal local helper surface used by workflow-embedded lifecycle mechanics. It is kept available, but it is not the normal first-run user entrypoint.
 
 Advanced/internal helper commands remain available:
 
@@ -271,7 +269,7 @@ Other CLI commands that remain available outside the first-run path:
 |------|-----------------|
 | `claude` | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
 | `opencode` | `.opencode/commands/`, `.opencode/agents/` |
-| `codex` | `.codex/agents/gsdd-plan-checker.toml` (`.agents/skills/gsdd-*` and `.planning/bin/gsdd.mjs` are always generated; `$gsdd-plan` stays plan-only until explicit `$gsdd-execute`) |
+| `codex` | `.codex/agents/gsdd-plan-checker.toml` (`.agents/skills/gsdd-*` and `.work/bin/gsdd.mjs` are always generated; `$gsdd-plan` stays plan-only until explicit `$gsdd-execute`) |
 | `agents` | Bounded fallback block in root `AGENTS.md` |
 | `all` | All of the above |
 | *(none)* | Auto-detect installed tools |
@@ -280,7 +278,7 @@ Other CLI commands that remain available outside the first-run path:
 
 ## Configuration Reference
 
-`npx -y gsdd-cli init` creates `.planning/config.json` interactively (or with defaults via `--auto`).
+`npx -y gsdd-cli init` creates `.work/config.json` interactively (or with defaults via `--auto`).
 
 ### Full config.json Schema
 
@@ -309,7 +307,7 @@ Other CLI commands that remain available outside the first-run path:
 |---------|---------|---------|------------------|
 | `researchDepth` | `fast`, `balanced`, `deep` | `balanced` | Research thoroughness per phase |
 | `parallelization` | `true`, `false` | `true` | Run independent agents simultaneously |
-| `commitDocs` | `true`, `false` | `true` | Track `.planning/` in git |
+| `commitDocs` | `true`, `false` | `true` | Track `.work/` in git |
 | `modelProfile` | `balanced`, `quality`, `budget` | `balanced` | Portable semantic model tier |
 
 ### Workflow Toggles
@@ -445,11 +443,11 @@ Do not re-run `gsdd-execute`. Use `gsdd-quick` for targeted fixes, or `gsdd-veri
 npx -y gsdd-cli update --templates       # Refreshes role contracts and delegates
 ```
 
-If you've modified any templates, the generation manifest detects this and warns you before overwriting. The SHA-256 hash of each generated file is tracked in `.planning/generation-manifest.json`.
+If you've modified any templates, the generation manifest detects this and warns you before overwriting. The SHA-256 hash of each generated file is tracked in `.work/generation-manifest.json`.
 
 ### Generated Surfaces Drift Or A Runtime Command Goes Missing
 
-In a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. If it reports drift or missing installed generated surfaces, run `npx -y gsdd-cli update` for the whole workspace or `npx -y gsdd-cli update --tools <runtime>` for a specific runtime. For global personal installs, rerun `npx -y gsdd-cli install --global --auto` or scope it explicitly with `npx -y gsdd-cli install --global --tools <targets>`.
+In a repo-local `.work/` workspace, start with `npx -y gsdd-cli health`. If it reports drift or missing installed generated surfaces, run `npx -y gsdd-cli update` for the whole workspace or `npx -y gsdd-cli update --tools <runtime>` for a specific runtime. For global personal installs, rerun `npx -y gsdd-cli install --global --auto` or scope it explicitly with `npx -y gsdd-cli install --global --tools <targets>`.
 
 That repair path is deterministic for generated files. It does not imply that every runtime has equal native ergonomics or equal validation depth.
 
@@ -476,7 +474,7 @@ Switch to budget profile: `npx -y gsdd-cli models profile budget` (or `gsdd mode
 ## Project File Structure
 
 ```
-.planning/
+.work/
   SPEC.md                   # Living specification (goals, constraints, decisions)
   ROADMAP.md                # Phased delivery plan with inline status
   config.json               # Project configuration
@@ -506,7 +504,7 @@ Switch to budget profile: `npx -y gsdd-cli models profile budget` (or `gsdd mode
 
 agents/                     # 10 canonical role contracts
 .agents/skills/gsdd-*/      # Portable workflow entrypoints (open standard)
-.planning/bin/gsdd.mjs      # Internal repo-local helper runtime for deterministic workflow commands (run from repo root)
+.work/bin/gsdd.mjs          # Internal repo-local helper runtime for deterministic workflow commands (run from repo root)
 ```
 
 Platform-specific adapters (generated by `npx -y gsdd-cli init`, or `gsdd init` when globally installed):
@@ -524,4 +522,4 @@ Platform-specific adapters (generated by `npx -y gsdd-cli init`, or `gsdd init` 
 AGENTS.md                   # Optional governance block (useful for agents that consume AGENTS.md)
 ```
 
-`.agents/skills/` is the workflow entry surface. `.planning/bin/` is the internal helper runtime used by those workflows. Native adapters and governance files are optional ergonomics, not required prompt bulk.
+`.agents/skills/` is the workflow entry surface. `.work/bin/` is the internal helper runtime used by those workflows. Native adapters and governance files are optional ergonomics, not required prompt bulk.
