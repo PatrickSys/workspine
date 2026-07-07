@@ -8,6 +8,7 @@ import { join } from 'path';
 import { CLAUDE_MODEL_PROFILES } from '../adapters/claude.mjs';
 import { detectOpenCodeConfiguredModel } from '../adapters/opencode.mjs';
 import { parseFlagValue, output } from './cli-utils.mjs';
+import { resolveStateDir } from './state-dir.mjs';
 
 export const DEFAULT_GIT_PROTOCOL = {
   branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
@@ -83,11 +84,11 @@ export function buildDefaultConfig({ autoAdvance = false } = {}) {
 }
 
 export function isProjectInitialized(cwd = process.cwd()) {
-  return existsSync(join(cwd, '.planning', 'config.json'));
+  return existsSync(join(resolveStateDir(cwd).dir, 'config.json'));
 }
 
 export function loadProjectModelConfig(cwd = process.cwd()) {
-  const configPath = join(cwd, '.planning', 'config.json');
+  const configPath = join(resolveStateDir(cwd).dir, 'config.json');
   if (!existsSync(configPath)) return buildDefaultConfig();
 
   try {
@@ -102,7 +103,7 @@ export function loadProjectModelConfig(cwd = process.cwd()) {
 }
 
 function loadConfigForMutation(cwd = process.cwd()) {
-  const configPath = join(cwd, '.planning', 'config.json');
+  const configPath = join(resolveStateDir(cwd).dir, 'config.json');
   let raw;
   try {
     raw = readFileSync(configPath, 'utf-8');
@@ -117,14 +118,14 @@ function loadConfigForMutation(cwd = process.cwd()) {
 }
 
 export function ensureProjectConfig(cwd = process.cwd()) {
-  mkdirSync(join(cwd, '.planning'), { recursive: true });
+  mkdirSync(resolveStateDir(cwd).dir, { recursive: true });
   const config = loadProjectModelConfig(cwd);
   writeProjectConfig(config, cwd);
   return config;
 }
 
 export function writeProjectConfig(config, cwd = process.cwd()) {
-  const configPath = join(cwd, '.planning', 'config.json');
+  const configPath = join(resolveStateDir(cwd).dir, 'config.json');
   writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
