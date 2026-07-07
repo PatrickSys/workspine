@@ -1,6 +1,6 @@
 # Workspine
 
-A repo-native delivery spine for the part of AI coding that still needs human judgment: planning, checking, execution, verification, and handoff.
+Plan, execute, and verify AI-assisted work from files in your repo — for the part of AI coding that still needs human judgment: planning, checking, execution, verification, and handoff.
 
 Workspine keeps planning, execution, verification, handoff, and progress state in the repo so work survives cold starts, runtime switches, and session loss. The retained package and CLI contracts remain `gsdd-cli` / `gsdd`.
 
@@ -30,11 +30,11 @@ Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:
 - generates an internal repo-local helper runtime at `.planning/bin/gsdd.mjs` for deterministic workflow commands run from the repo root
 - optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents, Codex CLI checker agent)
 
-It gives serious AI-assisted work one durable repo workflow spine for planning, checking, execution, verification, and handoff without pretending to be a hosted orchestration layer.
+It gives serious AI-assisted work one durable, repo-native workflow for planning, checking, execution, verification, and handoff — plain files, no hosted service.
 
 Workspine is the product name. The package, CLI commands, workflow prefixes, and workspace directory remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` — these are retained technical contracts, not rename residue.
 
-Workspine began as a fork of Get Shit Done, whose long-horizon delivery spine proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native delivery spine with fewer public workflow surfaces, generated runtime surfaces from a portable core, evidence-gated closure, and provenance-aware continuity.
+Workspine began as a fork of Get Shit Done, whose long-horizon workflow proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native tool with fewer public workflows, generated runtime surfaces from a portable core, proof required before closing work, and decisions that keep their why.
 
 Launch proof posture:
 - Directly validated in repo truth: Claude Code, Codex CLI, OpenCode

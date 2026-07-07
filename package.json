@@ -1,7 +1,7 @@
 {
   "name": "gsdd-cli",
   "version": "0.27.0",
-  "description": "Workspine — a repo-native delivery spine for long-horizon AI-assisted work, with directly validated support for Claude Code, Codex CLI, and OpenCode, published as gsdd-cli.",
+  "description": "Workspine — plan, execute, and verify AI-assisted work from files in your repo, with proof before done. Published as gsdd-cli.",
   "type": "module",
   "bin": {
     "gsdd": "bin/gsdd.mjs"

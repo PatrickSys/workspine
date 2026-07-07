@@ -1748,11 +1748,11 @@ describe('G12 — Documentation Accuracy Guards', () => {
     );
   });
 
-  test('package.json description matches the repo-native delivery spine launch framing', () => {
-    assert.match(pkg.description, /repo-native delivery spine/i,
-      'package.json description must use the repo-native delivery spine framing. FIX: Update the package description.');
-    assert.match(pkg.description, /Claude Code.*Codex CLI.*OpenCode/i,
-      'package.json description must name only the directly validated runtimes. FIX: Limit the description to the current proof set.');
+  test('package.json description uses the plain proof-first framing', () => {
+    assert.match(pkg.description, /plan, execute, and verify/i,
+      'package.json description must use the plain proof-first framing. FIX: Update the package description.');
+    assert.doesNotMatch(pkg.description, /delivery spine|directly validated/i,
+      'package.json description must avoid banned jargon and launch-proof overclaims. FIX: Keep package metadata plain and proof-first.');
   });
 
   test('package.json exposes npm test alias for README test command', () => {
@@ -1883,13 +1883,13 @@ describe('G34b - Branch Safety Invariants', () => {
 });
 
 describe('G34c - Launch Surface Invariants', () => {
-  test('distilled README and package description share repo-native delivery spine framing', () => {
+  test('distilled README and package description stay jargon-free', () => {
     const distilledReadme = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'README.md'), 'utf-8');
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
-    assert.match(distilledReadme, /repo-native delivery spine/i,
-      'distilled/README.md must keep the repo-native delivery spine framing. FIX: Align the distilled intro to the launch story.');
-    assert.match(pkg.description, /repo-native delivery spine/i,
-      'package.json description must keep the repo-native delivery spine framing. FIX: Keep package metadata aligned with the launch story.');
+    assert.doesNotMatch(distilledReadme, /delivery spine|workflow spine/i,
+      'distilled/README.md must stay jargon-free. FIX: Keep the distilled intro plain.');
+    assert.doesNotMatch(pkg.description, /delivery spine|workflow spine/i,
+      'package.json description must stay jargon-free. FIX: Keep package metadata plain.');
   });
 
   test('agents block does not carry launch proof posture', () => {
