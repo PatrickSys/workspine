@@ -84,35 +84,36 @@ export function createCmdInit(ctx) {
       parsedTools,
       isAuto,
     });
+    const { planningDir, stateDirName } = ctx;
 
-    const existed = existsSync(ctx.planningDir);
-    mkdirSync(join(ctx.planningDir, 'phases'), { recursive: true });
-    mkdirSync(join(ctx.planningDir, 'research'), { recursive: true });
+    const existed = existsSync(planningDir);
+    mkdirSync(join(planningDir, 'phases'), { recursive: true });
+    mkdirSync(join(planningDir, 'research'), { recursive: true });
     console.log(existed
-      ? `  - ${ctx.stateDirName}/ already exists (ensured subdirectories)`
-      : `  - created ${ctx.stateDirName}/ directory structure`);
+      ? `  - ${stateDirName}/ already exists (ensured subdirectories)`
+      : `  - created ${stateDirName}/ directory structure`);
 
     installProjectTemplates(ctx);
     await ensureConfig({
       cwd: ctx.cwd,
-      planningDir: ctx.planningDir,
+      planningDir,
       isAuto,
       promptApi,
       preselectedConfig: interactiveSession.config,
-      stateDirName: ctx.stateDirName,
+      stateDirName,
     });
-    ensureGitignoreEntry(ctx.cwd, `${ctx.stateDirName}/.local/`, `  - ensured ${ctx.stateDirName}/.local/ is gitignored`);
+    ensureGitignoreEntry(ctx.cwd, `${stateDirName}/.local/`, `  - ensured ${stateDirName}/.local/ is gitignored`);
 
     if (briefSource) {
-      cpSync(briefSource, join(ctx.planningDir, 'PROJECT_BRIEF.md'));
-      console.log('  - copied project brief to .planning/PROJECT_BRIEF.md');
+      cpSync(briefSource, join(planningDir, 'PROJECT_BRIEF.md'));
+      console.log(`  - copied project brief to ${stateDirName}/PROJECT_BRIEF.md`);
     }
 
     generateOpenStandardSkills(ctx.cwd, ctx.workflows);
     console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
 
     generatePlanningCliHelpers(ctx);
-    console.log('  - generated local workflow helpers (.planning/bin/gsdd*)');
+    console.log(`  - generated local workflow helpers (${stateDirName}/bin/gsdd*)`);
 
     for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {
       adapter.generate();
@@ -120,8 +121,8 @@ export function createCmdInit(ctx) {
       console.log(`  - ${adapter.summary('generated')}`);
     }
 
-    const manifest = buildManifest({ planningDir: ctx.planningDir, frameworkVersion: ctx.frameworkVersion });
-    writeManifest(ctx.planningDir, manifest);
+    const manifest = buildManifest({ planningDir, frameworkVersion: ctx.frameworkVersion });
+    writeManifest(planningDir, manifest);
     console.log('  - wrote generation manifest');
 
     console.log('\n\x1B[1m\x1B[32m✓ GSDD initialized.\x1B[0m');
@@ -136,6 +137,7 @@ export function createCmdUpdate(ctx) {
   return function cmdUpdate(...updateArgs) {
     const isDry = updateArgs.includes('--dry');
     const doTemplates = updateArgs.includes('--templates');
+    const { planningDir, stateDirName } = ctx;
 
     console.log(`gsdd update - regenerating adapter files${isDry ? ' (dry run)' : ''}\n`);
 
@@ -150,7 +152,7 @@ export function createCmdUpdate(ctx) {
       updated = true;
     }
 
-    if (platforms.length > 0 || existsSync(ctx.planningDir) || hasGeneratedOpenStandardSkills(ctx.cwd)) {
+    if (platforms.length > 0 || existsSync(planningDir) || hasGeneratedOpenStandardSkills(ctx.cwd)) {
       if (isDry) {
         console.log('  - would update open-standard skills (.agents/skills/gsdd-*)');
       } else {
@@ -160,12 +162,12 @@ export function createCmdUpdate(ctx) {
       updated = true;
     }
 
-    if (existsSync(ctx.planningDir)) {
+    if (existsSync(planningDir)) {
       if (isDry) {
-        console.log('  - would update local workflow helpers (.planning/bin/gsdd*)');
+        console.log(`  - would update local workflow helpers (${stateDirName}/bin/gsdd*)`);
       } else {
         generatePlanningCliHelpers(ctx);
-        console.log('  - updated local workflow helpers (.planning/bin/gsdd*)');
+        console.log(`  - updated local workflow helpers (${stateDirName}/bin/gsdd*)`);
       }
       updated = true;
     }
@@ -186,14 +188,14 @@ export function createCmdUpdate(ctx) {
     } else if (isDry) {
       console.log('\nDry run complete. No files were written.\n');
     } else {
-      if (existsSync(ctx.planningDir)) {
+      if (existsSync(planningDir)) {
         const manifest = buildUpdateManifest({
-          planningDir: ctx.planningDir,
+          planningDir,
           frameworkVersion: ctx.frameworkVersion,
           updateTemplates: doTemplates,
         });
         if (manifest) {
-          writeManifest(ctx.planningDir, manifest);
+          writeManifest(planningDir, manifest);
           console.log('  - updated generation manifest');
         }
       }
@@ -225,12 +227,12 @@ function generateOpenStandardSkills(cwd, workflows) {
   }
 }
 
-function generatePlanningCliHelpers(ctx) {
+function generatePlanningCliHelpers({ packageName, packageVersion, planningDir }) {
   for (const entry of buildPlanningCliHelperEntries({
-    packageName: ctx.packageName,
-    packageVersion: ctx.packageVersion,
+    packageName,
+    packageVersion,
   })) {
-    const absolutePath = join(ctx.planningDir, entry.relativePath);
+    const absolutePath = join(planningDir, entry.relativePath);
     mkdirSync(dirname(absolutePath), { recursive: true });
     writeFileSync(absolutePath, entry.content);
     if (!absolutePath.endsWith('.cmd')) {
