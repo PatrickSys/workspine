@@ -1,17 +1,18 @@
 // templates.mjs - Project template and role installation/refresh helpers
 
 import { existsSync, mkdirSync, readdirSync, cpSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { fileHash, readManifest } from './manifest.mjs';
 
 export function installProjectTemplates({ planningDir, distilledDir, agentsDir }) {
   const localTemplatesDir = join(planningDir, 'templates');
   const globalTemplatesDir = join(distilledDir, 'templates');
+  const stateName = basename(planningDir);
 
   if (!existsSync(localTemplatesDir)) {
     if (existsSync(globalTemplatesDir)) {
       cpSync(globalTemplatesDir, localTemplatesDir, { recursive: true });
-      console.log('  - copied templates to .planning/templates/');
+      console.log(`  - copied templates to ${stateName}/templates/`);
       // Warn-only by design: init should not fail on missing templates because
       // the user may still proceed and fix later. The hard gate lives in
       // `gsdd health` (E6/E7/E8) which reports these as errors. This is the
@@ -33,7 +34,7 @@ export function installProjectTemplates({ planningDir, distilledDir, agentsDir }
       console.log('  - WARN: missing distilled/templates/; cannot copy templates');
     }
   } else {
-    console.log('  - .planning/templates/ already exists');
+    console.log(`  - ${stateName}/templates/ already exists`);
   }
 
   const localRolesDir = join(localTemplatesDir, 'roles');
@@ -43,12 +44,12 @@ export function installProjectTemplates({ planningDir, distilledDir, agentsDir }
       for (const file of listRoleFiles(agentsDir)) {
         cpSync(join(agentsDir, file), join(localRolesDir, file));
       }
-      console.log('  - copied role contracts to .planning/templates/roles/');
+      console.log(`  - copied role contracts to ${stateName}/templates/roles/`);
     } else {
       console.log('  - WARN: missing agents/; cannot copy role contracts');
     }
   } else {
-    console.log('  - .planning/templates/roles/ already exists');
+    console.log(`  - ${stateName}/templates/roles/ already exists`);
   }
 }
 
