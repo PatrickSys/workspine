@@ -712,7 +712,7 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must prefer npx -y gsdd-cli init for humans. FIX: Replace primary bare gsdd init guidance.');
     assert.match(readme, /npx -y gsdd-cli install --global/i,
       'README.md must describe the global agent install path. FIX: Add explicit global/local install contract text.');
-    assert.match(readme, /does not create `.planning\/`/i,
+    assert.match(readme, /does not create `.work\/`/i,
       'README.md must state that global install does not bootstrap repo-local planning state. FIX: Add global install boundary wording.');
   });
 
