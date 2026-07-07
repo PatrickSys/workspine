@@ -112,5 +112,13 @@ async function runCli(cliCommand = command, ...cliArgs) {
   await COMMANDS[cliCommand](...normalizedArgs);
 }
 
-if (IS_MAIN) await runCli();
+if (IS_MAIN) {
+  await runCli();
+  // D-47: interactive prompts (raw-mode keypress pickers) can leave stdin
+  // referenced; release it so the process exits when work is done.
+  if (process.stdin.isTTY) {
+    process.stdin.pause();
+    if (typeof process.stdin.unref === 'function') process.stdin.unref();
+  }
+}
 export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdFileOp, cmdLifecyclePreflight, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
