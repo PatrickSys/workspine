@@ -43,6 +43,7 @@ MILESTONES.md
 .codebase-context/
 _bmad/
 .cursor/
+# Local Workspine dogfood continuity. If .work/ exists here, start at .work/README.md; keep .work/ untracked and out of generated consumer surfaces.
 .work/
 
 # Local temp files (slides, previews, scratch)
