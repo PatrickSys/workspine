@@ -1966,7 +1966,7 @@ describe('G34e - Phase 24 Public Naming Invariants', () => {
       'package.json bin.gsdd must remain bin/gsdd.mjs. FIX: Keep the retained command contract stable.');
     assert.match(readme, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.work\/`/i,
       'README.md must keep the retained naming stack explicit. FIX: Spell out the retained technical contracts.');
-    assert.match(userGuide, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.planning\/`/i,
+    assert.match(userGuide, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.work\/`/i,
       'docs/USER-GUIDE.md must keep the retained naming stack explicit. FIX: Explain the retained technical contracts in the guide intro.');
     assert.match(readme, /began as a fork of.*Get Shit Done/i,
       'README.md must preserve the brief appreciative lineage note. FIX: Keep the lineage explicit but secondary.');
