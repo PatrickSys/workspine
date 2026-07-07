@@ -1,0 +1,40 @@
+name: smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: CLI help surface exits clean
+        run: node bin/gsdd.mjs help
+      - name: init, next, and preflight run clean in a throwaway fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLI="$GITHUB_WORKSPACE/bin/gsdd.mjs"
+          FIXTURE="$(mktemp -d)"
+          cd "$FIXTURE"
+          node "$CLI" init --auto --tools claude
+          node "$CLI" next --init
+          node "$CLI" next
+          node "$CLI" lifecycle-preflight progress
+      - name: Publish-path smoke — npm pack + install tarball (D-74; catches bin-name mapping bugs npx-on-checkout cannot)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARBALL="$GITHUB_WORKSPACE/$(npm pack --silent)"
+          INSTALL_DIR="$(mktemp -d)"
+          cd "$INSTALL_DIR"
+          npm init -y >/dev/null
+          npm install --no-save "$TARBALL" >/dev/null
+          ./node_modules/.bin/gsdd help
+      - name: Full test suite (includes the next-card snapshot)
+        run: npm test
