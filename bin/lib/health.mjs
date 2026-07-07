@@ -10,7 +10,6 @@ import { output } from './cli-utils.mjs';
 import { runTruthChecks, TRUTH_CHECK_IDS } from './health-truth.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
 import { evaluateRuntimeFreshness } from './runtime-freshness.mjs';
-import { findUiProofBundleFiles, readUiProofBundleFile, validateUiProofBundle } from './ui-proof.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 /**
@@ -30,7 +29,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
     }
     const cwd = workspaceRoot;
     const frameworkSourceMode = isFrameworkSourceRepo(cwd);
-    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
+    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
 
     // Pre-init guard
     if (!existsSync(join(planningDir, 'config.json'))) {
@@ -136,23 +135,6 @@ export function buildHealthReport(ctx, healthArgs = []) {
         if (missingBrownfield.length > 0) {
           errors.push({ id: 'E9', severity: 'ERROR', message: `.planning/templates/brownfield-change/ missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
-      }
-    }
-
-    // E10: known UI proof bundles must satisfy deterministic metadata/privacy validation.
-    for (const bundlePath of findUiProofBundleFiles(planningDir)) {
-      const relativePath = relative(cwd, bundlePath).replace(/\\/g, '/');
-      const parsed = readUiProofBundleFile(bundlePath);
-      const validation = parsed.errors.length > 0
-        ? { valid: false, errors: parsed.errors }
-        : validateUiProofBundle(parsed.bundle, { requireLocalArtifactExists: true, workspaceRoot: cwd });
-      if (!validation.valid) {
-        errors.push({
-          id: 'E10',
-          severity: 'ERROR',
-          message: `${relativePath} has invalid UI proof metadata (${validation.errors.map((entry) => entry.code).join(', ')})`,
-          fix: 'Run `gsdd ui-proof validate <path>` and add required privacy metadata, claim limits, fixed evidence kinds, concise tool provenance, failure classification when failed or partial, observation artifact references, existing local artifact paths, and safe-to-publish handling.',
-        });
       }
     }
 
