@@ -12,6 +12,20 @@ const testsDir = __dirname;
 const files = fs.readdirSync(testsDir).filter((f) => f.endsWith('.test.cjs')).sort();
 const known = JSON.parse(fs.readFileSync(path.join(testsDir, 'known-failures.json'), 'utf-8')).allowed;
 const stripAnsi = (text) => String(text).replace(/\x1B\[[0-9;]*[A-Za-z]/g, '');
+const parentSuitePattern = /^(?:G|I)\d+[a-z]?\b/;
+
+function parseFailedTests(output) {
+  const cleanOutput = stripAnsi(output);
+  const failureSummary = cleanOutput.includes('✖ failing tests:')
+    ? cleanOutput.split('✖ failing tests:').pop()
+    : cleanOutput;
+  const names = [
+    ...failureSummary.matchAll(/^[^\S\n]*✖ (.+?)(?: \(|$)/gmu),
+    ...cleanOutput.matchAll(/^[^\S\n]*not ok \d+ - (.+?)$/gmu),
+  ].map((m) => m[1].trim());
+  const leafNames = names.filter((name) => !parentSuitePattern.test(name));
+  return [...new Set(leafNames.length ? leafNames : names)];
+}
 
 let hardFailures = 0;
 for (const file of files) {
@@ -21,11 +35,8 @@ for (const file of files) {
     console.log(`PASS ${rel}`);
     continue;
   }
-  const cleanOutput = stripAnsi(r.stdout + r.stderr);
-  const failureSummary = cleanOutput.includes('✖ failing tests:')
-    ? cleanOutput.split('✖ failing tests:').pop()
-    : cleanOutput;
-  const failedTests = [...failureSummary.matchAll(/^[^\S\n]*✖ (.+?) \(/gmu)].map((m) => m[1].trim());
+  const combinedOutput = r.stdout + r.stderr;
+  const failedTests = parseFailedTests(combinedOutput);
   const unexpected = failedTests.filter((t) => !known.some((k) => k.file === rel && t.includes(k.test)));
   if (failedTests.length > 0 && unexpected.length === 0) {
     console.log(`PASS ${rel} (known failures only: ${failedTests.join('; ')})`);
@@ -34,7 +45,7 @@ for (const file of files) {
   hardFailures += 1;
   console.log(`FAIL ${rel}`);
   for (const t of (unexpected.length ? unexpected : ['<could not parse failing test names — full output below>'])) console.log(`  ✖ ${t}`);
-  if (unexpected.length === 0) console.log(r.stdout.slice(-2000));
+  if (unexpected.length === 0) console.log(combinedOutput.slice(-2000));
 }
 console.log(hardFailures === 0 ? `ALL GREEN (${files.length} files; known debts tolerated per known-failures.json)` : `${hardFailures} file(s) with unexpected failures`);
 process.exit(hardFailures === 0 ? 0 : 1);
