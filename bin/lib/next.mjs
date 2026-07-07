@@ -148,8 +148,14 @@ function readManifestStatus(context) {
 
 function repoWarningsFromControlMap(controlMap) {
   return (controlMap.risks || [])
-    .filter((risk) => risk.code === 'canonical_dirty')
+    .filter((risk) => risk.code === 'canonical_dirty' || risk.severity === 'block')
     .map((risk) => risk.message);
+}
+
+function controlMapBlockers(controlMap) {
+  return (controlMap.risks || [])
+    .filter((risk) => risk.severity === 'block')
+    .map((risk) => risk.code);
 }
 
 function hasActiveBrownfieldChange(context) {
@@ -565,6 +571,8 @@ function routeNext(ctx) {
       next_action: workflowAction('gsdd-plan', 'Plan the Workspine-native milestone from `.work` truth.'),
       authority: 'work',
       route_kind: 'work_native_plan',
+      blocked_by: controlMapBlockers(controlMap),
+      repo_warnings: repoWarningsFromControlMap(controlMap),
       requires_user: false,
       constraints: [
         ...constraints,
@@ -593,6 +601,8 @@ function routeNext(ctx) {
     next_action: workflowAction('gsdd-plan', 'Plan the next approved work slice.'),
     authority: 'planning',
     route_kind: 'phase_plan',
+    blocked_by: controlMapBlockers(controlMap),
+    repo_warnings: repoWarningsFromControlMap(controlMap),
     requires_user: false,
     constraints,
     artifacts_to_read: ['.work/goal.md', '.planning/SPEC.md', '.planning/ROADMAP.md', '.planning/MILESTONES.md'],
@@ -666,7 +676,7 @@ function enrichRoute(route, { context, controlMap, constraints, privacyNotes, in
     next_action: nextAction,
     authority: route.authority || inferAuthorityForState(route.state, context),
     route_kind: route.route_kind || route.state,
-    blocked_by: route.blocked_by || [],
+    blocked_by: [...(route.blocked_by || []), ...controlMapBlockers(controlMap)],
     requires_user: route.state === 'ask_user',
     questions: route.questions || [],
     constraints,
