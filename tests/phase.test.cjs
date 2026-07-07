@@ -425,7 +425,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   test('helper commands fail loudly when --workspace-root targets the wrong path', async () => {
     const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done', '--workspace-root', path.join(tmpDir, 'missing-root')]);
     assert.notStrictEqual(result.exitCode, 0, 'invalid workspace-root target should fail');
-    assert.match(result.output, /Workspace root does not contain \.planning\//);
+    assert.match(result.output, /Workspace root does not contain \.work\/ or \.planning\//);
   });
 
   test('help text documents file-op, phase-status, and lifecycle-preflight commands', async () => {
@@ -1745,7 +1745,7 @@ describe('Phase 32 runtime-freshness helper', () => {
     assert.strictEqual(initResult.exitCode, 0, initResult.output);
 
     fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'), '\n<!-- local drift -->\n');
-    fs.unlinkSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'));
+    fs.unlinkSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'));
 
     const gsdd = await loadGsdd(tmpDir);
     const mod = await importRuntimeFreshnessModule();
@@ -1757,7 +1757,7 @@ describe('Phase 32 runtime-freshness helper', () => {
     assert.strictEqual(report.staleCount, 1);
     assert.strictEqual(report.missingCount, 1);
     assert.ok(report.issues.some((entry) => entry.relativePath === '.agents/skills/gsdd-plan/SKILL.md' && entry.status === 'stale'));
-    assert.ok(report.issues.some((entry) => entry.relativePath === '.planning/bin/gsdd.mjs' && entry.status === 'missing'));
+    assert.ok(report.issues.some((entry) => entry.relativePath === '.work/bin/gsdd.mjs' && entry.status === 'missing'));
   });
 });
 

@@ -62,7 +62,7 @@ async function runWizardInit(tmpDir, { selectedRuntimes = ['claude'], adapterTar
     restoreStdin();
   }
 
-  return { callLog, config: readJson(path.join(tmpDir, '.planning', 'config.json')) };
+  return { callLog, config: readJson(path.join(tmpDir, '.work', 'config.json')) };
 }
 
 describe('consumer ceremony reduction', () => {
@@ -154,7 +154,7 @@ describe('consumer ceremony reduction', () => {
         restoreStdin();
       }
 
-      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+      const config = readJson(path.join(tmpDir, '.work', 'config.json'));
       assert.ok('researchDepth' in config);
       assert.ok('parallelization' in config);
       assert.ok('commitDocs' in config);

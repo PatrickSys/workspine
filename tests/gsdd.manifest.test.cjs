@@ -40,7 +40,7 @@ describe('generation manifest', () => {
   test('init writes generation-manifest.json with correct shape', async () => {
     await initProject();
 
-    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
     assert.ok(fs.existsSync(manifestPath), 'generation-manifest.json must exist after init');
 
     const manifest = readJson(manifestPath);
@@ -65,7 +65,7 @@ describe('generation manifest', () => {
 
   test('init produces non-empty research, codebase, and root manifest groups', async () => {
     await initProject();
-    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
     const manifest = readJson(manifestPath);
     assert.ok(Object.keys(manifest.templates.research).length > 0,
       'templates.research must have at least one file hash after init (empty group = scaffold failure)');
@@ -79,29 +79,29 @@ describe('generation manifest', () => {
 
   test('init creates research and codebase template subdirs with .md files', async () => {
     await initProject();
-    const researchDir = path.join(tmpDir, '.planning', 'templates', 'research');
-    const codebaseDir = path.join(tmpDir, '.planning', 'templates', 'codebase');
-    assert.ok(fs.existsSync(researchDir), '.planning/templates/research/ must exist after init');
-    assert.ok(fs.existsSync(codebaseDir), '.planning/templates/codebase/ must exist after init');
+    const researchDir = path.join(tmpDir, '.work', 'templates', 'research');
+    const codebaseDir = path.join(tmpDir, '.work', 'templates', 'codebase');
+    assert.ok(fs.existsSync(researchDir), '.work/templates/research/ must exist after init');
+    assert.ok(fs.existsSync(codebaseDir), '.work/templates/codebase/ must exist after init');
     const researchFiles = fs.readdirSync(researchDir).filter(f => f.endsWith('.md'));
     const codebaseFiles = fs.readdirSync(codebaseDir).filter(f => f.endsWith('.md'));
-    assert.ok(researchFiles.length > 0, '.planning/templates/research/ must have .md files after init');
-    assert.ok(codebaseFiles.length > 0, '.planning/templates/codebase/ must have .md files after init');
+    assert.ok(researchFiles.length > 0, '.work/templates/research/ must have .md files after init');
+    assert.ok(codebaseFiles.length > 0, '.work/templates/codebase/ must have .md files after init');
   });
 
   test('init copies critical root template files (spec.md, roadmap.md, auth-matrix.md)', async () => {
     await initProject();
-    const templatesDir = path.join(tmpDir, '.planning', 'templates');
+    const templatesDir = path.join(tmpDir, '.work', 'templates');
     for (const file of ['spec.md', 'roadmap.md', 'auth-matrix.md']) {
       assert.ok(fs.existsSync(path.join(templatesDir, file)),
-        `.planning/templates/${file} must exist after init (SC7 template family)`);
+        `.work/templates/${file} must exist after init (SC7 template family)`);
     }
   });
 
   test('update --templates refreshes corrupted delegate', async () => {
     await initProject();
 
-    const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+    const delegatePath = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
     fs.writeFileSync(delegatePath, 'stale content');
 
     const result = await runCliAsMain(tmpDir, ['update', '--templates']);
@@ -116,7 +116,7 @@ describe('generation manifest', () => {
   test('update --templates warns about user-modified files', async () => {
     await initProject();
 
-    const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+    const delegatePath = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
     fs.writeFileSync(delegatePath, 'user-modified content');
 
     const result = await runCliAsMain(tmpDir, ['update', '--templates']);
@@ -126,7 +126,7 @@ describe('generation manifest', () => {
   test('update --dry does not write files', async () => {
     await initProject();
 
-    const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+    const delegatePath = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
     fs.writeFileSync(delegatePath, 'stale content');
 
     const result = await runCliAsMain(tmpDir, ['update', '--templates', '--dry']);
@@ -138,7 +138,7 @@ describe('generation manifest', () => {
   test('update --templates refreshes role contracts', async () => {
     await initProject();
 
-    const rolePath = path.join(tmpDir, '.planning', 'templates', 'roles', 'mapper.md');
+    const rolePath = path.join(tmpDir, '.work', 'templates', 'roles', 'mapper.md');
     fs.writeFileSync(rolePath, 'stale role');
 
     const result = await runCliAsMain(tmpDir, ['update', '--templates']);
@@ -159,7 +159,7 @@ describe('generation manifest', () => {
   test('update without --templates does not touch templates', async () => {
     await initProject();
 
-    const delegatePath = path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md');
+    const delegatePath = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
     fs.writeFileSync(delegatePath, 'stale content');
 
     const result = await runCliAsMain(tmpDir, ['update']);
@@ -170,9 +170,9 @@ describe('generation manifest', () => {
   test('update without --templates does not rewrite manifest', async () => {
     await initProject();
 
-    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
     const beforeContent = fs.readFileSync(manifestPath, 'utf-8');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md'), 'user-modified content');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md'), 'user-modified content');
 
     const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0);
@@ -195,11 +195,11 @@ describe('generation manifest', () => {
       'update must not bootstrap planning state for an unrelated .agents/skills directory');
   });
 
-  test('update repairs open-standard skills when only the .planning/bin helper remains', async () => {
+  test('update repairs open-standard skills when only the .work/bin helper remains', async () => {
     await initProject();
 
     const skillsDir = path.join(tmpDir, '.agents', 'skills');
-    const launcherPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const launcherPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
     fs.rmSync(skillsDir, { recursive: true, force: true });
 
     assert.ok(fs.existsSync(launcherPath), 'launcher must remain present for the partial-runtime repair case');
@@ -212,10 +212,10 @@ describe('generation manifest', () => {
     assert.ok(fs.existsSync(launcherPath));
   });
 
-  test('update repairs .planning/bin helper when planning exists and helpers are missing', async () => {
+  test('update repairs .work/bin helper when planning exists and helpers are missing', async () => {
     await initProject();
 
-    const helperDir = path.join(tmpDir, '.planning', 'bin');
+    const helperDir = path.join(tmpDir, '.work', 'bin');
     const launcherPath = path.join(helperDir, 'gsdd.mjs');
     fs.rmSync(helperDir, { recursive: true, force: true });
 
@@ -230,13 +230,13 @@ describe('generation manifest', () => {
 
     const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
     fs.mkdirSync(nestedDir, { recursive: true });
-    fs.rmSync(path.join(tmpDir, '.planning', 'bin'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'bin'), { recursive: true, force: true });
     fs.rmSync(path.join(tmpDir, '.agents', 'skills'), { recursive: true, force: true });
 
     const result = await runCliAsMain(nestedDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
     assert.ok(!fs.existsSync(path.join(nestedDir, '.planning')), 'update must not initialize nested cwd as a separate workspace');
   });
@@ -255,13 +255,13 @@ describe('generation manifest', () => {
 
       const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
       fs.mkdirSync(nestedDir, { recursive: true });
-      fs.rmSync(path.join(tmpDir, '.planning', 'bin'), { recursive: true, force: true });
+      fs.rmSync(path.join(tmpDir, '.work', 'bin'), { recursive: true, force: true });
       fs.rmSync(path.join(tmpDir, '.agents', 'skills'), { recursive: true, force: true });
 
       const result = await withEnv({ GSDD_WORKSPACE_ROOT: otherDir }, () => runCliAsMain(nestedDir, ['update']));
       assert.strictEqual(result.exitCode, 0, result.output);
 
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')),
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')),
         'update must repair the cwd-discovered workspace, not the stale env workspace');
       assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')),
         'update must repair skills in the cwd-discovered workspace');
@@ -274,9 +274,9 @@ describe('generation manifest', () => {
     await initProject();
 
     const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
-    const helperDir = path.join(tmpDir, '.planning', 'bin');
+    const helperDir = path.join(tmpDir, '.work', 'bin');
     const skillsDir = path.join(tmpDir, '.agents', 'skills');
-    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
     fs.mkdirSync(nestedDir, { recursive: true });
     fs.rmSync(helperDir, { recursive: true, force: true });
     fs.rmSync(skillsDir, { recursive: true, force: true });
@@ -288,7 +288,7 @@ describe('generation manifest', () => {
     assert.match(result.output, /would update local workflow helpers/);
     assert.match(result.output, /Dry run/);
 
-    assert.ok(!fs.existsSync(path.join(helperDir, 'gsdd.mjs')), 'dry update must not repair .planning/bin');
+    assert.ok(!fs.existsSync(path.join(helperDir, 'gsdd.mjs')), 'dry update must not repair .work/bin');
     assert.ok(!fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')), 'dry update must not repair .agents/skills');
     assert.strictEqual(fs.readFileSync(manifestPath, 'utf-8'), manifestBefore, 'dry update must not rewrite the manifest');
     assert.ok(!fs.existsSync(path.join(nestedDir, '.planning')), 'dry update must not initialize nested cwd as a separate workspace');
@@ -307,7 +307,7 @@ describe('generation manifest', () => {
   test('update --templates removes orphaned root templates', async () => {
     await initProject();
 
-    const orphanPath = path.join(tmpDir, '.planning', 'templates', 'obsolete-template.md');
+    const orphanPath = path.join(tmpDir, '.work', 'templates', 'obsolete-template.md');
     fs.writeFileSync(orphanPath, '# Obsolete');
 
     const result = await runCliAsMain(tmpDir, ['update', '--templates']);
