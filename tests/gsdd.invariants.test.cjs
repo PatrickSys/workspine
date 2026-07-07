@@ -1964,7 +1964,7 @@ describe('G34e - Phase 24 Public Naming Invariants', () => {
       'package.json name must remain gsdd-cli. FIX: Phase 24 reconciles naming copy, not the published package contract.');
     assert.strictEqual(pkg.bin.gsdd, 'bin/gsdd.mjs',
       'package.json bin.gsdd must remain bin/gsdd.mjs. FIX: Keep the retained command contract stable.');
-    assert.match(readme, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.planning\/`/i,
+    assert.match(readme, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.work\/`/i,
       'README.md must keep the retained naming stack explicit. FIX: Spell out the retained technical contracts.');
     assert.match(userGuide, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.planning\/`/i,
       'docs/USER-GUIDE.md must keep the retained naming stack explicit. FIX: Explain the retained technical contracts in the guide intro.');

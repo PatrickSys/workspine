@@ -94,9 +94,9 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   });
 
   test('init installs files that new-project references', () => {
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'spec.md')), 'spec template must exist');
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roadmap.md')), 'roadmap template must exist');
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'config.json')), 'config.json must exist');
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'spec.md')), 'spec template must exist');
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'roadmap.md')), 'roadmap template must exist');
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'config.json')), 'config.json must exist');
   });
 
   test('new-project researcher delegates reference installed delegate files', () => {
@@ -109,7 +109,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
         `new-project must reference delegate ${delegate}`
       );
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', delegate)),
+        fs.existsSync(path.join(tmpDir, '.work', 'templates', 'delegates', delegate)),
         `delegate file must be installed: ${delegate}`
       );
     }
@@ -119,7 +119,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     const content = readSkill(tmpDir, 'gsdd-new-project');
     assert.ok(content.includes('researcher-synthesizer.md'), 'must reference synthesizer delegate');
     assert.ok(
-      fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'researcher-synthesizer.md')),
+      fs.existsSync(path.join(tmpDir, '.work', 'templates', 'delegates', 'researcher-synthesizer.md')),
       'synthesizer delegate must be installed'
     );
   });
@@ -212,7 +212,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     const content = readSkill(tmpDir, 'gsdd-audit-milestone');
     assert.ok(content.includes('integration-checker'), 'audit must reference integration-checker');
     assert.ok(
-      fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'integration-checker.md')),
+      fs.existsSync(path.join(tmpDir, '.work', 'templates', 'roles', 'integration-checker.md')),
       'integration-checker role must be installed'
     );
   });
@@ -307,21 +307,21 @@ describe('S2 — Brownfield Path (init → map-codebase → new-project brownfie
       'map-codebase must keep the routing synthesis ephemeral rather than adding a fifth file');
   });
 
-  test('each mapper delegate exists in .planning/templates/delegates/', () => {
+  test('each mapper delegate exists in .work/templates/delegates/', () => {
     const mapperDelegates = ['mapper-tech.md', 'mapper-arch.md', 'mapper-quality.md', 'mapper-concerns.md'];
     for (const delegate of mapperDelegates) {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', delegate)),
+        fs.existsSync(path.join(tmpDir, '.work', 'templates', 'delegates', delegate)),
         `mapper delegate must be installed: ${delegate}`
       );
     }
   });
 
-  test('mapper delegates reference mapper role at .planning/templates/roles/mapper.md', () => {
+  test('mapper delegates reference mapper role at .work/templates/roles/mapper.md', () => {
     const mapperDelegates = ['mapper-tech.md', 'mapper-arch.md', 'mapper-quality.md', 'mapper-concerns.md'];
     for (const delegate of mapperDelegates) {
       const content = fs.readFileSync(
-        path.join(tmpDir, '.planning', 'templates', 'delegates', delegate),
+        path.join(tmpDir, '.work', 'templates', 'delegates', delegate),
         'utf-8'
       );
       assert.ok(
@@ -333,7 +333,7 @@ describe('S2 — Brownfield Path (init → map-codebase → new-project brownfie
 
   test('mapper role was installed by init', () => {
     assert.ok(
-      fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'mapper.md')),
+      fs.existsSync(path.join(tmpDir, '.work', 'templates', 'roles', 'mapper.md')),
       'mapper.md role must be installed'
     );
   });
@@ -382,7 +382,7 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
     const roles = ['planner.md', 'executor.md', 'verifier.md'];
     for (const role of roles) {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', role)),
+        fs.existsSync(path.join(tmpDir, '.work', 'templates', 'roles', role)),
         `role must be installed: ${role}`
       );
     }
@@ -566,7 +566,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
 
     test('plan-checker delegate has same 14 dimensions as native checker', () => {
       const delegate = fs.readFileSync(
-        path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md'),
+        path.join(tmpDir, '.work', 'templates', 'delegates', 'plan-checker.md'),
         'utf-8'
       );
       const dimensions = [
@@ -635,15 +635,15 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         const gsdd = await loadGsdd(opencodeTmpDir);
         await gsdd.cmdInit('--auto', '--tools', 'opencode');
         role = fs.readFileSync(
-          path.join(opencodeTmpDir, '.planning', 'templates', 'roles', 'approach-explorer.md'),
+          path.join(opencodeTmpDir, '.work', 'templates', 'roles', 'approach-explorer.md'),
           'utf-8'
         );
         approach = fs.readFileSync(
-          path.join(opencodeTmpDir, '.planning', 'templates', 'approach.md'),
+          path.join(opencodeTmpDir, '.work', 'templates', 'approach.md'),
           'utf-8'
         );
         checker = fs.readFileSync(
-          path.join(opencodeTmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md'),
+          path.join(opencodeTmpDir, '.work', 'templates', 'delegates', 'plan-checker.md'),
           'utf-8'
         );
       } finally {
@@ -970,7 +970,7 @@ describe('S5 — Config-to-Content Propagation', () => {
   afterEach(() => { cleanup(tmpDir); });
 
   test('auto config has workflow.research = true and new-project contains research section', () => {
-    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.planning', 'config.json'), 'utf-8'));
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf-8'));
     assert.strictEqual(config.workflow.research, true, 'default config must have workflow.research = true');
 
     const content = readSkill(tmpDir, 'gsdd-new-project');
@@ -979,7 +979,7 @@ describe('S5 — Config-to-Content Propagation', () => {
   });
 
   test('auto config has workflow.planCheck = true and plan SKILL.md contains plan-check orchestration', () => {
-    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.planning', 'config.json'), 'utf-8'));
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf-8'));
     assert.strictEqual(config.workflow.planCheck, true, 'default config must have workflow.planCheck = true');
 
     const content = readSkill(tmpDir, 'gsdd-plan');
@@ -991,7 +991,7 @@ describe('S5 — Config-to-Content Propagation', () => {
   });
 
   test('auto config has gitProtocol with all 3 fields and execute references gitProtocol', () => {
-    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.planning', 'config.json'), 'utf-8'));
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf-8'));
     assert.ok(config.gitProtocol, 'config must have gitProtocol');
     assert.ok(config.gitProtocol.branch, 'gitProtocol must have branch');
     assert.ok(config.gitProtocol.commit, 'gitProtocol must have commit');
@@ -1006,7 +1006,7 @@ describe('S5 — Config-to-Content Propagation', () => {
   });
 
   test('auto config has modelProfile = balanced', () => {
-    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.planning', 'config.json'), 'utf-8'));
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf-8'));
     assert.strictEqual(config.modelProfile, 'balanced', 'default modelProfile must be balanced');
   });
 

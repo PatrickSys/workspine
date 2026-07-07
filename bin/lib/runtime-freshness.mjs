@@ -29,6 +29,7 @@ import {
   loadProjectModelConfig,
   resolveRuntimeAgentModel,
 } from './config.mjs';
+import { resolveStateDir } from './state-dir.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -150,24 +151,25 @@ function buildCodexEntries({ cwd }) {
   ];
 }
 
-function buildWorkspaceHelperEntries() {
+function buildWorkspaceHelperEntries(stateDirName) {
   return buildPlanningCliHelperEntries({
     packageName: PACKAGE_JSON.name,
     packageVersion: PACKAGE_JSON.version,
   }).map((entry) => ({
-    relativePath: `.planning/${entry.relativePath}`,
+    relativePath: `${stateDirName}/${entry.relativePath}`,
     expectedContent: entry.content,
   }));
 }
 
 export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workflows }) {
+  const stateDirName = resolveStateDir(cwd).name;
   return [
     {
       runtime: 'workspace-helper',
       label: 'workspace workflow helper',
-      root: '.planning/bin',
+      root: `${stateDirName}/bin`,
       repairCommand: 'npx -y gsdd-cli update',
-      entries: buildWorkspaceHelperEntries(),
+      entries: buildWorkspaceHelperEntries(stateDirName),
     },
     {
       runtime: 'portable',
@@ -206,7 +208,7 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
 export function evaluateRuntimeFreshness({ cwd = process.cwd(), workflows = [] }) {
   const groups = collectExpectedRuntimeSurfaceGroups({ cwd, workflows }).map((group) => {
     const installed = group.runtime === 'workspace-helper'
-      ? existsSync(join(cwd, '.planning'))
+      ? existsSync(resolveStateDir(cwd).dir)
       : existsSync(join(cwd, group.root));
     const comparisons = installed
       ? group.entries.map((entry) => compareGeneratedFile({

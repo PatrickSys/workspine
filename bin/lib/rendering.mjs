@@ -13,6 +13,7 @@ const HELPER_LIB_FILES = Object.freeze([
   'lifecycle-state.mjs',
   'next.mjs',
   'phase.mjs',
+  'state-dir.mjs',
   'work-context.mjs',
   'workspace-root.mjs',
 ]);
