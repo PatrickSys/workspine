@@ -18,7 +18,7 @@ async function importModule(filePath) {
 async function runWizardInit(tmpDir, { selectedRuntimes = ['claude'], adapterTargets = ['claude'], rigor = 'balanced', cost = 'balanced', commitDocs = true } = {}) {
   const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
   const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
-  const models = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'models.mjs'));
+  const models = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'config.mjs'));
   const ctx = gsddMod.createCliContext(tmpDir);
   const callLog = [];
 
@@ -99,7 +99,7 @@ describe('consumer ceremony reduction', () => {
   });
 
   test('wizard resolves all 9 rigor/cost combinations correctly', async () => {
-    const models = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'models.mjs'));
+    const models = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'config.mjs'));
     for (const rigor of Object.keys(models.RIGOR_PROFILES)) {
       for (const cost of Object.keys(models.COST_PROFILES)) {
         const comboDir = createTempProject();

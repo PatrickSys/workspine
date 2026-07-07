@@ -10,7 +10,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const GSDD_PATH = path.join(ROOT, 'bin', 'gsdd.mjs');
-const MODELS_MODULE = path.join(ROOT, 'bin', 'lib', 'models.mjs');
+const MODELS_MODULE = path.join(ROOT, 'bin', 'lib', 'config.mjs');
 const MANIFEST_MODULE = path.join(ROOT, 'bin', 'lib', 'manifest.mjs');
 const HEALTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health.mjs');
 const HEALTH_TRUTH_MODULE = path.join(ROOT, 'bin', 'lib', 'health-truth.mjs');
