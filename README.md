@@ -40,7 +40,7 @@ For agent continuity across long sessions, `gsdd next` reads `.work/` plus repo 
 
 `gsdd next` keeps the human surface tight and the agent surface structured. JSON packets include typed `next_action` values for CLI commands, workflow skills, manual review, and user-question gates. Blocking questions, decisions, graph rebuilds, and dogfood findings use explicit subcommands; duplicate question, decision, and dogfood IDs replay as unchanged when the content matches and fail unless `--replace` is passed when the content differs. The continuity graph records answer and supersession edges so future agents can reconstruct decision history without rereading raw transcripts.
 
-Workspine ships 14 workflows. The package and CLI are `gsdd-cli` / `gsdd-*` — retained as the technical contract under the Workspine product name.
+Workspine ships 13 workflows. The package and CLI are `gsdd-cli` / `gsdd-*` — retained as the technical contract under the Workspine product name.
 
 ---
 
@@ -174,7 +174,7 @@ Use Workspine when a feature takes more than one session, or when you need to sw
 | Tool | Good for | vs Workspine |
 |------|----------|--------------|
 | **Workspine** | Work that spans sessions, agents, or runtimes where plans and proof need to stay in the repo | — |
-| [GSD](https://github.com/gsd-build/get-shit-done) | Broad AI prompting suite — 81 commands, 78 workflows, 33 agents | Workspine is narrower: 14 workflows, fewer moving parts for the human in the loop |
+| [GSD](https://github.com/gsd-build/get-shit-done) | Broad AI prompting suite — 81 commands, 78 workflows, 33 agents | Workspine is narrower: 13 workflows, fewer moving parts for the human in the loop |
 | [OpenSpec](https://openspec.dev/) | Living spec + change proposals in a lightweight format | Workspine adds the execution, verification, and handoff layer on top of planning |
 | [LeanSpec](https://www.lean-spec.dev/docs/guide/first-principles) | Minimal specs that fit LLM context | Workspine adds workflow gates and runtime entrypoints for when you need the full structure |
 | [GitHub Spec Kit](https://github.com/github/spec-kit) | Spec-first planning workflows in `.specify/` | Similar space; Workspine is one CLI with one delivery loop instead of a broader ecosystem |

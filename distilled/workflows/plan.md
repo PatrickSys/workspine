@@ -14,10 +14,11 @@ Before starting, read these files:
 7. Relevant source code - if this phase or change builds on existing code, read the key files
 8. `.work/phases/*-SUMMARY.md` for the prior completed phase - if a `<judgment>` section is present, read all four sub-sections. The `<judgment>` carries forward active constraints, unresolved uncertainty, decision posture, and anti-regression rules from the prior phase. Honor these as input context alongside SPEC.md decisions and APPROACH.md choices.
 9. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 8, check whether `.work/.continue-here.bak` exists. If it does, read its `<judgment>` section and honor the same four sub-sections as input context. After reading, run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` (auto-clean: the judgment has been absorbed into this session's context).
+10. `.work/*-MILESTONE-AUDIT.md`, `.work/milestone/AUDIT.md`, `.work/evidence/manifest.json`, and recent `*-VERIFICATION.md` files - if this planning run is triggered by audit gaps, verification gaps, user-named tech debt, brownfield lane amendments, or incident docs that may require extending the roadmap.
 
 Classify the target before preflight:
-- If `.work/brownfield-change/CHANGE.md` exists and the requested work fits its single active goal, scope, done-when, next action, or declared write scope, select `brownfield-change` as the planning target.
-- If the work no longer fits one active brownfield stream, stop and route widening through `/gsdd-new-project` or `/gsdd-new-milestone` using the brownfield artifact family as preserved input.
+- If `.work/brownfield-change/CHANGE.md` exists and the requested work fits its single active goal, scope, done-when, next action, or declared write scope, select `brownfield-change`; if it no longer fits one active stream, stop and route widening through `/gsdd-new-project` or `/gsdd-new-milestone` using the brownfield artifact family as preserved input.
+- If audit gaps, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` require adding new roadmap work, select `amend` as the planning target before normal phase selection.
 - Otherwise identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>
 <repo_root_helper_contract>
@@ -25,25 +26,24 @@ All `node .work/bin/gsdd.mjs ...` helper commands below assume the current worki
 </repo_root_helper_contract>
 <lifecycle_preflight>
 Before writing or rewriting planning artifacts, run the preflight for the selected authority:
-- Phase planning: `node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`
-- Bounded brownfield-change planning: `node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`
-If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift.
-Do not run phase preflight before target classification. An unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
+- Phase: `node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`; bounded brownfield: `node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`; amend/extend before roadmap append: `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`
+If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift. Do not run phase preflight before target classification; an unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
+<amend_extend_mode>
+Use this entry mode of `/gsdd-plan` when audit findings, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` need follow-up planning without a suitable existing phase. Reconcile latest `MILESTONE-AUDIT.md`, `.work/milestone/AUDIT.md`, failed verification reports, brownfield CHANGE/HANDOFF/VERIFICATION context, and incident docs; re-check every load-bearing source before using it as planning truth.
+If an existing open phase fits, route to normal phase planning. If a new phase is needed, run `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`, append the smallest closure phase to `.work/ROADMAP.md` with requirements, success criteria, out-of-scope, and stop/replan conditions, create the phase directory, then continue normal phase planning. After appending roadmap work, run `node .work/bin/gsdd.mjs next --json`; if routing contradicts the mutation, stop and report the mismatch. Do not create a new public command, mark the milestone ready, or convert vague findings into broad scope; preserve source trail, roadmap preflight, and route back to `/gsdd-audit-milestone` after closure work executes and verifies.
+</amend_extend_mode>
 <integration_surface_check>
 Before planning roadmap work, inspect the live integration surface separately from checkpoint or planning artifacts:
-- Run `node .work/bin/gsdd.mjs control-map --json` when available.
-- Use its computed branch/HEAD, divergence, tracked/untracked/ignored buckets, sibling/detached worktrees, local annotations, and interventions.
+- Run `node .work/bin/gsdd.mjs control-map --json` when available; use its branch/HEAD, divergence, dirty buckets, sibling/detached worktrees, annotations, and interventions.
 - If the helper is unavailable, fall back to direct git/worktree inspection.
-
 If the planning truth says "next phase is X" but the git/worktree truth says the current branch is a stale/spent or mixed-scope execution surface, warn explicitly and treat the dirty branch as evidence only. Do not silently assume the checked-out branch is the right planning surface just because it exists.
 Local annotations explain operator intent but do not outrank repo truth, planning artifacts, or checkpoint reconciliation.
 </integration_surface_check>
 <runtime_contract>
 Use the `Runtime` and `Assurance` types from `.work/SPEC.md`.
 Infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
-Assurance is ordered: `unreviewed` -> `self_checked` -> `cross_runtime_checked`.
-Same-runtime helpers never count as cross-runtime evidence.
+Assurance is ordered: `unreviewed` -> `self_checked` -> `cross_runtime_checked`; same-runtime helpers never count as cross-runtime evidence.
 </runtime_contract>
 <assurance_check>
 After `<load_context>`, compare the current planning pass against the strongest upstream artifact available: same-phase prior plan first, otherwise prior completed phase SUMMARY or VERIFICATION.

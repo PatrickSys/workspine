@@ -91,7 +91,7 @@ npx -y gsdd-cli init       -> bootstrap (create .work/, copy templates, generate
 /gsdd-audit-milestone      -> MILESTONE-AUDIT.md     (cross-phase integration + requirements coverage)
 /gsdd-complete-milestone   -> milestones/vX.Y-*      (archive, evolve spec, collapse roadmap)
 /gsdd-new-milestone        -> updated SPEC.md + ROADMAP.md  (next milestone goals + phases)
-/gsdd-plan-milestone-gaps  -> gap closure phases in ROADMAP.md  (from audit results)
+/gsdd-plan                 -> amend/extend gap closure phases in ROADMAP.md  (from audit results)
 /gsdd-quick                -> .work/quick/NNN/   (sub-hour task outside phases)
 /gsdd-pause                -> .work/.continue-here.md  (session checkpoint)
 /gsdd-resume               -> restore context, route to next action
@@ -119,7 +119,7 @@ Use the same three-way routing everywhere:
 | `audit-milestone.md` | Cross-phase integration audit, auth protection checks, requirement reconciliation, and orphan detection into `MILESTONE-AUDIT.md` |
 | `complete-milestone.md` | Milestone archive, spec evolution, and roadmap collapse |
 | `new-milestone.md` | Brownfield milestone continuation: goals, requirements, and roadmap phases |
-| `plan-milestone-gaps.md` | Gap-closure phases from `MILESTONE-AUDIT.md` results |
+| `plan.md` amend/extend mode | Gap-closure phases from `MILESTONE-AUDIT.md`, verification gaps, tech debt, brownfield amendments, or incident docs |
 | `quick.md` | Quick-work lane for sub-hour tasks outside the phase cycle |
 | `pause.md` | Session checkpoint writer with conversational handoff |
 | `resume.md` | Session context restorer with priority-ordered routing |
@@ -165,7 +165,6 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-new-project/SKILL.md
   gsdd-new-milestone/SKILL.md
   gsdd-plan/SKILL.md
-  gsdd-plan-milestone-gaps/SKILL.md
   gsdd-execute/SKILL.md
   gsdd-verify/SKILL.md
   gsdd-verify-work/SKILL.md
@@ -209,7 +208,6 @@ distilled/
     new-milestone.md
     pause.md
     plan.md
-    plan-milestone-gaps.md
     progress.md
     quick.md
     resume.md

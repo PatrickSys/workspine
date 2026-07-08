@@ -232,16 +232,18 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     }
   });
 
-  test('gap closure workflow confirms next route after generation', () => {
-    const content = readSkill(tmpDir, 'gsdd-plan-milestone-gaps');
-    assert.match(content, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight plan-milestone-gaps/,
-      'generated plan-milestone-gaps skill must preflight before mutating ROADMAP.');
+  test('generated plan skill amend mode confirms next route after gap-phase generation', () => {
+    const content = readSkill(tmpDir, 'gsdd-plan');
+    assert.match(content, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight plan amend/,
+      'generated plan skill must preflight amend mode before mutating ROADMAP.');
     assert.match(content, /node \.work\/bin\/gsdd\.mjs next --json/,
-      'generated plan-milestone-gaps skill must confirm next-action routing after intentional ROADMAP writes.');
+      'generated plan skill must confirm next-action routing after intentional ROADMAP writes.');
     assert.doesNotMatch(content, /\bgsdd next --json\b/,
-      'generated plan-milestone-gaps skill must use the local helper path, not bare gsdd.');
+      'generated plan skill must use the local helper path, not bare gsdd.');
     assert.match(content, /\/gsdd-plan/,
-      'generated plan-milestone-gaps skill must still route to /gsdd-plan after creating phases.');
+      'generated plan skill must still route through /gsdd-plan for amend/extend work.');
+    assert.match(content, /\/gsdd-audit-milestone/,
+      'generated plan skill must preserve re-audit guidance after closure work.');
   });
 });
 

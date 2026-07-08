@@ -1171,14 +1171,14 @@ describe('G20 - Session Continuity Contracts', () => {
       `resume.md determine_action must route to at least 3 workflows, found ${workflows.length}. FIX: Add routing branches.`);
   });
 
-  test('progress <route_action> routes to workflows that exist in the 14-workflow set', () => {
+  test('progress <route_action> routes to workflows that exist in the 13-workflow set', () => {
     const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
     const section = content.slice(content.indexOf('<route_action>'), content.indexOf('</route_action>'));
     const workflows = section.match(/\/gsdd-\w[\w-]*/g) || [];
     const validWorkflows = [
       '/gsdd-new-project', '/gsdd-plan', '/gsdd-execute', '/gsdd-verify',
       '/gsdd-audit-milestone', '/gsdd-complete-milestone', '/gsdd-new-milestone',
-      '/gsdd-plan-milestone-gaps', '/gsdd-quick', '/gsdd-pause', '/gsdd-resume',
+      '/gsdd-quick', '/gsdd-pause', '/gsdd-resume',
       '/gsdd-progress', '/gsdd-map-codebase'
     ];
     for (const wf of workflows) {
@@ -1314,7 +1314,6 @@ describe('G22 - Workflow Completion Routing', () => {
     'audit-milestone.md',
     'complete-milestone.md',
     'new-milestone.md',
-    'plan-milestone-gaps.md',
     'quick.md',
     'pause.md',
     'resume.md',
@@ -3011,7 +3010,6 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
   const MILESTONE_WORKFLOWS = [
     'new-milestone.md',
     'complete-milestone.md',
-    'plan-milestone-gaps.md',
   ];
 
   // Structural invariant: each file uses standard GSDD workflow sections
@@ -3058,21 +3056,19 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
       'complete-milestone completion must route to /gsdd-new-milestone. FIX: Add /gsdd-new-milestone as next step in completion.');
   });
 
-  test('plan-milestone-gaps.md completion routes to /gsdd-plan', () => {
-    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
-    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd-plan/,
-      'plan-milestone-gaps completion must route to /gsdd-plan. FIX: Add /gsdd-plan as next step in completion.');
-  });
-
-  test('plan-milestone-gaps.md confirms next route before recommending /gsdd-plan', () => {
-    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
-    assert.match(content, /lifecycle-preflight plan-milestone-gaps/,
-      'plan-milestone-gaps must preflight before mutating ROADMAP. FIX: Add lifecycle-preflight plan-milestone-gaps.');
-    assert.match(content, /node \.work\/bin\/gsdd\.mjs next --json/,
-      'plan-milestone-gaps must confirm next-action routing after intentional ROADMAP mutations. FIX: Run next --json after creating phases.');
-    assert.ok(content.indexOf('next --json') < content.indexOf('<completion>'),
-      'plan-milestone-gaps must confirm routing before completion recommends /gsdd-plan. FIX: Move next --json before completion.');
+  test('plan.md amend mode owns former gap-closure guardrails', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
+    const section = content.slice(content.indexOf('<amend_extend_mode>'), content.indexOf('</amend_extend_mode>'));
+    assert.match(section, /MILESTONE-AUDIT\.md|milestone audit/i,
+      'plan amend mode must reference milestone audit sources. FIX: Add audit source handling to <amend_extend_mode>.');
+    assert.match(section, /verification gaps/i,
+      'plan amend mode must handle verification gaps. FIX: Add verification-gap handling to <amend_extend_mode>.');
+    assert.match(section, /lifecycle-preflight plan amend/,
+      'plan amend mode must preflight before mutating ROADMAP. FIX: Add lifecycle-preflight plan amend.');
+    assert.match(section, /node \.work\/bin\/gsdd\.mjs next --json/,
+      'plan amend mode must confirm next-action routing after intentional ROADMAP writes. FIX: Run next --json after creating phases.');
+    assert.match(section, /\/gsdd-audit-milestone/,
+      'plan amend mode must preserve re-audit after gap closure. FIX: Add re-audit routing guidance.');
   });
 
   // Context references: each workflow reads the right source files
@@ -3098,17 +3094,10 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
       'complete-milestone load_context must reference MILESTONE-AUDIT.md. FIX: Add MILESTONE-AUDIT.md to load_context.');
   });
 
-  test('plan-milestone-gaps.md references MILESTONE-AUDIT.md', () => {
-    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
+  test('plan.md amend mode references MILESTONE-AUDIT.md', () => {
+    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
     assert.match(content, /MILESTONE-AUDIT\.md/,
-      'plan-milestone-gaps must reference MILESTONE-AUDIT.md. FIX: Add MILESTONE-AUDIT.md reference.');
-  });
-
-  test('plan-milestone-gaps.md completion routes to /gsdd-audit-milestone after gap closure', () => {
-    const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan-milestone-gaps.md'), 'utf-8');
-    const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd-audit-milestone/,
-      'plan-milestone-gaps completion must mention /gsdd-audit-milestone for re-audit. FIX: Add re-audit hint to completion.');
+      'plan amend mode must reference MILESTONE-AUDIT.md. FIX: Add MILESTONE-AUDIT.md reference.');
   });
 
   test('MILESTONES.md must be listed in .gitignore (internal-only, not public)', () => {

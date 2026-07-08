@@ -671,7 +671,7 @@ function enrichRoute(route, { context, controlMap, constraints, privacyNotes, in
     execute: workflowAction('gsdd-execute', 'Execute the approved Workspine plan.'),
     verify: workflowAction('gsdd-verify', 'Verify executed artifacts against the plan.'),
     audit: workflowAction('gsdd-audit-milestone', 'Audit milestone-level integration and closure evidence.'),
-    fix_gaps: workflowAction('gsdd-plan-milestone-gaps', 'Plan gap-fix work from audit or verification findings.'),
+    fix_gaps: workflowAction('gsdd-plan', 'Plan amend/extend work from audit or verification findings.'),
     dogfood: cliAction(['next', 'dogfood', 'capture', '--id', '<id>', '--title', '<text>', '--body', '<text>'], 'Capture one bounded local dogfood finding.'),
     pause: manualReviewAction(['.work/handoff/current.md'], 'Update handoff before pausing.'),
     blocked: null,
@@ -724,7 +724,7 @@ function defaultReadArtifacts(state, context) {
   if (state === 'audit') return context.milestone?.has_roadmap
     ? ['.work/goal.md', '.work/milestone/ROADMAP.md', '.work/milestone/phases/*/*-VERIFY.md']
     : ['.work/goal.md', '.work/evidence/manifest.json', statePath(context, 'phases/**/*-VERIFICATION.md')];
-  if (state === 'fix_gaps') return ['.work/evidence/manifest.json'];
+  if (state === 'fix_gaps') return ['.work/evidence/manifest.json', '.work/*-MILESTONE-AUDIT.md', '.work/milestone/AUDIT.md'];
   if (state === 'dogfood') return ['.work/goal.md', '.work/evidence/manifest.json'];
   if (state === 'pause') return ['.work/handoff/current.md'];
   if (state === 'complete') return ['.work/goal.md', '.work/evidence/manifest.json', '.work/dogfood/'];
@@ -735,7 +735,7 @@ function defaultReadArtifacts(state, context) {
 function defaultWriteArtifacts(state) {
   if (state === 'verify') return ['.work/evidence/manifest.json'];
   if (state === 'audit') return ['.work/evidence/manifest.json'];
-  if (state === 'fix_gaps') return ['.work/focus/current.md', '.work/graph/events.jsonl'];
+  if (state === 'fix_gaps') return ['.work/ROADMAP.md', '.work/phases/', '.work/focus/current.md', '.work/graph/events.jsonl'];
   if (state === 'dogfood') return ['.work/dogfood/*.md', '.work/graph/events.jsonl'];
   if (state === 'pause') return ['.work/handoff/current.md'];
   return [];
@@ -767,7 +767,7 @@ const STATE_LABELS = {
   execute: 'Build the planned work',
   verify: 'Prove the last piece of work is done',
   audit: 'Check the whole milestone holds together',
-  fix_gaps: 'Close the gaps that checking found',
+  fix_gaps: 'Plan the gaps that checking found',
   dogfood: 'Use the result and record one honest finding',
   complete: 'Finish and archive the milestone',
   ask_user: 'Answer a question before work can continue',

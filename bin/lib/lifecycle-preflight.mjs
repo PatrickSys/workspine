@@ -44,11 +44,6 @@ const SURFACE_POLICIES = {
     ownedWrites: ['spec', 'roadmap', 'phase-directories'],
     explicitLifecycleMutation: 'none',
   },
-  'plan-milestone-gaps': {
-    classification: 'owned_write',
-    ownedWrites: ['roadmap', 'phase-directories'],
-    explicitLifecycleMutation: 'none',
-  },
   resume: {
     classification: 'owned_write',
     ownedWrites: ['checkpoint-cleanup'],
@@ -77,6 +72,7 @@ export function evaluateLifecyclePreflight({
   const lifecycle = evaluateLifecycleState({ planningDir });
   const normalizedPhase = phaseNumber ? normalizePhaseToken(phaseNumber) : null;
   const usesBrownfieldAuthority = surface === 'plan' && normalizedPhase === 'brownfield-change';
+  const usesPlanAmendAuthority = surface === 'plan' && normalizedPhase === 'amend';
   const workMilestone = normalizedPhase ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase }) : null;
   const checkpointPath = join(planningDir, '.continue-here.md');
   const stateLabel = createStateLabeler(planningDir);
@@ -84,7 +80,10 @@ export function evaluateLifecyclePreflight({
     ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath })
     : null;
   const usesWorkAuthority = Boolean(workMilestone?.phaseEntry || resumeWorkCheckpoint);
-  const usesAlternateAuthority = usesWorkAuthority || usesBrownfieldAuthority;
+  const usesAlternateAuthority = usesWorkAuthority || usesBrownfieldAuthority || usesPlanAmendAuthority;
+  const ownedWrites = usesPlanAmendAuthority
+    ? [...policy.ownedWrites, 'roadmap', 'phase-directories']
+    : policy.ownedWrites;
   const specPath = join(planningDir, 'SPEC.md');
   const milestonesPath = join(planningDir, 'MILESTONES.md');
   const blockers = [];
@@ -127,7 +126,7 @@ export function evaluateLifecyclePreflight({
     }
   }
 
-  if (normalizedPhase && !usesBrownfieldAuthority) {
+  if (normalizedPhase && !usesBrownfieldAuthority && !usesPlanAmendAuthority) {
     blockers.push(
       ...(usesWorkAuthority
         ? buildWorkPhaseBlockers({ workMilestone, phaseToken: normalizedPhase, surface })
@@ -197,10 +196,10 @@ export function evaluateLifecyclePreflight({
     surface,
     phase: normalizedPhase,
     classification: policy.classification,
-    ownedWrites: policy.ownedWrites,
+    ownedWrites,
     explicitLifecycleMutation: policy.explicitLifecycleMutation,
     mutationRequest: expectsMutation,
-    authority: usesBrownfieldAuthority ? 'brownfield_change' : usesWorkAuthority ? 'work_milestone' : 'planning',
+    authority: usesPlanAmendAuthority ? 'plan_amend' : usesBrownfieldAuthority ? 'brownfield_change' : usesWorkAuthority ? 'work_milestone' : 'planning',
     allowed: blockers.length === 0,
     status: blockers.length === 0 ? 'allowed' : 'blocked',
     reason: blockers[0]?.code ?? null,
@@ -209,7 +208,7 @@ export function evaluateLifecyclePreflight({
     planningState,
     controlMap: controlMap.summary,
     lifecycle: {
-      authority: usesBrownfieldAuthority ? 'brownfield_change' : usesWorkAuthority ? 'work_milestone' : 'planning',
+      authority: usesPlanAmendAuthority ? 'plan_amend' : usesBrownfieldAuthority ? 'brownfield_change' : usesWorkAuthority ? 'work_milestone' : 'planning',
       currentMilestone: lifecycle.currentMilestone,
       currentPhase: lifecycle.currentPhase ? lifecycle.currentPhase.number : null,
       nextPhase: lifecycle.nextPhase ? lifecycle.nextPhase.number : null,
@@ -229,6 +228,12 @@ export function evaluateLifecyclePreflight({
             status: lifecycle.brownfieldChange.currentStatus,
             title: lifecycle.brownfieldChange.title,
             nextAction: lifecycle.brownfieldChange.nextAction,
+          }
+        : null,
+      planAmend: usesPlanAmendAuthority
+        ? {
+            target: 'amend',
+            path: stateLabel('ROADMAP.md'),
           }
         : null,
     },
