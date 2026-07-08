@@ -233,6 +233,14 @@ Global install writes Workspine-managed files under selected agent homes and rec
 
 If `gsdd-cli` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .work/bin/gsdd.mjs ...` from the repo root.
 
+Browser-proof contract migration: `update` refreshes templates, skills,
+adapters, and helper code, but it does not rewrite historical phase artifacts.
+Old no-UI plans that use `ui_proof_slots: []` with a meaningful
+`no_ui_proof_rationale` continue to verify with a compatibility warning. Old
+plans with non-empty `ui_proof_slots` must be migrated to
+`browser_proof_required: true` plus a `## Browser Proof Plan` before they can
+close through direct verification.
+
 Normal user flow:
 
 1. Run `npx -y gsdd-cli init`.
@@ -259,7 +267,7 @@ Other CLI commands that remain available outside the first-run path:
 | Command | Purpose |
 |---------|---------|
 | `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
-| `gsdd verify <N>` | Run phase artifact and UI-proof closure checks for phase N; exits nonzero when verification is blocked |
+| `gsdd verify <N>` | Run phase artifact and browser-proof closure checks for phase N; exits nonzero when verification is blocked |
 | `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
 
 ### Platform flags for `--tools`

@@ -2244,8 +2244,8 @@ describe('G28 - Spec Quality Check and Contradiction Detection', () => {
       'plan.md phase_contract_gate must require explicit stop/replan conditions in the roadmap phase contract. FIX: Add stop/replan requirement to <phase_contract_gate>.');
   });
 
-  test('plan.md anti-drift contract requires boundary and closure fields', () => {
-    for (const token of ['non_goals', 'hard_boundaries', 'escalation_triggers', 'approval_gates', 'closure_claim_limit', 'leverage']) {
+  test('plan.md anti-drift contract requires boundary and proof fields', () => {
+    for (const token of ['non_goals', 'hard_boundaries', 'escalation_triggers', 'approval_gates', 'anti_regression_targets', 'known_unknowns', 'browser_proof_required', 'browser_proof_rationale']) {
       assert.match(planWorkflow, new RegExp(token),
         `plan.md must include anti-drift contract field "${token}". FIX: Add ${token} to the plan schema and plan structure.`);
     }
@@ -2253,7 +2253,7 @@ describe('G28 - Spec Quality Check and Contradiction Detection', () => {
 
   test('planner role uses the same anti-drift plan schema as plan.md', () => {
     const plannerRole = fs.readFileSync(path.join(ROOT, 'agents', 'planner.md'), 'utf-8');
-    for (const token of ['non_goals', 'hard_boundaries', 'escalation_triggers', 'approval_gates', 'anti_regression_targets', 'known_unknowns', 'high_leverage_surfaces', 'second_pass_required', 'closure_claim_limit', 'parallelism_budget', 'leverage']) {
+    for (const token of ['non_goals', 'hard_boundaries', 'escalation_triggers', 'approval_gates', 'anti_regression_targets', 'known_unknowns', 'browser_proof_required', 'browser_proof_rationale']) {
       assert.match(plannerRole, new RegExp(token),
         `planner role must include anti-drift contract field "${token}". FIX: Keep planner.md schema aligned with plan.md.`);
     }
@@ -3477,93 +3477,77 @@ describe('G53 - Deliberate Subagent Contract', () => {
   });
 });
 
-describe('G55 - UI Proof Contract', () => {
+describe('G55 - Browser Proof Contract', () => {
   const template = fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'ui-proof.md'), 'utf-8');
   const planContent = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'plan.md'), 'utf-8');
   const executeContent = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'execute.md'), 'utf-8');
   const quickContent = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'quick.md'), 'utf-8');
   const verifyContent = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'verify.md'), 'utf-8');
+  const proofRules = fs.readFileSync(path.join(ROOT, 'distilled', 'references', 'proof-rules.md'), 'utf-8');
+  const observationRecord = fs.readFileSync(path.join(ROOT, 'distilled', 'references', 'observation-record.md'), 'utf-8');
   const plannerRole = fs.readFileSync(path.join(ROOT, 'agents', 'planner.md'), 'utf-8');
   const executorRole = fs.readFileSync(path.join(ROOT, 'agents', 'executor.md'), 'utf-8');
   const verifierRole = fs.readFileSync(path.join(ROOT, 'agents', 'verifier.md'), 'utf-8');
   const planChecker = fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'delegates', 'plan-checker.md'), 'utf-8');
 
-  function parseObservedBundleExample() {
-    const match = template.match(/```json\s*\n([\s\S]*?)\n```/);
-    assert.ok(match, 'ui-proof.md must include a fenced JSON observed-bundle example.');
-    return JSON.parse(match[1]);
-  }
-
-  test('template preserves planned slot and observed bundle fields', () => {
+  test('template preserves browser-proof declaration and observation fields', () => {
     for (const token of [
-      'ui_proof_slots',
-      'no_ui_proof_rationale',
-      'claim',
-      'route_state',
-      'required_evidence_kinds',
-      'minimum_observations',
-      'expected_artifact_types',
-      'validation_command',
-      'environment',
-      'viewport',
-      'manual_acceptance_required',
-      'claim_limit',
-      'requirement_ids',
-      'slot_ids',
-      'evidence_inputs',
-      'commands_or_manual_steps',
-      'observations',
-      'artifacts',
-      'privacy',
-      'result',
-      'claim_status',
-      'claim_limits',
+      'browser_proof_required',
+      'browser_proof_rationale',
+      'Browser Proof Plan',
+      'Routes/states',
+      'Viewports',
+      'Runtime path',
+      'Evidence command',
+      'No-command rationale',
+      'Observations',
+      'Artifacts',
+      'Claim limit',
+      'Browser Proof Observation',
+      'Stale after',
     ]) {
-      assert.match(template, new RegExp(token), `ui-proof.md must include ${token}. FIX: Restore the locked UI proof schema field.`);
+      assert.match(template, new RegExp(token), `ui-proof.md must include ${token}. FIX: Restore the browser-proof contract field.`);
     }
-    assert.match(template, /```json/, 'ui-proof.md must use fenced JSON for observed proof bundle validation. FIX: Keep JSON canonical.');
+    assert.doesNotMatch(template, /ui_proof_slots|gsdd ui-proof validate|gsdd ui-proof compare|proof_bundle_version|claim_limits/,
+      'ui-proof.md must not reintroduce the retired slot/bundle validator contract.');
   });
 
-  test('template defines comparison statuses and unchanged evidence kinds', () => {
-    assert.match(template, /code`, `test`, `runtime`, `delivery`, and `human`/, 'ui-proof.md must preserve the five stable evidence kinds.');
-    for (const status of ['satisfied', 'partial', 'missing', 'waived', 'deferred', 'not_applicable']) {
-      assert.match(template, new RegExp('`' + status + '`'), `ui-proof.md must define comparison status ${status}.`);
+  test('template and proof rules preserve evidence kinds and failure causes', () => {
+    assert.match(template, /code`, `test`,\s*`runtime`, `delivery`, and `human`/, 'ui-proof.md must preserve the five stable evidence kinds.');
+    for (const cause of ['product_bug', 'missing_infra', 'flaky_harness', 'ambiguous_spec']) {
+      assert.match(proofRules, new RegExp('`' + cause + '`'), `proof-rules.md must define failure cause ${cause}.`);
     }
-    assert.match(template, /not new evidence kinds/i, 'UI artifacts must not become new evidence kinds.');
+    assert.match(template, /not new evidence kinds/i, 'Browser artifacts must not become new evidence kinds.');
+    assert.match(observationRecord, /failure-cause names in proof-rules\.md/i,
+      'observation-record.md must point failed or partial proof to proof-rules.md.');
   });
 
-  test('workflow and role sources preserve UI proof planning execution and verification contracts', () => {
-    assert.match(planContent, /<ui_proof_planning>/, 'plan.md must include UI proof planning contract.');
-    assert.match(planContent, /ui_proof_slots[\s\S]*no_ui_proof_rationale/, 'plan.md must require slots or no-UI-proof rationale.');
-    assert.match(plannerRole, /<ui_proof_planning>/, 'planner role must include UI proof planning guidance.');
-    assert.match(executeContent, /UI Proof Execution/, 'execute.md must include UI proof execution guidance.');
-    assert.match(executorRole, /UI Proof Execution/, 'executor role must include UI proof execution guidance.');
-    assert.match(quickContent, /ui_proof_slots/, 'quick.md must preserve proportional UI proof slots.');
-    assert.match(quickContent, /ui_proof_slots[\s\S]*closure_honesty/, 'quick.md must run closure_honesty checking for UI-sensitive quick plans.');
-    assert.match(verifyContent, /<ui_proof_comparison>/, 'verify.md must include planned-vs-observed UI proof comparison.');
-    assert.match(verifyContent, /gsdd ui-proof compare <planned-slots-json>/, 'verify.md must prefer the deterministic product-facing UI proof comparison command.');
-    assert.match(verifyContent, /plan frontmatter contract only/i, 'verify.md must make plan frontmatter the only UI proof declaration authority.');
-    assert.match(verifyContent, /body prose, fenced examples, stale sidecars/i, 'verify.md must reject prose/examples/sidecars as UI proof declaration authority.');
-    assert.match(verifyContent, /ui_proof_slots: \[\][\s\S]{0,140}no_ui_proof_rationale/i, 'verify.md must require a no-UI rationale for empty UI proof slots.');
+  test('workflow and role sources preserve browser-proof planning execution and verification contracts', () => {
+    assert.match(planContent, /<browser_proof_planning>/, 'plan.md must include browser-proof planning contract.');
+    assert.match(planContent, /browser_proof_required[\s\S]*browser_proof_rationale/, 'plan.md must require browser-proof declaration fields.');
+    assert.match(planContent, /Evidence command[\s\S]*No-command rationale/, 'plan.md must require runnable proof command or narrowed no-command rationale.');
+    assert.match(plannerRole, /<browser_proof_planning>/, 'planner role must include browser-proof planning guidance.');
+    assert.match(executeContent, /Browser Proof Execution/, 'execute.md must include browser-proof execution guidance.');
+    assert.match(executorRole, /Browser Proof Execution/, 'executor role must include browser-proof execution guidance.');
+    assert.match(quickContent, /browser_proof_required/, 'quick.md must preserve proportional browser-proof planning.');
+    assert.match(quickContent, /rendered UI claim[\s\S]*goal_achievement/, 'quick.md must check weak browser proof through goal_achievement.');
+    assert.match(verifyContent, /<browser_proof_comparison>/, 'verify.md must include browser-proof comparison.');
+    assert.match(verifyContent, /browser_proof_required: false[\s\S]*rationale is nonblank/i, 'verify.md must require rationale when browser proof is not required.');
+    assert.match(verifyContent, /body prose and stale sidecars do not declare proof intent/i, 'verify.md must reject prose/sidecars as browser-proof declaration authority.');
     assert.match(verifyContent, /no matching PLAN\.md or SUMMARY\.md/i, 'verify.md must fail closed on missing phase prerequisites.');
-    assert.match(verifierRole, /For UI proof slots, fail closed/i, 'verifier role must fail closed on weak UI proof.');
-  });
-
-  test('template documents product-facing UI proof comparison command', () => {
-    assert.match(template, /gsdd ui-proof validate <path>/, 'ui-proof.md must document metadata validation.');
-    assert.match(template, /gsdd ui-proof compare <planned-slots-json>/, 'ui-proof.md must document planned-vs-observed comparison.');
+    assert.match(verifierRole, /For browser proof, fail closed/i, 'verifier role must fail closed on weak browser proof.');
   });
 
   test('contract preserves agent-browser default without provider-locking validation', () => {
     const combined = [template, planContent, executeContent, quickContent, verifyContent, plannerRole, executorRole, verifierRole, planChecker].join('\n');
     assert.match(combined, /agent-browser/i,
-      'UI proof contract must name agent-browser as the default live UI proof path.');
+      'Browser proof contract must name agent-browser as the default live browser proof path.');
     assert.match(combined, /availability constraint/i,
-      'UI proof contract must require explicit fallback documentation when agent-browser is unavailable.');
+      'Browser proof contract must require explicit fallback documentation when agent-browser is unavailable.');
     assert.match(combined, /Playwright[\s\S]{0,160}(canonical|repeatable).*regression/i,
-      'UI proof contract must keep existing Playwright tests as canonical repeatable regression evidence.');
+      'Browser proof contract must keep existing Playwright tests as repeatable regression evidence.');
     assert.match(combined, /Playwright scripting[\s\S]{0,220}(JS-disabled|structured console|multi-context)/i,
-      'UI proof contract must reserve Playwright scripting for capabilities agent-browser cannot cover cleanly.');
+      'Browser proof contract must reserve Playwright scripting for capabilities agent-browser cannot cover cleanly.');
 
     for (const [surfaceName, source] of [
       ['ui-proof template', template],
@@ -3576,7 +3560,7 @@ describe('G55 - UI Proof Contract', () => {
       ['verifier role', verifierRole]
     ]) {
       assert.match(source, /agent-browser/i,
-        `${surfaceName} must preserve agent-browser as the default live UI proof path.`);
+        `${surfaceName} must preserve agent-browser as the default live browser proof path.`);
       assert.match(source, /Playwright[\s\S]{0,220}(canonical|repeatable).*regression/i,
         `${surfaceName} must preserve Playwright/package-script browser tests as repeatable regression evidence.`);
     }
@@ -3595,53 +3579,19 @@ describe('G55 - UI Proof Contract', () => {
       assert.match(source, /availability constraint/i,
         `${surfaceName} must require explicit availability-constraint fallback wording.`);
     }
-
-    assert.match(template, /does not inspect raw screenshot[\s\S]{0,180}does not require any specific browser provider/i,
-      'ui-proof.md must keep deterministic validation provider-agnostic.');
   });
 
-  test('observed bundle example keeps runtime artifacts traceable', () => {
-    const bundle = parseObservedBundleExample();
-    const declaredRefs = new Set(bundle.artifacts.map((artifact) => artifact.path || artifact.url));
-    const observationRefs = new Set(bundle.observations.flatMap((observation) => observation.artifact_refs));
-    const commandText = bundle.commands_or_manual_steps
-      .map((step) => step.command || step.manual_step || '')
-      .join('\n');
-
-    assert.deepStrictEqual(bundle.evidence_inputs.tools_used, ['playwright', 'agent-browser'],
-      'ui-proof.md example must use concise tool identifiers.');
-    for (const tool of bundle.evidence_inputs.tools_used) {
-      assert.match(tool, /^[a-z0-9][a-z0-9_.:-]*$/,
-        `UI proof tool id must be a concise machine-friendly identifier: ${tool}`);
-    }
-
-    assert.doesNotMatch(commandText, /\.planning\/quick\/001-example/,
-      'ui-proof.md example commands must use a work-item placeholder instead of a hardcoded quick-task directory.');
-
-    const screenshotCommand = commandText.match(/agent-browser screenshot\s+(\S+)/);
-    assert.ok(screenshotCommand, 'ui-proof.md example must capture a screenshot through agent-browser.');
-    const screenshotRef = screenshotCommand[1];
-    assert.ok(declaredRefs.has(screenshotRef),
-      'agent-browser screenshot path in the example must be listed in artifacts[].');
-    assert.ok(observationRefs.has(screenshotRef),
-      'agent-browser screenshot path in the example must be linked from observations[].artifact_refs.');
-
-    for (const ref of observationRefs) {
-      assert.ok(declaredRefs.has(ref),
-        `ui-proof.md example observation references undeclared artifact: ${ref}`);
-    }
-  });
-
-  test('plan-checker rejects weak UI proof slots before execution', () => {
+  test('plan-checker rejects weak browser proof before execution', () => {
     for (const phrase of [
-      /specific route\/state/i,
-      /viewport rationale/i,
-      /minimum observations/i,
-      /expected artifact types/i,
-      /runnable validation/i,
+      /route\/state/i,
+      /viewport/i,
+      /evidence command/i,
+      /no-command rationale/i,
+      /artifacts\/privacy notes/i,
+      /claim limit/i,
       /under-specified viewport coverage/i,
     ]) {
-      assert.match(planChecker, phrase, `plan-checker must reject weak UI proof slots missing ${phrase}.`);
+      assert.match(planChecker, phrase, `plan-checker must reject weak browser proof missing ${phrase}.`);
     }
   });
 
@@ -3654,15 +3604,13 @@ describe('G55 - UI Proof Contract', () => {
       /subjective polish\/layout quality/i,
       /privacy publication/i,
       /does not replace required `code`, `test`, `runtime`, or `delivery` evidence/i,
-      /agent-only `looks good` closure/i,
+      /agent-only "looks good" closure/i,
       /artifact-count proof|Artifact count is never proof/i,
-      /visibility[\s\S]*retention[\s\S]*sensitivity[\s\S]*safe_to_publish/,
-      /observation privacy fields|observation privacy metadata|privacy metadata/i,
-      /`passed`, `failed`, `partial`, `waived`, `deferred`, or `not_applicable`/,
-      /local-only or `safe_to_publish: false` artifacts|local-only or unsafe artifacts/i,
+      /privacy\/safety note|safe to publish/i,
+      /local-only or unsafe artifacts|local-only and unsafe/i,
       /Do not install Playwright, Cypress, Cucumber, Storybook, browser MCP, CI, or visual-regression tooling by default|do not scaffold Playwright, Cypress, Cucumber, Storybook, CI, browser MCP, or visual-regression tooling by default/i,
     ]) {
-      assert.match(combined, phrase, `UI proof contract must preserve guardrail ${phrase}.`);
+      assert.match(combined, phrase, `Browser proof contract must preserve guardrail ${phrase}.`);
     }
   });
 });

@@ -331,7 +331,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.doesNotMatch(content, /^sandbox_mode = "read-only"/m, 'approach-explorer must NOT be read-only (needs write access unlike checker)');
   });
 
-  test('all native plan surfaces contain the same 14 dimension names', async () => {
+  test('all native plan surfaces contain the same 9 dimension names', async () => {
     const allDimensions = [
       'requirement_coverage',
       'task_completeness',
@@ -341,12 +341,14 @@ describe('specialized plan adapter surfaces', () => {
       'must_have_quality',
       'context_compliance',
       'goal_achievement',
+      'approach_alignment',
+    ];
+    const retiredDimensions = [
       'scope_boundaries',
       'anti_regression_capture',
       'escalation_integrity',
       'closure_honesty',
       'high_leverage_review',
-      'approach_alignment',
     ];
 
     // Init claude
@@ -403,6 +405,9 @@ describe('specialized plan adapter surfaces', () => {
     for (const [label, content] of surfaces) {
       for (const dim of allDimensions) {
         assert.ok(content.includes(dim), `${label} must contain dimension: ${dim}`);
+      }
+      for (const dim of retiredDimensions) {
+        assert.ok(!content.includes(dim), `${label} must not contain retired dimension: ${dim}`);
       }
     }
   });
