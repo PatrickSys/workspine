@@ -13,31 +13,30 @@ Read only the explicit inputs provided by the orchestrator:
 Do NOT inherit the planner's hidden reasoning. Treat the current plans as untrusted drafts that must prove they will achieve the phase goal before execution.
 
 Verify these dimensions:
-- `requirement_coverage`: every phase requirement is covered by at least one concrete task
+- `requirement_coverage`: every phase requirement is covered by at least one concrete task.
 - `task_completeness`: every executable task has files, action, verify, and done fields. Additionally check verify quality:
   - **Runnable?** Does `<verify>` contain at least one command that an executor can run programmatically (e.g., a shell command, test runner invocation, curl request)? If ALL verify items are observational text with no runnable command -> `blocker`.
   - **Fast?** Do verify commands complete quickly? Flag full E2E suites (playwright, cypress, selenium) without a faster smoke test -> `warning`. Flag watch-mode flags (`--watchAll`, `--watch`) -> `blocker`. Flag arbitrary delays > 30s -> `warning`.
   - **Ordered?** If a verify command references a test file, does an earlier task in the plan create that file? If the referenced file has no prior task producing it -> `blocker`.
-- `dependency_correctness`: ordering, dependencies, and plan structure are coherent
-- `key_link_completeness`: important wiring/integration links are planned, not just isolated artifacts
-- `scope_sanity`: plans are sized so an executor can complete them without context collapse
-- `must_have_quality`: success criteria and must-haves are specific, observable, and reflected in tasks
+  - **Browser proof command?** If the plan requires browser proof, the Browser Proof Plan names a runnable evidence command or an explicit narrowed no-command rationale. A rendered-UI claim with neither is a `blocker`.
+- `dependency_correctness`: ordering, dependencies, and plan structure are coherent.
+- `key_link_completeness`: important wiring/integration links are planned, not just isolated artifacts.
+- `scope_sanity`: plans are sized so an executor can complete them without context collapse, and hard boundaries, anti-goals, and explicit out-of-scope items are preserved in task scope.
+- `must_have_quality`: success criteria and must-haves are specific, observable, and reflected in tasks.
 - `context_compliance`: locked decisions are honored and deferred ideas stay out of scope. Additionally check scope consistency:
   - **Must-have coverage?** Every must-have requirement mapped to this phase in SPEC.md must appear in at least one plan task. A must-have that silently disappears from the plan is a `blocker`.
   - **Deferred exclusion?** Items marked "Nice to Have", "Deferred", or "Out of Scope" in SPEC.md must not appear as plan tasks. Present → `blocker`.
   - **Cross-surface consistency?** If SPEC.md marks an item as must-have but APPROACH.md marks it as deferred (or vice versa), surface the contradiction → `blocker`. Include a `fix_hint` asking the planner to resolve the conflict with the user before proceeding.
+  - **Anti-regression captured?** Known prior failures, compatibility risks, and behavior that must not regress are represented in tasks or verification.
+  - **Escalation preserved?** Tasks include checkpoints or escalation when evidence, permissions, user decisions, or risky ambiguity are required.
+  - **Abstraction justified?** Reject a task or refactor whose only rationale is "cleaner code" without reducing risk, removing meaningful duplication, simplifying a consumer path, or matching an existing repo pattern.
 - `goal_achievement`: does the plan, if executed perfectly, actually achieve the stated phase goal? Check:
   - **Goal addressed?** Compare the phase goal statement to the plan's collective task outputs. Would successful completion of all tasks deliver the goal? If the goal says "users can authenticate" but tasks only set up database schema → `blocker`.
   - **Success criteria reachable?** Are the phase success criteria from ROADMAP.md achievable through the planned tasks? Each success criterion should be traceable to at least one task's verify output → `blocker` if unreachable.
   - **Outcome observable?** After execution, could a human or automated check confirm the goal was met? Plans that produce only internal artifacts with no user-visible or testable outcome → `warning`.
-- `scope_boundaries`: hard boundaries, anti-goals, and explicit out-of-scope items are preserved in task scope.
-- `anti_regression_capture`: known prior failures, compatibility risks, and behavior that must not regress are represented in tasks or verification.
-- `escalation_integrity`: tasks include checkpoints or escalation when evidence, permissions, user decisions, or risky ambiguity are required.
-- `closure_honesty`: the plan's done criteria and evidence limits support only claims that execution can actually prove.
-- `closure_honesty`: for UI proof, reject agent-only `looks good` closure, artifact-count proof, unsupported evidence kinds, and human acceptance that converts missing/mismatched non-human evidence into `satisfied` proof. Waiver, deferment, proof debt, or narrowed-claim language is acceptable only when the stronger UI claim is not treated as proven.
-- `closure_honesty`: for UI proof planning, reject weak slots that omit a specific route/state, viewport rationale or narrowed viewport claim limit, minimum observations, expected artifact types, runnable validation, or a way to compare observed proof back to the planned claim. Treat under-specified viewport coverage as a blocker for responsive or layout-sensitive claims. `agent-browser` is the default live runtime evidence path; do not block a slot solely for using another project-native browser path, but require the plan to explain the `agent-browser` availability constraint and fallback choice.
-- `closure_honesty`: for UI proof privacy, require artifact `visibility`, `retention`, `sensitivity`, and `safe_to_publish`, require `gsdd ui-proof validate` or `gsdd health` when bundle metadata exists, and reject public/tracked/delivery/publication proof claims backed by local-only or `safe_to_publish: false` artifacts.
-- `high_leverage_review`: high-leverage surfaces have a second-pass review or equivalent contradiction/staleness check before completion.
+  - **Claim honest?** Done criteria and evidence limits support only claims that execution can actually prove. For browser proof, reject agent-only "looks good" closure, artifact-count proof, unsupported evidence kinds, and human acceptance that replaces required code, test, runtime, or delivery evidence.
+  - **Browser proof specific?** Required browser proof names exact route/state, viewport coverage or a narrowed viewport claim, runtime path, rendered observations, artifacts/privacy notes, and claim limit. Under-specified viewport coverage is a blocker for responsive or layout-sensitive claims, and fallback browser tooling must state the `agent-browser` availability constraint.
+  - **Second pass present?** Shared or high-leverage surfaces have a final contradiction/staleness review before completion.
 - `approach_alignment`: when APPROACH.md is provided, verify that plan tasks implement the chosen approaches from the user's decisions. Check:
   - **Alignment proof valid?** When `workflow.discuss` is `true`, APPROACH.md must record `alignment_status: user_confirmed` or `alignment_status: approved_skip`. Missing alignment proof, unknown status, or agent-discretion-only proof -> `blocker` with `fix_hint` telling the planner to revise APPROACH.md through real user alignment or an explicit user-approved skip.
   - **Canonical proof fields present?** APPROACH.md must include all canonical proof fields: `alignment_status`, `alignment_method`, `user_confirmed_at`, `explicit_skip_approved`, `skip_scope`, `skip_rationale`, and `confirmed_decisions`. Missing fields -> `blocker`.
@@ -56,7 +55,7 @@ Return JSON only as a single finding summary object with this shape:
   "summary": "One sentence overall assessment",
   "issues": [
     {
-      "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | scope_boundaries | anti_regression_capture | escalation_integrity | closure_honesty | high_leverage_review | approach_alignment",
+      "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
       "severity": "blocker | warning",
       "description": "What is wrong",
       "plan": "01-PLAN",

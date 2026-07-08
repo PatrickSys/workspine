@@ -515,7 +515,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       );
     });
 
-    test('checker content includes all 14 plan-check dimension names', () => {
+    test('checker content includes all 9 plan-check dimension names', () => {
       const content = fs.readFileSync(
         path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
         'utf-8'
@@ -529,15 +529,20 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         'must_have_quality',
         'context_compliance',
         'goal_achievement',
+        'approach_alignment',
+      ];
+      const retiredDimensions = [
         'scope_boundaries',
         'anti_regression_capture',
         'escalation_integrity',
         'closure_honesty',
         'high_leverage_review',
-        'approach_alignment',
       ];
       for (const dim of dimensions) {
         assert.ok(content.includes(dim), `checker must include dimension: ${dim}`);
+      }
+      for (const dim of retiredDimensions) {
+        assert.ok(!content.includes(dim), `checker must not include retired dimension: ${dim}`);
       }
     });
 
@@ -566,7 +571,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       );
     });
 
-    test('plan-checker delegate has same 14 dimensions as native checker', () => {
+    test('plan-checker delegate has same 9 dimensions as native checker', () => {
       const delegate = fs.readFileSync(
         path.join(tmpDir, '.work', 'templates', 'delegates', 'plan-checker.md'),
         'utf-8'
@@ -580,15 +585,20 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         'must_have_quality',
         'context_compliance',
         'goal_achievement',
+        'approach_alignment',
+      ];
+      const retiredDimensions = [
         'scope_boundaries',
         'anti_regression_capture',
         'escalation_integrity',
         'closure_honesty',
         'high_leverage_review',
-        'approach_alignment',
       ];
       for (const dim of dimensions) {
         assert.ok(delegate.includes(dim), `delegate must include dimension: ${dim}`);
+      }
+      for (const dim of retiredDimensions) {
+        assert.ok(!delegate.includes(dim), `delegate must not include retired dimension: ${dim}`);
       }
     });
 
@@ -706,7 +716,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       );
     });
 
-    test('Codex checker contains all 14 dimension names', () => {
+    test('Codex checker contains all 9 dimension names', () => {
       const content = fs.readFileSync(
         path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
         'utf-8'
@@ -720,15 +730,20 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         'must_have_quality',
         'context_compliance',
         'goal_achievement',
+        'approach_alignment',
+      ];
+      const retiredDimensions = [
         'scope_boundaries',
         'anti_regression_capture',
         'escalation_integrity',
         'closure_honesty',
         'high_leverage_review',
-        'approach_alignment',
       ];
       for (const dim of dimensions) {
         assert.ok(content.includes(dim), `Codex checker must include dimension: ${dim}`);
+      }
+      for (const dim of retiredDimensions) {
+        assert.ok(!content.includes(dim), `Codex checker must not include retired dimension: ${dim}`);
       }
     });
 

@@ -929,12 +929,14 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     'must_have_quality',
     'context_compliance',
     'goal_achievement',
+    'approach_alignment',
+  ];
+  const RETIRED_PLAN_CHECKER_DIMENSIONS = [
     'scope_boundaries',
     'anti_regression_capture',
     'escalation_integrity',
     'closure_honesty',
     'high_leverage_review',
-    'approach_alignment',
   ];
 
   const planCheckerContent = fs.readFileSync(
@@ -947,7 +949,7 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
     path.join(AGENTS_DIR, 'planner.md'), 'utf-8'
   );
 
-  describe('plan-checker.md documents all 14 dimensions', () => {
+  describe('plan-checker.md documents all 9 dimensions', () => {
     for (const dim of PLAN_CHECKER_DIMENSIONS) {
       test(`plan-checker.md documents dimension: ${dim}`, () => {
         assert.ok(
@@ -956,9 +958,17 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
         );
       });
     }
+    for (const dim of RETIRED_PLAN_CHECKER_DIMENSIONS) {
+      test(`plan-checker.md omits retired dimension: ${dim}`, () => {
+        assert.ok(
+          !planCheckerContent.includes(dim),
+          `plan-checker.md must not document retired dimension ${dim}`
+        );
+      });
+    }
   });
 
-  describe('plan.md documents all 14 checker dimensions', () => {
+  describe('plan.md documents all 9 checker dimensions', () => {
     for (const dim of PLAN_CHECKER_DIMENSIONS) {
       test(`plan.md documents checker dimension: ${dim}`, () => {
         assert.ok(
@@ -967,9 +977,17 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
         );
       });
     }
+    for (const dim of RETIRED_PLAN_CHECKER_DIMENSIONS) {
+      test(`plan.md omits retired checker dimension: ${dim}`, () => {
+        assert.ok(
+          !planWorkflowContent.includes(dim),
+          `plan.md must not document retired checker dimension ${dim}`
+        );
+      });
+    }
   });
 
-  describe('planner.md references all 14 checker dimensions', () => {
+  describe('planner.md references all 9 checker dimensions', () => {
     // planner.md uses natural language labels (e.g. "requirement coverage") not underscored JSON keys
     const PLANNER_DIMENSION_LABELS = [
       'requirement coverage',
@@ -980,12 +998,14 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
       'must-have quality',
       'context compliance',
       'goal achievement',
+      'approach alignment',
+    ];
+    const RETIRED_PLANNER_DIMENSION_LABELS = [
       'scope boundaries',
       'anti-regression capture',
       'escalation integrity',
       'closure honesty',
       'high-leverage review',
-      'approach alignment',
     ];
 
     for (const label of PLANNER_DIMENSION_LABELS) {
@@ -993,6 +1013,14 @@ describe('I7 — Plan-Checker Dimension Integrity', () => {
         assert.ok(
           plannerContent.includes(label),
           `planner.md must reference checker dimension "${label}" in its internal_quality_gate`
+        );
+      });
+    }
+    for (const label of RETIRED_PLANNER_DIMENSION_LABELS) {
+      test(`planner.md omits retired checker label: ${label}`, () => {
+        assert.ok(
+          !plannerContent.includes(label),
+          `planner.md must not reference retired checker label "${label}" in its internal_quality_gate`
         );
       });
     }
@@ -1397,7 +1425,7 @@ describe('G1 — Cross-Document Schema Consistency', () => {
 
   // PLAN.md frontmatter must appear in both planner.md and plan.md
   describe('PLAN.md frontmatter in planner.md AND plan.md', () => {
-    const PLAN_FIELDS = ['phase:', 'depends_on:', 'files-modified:', 'autonomous:', 'requirements:', 'must_haves:'];
+    const PLAN_FIELDS = ['phase:', 'depends_on:', 'files-modified:', 'autonomous:', 'requirements:', 'browser_proof_required:', 'browser_proof_rationale:', 'must_haves:'];
     for (const field of PLAN_FIELDS) {
       test(`${field} appears in both planner.md and plan.md`, () => {
         assert.ok(plannerContent.includes(field),

@@ -486,11 +486,11 @@
 - GSD comparison source: `get-shit-done/workflows/new-project.md`
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`
 
-## D62 — Repo-Native UI Proof Contract
+## D62 — Repo-Native Browser Proof Contract
 - `distilled/templates/ui-proof.md`
 - `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/quick.md`, `distilled/workflows/verify.md`
 - `agents/planner.md`, `agents/executor.md`, `agents/verifier.md`, `distilled/templates/delegates/plan-checker.md`
-- `bin/lib/templates.mjs`, `bin/lib/ui-proof.mjs`, `bin/lib/health.mjs`, `bin/lib/rendering.mjs`
+- `bin/lib/templates.mjs`, `bin/lib/health.mjs`, `bin/lib/phase.mjs`, `bin/lib/rendering.mjs`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.init.test.cjs`
 - OneShot QC/browser policy: https://github.com/oneshot-repo/OneShot/tree/main/skills
 - Vercel agent-browser docs: https://github.com/vercel-labs/agent-browser/blob/main/skill-data/core/SKILL.md, https://agent-browser.dev/snapshots
@@ -503,7 +503,7 @@
 - Agent-hostile UI semantics source: https://dev.to/ratikkoka/your-ui-is-invisible-to-ai-agents-heres-how-to-fix-it-1ib3
 - Browser-harness efficiency source: https://dev.to/louaiboumediene/the-ai-harness-why-your-ai-coding-agent-is-only-as-smart-as-the-repo-you-put-it-in-cml
 - Dynamic-UI harness brittleness source: https://tessl.io/blog/webmcp-making-web-apps-faster-and-cheaper-for-ai-agents/
-- Long-term pitfalls carried forward: do not accept screenshot-free "looks good" claims, weak planned slots, unverified artifact paths, stale interactive refs after page mutation, partial/failed proof without failure classification, raw artifact publication without privacy metadata, browser contention in parallel checks, or semantic/selector-poor UI that forces fragile coordinate inspection.
+- Long-term pitfalls carried forward: do not accept screenshot-free "looks good" claims, weak browser-proof plans, unverified artifact paths, stale interactive refs after page mutation, partial/failed proof without failure classification, raw artifact publication without privacy/safety notes, browser contention in parallel checks, or semantic/selector-poor UI that forces fragile coordinate inspection.
 - Supporting spec/runtime docs: https://openspec.dev/, https://www.lean-spec.dev/docs/guide/first-principles, https://help.openai.com/en/articles/11369540-codex-in-chatgpt, https://docs.claude.com/en/docs/agents-and-tools/agent-skills, https://docs.github.com/en/copilot/concepts/prompting/response-customization
 
 ## D63 — Computed-First Control Map
