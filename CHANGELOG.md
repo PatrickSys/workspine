@@ -1,3 +1,15 @@
+# [0.29.0](https://github.com/PatrickSys/workspine/compare/v0.28.0...v0.29.0) (2026-07-08)
+
+
+### Bug Fixes
+
+* harden browser proof verification ([829f0c8](https://github.com/PatrickSys/workspine/commit/829f0c83223554d91d67d8eafebb335b398ff4d1))
+
+
+### Features
+
+* slim plan contract ([bc819b0](https://github.com/PatrickSys/workspine/commit/bc819b0bb28955eae5e660bf66ea8e20b5a07b88))
+
 # [0.28.0](https://github.com/PatrickSys/workspine/compare/v0.27.0...v0.28.0) (2026-07-08)
 
 
