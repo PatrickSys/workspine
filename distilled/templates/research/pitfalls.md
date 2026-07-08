@@ -2,7 +2,7 @@
 
 Use when researching common mistakes and gotchas for a domain or technology.
 
-Write to: `.planning/research/PITFALLS.md`
+Write to: `.work/research/PITFALLS.md`
 
 ---
 

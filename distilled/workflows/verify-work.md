@@ -17,9 +17,9 @@ No Pass/Fail buttons. No severity questions. Just: "Here's what should happen. D
 
 <load_context>
 Read these before any other action:
-1. `.planning/phases/{N}-*/` — all `*-SUMMARY.md` files for the target phase
-2. `.planning/SPEC.md` — requirements and acceptance criteria
-3. `.planning/ROADMAP.md` — phase goal and must-haves
+1. `.work/phases/{N}-*/` — all `*-SUMMARY.md` files for the target phase
+2. `.work/SPEC.md` — requirements and acceptance criteria
+3. `.work/ROADMAP.md` — phase goal and must-haves
 
 **$ARGUMENTS:** optional phase number, e.g., `/gsdd-verify-work 4`
 </load_context>
@@ -29,7 +29,7 @@ Before starting a new session, check for existing UAT state:
 
 ```bash
 # Check for existing UAT files in this phase
-ls .planning/phases/{N}-*/*-UAT.md 2>/dev/null || echo "none"
+ls .work/phases/{N}-*/*-UAT.md 2>/dev/null || echo "none"
 ```
 
 **If a UAT.md exists** with `status: testing`, offer to resume:
@@ -69,7 +69,7 @@ Wait for confirmation.
 </extract_tests>
 
 <create_uat_file>
-Create `.planning/phases/{N}-{name}/{phase_num}-UAT.md`:
+Create `.work/phases/{N}-{name}/{phase_num}-UAT.md`:
 
 ```markdown
 ---
@@ -241,14 +241,14 @@ Then route to gap closure (see `<completion>`).
 Report to the user what was tested, then present the next step:
 
 ---
-**Completed:** UAT — created `.planning/phases/{phase_dir}/{phase_num}-UAT.md`.
+**Completed:** UAT — created `.work/phases/{phase_dir}/{phase_num}-UAT.md`.
 
 If no issues:
 **Next step:** `/gsdd-progress` — route to next phase or milestone audit
 
 If issues found:
 **Next step:** `/gsdd-plan` — plan gap closure using the diagnosed root causes in UAT.md
-- Open `.planning/phases/{phase_dir}/{phase_num}-UAT.md` for the plan context
+- Open `.work/phases/{phase_dir}/{phase_num}-UAT.md` for the plan context
 - Use `--gaps` mode if your runtime supports it
 
 Also available:

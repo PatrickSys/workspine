@@ -186,7 +186,7 @@ describe('gsdd init and update', () => {
       path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md'),
       'utf-8'
     );
-    assert.match(mapperTechTemplate, /\.planning\/templates\/roles\/mapper\.md/);
+    assert.match(mapperTechTemplate, /\.work\/templates\/roles\/mapper\.md/);
     assert.doesNotMatch(mapperTechTemplate, /active platform skill\/adapter/);
 
     const requiredRoles = [
@@ -268,13 +268,13 @@ describe('gsdd init and update', () => {
       /<output_format>/,
       /<structured_returns>/,
       /<success_criteria>/,
-      /\.planning\/research\/STACK\.md/,
-      /\.planning\/research\/FEATURES\.md/,
-      /\.planning\/research\/ARCHITECTURE\.md/,
-      /\.planning\/research\/PITFALLS\.md/,
+      /\.work\/research\/STACK\.md/,
+      /\.work\/research\/FEATURES\.md/,
+      /\.work\/research\/ARCHITECTURE\.md/,
+      /\.work\/research\/PITFALLS\.md/,
       /If any required file is missing:/,
       /do not silently continue with a degraded synthesis/i,
-      /Write `\.planning\/research\/SUMMARY\.md`/,
+      /Write `\.work\/research\/SUMMARY\.md`/,
       /- Sources/,
       /- Research Flags/,
       /^sources:$/m,
@@ -282,13 +282,13 @@ describe('gsdd init and update', () => {
       /\*\*Missing files:\*\*/,
       /<scope_boundary>/,
       /does not do new web or codebase research/i,
-      /does not write `\.planning\/ROADMAP\.md`/i,
+      /does not write `\.work\/ROADMAP\.md`/i,
       /does not own git actions or commit output/i,
       /```yaml[\s\S]*executive_summary:/,
     ]) {
       assert.match(synthRole, required);
     }
-    for (const banned of [/~\/\.claude\//i, /docs: complete project research/i, /cat \.planning\/research\//i]) {
+    for (const banned of [/~\/\.claude\//i, /docs: complete project research/i, /cat \.work\/research\//i]) {
       assert.doesNotMatch(synthRole, banned);
     }
 
@@ -301,7 +301,7 @@ describe('gsdd init and update', () => {
       /<coverage_validation>/,
       /<structured_returns>/,
       /<success_criteria>/,
-      /Write `\.planning\/ROADMAP\.md`/,
+      /Write `\.work\/ROADMAP\.md`/,
       /## Phases/,
       /## Phase Details/,
       /`\*\*Status\*\*` must use one of: `\[ \]`, `\[-\]`, `\[x\]`/,
@@ -312,7 +312,7 @@ describe('gsdd init and update', () => {
       /## ROADMAP CREATED/,
       /## ROADMAP REVISED/,
       /## ROADMAP BLOCKED/,
-      /\*\*Artifact written:\*\* \.planning\/ROADMAP\.md/,
+      /\*\*Artifact written:\*\* \.work\/ROADMAP\.md/,
       /\*\*Status\*\*: \[ \]/,
       /revise the roadmap in place rather than rewriting it from scratch/i,
       /Options:/,
@@ -399,7 +399,7 @@ describe('gsdd init and update', () => {
       /^gaps:$/m,
       /<structured_returns>/,
       /Return a concise machine-usable summary to the orchestrator/i,
-      /^report: "\.planning\/phases\/01-foundation\/01-VERIFICATION\.md"$/m,
+      /^report: "\.work\/phases\/01-foundation\/01-VERIFICATION\.md"$/m,
     ]) {
       assert.match(verifierRole, required);
     }
@@ -477,7 +477,7 @@ describe('gsdd init and update', () => {
     for (const required of [
       /type="checkpoint:user"/,
       /type="checkpoint:review"/,
-      /node \.planning\/bin\/gsdd\.mjs phase-status \{N\} done/,
+      /node \.work\/bin\/gsdd\.mjs phase-status \{N\} done/,
       /DO NOT freelance/,
       /Checkpoint tasks are contract boundaries/i,
       /factual_discovery/,
@@ -489,7 +489,7 @@ describe('gsdd init and update', () => {
       /^assurance: self_checked$/m,
       /stale reference/i,
       /Mandatory-now context and task-scoped files read at the correct execution point/i,
-      /session-fingerprint write/i,
+      /next --json/i,
       /Authentication gates handled with the auth-gate protocol/i,
     ]) {
       assert.match(executeSkill, required);
@@ -550,7 +550,7 @@ describe('gsdd init and update', () => {
       'progress must remain agent: Plan because it is the read-only workflow');
   });
 
-  test('repo-local helper runtime is generated under .planning/bin as a self-contained workspace helper', async () => {
+  test('repo-local helper runtime is generated under .work/bin as a self-contained workspace helper', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
       const gsdd = await loadGsdd(tmpDir);
@@ -570,7 +570,7 @@ describe('gsdd init and update', () => {
     assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\);/);
     assert.doesNotMatch(launcher, /from 'gsdd-cli'/);
     assert.doesNotMatch(launcher, /from 'gsdd'/);
-    assert.match(launcher, /Usage: node \.planning\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
+    assert.match(launcher, /Usage: node \.work\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
     assert.match(launcher, /file-op <copy\|delete\|regex-sub>/);
     assert.match(launcher, /verify <N>\s+Run direct phase artifact checks/);
     assert.match(launcher, /next \[--json\] \[--init\]/);
@@ -770,19 +770,19 @@ describe('gsdd init and update', () => {
       path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md'),
       'utf-8'
     );
-    assert.match(mapperTech, /\.planning\/templates\/roles\/mapper\.md/);
+    assert.match(mapperTech, /\.work\/templates\/roles\/mapper\.md/);
 
     const researcherStack = fs.readFileSync(
       path.join(tmpDir, '.work', 'templates', 'delegates', 'researcher-stack.md'),
       'utf-8'
     );
-    assert.match(researcherStack, /\.planning\/templates\/roles\/researcher\.md/);
+    assert.match(researcherStack, /\.work\/templates\/roles\/researcher\.md/);
 
     const synthDelegate = fs.readFileSync(
       path.join(tmpDir, '.work', 'templates', 'delegates', 'researcher-synthesizer.md'),
       'utf-8'
     );
-    assert.match(synthDelegate, /\.planning\/templates\/roles\/synthesizer\.md/);
+    assert.match(synthDelegate, /\.work\/templates\/roles\/synthesizer\.md/);
 
     const mapperRole = fs.readFileSync(
       path.join(tmpDir, '.work', 'templates', 'roles', 'mapper.md'),
@@ -1012,7 +1012,7 @@ describe('gsdd init and update', () => {
       title: 'Planning docs in git',
       multi: false,
       choices: [
-        { value: true, label: 'yes', description: 'Track .planning/ in git for history and team recovery.', selected: true, detected: false },
+        { value: true, label: 'yes', description: 'Track .work/ in git for history and team recovery.', selected: true, detected: false },
         { value: false, label: 'no', description: 'Keep planning docs local only and out of version control.', selected: false, detected: false },
       ],
     });
@@ -1362,7 +1362,7 @@ describe('gsdd init and update', () => {
       assert.strictEqual(config.initVersion, 'v1.1');
     });
 
-    test('--brief copies file to .planning/PROJECT_BRIEF.md', async () => {
+    test('--brief copies file to .work/PROJECT_BRIEF.md', async () => {
       const briefContent = '# Project Brief\n\nBuild a task manager app.\n';
       fs.writeFileSync(path.join(tmpDir, 'my-brief.md'), briefContent);
 
@@ -1379,7 +1379,7 @@ describe('gsdd init and update', () => {
       assert.strictEqual(fs.readFileSync(briefDest, 'utf-8'), briefContent);
     });
 
-    test('--brief with absolute path copies file to .planning/PROJECT_BRIEF.md', async () => {
+    test('--brief with absolute path copies file to .work/PROJECT_BRIEF.md', async () => {
       const briefContent = '# Brief\n\nAbsolute path test.\n';
       const absPath = path.join(tmpDir, 'abs-brief.md');
       fs.writeFileSync(absPath, briefContent);

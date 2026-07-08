@@ -2,7 +2,7 @@
 
 Use when researching the technology stack for a project or phase.
 
-Write to: `.planning/research/STACK.md`
+Write to: `.work/research/STACK.md`
 
 ---
 

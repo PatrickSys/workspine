@@ -60,9 +60,9 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /all canonical proof fields[\s\S]{0,260}alignment_status[\s\S]{0,80}alignment_method[\s\S]{0,80}user_confirmed_at[\s\S]{0,80}explicit_skip_approved[\s\S]{0,80}skip_scope[\s\S]{0,80}skip_rationale[\s\S]{0,80}confirmed_decisions/);
     assert.match(claudePlanSkill, /No questions needed.*not valid proof|not valid proof.*No questions needed/);
     assert.match(claudePlanSkill, /Use existing[\s\S]{0,220}validate the alignment proof/i);
-    assert.match(claudePlanSkill, /gsdd-approach-explorer[\s\S]{0,240}\.planning\/config\.json[\s\S]{0,100}workflow\.discuss/i);
+    assert.match(claudePlanSkill, /gsdd-approach-explorer[\s\S]{0,240}\.work\/config\.json[\s\S]{0,100}workflow\.discuss/i);
     assert.match(claudePlanSkill, /workflow\.planCheck: false[\s\S]{0,260}does not skip[\s\S]{0,160}alignment-proof gate/i);
-    assert.match(claudePlanSkill, /\.planning\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
+    assert.match(claudePlanSkill, /\.work\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
     assert.doesNotMatch(claudePlanSkill, /^context: fork$/m);
     assert.doesNotMatch(claudePlanSkill, /^agent:/m);
 
@@ -113,9 +113,9 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(opencodePlanCommand, /skip_rationale/);
     assert.match(opencodePlanCommand, /No questions needed.*not valid proof|not valid proof.*No questions needed/);
     assert.match(opencodePlanCommand, /Use existing[\s\S]{0,220}validate the alignment proof/i);
-    assert.match(opencodePlanCommand, /gsdd-approach-explorer[\s\S]{0,220}\.planning\/config\.json[\s\S]{0,80}workflow\.discuss/i);
+    assert.match(opencodePlanCommand, /gsdd-approach-explorer[\s\S]{0,220}\.work\/config\.json[\s\S]{0,80}workflow\.discuss/i);
     assert.match(opencodePlanCommand, /workflow\.planCheck: false[\s\S]{0,260}does not skip[\s\S]{0,160}alignment-proof gate/i);
-    assert.match(opencodePlanCommand, /\.planning\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
+    assert.match(opencodePlanCommand, /\.work\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
 
     assert.doesNotMatch(opencodeExecuteCommand, /^subtask: false$/m);
 
@@ -123,7 +123,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(opencodePlanChecker, /^hidden: true$/m);
     assert.match(opencodePlanChecker, /Return JSON only/);
     assert.match(opencodePlanChecker, /alignment_status/);
-    assert.match(opencodePlanChecker, /\.planning\/config\.json/);
+    assert.match(opencodePlanChecker, /\.work\/config\.json/);
   });
 
   test('portable skill is the Codex entry surface with checker invocation instructions', async () => {

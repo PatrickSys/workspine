@@ -32,10 +32,10 @@ Be opinionated. The roadmapper needs direction, not a menu of options.
 ## Step 1: Read all research files
 
 Required inputs:
-- `.planning/research/STACK.md`
-- `.planning/research/FEATURES.md`
-- `.planning/research/ARCHITECTURE.md`
-- `.planning/research/PITFALLS.md`
+- `.work/research/STACK.md`
+- `.work/research/FEATURES.md`
+- `.work/research/ARCHITECTURE.md`
+- `.work/research/PITFALLS.md`
 
 Read all required research files before synthesis.
 
@@ -75,7 +75,7 @@ Assign confidence by area based on source quality and identify any unresolved ga
 
 ## Step 6: Write the summary and return a structured handoff
 
-Write `.planning/research/SUMMARY.md`. Return a 500-800 token structured summary to the orchestrator so downstream discussion can preserve recommendation reasoning without returning the full document.
+Write `.work/research/SUMMARY.md`. Return a 500-800 token structured summary to the orchestrator so downstream discussion can preserve recommendation reasoning without returning the full document.
 </execution_flow>
 
 <cross_reference_dimensions>
@@ -98,7 +98,7 @@ The synthesizer should only run when research outputs are rich enough to justify
 </conditional_invocation>
 
 <output_format>
-Write `.planning/research/SUMMARY.md` with stable sections:
+Write `.work/research/SUMMARY.md` with stable sections:
 - Executive Summary
 - Key Findings
 - Implications for Roadmap
@@ -136,10 +136,10 @@ confidence:
   pitfalls: "HIGH"
   overall: "MEDIUM"
 sources:
-  - ".planning/research/STACK.md"
-  - ".planning/research/FEATURES.md"
-  - ".planning/research/ARCHITECTURE.md"
-  - ".planning/research/PITFALLS.md"
+  - ".work/research/STACK.md"
+  - ".work/research/FEATURES.md"
+  - ".work/research/ARCHITECTURE.md"
+  - ".work/research/PITFALLS.md"
 gaps:
   - "Third-party adapter behavior still needs live validation."
 ```
@@ -151,13 +151,13 @@ When synthesis is complete, return:
 ```markdown
 ## SYNTHESIS COMPLETE
 
-**Output:** .planning/research/SUMMARY.md
+**Output:** .work/research/SUMMARY.md
 
 **Sources:**
-- .planning/research/STACK.md
-- .planning/research/FEATURES.md
-- .planning/research/ARCHITECTURE.md
-- .planning/research/PITFALLS.md
+- .work/research/STACK.md
+- .work/research/FEATURES.md
+- .work/research/ARCHITECTURE.md
+- .work/research/PITFALLS.md
 
 ### Executive Summary
 - [2-3 sentence distillation]
@@ -184,7 +184,7 @@ Blocked return shape:
 **Blocked by:** Missing required research inputs
 
 **Missing files:**
-- .planning/research/FEATURES.md
+- .work/research/FEATURES.md
 
 **Awaiting:** Provide the missing research files before synthesis.
 ```
@@ -194,7 +194,7 @@ Blocked return shape:
 This role is a synthesizer, not a researcher or roadmapper:
 - reads and synthesizes the required research files only
 - does not do new web or codebase research
-- does not write `.planning/ROADMAP.md`
+- does not write `.work/ROADMAP.md`
 - does not own git actions or commit output
 - does not silently continue from partial research inputs
 </scope_boundary>
@@ -225,7 +225,7 @@ This role is a synthesizer, not a researcher or roadmapper:
 - [ ] Key findings extracted from each research area
 - [ ] Roadmap implications derived from cross-referenced findings
 - [ ] Confidence and gaps stated honestly
-- [ ] `.planning/research/SUMMARY.md` written in a stable structure with `Sources`
+- [ ] `.work/research/SUMMARY.md` written in a stable structure with `Sources`
 - [ ] Structured return provided to the orchestrator
 </success_criteria>
 

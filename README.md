@@ -129,7 +129,7 @@ Use `--auto` for non-interactive install into detected local agent homes. Use `-
 | Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
 | GitHub Copilot CLI | `~/.agents/skills`, `~/.copilot/agents` |
 
-Install availability is not a parity claim. Claude Code, OpenCode, and Codex CLI remain the directly validated runtimes; GitHub Copilot CLI is available as a qualified global target.
+Install availability is not a parity claim. Repo proof currently covers Claude Code, OpenCode, and Codex CLI paths; GitHub Copilot CLI is available as a qualified global target.
 
 OpenCode honors `OPENCODE_CONFIG_DIR` for commands and agents; Workspine installs portable skills once in the shared agent-compatible global root.
 

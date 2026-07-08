@@ -4,7 +4,7 @@
 // evaluate once, so CWD must be computed inside function bodies.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs';
-import { dirname, join, relative } from 'path';
+import { basename, dirname, join, relative } from 'path';
 import { output } from './cli-utils.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
@@ -277,6 +277,7 @@ export function cmdPhaseStatus(...args) {
     return;
   }
   const roadmapPath = join(planningDir, 'ROADMAP.md');
+  const stateName = basename(planningDir);
   const [phaseNumber, status] = normalizedArgs;
 
   if (!phaseNumber || !status) {
@@ -298,7 +299,7 @@ export function cmdPhaseStatus(...args) {
     if (changed) {
       writeFileSync(roadmapPath, updated);
     }
-    output({ phase: phaseNumber, status, roadmap: '.planning/ROADMAP.md', changed });
+    output({ phase: phaseNumber, status, roadmap: `${stateName}/ROADMAP.md`, changed });
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
@@ -313,9 +314,10 @@ export function cmdFindPhase(...args) {
     return;
   }
   const phaseNum = normalizedArgs[0];
+  const stateName = basename(planningDir);
 
   if (!existsSync(planningDir)) {
-    output({ error: 'No .planning/ directory found. Run `npx -y gsdd-cli init` then the new-project workflow first.' });
+    output({ error: `No ${stateName}/ directory found. Run \`npx -y gsdd-cli init\` then the new-project workflow first.` });
     return;
   }
 
@@ -368,9 +370,10 @@ export function buildPhaseVerificationReport(...args) {
   if (!phaseNum) {
     return { ok: false, error: 'Usage: gsdd verify <phase-number>', exitCode: 1 };
   }
+  const stateName = basename(planningDir);
 
   if (!existsSync(planningDir)) {
-    return { ok: false, error: 'No .planning/ directory found.', exitCode: 1 };
+    return { ok: false, error: `No ${stateName}/ directory found.`, exitCode: 1 };
   }
   const phasesDir = join(planningDir, 'phases');
   const matchingPlans = findFiles(phasesDir, `${padPhase(phaseNum)}-PLAN`);
@@ -380,7 +383,7 @@ export function buildPhaseVerificationReport(...args) {
     prerequisiteBlockers.push({
       code: 'missing_phase_plan',
       severity: 'blocker',
-      path: `.planning/phases/${padPhase(phaseNum)}-*/${padPhase(phaseNum)}-PLAN.md`,
+      path: `${stateName}/phases/${padPhase(phaseNum)}-*/${padPhase(phaseNum)}-PLAN.md`,
       message: `No PLAN.md artifact was found for phase ${normalizePhaseToken(phaseNum)}.`,
       fix_hint: `Run /gsdd-plan ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
     });
@@ -389,7 +392,7 @@ export function buildPhaseVerificationReport(...args) {
     prerequisiteBlockers.push({
       code: 'missing_phase_summary',
       severity: 'blocker',
-      path: `.planning/phases/${padPhase(phaseNum)}-*/${padPhase(phaseNum)}-SUMMARY.md`,
+      path: `${stateName}/phases/${padPhase(phaseNum)}-*/${padPhase(phaseNum)}-SUMMARY.md`,
       message: `No SUMMARY.md artifact was found for phase ${normalizePhaseToken(phaseNum)}.`,
       fix_hint: `Run /gsdd-execute ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
     });

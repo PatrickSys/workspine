@@ -9,7 +9,7 @@ type: medium_scope_brownfield
 > This folder is the bounded medium-scope lane.
 > It represents one active medium-scope change only.
 > Do not add phase numbering, roadmap checkboxes, or milestone state here.
-> Instantiate the live operational artifact at `.planning/brownfield-change/CHANGE.md`.
+> Instantiate the live operational artifact at `.work/brownfield-change/CHANGE.md`.
 > `progress` and `resume` read this file first for status, scope, integration surface, and the authoritative next action.
 > If this lane no longer fits one active stream, widen explicitly through `/gsdd-new-project` (first milestone) or `/gsdd-new-milestone` (subsequent milestone) using this folder as the preserved input surface. Do not invent a separate promotion artifact.
 

@@ -88,6 +88,14 @@ async function importLifecyclePreflightModule() {
   return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'lifecycle-preflight.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 }
 
+async function importControlMapModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'control-map.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
+async function importRenderingModule() {
+  return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'rendering.mjs')).href}?t=${Date.now()}-${Math.random()}`);
+}
+
 async function importRuntimeFreshnessModule() {
   return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'runtime-freshness.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 }
@@ -438,7 +446,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('repo-local helper executes correctly from a nested cwd', async () => {
-    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'all']);
     assert.strictEqual(initResult.exitCode, 0, initResult.output);
 
     const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
@@ -456,7 +464,37 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs phase-status/);
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs verify 1/);
     assert.match(output, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
+    assert.doesNotMatch(output, /node \.work\/bin\/gsdd\.mjs/);
     assert.doesNotMatch(output, /\.agents\/bin\/gsdd\.mjs/);
+
+    const generatedSkill = fs.readFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-execute', 'SKILL.md'), 'utf-8');
+    assert.match(generatedSkill, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
+    assert.doesNotMatch(generatedSkill, /node \.work\/bin\/gsdd\.mjs/);
+
+    const executorRole = fs.readFileSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'executor.md'), 'utf-8');
+    assert.match(executorRole, /node \.planning\/bin\/gsdd\.mjs next --json/);
+    assert.doesNotMatch(executorRole, /node \.work\/bin\/gsdd\.mjs/);
+
+    const rootAgents = fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf-8');
+    assert.match(rootAgents, /helpers in `\.planning\/bin\/`/);
+    assert.doesNotMatch(rootAgents, /\.work\/bin/);
+
+    const claudeSkill = fs.readFileSync(path.join(tmpDir, '.claude', 'skills', 'gsdd-execute', 'SKILL.md'), 'utf-8');
+    assert.match(claudeSkill, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
+    assert.doesNotMatch(claudeSkill, /node \.work\/bin\/gsdd\.mjs/);
+
+    const openCodeCommand = fs.readFileSync(path.join(tmpDir, '.opencode', 'commands', 'gsdd-execute.md'), 'utf-8');
+    assert.match(openCodeCommand, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
+    assert.doesNotMatch(openCodeCommand, /node \.work\/bin\/gsdd\.mjs/);
+  });
+
+  test('state-dir localization does not rewrite longer dot-work prefixes', async () => {
+    const { localizeStateDirReferences } = await importRenderingModule();
+    const localized = localizeStateDirReferences('Use .work/.continue-here.md, but keep .worktrees/ literal.', {
+      stateDirName: '.planning',
+    });
+
+    assert.strictEqual(localized, 'Use .planning/.continue-here.md, but keep .worktrees/ literal.');
   });
 
   test('a later successful in-process CLI run clears an earlier phase-command failure exit code', async () => {
@@ -964,6 +1002,35 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(!output.blockers.some((blocker) => blocker.code === 'canonical_dirty'));
   });
 
+  test('control-map reports checkpoint and annotation labels from the resolved legacy state dir', async () => {
+    initPreflightGitWorkspace(tmpDir);
+    writeProjectFile(tmpDir, '.planning/.continue-here.md', '# checkpoint\n');
+
+    const { buildControlMap } = await importControlMapModule();
+    const output = buildControlMap({ workspaceRoot: tmpDir });
+
+    assert.strictEqual(output.workflow_state.checkpoint.exists, true);
+    assert.strictEqual(output.workflow_state.checkpoint.path, '.planning/.continue-here.md');
+    assert.strictEqual(output.default_annotations_path, '.planning/.local/control-map.annotations.json');
+  });
+
+  test('control-map reports checkpoint and annotation labels from the resolved .work state dir', async () => {
+    const workRoot = createGsddTempProject();
+    try {
+      fs.mkdirSync(path.join(workRoot, '.work'), { recursive: true });
+      writeProjectFile(workRoot, '.work/.continue-here.md', '# checkpoint\n');
+
+      const { buildControlMap } = await importControlMapModule();
+      const output = buildControlMap({ workspaceRoot: workRoot });
+
+      assert.strictEqual(output.workflow_state.checkpoint.exists, true);
+      assert.strictEqual(output.workflow_state.checkpoint.path, '.work/.continue-here.md');
+      assert.strictEqual(output.default_annotations_path, '.work/.local/control-map.annotations.json');
+    } finally {
+      cleanup(workRoot);
+    }
+  });
+
   test('owned-write preflight blocks on block-level control-map overlap risks', async () => {
     initPreflightGitWorkspace(tmpDir);
     writePreflightPhase(tmpDir);
@@ -1307,7 +1374,39 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     const output = JSON.parse(result.output);
     assert.strictEqual(output.allowed, false);
     assert.strictEqual(output.reason, 'missing_checkpoint');
-    assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_checkpoint'));
+    const checkpointBlocker = output.blockers.find((blocker) => blocker.code === 'missing_checkpoint');
+    assert.ok(checkpointBlocker);
+    assert.match(checkpointBlocker.message, /\.planning\/\.continue-here\.md/);
+    assert.deepStrictEqual(checkpointBlocker.artifacts, [
+      '.planning/.continue-here.md',
+      '.planning/brownfield-change/CHANGE.md',
+    ]);
+  });
+
+  test('resume preflight reports .work checkpoint labels from .work state dir', async () => {
+    const workRoot = createGsddTempProject();
+    try {
+      fs.mkdirSync(path.join(workRoot, '.work'), { recursive: true });
+      fs.writeFileSync(path.join(workRoot, '.work', 'config.json'), '{}\n');
+
+      const { evaluateLifecyclePreflight } = await importLifecyclePreflightModule();
+      const output = evaluateLifecyclePreflight({
+        planningDir: path.join(workRoot, '.work'),
+        surface: 'resume',
+      });
+
+      assert.strictEqual(output.allowed, false);
+      assert.strictEqual(output.reason, 'missing_checkpoint');
+      const checkpointBlocker = output.blockers.find((blocker) => blocker.code === 'missing_checkpoint');
+      assert.ok(checkpointBlocker);
+      assert.match(checkpointBlocker.message, /\.work\/\.continue-here\.md/);
+      assert.deepStrictEqual(checkpointBlocker.artifacts, [
+        '.work/.continue-here.md',
+        '.work/brownfield-change/CHANGE.md',
+      ]);
+    } finally {
+      cleanup(workRoot);
+    }
   });
 
   test('allows explicit brownfield-change plan preflight without roadmap phase membership', async () => {
@@ -1352,6 +1451,42 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.phase, 'brownfield-change');
     assert.strictEqual(output.lifecycle.brownfieldChange.path, '.planning/brownfield-change/CHANGE.md');
     assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
+  });
+
+  test('explicit brownfield-change preflight reports .work labels from .work state dir', async () => {
+    const workRoot = createGsddTempProject();
+    try {
+      const changeDir = path.join(workRoot, '.work', 'brownfield-change');
+      fs.mkdirSync(changeDir, { recursive: true });
+      fs.writeFileSync(path.join(workRoot, '.work', 'config.json'), '{}\n');
+      fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
+        '---',
+        'change: PBI-9000',
+        'status: active',
+        '---',
+        '',
+        '# Brownfield Change: Work State Labels',
+        '',
+        '## Current Status',
+        '- Current posture: active',
+        '',
+        '## Next Action',
+        '- Continue the bounded change.',
+        '',
+      ].join('\n'));
+
+      const { evaluateLifecyclePreflight } = await importLifecyclePreflightModule();
+      const output = evaluateLifecyclePreflight({
+        planningDir: path.join(workRoot, '.work'),
+        surface: 'plan',
+        phaseNumber: 'brownfield-change',
+      });
+
+      assert.strictEqual(output.allowed, true);
+      assert.strictEqual(output.lifecycle.brownfieldChange.path, '.work/brownfield-change/CHANGE.md');
+    } finally {
+      cleanup(workRoot);
+    }
   });
 
   test('blocks explicit brownfield-change plan preflight when CHANGE.md is missing or closed', async () => {

@@ -8,7 +8,12 @@ import {
 
 export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10', 'W11'];
 
+function statePath(stateDirName, relativePath = '') {
+  return relativePath ? `${stateDirName}/${relativePath}` : stateDirName;
+}
+
 export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, options = {}) {
+  const stateDirName = options.stateDirName || '.work';
   const warnings = [];
   const designPath = join(frameworkDir, 'distilled', 'DESIGN.md');
   const readmePath = join(frameworkDir, 'distilled', 'README.md');
@@ -84,7 +89,7 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, option
         id: 'W10',
         severity: 'WARN',
         message: `ROADMAP/SPEC requirement status drift (${mismatches.join('; ')})`,
-        fix: 'Reconcile .planning/ROADMAP.md phase completion markers with .planning/SPEC.md requirement checkboxes',
+        fix: `Reconcile ${statePath(stateDirName, 'ROADMAP.md')} phase completion markers with ${statePath(stateDirName, 'SPEC.md')} requirement checkboxes`,
       });
     }
   }
@@ -145,6 +150,7 @@ function extractRepoLocalPaths(content) {
     'CHANGELOG.md',
     'SPEC.md',
     'package.json',
+    '.work/',
     '.planning/',
     '.internal-research/',
     '.agents/',

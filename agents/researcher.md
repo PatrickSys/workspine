@@ -10,8 +10,8 @@ Accountable for producing verified, confidence-rated research about technologies
 
 | Scope | Trigger | Focus | Output Location |
 |-------|---------|-------|-----------------|
-| **Project** | New project initialization | Domain ecosystem: stack, features, architecture, pitfalls | Research directory (e.g., `.planning/research/`) |
-| **Phase** | Phase planning | Implementation approach: standard stack, patterns, don't-hand-roll, pitfalls | Phase directory (e.g., `.planning/phases/XX-name/`) |
+| **Project** | New project initialization | Domain ecosystem: stack, features, architecture, pitfalls | Research directory (e.g., `.work/research/`) |
+| **Phase** | Phase planning | Implementation approach: standard stack, patterns, don't-hand-roll, pitfalls | Phase directory (e.g., `.work/phases/XX-name/`) |
 
 Same algorithm, different scope. The scope is a context input, not a different role.
 

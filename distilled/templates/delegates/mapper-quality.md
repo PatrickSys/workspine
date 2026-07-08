@@ -1,8 +1,8 @@
-**Role contract:** Read `.planning/templates/roles/mapper.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/mapper.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 Map the conventions and quality patterns of this codebase. Read existing tests, lint config, and code samples.
 
-Write CONVENTIONS.md to `.planning/codebase/` using the template at `.planning/templates/codebase/conventions.md`.
+Write CONVENTIONS.md to `.work/codebase/` using the template at `.work/templates/codebase/conventions.md`.
 
 Include:
 - Naming patterns (files, functions, variables, exports)
@@ -23,6 +23,6 @@ Include:
 - [ ] Golden files section lists at least 2 files with rationale
 </quality_gate>
 
-Write to: `.planning/codebase/CONVENTIONS.md`
+Write to: `.work/codebase/CONVENTIONS.md`
 Return: Routing summary to the Orchestrator (100-200 tokens) when done.
 Guardrails: Max Agent Hops = 3. Rules not inventories.
