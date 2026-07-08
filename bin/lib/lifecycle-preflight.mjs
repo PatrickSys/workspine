@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { join, resolve } from 'path';
+import { isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
 import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
@@ -79,6 +79,7 @@ export function evaluateLifecyclePreflight({
   const usesBrownfieldAuthority = surface === 'plan' && normalizedPhase === 'brownfield-change';
   const workMilestone = normalizedPhase ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase }) : null;
   const checkpointPath = join(planningDir, '.continue-here.md');
+  const stateLabel = createStateLabeler(planningDir);
   const resumeWorkCheckpoint = surface === 'resume'
     ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath })
     : null;
@@ -89,7 +90,7 @@ export function evaluateLifecyclePreflight({
   const blockers = [];
 
   if (!existsSync(planningDir)) {
-    blockers.push(blocker('missing_planning_dir', '.planning/ does not exist yet.', ['.planning/']));
+    blockers.push(blocker('missing_planning_dir', `${stateLabel('.')} does not exist yet.`, [stateLabel('.')]));
   }
 
   if (expectsMutation !== 'none' && expectsMutation !== policy.explicitLifecycleMutation) {
@@ -111,8 +112,8 @@ export function evaluateLifecyclePreflight({
       blockers.push(
         blocker(
           'missing_brownfield_change',
-          'Brownfield-change planning requires an active .planning/brownfield-change/CHANGE.md continuity anchor.',
-          ['.planning/brownfield-change/CHANGE.md']
+          `Brownfield-change planning requires an active ${stateLabel('brownfield-change', 'CHANGE.md')} continuity anchor.`,
+          [stateLabel('brownfield-change', 'CHANGE.md')]
         )
       );
     } else if (String(lifecycle.brownfieldChange.currentStatus || '').toLowerCase() === 'closed') {
@@ -120,7 +121,7 @@ export function evaluateLifecyclePreflight({
         blocker(
           'brownfield_change_closed',
           'Brownfield-change planning cannot continue because CHANGE.md marks the change closed.',
-          ['.planning/brownfield-change/CHANGE.md']
+          [stateLabel('brownfield-change', 'CHANGE.md')]
         )
       );
     }
@@ -130,42 +131,44 @@ export function evaluateLifecyclePreflight({
     blockers.push(
       ...(usesWorkAuthority
         ? buildWorkPhaseBlockers({ workMilestone, phaseToken: normalizedPhase, surface })
-        : buildPhaseBlockers({ lifecycle, phaseToken: normalizedPhase, surface }))
+        : buildPhaseBlockers({ lifecycle, phaseToken: normalizedPhase, surface, stateLabel }))
     );
   }
 
   if (surface === 'audit-milestone') {
-    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle));
-    blockers.push(...buildAuditBlockers(lifecycle));
+    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle, stateLabel));
+    blockers.push(...buildAuditBlockers(lifecycle, { stateLabel }));
   }
 
   if (surface === 'complete-milestone') {
-    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle));
-    blockers.push(...buildAuditBlockers(lifecycle, { allowArchivedBlocker: true }));
+    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle, stateLabel));
+    blockers.push(...buildAuditBlockers(lifecycle, { allowArchivedBlocker: true, stateLabel }));
     blockers.push(...buildCompletionBlockers(planningDir, lifecycle));
   }
 
   if (surface === 'new-milestone') {
-    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle));
+    blockers.push(...buildRoadmapAlignmentBlockers(lifecycle, stateLabel));
     if (!existsSync(specPath)) {
-      blockers.push(blocker('missing_spec', 'SPEC.md is required before starting a new milestone.', ['.planning/SPEC.md']));
+      blockers.push(blocker('missing_spec', 'SPEC.md is required before starting a new milestone.', [stateLabel('SPEC.md')]));
     }
     if (!existsSync(milestonesPath)) {
-      blockers.push(blocker('missing_milestones', 'MILESTONES.md is required before starting a new milestone.', ['.planning/MILESTONES.md']));
+      blockers.push(blocker('missing_milestones', 'MILESTONES.md is required before starting a new milestone.', [stateLabel('MILESTONES.md')]));
     }
     if (lifecycle.currentMilestone.version && lifecycle.currentMilestone.archiveState !== 'archived') {
       blockers.push(
         blocker(
           'active_milestone_in_progress',
           `Milestone ${lifecycle.currentMilestone.version} is still active. Archive or remove the active roadmap before starting the next milestone.`,
-          ['.planning/ROADMAP.md']
+          [stateLabel('ROADMAP.md')]
         )
       );
     }
   }
 
   if (surface === 'resume' && !existsSync(checkpointPath) && lifecycle.nonPhaseState !== 'active_brownfield_change') {
-    blockers.push(blocker('missing_checkpoint', 'resume requires .planning/.continue-here.md unless an active .planning/brownfield-change/CHANGE.md continuity anchor exists.', ['.planning/.continue-here.md', '.planning/brownfield-change/CHANGE.md']));
+    const checkpointLabel = stateLabel('.continue-here.md');
+    const brownfieldLabel = stateLabel('brownfield-change', 'CHANGE.md');
+    blockers.push(blocker('missing_checkpoint', `resume requires ${checkpointLabel} unless an active ${brownfieldLabel} continuity anchor exists.`, [checkpointLabel, brownfieldLabel]));
   }
 
   const warnings = [];
@@ -186,7 +189,7 @@ export function evaluateLifecyclePreflight({
     warnings.push({
       code: 'roadmap_phase_status_mismatch',
       message: `ROADMAP.md overview/detail phase statuses disagree: ${lifecycle.phaseStatusAlignment.mismatches.join('; ')}`,
-      artifacts: ['.planning/ROADMAP.md'],
+      artifacts: [stateLabel('ROADMAP.md')],
     });
   }
 
@@ -222,7 +225,7 @@ export function evaluateLifecyclePreflight({
         : null,
       brownfieldChange: usesBrownfieldAuthority
         ? {
-            path: '.planning/brownfield-change/CHANGE.md',
+            path: stateLabel('brownfield-change', 'CHANGE.md'),
             status: lifecycle.brownfieldChange.currentStatus,
             title: lifecycle.brownfieldChange.title,
             nextAction: lifecycle.brownfieldChange.nextAction,
@@ -246,8 +249,9 @@ function buildPreflightControlMap({ planningDir, policy, existingBlockerCodes, c
   const risks = (map.risks || []).filter((risk) => (
     !(existingBlockerCodes.has(risk.code) && risk.severity !== 'block')
   ));
+  const stateLabel = createStateLabeler(planningDir);
   const notices = risks.map((risk) => ({
-    ...controlMapNotice(risk),
+    ...controlMapNotice(risk, stateLabel),
     severity: risk.severity || 'info',
   }));
 
@@ -263,17 +267,17 @@ function buildPreflightControlMap({ planningDir, policy, existingBlockerCodes, c
   };
 }
 
-function controlMapNotice(risk) {
+function controlMapNotice(risk, stateLabel) {
   return {
     code: risk.code,
     source: 'control-map',
     message: risk.message,
-    artifacts: ['gsdd control-map --json'],
+    artifacts: [`node ${stateLabel('bin', 'gsdd.mjs')} control-map --json`],
     risk,
   };
 }
 
-function buildPhaseBlockers({ lifecycle, phaseToken, surface }) {
+function buildPhaseBlockers({ lifecycle, phaseToken, surface, stateLabel }) {
   const blockers = [];
   const phaseEntry = lifecycle.phases.find((phase) => phase.number === phaseToken);
   if (!phaseEntry) {
@@ -281,7 +285,7 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface }) {
       blocker(
         'missing_phase',
         `Phase ${phaseToken} was not found in the active roadmap.`,
-        ['.planning/ROADMAP.md']
+        [stateLabel('ROADMAP.md')]
       )
     );
     return blockers;
@@ -299,7 +303,7 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface }) {
         blocker(
           'missing_plan',
           `Phase ${phaseToken} cannot execute because no PLAN artifact exists.`,
-          ['.planning/phases/']
+          [stateLabel('phases')]
         )
       );
     } else if (pendingPlans.length === 0) {
@@ -318,7 +322,7 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface }) {
       blocker(
         'phase_already_complete',
         `Phase ${phaseToken} is already complete and should not be planned again.`,
-        ['.planning/ROADMAP.md']
+        [stateLabel('ROADMAP.md')]
       )
     );
   }
@@ -329,7 +333,7 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface }) {
         blocker(
           'missing_plan',
           `Phase ${phaseToken} cannot be verified because no PLAN artifact exists.`,
-          ['.planning/phases/']
+          [stateLabel('phases')]
         )
       );
     }
@@ -338,7 +342,7 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface }) {
         blocker(
           'missing_summary',
           `Phase ${phaseToken} cannot be verified because no SUMMARY artifact exists yet.`,
-          ['.planning/phases/']
+          [stateLabel('phases')]
         )
       );
     }
@@ -527,21 +531,21 @@ function buildWorkPhaseBlockers({ workMilestone, phaseToken, surface }) {
   return blockers;
 }
 
-function buildRoadmapAlignmentBlockers(lifecycle) {
+function buildRoadmapAlignmentBlockers(lifecycle, stateLabel) {
   if (lifecycle.phaseStatusAlignment.mismatches.length === 0) return [];
   return [
     blocker(
       'roadmap_phase_status_mismatch',
       `ROADMAP.md overview/detail phase statuses disagree: ${lifecycle.phaseStatusAlignment.mismatches.join('; ')}`,
-      ['.planning/ROADMAP.md']
+      [stateLabel('ROADMAP.md')]
     ),
   ];
 }
 
-function buildAuditBlockers(lifecycle, { allowArchivedBlocker = false } = {}) {
+function buildAuditBlockers(lifecycle, { allowArchivedBlocker = false, stateLabel } = {}) {
   const blockers = [];
   if (!lifecycle.currentMilestone.version) {
-    blockers.push(blocker('missing_milestone', 'No active or retained milestone could be derived from ROADMAP.md.', ['.planning/ROADMAP.md']));
+    blockers.push(blocker('missing_milestone', 'No active or retained milestone could be derived from ROADMAP.md.', [stateLabel('ROADMAP.md')]));
     return blockers;
   }
 
@@ -550,19 +554,19 @@ function buildAuditBlockers(lifecycle, { allowArchivedBlocker = false } = {}) {
       blocker(
         allowArchivedBlocker ? 'milestone_already_archived' : 'milestone_already_archived',
         `Milestone ${lifecycle.currentMilestone.version} is already archived-with-ROADMAP.md evidence.`,
-        ['.planning/ROADMAP.md', '.planning/MILESTONES.md']
+        [stateLabel('ROADMAP.md'), stateLabel('MILESTONES.md')]
       )
     );
   }
 
   if (lifecycle.counts.total === 0) {
-    blockers.push(blocker('missing_phases', 'No active milestone phases were found in ROADMAP.md.', ['.planning/ROADMAP.md']));
+    blockers.push(blocker('missing_phases', 'No active milestone phases were found in ROADMAP.md.', [stateLabel('ROADMAP.md')]));
   } else if (lifecycle.counts.completed !== lifecycle.counts.total) {
     blockers.push(
       blocker(
         'incomplete_phases',
         `Milestone ${lifecycle.currentMilestone.version} still has incomplete phases (${lifecycle.counts.completed}/${lifecycle.counts.total} complete).`,
-        ['.planning/ROADMAP.md']
+        [stateLabel('ROADMAP.md')]
       )
     );
   }
@@ -577,7 +581,7 @@ function buildAuditBlockers(lifecycle, { allowArchivedBlocker = false } = {}) {
       blocker(
         'missing_verification',
         `Completed phases are missing VERIFICATION artifacts (${phasesMissingVerification.join(', ')}).`,
-        ['.planning/phases/']
+        [stateLabel('phases')]
       )
     );
   }
@@ -586,13 +590,14 @@ function buildAuditBlockers(lifecycle, { allowArchivedBlocker = false } = {}) {
 }
 
 function buildCompletionBlockers(planningDir, lifecycle) {
+  const stateLabel = createStateLabeler(planningDir);
   const auditPath = join(planningDir, `${lifecycle.currentMilestone.version}-MILESTONE-AUDIT.md`);
   if (!existsSync(auditPath)) {
     return [
       blocker(
         'missing_milestone_audit',
         `Milestone ${lifecycle.currentMilestone.version} cannot be completed without a milestone audit artifact.`,
-        [auditPath]
+        [stateLabel(`${lifecycle.currentMilestone.version}-MILESTONE-AUDIT.md`)]
       ),
     ];
   }
@@ -605,7 +610,7 @@ function buildCompletionBlockers(planningDir, lifecycle) {
       blocker(
         'audit_not_passed',
         `Milestone ${lifecycle.currentMilestone.version} requires a passed audit before completion.`,
-        [auditPath]
+        [stateLabel(`${lifecycle.currentMilestone.version}-MILESTONE-AUDIT.md`)]
       ),
     ];
   }
@@ -665,6 +670,17 @@ function blocker(code, message, artifacts) {
   return { code, message, artifacts };
 }
 
+function createStateLabeler(planningDir) {
+  const workspaceRoot = resolve(planningDir, '..');
+  return (...segments) => {
+    const targetPath = resolve(join(planningDir, ...segments));
+    const label = relative(workspaceRoot, targetPath);
+    if (label === '') return '.';
+    if (!label.startsWith('..') && !isAbsolute(label)) return label.replace(/\\/g, '/');
+    return targetPath.replace(/\\/g, '/');
+  };
+}
+
 export function cmdLifecyclePreflight(...args) {
   const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
   if (invalid) {
@@ -673,9 +689,10 @@ export function cmdLifecyclePreflight(...args) {
     return;
   }
   const [surface, maybePhase, ...rest] = normalizedArgs;
+  const stateLabel = createStateLabeler(planningDir);
 
   if (!surface) {
-    console.error('Usage: node .planning/bin/gsdd.mjs lifecycle-preflight <surface> [phase] [--expects-mutation <none|phase-status>]');
+    console.error(`Usage: node ${stateLabel('bin', 'gsdd.mjs')} lifecycle-preflight <surface> [phase] [--expects-mutation <none|phase-status>]`);
     process.exitCode = 1;
     return;
   }

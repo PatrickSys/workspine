@@ -28,9 +28,9 @@ function extractXmlSection(content, tag) {
   return matches ? matches.join('\n') : '';
 }
 
-/** Collect all .planning/ path references from content */
+/** Collect all default state path references from content */
 function collectPlanningPaths(content) {
-  const matches = content.match(/\.planning\/[^\s)}>'"`,]+/g);
+  const matches = content.match(/\.work\/[^\s)}>'"`,]+/g);
   return matches ? [...new Set(matches)] : [];
 }
 
@@ -88,9 +88,9 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     const loadCtx = extractXmlSection(content, 'load_context');
 
     assert.ok(loadCtx.length > 0, 'new-project must have <load_context>');
-    assert.ok(referencesPath(loadCtx, '.planning/templates/spec.md'), 'must reference spec template');
-    assert.ok(referencesPath(loadCtx, '.planning/templates/roadmap.md'), 'must reference roadmap template');
-    assert.ok(referencesPath(loadCtx, '.planning/config.json'), 'must reference config.json');
+    assert.ok(referencesPath(loadCtx, '.work/templates/spec.md'), 'must reference spec template');
+    assert.ok(referencesPath(loadCtx, '.work/templates/roadmap.md'), 'must reference roadmap template');
+    assert.ok(referencesPath(loadCtx, '.work/config.json'), 'must reference config.json');
   });
 
   test('init installs files that new-project references', () => {
@@ -131,10 +131,10 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     const loadCtx = extractXmlSection(content, 'load_context');
 
     assert.ok(loadCtx.length > 0, 'plan must have <load_context>');
-    assert.ok(referencesPath(loadCtx, '.planning/SPEC.md'), 'plan must reference SPEC.md');
-    assert.ok(referencesPath(loadCtx, '.planning/ROADMAP.md'), 'plan must reference ROADMAP.md');
-    assert.ok(referencesPath(loadCtx, '.planning/research/'), 'plan must reference research directory');
-    assert.ok(referencesPath(loadCtx, '.planning/phases/'), 'plan must reference phases directory');
+    assert.ok(referencesPath(loadCtx, '.work/SPEC.md'), 'plan must reference SPEC.md');
+    assert.ok(referencesPath(loadCtx, '.work/ROADMAP.md'), 'plan must reference ROADMAP.md');
+    assert.ok(referencesPath(loadCtx, '.work/research/'), 'plan must reference research directory');
+    assert.ok(referencesPath(loadCtx, '.work/phases/'), 'plan must reference phases directory');
   });
 
   // --- plan → execute chain ---
@@ -145,8 +145,8 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
 
     assert.ok(loadCtx.length > 0, 'execute must have <load_context>');
     assert.ok(referencesPath(loadCtx, 'PLAN.md'), 'execute must reference PLAN.md');
-    assert.ok(referencesPath(loadCtx, '.planning/SPEC.md'), 'execute must reference SPEC.md');
-    assert.ok(referencesPath(loadCtx, '.planning/ROADMAP.md'), 'execute must reference ROADMAP.md');
+    assert.ok(referencesPath(loadCtx, '.work/SPEC.md'), 'execute must reference SPEC.md');
+    assert.ok(referencesPath(loadCtx, '.work/ROADMAP.md'), 'execute must reference ROADMAP.md');
     assert.match(loadCtx, /mandatory_now/, 'execute load_context must identify mandatory_now reads');
     assert.match(loadCtx, /task_scoped/, 'execute load_context must identify task_scoped reads');
     assert.match(loadCtx, /reference_only/, 'execute load_context must identify reference_only reads');
@@ -202,8 +202,8 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     const loadCtx = extractXmlSection(content, 'load_context');
 
     assert.ok(loadCtx.length > 0, 'audit-milestone must have <load_context>');
-    assert.ok(referencesPath(loadCtx, '.planning/ROADMAP.md'), 'audit must reference ROADMAP.md');
-    assert.ok(referencesPath(loadCtx, '.planning/SPEC.md'), 'audit must reference SPEC.md');
+    assert.ok(referencesPath(loadCtx, '.work/ROADMAP.md'), 'audit must reference ROADMAP.md');
+    assert.ok(referencesPath(loadCtx, '.work/SPEC.md'), 'audit must reference SPEC.md');
     assert.ok(referencesPath(loadCtx, 'VERIFICATION.md'), 'audit must reference phase VERIFICATION.md files');
     assert.ok(referencesPath(loadCtx, 'SUMMARY.md'), 'audit must reference phase SUMMARY.md files');
   });
@@ -232,13 +232,13 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
     }
   });
 
-  test('gap closure workflow preserves fingerprint handoff after generation', () => {
+  test('gap closure workflow confirms next route after generation', () => {
     const content = readSkill(tmpDir, 'gsdd-plan-milestone-gaps');
-    assert.match(content, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight plan-milestone-gaps/,
+    assert.match(content, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight plan-milestone-gaps/,
       'generated plan-milestone-gaps skill must preflight before mutating ROADMAP.');
-    assert.match(content, /node \.planning\/bin\/gsdd\.mjs session-fingerprint write/,
-      'generated plan-milestone-gaps skill must refresh fingerprint after intentional ROADMAP writes.');
-    assert.doesNotMatch(content, /\bgsdd session-fingerprint write\b/,
+    assert.match(content, /node \.work\/bin\/gsdd\.mjs next --json/,
+      'generated plan-milestone-gaps skill must confirm next-action routing after intentional ROADMAP writes.');
+    assert.doesNotMatch(content, /\bgsdd next --json\b/,
       'generated plan-milestone-gaps skill must use the local helper path, not bare gsdd.');
     assert.match(content, /\/gsdd-plan/,
       'generated plan-milestone-gaps skill must still route to /gsdd-plan after creating phases.');
@@ -353,12 +353,12 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
 
   afterEach(() => { cleanup(tmpDir); });
 
-  test('quick prerequisites requires .planning/ but NOT ROADMAP.md or SPEC.md', () => {
+  test('quick prerequisites requires .work/ but NOT ROADMAP.md or SPEC.md', () => {
     const content = readSkill(tmpDir, 'gsdd-quick');
     const prereqs = extractXmlSection(content, 'prerequisites');
 
     assert.ok(prereqs.length > 0, 'must have <prerequisites>');
-    assert.ok(prereqs.includes('.planning/'), 'prerequisites must require .planning/');
+    assert.ok(prereqs.includes('.work/'), 'prerequisites must require .work/');
     // ROADMAP.md appears only in negation ("is NOT required"), never as a positive prerequisite
     assert.ok(
       !prereqs.includes('ROADMAP.md') || prereqs.includes('NOT required'),
@@ -615,11 +615,11 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         assert.match(content, /user_confirmed/i, `OpenCode ${label} must include user_confirmed proof state.`);
         assert.match(content, /approved_skip/i, `OpenCode ${label} must include approved_skip proof state.`);
       }
-      assert.match(explorer, /\.planning\/config\.json/i,
+      assert.match(explorer, /\.work\/config\.json/i,
         'OpenCode explorer must receive project config for workflow.discuss validation.');
       assert.match(explorer, /workflow\.discuss/i,
         'OpenCode explorer must inspect workflow.discuss before writing alignment proof.');
-      assert.match(checker, /\.planning\/config\.json/i,
+      assert.match(checker, /\.work\/config\.json/i,
         'OpenCode checker must receive project config for workflow.discuss validation.');
       assert.match(checker, /No questions needed[\s\S]*blocker|blocker[\s\S]*No questions needed/i,
         'OpenCode checker must preserve no-questions-needed blocker language.');
@@ -653,7 +653,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
 
       assert.match(role, /workflow\.discuss/i,
         'local approach-explorer role must mention workflow.discuss alignment proof.');
-      assert.match(role, /\.planning\/config\.json/i,
+      assert.match(role, /\.work\/config\.json/i,
         'local approach-explorer role must receive project config for workflow.discuss validation.');
       assert.match(role, /alignment_status[\s\S]*user_confirmed|user_confirmed[\s\S]*alignment_status/i,
         'local approach-explorer role must require user_confirmed alignment proof.');
@@ -675,7 +675,7 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
         'local plan-checker delegate must validate alignment proof.');
       assert.match(checker, /No questions needed[\s\S]*blocker|blocker[\s\S]*No questions needed/i,
         'local plan-checker delegate must block agent-only no-questions-needed claims.');
-      assert.match(checker, /\.planning\/config\.json/i,
+      assert.match(checker, /\.work\/config\.json/i,
         'local plan-checker delegate must read project config for workflow.discuss validation.');
     });
 
@@ -817,12 +817,12 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
 
   test('affected portable skills route checkpoint cleanup through the repo-local helper launcher', () => {
     const expectations = new Map([
-      ['gsdd-pause', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
-      ['gsdd-resume', ['node .planning/bin/gsdd.mjs file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.md']],
-      ['gsdd-plan', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
-      ['gsdd-execute', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
-      ['gsdd-verify', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
-      ['gsdd-quick', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['gsdd-pause', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['gsdd-resume', ['node .work/bin/gsdd.mjs file-op copy .work/.continue-here.md .work/.continue-here.bak', 'node .work/bin/gsdd.mjs file-op delete .work/.continue-here.md']],
+      ['gsdd-plan', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['gsdd-execute', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['gsdd-verify', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['gsdd-quick', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
     ]);
 
     for (const [skillName, snippets] of expectations.entries()) {
@@ -835,25 +835,25 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
 
   test('resume portable skill no longer carries manual checkpoint copy/delete prose', () => {
     const content = readSkill(tmpDir, 'gsdd-resume');
-    assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Copy `?\.planning\/\.continue-here\.md`? to `?\.planning\/\.continue-here\.bak`?/i,
+    assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Copy `?\.work\/\.continue-here\.md`? to `?\.work\/\.continue-here\.bak`?/i,
       'gsdd-resume must not keep the old manual checkpoint copy prose.');
-    assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Delete `?\.planning\/\.continue-here\.md`?/i,
+    assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Delete `?\.work\/\.continue-here\.md`?/i,
       'gsdd-resume must not keep the old manual checkpoint delete prose.');
   });
 
   test('transition-sensitive portable skills route lifecycle eligibility through the repo-local helper launcher', () => {
     const expectations = new Map([
       ['gsdd-plan', [
-        'node .planning/bin/gsdd.mjs lifecycle-preflight plan {phase_num}',
-        'node .planning/bin/gsdd.mjs lifecycle-preflight plan brownfield-change',
+        'node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}',
+        'node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change',
         'Do not run phase preflight before target classification',
       ]],
-      ['gsdd-execute', ['node .planning/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'node .planning/bin/gsdd.mjs phase-status']],
-      ['gsdd-verify', ['node .planning/bin/gsdd.mjs lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'node .planning/bin/gsdd.mjs phase-status']],
-      ['gsdd-audit-milestone', ['node .planning/bin/gsdd.mjs lifecycle-preflight audit-milestone']],
-      ['gsdd-complete-milestone', ['node .planning/bin/gsdd.mjs lifecycle-preflight complete-milestone']],
-      ['gsdd-new-milestone', ['node .planning/bin/gsdd.mjs lifecycle-preflight new-milestone']],
-      ['gsdd-resume', ['node .planning/bin/gsdd.mjs lifecycle-preflight resume']],
+      ['gsdd-execute', ['node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
+      ['gsdd-verify', ['node .work/bin/gsdd.mjs lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
+      ['gsdd-audit-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight audit-milestone']],
+      ['gsdd-complete-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight complete-milestone']],
+      ['gsdd-new-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight new-milestone']],
+      ['gsdd-resume', ['node .work/bin/gsdd.mjs lifecycle-preflight resume']],
     ]);
 
     for (const [skillName, snippets] of expectations.entries()) {
@@ -870,7 +870,7 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
       const content = readSkill(tmpDir, entry);
       assert.doesNotMatch(content, /\.agents[\\/]bin/i,
         `${entry} must not reference stale .agents/bin helper paths.`);
-      assert.doesNotMatch(content, /(?<!node \.planning\/bin\/gsdd\.mjs\s)gsdd\s+lifecycle-preflight\b/i,
+      assert.doesNotMatch(content, /(?<!node \.work\/bin\/gsdd\.mjs\s)gsdd\s+lifecycle-preflight\b/i,
         `${entry} must not call bare gsdd lifecycle-preflight.`);
     }
   });
@@ -879,9 +879,9 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
     const content = readSkill(tmpDir, 'gsdd-progress');
     assert.ok(content.includes('progress` stays read-only.') || content.includes('progress stays read-only.'),
       'gsdd-progress must preserve the read-only lifecycle boundary.');
-    assert.ok(content.includes('Do not call `node .planning/bin/gsdd.mjs phase-status` here.'),
-      'gsdd-progress must forbid node .planning/bin/gsdd.mjs phase-status in the read-only reporter.');
-    assert.ok(content.includes('downstream mutating workflow must rerun its own `node .planning/bin/gsdd.mjs lifecycle-preflight ...` gate before acting.'),
+    assert.ok(content.includes('Do not call `node .work/bin/gsdd.mjs phase-status` here.'),
+      'gsdd-progress must forbid node .work/bin/gsdd.mjs phase-status in the read-only reporter.');
+    assert.ok(content.includes('downstream mutating workflow must rerun its own `node .work/bin/gsdd.mjs lifecycle-preflight ...` gate before acting.'),
       'gsdd-progress must route downstream lifecycle transitions back through the repo-local helper launcher.');
   });
 
@@ -905,7 +905,7 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
     const resume = readSkill(tmpDir, 'gsdd-resume');
     const progress = readSkill(tmpDir, 'gsdd-progress');
 
-    assert.match(progress, /\.planning\/brownfield-change\/CHANGE\.md/,
+    assert.match(progress, /\.work\/brownfield-change\/CHANGE\.md/,
       'gsdd-progress must preserve the active brownfield change path.');
     assert.match(progress, /active_brownfield_change/i,
       'gsdd-progress must preserve the active_brownfield_change non-phase state.');

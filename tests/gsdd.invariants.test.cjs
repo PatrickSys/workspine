@@ -175,16 +175,16 @@ describe('I1 — Delegate-Role References', () => {
   for (const delegate of getDelegateFiles()) {
     test(`${delegate} references a role contract path`, () => {
       const content = readDelegate(delegate);
-      const roleRef = content.match(/\.planning\/templates\/roles\/(\S+\.md)/);
+      const roleRef = content.match(/\.work\/templates\/roles\/(\S+\.md)/);
       assert.ok(
         roleRef,
-        `${delegate} must reference a .planning/templates/roles/<role>.md path`
+        `${delegate} must reference a .work/templates/roles/<role>.md path`
       );
     });
 
     test(`${delegate} references an existing role`, () => {
       const content = readDelegate(delegate);
-      const roleRef = content.match(/\.planning\/templates\/roles\/(\S+\.md)/);
+      const roleRef = content.match(/\.work\/templates\/roles\/(\S+\.md)/);
       if (!roleRef) {
         assert.fail(`${delegate} has no role reference to validate`);
         return;
@@ -438,9 +438,9 @@ describe('I5 — Session Management Workflows', () => {
     if (processMatch) {
       const processContent = processMatch[1];
       // These patterns indicate file-writing instructions, not references to existing files
-      assert.ok(!processContent.includes('Write `.planning/'), 'progress.md process must not instruct writing to .planning/');
-      assert.ok(!processContent.includes('Create `.planning/'), 'progress.md process must not instruct creating in .planning/');
-      assert.ok(!processContent.includes('Delete `.planning/'), 'progress.md process must not instruct deleting from .planning/');
+      assert.ok(!processContent.includes('Write `.work/'), 'progress.md process must not instruct writing to .work/');
+      assert.ok(!processContent.includes('Create `.work/'), 'progress.md process must not instruct creating in .work/');
+      assert.ok(!processContent.includes('Delete `.work/'), 'progress.md process must not instruct deleting from .work/');
     }
   });
 });
@@ -448,12 +448,12 @@ describe('I5 — Session Management Workflows', () => {
 describe('Phase 18 deterministic mechanics invariants', () => {
   test('checkpoint-cleanup workflows use the repo-local helper launcher for deterministic copy/delete mechanics', () => {
     const expectations = new Map([
-      ['pause.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
-      ['resume.md', ['node .planning/bin/gsdd.mjs file-op copy .planning/.continue-here.md .planning/.continue-here.bak', 'node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.md']],
-      ['plan.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
-      ['execute.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
-      ['verify.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
-      ['quick.md', ['node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok']],
+      ['pause.md', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['resume.md', ['node .work/bin/gsdd.mjs file-op copy .work/.continue-here.md .work/.continue-here.bak', 'node .work/bin/gsdd.mjs file-op delete .work/.continue-here.md']],
+      ['plan.md', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['execute.md', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['verify.md', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['quick.md', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
     ]);
 
     for (const [workflow, snippets] of expectations.entries()) {
@@ -467,38 +467,38 @@ describe('Phase 18 deterministic mechanics invariants', () => {
   test('manual checkpoint copy/delete prose no longer coexists with helper commands', () => {
     const resume = readWorkflow('resume.md');
     const pause = readWorkflow('pause.md');
-    assert.ok(!/(^|\n)\s*\d+\.\s*Copy `?\.planning\/\.continue-here\.md`? to `?\.planning\/\.continue-here\.bak`?/i.test(resume),
+    assert.ok(!/(^|\n)\s*\d+\.\s*Copy `?\.work\/\.continue-here\.md`? to `?\.work\/\.continue-here\.bak`?/i.test(resume),
       'resume.md must not keep manual checkpoint copy prose once the repo-local helper launcher exists.');
-    assert.ok(!/(^|\n)\s*\d+\.\s*Delete `?\.planning\/\.continue-here\.md`?/i.test(resume),
+    assert.ok(!/(^|\n)\s*\d+\.\s*Delete `?\.work\/\.continue-here\.md`?/i.test(resume),
       'resume.md must not keep manual checkpoint delete prose once the repo-local helper launcher exists.');
-    assert.ok(!/(^|\n)\s*Delete `?\.planning\/\.continue-here\.bak`? if it exists/i.test(pause),
+    assert.ok(!/(^|\n)\s*Delete `?\.work\/\.continue-here\.bak`? if it exists/i.test(pause),
       'pause.md must not keep manual backup cleanup prose once the repo-local helper launcher exists.');
   });
 
   test('execute.md and verify.md use the repo-local helper launcher for roadmap status transitions', () => {
     for (const workflow of ['execute.md', 'verify.md']) {
       const content = readWorkflow(workflow);
-      assert.ok(content.includes('node .planning/bin/gsdd.mjs phase-status'), `${workflow} must reference node .planning/bin/gsdd.mjs phase-status.`);
+      assert.ok(content.includes('node .work/bin/gsdd.mjs phase-status'), `${workflow} must reference node .work/bin/gsdd.mjs phase-status.`);
     }
   });
 
   test('execute.md no longer instructs hand-editing roadmap checkbox lines', () => {
     const execute = readWorkflow('execute.md');
     assert.ok(!execute.includes('- [x] **Phase {N}: {Name}** - {Goal}'),
-      'execute.md must not keep the old raw ROADMAP checkbox example once node .planning/bin/gsdd.mjs phase-status exists.');
+      'execute.md must not keep the old raw ROADMAP checkbox example once node .work/bin/gsdd.mjs phase-status exists.');
   });
 
-  test('workflow helper commands use .planning/bin and never stale .agents/bin or bare lifecycle-preflight', () => {
+  test('workflow helper commands use .work/bin and never stale .agents/bin or bare lifecycle-preflight', () => {
     for (const workflow of getWorkflowFiles()) {
       const content = readWorkflow(workflow);
       assert.doesNotMatch(content, /\.agents[\\/]bin/i,
         `${workflow} must not reference stale .agents/bin helper paths.`);
-      assert.doesNotMatch(content, /(?<!node \.planning\/bin\/)gsdd\.mjs/i,
-        `${workflow} must reference gsdd.mjs through node .planning/bin/gsdd.mjs.`);
-      assert.doesNotMatch(content, /(?<!node \.planning\/bin\/gsdd\.mjs\s)lifecycle-preflight\b/,
-        `${workflow} must not mention bare lifecycle-preflight; use node .planning/bin/gsdd.mjs lifecycle-preflight.`);
-      assert.doesNotMatch(content, /(?<!node \.planning\/bin\/gsdd\.mjs\s)gsdd\s+lifecycle-preflight\b/i,
-        `${workflow} must not call bare gsdd lifecycle-preflight; use node .planning/bin/gsdd.mjs lifecycle-preflight.`);
+      assert.doesNotMatch(content, /(?<!node \.work\/bin\/)gsdd\.mjs/i,
+        `${workflow} must reference gsdd.mjs through node .work/bin/gsdd.mjs.`);
+      assert.doesNotMatch(content, /(?<!node \.work\/bin\/gsdd\.mjs\s)lifecycle-preflight\b/,
+        `${workflow} must not mention bare lifecycle-preflight; use node .work/bin/gsdd.mjs lifecycle-preflight.`);
+      assert.doesNotMatch(content, /(?<!node \.work\/bin\/gsdd\.mjs\s)gsdd\s+lifecycle-preflight\b/i,
+        `${workflow} must not call bare gsdd lifecycle-preflight; use node .work/bin/gsdd.mjs lifecycle-preflight.`);
     }
   });
 });
@@ -1748,11 +1748,11 @@ describe('G12 — Documentation Accuracy Guards', () => {
     );
   });
 
-  test('package.json description matches the repo-native delivery spine launch framing', () => {
-    assert.match(pkg.description, /repo-native delivery spine/i,
-      'package.json description must use the repo-native delivery spine framing. FIX: Update the package description.');
-    assert.match(pkg.description, /Claude Code.*Codex CLI.*OpenCode/i,
-      'package.json description must name only the directly validated runtimes. FIX: Limit the description to the current proof set.');
+  test('package.json description uses the plain proof-first framing', () => {
+    assert.match(pkg.description, /plan, execute, and verify/i,
+      'package.json description must use the plain proof-first framing. FIX: Update the package description.');
+    assert.doesNotMatch(pkg.description, /delivery spine|directly validated/i,
+      'package.json description must avoid banned jargon and launch-proof overclaims. FIX: Keep package metadata plain and proof-first.');
   });
 
   test('package.json exposes npm test alias for README test command', () => {
@@ -1765,7 +1765,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
 describe('G35b - Role and Delegate Reference Integrity', () => {
   const workflowFiles = fs.readdirSync(WORKFLOWS_DIR).filter(f => f.endsWith('.md'));
 
-  // G35b.1: Every .planning/templates/roles/*.md reference has a matching source in agents/
+  // G35b.1: Every .work/templates/roles/*.md reference has a matching source in agents/
   test('all roles/ references in workflow files resolve to agents/ source files', () => {
     const roleRefs = new Set();
     for (const file of workflowFiles) {
@@ -1883,13 +1883,13 @@ describe('G34b - Branch Safety Invariants', () => {
 });
 
 describe('G34c - Launch Surface Invariants', () => {
-  test('distilled README and package description share repo-native delivery spine framing', () => {
+  test('distilled README and package description stay jargon-free', () => {
     const distilledReadme = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'README.md'), 'utf-8');
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
-    assert.match(distilledReadme, /repo-native delivery spine/i,
-      'distilled/README.md must keep the repo-native delivery spine framing. FIX: Align the distilled intro to the launch story.');
-    assert.match(pkg.description, /repo-native delivery spine/i,
-      'package.json description must keep the repo-native delivery spine framing. FIX: Keep package metadata aligned with the launch story.');
+    assert.doesNotMatch(distilledReadme, /delivery spine|workflow spine/i,
+      'distilled/README.md must stay jargon-free. FIX: Keep the distilled intro plain.');
+    assert.doesNotMatch(pkg.description, /delivery spine|workflow spine/i,
+      'package.json description must stay jargon-free. FIX: Keep package metadata plain.');
   });
 
   test('agents block does not carry launch proof posture', () => {

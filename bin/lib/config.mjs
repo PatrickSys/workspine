@@ -87,6 +87,10 @@ export function isProjectInitialized(cwd = process.cwd()) {
   return existsSync(join(resolveStateDir(cwd).dir, 'config.json'));
 }
 
+function configPathLabel(cwd = process.cwd()) {
+  return `${resolveStateDir(cwd).name}/config.json`;
+}
+
 export function loadProjectModelConfig(cwd = process.cwd()) {
   const configPath = join(resolveStateDir(cwd).dir, 'config.json');
   if (!existsSync(configPath)) return buildDefaultConfig();
@@ -97,23 +101,25 @@ export function loadProjectModelConfig(cwd = process.cwd()) {
       ...JSON.parse(readFileSync(configPath, 'utf-8')),
     };
   } catch (e) {
-    console.error(`WARNING: .planning/config.json is malformed (${e.message}). Using defaults.`);
+    console.error(`WARNING: ${configPathLabel(cwd)} is malformed (${e.message}). Using defaults.`);
     return buildDefaultConfig();
   }
 }
 
 function loadConfigForMutation(cwd = process.cwd()) {
-  const configPath = join(resolveStateDir(cwd).dir, 'config.json');
+  const state = resolveStateDir(cwd);
+  const configPath = join(state.dir, 'config.json');
+  const pathLabel = `${state.name}/config.json`;
   let raw;
   try {
     raw = readFileSync(configPath, 'utf-8');
   } catch (e) {
-    return { ok: false, error: `could not read config file (${e.message})` };
+    return { ok: false, pathLabel, error: `could not read config file (${e.message})` };
   }
   try {
-    return { ok: true, config: { ...buildDefaultConfig(), ...JSON.parse(raw) } };
+    return { ok: true, pathLabel, config: { ...buildDefaultConfig(), ...JSON.parse(raw) } };
   } catch (e) {
-    return { ok: false, error: `malformed JSON (${e.message})` };
+    return { ok: false, pathLabel, error: `malformed JSON (${e.message})` };
   }
 }
 
@@ -273,7 +279,7 @@ function cmdModelsProfile(profile) {
 
   const result = loadConfigForMutation();
   if (!result.ok) {
-    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running model mutations.`);
+    console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
     return;
   }
@@ -307,7 +313,7 @@ function cmdModelsAgentProfile(args) {
 
   const result = loadConfigForMutation();
   if (!result.ok) {
-    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running model mutations.`);
+    console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
     return;
   }
@@ -335,7 +341,7 @@ function cmdModelsClearAgentProfile(args) {
 
   const result = loadConfigForMutation();
   if (!result.ok) {
-    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running model mutations.`);
+    console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
     return;
   }
@@ -385,7 +391,7 @@ function cmdModelsSetRuntimeOverride(args) {
 
   const result = loadConfigForMutation();
   if (!result.ok) {
-    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running model mutations.`);
+    console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
     return;
   }
@@ -421,7 +427,7 @@ function cmdModelsClearRuntimeOverride(args) {
 
   const result = loadConfigForMutation();
   if (!result.ok) {
-    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running model mutations.`);
+    console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
     return;
   }
@@ -500,7 +506,7 @@ function cmdRigorSetProfile(level) {
   }
   const result = loadConfigForMutation();
   if (!result.ok) {
-    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running rigor mutations.`);
+    console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running rigor mutations.`);
     process.exitCode = 1;
     return;
   }
@@ -530,7 +536,7 @@ function cmdRigorSetStep(step, level) {
   }
   const result = loadConfigForMutation();
   if (!result.ok) {
-    console.error(`ERROR: .planning/config.json is malformed (${result.error}). Fix the file manually before running rigor mutations.`);
+    console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running rigor mutations.`);
     process.exitCode = 1;
     return;
   }

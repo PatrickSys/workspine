@@ -188,7 +188,7 @@ Orphaned requirements must be reported even if the overall phase otherwise looks
 </requirements_coverage>
 
 <output>
-Write `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md`.
+Write `.work/phases/{phase_dir}/{phase_num}-VERIFICATION.md`.
 
 Keep the current GSDD report schema:
 - base frontmatter: `phase`, `verified`, `status`, `score`
@@ -275,7 +275,7 @@ Return summary example:
 ```yaml
 status: "gaps_found"
 score: "2/3 must-haves verified"
-report: ".planning/phases/01-foundation/01-VERIFICATION.md"
+report: ".work/phases/01-foundation/01-VERIFICATION.md"
 gaps:
   - truth: "Users can create a user from the page"
     reason: "POST handler returns placeholder data"

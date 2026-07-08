@@ -5,9 +5,9 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { spawnSync } from 'child_process';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
+import { resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
-const DEFAULT_ANNOTATIONS_RELATIVE_PATH = '.planning/.local/control-map.annotations.json';
 const MAX_DIRTY_BUCKET_ENTRIES = 200;
 const CLEANUP_STATES = Object.freeze(['active', 'paused', 'merged', 'abandoned', 'superseded', 'cleanup_deferred']);
 const ACTIVE_ANNOTATION_STATES = Object.freeze(['active', 'paused', 'cleanup_deferred']);
@@ -542,6 +542,7 @@ function reconcileAnnotations(worktrees, annotations) {
 function classifyWorkflowState(planningDir) {
   const lifecycle = evaluateLifecycleState({ planningDir });
   const checkpointPath = join(planningDir, '.continue-here.md');
+  const workspaceRoot = resolve(planningDir, '..');
   const milestoneVersion = lifecycle.currentMilestone?.version || null;
   const milestoneTitle = lifecycle.currentMilestone?.title || null;
   const milestone = milestoneVersion || milestoneTitle
@@ -554,7 +555,7 @@ function classifyWorkflowState(planningDir) {
     non_phase_state: lifecycle.nonPhaseState || null,
     checkpoint: {
       exists: existsSync(checkpointPath),
-      path: '.planning/.continue-here.md',
+      path: workspacePathLabel(workspaceRoot, checkpointPath),
     },
   };
 }
@@ -589,7 +590,7 @@ function addBranchStateRisks(risks, worktree, { canonical = false } = {}) {
   }
 }
 
-function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtimeDirs, workflowState, gitErrors }) {
+function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtimeDirs, workflowState, gitErrors, helperCommand }) {
   const risks = [];
   const writeEntries = annotationWriteEntries(worktrees, rawAnnotations || { worktrees: [] });
   const dirtyEntries = worktrees.flatMap((worktree) => dirtyRepoPathEntries(worktree));
@@ -602,7 +603,7 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
       case 'canonical_git_invalid':
       case 'worktree_git_invalid': {
         const targetPath = risk.worktree_id || canonical.path;
-        return `Run \`git config --global --add safe.directory ${targetPath}\`, then re-run \`gsdd control-map --json\`.`;
+        return `Run \`git config --global --add safe.directory ${targetPath}\`, then re-run \`${helperCommand}\`.`;
       }
       case 'canonical_dirty':
         return 'Commit, stash, or checkpoint the canonical changes before planning, cleanup, merge, or broad execution.';
@@ -781,7 +782,9 @@ export function buildControlMap({
   now = new Date(),
 } = {}) {
   const root = resolve(workspaceRoot || process.cwd());
-  const planning = planningDir || join(root, '.planning');
+  const planning = planningDir || resolveStateDir(root).dir;
+  const defaultAnnotationsPath = resolveAnnotationFilePath(root, planning).label;
+  const helperCommand = `node ${workspacePathLabel(root, join(planning, 'bin', 'gsdd.mjs'))} control-map --json`;
   const discovered = discoverGitWorktrees(root, { includeIgnoredPaths, includeIgnoredCount: includeIgnoredPaths });
   const annotations = loadAnnotations(root, planning, annotationPath);
   const reconciled = reconcileAnnotations(discovered.worktrees, annotations);
@@ -805,6 +808,7 @@ export function buildControlMap({
     runtimeDirs,
     workflowState,
     gitErrors: discovered.errors,
+    helperCommand,
   });
 
   return {
@@ -813,7 +817,7 @@ export function buildControlMap({
     operation: 'control-map',
     repo_root_id: canonical.git_top_level || normalizeSlashes(root),
     workspace_root: normalizeSlashes(root),
-    default_annotations_path: DEFAULT_ANNOTATIONS_RELATIVE_PATH,
+    default_annotations_path: defaultAnnotationsPath,
     authority: AUTHORITY_ORDER,
     canonical_worktree: canonical,
     worktrees: reconciled.worktrees,

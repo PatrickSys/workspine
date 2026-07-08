@@ -1,4 +1,4 @@
-**Role contract:** Read `.planning/templates/roles/researcher.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/researcher.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 You are researching ONE dimension: the technology stack for the project domain.
 
@@ -24,7 +24,7 @@ Your output feeds the roadmapper. Be prescriptive:
 - [ ] Confidence level assigned to each recommendation
 </quality_gate>
 
-Write to: `.planning/research/STACK.md`
-Use template: `.planning/templates/research/stack.md` (if it exists)
+Write to: `.work/research/STACK.md`
+Use template: `.work/templates/research/stack.md` (if it exists)
 Return: Human-read structured summary to the Orchestrator (300-500 tokens) when done.
 Guardrails: Max Agent Hops = 3.

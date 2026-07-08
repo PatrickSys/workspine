@@ -49,6 +49,7 @@ function createCliContext(cwd = process.cwd()) {
     adapters: createAdapterRegistry({
       cwd,
       workflows: WORKFLOWS,
+      stateDirName: state.name,
       renderAgentsBoundedBlock,
       renderAgentsFileContent,
       renderOpenCodeCommandContent,

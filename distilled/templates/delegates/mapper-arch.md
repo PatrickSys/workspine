@@ -1,8 +1,8 @@
-**Role contract:** Read `.planning/templates/roles/mapper.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/mapper.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 Map the architecture and structure of this codebase. Read key source files to understand component boundaries, data flow, and patterns.
 
-Write ARCHITECTURE.md to `.planning/codebase/` using the template at `.planning/templates/codebase/architecture.md`.
+Write ARCHITECTURE.md to `.work/codebase/` using the template at `.work/templates/codebase/architecture.md`.
 
 Include:
 - Major components and their responsibilities (what belongs in each, what doesn't)
@@ -21,6 +21,6 @@ Include:
 - [ ] Golden files table populated with at least one file per major layer
 </quality_gate>
 
-Write to: `.planning/codebase/ARCHITECTURE.md`
+Write to: `.work/codebase/ARCHITECTURE.md`
 Return: Routing summary to the Orchestrator (100-200 tokens) when done.
 Guardrails: Max Agent Hops = 3. No static directory dumps.

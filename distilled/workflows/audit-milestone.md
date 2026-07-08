@@ -6,28 +6,28 @@ Core mindset: individual phases can pass while the milestone fails. Integration 
 
 <load_context>
 Before starting, read these files:
-1. `.planning/ROADMAP.md` - milestone phases, definitions of done, requirement assignments
-2. `.planning/SPEC.md` - requirement IDs, descriptions, and checkbox status
-3. All phase VERIFICATION.md files (from `.planning/phases/`)
-4. All phase SUMMARY.md files (from `.planning/phases/`)
-5. `.planning/AUTH_MATRIX.md` (if it exists) — authorization matrix for matrix-driven auth verification
+1. `.work/ROADMAP.md` - milestone phases, definitions of done, requirement assignments
+2. `.work/SPEC.md` - requirement IDs, descriptions, and checkbox status
+3. All phase VERIFICATION.md files (from `.work/phases/`)
+4. All phase SUMMARY.md files (from `.work/phases/`)
+5. `.work/AUTH_MATRIX.md` (if it exists) — authorization matrix for matrix-driven auth verification
 </load_context>
 
 <repo_root_helper_contract>
-All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <lifecycle_preflight>
 Before determining milestone scope or spawning the integration checker, run:
 
-- `node .planning/bin/gsdd.mjs lifecycle-preflight audit-milestone`
+- `node .work/bin/gsdd.mjs lifecycle-preflight audit-milestone`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone eligibility from workflow-local prose.
 
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject milestone audit
 - it does not archive or mutate milestone state
-- the owned write for this workflow remains `.planning/v{version}-MILESTONE-AUDIT.md`
+- the owned write for this workflow remains `.work/v{version}-MILESTONE-AUDIT.md`
 </lifecycle_preflight>
 
 <evidence_contract>
@@ -64,25 +64,25 @@ Rules:
 - deferrals must name the unsupported claim, missing evidence kind(s), and later workflow or milestone candidate when known
 - contradiction checks must cover evidence, public-surface, runtime, delivery, planning-drift, and generated-surface contradictions; stop or downgrade when the claim outruns the evidence
 - `delivery_posture` and `release_claim_posture` must remain compatible: `repo_closeout` and `runtime_validated_closeout` pair with `repo_only`; `delivery_supported_closeout` pairs with `delivery_sensitive`
-- local-only `.planning/` proof may support `repo_closeout`, but public-facing release/support claims need tracked public or repo-visible evidence when intended for external readers
+- local-only `.work/` proof may support `repo_closeout`, but public-facing release/support claims need tracked public or repo-visible evidence when intended for external readers
 </evidence_contract>
 
 <process>
 
 ## 1. Determine Milestone Scope
 
-Parse `.planning/ROADMAP.md` for:
+Parse `.work/ROADMAP.md` for:
 - All phases in the current milestone (sorted numerically)
 - Milestone definition of done
 - Phase-to-requirement mappings (the Requirements field in each phase detail)
 
-Parse `.planning/SPEC.md` for:
+Parse `.work/SPEC.md` for:
 - All requirement IDs with descriptions
 - Current checkbox status (`[x]` vs `[ ]`)
 
 ## 2. Read All Phase Verifications
 
-For each phase directory in `.planning/phases/`, read the VERIFICATION.md.
+For each phase directory in `.work/phases/`, read the VERIFICATION.md.
 
 From each VERIFICATION.md, extract:
 - **Status:** passed | gaps_found | human_needed
@@ -99,14 +99,14 @@ With phase context collected, delegate cross-phase integration checking:
 
 <delegate>
 **Identity:** Integration Checker
-**Instruction:** Read `.planning/templates/roles/integration-checker.md`, then check cross-phase integration.
+**Instruction:** Read `.work/templates/roles/integration-checker.md`, then check cross-phase integration.
 
 **Context to provide:**
 - Phase directories in milestone scope
 - Key exports from each phase (extracted from SUMMARYs)
 - API routes and endpoints created
 - Milestone requirement IDs with descriptions and assigned phases
-- `.planning/AUTH_MATRIX.md` path (if it exists)
+- `.work/AUTH_MATRIX.md` path (if it exists)
 
 **Task:** Verify cross-phase wiring, API coverage, auth protection, and E2E user flows. Return structured integration report with wiring summary, API coverage, auth protection, E2E flow status, and Requirements Integration Map.
 
@@ -134,12 +134,12 @@ Cross-reference three independent sources for each requirement to determine sati
 
 ### 5a. Parse SPEC.md Requirements
 
-Extract all requirement IDs from `.planning/SPEC.md`:
+Extract all requirement IDs from `.work/SPEC.md`:
 - Requirement ID, description, checkbox status (`[x]` vs `[ ]`)
 
 ### 5b. Parse ROADMAP.md Phase-to-Requirement Mapping
 
-For each phase in `.planning/ROADMAP.md`, extract the Requirements field:
+For each phase in `.work/ROADMAP.md`, extract the Requirements field:
 - Which requirements are assigned to which phase
 
 ### 5c. Parse Phase VERIFICATION.md Requirements Tables
@@ -170,11 +170,11 @@ For each requirement, determine status using all available sources:
 
 **FAIL gate:** Any `unsatisfied` requirement forces `gaps_found` status on the milestone audit. No exceptions.
 
-**Orphan detection:** Requirements in `.planning/SPEC.md` that are mapped to phases in `.planning/ROADMAP.md` but absent from ALL phase VERIFICATION.md files are orphaned. Orphaned requirements are treated as `unsatisfied` - they were assigned but never verified by any phase.
+**Orphan detection:** Requirements in `.work/SPEC.md` that are mapped to phases in `.work/ROADMAP.md` but absent from ALL phase VERIFICATION.md files are orphaned. Orphaned requirements are treated as `unsatisfied` - they were assigned but never verified by any phase.
 
 ## 6. Write Milestone Audit Report
 
-Create `.planning/v{version}-MILESTONE-AUDIT.md` with structured frontmatter:
+Create `.work/v{version}-MILESTONE-AUDIT.md` with structured frontmatter:
 
 ```yaml
 ---
@@ -240,10 +240,10 @@ Evidence gate:
 - `repo_only` audits cannot be downgraded merely because `runtime` or `delivery` evidence was never relevant
 - a `passed` audit must have no unsupported stronger release claims unless they are explicitly downgraded or deferred in `release_claim_contract`
 - invalid waivers are blockers: human approval cannot replace missing `code`, `test`, `runtime`, or `delivery` evidence for a stronger claim
-- public/support wording must be scoped to tracked public or repo-visible evidence; local-only `.planning/` artifacts cannot carry public release claims by themselves
+- public/support wording must be scoped to tracked public or repo-visible evidence; local-only `.work/` artifacts cannot carry public release claims by themselves
 - generated-surface freshness is claim-scoped: W11-style drift blocks only claims that depend on generated runtime/helper freshness, not unrelated repo-only closeout
 
-**MANDATORY: The milestone audit report must exist at `.planning/v{version}-MILESTONE-AUDIT.md` on disk before presenting results. If the file was not written, STOP and report the write failure. Do NOT present audit results from conversation context alone — this is the highest-cost artifact to regenerate. Do NOT downgrade a write failure into "results shown inline anyway."**
+**MANDATORY: The milestone audit report must exist at `.work/v{version}-MILESTONE-AUDIT.md` on disk before presenting results. If the file was not written, STOP and report the write failure. Do NOT present audit results from conversation context alone — this is the highest-cost artifact to regenerate. Do NOT downgrade a write failure into "results shown inline anyway."**
 
 ## 7. Present Results
 
@@ -285,7 +285,7 @@ Audit is complete when all of these are true:
 Report the audit result to the user, then present the next step:
 
 ---
-**Completed:** Milestone audit — created `.planning/v{version}-MILESTONE-AUDIT.md`.
+**Completed:** Milestone audit — created `.work/v{version}-MILESTONE-AUDIT.md`.
 
 If status is `passed`:
 **Next step:** `/gsdd-complete-milestone` — archive the milestone and prepare for the next

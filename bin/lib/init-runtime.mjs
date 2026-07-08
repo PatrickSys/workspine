@@ -2,19 +2,19 @@ const RUNTIME_OPTIONS = [
   {
     id: 'claude',
     label: 'Claude Code',
-    description: 'Directly validated native skills, commands, and agents with local freshness checks',
+    description: 'Recorded proof for native skills, commands, and agents with local freshness checks',
     kind: 'native',
   },
   {
     id: 'opencode',
     label: 'OpenCode',
-    description: 'Directly validated native slash commands and agents with local freshness checks',
+    description: 'Recorded proof for native slash commands and agents with local freshness checks',
     kind: 'native',
   },
   {
     id: 'codex',
     label: 'Codex CLI',
-    description: 'Directly validated portable skills plus native checker agents with local freshness checks',
+    description: 'Recorded proof for portable skills plus native checker agents with local freshness checks',
     kind: 'native',
   },
   {
@@ -163,7 +163,7 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 export function getHelpText() {
   return `
 gsdd - Workspine CLI
-Repo-native delivery spine for long-horizon AI-assisted work across coding runtimes.
+Plan, execute, and verify AI-assisted work from files in your repo — with proof before "done".
 
 Usage: gsdd <command> [args]
 
@@ -171,14 +171,14 @@ Commands:
   init [--tools <platform>] [--auto] [--brief <file>]
                               Launch guided install wizard in TTYs, or use --tools for manual/headless setup
                               --auto: non-interactive mode with smart defaults (requires --tools)
-                              --brief <file>: copy project brief to .planning/PROJECT_BRIEF.md
+                              --brief <file>: copy project brief to .work/PROJECT_BRIEF.md
   install --global [--auto] [--tools <platform>] [--dry]
                               Install reusable Workspine skills and native runtime surfaces into agent home directories
                               --auto: non-interactive mode that installs detected local agent targets
                               In TTYs, omitting --tools opens an agent picker
   update [--tools <platform>] [--templates] [--dry]
                               Regenerate adapters from latest framework sources
-                              --templates: also refresh .planning/templates/ and roles
+                              --templates: also refresh .work/templates/ and roles
                               --dry: preview changes without writing files
   health [--json]             Check workspace integrity (healthy/degraded/broken)
   next [--json] [--format auto|json|human] [--init]
@@ -214,17 +214,17 @@ Global install targets:
 Notes:
   - use \`npx -y gsdd-cli init\` for repo-local setup; use \`npx -y gsdd-cli install --global --auto\` when you want reusable skills in detected agent homes
   - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
-  - init also generates a local .planning/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
-  - install --global never creates .planning/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
+  - init also generates a local .work/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
+  - install --global never creates .work/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
   - use \`npx -y gsdd-cli install --global --auto\` for non-interactive global install into detected agent homes; use \`--tools <targets>\` to override detection explicitly
   - repair or refresh a global install by rerunning \`npx -y gsdd-cli install --global --auto\` or \`npx -y gsdd-cli install --global --tools <targets>\`; runtime probes stay in test harnesses
-  - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .planning/
+  - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .work/ (legacy planning workspaces are still read)
   - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
-  - \`npx -y gsdd-cli health\` is for repo-local .planning/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift
+  - \`npx -y gsdd-cli health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift
   - \`npx -y gsdd-cli next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed next-action packet
   - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
-  - directly validated launch surfaces in this repo are Claude Code, OpenCode, and Codex CLI
+  - recorded launch proof in this repo currently covers Claude Code, OpenCode, and Codex CLI paths
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)

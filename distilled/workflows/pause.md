@@ -7,17 +7,17 @@ Scope boundary: you write a checkpoint file. You do not route, present status, o
 </role>
 
 <prerequisites>
-`.planning/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed).
+`.work/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed).
 
-If `.planning/` does not exist, stop and tell the user to run `npx -y gsdd-cli init` first.
+If `.work/` does not exist, stop and tell the user to run `npx -y gsdd-cli init` first.
 </prerequisites>
 
 <repo_root_helper_contract>
-All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <runtime_contract>
-Use the `Runtime` type from `.planning/SPEC.md`.
+Use the `Runtime` type from `.work/SPEC.md`.
 Infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
 Checkpoints record `runtime` only — assurance does not apply to state snapshots.
 </runtime_contract>
@@ -27,8 +27,8 @@ Checkpoints record `runtime` only — assurance does not apply to state snapshot
 <detect_work>
 Scan for active work in priority order:
 
-1. **Active phase work** — look in `.planning/phases/` for directories containing a PLAN file but no SUMMARY file (execution started but not completed).
-2. **Active quick task** — read `.planning/quick/LOG.md` if it exists. Check the last entry: if its status is not `done`/`passed`, there is an incomplete quick task.
+1. **Active phase work** — look in `.work/phases/` for directories containing a PLAN file but no SUMMARY file (execution started but not completed).
+2. **Active quick task** — read `.work/quick/LOG.md` if it exists. Check the last entry: if its status is not `done`/`passed`, there is an incomplete quick task.
 3. **Generic work** — if neither of the above, ask the user what they were working on.
 
 If no active work is detected and the user confirms nothing is in progress, inform them there is nothing to pause and exit.
@@ -39,7 +39,7 @@ Store the detected work type as `$WORK_TYPE` (one of: `phase`, `quick`, `generic
 <gather_state>
 Build a draft checkpoint from artifact truth before asking the user to restate work. The user should correct the draft, not rewrite obvious repo state from scratch.
 
-When available, run `node .planning/bin/gsdd.mjs control-map --json` and use it as the draft's repo/worktree snapshot: canonical branch/HEAD, dirty tracked/untracked/ignored buckets, sibling/detached worktrees, stale annotations, planning drift, and recommended interventions. Include only a compact summary or pointer in `.planning/.continue-here.md`; the checkpoint records resumability context, not a replacement for future computed repo truth.
+When available, run `node .work/bin/gsdd.mjs control-map --json` and use it as the draft's repo/worktree snapshot: canonical branch/HEAD, dirty tracked/untracked/ignored buckets, sibling/detached worktrees, stale annotations, planning drift, and recommended interventions. Include only a compact summary or pointer in `.work/.continue-here.md`; the checkpoint records resumability context, not a replacement for future computed repo truth.
 
 Ask the user conversationally to fill in the gaps the artifacts cannot answer:
 
@@ -63,11 +63,11 @@ Question budget:
 </gather_state>
 
 <write_checkpoint>
-Before writing the new checkpoint, run `node .planning/bin/gsdd.mjs file-op delete .planning/.continue-here.bak --missing ok` to clear the prior session backup. This is cleanup-only and should no-op safely if the backup is absent.
+Before writing the new checkpoint, run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` to clear the prior session backup. This is cleanup-only and should no-op safely if the backup is absent.
 
 When the current branch/worktree is known to be evidence-only, stale/spent, or otherwise not the next intended execution surface, say that explicitly in `<current_state>`, `<remaining_work>`, and `<anti_regression>`. Do not flatten evidence-only local state into the same continuity story as the next execution surface.
 
-Write `.planning/.continue-here.md` with the following structure:
+Write `.work/.continue-here.md` with the following structure:
 
 ```markdown
 ---
@@ -117,13 +117,13 @@ runtime: $INFERRED_RUNTIME
 </judgment>
 ```
 
-The checkpoint is project-scoped (lives at `.planning/.continue-here.md`, not inside a phase directory) so resume always knows where to look.
+The checkpoint is project-scoped (lives at `.work/.continue-here.md`, not inside a phase directory) so resume always knows where to look.
 </write_checkpoint>
 
-**MANDATORY: `.planning/.continue-here.md` must exist on disk after writing. If the file was not created, STOP and report the failure. The entire purpose of this workflow is to persist context — a failed write means the pause did nothing.**
+**MANDATORY: `.work/.continue-here.md` must exist on disk after writing. If the file was not created, STOP and report the failure. The entire purpose of this workflow is to persist context — a failed write means the pause did nothing.**
 
 <advisory_git>
-Read `.planning/config.json` for the `gitProtocol` section. If config.json cannot be read, skip git advice.
+Read `.work/config.json` for the `gitProtocol` section. If config.json cannot be read, skip git advice.
 
 Suggest a WIP commit following the project's git conventions. Do not mandate it — the user decides whether and how to commit.
 
@@ -132,7 +132,7 @@ Example suggestion: "You may want to commit your current changes as a WIP before
 
 <confirm>
 Report to the user:
-- Checkpoint location: `.planning/.continue-here.md`
+- Checkpoint location: `.work/.continue-here.md`
 - Work type captured (phase/quick/generic)
 - How to resume: run the `/gsdd-resume` workflow in the next session
 </confirm>
@@ -142,7 +142,7 @@ Report to the user:
 <success_criteria>
 - [ ] Active work context detected (phase, quick, or generic)
 - [ ] User provided missing context via conversation
-- [ ] `.planning/.continue-here.md` created with frontmatter, all 6 sections, and <judgment> block
+- [ ] `.work/.continue-here.md` created with frontmatter, all 6 sections, and <judgment> block
 - [ ] Advisory git suggestion presented (not mandated)
 - [ ] User informed of checkpoint location and resume instructions
 </success_criteria>
@@ -151,7 +151,7 @@ Report to the user:
 Report to the user what was accomplished, then present the next step:
 
 ---
-**Completed:** Session paused — created `.planning/.continue-here.md` (checkpoint file).
+**Completed:** Session paused — created `.work/.continue-here.md` (checkpoint file).
 
 **Next step (next session):** `/gsdd-resume` — restore context and continue where you left off
 
