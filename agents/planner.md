@@ -154,9 +154,9 @@ Any plan containing `checkpoint:*` must set `autonomous: false`.
 </task_contract>
 
 <browser_proof_planning>
-For UI-sensitive work, set `browser_proof_required: true` and include a `## Browser Proof Plan` that can later be matched exactly to route/state, viewport, observation, evidence kind, artifact path or manual step, privacy/safety note, result, and claim limit. Use only the stable evidence kinds `code`, `test`, `runtime`, `delivery`, and `human`.
+For UI-sensitive work, set `browser_proof_required: true` and include a `## Browser Proof Plan` that can later be matched exactly to route/state, viewport, observation, evidence kind, artifact path or manual step, privacy/safety note, result, and claim limit. Browser Proof Plan/Observation records use only `runtime` or `test` as their `Evidence kind`; keep the broader `code`, `test`, `runtime`, `delivery`, and `human` vocabulary for the closure evidence contract.
 
-The Browser Proof Plan must name route/state, viewport coverage, runtime path, evidence command or narrowed no-command rationale, observations, artifacts, and claim limit. For live rendered UI proof, plan `agent-browser` as the default runtime evidence path: route open, interactive snapshot/refs when relevant, changed-flow interaction, screenshots for the planned viewport(s), and relevant console/network observations. If `agent-browser` is unavailable in the runtime, require an explicit availability constraint and the closest project-native interactive browser fallback before narrowing the claim. Existing Playwright/package-script browser tests remain the canonical repeatable regression path when present; do not scaffold new browser infrastructure by default. Responsive claims need desktop/mobile or equivalent state coverage unless the claim is narrowed.
+The Browser Proof Plan must name route/state, viewport coverage, runtime path, evidence kind, evidence command or narrowed no-command rationale, observations, artifacts, and claim limit. For live rendered UI proof, plan `agent-browser` as the default runtime evidence path: route open, interactive snapshot/refs when relevant, changed-flow interaction, screenshots for the planned viewport(s), and relevant console/network observations. If `agent-browser` is unavailable in the runtime, require an explicit availability constraint and the closest project-native interactive browser fallback before narrowing the claim. Existing Playwright/package-script browser tests remain the canonical repeatable regression path when present; do not scaffold new browser infrastructure by default. Responsive claims need desktop/mobile or equivalent state coverage unless the claim is narrowed.
 
 Do not let source annotations, AST/cAST findings, semantic search, comments, or Semble-like retrieval satisfy browser proof; they are discovery hints only. Human acceptance can narrow or waive a claim and record proof debt, but it must not turn missing or mismatched non-human evidence into satisfied proof.
 </browser_proof_planning>
@@ -194,7 +194,7 @@ Write one or more `PLAN.md` files to the phase directory.
 Keep the current GSDD schema exactly:
 - frontmatter keys: `phase`, `plan`, `type`, `wave`, `runtime`, `assurance`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `non_goals`, `hard_boundaries`, `escalation_triggers`, `approval_gates`, `anti_regression_targets`, `known_unknowns`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`
 - typed tasks with `files`, `action`, `verify`, and `done`
-- if `browser_proof_required: true`, the plan body must include `## Browser Proof Plan` with route/state, viewport, runtime path, evidence command or no-command rationale, observations, artifacts, and claim limit
+- if `browser_proof_required: true`, the plan body must include `## Browser Proof Plan` with route/state, viewport, runtime path, evidence kind, evidence command or no-command rationale, observations, artifacts, and claim limit
 
 Typed frontmatter example:
 

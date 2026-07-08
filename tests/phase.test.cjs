@@ -1877,7 +1877,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     )));
   });
 
-  test('phase verify blocks retired ui-proof declarations instead of passing legacy plans', async () => {
+  test('phase verify blocks legacy no-UI proof declarations with placeholder rationale', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-retired-browser-proof');
     fs.mkdirSync(phaseDir, { recursive: true });
@@ -1899,9 +1899,40 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
     assert.strictEqual(output.verified, false);
     assert.ok(output.browser_proof_status.blockers.some((blocker) => (
-      blocker.code === 'retired_browser_proof_contract'
+      blocker.code === 'missing_browser_proof_rationale'
       && blocker.message.includes('ui_proof_slots')
     )));
+  });
+
+  test('phase verify blocks legacy non-empty ui-proof slots pending migration', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-legacy-ui-proof-slots');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'ui_proof_slots:',
+        '  - slot_id: dashboard-render',
+        '    claim: dashboard render proof',
+        'no_ui_proof_rationale: null',
+        '---',
+        '# Phase 1 Plan',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'legacy_browser_proof_slots_require_migration'
+    )));
+    assert.strictEqual(output.browser_proof_status.blockers.filter((blocker) => (
+      blocker.code === 'legacy_browser_proof_slots_require_migration'
+    )).length, 1);
   });
 
   test('phase verify normalizes scalar comments and rejects placeholder rationale values', async () => {
@@ -2019,6 +2050,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Routes/states: /dashboard after loading current account.',
         'Viewports: desktop and mobile.',
         'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
         'Artifacts: .planning/phases/01-browser-proof-observation-missing/artifacts/dashboard.png, local_only.',
@@ -2054,6 +2086,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Routes/states: /dashboard after loading current account.',
         'Viewports: desktop and mobile.',
         'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
         'Artifacts: .planning/phases/01-browser-proof-observed/artifacts/dashboard.png, local_only.',
@@ -2067,9 +2100,11 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '',
         '## Browser Proof Observation',
         '',
+        '- Plan: 01-browser-proof-observed/01-PLAN.md',
         '- Flow: /dashboard after loading current account.',
         '- Viewports: desktop and mobile.',
         '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard',
         '- Observed: dashboard widgets rendered without console errors.',
         '- Artifacts:',
@@ -2087,6 +2122,383 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.strictEqual(output.browser_proof_status.satisfied, true);
   });
 
+  test('phase verify blocks failed browser proof observations', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-failed');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-failed/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Plan: 01-browser-proof-failed/01-PLAN.md',
+        '- Flow: /dashboard after loading current account.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
+        '- Evidence command: npm run test:e2e -- --grep dashboard',
+        '- Observed: dashboard widget failed to render.',
+        '- Artifacts: .planning/phases/01-browser-proof-failed/artifacts/dashboard.png - local-only',
+        '- Result: failed product_bug',
+        '- Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'failed_browser_proof_observation'
+    )));
+  });
+
+  test('phase verify blocks failed browser proof observations even when another observation passes', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-mixed-result');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-mixed-result/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Plan: 01-browser-proof-mixed-result/01-PLAN.md',
+        '- Flow: /dashboard after loading current account.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
+        '- Evidence command: npm run test:e2e -- --grep dashboard',
+        '- Observed: dashboard widgets rendered without console errors.',
+        '- Artifacts: .planning/phases/01-browser-proof-mixed-result/artifacts/dashboard.png - local-only',
+        '- Result: passed',
+        '- Claim limit: dashboard render proof only.',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Plan: 01-browser-proof-mixed-result/01-PLAN.md',
+        '- Flow: /dashboard after loading current account.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
+        '- Evidence command: npm run test:e2e -- --grep dashboard',
+        '- Observed: dashboard widget failed to render on mobile.',
+        '- Artifacts: .planning/phases/01-browser-proof-mixed-result/artifacts/dashboard-mobile.png - local-only',
+        '- Result: partial product_bug',
+        '- Claim limit: dashboard mobile render proof only.',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'failed_browser_proof_observation'
+    )));
+  });
+
+  test('phase verify blocks single-plan browser proof when observation references another plan', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-wrong-plan');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-wrong-plan/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Plan: 99-other-phase/99-PLAN.md',
+        '- Flow: /dashboard after loading current account.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
+        '- Evidence command: npm run test:e2e -- --grep dashboard',
+        '- Observed: dashboard widgets rendered without console errors.',
+        '- Artifacts: .planning/phases/01-browser-proof-wrong-plan/artifacts/dashboard.png - local-only',
+        '- Result: passed',
+        '- Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'unmatched_browser_proof_observation'
+      && blocker.path.endsWith('01-PLAN.md')
+    )));
+  });
+
+  test('phase verify blocks linked browser proof observation outside workspace', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-outside-link');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    const outsideRecord = path.join(path.dirname(tmpDir), `outside-browser-proof-${Date.now()}.md`);
+    fs.writeFileSync(outsideRecord, '## Browser Proof Observation\n\n- Result: passed\n');
+    const outsideLink = path.relative(phaseDir, outsideRecord).replace(/\\/g, '/');
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-outside-link/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        `Browser Proof Observation: ${outsideLink}`,
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'invalid_browser_proof_observation_link'
+    )));
+  });
+
+  test('phase verify blocks URL browser proof observation links', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-url-link');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-url-link/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        'Browser Proof Observation: https://example.test/proof.md',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'invalid_browser_proof_observation_link'
+      && blocker.message.includes('not a URL')
+    )));
+  });
+
+  test('phase verify blocks linked browser proof observation symlink escape', async (t) => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-symlink-link');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    const outsideRecord = path.join(path.dirname(tmpDir), `outside-browser-proof-${Date.now()}.md`);
+    const symlinkRecord = path.join(phaseDir, 'linked-observation.md');
+    fs.writeFileSync(outsideRecord, '## Browser Proof Observation\n\n- Result: passed\n');
+    try {
+      fs.symlinkSync(outsideRecord, symlinkRecord, 'file');
+    } catch (error) {
+      if (['EPERM', 'ENOTSUP', 'EACCES'].includes(error.code)) {
+        t.skip(`symlink creation unavailable in this environment: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-symlink-link/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n\nBrowser Proof Observation: linked-observation.md\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'invalid_browser_proof_observation_link'
+    )));
+  });
+
+  test('phase verify reports linked browser proof observation directories instead of throwing', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-directory-link');
+    fs.mkdirSync(path.join(phaseDir, 'observations'), { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-directory-link/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n\nBrowser Proof Observation: observations\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'invalid_browser_proof_observation_link'
+    )));
+  });
+
+  test('phase verify keeps legacy no-UI proof plans compatible', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-legacy-no-ui-proof');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'ui_proof_slots: []',
+        'no_ui_proof_rationale: CLI-only phase; no rendered UI behavior is claimed.',
+        '---',
+        '# Phase 1 Plan',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, true);
+    assert.strictEqual(output.browser_proof_status.plans[0].legacy_compatible, true);
+    assert.ok(output.browser_proof_status.warnings.some((warning) => (
+      warning.code === 'legacy_browser_proof_contract'
+    )));
+  });
+
   test('phase verify blocks multi-plan browser proof when observations do not identify each plan', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-multi');
@@ -2102,6 +2514,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       'Routes/states: /dashboard after loading current account.',
       'Viewports: desktop and mobile.',
       'Runtime path: agent-browser.',
+      'Evidence kind: runtime',
       'Evidence command: npm run test:e2e -- --grep dashboard',
       'Observations: dashboard widgets render without console errors.',
       'Artifacts: .planning/phases/01-browser-proof-multi/artifacts/dashboard.png, local_only.',
@@ -2119,6 +2532,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Flow: /dashboard after loading current account.',
         '- Viewports: desktop and mobile.',
         '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard',
         '- Observed: dashboard widgets rendered without console errors.',
         '- Artifacts: .planning/phases/01-browser-proof-multi/artifacts/dashboard.png - local-only',
@@ -2157,6 +2571,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       'Routes/states: /dashboard after loading current account.',
       'Viewports: desktop and mobile.',
       'Runtime path: agent-browser.',
+      'Evidence kind: runtime',
       'Evidence command: npm run test:e2e -- --grep dashboard',
       'Observations: dashboard widgets render without console errors.',
       'Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard.png, local_only.',
@@ -2175,6 +2590,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Flow: /dashboard account A.',
         '- Viewports: desktop and mobile.',
         '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard-a',
         '- Observed: dashboard widgets rendered without console errors.',
         '- Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard-a.png - local-only',
@@ -2187,6 +2603,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Flow: /dashboard account B.',
         '- Viewports: desktop and mobile.',
         '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard-b',
         '- Observed: dashboard widgets rendered without console errors.',
         '- Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard-b.png - local-only',

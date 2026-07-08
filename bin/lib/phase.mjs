@@ -3,8 +3,8 @@
 // IMPORTANT: No module-scope process.cwd() — ESM caching means sub-modules
 // evaluate once, so CWD must be computed inside function bodies.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs';
-import { basename, dirname, isAbsolute, join, relative } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, realpathSync } from 'fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
@@ -184,6 +184,29 @@ function hasTopLevelKey(frontmatter, key) {
   return new RegExp(`^${escapedKey}:\\s*.*$`, 'm').test(String(frontmatter || ''));
 }
 
+function readTopLevelBlock(frontmatter, key) {
+  const escapedKey = String(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const lines = String(frontmatter || '').replace(/\r\n/g, '\n').split('\n');
+  const startIndex = lines.findIndex((line) => new RegExp(`^${escapedKey}:\\s*(.*)$`).test(line));
+  if (startIndex === -1) return null;
+
+  const scalar = normalizeScalarValue(lines[startIndex].replace(new RegExp(`^${escapedKey}:\\s*`), ''));
+  const nested = [];
+  for (const line of lines.slice(startIndex + 1)) {
+    if (/^\S[^:]*:\s*/.test(line)) break;
+    if (line.trim()) nested.push(line.trim());
+  }
+  return { scalar, nested };
+}
+
+function legacyUiProofSlotsState(frontmatter) {
+  const block = readTopLevelBlock(frontmatter, 'ui_proof_slots');
+  if (!block) return null;
+  if (/^\[\s*\]$/.test(block.scalar)) return 'empty';
+  if (isMeaningfulFieldValue(block.scalar)) return 'present';
+  return block.nested.length > 0 ? 'present' : 'empty';
+}
+
 function stripInlineComment(value) {
   const text = String(value || '');
   let quote = null;
@@ -279,9 +302,62 @@ function nonEmptyField(section, label) {
   return isMeaningfulFieldValue(value);
 }
 
+function firstFieldValue(section, labels) {
+  for (const label of labels) {
+    const value = sectionFieldValue(section, label);
+    if (isMeaningfulFieldValue(value)) return value;
+  }
+  return '';
+}
+
+function evidenceKindValues(section) {
+  const value = firstFieldValue(section, ['Evidence kind', 'Evidence kinds']);
+  return value
+    .split(/[,/;|]|\band\b/i)
+    .map((part) => normalizeScalarValue(part).toLowerCase())
+    .filter(Boolean);
+}
+
+function hasSupportedBrowserProofEvidenceKind(section) {
+  return evidenceKindValues(section).some((kind) => kind === 'runtime' || kind === 'test');
+}
+
+function hasPassingBrowserProofResult(section) {
+  const value = firstFieldValue(section, ['Result']).toLowerCase();
+  if (!isMeaningfulFieldValue(value)) return false;
+  if (/\b(not\s+passed|fail(?:ed|ing)?|partial|partly|blocked|waived|deferred|missing|not[_ -]?applicable|unknown)\b/i.test(value)) {
+    return false;
+  }
+  return /\b(pass(?:ed|ing)?|satisfied|success(?:ful)?)\b/i.test(value);
+}
+
+function isBoundedBrowserProofClaim(section) {
+  const value = firstFieldValue(section, ['Claim limit']).toLowerCase();
+  if (!isMeaningfulFieldValue(value)) return false;
+  if (/\b(no limit|unlimited|entire app|whole app|full app|complete app|everything works|all works|all flows|all ui|all screens|works everywhere)\b/i.test(value)) {
+    return false;
+  }
+  return true;
+}
+
+function hasPrivacySafetyNote(section) {
+  if (firstFieldValue(section, ['Privacy/safety', 'Privacy note', 'Safety note', 'Safe to publish'])) return true;
+  const artifacts = firstFieldValue(section, ['Artifacts']);
+  return /\b(local[-_ ]?only|safe to publish|not safe to publish|publishable|private|unsafe|sanitized)\b/i.test(artifacts);
+}
+
 function browserProofFixHint(code) {
   if (code === 'retired_browser_proof_contract') {
     return 'Replace retired ui_proof_slots/no_ui_proof_rationale fields with browser_proof_required and browser_proof_rationale.';
+  }
+  if (code === 'legacy_browser_proof_contract') {
+    return 'Update PLAN.md frontmatter to browser_proof_required: false and browser_proof_rationale when you next touch this phase.';
+  }
+  if (code === 'legacy_browser_proof_slots_require_migration') {
+    return 'Migrate non-empty ui_proof_slots to browser_proof_required: true plus a Browser Proof Plan before verifying this phase.';
+  }
+  if (code === 'conflicting_browser_proof_contract') {
+    return 'Use either the new browser_proof_* frontmatter or the legacy ui_proof_* frontmatter, not both.';
   }
   if (code === 'missing_browser_proof_declaration') {
     return 'Add browser_proof_required: true|false and browser_proof_rationale to PLAN.md frontmatter.';
@@ -301,27 +377,122 @@ function browserProofFixHint(code) {
   if (code === 'incomplete_browser_proof_observation') {
     return 'Complete the Browser Proof Observation fields or narrow the proof claim.';
   }
+  if (code === 'failed_browser_proof_observation') {
+    return 'Record a passing browser-proof observation, or narrow the claim and leave verification blocked.';
+  }
+  if (code === 'unsupported_browser_proof_evidence_kind') {
+    return 'Use Evidence kind: runtime or Evidence kind: test for browser proof, or narrow the claim.';
+  }
+  if (code === 'overbroad_browser_proof_claim') {
+    return 'Narrow Claim limit to the exact route, state, viewport, and behavior actually observed.';
+  }
+  if (code === 'invalid_browser_proof_observation_link') {
+    return 'Link browser-proof observation records as repo-local regular files inside this workspace.';
+  }
   if (code === 'unmatched_browser_proof_observation') {
-    return 'When multiple required browser-proof plans exist, add a Plan field to each Browser Proof Observation that names the matching PLAN.md artifact.';
+    return 'Add a Plan field to each Browser Proof Observation that names the exact required PLAN.md artifact.';
   }
   return 'Complete the Browser Proof Plan fields or narrow the proof claim.';
 }
 
 function evaluateBrowserProofContract(planContent, planPath) {
   const frontmatter = extractFrontmatter(planContent);
-  const requiredRaw = readTopLevelScalar(frontmatter, 'browser_proof_required');
-  const rationale = readTopLevelScalar(frontmatter, 'browser_proof_rationale');
-  const declarationPresent = requiredRaw !== null || rationale !== null;
+  let requiredRaw = readTopLevelScalar(frontmatter, 'browser_proof_required');
+  let rationale = readTopLevelScalar(frontmatter, 'browser_proof_rationale');
+  let declarationPresent = requiredRaw !== null || rationale !== null;
+  const legacySlots = legacyUiProofSlotsState(frontmatter);
+  const legacyRationale = readTopLevelScalar(frontmatter, 'no_ui_proof_rationale');
+  const legacyNoUiCompatible = !declarationPresent
+    && legacySlots === 'empty'
+    && isMeaningfulFieldValue(legacyRationale);
   const retiredKeys = ['ui_proof_slots', 'no_ui_proof_rationale', 'proof_bundle_version', 'claim_limits']
     .filter((key) => hasTopLevelKey(frontmatter, key));
   const blockers = [];
+  const warnings = [];
 
-  if (retiredKeys.length > 0) {
+  if (declarationPresent && retiredKeys.length > 0) {
+    blockers.push({
+      code: 'conflicting_browser_proof_contract',
+      severity: 'blocker',
+      path: planPath,
+      message: `PLAN.md mixes new browser-proof field(s) with retired field(s): ${retiredKeys.join(', ')}.`,
+      fix_hint: browserProofFixHint('conflicting_browser_proof_contract'),
+    });
+    return {
+      path: planPath,
+      declaration_present: declarationPresent,
+      required: null,
+      rationale,
+      legacy_compatible: false,
+      satisfied: false,
+      warnings,
+      blockers,
+    };
+  }
+
+  if (!declarationPresent && legacySlots === 'present') {
+    blockers.push({
+      code: 'legacy_browser_proof_slots_require_migration',
+      severity: 'blocker',
+      path: planPath,
+      message: 'PLAN.md uses legacy non-empty ui_proof_slots; migrate them to browser_proof_required plus a Browser Proof Plan before verification.',
+      fix_hint: browserProofFixHint('legacy_browser_proof_slots_require_migration'),
+    });
+    return {
+      path: planPath,
+      declaration_present: false,
+      required: null,
+      rationale: legacyRationale,
+      legacy_compatible: false,
+      satisfied: false,
+      warnings,
+      blockers,
+    };
+  }
+
+  if (!declarationPresent && legacySlots === 'empty' && !isMeaningfulFieldValue(legacyRationale)) {
+    blockers.push({
+      code: 'missing_browser_proof_rationale',
+      severity: 'blocker',
+      path: planPath,
+      message: 'Legacy ui_proof_slots: [] requires a meaningful no_ui_proof_rationale, or migration to browser_proof_required/browser_proof_rationale.',
+      fix_hint: browserProofFixHint('missing_browser_proof_rationale'),
+    });
+    return {
+      path: planPath,
+      declaration_present: false,
+      required: null,
+      rationale: legacyRationale,
+      legacy_compatible: false,
+      satisfied: false,
+      warnings,
+      blockers,
+    };
+  }
+
+  if (legacyNoUiCompatible) {
+    requiredRaw = 'false';
+    rationale = legacyRationale;
+    declarationPresent = true;
+    warnings.push({
+      code: 'legacy_browser_proof_contract',
+      severity: 'warning',
+      path: planPath,
+      message: 'PLAN.md uses legacy no-UI proof frontmatter; treating it as browser_proof_required: false for compatibility.',
+      fix_hint: browserProofFixHint('legacy_browser_proof_contract'),
+    });
+  }
+
+  const blockingRetiredKeys = legacyNoUiCompatible
+    ? retiredKeys.filter((key) => key !== 'ui_proof_slots' && key !== 'no_ui_proof_rationale')
+    : retiredKeys;
+
+  if (blockingRetiredKeys.length > 0) {
     blockers.push({
       code: 'retired_browser_proof_contract',
       severity: 'blocker',
       path: planPath,
-      message: `PLAN.md uses retired browser-proof field(s): ${retiredKeys.join(', ')}.`,
+      message: `PLAN.md uses retired browser-proof field(s): ${blockingRetiredKeys.join(', ')}.`,
       fix_hint: browserProofFixHint('retired_browser_proof_contract'),
     });
   }
@@ -339,7 +510,9 @@ function evaluateBrowserProofContract(planContent, planPath) {
       declaration_present: false,
       required: null,
       rationale: null,
+      legacy_compatible: false,
       satisfied: false,
+      warnings,
       blockers,
     };
   }
@@ -389,6 +562,15 @@ function evaluateBrowserProofContract(planContent, planPath) {
       if (!hasEvidenceCommand && !hasNoCommandRationale) {
         missingFields.push('Evidence command or No-command rationale');
       }
+      if (!hasSupportedBrowserProofEvidenceKind(section)) {
+        missingFields.push('Evidence kind');
+      }
+      if (!hasPrivacySafetyNote(section)) {
+        missingFields.push('Privacy/safety');
+      }
+      if (!isBoundedBrowserProofClaim(section)) {
+        missingFields.push('bounded Claim limit');
+      }
       if (missingFields.length > 0) {
         blockers.push({
           code: 'incomplete_browser_proof_plan',
@@ -406,7 +588,9 @@ function evaluateBrowserProofContract(planContent, planPath) {
     declaration_present: declarationPresent,
     required,
     rationale,
+    legacy_compatible: legacyNoUiCompatible,
     satisfied: blockers.length === 0,
+    warnings,
     blockers,
   };
 }
@@ -416,48 +600,154 @@ function sanitizeLinkedObservationPath(value) {
   const markdownLink = text.match(/^\[[^\]]+\]\(([^)]+)\)$/);
   if (markdownLink) text = markdownLink[1].trim();
   text = text.replace(/^`|`$/g, '').trim();
-  if (/^[a-z]+:\/\//i.test(text)) return '';
   return text;
+}
+
+function isInsidePath(parent, child) {
+  const relativePath = relative(resolve(parent), resolve(child));
+  return relativePath === '' || (!!relativePath && !relativePath.startsWith('..') && !isAbsolute(relativePath));
 }
 
 function readLinkedObservationRecords(summaryContent, summaryFullPath, workspaceRoot) {
   const records = [];
+  const blockers = [];
   const matcher = /^\s*(?:[-*]\s*)?(?:Browser Proof Observation|Browser proof observation|Observation record|Browser proof record):\s*(.+)$/gim;
   let match;
   while ((match = matcher.exec(String(summaryContent || '')))) {
     const linkedPath = sanitizeLinkedObservationPath(match[1]);
     if (!linkedPath) continue;
-    const candidates = isAbsolute(linkedPath)
-      ? [linkedPath]
-      : [join(dirname(summaryFullPath), linkedPath), join(workspaceRoot, linkedPath)];
+    if (/^[a-z]+:\/\//i.test(linkedPath)) {
+      blockers.push({
+        code: 'invalid_browser_proof_observation_link',
+        severity: 'blocker',
+        path: linkedPath,
+        message: 'Browser Proof Observation link must be a repo-local relative file path, not a URL.',
+        fix_hint: browserProofFixHint('invalid_browser_proof_observation_link'),
+      });
+      continue;
+    }
+    if (isAbsolute(linkedPath)) {
+      blockers.push({
+        code: 'invalid_browser_proof_observation_link',
+        severity: 'blocker',
+        path: linkedPath,
+        message: 'Browser Proof Observation link must be a repo-local relative file path.',
+        fix_hint: browserProofFixHint('invalid_browser_proof_observation_link'),
+      });
+      continue;
+    }
+
+    const candidates = [resolve(dirname(summaryFullPath), linkedPath), resolve(workspaceRoot, linkedPath)]
+      .filter((candidate, index, list) => list.indexOf(candidate) === index);
     const existingPath = candidates.find((candidate) => existsSync(candidate));
-    if (existingPath) records.push(readFileSync(existingPath, 'utf-8'));
+    if (!existingPath) {
+      blockers.push({
+        code: 'invalid_browser_proof_observation_link',
+        severity: 'blocker',
+        path: linkedPath,
+        message: 'Browser Proof Observation link does not resolve to an existing file in this workspace.',
+        fix_hint: browserProofFixHint('invalid_browser_proof_observation_link'),
+      });
+      continue;
+    }
+    try {
+      const realWorkspaceRoot = realpathSync(workspaceRoot);
+      const realExistingPath = realpathSync(existingPath);
+      if (!isInsidePath(realWorkspaceRoot, realExistingPath)) {
+        blockers.push({
+          code: 'invalid_browser_proof_observation_link',
+          severity: 'blocker',
+          path: linkedPath,
+          message: 'Browser Proof Observation link resolves outside this workspace.',
+          fix_hint: browserProofFixHint('invalid_browser_proof_observation_link'),
+        });
+        continue;
+      }
+      const stat = statSync(existingPath);
+      if (!stat.isFile()) {
+        blockers.push({
+          code: 'invalid_browser_proof_observation_link',
+          severity: 'blocker',
+          path: linkedPath,
+          message: 'Browser Proof Observation link must resolve to a regular file.',
+          fix_hint: browserProofFixHint('invalid_browser_proof_observation_link'),
+        });
+        continue;
+      }
+      records.push(readFileSync(existingPath, 'utf-8'));
+    } catch (error) {
+      blockers.push({
+        code: 'invalid_browser_proof_observation_link',
+        severity: 'blocker',
+        path: linkedPath,
+        message: `Browser Proof Observation link could not be read: ${error.code || error.message}.`,
+        fix_hint: browserProofFixHint('invalid_browser_proof_observation_link'),
+      });
+    }
   }
-  return records;
+  return { records, blockers };
 }
 
 function findBrowserProofObservationSections(summaryContent, summaryFullPath, workspaceRoot) {
-  return [
-    ...extractMarkdownSections(summaryContent, 'Browser Proof Observation'),
-    ...readLinkedObservationRecords(summaryContent, summaryFullPath, workspaceRoot)
-      .flatMap((record) => extractMarkdownSections(record, 'Browser Proof Observation')),
-  ].filter(Boolean);
+  const linked = readLinkedObservationRecords(summaryContent, summaryFullPath, workspaceRoot);
+  return {
+    sections: [
+      ...extractMarkdownSections(summaryContent, 'Browser Proof Observation'),
+      ...linked.records
+        .flatMap((record) => extractMarkdownSections(record, 'Browser Proof Observation')),
+    ].filter(Boolean),
+    blockers: linked.blockers,
+  };
 }
 
-function isCompleteBrowserProofObservation(section) {
+function browserProofObservationIssues(section) {
   const requiredFieldSets = [
     ['Flow', 'Routes/states'],
     ['Viewports'],
     ['Runtime path'],
+    ['Evidence kind', 'Evidence kinds'],
     ['Evidence command', 'No-command rationale'],
     ['Observed', 'Observations'],
     ['Artifacts'],
     ['Result'],
     ['Claim limit'],
   ];
-  return requiredFieldSets.every((labels) => (
-    labels.some((label) => nonEmptyField(section, label))
-  ));
+  const missingFields = requiredFieldSets
+    .filter((labels) => !labels.some((label) => nonEmptyField(section, label)))
+    .map((labels) => labels.join(' or '));
+  if (!hasPrivacySafetyNote(section)) {
+    missingFields.push('Privacy/safety');
+  }
+  const issues = missingFields.length > 0
+    ? [{
+        code: 'incomplete_browser_proof_observation',
+        missingFields,
+        message: `Browser Proof Observation is missing required observed-proof field(s): ${missingFields.join(', ')}.`,
+      }]
+    : [];
+  if (!hasSupportedBrowserProofEvidenceKind(section)) {
+    issues.push({
+      code: 'unsupported_browser_proof_evidence_kind',
+      message: 'Browser Proof Observation evidence kind must include runtime or test.',
+    });
+  }
+  if (!hasPassingBrowserProofResult(section)) {
+    issues.push({
+      code: 'failed_browser_proof_observation',
+      message: 'Browser Proof Observation result is not an explicit pass.',
+    });
+  }
+  if (!isBoundedBrowserProofClaim(section)) {
+    issues.push({
+      code: 'overbroad_browser_proof_claim',
+      message: 'Browser Proof Observation claim limit is missing or too broad.',
+    });
+  }
+  return issues;
+}
+
+function isCompleteBrowserProofObservation(section) {
+  return browserProofObservationIssues(section).length === 0;
 }
 
 function normalizeArtifactReference(value) {
@@ -469,13 +759,12 @@ function observationReferencesPlan(section, planPath) {
     || sectionFieldValue(section, 'Plan artifact')
     || sectionFieldValue(section, 'PLAN');
   if (!isMeaningfulFieldValue(planReference)) return false;
-  const normalizedReference = normalizeArtifactReference(planReference);
+  const normalizedReferences = normalizeArtifactReference(planReference)
+    .split(/[\n,;]+/)
+    .map((reference) => reference.trim().replace(/^\.\//, ''))
+    .filter(Boolean);
   const normalizedPlanPath = normalizeArtifactReference(planPath);
-  const normalizedPlanName = normalizeArtifactReference(basename(planPath));
-  return normalizedReference === normalizedPlanPath
-    || normalizedReference === normalizedPlanName
-    || normalizedReference.includes(normalizedPlanPath)
-    || normalizedReference.includes(normalizedPlanName);
+  return normalizedReferences.some((reference) => reference === normalizedPlanPath);
 }
 
 function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, phasesDir, workspaceRoot) {
@@ -484,6 +773,7 @@ function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, p
     return {
       satisfied: true,
       sections: [],
+      warnings: [],
       blockers: [],
     };
   }
@@ -491,17 +781,28 @@ function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, p
   const sections = matchingSummaries.flatMap((summaryPath) => {
     const summaryFullPath = join(phasesDir, summaryPath);
     if (!existsSync(summaryFullPath)) return [];
-    return findBrowserProofObservationSections(
+    const found = findBrowserProofObservationSections(
       readFileSync(summaryFullPath, 'utf-8'),
       summaryFullPath,
       workspaceRoot
     );
+    return found.sections.map((section) => ({ section, summaryPath }));
+  });
+  const linkBlockers = matchingSummaries.flatMap((summaryPath) => {
+    const summaryFullPath = join(phasesDir, summaryPath);
+    if (!existsSync(summaryFullPath)) return [];
+    return findBrowserProofObservationSections(
+      readFileSync(summaryFullPath, 'utf-8'),
+      summaryFullPath,
+      workspaceRoot
+    ).blockers.map((blocker) => ({ ...blocker, path: `${summaryPath}: ${blocker.path}` }));
   });
 
-  if (sections.length === 0) {
+  if (sections.length === 0 && linkBlockers.length === 0) {
     return {
       satisfied: false,
       sections,
+      warnings: [],
       blockers: [{
         code: 'missing_browser_proof_observation',
         severity: 'blocker',
@@ -512,50 +813,50 @@ function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, p
     };
   }
 
-  const completeSections = sections.filter((section) => isCompleteBrowserProofObservation(section));
+  const issueBlockers = sections.flatMap(({ section, summaryPath }) => (
+    browserProofObservationIssues(section).map((issue) => ({
+      code: issue.code,
+      severity: 'blocker',
+      path: summaryPath,
+      message: issue.message,
+      fix_hint: browserProofFixHint(issue.code),
+    }))
+  ));
+  const completeSections = sections.filter(({ section }) => isCompleteBrowserProofObservation(section));
   if (completeSections.length === 0) {
     return {
       satisfied: false,
-      sections,
-      blockers: [{
-        code: 'incomplete_browser_proof_observation',
-        severity: 'blocker',
-        path: matchingSummaries.join(', '),
-        message: 'Browser Proof Observation is missing required observed-proof fields.',
-        fix_hint: browserProofFixHint('incomplete_browser_proof_observation'),
-      }],
-    };
-  }
-
-  if (requiredPlans.length === 1) {
-    return {
-      satisfied: true,
-      sections,
-      blockers: [],
+      sections: sections.map(({ section }) => section),
+      warnings: [],
+      blockers: [...linkBlockers, ...issueBlockers],
     };
   }
 
   const unmatchedPlans = requiredPlans.filter((plan) => (
-    !completeSections.some((section) => observationReferencesPlan(section, plan.path))
+    !completeSections.some(({ section }) => observationReferencesPlan(section, plan.path))
   ));
-  if (unmatchedPlans.length === 0) {
+  const unmatchedBlockers = unmatchedPlans.map((plan) => ({
+    code: 'unmatched_browser_proof_observation',
+    severity: 'blocker',
+    path: plan.path,
+    message: `No complete Browser Proof Observation references required plan ${plan.path}.`,
+    fix_hint: browserProofFixHint('unmatched_browser_proof_observation'),
+  }));
+  const blockers = [...linkBlockers, ...issueBlockers, ...unmatchedBlockers];
+  if (blockers.length === 0) {
     return {
       satisfied: true,
-      sections,
+      sections: sections.map(({ section }) => section),
+      warnings: [],
       blockers: [],
     };
   }
 
   return {
     satisfied: false,
-    sections,
-    blockers: unmatchedPlans.map((plan) => ({
-      code: 'unmatched_browser_proof_observation',
-      severity: 'blocker',
-      path: plan.path,
-      message: `No complete Browser Proof Observation references required plan ${plan.path}.`,
-      fix_hint: browserProofFixHint('unmatched_browser_proof_observation'),
-    })),
+    sections: sections.map(({ section }) => section),
+    warnings: [],
+    blockers,
   };
 }
 
@@ -804,6 +1105,7 @@ export function buildPhaseVerificationReport(...args) {
           required: null,
           rationale: null,
           satisfied: true,
+          warnings: [],
           blockers: [],
         };
   });
@@ -816,6 +1118,10 @@ export function buildPhaseVerificationReport(...args) {
   const browserProofBlockers = [
     ...browserProofPlans.flatMap((plan) => plan.blockers),
     ...browserProofObservationStatus.blockers,
+  ];
+  const browserProofWarnings = [
+    ...browserProofPlans.flatMap((plan) => plan.warnings || []),
+    ...(browserProofObservationStatus.warnings || []),
   ];
   const artifactStatus = evaluatePlanArtifacts(artifacts);
   const legacyVerified = matchingPlans.length > 0 && matchingSummaries.length > 0;
@@ -841,6 +1147,7 @@ export function buildPhaseVerificationReport(...args) {
       satisfied: browserProofBlockers.length === 0,
       plans: browserProofPlans,
       observations: browserProofObservationStatus,
+      warnings: browserProofWarnings,
       blockers: browserProofBlockers,
     },
     verified: closureVerified,
