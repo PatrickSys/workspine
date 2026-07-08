@@ -5,11 +5,15 @@ import {
   getRuntimeFreshnessRepairGuidance,
   summarizeRuntimeFreshnessIssues,
 } from './runtime-freshness.mjs';
-import { checkDrift } from './session-fingerprint.mjs';
 
-export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10', 'W11', 'W12'];
+export const TRUTH_CHECK_IDS = ['W7', 'W8', 'W9', 'W10', 'W11'];
+
+function statePath(stateDirName, relativePath = '') {
+  return relativePath ? `${stateDirName}/${relativePath}` : stateDirName;
+}
 
 export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, options = {}) {
+  const stateDirName = options.stateDirName || '.work';
   const warnings = [];
   const designPath = join(frameworkDir, 'distilled', 'DESIGN.md');
   const readmePath = join(frameworkDir, 'distilled', 'README.md');
@@ -85,7 +89,7 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, option
         id: 'W10',
         severity: 'WARN',
         message: `ROADMAP/SPEC requirement status drift (${mismatches.join('; ')})`,
-        fix: 'Reconcile .planning/ROADMAP.md phase completion markers with .planning/SPEC.md requirement checkboxes',
+        fix: `Reconcile ${statePath(stateDirName, 'ROADMAP.md')} phase completion markers with ${statePath(stateDirName, 'SPEC.md')} requirement checkboxes`,
       });
     }
   }
@@ -97,16 +101,6 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, option
       message: `Renderer-backed generated runtime and workflow-helper surfaces drift from current render output (${summarizeRuntimeFreshnessIssues(options.runtimeFreshnessReport)})`,
       fix: getRuntimeFreshnessRepairGuidance(options.runtimeFreshnessReport),
     });
-  }
-
-  const drift = checkDrift(planningDir);
-  if (drift.drifted) {
-    warnings.push({
-      id: 'W12',
-      severity: 'WARN',
-      message: `Planning state drifted since last recorded session (${drift.details.join('; ')})`,
-        fix: 'Review the changed planning files. If the drift is intentional, rebaseline with `node .planning/bin/gsdd.mjs session-fingerprint write`, then rerun the blocked lifecycle preflight.',
-      });
   }
 
   return warnings;
@@ -156,6 +150,7 @@ function extractRepoLocalPaths(content) {
     'CHANGELOG.md',
     'SPEC.md',
     'package.json',
+    '.work/',
     '.planning/',
     '.internal-research/',
     '.agents/',

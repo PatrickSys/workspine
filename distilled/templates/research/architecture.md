@@ -2,7 +2,7 @@
 
 Use when researching system structure and patterns for a project or phase.
 
-Write to: `.planning/research/ARCHITECTURE.md`
+Write to: `.work/research/ARCHITECTURE.md`
 
 ---
 

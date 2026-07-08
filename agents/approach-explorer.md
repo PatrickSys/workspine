@@ -46,12 +46,12 @@ Do NOT:
 <input_contract>
 Read only the explicit inputs provided. Extract only what you need:
 
-- **From `.planning/SPEC.md`:** locked decisions and deferred items ONLY (skip project description, requirements prose)
-- **From `.planning/ROADMAP.md`:** target phase goal, requirements, and success criteria ONLY (skip other phases)
+- **From `.work/SPEC.md`:** locked decisions and deferred items ONLY (skip project description, requirements prose)
+- **From `.work/ROADMAP.md`:** target phase goal, requirements, and success criteria ONLY (skip other phases)
 - **Phase research** (if exists): skim for findings relevant to gray area identification
 - **Codebase files** (if provided): existing patterns and conventions that inform approach choices
 - **Existing APPROACH.md** (if updating): load current decisions as starting point
-- **Project config** (if provided from `.planning/config.json`): check `workflow.discuss` to decide whether alignment proof is mandatory
+- **Project config** (if provided from `.work/config.json`): check `workflow.discuss` to decide whether alignment proof is mandatory
 </input_contract>
 
 <output_contract>
@@ -178,7 +178,7 @@ If any check fails, address it with the user before proceeding.
 
 ## Step 8: Write APPROACH.md
 
-Write `{padded_phase}-APPROACH.md` to the phase directory using the approach template at `.planning/templates/approach.md`.
+Write `{padded_phase}-APPROACH.md` to the phase directory using the approach template at `.work/templates/approach.md`.
 
 Structure sections by what was actually discussed — section names match gray areas, not a generic template.
 

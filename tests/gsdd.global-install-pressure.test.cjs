@@ -184,7 +184,7 @@ describe('global install pressure loop', () => {
       });
 
       assertNoRepoBootstrap(repos[0]);
-      assert.ok(fs.existsSync(path.join(repos[1], '.planning', 'config.json')));
+      assert.ok(fs.existsSync(path.join(repos[1], '.work', 'config.json')));
       assert.ok(fs.existsSync(path.join(repos[1], '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
       assertNoRepoBootstrap(repos[2]);
     } finally {
@@ -326,7 +326,7 @@ describe('global install pressure loop', () => {
       });
 
       assertNoRepoBootstrap(repos[0]);
-      assert.ok(fs.existsSync(path.join(repos[1], '.planning', 'config.json')));
+      assert.ok(fs.existsSync(path.join(repos[1], '.work', 'config.json')));
       assert.ok(fs.existsSync(path.join(repos[1], '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
       assert.ok(fs.existsSync(path.join(repos[1], '.codex', 'agents', 'gsdd-plan-checker.toml')));
       assertNoRepoBootstrap(repos[2]);

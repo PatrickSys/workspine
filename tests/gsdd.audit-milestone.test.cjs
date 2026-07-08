@@ -56,7 +56,7 @@ describe('gsdd audit-milestone', () => {
       restoreStdin();
     }
 
-    const rolePath = path.join(tmpDir, '.planning', 'templates', 'roles', 'integration-checker.md');
+    const rolePath = path.join(tmpDir, '.work', 'templates', 'roles', 'integration-checker.md');
     assert.ok(fs.existsSync(rolePath), 'integration-checker role must be distributed');
 
     const content = fs.readFileSync(rolePath, 'utf-8');
@@ -136,7 +136,7 @@ describe('gsdd audit-milestone', () => {
       restoreStdin();
     }
 
-    const rolePath = path.join(tmpDir, '.planning', 'templates', 'roles', 'integration-checker.md');
+    const rolePath = path.join(tmpDir, '.work', 'templates', 'roles', 'integration-checker.md');
     const content = fs.readFileSync(rolePath, 'utf-8');
     assert.match(content, /Step 4a/,
       'integration-checker role must include Step 4a matrix-driven verification');

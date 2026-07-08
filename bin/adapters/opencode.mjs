@@ -6,6 +6,7 @@ import {
   MAX_CHECKER_CYCLES,
   CHECKER_STATUSES,
 } from '../lib/plan-constants.mjs';
+import { localizeStateDirReferences } from '../lib/rendering.mjs';
 
 function expandHome(filePath) {
   if (!filePath) return filePath;
@@ -145,8 +146,8 @@ ${delegateContent.trim()}
 `;
 }
 
-function renderOpenCodePlanCommand({ skillPath = '.agents/skills/gsdd-plan/SKILL.md' } = {}) {
-  return `---
+function renderOpenCodePlanCommand({ skillPath = '.agents/skills/gsdd-plan/SKILL.md', stateDirName = '.work' } = {}) {
+  const content = `---
 description: OpenCode-native phase planning with fresh-context plan checking for GSDD
 subtask: false
 ---
@@ -165,25 +166,25 @@ Native OpenCode adapter rule:
 - Do NOT claim that other runtimes have the same behavior unless their own adapters explicitly implement and prove it.
 
 Execution flow:
-1. Read \`.planning/SPEC.md\`, \`.planning/ROADMAP.md\`, \`.planning/config.json\`, relevant phase research, and any existing phase plan files.
+1. Read \`.work/SPEC.md\`, \`.work/ROADMAP.md\`, \`.work/config.json\`, relevant phase research, and any existing phase plan files.
 2. Resolve the target phase from the command arguments. If no phase is provided, choose the first roadmap phase that is not complete.
 3. **Approach exploration** (before planning):
-   a. Check \`.planning/config.json\` for \`workflow.discuss\`. If \`false\` or missing, skip to step 4 and report \`reduced_alignment\` in the summary.
+   a. Check \`.work/config.json\` for \`workflow.discuss\`. If \`false\` or missing, skip to step 4 and report \`reduced_alignment\` in the summary.
    b. Check if \`{phase_dir}/{padded_phase}-APPROACH.md\` exists. If it does, offer the user: "Use existing" / "Update it" / "View it". If "Use existing", load decisions, then validate the alignment proof before step 4; proofless or invalid existing APPROACH.md must be updated, not silently trusted.
-   c. If no APPROACH.md exists (or user chose "Update"): invoke the \`gsdd-approach-explorer\` subagent with the phase goal, requirement IDs, project config from \`.planning/config.json\` (especially \`workflow.discuss\`), SPEC locked decisions, phase research, and relevant codebase files.
+   c. If no APPROACH.md exists (or user chose "Update"): invoke the \`gsdd-approach-explorer\` subagent with the phase goal, requirement IDs, project config from \`.work/config.json\` (especially \`workflow.discuss\`), SPEC locked decisions, phase research, and relevant codebase files.
    d. The explorer runs a GSD-style interactive conversation with the user (gray areas, research, deep-dive questions, assumptions) and writes APPROACH.md.
    e. Before planning, confirm APPROACH.md records all canonical proof fields: \`alignment_status\`, \`alignment_method\`, \`user_confirmed_at\`, \`explicit_skip_approved\`, \`skip_scope\`, \`skip_rationale\`, and \`confirmed_decisions\`. For \`alignment_status: user_confirmed\`, \`confirmed_decisions\` must name the locked decisions and skip fields may be \`false\`/\`N/A\`; for \`alignment_status: approved_skip\`, \`explicit_skip_approved: true\`, \`skip_scope\`, and \`skip_rationale\` must be substantive. Agent-only "No questions needed" is not valid proof under \`workflow.discuss: true\`.
    f. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
 4. Produce the initial phase plan according to \`${skillPath}\`. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
-5. If \`.planning/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the step 3 alignment-proof gate when \`workflow.discuss: true\`.
+5. If \`.work/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the step 3 alignment-proof gate when \`workflow.discuss: true\`.
 6. If \`workflow.planCheck: true\`, invoke the hidden \`gsdd-plan-checker\` subagent with fresh context.
 7. Pass only explicit inputs to the checker:
    - target phase goal and requirement IDs
-   - relevant locked decisions / deferred items from \`.planning/SPEC.md\`
-   - project config from \`.planning/config.json\`, especially \`workflow.discuss\` and \`workflow.planCheck\`
-   - approach decisions from \`.planning/phases/*-APPROACH.md\` (if exists)
+   - relevant locked decisions / deferred items from \`.work/SPEC.md\`
+   - project config from \`.work/config.json\`, especially \`workflow.discuss\` and \`workflow.planCheck\`
+   - approach decisions from \`.work/phases/*-APPROACH.md\` (if exists)
    - relevant phase research file(s)
-   - produced \`.planning/phases/*-PLAN.md\` file(s)
+   - produced \`.work/phases/*-PLAN.md\` file(s)
 8. Require the checker to return a single JSON object with this shape:
    {
      "status": "issues_found",
@@ -213,11 +214,13 @@ Return a concise orchestration summary:
 
 Never return raw checker JSON without summarizing it.
 `;
+  return localizeStateDirReferences(content, { stateDirName });
 }
 
 function createOpenCodeAdapter({
   cwd,
   workflows,
+  stateDirName = '.work',
   renderOpenCodeCommandContent,
   getDelegateContent,
   getRuntimeModelOverride,
@@ -247,8 +250,8 @@ function createOpenCodeAdapter({
       mkdirSync(commandsDir, { recursive: true });
       for (const workflow of workflows) {
         const content = workflow.name === 'gsdd-plan'
-          ? renderOpenCodePlanCommand()
-          : renderOpenCodeCommandContent(workflow);
+          ? renderOpenCodePlanCommand({ stateDirName })
+          : renderOpenCodeCommandContent(workflow, { stateDirName });
         writeFileSync(
           join(commandsDir, `${workflow.name}.md`),
           content

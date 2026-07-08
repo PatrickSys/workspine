@@ -1,7 +1,7 @@
 <role>
 You are a Codebase Mapper Orchestrator. You analyze an existing codebase using 4 specialized mapper delegates, each focused on one dimension. The delegates write their documents directly -- you only coordinate, validate, and synthesize a bounded brownfield routing summary from their results.
 
-Output: `.planning/codebase/` with 4 structured documents about the codebase state.
+Output: `.work/codebase/` with 4 structured documents about the codebase state.
 </role>
 
 <when_to_use>
@@ -21,22 +21,22 @@ Do NOT use when:
 <load_context>
 ### 1. Read Config
 
-Read `.planning/config.json` to extract:
+Read `.work/config.json` to extract:
 - `parallelization` -- determines whether mappers run in parallel or sequentially
 - `commitDocs` -- determines whether to commit generated documents
 
-If `.planning/config.json` does not exist, assume `parallelization: true` and `commitDocs: false` (safe default -- do not commit potentially sensitive codebase documents without explicit opt-in).
+If `.work/config.json` does not exist, assume `parallelization: true` and `commitDocs: false` (safe default -- do not commit potentially sensitive codebase documents without explicit opt-in).
 </load_context>
 
 <check_existing>
 ### 2. Check Existing Maps
 
-Check whether `.planning/codebase/STACK.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/CONVENTIONS.md`, or `.planning/codebase/CONCERNS.md` already exist and contain content.
+Check whether `.work/codebase/STACK.md`, `.work/codebase/ARCHITECTURE.md`, `.work/codebase/CONVENTIONS.md`, or `.work/codebase/CONCERNS.md` already exist and contain content.
 
 **If maps exist, present the user with three options:**
 
 ```
-.planning/codebase/ already exists with these documents:
+.work/codebase/ already exists with these documents:
 [List files found with sizes]
 
 Options:
@@ -47,7 +47,7 @@ Options:
 
 Wait for user response.
 
-- **Refresh**: Delete all files in `.planning/codebase/`, continue to mapping step.
+- **Refresh**: Delete all files in `.work/codebase/`, continue to mapping step.
 - **Update**: Ask which documents to regenerate (STACK, ARCHITECTURE, CONVENTIONS, CONCERNS), then continue to mapping step with only the selected delegates.
 - **Skip**: End workflow. Inform user maps are unchanged.
 
@@ -83,55 +83,55 @@ Wait for user response.
 <mapping>
 ### 3. Spawn Mapper Delegates
 
-Ensure `.planning/codebase/` directory exists before spawning.
+Ensure `.work/codebase/` directory exists before spawning.
 
 **If `parallelization: true` and your platform supports parallel execution -- run all selected mappers in parallel.**
 **If `parallelization: false` or your platform lacks parallel execution -- run the same mappers sequentially.**
 
 ```
 Spawning codebase mappers...
-  -> Tech mapper     -> .planning/codebase/STACK.md
-  -> Arch mapper     -> .planning/codebase/ARCHITECTURE.md
-  -> Quality mapper  -> .planning/codebase/CONVENTIONS.md
-  -> Concerns mapper -> .planning/codebase/CONCERNS.md
+  -> Tech mapper     -> .work/codebase/STACK.md
+  -> Arch mapper     -> .work/codebase/ARCHITECTURE.md
+  -> Quality mapper  -> .work/codebase/CONVENTIONS.md
+  -> Concerns mapper -> .work/codebase/CONCERNS.md
 ```
 
 <delegate>
 Agent: TechMapper
-Parallel: (use parallelization value from .planning/config.json)
+Parallel: (use parallelization value from .work/config.json)
 Context: Current working directory. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/mapper-tech.md` for full task instructions. Follow them exactly.
-Output: `.planning/codebase/STACK.md`
+Instruction: Read `.work/templates/delegates/mapper-tech.md` for full task instructions. Follow them exactly.
+Output: `.work/codebase/STACK.md`
 Return: Routing summary to Orchestrator (100-200 tokens); full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3. No static dumps. Never read .env contents.
 </delegate>
 
 <delegate>
 Agent: ArchMapper
-Parallel: (use parallelization value from .planning/config.json)
+Parallel: (use parallelization value from .work/config.json)
 Context: Current working directory. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/mapper-arch.md` for full task instructions. Follow them exactly.
-Output: `.planning/codebase/ARCHITECTURE.md`
+Instruction: Read `.work/templates/delegates/mapper-arch.md` for full task instructions. Follow them exactly.
+Output: `.work/codebase/ARCHITECTURE.md`
 Return: Routing summary to Orchestrator (100-200 tokens); full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3. No static directory dumps. Never read .env contents.
 </delegate>
 
 <delegate>
 Agent: QualityMapper
-Parallel: (use parallelization value from .planning/config.json)
+Parallel: (use parallelization value from .work/config.json)
 Context: Current working directory. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/mapper-quality.md` for full task instructions. Follow them exactly.
-Output: `.planning/codebase/CONVENTIONS.md`
+Instruction: Read `.work/templates/delegates/mapper-quality.md` for full task instructions. Follow them exactly.
+Output: `.work/codebase/CONVENTIONS.md`
 Return: Routing summary to Orchestrator (100-200 tokens); full findings stay in the output artifact.
 Guardrails: Max Agent Hops = 3. Rules not inventories. Never read .env contents.
 </delegate>
 
 <delegate>
 Agent: ConcernsMapper
-Parallel: (use parallelization value from .planning/config.json)
+Parallel: (use parallelization value from .work/config.json)
 Context: Current working directory. DO NOT share conversation history.
-Instruction: Read `.planning/templates/delegates/mapper-concerns.md` for full task instructions. Follow them exactly. Hard stop if secrets found -- report immediately.
-Output: `.planning/codebase/CONCERNS.md`
+Instruction: Read `.work/templates/delegates/mapper-concerns.md` for full task instructions. Follow them exactly. Hard stop if secrets found -- report immediately.
+Output: `.work/codebase/CONCERNS.md`
 Return: Routing summary to Orchestrator (100-200 tokens); full findings stay in the output artifact. If secrets found, STOP and report immediately.
 Guardrails: Max Agent Hops = 3. Hard stop on secrets. Never read .env contents.
 </delegate>
@@ -163,7 +163,7 @@ These 4 documents are consumed by downstream GSDD workflows:
 
 After all mappers complete, verify:
 
-- [ ] All 4 documents exist in `.planning/codebase/` (L1: exists)
+- [ ] All 4 documents exist in `.work/codebase/` (L1: exists)
 - [ ] No document is empty or trivially short — each must exceed 20 non-empty lines (L2: substantive)
 - [ ] Each document contains actual file path references in backtick format — not generic advice (L2: specificity)
 - [ ] STACK.md names at least 2 concrete technologies with version information (L2: specificity)
@@ -180,7 +180,7 @@ If any check fails, note the specific failure and inform the user which document
 
 **CRITICAL SECURITY CHECK:** Scan all generated documents for accidentally leaked secrets before committing.
 
-Search `.planning/codebase/*.md` for these patterns (use your platform's search/grep capability):
+Search `.work/codebase/*.md` for these patterns (use your platform's search/grep capability):
 
 **Reference patterns (regex):**
 - `sk-[a-zA-Z0-9]{20,}` | `sk_live_[a-zA-Z0-9]+` | `sk_test_[a-zA-Z0-9]+` -- Stripe/OpenAI keys
@@ -218,11 +218,11 @@ Wait for user confirmation before continuing.
 <commit>
 ### 6. Commit (if configured)
 
-Read `commitDocs` from `.planning/config.json`.
+Read `commitDocs` from `.work/config.json`.
 
 **If `commitDocs: true`:** Commit the generated codebase documents.
 Suggested commit message: `docs: map existing codebase`
-Files: `.planning/codebase/*.md`
+Files: `.work/codebase/*.md`
 
 **If `commitDocs: false`:** Skip commit. Documents remain local-only.
 </commit>
@@ -231,7 +231,7 @@ Files: `.planning/codebase/*.md`
 Report to the user what was accomplished, then present the next step:
 
 ---
-**Completed:** Codebase mapping — 4 documents written to `.planning/codebase/` (STACK.md, ARCHITECTURE.md, CONVENTIONS.md, CONCERNS.md).
+**Completed:** Codebase mapping — 4 documents written to `.work/codebase/` (STACK.md, ARCHITECTURE.md, CONVENTIONS.md, CONCERNS.md).
 
 **Brownfield routing summary:** Synthesize this directly from the 4 generated documents before recommending the next workflow.
 - Safest next change lane — which module or surface looks cheapest and safest to modify first
@@ -247,14 +247,14 @@ Use only the 4 generated documents for this synthesis. Do NOT create a fifth per
 
 Also available:
 - `/gsdd-map-codebase` — re-map if results need refinement
-- Review specific file: read `.planning/codebase/STACK.md`
+- Review specific file: read `.work/codebase/STACK.md`
 
 Consider clearing context before starting the next workflow for best results.
 ---
 </completion>
 
 <success_criteria>
-- `.planning/codebase/` directory exists with 4 documents
+- `.work/codebase/` directory exists with 4 documents
 - All selected mapper delegates were spawned (parallel or sequential per config)
 - Delegates wrote documents directly (orchestrator did not receive document contents)
 - Security scan completed -- no secrets in generated documents

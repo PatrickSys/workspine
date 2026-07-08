@@ -11,19 +11,16 @@ import {
   upsertBoundedBlock,
   getDelegateContent,
 } from './lib/rendering.mjs';
-import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels, cmdRigor } from './lib/models.mjs';
+import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels, cmdRigor } from './lib/config.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
 import { createCmdInstall } from './lib/global-install.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { createCmdHealth } from './lib/health.mjs';
 import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
-import { cmdSessionFingerprint } from './lib/session-fingerprint.mjs';
-import { cmdUiProof } from './lib/ui-proof.mjs';
-import { cmdControlMap } from './lib/control-map.mjs';
-import { createCmdCloseoutReport } from './lib/closeout-report.mjs';
 import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
+import { resolveStateDir } from './lib/state-dir.mjs';
 import { FRAMEWORK_VERSION, WORKFLOWS } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -35,9 +32,11 @@ const IS_MAIN = process.argv[1] ? realpathSync(process.argv[1]) === realpathSync
 const [,, command, ...args] = process.argv;
 
 function createCliContext(cwd = process.cwd()) {
+  const state = resolveStateDir(cwd);
   return {
     cwd,
-    planningDir: join(cwd, '.planning'),
+    planningDir: state.dir,
+    stateDirName: state.name,
     distilledDir: DISTILLED_DIR,
     agentsDir: AGENTS_DIR,
     packageName: PACKAGE_JSON.name,
@@ -50,6 +49,7 @@ function createCliContext(cwd = process.cwd()) {
     adapters: createAdapterRegistry({
       cwd,
       workflows: WORKFLOWS,
+      stateDirName: state.name,
       renderAgentsBoundedBlock,
       renderAgentsFileContent,
       renderOpenCodeCommandContent,
@@ -67,7 +67,6 @@ const INIT_CONTEXT = createCliContext(process.cwd());
 const cmdInit = createCmdInit(INIT_CONTEXT);
 const cmdInstall = createCmdInstall(INIT_CONTEXT);
 const cmdHealth = createCmdHealth(INIT_CONTEXT);
-const cmdCloseoutReport = createCmdCloseoutReport(INIT_CONTEXT);
 const cmdNext = createCmdNext(INIT_CONTEXT);
 
 const cmdUpdate = (...updateArgs) => {
@@ -89,10 +88,6 @@ const COMMANDS = {
   next: cmdNext,
   'file-op': cmdFileOp,
   'lifecycle-preflight': cmdLifecyclePreflight,
-  'session-fingerprint': cmdSessionFingerprint,
-  'ui-proof': cmdUiProof,
-  'control-map': cmdControlMap,
-  'closeout-report': cmdCloseoutReport,
   'find-phase': cmdFindPhase,
   'phase-status': cmdPhaseStatus,
   verify: cmdVerify,
@@ -118,5 +113,13 @@ async function runCli(cliCommand = command, ...cliArgs) {
   await COMMANDS[cliCommand](...normalizedArgs);
 }
 
-if (IS_MAIN) await runCli();
-export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdFileOp, cmdLifecyclePreflight, cmdSessionFingerprint, cmdUiProof, cmdControlMap, cmdCloseoutReport, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+if (IS_MAIN) {
+  await runCli();
+  // D-47: interactive prompts (raw-mode keypress pickers) can leave stdin
+  // referenced; release it so the process exits when work is done.
+  if (process.stdin.isTTY) {
+    process.stdin.pause();
+    if (typeof process.stdin.unref === 'function') process.stdin.unref();
+  }
+}
+export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdFileOp, cmdLifecyclePreflight, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

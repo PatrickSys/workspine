@@ -7,8 +7,8 @@ Scope boundary: you produce updated SPEC.md requirements and a new set of phases
 </role>
 
 <prerequisites>
-`.planning/SPEC.md` must exist (project has been initialized and at least one milestone shipped).
-`.planning/MILESTONES.md` must exist (at least one milestone was completed and archived).
+`.work/SPEC.md` must exist (project has been initialized and at least one milestone shipped).
+`.work/MILESTONES.md` must exist (at least one milestone was completed and archived).
 
 If SPEC.md is missing, the project has not been initialized — run `/gsdd-new-project` instead.
 If MILESTONES.md is missing, no milestone has been completed — complete the current milestone first with `/gsdd-complete-milestone`.
@@ -17,21 +17,21 @@ If MILESTONES.md is missing, no milestone has been completed — complete the cu
 <load_context>
 Before starting, read these files:
 
-1. `.planning/SPEC.md` — project identity, core value, validated requirements, constraints, decisions
-2. `.planning/MILESTONES.md` — what shipped previously, last milestone version and date
-3. `.planning/ROADMAP.md` — collapsed milestone phases, current phase numbering (to determine where to continue)
-4. `.planning/config.json` — `workflow.research`, `researchDepth`, `gitProtocol`
-5. `.planning/brownfield-change/CHANGE.md`, `.planning/brownfield-change/HANDOFF.md`, and `.planning/brownfield-change/VERIFICATION.md` when an active bounded change is being widened into the next milestone
+1. `.work/SPEC.md` — project identity, core value, validated requirements, constraints, decisions
+2. `.work/MILESTONES.md` — what shipped previously, last milestone version and date
+3. `.work/ROADMAP.md` — collapsed milestone phases, current phase numbering (to determine where to continue)
+4. `.work/config.json` — `workflow.research`, `researchDepth`, `gitProtocol`
+5. `.work/brownfield-change/CHANGE.md`, `.work/brownfield-change/HANDOFF.md`, and `.work/brownfield-change/VERIFICATION.md` when an active bounded change is being widened into the next milestone
 </load_context>
 
 <repo_root_helper_contract>
-All `node .planning/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
+All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 
 <lifecycle_preflight>
 Before presenting the last milestone or gathering new milestone goals, run:
 
-- `node .planning/bin/gsdd.mjs lifecycle-preflight new-milestone`
+- `node .work/bin/gsdd.mjs lifecycle-preflight new-milestone`
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring milestone-start eligibility from workflow-local prose.
 
@@ -52,7 +52,7 @@ If milestone truth on disk is local-only or AI-generated draft truth, or if the 
 </integration_surface_check>
 
 <brownfield_widening_inputs>
-If `.planning/brownfield-change/CHANGE.md` exists, treat invocation of `/gsdd-new-milestone` as an explicit widen request for that active bounded change.
+If `.work/brownfield-change/CHANGE.md` exists, treat invocation of `/gsdd-new-milestone` as an explicit widen request for that active bounded change.
 
 Before gathering new milestone goals, read and preserve:
 - `CHANGE.md` for the current goal, scope, done-when, next action, and declared write scope
@@ -66,7 +66,7 @@ Do not force the user to rediscover this context and do not create a new promoti
 
 ## 1. Present What Shipped Last
 
-Read `.planning/MILESTONES.md`. Find the most recent milestone entry. Present it to the user:
+Read `.work/MILESTONES.md`. Find the most recent milestone entry. Present it to the user:
 
 ```
 Last milestone: v[X.Y] — [Name] (shipped [date])
@@ -87,8 +87,8 @@ Ask the user what the next milestone should focus on. Explore:
 
 If widening from an active brownfield change, start by presenting the preserved brownfield goal/scope/proof context and ask what now needs milestone-owned lifecycle state beyond that bounded lane.
 
-If a `.planning/MILESTONE-BRIEF.md` exists, use it as the input instead of asking. Note any assumptions inferred from the brief.
-(MILESTONE-BRIEF.md is an optional pre-written document with goals and scope for the next milestone — useful when the user wants to skip the interactive questioning. Create it manually in `.planning/` before running this workflow.)
+If a `.work/MILESTONE-BRIEF.md` exists, use it as the input instead of asking. Note any assumptions inferred from the brief.
+(MILESTONE-BRIEF.md is an optional pre-written document with goals and scope for the next milestone — useful when the user wants to skip the interactive questioning. Create it manually in `.work/` before running this workflow.)
 
 ## 3. Determine Version
 
@@ -121,11 +121,11 @@ Use `<delegate>` blocks to spawn researchers. Pass milestone context to each:
 ```
 <delegate>
 **Identity:** Researcher — Stack
-**Instruction:** Read `.planning/templates/roles/researcher.md`, then research what stack additions are needed for the new milestone capabilities.
+**Instruction:** Read `.work/templates/roles/researcher.md`, then research what stack additions are needed for the new milestone capabilities.
 
 **Milestone context:** [existing validated capabilities, new capabilities being added]
 **Question:** What library/framework additions are needed? What should NOT be added?
-**Output:** Write findings to `.planning/research/STACK.md`
+**Output:** Write findings to `.work/research/STACK.md`
 **Return:** 2-3 sentence summary of key findings
 </delegate>
 ```
@@ -219,7 +219,7 @@ Also update the Milestones list at the top of ROADMAP.md:
 Create placeholder directories for each new phase:
 
 ```
-.planning/phases/[NN]-[phase-name-kebab]/
+.work/phases/[NN]-[phase-name-kebab]/
 ```
 
 No files inside — the `/gsdd-plan` workflow populates them.
@@ -258,7 +258,7 @@ Update the `## Current State` section in SPEC.md:
 - [ ] Phase directories created
 </success_criteria>
 
-**MANDATORY: `.planning/SPEC.md` and `.planning/ROADMAP.md` must be updated on disk before this workflow is complete. If either write fails, STOP and report the failure. These are the handoff artifacts — without them, the next session cannot proceed.**
+**MANDATORY: `.work/SPEC.md` and `.work/ROADMAP.md` must be updated on disk before this workflow is complete. If either write fails, STOP and report the failure. These are the handoff artifacts — without them, the next session cannot proceed.**
 
 <completion>
 Report to the user what was created, then present the next step:
@@ -269,7 +269,7 @@ Report to the user what was created, then present the next step:
 Created:
 - [N] new requirements in `SPEC.md` Must Have section
 - [M] new phases in `ROADMAP.md` (Phases [start]–[end])
-- Phase directories in `.planning/phases/`
+- Phase directories in `.work/phases/`
 
 **Next step:** `/gsdd-plan [N]` — plan Phase [N]: [phase name]
 

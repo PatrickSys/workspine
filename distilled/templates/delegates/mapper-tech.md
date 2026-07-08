@@ -1,8 +1,8 @@
-**Role contract:** Read `.planning/templates/roles/mapper.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/mapper.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 Map the technology stack of this codebase. Read package manifests, lockfiles, and entry points.
 
-Write STACK.md to `.planning/codebase/` using the template at `.planning/templates/codebase/stack.md`.
+Write STACK.md to `.work/codebase/` using the template at `.work/templates/codebase/stack.md`.
 
 Include:
 - Languages and runtimes (with versions)
@@ -20,6 +20,6 @@ Include:
 - [ ] Must-know packages section identifies at least 3 packages with risk index (low/medium/high)
 </quality_gate>
 
-Write to: `.planning/codebase/STACK.md`
+Write to: `.work/codebase/STACK.md`
 Return: Routing summary to the Orchestrator (100-200 tokens) when done.
 Guardrails: Max Agent Hops = 3. No static dependency dumps.

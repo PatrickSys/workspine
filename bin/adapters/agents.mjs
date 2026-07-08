@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-function createRootAgentsAdapter({ cwd, renderAgentsBoundedBlock, renderAgentsFileContent, upsertBoundedBlock }, name = 'agents') {
+function createRootAgentsAdapter({ cwd, stateDirName = '.work', renderAgentsBoundedBlock, renderAgentsFileContent, upsertBoundedBlock }, name = 'agents') {
   return {
     id: 'agents',
     name,
@@ -15,10 +15,10 @@ function createRootAgentsAdapter({ cwd, renderAgentsBoundedBlock, renderAgentsFi
     },
     generate() {
       const agentsPath = join(cwd, 'AGENTS.md');
-      const block = renderAgentsBoundedBlock();
+      const block = renderAgentsBoundedBlock({ stateDirName });
 
       if (!existsSync(agentsPath)) {
-        writeFileSync(agentsPath, renderAgentsFileContent());
+        writeFileSync(agentsPath, renderAgentsFileContent({ stateDirName }));
         return;
       }
 

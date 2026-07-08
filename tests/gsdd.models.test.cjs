@@ -657,7 +657,7 @@ describe('gsdd models and model propagation', () => {
 
   describe('rigor and cost resolvers', () => {
     test('RIGOR_PROFILES has the four canonical levels with the six-flag workflow shape', async () => {
-      const models = await import('../bin/lib/models.mjs');
+      const models = await import('../bin/lib/config.mjs');
       assert.deepStrictEqual(Object.keys(models.RIGOR_PROFILES), ['low', 'medium', 'high', 'max']);
       for (const level of ['low', 'medium', 'high', 'max']) {
         const w = models.RIGOR_PROFILES[level].workflow;
@@ -672,14 +672,14 @@ describe('gsdd models and model propagation', () => {
     });
 
     test('legacy rigor names alias to the new levels', async () => {
-      const models = await import('../bin/lib/models.mjs');
+      const models = await import('../bin/lib/config.mjs');
       assert.strictEqual(models.resolveRigor('quick'), models.RIGOR_PROFILES.low);
       assert.strictEqual(models.resolveRigor('balanced'), models.RIGOR_PROFILES.medium);
       assert.strictEqual(models.resolveRigor('thorough'), models.RIGOR_PROFILES.high);
     });
 
     test('resolveStepRigor honors per-step overrides then the base profile', async () => {
-      const models = await import('../bin/lib/models.mjs');
+      const models = await import('../bin/lib/config.mjs');
       const config = { rigorProfile: 'low', rigorOverrides: { verify: 'max' } };
       assert.strictEqual(models.resolveStepRigor(config, 'plan'), models.RIGOR_PROFILES.low);
       assert.strictEqual(models.resolveStepRigor(config, 'verify'), models.RIGOR_PROFILES.max);
@@ -689,12 +689,12 @@ describe('gsdd models and model propagation', () => {
     });
 
     test('COST_PROFILES has exactly keys budget, balanced, quality', async () => {
-      const models = await import('../bin/lib/models.mjs');
+      const models = await import('../bin/lib/config.mjs');
       assert.deepStrictEqual(Object.keys(models.COST_PROFILES), ['budget', 'balanced', 'quality']);
     });
 
     test('resolveRigor unknown returns balanced profile', async () => {
-      const models = await import('../bin/lib/models.mjs');
+      const models = await import('../bin/lib/config.mjs');
       const result = models.resolveRigor('unknown');
       assert.strictEqual(result.researchDepth, 'balanced');
       assert.strictEqual(result.workflow.research, true);
@@ -702,21 +702,21 @@ describe('gsdd models and model propagation', () => {
     });
 
     test('resolveCost unknown returns balanced profile', async () => {
-      const models = await import('../bin/lib/models.mjs');
+      const models = await import('../bin/lib/config.mjs');
       const result = models.resolveCost('unknown');
       assert.strictEqual(result.modelProfile, 'balanced');
       assert.strictEqual(result.parallelization, true);
     });
 
     test('every RIGOR_PROFILES entry has workflow.verifier === true', async () => {
-      const models = await import('../bin/lib/models.mjs');
+      const models = await import('../bin/lib/config.mjs');
       for (const [key, profile] of Object.entries(models.RIGOR_PROFILES)) {
         assert.strictEqual(profile.workflow.verifier, true, `${key} has verifier=true`);
       }
     });
 
     test('buildDefaultConfig output schema has all legacy keys', async () => {
-      const models = await import('../bin/lib/models.mjs');
+      const models = await import('../bin/lib/config.mjs');
       const config = models.buildDefaultConfig();
       assert.ok('researchDepth' in config);
       assert.ok('parallelization' in config);
