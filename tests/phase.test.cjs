@@ -1692,6 +1692,10 @@ describe('verify command nested phase plans', () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
       [
+        '---',
+        'browser_proof_required: false',
+        'browser_proof_rationale: Artifact-path fixture; no rendered UI behavior is claimed.',
+        '---',
         '<task id="34-01" type="auto">',
         '  <files>',
         '    - MODIFY: src/example.js',
@@ -1721,6 +1725,10 @@ describe('verify command nested phase plans', () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
       [
+        '---',
+        'browser_proof_required: false',
+        'browser_proof_rationale: Artifact-path fixture; no rendered UI behavior is claimed.',
+        '---',
         '<task id="34-01" type="auto">',
         '  <files>',
         '    - RENAME: src/old.js -> src/new.js',
@@ -1777,7 +1785,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-summary-missing');
     fs.mkdirSync(phaseDir, { recursive: true });
-    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots: []\nno_ui_proof_rationale: CLI-only work.\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nbrowser_proof_required: false\nbrowser_proof_rationale: CLI-only work.\n---\n# Phase 1 Plan\n');
 
     const result = await runCliAsMain(tmpDir, ['verify', '1']);
     assert.strictEqual(result.exitCode, 1, result.output);
@@ -1793,7 +1801,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-helper-verify');
     fs.mkdirSync(phaseDir, { recursive: true });
-    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots: []\nno_ui_proof_rationale: CLI-only helper verification.\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nbrowser_proof_required: false\nbrowser_proof_rationale: CLI-only helper verification.\n---\n# Phase 1 Plan\n');
     fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
 
     const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
@@ -1811,7 +1819,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-builder-verify');
     fs.mkdirSync(phaseDir, { recursive: true });
-    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nui_proof_slots: []\nno_ui_proof_rationale: CLI-only builder verification.\n---\n# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nbrowser_proof_required: false\nbrowser_proof_rationale: CLI-only builder verification.\n---\n# Phase 1 Plan\n');
     fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
 
     const phase = await importPhaseModule();
@@ -1825,11 +1833,381 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.deepStrictEqual(built.result.blocked_on, output.blocked_on);
   });
 
+  test('phase verify blocks required browser proof when the plan section is missing', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-missing');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.blocked_on.includes('browser_proof'));
+    assert.strictEqual(output.browser_proof_status.satisfied, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => blocker.code === 'missing_browser_proof_plan'));
+  });
+
+  test('phase verify blocks missing browser proof declaration', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-declaration');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '# Phase 1 Plan\n');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.blocked_on.includes('browser_proof'));
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'missing_browser_proof_declaration'
+    )));
+  });
+
+  test('phase verify blocks retired ui-proof declarations instead of passing legacy plans', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-retired-browser-proof');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'ui_proof_slots: []',
+        'no_ui_proof_rationale: none',
+        '---',
+        '# Phase 1 Plan',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'retired_browser_proof_contract'
+      && blocker.message.includes('ui_proof_slots')
+    )));
+  });
+
+  test('phase verify normalizes scalar comments and rejects placeholder rationale values', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-scalars');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: "false" # CLI-only',
+        'browser_proof_rationale: "" # empty placeholder',
+        '---',
+        '# Phase 1 Plan',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'missing_browser_proof_rationale'
+    )));
+    assert.ok(!output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'invalid_browser_proof_required'
+    )));
+  });
+
+  test('phase verify blocks incomplete browser proof sections without evidence command or no-command rationale', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-incomplete');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-incomplete/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'incomplete_browser_proof_plan'
+      && blocker.message.includes('Evidence command or No-command rationale')
+    )));
+  });
+
+  test('phase verify blocks placeholder browser proof plan fields', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-placeholders');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: [Exact routes or UI states to inspect]',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence command: [Runnable command]',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-placeholders/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'incomplete_browser_proof_plan'
+      && blocker.message.includes('Routes/states')
+    )));
+  });
+
+  test('phase verify blocks required browser proof when no observation is recorded', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-observation-missing');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-observation-missing/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\nNo browser proof yet.\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'missing_browser_proof_observation'
+    )));
+  });
+
+  test('phase verify passes required browser proof with a complete observation record', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-observed');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: "true" # visible dashboard work',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .planning/phases/01-browser-proof-observed/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Flow: /dashboard after loading current account.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence command: npm run test:e2e -- --grep dashboard',
+        '- Observed: dashboard widgets rendered without console errors.',
+        '- Artifacts:',
+        '  - .planning/phases/01-browser-proof-observed/artifacts/dashboard.png - local-only',
+        '- Result: passed',
+        '- Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, true);
+    assert.strictEqual(output.browser_proof_status.satisfied, true);
+  });
+
+  test('phase verify blocks multi-plan browser proof when observations do not identify each plan', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-multi');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    const planContent = [
+      '---',
+      'browser_proof_required: true',
+      'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+      '---',
+      '# Phase 1 Plan',
+      '',
+      '## Browser Proof Plan',
+      'Routes/states: /dashboard after loading current account.',
+      'Viewports: desktop and mobile.',
+      'Runtime path: agent-browser.',
+      'Evidence command: npm run test:e2e -- --grep dashboard',
+      'Observations: dashboard widgets render without console errors.',
+      'Artifacts: .planning/phases/01-browser-proof-multi/artifacts/dashboard.png, local_only.',
+      'Claim limit: dashboard render proof only.',
+    ].join('\n');
+    fs.writeFileSync(path.join(phaseDir, '01-1-PLAN.md'), planContent);
+    fs.writeFileSync(path.join(phaseDir, '01-2-PLAN.md'), planContent);
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Flow: /dashboard after loading current account.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence command: npm run test:e2e -- --grep dashboard',
+        '- Observed: dashboard widgets rendered without console errors.',
+        '- Artifacts: .planning/phases/01-browser-proof-multi/artifacts/dashboard.png - local-only',
+        '- Result: passed',
+        '- Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, false);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'unmatched_browser_proof_observation'
+      && blocker.path.endsWith('01-1-PLAN.md')
+    )));
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => (
+      blocker.code === 'unmatched_browser_proof_observation'
+      && blocker.path.endsWith('01-2-PLAN.md')
+    )));
+  });
+
+  test('phase verify passes multi-plan browser proof when observations reference each required plan', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-multi-observed');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    const planContent = [
+      '---',
+      'browser_proof_required: true',
+      'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+      '---',
+      '# Phase 1 Plan',
+      '',
+      '## Browser Proof Plan',
+      'Routes/states: /dashboard after loading current account.',
+      'Viewports: desktop and mobile.',
+      'Runtime path: agent-browser.',
+      'Evidence command: npm run test:e2e -- --grep dashboard',
+      'Observations: dashboard widgets render without console errors.',
+      'Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard.png, local_only.',
+      'Claim limit: dashboard render proof only.',
+    ].join('\n');
+    fs.writeFileSync(path.join(phaseDir, '01-1-PLAN.md'), planContent);
+    fs.writeFileSync(path.join(phaseDir, '01-2-PLAN.md'), planContent);
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Plan: 01-browser-proof-multi-observed/01-1-PLAN.md',
+        '- Flow: /dashboard account A.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence command: npm run test:e2e -- --grep dashboard-a',
+        '- Observed: dashboard widgets rendered without console errors.',
+        '- Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard-a.png - local-only',
+        '- Result: passed',
+        '- Claim limit: dashboard account A render proof only.',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Plan: 01-browser-proof-multi-observed/01-2-PLAN.md',
+        '- Flow: /dashboard account B.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence command: npm run test:e2e -- --grep dashboard-b',
+        '- Observed: dashboard widgets rendered without console errors.',
+        '- Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard-b.png - local-only',
+        '- Result: passed',
+        '- Claim limit: dashboard account B render proof only.',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const output = JSON.parse(result.output);
+
+    assert.strictEqual(output.verified, true);
+    assert.strictEqual(output.browser_proof_status.satisfied, true);
+  });
+
   test('phase verify blocks when planned file artifacts are unsatisfied', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-artifact-proof');
     fs.mkdirSync(phaseDir, { recursive: true });
-    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '<task id="01-01" type="auto">\n  <files>\n    - CREATE: src/missing.js\n  </files>\n</task>\n');
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nbrowser_proof_required: false\nbrowser_proof_rationale: File-artifact verification only.\n---\n<task id="01-01" type="auto">\n  <files>\n    - CREATE: src/missing.js\n  </files>\n</task>\n');
     fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
 
     const result = await runCliAsMain(tmpDir, ['verify', '1']);

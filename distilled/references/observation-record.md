@@ -13,8 +13,5 @@ actually observed. Plain markdown, one record per checked flow:
 - **safe to publish**: yes/no — may the artifacts leave the repo (no secrets,
   no private data)?
 - **stale after**: what change would invalidate this observation (optional).
-- **result**: worked / failed (say why) / partly (say what is missing).
-
-This replaces the retired machine-validated UI-proof bundle (`ui_proof_slots`,
-`gsdd ui-proof validate/compare`). The structure survives; the JSON schema
-validator does not.
+- **result**: worked / failed (say why) / partly (say what is missing). For
+  failed or partial proof, use the failure-cause names in proof-rules.md.

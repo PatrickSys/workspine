@@ -7,11 +7,6 @@ export const PLAN_CHECK_DIMENSIONS = [
   'must_have_quality',
   'context_compliance',
   'goal_achievement',
-  'scope_boundaries',
-  'anti_regression_capture',
-  'escalation_integrity',
-  'closure_honesty',
-  'high_leverage_review',
   'approach_alignment',
 ];
 

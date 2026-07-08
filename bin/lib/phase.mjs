@@ -4,7 +4,7 @@
 // evaluate once, so CWD must be computed inside function bodies.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs';
-import { basename, dirname, join, relative } from 'path';
+import { basename, dirname, isAbsolute, join, relative } from 'path';
 import { output } from './cli-utils.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
@@ -166,6 +166,397 @@ function extractPlanFileArtifacts(planContent, workspaceRoot) {
   }
 
   return artifacts;
+}
+
+function extractFrontmatter(content) {
+  const match = String(content || '').replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/);
+  return match ? match[1] : '';
+}
+
+function readTopLevelScalar(frontmatter, key) {
+  const escapedKey = String(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(frontmatter || '').match(new RegExp(`^${escapedKey}:\\s*(.*)$`, 'm'));
+  return match ? normalizeScalarValue(match[1]) : null;
+}
+
+function hasTopLevelKey(frontmatter, key) {
+  const escapedKey = String(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escapedKey}:\\s*.*$`, 'm').test(String(frontmatter || ''));
+}
+
+function stripInlineComment(value) {
+  const text = String(value || '');
+  let quote = null;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (quote === '"' && char === '\\') {
+        index += 1;
+        continue;
+      }
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '#') return text.slice(0, index);
+  }
+  return text;
+}
+
+function normalizeScalarValue(value) {
+  let normalized = stripInlineComment(value).trim();
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"'))
+    || (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1).trim();
+  }
+  return normalized;
+}
+
+function extractMarkdownSection(content, heading) {
+  return extractMarkdownSections(content, heading)[0] || '';
+}
+
+function extractMarkdownSections(content, heading) {
+  const normalized = String(content || '').replace(/\r\n/g, '\n');
+  const escapedHeading = String(heading).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headingMatcher = new RegExp(`^##\\s+${escapedHeading}\\s*$`, 'gim');
+  const matches = Array.from(normalized.matchAll(headingMatcher));
+  return matches.map((headingMatch, index) => {
+    const start = headingMatch.index + headingMatch[0].length;
+    const nextStart = matches[index + 1]?.index;
+    const rest = normalized.slice(start, nextStart);
+    const nextHeadingIndex = rest.search(/^##\s+/m);
+    return (nextHeadingIndex === -1 ? rest : rest.slice(0, nextHeadingIndex)).trim();
+  }).filter(Boolean);
+}
+
+function sectionFieldValue(section, label) {
+  const text = String(section || '');
+  const escapedLabel = String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`^\\s*(?:[-*]\\s*)?${escapedLabel}:\\s*(.*)$`, 'im').exec(text);
+  if (!match) return '';
+
+  const inlineValue = normalizeScalarValue(match[1]);
+  if (inlineValue) return inlineValue;
+
+  const nestedValues = [];
+  const followingLines = text.slice(match.index + match[0].length).split(/\r?\n/);
+  for (const line of followingLines) {
+    if (!line.trim()) continue;
+    if (/^\S/.test(line)) break;
+    const nestedBullet = line.match(/^\s+[-*]\s*(.+)$/);
+    if (nestedBullet) {
+      nestedValues.push(nestedBullet[1].trim());
+      continue;
+    }
+    const nestedText = line.match(/^\s{2,}(.+)$/);
+    if (nestedText) {
+      nestedValues.push(nestedText[1].trim());
+      continue;
+    }
+    break;
+  }
+  return normalizeScalarValue(nestedValues.join(' '));
+}
+
+function isMeaningfulFieldValue(value) {
+  const normalized = normalizeScalarValue(value);
+  if (!normalized) return false;
+  if (/^n\/?a$/i.test(normalized)) return false;
+  if (/^(none|null|nil|~|tbd|todo|unknown)$/i.test(normalized)) return false;
+  if (/^\[.*\]$/.test(normalized)) return false;
+  if (/^<.*>$/.test(normalized)) return false;
+  return true;
+}
+
+function nonEmptyField(section, label) {
+  const value = sectionFieldValue(section, label);
+  return isMeaningfulFieldValue(value);
+}
+
+function browserProofFixHint(code) {
+  if (code === 'retired_browser_proof_contract') {
+    return 'Replace retired ui_proof_slots/no_ui_proof_rationale fields with browser_proof_required and browser_proof_rationale.';
+  }
+  if (code === 'missing_browser_proof_declaration') {
+    return 'Add browser_proof_required: true|false and browser_proof_rationale to PLAN.md frontmatter.';
+  }
+  if (code === 'invalid_browser_proof_required') {
+    return 'Set browser_proof_required to true or false in PLAN.md frontmatter.';
+  }
+  if (code === 'missing_browser_proof_rationale') {
+    return 'Add a nonblank browser_proof_rationale explaining why browser proof is or is not required.';
+  }
+  if (code === 'missing_browser_proof_plan') {
+    return 'Add a ## Browser Proof Plan section or set browser_proof_required: false with a rationale if the work is not UI-sensitive.';
+  }
+  if (code === 'missing_browser_proof_observation') {
+    return 'Record a ## Browser Proof Observation in SUMMARY.md or link to an observation record before verifying browser-sensitive work.';
+  }
+  if (code === 'incomplete_browser_proof_observation') {
+    return 'Complete the Browser Proof Observation fields or narrow the proof claim.';
+  }
+  if (code === 'unmatched_browser_proof_observation') {
+    return 'When multiple required browser-proof plans exist, add a Plan field to each Browser Proof Observation that names the matching PLAN.md artifact.';
+  }
+  return 'Complete the Browser Proof Plan fields or narrow the proof claim.';
+}
+
+function evaluateBrowserProofContract(planContent, planPath) {
+  const frontmatter = extractFrontmatter(planContent);
+  const requiredRaw = readTopLevelScalar(frontmatter, 'browser_proof_required');
+  const rationale = readTopLevelScalar(frontmatter, 'browser_proof_rationale');
+  const declarationPresent = requiredRaw !== null || rationale !== null;
+  const retiredKeys = ['ui_proof_slots', 'no_ui_proof_rationale', 'proof_bundle_version', 'claim_limits']
+    .filter((key) => hasTopLevelKey(frontmatter, key));
+  const blockers = [];
+
+  if (retiredKeys.length > 0) {
+    blockers.push({
+      code: 'retired_browser_proof_contract',
+      severity: 'blocker',
+      path: planPath,
+      message: `PLAN.md uses retired browser-proof field(s): ${retiredKeys.join(', ')}.`,
+      fix_hint: browserProofFixHint('retired_browser_proof_contract'),
+    });
+  }
+
+  if (!declarationPresent && retiredKeys.length === 0) {
+    blockers.push({
+      code: 'missing_browser_proof_declaration',
+      severity: 'blocker',
+      path: planPath,
+      message: 'PLAN.md must declare browser_proof_required and browser_proof_rationale before verification.',
+      fix_hint: browserProofFixHint('missing_browser_proof_declaration'),
+    });
+    return {
+      path: planPath,
+      declaration_present: false,
+      required: null,
+      rationale: null,
+      satisfied: false,
+      blockers,
+    };
+  }
+
+  const normalizedRequired = String(requiredRaw || '').toLowerCase();
+  const required = normalizedRequired === 'true'
+    ? true
+    : normalizedRequired === 'false'
+      ? false
+      : null;
+
+  if (required === null) {
+    blockers.push({
+      code: 'invalid_browser_proof_required',
+      severity: 'blocker',
+      path: planPath,
+      message: 'browser_proof_required must be true or false when the browser-proof contract is declared.',
+      fix_hint: browserProofFixHint('invalid_browser_proof_required'),
+    });
+  }
+
+  if (!isMeaningfulFieldValue(rationale)) {
+    blockers.push({
+      code: 'missing_browser_proof_rationale',
+      severity: 'blocker',
+      path: planPath,
+      message: 'browser_proof_rationale is required when the browser-proof contract is declared.',
+      fix_hint: browserProofFixHint('missing_browser_proof_rationale'),
+    });
+  }
+
+  if (required === true) {
+    const section = extractMarkdownSection(planContent, 'Browser Proof Plan');
+    if (!section) {
+      blockers.push({
+        code: 'missing_browser_proof_plan',
+        severity: 'blocker',
+        path: planPath,
+        message: 'browser_proof_required is true but PLAN.md has no ## Browser Proof Plan section.',
+        fix_hint: browserProofFixHint('missing_browser_proof_plan'),
+      });
+    } else {
+      const missingFields = ['Routes/states', 'Viewports', 'Runtime path', 'Observations', 'Artifacts', 'Claim limit']
+        .filter((field) => !nonEmptyField(section, field));
+      const hasEvidenceCommand = nonEmptyField(section, 'Evidence command');
+      const hasNoCommandRationale = nonEmptyField(section, 'No-command rationale');
+      if (!hasEvidenceCommand && !hasNoCommandRationale) {
+        missingFields.push('Evidence command or No-command rationale');
+      }
+      if (missingFields.length > 0) {
+        blockers.push({
+          code: 'incomplete_browser_proof_plan',
+          severity: 'blocker',
+          path: planPath,
+          message: `Browser Proof Plan is missing required field(s): ${missingFields.join(', ')}.`,
+          fix_hint: browserProofFixHint('incomplete_browser_proof_plan'),
+        });
+      }
+    }
+  }
+
+  return {
+    path: planPath,
+    declaration_present: declarationPresent,
+    required,
+    rationale,
+    satisfied: blockers.length === 0,
+    blockers,
+  };
+}
+
+function sanitizeLinkedObservationPath(value) {
+  let text = normalizeScalarValue(value);
+  const markdownLink = text.match(/^\[[^\]]+\]\(([^)]+)\)$/);
+  if (markdownLink) text = markdownLink[1].trim();
+  text = text.replace(/^`|`$/g, '').trim();
+  if (/^[a-z]+:\/\//i.test(text)) return '';
+  return text;
+}
+
+function readLinkedObservationRecords(summaryContent, summaryFullPath, workspaceRoot) {
+  const records = [];
+  const matcher = /^\s*(?:[-*]\s*)?(?:Browser Proof Observation|Browser proof observation|Observation record|Browser proof record):\s*(.+)$/gim;
+  let match;
+  while ((match = matcher.exec(String(summaryContent || '')))) {
+    const linkedPath = sanitizeLinkedObservationPath(match[1]);
+    if (!linkedPath) continue;
+    const candidates = isAbsolute(linkedPath)
+      ? [linkedPath]
+      : [join(dirname(summaryFullPath), linkedPath), join(workspaceRoot, linkedPath)];
+    const existingPath = candidates.find((candidate) => existsSync(candidate));
+    if (existingPath) records.push(readFileSync(existingPath, 'utf-8'));
+  }
+  return records;
+}
+
+function findBrowserProofObservationSections(summaryContent, summaryFullPath, workspaceRoot) {
+  return [
+    ...extractMarkdownSections(summaryContent, 'Browser Proof Observation'),
+    ...readLinkedObservationRecords(summaryContent, summaryFullPath, workspaceRoot)
+      .flatMap((record) => extractMarkdownSections(record, 'Browser Proof Observation')),
+  ].filter(Boolean);
+}
+
+function isCompleteBrowserProofObservation(section) {
+  const requiredFieldSets = [
+    ['Flow', 'Routes/states'],
+    ['Viewports'],
+    ['Runtime path'],
+    ['Evidence command', 'No-command rationale'],
+    ['Observed', 'Observations'],
+    ['Artifacts'],
+    ['Result'],
+    ['Claim limit'],
+  ];
+  return requiredFieldSets.every((labels) => (
+    labels.some((label) => nonEmptyField(section, label))
+  ));
+}
+
+function normalizeArtifactReference(value) {
+  return String(value || '').replace(/\\/g, '/').toLowerCase();
+}
+
+function observationReferencesPlan(section, planPath) {
+  const planReference = sectionFieldValue(section, 'Plan')
+    || sectionFieldValue(section, 'Plan artifact')
+    || sectionFieldValue(section, 'PLAN');
+  if (!isMeaningfulFieldValue(planReference)) return false;
+  const normalizedReference = normalizeArtifactReference(planReference);
+  const normalizedPlanPath = normalizeArtifactReference(planPath);
+  const normalizedPlanName = normalizeArtifactReference(basename(planPath));
+  return normalizedReference === normalizedPlanPath
+    || normalizedReference === normalizedPlanName
+    || normalizedReference.includes(normalizedPlanPath)
+    || normalizedReference.includes(normalizedPlanName);
+}
+
+function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, phasesDir, workspaceRoot) {
+  const requiredPlans = browserProofPlans.filter((plan) => plan.required === true);
+  if (requiredPlans.length === 0 || matchingSummaries.length === 0) {
+    return {
+      satisfied: true,
+      sections: [],
+      blockers: [],
+    };
+  }
+
+  const sections = matchingSummaries.flatMap((summaryPath) => {
+    const summaryFullPath = join(phasesDir, summaryPath);
+    if (!existsSync(summaryFullPath)) return [];
+    return findBrowserProofObservationSections(
+      readFileSync(summaryFullPath, 'utf-8'),
+      summaryFullPath,
+      workspaceRoot
+    );
+  });
+
+  if (sections.length === 0) {
+    return {
+      satisfied: false,
+      sections,
+      blockers: [{
+        code: 'missing_browser_proof_observation',
+        severity: 'blocker',
+        path: matchingSummaries.join(', '),
+        message: 'A plan requires browser proof, but no SUMMARY.md or linked record contains ## Browser Proof Observation.',
+        fix_hint: browserProofFixHint('missing_browser_proof_observation'),
+      }],
+    };
+  }
+
+  const completeSections = sections.filter((section) => isCompleteBrowserProofObservation(section));
+  if (completeSections.length === 0) {
+    return {
+      satisfied: false,
+      sections,
+      blockers: [{
+        code: 'incomplete_browser_proof_observation',
+        severity: 'blocker',
+        path: matchingSummaries.join(', '),
+        message: 'Browser Proof Observation is missing required observed-proof fields.',
+        fix_hint: browserProofFixHint('incomplete_browser_proof_observation'),
+      }],
+    };
+  }
+
+  if (requiredPlans.length === 1) {
+    return {
+      satisfied: true,
+      sections,
+      blockers: [],
+    };
+  }
+
+  const unmatchedPlans = requiredPlans.filter((plan) => (
+    !completeSections.some((section) => observationReferencesPlan(section, plan.path))
+  ));
+  if (unmatchedPlans.length === 0) {
+    return {
+      satisfied: true,
+      sections,
+      blockers: [],
+    };
+  }
+
+  return {
+    satisfied: false,
+    sections,
+    blockers: unmatchedPlans.map((plan) => ({
+      code: 'unmatched_browser_proof_observation',
+      severity: 'blocker',
+      path: plan.path,
+      message: `No complete Browser Proof Observation references required plan ${plan.path}.`,
+      fix_hint: browserProofFixHint('unmatched_browser_proof_observation'),
+    })),
+  };
 }
 
 function isPlanArtifactSatisfied(artifact) {
@@ -403,13 +794,40 @@ export function buildPhaseVerificationReport(...args) {
       ? extractPlanFileArtifacts(readFileSync(fullPath, 'utf-8'), workspaceRoot)
       : [];
   });
+  const browserProofPlans = matchingPlans.map((planPath) => {
+    const fullPath = join(phasesDir, planPath);
+    return existsSync(fullPath)
+      ? evaluateBrowserProofContract(readFileSync(fullPath, 'utf-8'), planPath)
+      : {
+          path: planPath,
+          declaration_present: false,
+          required: null,
+          rationale: null,
+          satisfied: true,
+          blockers: [],
+        };
+  });
+  const browserProofObservationStatus = evaluateBrowserProofObservation(
+    browserProofPlans,
+    matchingSummaries,
+    phasesDir,
+    workspaceRoot
+  );
+  const browserProofBlockers = [
+    ...browserProofPlans.flatMap((plan) => plan.blockers),
+    ...browserProofObservationStatus.blockers,
+  ];
   const artifactStatus = evaluatePlanArtifacts(artifacts);
   const legacyVerified = matchingPlans.length > 0 && matchingSummaries.length > 0;
   const blockedOn = [
     ...(prerequisiteBlockers.length > 0 ? ['prerequisites'] : []),
     ...(artifactStatus.satisfied ? [] : ['artifacts']),
+    ...(browserProofBlockers.length > 0 ? ['browser_proof'] : []),
   ];
-  const closureVerified = legacyVerified && prerequisiteBlockers.length === 0 && artifactStatus.satisfied;
+  const closureVerified = legacyVerified
+    && prerequisiteBlockers.length === 0
+    && artifactStatus.satisfied
+    && browserProofBlockers.length === 0;
 
   const result = {
     phase: normalizePhaseToken(phaseNum),
@@ -419,6 +837,12 @@ export function buildPhaseVerificationReport(...args) {
     artifacts,
     allExist: artifacts.every((artifact) => artifact.exists),
     artifact_status: artifactStatus,
+    browser_proof_status: {
+      satisfied: browserProofBlockers.length === 0,
+      plans: browserProofPlans,
+      observations: browserProofObservationStatus,
+      blockers: browserProofBlockers,
+    },
     verified: closureVerified,
     legacy_verified: legacyVerified,
     phase_artifacts_present: legacyVerified,

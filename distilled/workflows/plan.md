@@ -131,11 +131,20 @@ If the selected target is `brownfield-change`, do not require ROADMAP phase memb
 Also verify that `HANDOFF.md` is judgment-only context and does not contradict the operational status, scope, or next action in `CHANGE.md`. If any brownfield contract field is missing or contradictory, STOP and repair the brownfield contract before planning.
 </phase_contract_gate>
 
-<ui_proof_planning>
-For UI-sensitive work, include compact `ui_proof_slots` with `slot_id`, optional `requirement_id`, `claim`, `route_state`, fixed evidence kinds (`code`, `test`, `runtime`, `delivery`, `human`), `minimum_observations`, `expected_artifact_types`, `validation_command`, `environment`, `viewport`, `manual_acceptance_required`, and `claim_limit`; otherwise set `no_ui_proof_rationale`.
-Do not create slots for backend-only, CLI-only, docs-only, or refactor-only work unless the plan claims a visible UI outcome. Evidence must later match claim, route/state, observation, artifact path, evidence kind, privacy metadata, result, and claim limit; local-only or unsafe artifacts cannot support public, publication, tracked, delivery, or release proof claims. Human approval does not replace required `code`, `test`, `runtime`, or `delivery` evidence.
-For live rendered UI proof, plan `agent-browser` as the default runtime evidence path and existing Playwright/package-script browser tests as the repeatable regression path when the repo already has them. If the runtime does not provide `agent-browser`, require the plan to state that availability constraint and name the closest project-native interactive browser fallback before narrowing the claim. The planner chooses the viewport set, but each slot must explain why the chosen viewport(s) are enough for the claim or narrow the claim limit; responsive claims need desktop/mobile or equivalent state coverage. Do not plan new browser infrastructure by default, and use Playwright scripting only for checks `agent-browser` cannot cover cleanly, such as JS-disabled, structured console, or multi-context verification.
-</ui_proof_planning>
+<browser_proof_planning>
+For UI-sensitive work, set `browser_proof_required: true` and add a `## Browser Proof Plan` section. For backend-only, CLI-only, docs-only, or refactor-only work that claims no visible UI outcome, set `browser_proof_required: false` with a short `browser_proof_rationale`.
+
+The Browser Proof Plan is plain markdown, not a JSON slot schema. It must name:
+- `Routes/states:` exact route(s), screen(s), or UI states to inspect
+- `Viewports:` desktop and mobile for responsive or layout-sensitive claims, or a narrowed claim explaining why one viewport is enough
+- `Runtime path:` `agent-browser` preferred; Playwright or another project-native browser fallback must explain the availability constraint
+- `Evidence command:` a runnable command that can reproduce or validate the browser proof, or `No-command rationale:` when the runtime path is manual/interactive only and the claim is narrowed accordingly
+- `Observations:` rendered DOM/behavior, interaction steps, and console/network observations when relevant
+- `Artifacts:` screenshot/report/log paths if produced, with local-only vs publishable privacy/safety note
+- `Claim limit:` the exact claim the observation can support
+
+Evidence must later match route/state, viewport, observation, artifact path, evidence kind, privacy/safety note, result, and claim limit. Human approval does not replace required `code`, `test`, `runtime`, or `delivery` evidence. Existing Playwright/package-script browser tests remain canonical repeatable regression evidence when present. Do not plan new browser infrastructure by default; use Playwright scripting only for checks `agent-browser` cannot cover cleanly, such as JS-disabled, structured console, or multi-context verification.
+</browser_proof_planning>
 <goal_backward_planning>
 Plan backward from success criteria.
 
@@ -195,18 +204,8 @@ anti_regression_targets:
   - Existing session middleware behavior remains unchanged for already-supported routes.
 known_unknowns:
   - Exact copy wording for auth errors may still need product confirmation.
-ui_proof_slots: []
-no_ui_proof_rationale: Not UI-sensitive; scoped work does not claim a visible UI outcome.
-high_leverage_surfaces: []
-second_pass_required: false
-closure_claim_limit: Do not claim phase completion until verification satisfies the evidence contract for the scoped truths.
-parallelism_budget:
-  max_concurrent_plans: 1
-  safe_parallelism: []
-leverage:
-  lost: Slightly more planning ceremony for this plan.
-  kept: Existing auth/session architecture and repo conventions.
-  gained: Explicit anti-drift boundaries and fail-closed escalation.
+browser_proof_required: false
+browser_proof_rationale: Not UI-sensitive; scoped work does not claim a visible UI outcome.
 must_haves:
   truths:
     - User can sign in with email and password.
@@ -225,11 +224,9 @@ Schema rules:
 - `requirements` must not be empty
 - `files-modified` should list the files this plan is expected to touch
 - `must_haves` must trace back to roadmap success criteria
-- `non_goals`, `hard_boundaries`, `escalation_triggers`, and `closure_claim_limit` must not be empty
-- include `ui_proof_slots` for UI-sensitive work or `no_ui_proof_rationale` otherwise
-- `leverage.lost`, `leverage.kept`, and `leverage.gained` must all be explicit
-- `second_pass_required: true` if `high_leverage_surfaces` is non-empty
-- `parallelism_budget.max_concurrent_plans` must stay `1` unless the plan proves disjoint write ownership
+- `non_goals`, `hard_boundaries`, `escalation_triggers`, and `approval_gates` must be explicit
+- include `browser_proof_required` and `browser_proof_rationale`
+- if `browser_proof_required: true`, include a `## Browser Proof Plan` section with route/state, viewport, runtime path, evidence command or no-command rationale, observations, artifacts, and claim limit
 </plan_schema>
 
 <task_format>
@@ -326,16 +323,8 @@ anti_regression_targets:
   - Existing user route behavior outside the new list view remains unchanged.
 known_unknowns:
   - Final empty-state copy may still need product confirmation.
-high_leverage_surfaces: []
-second_pass_required: false
-closure_claim_limit: Do not claim phase completion until verification confirms the scoped truths with the required evidence.
-parallelism_budget:
-  max_concurrent_plans: 1
-  safe_parallelism: []
-leverage:
-  lost: Slightly more planning ceremony for stronger execution boundaries.
-  kept: Existing route/component conventions and repo-native workflow.
-  gained: Better anti-drift enforcement and more honest closure limits.
+browser_proof_required: true
+browser_proof_rationale: Visible route changes require rendered browser proof.
 must_haves:
   truths:
     - Users can view the list page.
@@ -382,6 +371,15 @@ must_haves:
 ## Approval Gates
 - [Decision or side-effect boundaries that require explicit user approval]
 
+## Browser Proof Plan
+Routes/states: [Exact routes or UI states to inspect, or `N/A` when not required]
+Viewports: [Desktop/mobile coverage or narrowed viewport claim]
+Runtime path: [agent-browser preferred; explain fallback availability constraints]
+Evidence command: [Runnable command, or use `No-command rationale:` for narrowed manual/interactive proof]
+Observations: [Rendered behavior, interaction steps, console/network observations]
+Artifacts: [Screenshot/report/log paths plus local-only or publishable safety note]
+Claim limit: [Exact claim this proof can support]
+
 <checks>
 <plan_check>
 checker: self | cross_runtime
@@ -408,13 +406,8 @@ notes: [What the checker actually validated or why it was skipped]
 ## Success Criteria
 - [What must be true when this plan is complete]
 
-## High-Leverage Review
-- [Which high-leverage surfaces are touched and whether a second pass is required]
-
-## Leverage Review
-- Lost: [What leverage this plan sacrifices]
-- Kept: [What existing leverage or conventions it preserves]
-- Gained: [What leverage this plan creates]
+## Second-Pass Review
+- [Shared/high-risk surfaces to re-check for contradictions, stale assumptions, and overclaims before closure]
 
 ## Notes
 [Gotchas, implementation notes, or explicit assumptions]
@@ -505,12 +498,9 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 6. `must_have_quality` - success criteria are specific, observable, and reflected in tasks
 7. `context_compliance` - locked decisions are honored and deferred ideas stay out of scope
 8. `goal_achievement` - the plan, if executed perfectly, actually achieves the stated phase goal: goal addressed (tasks deliver the goal), success criteria reachable (each criterion traceable to a task verify output), and outcome observable (a human or automated check can confirm the goal was met)
-9. `scope_boundaries` - anti-goals and hard boundaries are explicit, enforceable, and reflected in the task set
-10. `anti_regression_capture` - anti-regression targets are named and mapped to verification
-11. `escalation_integrity` - stop-and-challenge triggers and approval gates are present where side effects or ambiguity warrant them
-12. `closure_honesty` - closure claim limit prevents the plan from overclaiming what verification can prove
-13. `high_leverage_review` - high-leverage surfaces and second-pass obligations are recorded honestly
-14. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. When `workflow.discuss: true`, missing, proofless, agent-discretion-only, or invalid APPROACH.md is a blocker before a plan can be accepted.
+9. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. When `workflow.discuss: true`, missing, proofless, agent-discretion-only, or invalid APPROACH.md is a blocker before a plan can be accepted.
+
+The smaller dimension set still preserves the old failure coverage: scope boundaries are checked under `scope_sanity`, anti-regression and escalation under `context_compliance`, closure honesty and browser-proof specificity under `goal_achievement`, and second-pass review under the final shared-surface review before closure.
 ### Invoking the Checker
 1. If `.work/config.json` has `workflow.planCheck: false`, skip the independent checker. Perform the planner self-check below and report `reduced_assurance`. This does not skip the earlier alignment-proof gate when `workflow.discuss: true`.
 2. If plan checking is enabled, check if your runtime provides a `gsdd-plan-checker` agent.
@@ -528,7 +518,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
      "summary": "One sentence overall assessment",
      "issues": [
        {
-         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | scope_boundaries | anti_regression_capture | escalation_integrity | closure_honesty | high_leverage_review | approach_alignment",
+         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
          "severity": "blocker | warning",
          "description": "What is wrong",
          "plan": "01-PLAN",
@@ -587,9 +577,9 @@ For each task:
 - [ ] `escalation_triggers` force stop-and-challenge instead of silent interpretation
 - [ ] `approval_gates` appear anywhere side effects or irreversible choices could happen
 - [ ] `anti_regression_targets` are concrete enough for verification to check later
-- [ ] `closure_claim_limit` prevents the executor from claiming more than the evidence can support
-- [ ] `leverage.lost`, `leverage.kept`, and `leverage.gained` are explicit and defensible
-- [ ] If `high_leverage_surfaces` is non-empty, `second_pass_required` is true and named in the plan body
+- [ ] Evidence contract and claim limits prevent the executor from claiming more than verification can support
+- [ ] Browser-proof-required plans include route/state, viewport, runtime path, evidence command or no-command rationale, observations, artifacts, and claim limit
+- [ ] Shared or high-risk surfaces are named for a second-pass contradiction/staleness review
 
 ### Red Flags
 - A success criterion has no task covering it
@@ -615,14 +605,14 @@ Planning is done when all of these are true:
 - [ ] Plan self-check passed
 - [ ] Success criteria from `ROADMAP.md`, or Done When criteria from `CHANGE.md`, are represented as must-haves
 - [ ] Goal-backward derivation from criteria to artifacts to key links to tasks is explicit
-- [ ] Every plan has frontmatter with `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `non_goals`, `hard_boundaries`, `escalation_triggers`, `approval_gates`, `anti_regression_targets`, `ui_proof_slots` or `no_ui_proof_rationale`, `closure_claim_limit`, `parallelism_budget`, `leverage`, and `must_haves`
+- [ ] Every plan has frontmatter with `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `non_goals`, `hard_boundaries`, `escalation_triggers`, `approval_gates`, `anti_regression_targets`, `known_unknowns`, `browser_proof_required`, `browser_proof_rationale`, and `must_haves`
 - [ ] Every plan frontmatter records `runtime` and `assurance`
 - [ ] Every plan records checker outcome in a structured `<checks>` block
 - [ ] Every task has XML structure with `id`, `type`, `files`, `action`, `verify`, and `done`
 - [ ] Every task has at least one runnable verify command
 - [ ] Plan sizing stays within 2-5 tasks, preferring 2-3
 - [ ] Locked decisions from `.work/SPEC.md` and APPROACH.md are honored
-- [ ] Plan body includes explicit `## Anti-Goals`, `## Hard Boundaries`, `## Evidence Contract`, `## Common Pitfalls`, `## Stop-And-Challenge`, `## Approval Gates`, and `## Leverage Review` sections
+- [ ] Plan body includes explicit `## Anti-Goals`, `## Hard Boundaries`, `## Evidence Contract`, `## Common Pitfalls`, `## Stop-And-Challenge`, `## Approval Gates`, and `## Second-Pass Review` sections; UI-sensitive plans also include `## Browser Proof Plan`
 - [ ] Any git guidance stays repo-native and follows `.work/config.json`
 </success_criteria>
 
