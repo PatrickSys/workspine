@@ -1,3 +1,21 @@
+# [0.28.0](https://github.com/PatrickSys/workspine/compare/v0.27.0...v0.28.0) (2026-07-08)
+
+
+### Bug Fixes
+
+* **m0b:** surface next control-map blockers ([9b80e80](https://github.com/PatrickSys/workspine/commit/9b80e80eb35df54fa39dc0055362170d330bacd7))
+* **m0e:** align CLI and public surface language ([f5ab619](https://github.com/PatrickSys/workspine/commit/f5ab619a15ac22cb14eec9888d78c17cae9fee7d))
+* release stdin after init prompts ([a6162c3](https://github.com/PatrickSys/workspine/commit/a6162c33da5b41b99eb1c406d3646c4a5fca57f0))
+* route brownfield planning by authority ([5d4dbb0](https://github.com/PatrickSys/workspine/commit/5d4dbb04d89d94cdb925f3cc2457697ef581f8db))
+
+
+### Features
+
+* add boxed next card snapshot ([0d50190](https://github.com/PatrickSys/workspine/commit/0d501905651d29c580da81b46d7454b6de88a9bb))
+* add state directory resolver ([b4eae8c](https://github.com/PatrickSys/workspine/commit/b4eae8c93a905c7c8bc53bb451d2ec64d452ffd5))
+* fold gap planning into plan workflow ([11a4ddd](https://github.com/PatrickSys/workspine/commit/11a4ddd8026dcec16a21072ddb4d59fe87fada04))
+* write init state to work folder ([cb4e850](https://github.com/PatrickSys/workspine/commit/cb4e850600d2952e53321d6ffe8665ac0017d53d))
+
 # [0.27.0](https://github.com/PatrickSys/workspine/compare/v0.26.0...v0.27.0) (2026-06-29)
 
 
