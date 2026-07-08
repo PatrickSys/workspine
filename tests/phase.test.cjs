@@ -1134,7 +1134,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.phase, '30');
   });
 
-  test('allows plan-milestone-gaps as an owned write before mutating roadmap', async () => {
+  test('allows plan amend as an owned write before mutating roadmap', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'ROADMAP.md'),
       [
@@ -1148,14 +1148,16 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
     fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
 
-    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan-milestone-gaps']);
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'amend']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
     const output = JSON.parse(result.output);
     assert.strictEqual(output.allowed, true);
     assert.strictEqual(output.classification, 'owned_write');
-    assert.deepStrictEqual(output.ownedWrites, ['roadmap', 'phase-directories']);
+    assert.deepStrictEqual(output.ownedWrites, ['research', 'plan', 'roadmap', 'phase-directories']);
     assert.strictEqual(output.explicitLifecycleMutation, 'none');
+    assert.strictEqual(output.phase, 'amend');
+    assert.strictEqual(output.authority, 'plan_amend');
   });
 
   test('finds lifecycle state from a nested directory', async () => {

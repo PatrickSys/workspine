@@ -69,7 +69,7 @@ For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky
 Optional closure and milestone-continuation workflows in the shipped surface:
 
 - `gsdd-verify-work` adds conversational UAT when user-facing behavior needs explicit validation.
-- `gsdd-plan-milestone-gaps` turns audit findings into gap-closure phases when a milestone is not ready to ship.
+- `gsdd-plan` also handles amend/extend planning when audit findings need gap-closure phases before a milestone is ready to ship.
 - `gsdd-complete-milestone` archives a shipped milestone, evolves `SPEC.md`, and collapses `ROADMAP.md`.
 - `gsdd-new-milestone` starts the next milestone after closure.
 
@@ -209,7 +209,6 @@ Global install writes Workspine-managed files under selected agent homes and rec
 | `gsdd-audit-milestone` | Cross-phase integration, requirements coverage, E2E flows | When all phases are done |
 | `gsdd-complete-milestone` | Archive a shipped milestone, evolve `SPEC.md`, collapse `ROADMAP.md` | When the audited milestone is ready to ship |
 | `gsdd-new-milestone` | Start the next milestone with goals, requirements, and roadmap phases | After closing a milestone and starting the next one |
-| `gsdd-plan-milestone-gaps` | Turn milestone audit findings into gap-closure phases | When audit findings need planned follow-up before shipment |
 | `gsdd-quick` | Plan and execute sub-hour work outside the phase cycle | Bug fixes, small features, config changes when the bounded change is already concrete |
 | `gsdd-pause` | Save session context to checkpoint | Stopping mid-phase |
 | `gsdd-resume` | Restore context from checkpoint and route to next action | Starting a new session |
@@ -367,8 +366,8 @@ Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces whe
 
 ### Milestone Continuation
 
-- `Claude/OpenCode`: `/gsdd-plan-milestone-gaps` when audit findings need closure work, or `/gsdd-complete-milestone -> /gsdd-new-milestone` when the milestone is ready to ship
-- `Codex`: `$gsdd-plan-milestone-gaps` when audit findings need closure work, or `$gsdd-complete-milestone -> $gsdd-new-milestone` when the milestone is ready to ship
+- `Claude/OpenCode`: `/gsdd-plan` amend/extend mode when audit findings need closure work, or `/gsdd-complete-milestone -> /gsdd-new-milestone` when the milestone is ready to ship
+- `Codex`: `$gsdd-plan` amend/extend mode when audit findings need closure work, or `$gsdd-complete-milestone -> $gsdd-new-milestone` when the milestone is ready to ship
 - `Cursor / Copilot / Gemini`: use the matching slash commands when skill discovery is available, with the same routing as above
 
 ### Existing Codebase
