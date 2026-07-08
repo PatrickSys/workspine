@@ -50,7 +50,8 @@ When browser proof is required, the plan body should include:
 Routes/states: /example route, role, data state, and UI state to inspect
 Viewports: Desktop 1280px and mobile 390px, or a narrowed viewport claim
 Runtime path: agent-browser preferred; explain fallback constraints if unavailable
-Evidence command: npm run test:e2e -- --grep "changed flow"
+Evidence kind: runtime
+No-command rationale: agent-browser/manual refs were required for this local runtime; claim is limited to the observed session.
 Observations: Changed control is visible, interaction completes, no relevant console/network failures
 Artifacts: .work/.../artifacts/example-1280.png (local-only unless sanitized)
 Claim limit: Proves only this changed route/state and viewport set
@@ -70,14 +71,17 @@ Write one record per checked flow:
 ```markdown
 ## Browser Proof Observation
 
+- Plan: 01-example/01-PLAN.md
 - Flow: /example route, role, data state, and UI state checked
 - Viewports: 1280x720 desktop, 390x844 mobile
 - Runtime path: agent-browser
-- Evidence command: npm run test:e2e -- --grep "changed flow"
+- Evidence kind: runtime
+- No-command rationale: agent-browser/manual refs were required for this local runtime; claim is limited to the observed session.
 - Observed: Changed control rendered, interaction completed, no relevant console/network failures
 - Artifacts:
   - .work/.../artifacts/example-1280.png — local-only, not safe to publish
   - .work/.../artifacts/example-390.png — local-only, not safe to publish
+- Privacy/safety: artifacts are local-only and not safe to publish unless sanitized
 - Result: passed
 - Claim limit: Proves only the scoped route/state, data setup, and viewport set.
 - Stale after: route markup, interaction behavior, data fixture, or viewport assumptions change.

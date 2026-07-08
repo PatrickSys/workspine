@@ -1270,6 +1270,41 @@ describe('gsdd init and update', () => {
     assert.match(updatedChecker, /^sandbox_mode = "read-only"/m);
   });
 
+  test('update --templates refreshes templates without rewriting historical phase artifacts', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    let gsdd;
+    try {
+      gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'agents');
+    } finally {
+      restoreStdin();
+    }
+
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-history');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    const historicalPlanPath = path.join(phaseDir, '01-PLAN.md');
+    const historicalPlan = [
+      '---',
+      'ui_proof_slots: []',
+      'no_ui_proof_rationale: Historical CLI-only phase; no rendered UI claim.',
+      '---',
+      '# Phase 1 Plan',
+      '',
+      'This artifact is historical user work and must not be rewritten by update.',
+    ].join('\n');
+    fs.writeFileSync(historicalPlanPath, historicalPlan);
+
+    const templatePath = path.join(tmpDir, '.work', 'templates', 'ui-proof.md');
+    fs.writeFileSync(templatePath, 'stale template\n');
+
+    await gsdd.cmdUpdate('--templates');
+
+    const updatedTemplate = fs.readFileSync(templatePath, 'utf-8');
+    assert.doesNotMatch(updatedTemplate, /^stale template$/m);
+    assert.match(updatedTemplate, /Browser Proof Observation Template/);
+    assert.strictEqual(fs.readFileSync(historicalPlanPath, 'utf-8'), historicalPlan);
+  });
+
   test('cli entrypoint still runs when invoked through an aliased bin path', async () => {
     const result = await runCliViaJunction(tmpDir, ['help']);
 

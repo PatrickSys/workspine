@@ -211,7 +211,7 @@ Before reporting a task complete:
 - A task is not complete because code was written. It is complete when the intended verification path actually passes.
 
 ### Browser Proof Execution
-If the plan sets `browser_proof_required: true`, execute the Browser Proof Plan and record observed proof against the exact route/state, viewport, observation, evidence kind, artifact path or manual step, privacy/safety note, result, and claim limit before claiming task completion.
+If the plan sets `browser_proof_required: true`, execute the Browser Proof Plan and record observed proof against the exact `Plan:` artifact path, route/state, viewport, observation, evidence kind, artifact path or manual step, privacy/safety note, result, and claim limit before claiming task completion.
 
 Use `agent-browser` as the default live UI proof path:
 - open the planned route/state

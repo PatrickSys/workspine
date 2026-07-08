@@ -138,6 +138,7 @@ The Browser Proof Plan is plain markdown, not a JSON slot schema. It must name:
 - `Routes/states:` exact route(s), screen(s), or UI states to inspect
 - `Viewports:` desktop and mobile for responsive or layout-sensitive claims, or a narrowed claim explaining why one viewport is enough
 - `Runtime path:` `agent-browser` preferred; Playwright or another project-native browser fallback must explain the availability constraint
+- `Evidence kind:` `runtime` for live browser observation or `test` for a repeatable browser-regression command
 - `Evidence command:` a runnable command that can reproduce or validate the browser proof, or `No-command rationale:` when the runtime path is manual/interactive only and the claim is narrowed accordingly
 - `Observations:` rendered DOM/behavior, interaction steps, and console/network observations when relevant
 - `Artifacts:` screenshot/report/log paths if produced, with local-only vs publishable privacy/safety note
@@ -226,7 +227,7 @@ Schema rules:
 - `must_haves` must trace back to roadmap success criteria
 - `non_goals`, `hard_boundaries`, `escalation_triggers`, and `approval_gates` must be explicit
 - include `browser_proof_required` and `browser_proof_rationale`
-- if `browser_proof_required: true`, include a `## Browser Proof Plan` section with route/state, viewport, runtime path, evidence command or no-command rationale, observations, artifacts, and claim limit
+- if `browser_proof_required: true`, include a `## Browser Proof Plan` section with route/state, viewport, runtime path, evidence kind, evidence command or no-command rationale, observations, artifacts, and claim limit
 </plan_schema>
 
 <task_format>
@@ -375,6 +376,7 @@ must_haves:
 Routes/states: [Exact routes or UI states to inspect, or `N/A` when not required]
 Viewports: [Desktop/mobile coverage or narrowed viewport claim]
 Runtime path: [agent-browser preferred; explain fallback availability constraints]
+Evidence kind: [runtime or test]
 Evidence command: [Runnable command, or use `No-command rationale:` for narrowed manual/interactive proof]
 Observations: [Rendered behavior, interaction steps, console/network observations]
 Artifacts: [Screenshot/report/log paths plus local-only or publishable safety note]
@@ -578,7 +580,7 @@ For each task:
 - [ ] `approval_gates` appear anywhere side effects or irreversible choices could happen
 - [ ] `anti_regression_targets` are concrete enough for verification to check later
 - [ ] Evidence contract and claim limits prevent the executor from claiming more than verification can support
-- [ ] Browser-proof-required plans include route/state, viewport, runtime path, evidence command or no-command rationale, observations, artifacts, and claim limit
+- [ ] Browser-proof-required plans include route/state, viewport, runtime path, evidence kind, evidence command or no-command rationale, observations, artifacts/privacy-safety posture, and claim limit
 - [ ] Shared or high-risk surfaces are named for a second-pass contradiction/staleness review
 
 ### Red Flags
