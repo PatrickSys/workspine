@@ -1,20 +1,32 @@
-# Observation record
+# Browser Proof Observation Record
 
-When a step claims UI or runtime behavior was verified, write down what was
-actually observed. Plain markdown, one record per checked flow:
+When a step claims rendered UI or browser-observed runtime behavior was
+verified, record one parser-compatible markdown section per checked flow.
 
-- **flow**: which screen/route/behavior was checked (plans name these up front:
-  a plan touching UI lists the flows that need a real-browser look).
-- **tool**: what did the looking (`agent-browser`, `playwright`, `manual`,
-  or a project command).
-- **observed**: what actually happened — rendered DOM state, behavior on
-  interaction, console/network errors seen or absent.
-- **artifacts**: paths to screenshot / console log / network log, if captured.
-- **safe to publish**: yes/no — may the artifacts leave the repo (no secrets,
-  no private data)?
-- **stale after**: what change would invalidate this observation (optional).
-- **result**: worked / failed (say why) / partly (say what is missing).
+```markdown
+## Browser Proof Observation
 
-This replaces the retired machine-validated UI-proof bundle (`ui_proof_slots`,
-`gsdd ui-proof validate/compare`). The structure survives; the JSON schema
-validator does not.
+- Plan: 01-example/01-PLAN.md
+- Flow: /example route, role, data state, and UI state checked
+- Viewports: 1280x720 desktop, 390x844 mobile
+- Runtime path: agent-browser
+- Evidence kind: runtime
+- No-command rationale: agent-browser/manual refs were required for this local runtime; claim is limited to the observed session.
+- Observed: Changed control rendered, interaction completed, no relevant console/network failures
+- Artifacts:
+  - .work/.../artifacts/example-1280.png - local-only, not safe to publish
+  - .work/.../artifacts/example-390.png - local-only, not safe to publish
+- Privacy/safety: artifacts are local-only and not safe to publish unless sanitized
+- Result: passed
+- Claim limit: Proves only the scoped route/state, data setup, and viewport set.
+- Stale after: route markup, interaction behavior, data fixture, or viewport assumptions change.
+```
+
+Direct `gsdd verify <phase>` checks the declaration shape, required fields,
+repo-local linked records, explicit passing result, and exact `Plan:` reference.
+Supported Browser Proof observation evidence kinds are `runtime` for live
+browser observation and `test` for repeatable browser-regression commands.
+It does not inspect screenshot pixels, network logs, or visual quality. Failed
+or partial proof should use the failure-cause names in proof-rules.md
+(`distilled/references/proof-rules.md`) and leave the browser-proof claim
+blocked or narrowed.

@@ -44,7 +44,7 @@ The executor is plan-scoped:
 
 ## Core Algorithm
 
-1. **Load plan.** Parse frontmatter (`phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `must_haves`), objective, context references, and tasks. Treat any prompt-provided `<files_to_read>` block as task_scoped unless it explicitly labels entries as mandatory_now.
+1. **Load plan.** Parse frontmatter (`phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`), objective, context references, and tasks. Treat any prompt-provided `<files_to_read>` block as task_scoped unless it explicitly labels entries as mandatory_now.
 2. **Run lifecycle preflight.** Before mutating lifecycle artifacts, run `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`. If blocked, stop and surface the blocker.
 3. **For each task:**
    a. If `type="auto"`: Confirm mandatory_now context is loaded, read the task_scoped files and focused references needed for the current task, execute the task, apply deviation rules as needed, run verification, confirm done criteria, and handle any git actions using repo/user conventions.
@@ -175,7 +175,7 @@ For each task in the plan, follow this loop:
 ### Frontmatter And Task Semantics
 
 The executor consumes the plan schema defined by the planner:
-- frontmatter keys: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `must_haves`
+- frontmatter keys: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`
 - task types:
   - `type="auto"` - proceed without pausing
   - `type="checkpoint:user"` - stop for a required user decision or human-only step
@@ -210,8 +210,8 @@ Before reporting a task complete:
 - if an API change is involved, hit the endpoint or targeted integration path
 - A task is not complete because code was written. It is complete when the intended verification path actually passes.
 
-### UI Proof Execution
-If the plan defines UI proof slots, record observed proof against the exact claim, route/state, observation, evidence kind, artifact path or manual step, privacy metadata, result, and claim limit before claiming task completion.
+### Browser Proof Execution
+If the plan sets `browser_proof_required: true`, execute the Browser Proof Plan and record observed proof against the exact `Plan:` artifact path, route/state, viewport, observation, evidence kind, artifact path or manual step, privacy/safety note, result, and claim limit before claiming task completion.
 
 Use `agent-browser` as the default live UI proof path:
 - open the planned route/state
@@ -220,9 +220,9 @@ Use `agent-browser` as the default live UI proof path:
 - capture screenshots for the planned viewport(s)
 - record relevant console/network observations
 
-If `agent-browser` is unavailable, record the availability constraint and closest project-native interactive browser fallback in the proof bundle instead of silently treating the fallback as the default path. Existing Playwright/package-script browser tests remain canonical repeatable regression evidence when present; use Playwright scripting only for checks `agent-browser` cannot cover cleanly, such as JS-disabled, structured console, or multi-context verification.
+If `agent-browser` is unavailable, record the availability constraint and closest project-native interactive browser fallback instead of silently treating the fallback as the default path. Existing Playwright/package-script browser tests remain canonical repeatable regression evidence when present; use Playwright scripting only for checks `agent-browser` cannot cover cleanly, such as JS-disabled, structured console, or multi-context verification.
 
-Artifact metadata must include `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; raw screenshots, traces, videos, DOM snapshots, and reports are local-only/unsafe by default and cannot back public, tracked, delivery, release, or publication proof claims. Use `gsdd ui-proof validate <path>` or `gsdd health` when a bundle exists. Artifact count, source comments, AST/cAST findings, semantic search, and Semble-like retrieval are not proof. Missing or weakly linked evidence must be recorded as proof debt, waiver, deferment, or reduced claim language rather than satisfied proof.
+Raw screenshots, traces, videos, DOM snapshots, and reports are local-only/unsafe by default and cannot back public, tracked, delivery, release, or publication proof claims unless sanitized. Artifact count, source comments, AST/cAST findings, semantic search, and Semble-like retrieval are not proof. Missing or weakly linked evidence must be recorded as proof debt, waiver, deferment, or reduced claim language rather than satisfied proof, using the failure-cause names in `distilled/references/proof-rules.md` when proof fails or is partial.
 </execution_loop>
 
 <checkpoint_protocol>

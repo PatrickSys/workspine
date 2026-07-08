@@ -126,7 +126,7 @@ Combine:
 - Integration checker's report (wiring gaps, auth gaps, broken flows, requirements integration map)
 - Evidence observations by kind (`code`, `test`, `runtime`, `delivery`, `human`) from phase verifications, summaries, integration findings, and delivery metadata
 - Release claim posture observations: selected `release_claim_posture`, unsupported claims, waivers, deferrals, and contradiction checks for public, runtime, delivery, planning-drift, and generated-surface claims
-- UI proof debt from phase/quick proof bundles or verification gaps, preserving the rule that waiver/deferment/human acceptance narrows claims rather than satisfying missing proof
+- Browser-proof debt from phase/quick observation records or verification gaps, preserving the rule that waiver/deferment/human acceptance narrows claims rather than satisfying missing proof
 
 ## 5. 3-Source Cross-Reference
 

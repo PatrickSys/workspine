@@ -153,15 +153,13 @@ Any checkpoint must be justified by the task itself, not by planner caution or h
 Any plan containing `checkpoint:*` must set `autonomous: false`.
 </task_contract>
 
-<ui_proof_planning>
-For UI-sensitive work, plan proof slots that can later be matched exactly to claim, route/state, observation, evidence kind, artifact path or manual step, privacy metadata, result, and claim limit. Use only the stable evidence kinds `code`, `test`, `runtime`, `delivery`, and `human`.
+<browser_proof_planning>
+For UI-sensitive work, set `browser_proof_required: true` and include a `## Browser Proof Plan` that can later be matched exactly to route/state, viewport, observation, evidence kind, artifact path or manual step, privacy/safety note, result, and claim limit. Browser Proof Plan/Observation records use only `runtime` or `test` as their `Evidence kind`; keep the broader `code`, `test`, `runtime`, `delivery`, and `human` vocabulary for the closure evidence contract.
 
-Require observed artifacts to carry `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; when a planned slot is meant to support public, publication, tracked, delivery, or release proof, say to validate the observed bundle with `gsdd ui-proof validate <path> --claim <...>`. `gsdd ui-proof validate`/`gsdd health` must catch invalid bundle metadata when present.
+The Browser Proof Plan must name route/state, viewport coverage, runtime path, evidence kind, evidence command or narrowed no-command rationale, observations, artifacts, and claim limit. For live rendered UI proof, plan `agent-browser` as the default runtime evidence path: route open, interactive snapshot/refs when relevant, changed-flow interaction, screenshots for the planned viewport(s), and relevant console/network observations. If `agent-browser` is unavailable in the runtime, require an explicit availability constraint and the closest project-native interactive browser fallback before narrowing the claim. Existing Playwright/package-script browser tests remain the canonical repeatable regression path when present; do not scaffold new browser infrastructure by default. Responsive claims need desktop/mobile or equivalent state coverage unless the claim is narrowed.
 
-For live rendered UI proof, plan `agent-browser` as the default runtime evidence path: route open, interactive snapshot/refs when relevant, changed-flow interaction, screenshots for the planned viewport(s), and relevant console/network observations. If `agent-browser` is unavailable in the runtime, require an explicit availability constraint and the closest project-native interactive browser fallback before narrowing the claim. Existing Playwright/package-script browser tests remain the canonical repeatable regression path when present; do not scaffold new browser infrastructure by default. The planner chooses viewport coverage, but must explain why the viewport set is sufficient for the claim or narrow the claim limit; responsive claims need desktop/mobile or equivalent state coverage.
-
-Do not let source annotations, AST/cAST findings, semantic search, comments, or Semble-like retrieval satisfy proof slots; they are discovery hints only. Human acceptance can narrow or waive a claim and record proof debt, but it must not turn missing or mismatched non-human evidence into `satisfied` proof.
-</ui_proof_planning>
+Do not let source annotations, AST/cAST findings, semantic search, comments, or Semble-like retrieval satisfy browser proof; they are discovery hints only. Human acceptance can narrow or waive a claim and record proof debt, but it must not turn missing or mismatched non-human evidence into satisfied proof.
+</browser_proof_planning>
 
 <dependency_graph_example>
 Example dependency graph:
@@ -194,8 +192,9 @@ Wave rule:
 Write one or more `PLAN.md` files to the phase directory.
 
 Keep the current GSDD schema exactly:
-- frontmatter keys: `phase`, `plan`, `type`, `wave`, `runtime`, `assurance`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `non_goals`, `hard_boundaries`, `escalation_triggers`, `approval_gates`, `anti_regression_targets`, `known_unknowns`, `ui_proof_slots`, `no_ui_proof_rationale`, `high_leverage_surfaces`, `second_pass_required`, `closure_claim_limit`, `parallelism_budget`, `leverage`, `must_haves`
+- frontmatter keys: `phase`, `plan`, `type`, `wave`, `runtime`, `assurance`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `non_goals`, `hard_boundaries`, `escalation_triggers`, `approval_gates`, `anti_regression_targets`, `known_unknowns`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`
 - typed tasks with `files`, `action`, `verify`, and `done`
+- if `browser_proof_required: true`, the plan body must include `## Browser Proof Plan` with route/state, viewport, runtime path, evidence kind, evidence command or no-command rationale, observations, artifacts, and claim limit
 
 Typed frontmatter example:
 
@@ -225,18 +224,8 @@ anti_regression_targets:
   - Existing session middleware behavior remains unchanged for already-supported routes.
 known_unknowns:
   - Exact copy wording for auth errors may still need product confirmation.
-ui_proof_slots: []
-no_ui_proof_rationale: Not UI-sensitive; scoped work does not claim a visible UI outcome.
-high_leverage_surfaces: []
-second_pass_required: false
-closure_claim_limit: Do not claim phase completion until verification satisfies the evidence contract for the scoped truths.
-parallelism_budget:
-  max_concurrent_plans: 1
-  safe_parallelism: []
-leverage:
-  lost: Slightly more planning ceremony for this plan.
-  kept: Existing auth/session architecture and repo conventions.
-  gained: Explicit anti-drift boundaries and fail-closed escalation.
+browser_proof_required: false
+browser_proof_rationale: Not UI-sensitive; scoped work does not claim a visible UI outcome.
 must_haves:
   truths:
     - "User can sign in with email and password"
@@ -277,12 +266,7 @@ Before returning, self-check against the checker dimensions:
 6. must-have quality
 7. context compliance
 8. goal achievement
-9. scope boundaries
-10. anti-regression capture
-11. escalation integrity
-12. closure honesty
-13. high-leverage review
-14. approach alignment (when APPROACH.md exists)
+9. approach alignment (when APPROACH.md exists)
 
 Task completeness rules:
 - every task has files, action, verify, and done

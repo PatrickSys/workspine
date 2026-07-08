@@ -72,7 +72,7 @@
 59. [Continuity Authority And Planning-State Drift](#d59---continuity-authority-and-planning-state-drift)
 60. [Release Closeout Contract](#d60---release-closeout-contract)
 61. [Deliberate Subagent Contract](#d61---deliberate-subagent-contract)
-62. [Repo-Native UI Proof Contract](#d62---repo-native-ui-proof-contract)
+62. [Repo-Native Browser Proof Contract](#d62---repo-native-browser-proof-contract)
 63. [Computed-First Control Map](#d63---computed-first-control-map)
 64. [Work-Native Continuity Authority](#d64---work-native-continuity-authority)
 
@@ -961,7 +961,7 @@ Implementation lives under `bin/lib/`:
 | E7 | ERROR | `.planning/templates/codebase/` missing or empty |
 | E8 | ERROR | `.planning/templates/` missing critical root files (`spec.md`, `roadmap.md`, `auth-matrix.md`, `ui-proof.md`) |
 | E9 | ERROR | `.planning/templates/brownfield-change/` missing or missing critical files (`CHANGE.md`, `HANDOFF.md`, `VERIFICATION.md`) |
-| E10 | ERROR | Known UI proof bundle metadata is unparseable or fails deterministic privacy/claim validation |
+| E10 | RETIRED | Retired UI proof bundle metadata validator; current browser proof uses plan declarations and markdown observation records |
 | W1 | WARN | `generation-manifest.json` missing |
 | W2 | WARN | Manifest-tracked installed templates/helpers modified locally (hash mismatch vs manifest) |
 | W3 | WARN | Manifest-tracked installed templates/helpers missing from disk but listed in manifest |
@@ -2372,9 +2372,13 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
   - `escalation_triggers`
   - `approval_gates`
   - `anti_regression_targets`
-  - `closure_claim_limit`
-  - `parallelism_budget`
-  - `leverage` (`lost / kept / gained`)
+  - `known_unknowns`
+  - `browser_proof_required`
+  - `browser_proof_rationale`
+  - `must_haves`
+- Keep high-risk review pressure in the plan body through Evidence Contract,
+  Stop-And-Challenge, Approval Gates, and Second-Pass Review sections instead
+  of expanding the frontmatter into a control-plane schema.
 - Upgrade planner checking to block missing anti-drift contract fields instead of treating them as optional prose quality.
 - Thread the new contract through execution and verification so the fields constrain what execution may do and what closure may claim.
 
@@ -2822,49 +2826,47 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 ---
 
-## D62 - Repo-Native UI Proof Contract
+## D62 - Repo-Native Browser Proof Contract
 
-**Decision (2026-04-28; revised 2026-05-09):** UI-sensitive work should carry a compact planned proof-slot contract and, when executed, an observed UI proof bundle that references artifacts by path or link while preserving the existing closure evidence kinds: `code`, `test`, `runtime`, `delivery`, and `human`. For live rendered UI proof, `agent-browser` is the default runtime evidence path for consumers, while existing Playwright tests remain the canonical repeatable browser-regression path when present. The deterministic `ui-proof` validator remains provider-agnostic structural validation, but it now validates planned slot specificity, concise tool provenance, local artifact path existence when validating from files, raw-artifact safety for paths and URLs, and failed/partial proof classification so the workflow cannot degrade back into unstructured "looks good" review. Direct phase verification also treats plan frontmatter as the UI-proof declaration authority and fails closed on missing phase prerequisites, empty `ui_proof_slots: []` without `no_ui_proof_rationale`, and invalid required UI proof.
+**Decision (2026-04-28; revised 2026-05-09; revised 2026-07-08):** UI-sensitive work should carry a compact browser-proof declaration in plan frontmatter and, when executed, a plain markdown observation record that references artifacts by path or link while preserving the existing closure evidence kinds: `code`, `test`, `runtime`, `delivery`, and `human`. For live rendered UI proof, `agent-browser` is the default runtime evidence path for consumers, while existing Playwright tests remain the canonical repeatable browser-regression path when present. Direct phase verification treats `browser_proof_required` and `browser_proof_rationale` as the declaration authority and fails closed on missing phase prerequisites, invalid browser-proof frontmatter, a missing `## Browser Proof Plan` when proof is required, or a required browser-proof plan that omits route/state, viewport, runtime path, evidence kind, evidence command or no-command rationale, observations, artifacts with privacy/safety posture, and claim limit.
 
 **Context:**
-- UI proof targets the recurring failure mode where agents claim a UI works or looks good without rendered proof, matched observations, or explicit human judgment.
-- The contract defines proof slots, proof bundles, comparison statuses, fail-closed agent guardrails, deterministic metadata validation, privacy metadata, and health visibility without adding a browser-provider framework.
-- GSD's archived planner, executor, and verifier roles preserve strong lifecycle discipline, but they do not provide this UI-specific planned-vs-observed proof model. GSDD keeps the lifecycle leverage and adds a repo-native UI proof substrate without adding a browser-provider framework.
+- Browser proof targets the recurring failure mode where agents claim a UI works or looks good without rendered proof, matched observations, or explicit human judgment.
+- The contract defines plan declarations, Browser Proof Plan sections, observation records, fail-closed agent guardrails, privacy/safety notes, and claim limits without adding a browser-provider framework or a separate JSON validator.
+- GSD's archived planner, executor, and verifier roles preserve strong lifecycle discipline, but they do not provide this UI-specific browser observation model. GSDD keeps the lifecycle leverage and adds a repo-native browser proof substrate without adding a browser-provider framework.
 - OneShot's QC guidance and Vercel's `agent-browser` skill converge on an interactive browser loop for snapshots, ref-based interaction, screenshots, and network/console-adjacent inspection. GSDD adapts that as a default workflow instruction, not as a hard validator dependency.
 
 **Decision:**
-- Planning must classify UI-sensitive work and require either `ui_proof_slots` or an explicit `no_ui_proof_rationale`.
-- Direct phase verification must read `ui_proof_slots` and `no_ui_proof_rationale` from plan frontmatter only; body prose, fenced examples, and stale sidecars are not declaration authority.
-- Direct phase verification must fail nonzero with structured blockers when no matching plan or summary exists, or when `ui_proof_slots: []` lacks a nonblank `no_ui_proof_rationale`.
-- When an explicit no-UI rationale exists, stale UI-proof sidecars are warning-level cleanup signals, not proof and not blockers.
-- Planned slots record claim, route/state, required evidence kinds, minimum observations, expected artifact types, runnable validation command, environment/viewport, manual-acceptance requirement, claim limit, and requirement IDs.
-- Observed proof bundles record claim, requirement/slot IDs, route/state, environment, viewport, evidence inputs, commands/manual steps, observations, artifacts, privacy metadata, result, and claim limits.
-- Planned slots must be tight enough for the plan checker to reject vague proof: specific route/state, viewport rationale or narrowed claim limit, minimum observations, expected artifact types, runnable validation, and matchability back to the exact UI claim.
+- Planning must classify UI-sensitive work with `browser_proof_required: true|false` and a nonblank `browser_proof_rationale`.
+- Direct phase verification must read browser-proof declaration authority from plan frontmatter only. Body prose and stale sidecars are not declaration authority.
+- Direct phase verification must fail nonzero with structured blockers when no matching plan or summary exists, when browser-proof frontmatter is invalid, or when a required Browser Proof Plan is missing or incomplete.
+- When browser proof is not required and the rationale is explicit, stale browser-proof observations are warning-level cleanup signals, not proof and not blockers. Legacy `ui_proof_slots: []` with a meaningful `no_ui_proof_rationale` is treated as a compatibility warning rather than a blocker; legacy non-empty `ui_proof_slots` still require migration because required rendered proof cannot be inferred losslessly.
+- Browser Proof Plan sections record route/state, viewport coverage, runtime path, evidence kind, evidence command or narrowed no-command rationale, observations, artifacts, privacy/safety note, and claim limit.
+- Observation records record the exact plan artifact, actual route/state, viewport, runtime path, evidence kind, command/manual step, rendered observations, artifacts, result, privacy/safety note, stale-after trigger, and claim limit.
+- Browser Proof Plan sections must be tight enough for the plan checker to reject vague proof: specific route/state, viewport coverage or narrowed claim, runtime path, supported evidence kind, rendered observations, artifacts/privacy notes, evidence command or no-command rationale, and claim limit.
 - The planner chooses viewport coverage, but responsive or layout-sensitive claims require desktop/mobile or equivalent state coverage unless the claim is explicitly narrowed.
 - Execution defaults to `agent-browser` for live UI runtime proof: open the route/state, capture interactive snapshots/refs where relevant, exercise the changed flow, capture screenshots for planned viewport(s), and record relevant console/network observations.
 - Existing Playwright tests or package scripts remain the canonical repeatable browser-regression evidence when present. Playwright scripting is reserved for checks `agent-browser` cannot cover cleanly, such as JS-disabled behavior, structured console listeners, or multi-context testing.
-- Verification compares planned slots to observed bundles using `satisfied`, `partial`, `missing`, `waived`, `deferred`, and `not_applicable`; waiver and deferral are not proof.
-- UI correctness claims fail closed unless rendered proof is matched exactly to claim, route/state, observation, evidence kind, artifact path or manual step, privacy metadata, result, and claim limit, or an explicit waiver/deferment narrows the claim.
-- Human acceptance may close a narrowed claim and record proof debt, but it must not convert missing or mismatched non-human evidence into `satisfied` proof.
+- Direct verification fails closed unless each required browser-proof plan has a repo-local, parser-compatible, explicitly passing observation that names the exact plan artifact and carries supported evidence semantics, privacy/safety posture, and bounded claim scope. The workflow verifier still owns substantive judgment about whether the recorded observation actually supports the route/state, viewport, artifact, and claim.
+- Human acceptance may close a narrowed claim and record proof debt, but it must not convert missing or mismatched non-human evidence into satisfied proof.
 - Screenshots, traces, videos, reports, accessibility scans, Gherkin, and visual diffs are artifact types or activities mapped onto the five existing evidence kinds, not new evidence kinds.
-- Source annotations, AST/cAST findings, semantic search hits, comments, and Semble-like retrieval may discover proof obligations, but they are discovery hints only and do not satisfy proof slots.
+- Source annotations, AST/cAST findings, semantic search hits, comments, and Semble-like retrieval may discover proof obligations, but they are discovery hints only and do not satisfy browser proof.
 - Visual taste, accessibility judgment, baseline acceptance, subjective polish/layout quality, and privacy publication require human evidence or explicit waiver, and human approval does not replace required `code`, `test`, `runtime`, or `delivery` evidence.
-- Deterministic validation keeps the evidence and comparison-status vocabularies unchanged: planned slots require specific claim, route/state, evidence, expected artifacts, validation, viewport, and claim-limit fields; artifact entries require `visibility`, `retention`, `sensitivity`, and `safe_to_publish`; raw screenshots, traces, videos, DOM snapshots, and reports default to `local_only` plus `safe_to_publish: false`; `bin/lib/ui-proof.mjs` validates required bundle/observation fields, structured command/manual-step entries, fixed evidence kinds, concise `tools_used` IDs, claim/result statuses, comparison statuses, failure classification for failed/partial proof, claim limits, privacy metadata, safe artifact references, local artifact path existence when validating file-backed bundles, and public/tracked/delivery proof claims backed by local-only, unsafe, unsanitized, or privacy-contradictory artifacts.
-- `gsdd health` reports invalid known UI proof bundles as E10 using the same validator, staying read-only and avoiding raw artifact content inspection.
-- Failed UI proof is reported through existing GSDD gap/proof-debt language. Product behavior defects, missing or blocked infrastructure, flaky harnesses, and ambiguous specs explain causes, but they do not add new evidence kinds, result statuses, or comparison statuses.
+- The current contract is validator-light by design: direct phase verification checks declaration shape, required Browser Proof Plan fields, observation record shape, safe linked-record boundaries, exact plan references, explicit pass/fail posture, supported evidence-kind labels, and bounded claim wording. It does not inspect raw screenshot pixels, report contents, or visual quality; substantive rendered proof remains a workflow/role obligation captured in summaries or observation records.
+- Failed browser proof is reported through the failure-cause names in `distilled/references/proof-rules.md`: product behavior defects, missing or blocked infrastructure, flaky harnesses, and ambiguous specs explain causes, but they do not add new evidence kinds.
 
 **Leverage:**
-- Lost: UI-sensitive work now carries a small proof-contract burden, and default live proof guidance adds slightly more specificity for planners/checkers to enforce.
-- Kept: repo-native markdown artifacts, optional project tooling, fixed closure evidence kinds, generated-surface freshness, the plan/execute/verify separation, and provider-agnostic deterministic metadata validation.
-- Gained: exact claim-to-proof traceability, strict comparison statuses, privacy and claim-limit metadata, fail-closed overclaim guardrails, deterministic metadata validation, a concrete live browser evidence path, and health-visible protection against unsafe public proof claims.
+- Lost: UI-sensitive work still carries a small proof-contract burden, and direct verification checks only shape rather than raw screenshot/report contents.
+- Kept: repo-native markdown artifacts, optional project tooling, fixed closure evidence kinds, generated-surface freshness, the plan/execute/verify separation, and a concrete live browser evidence path.
+- Gained: a much simpler consumer contract, exact claim-to-observation traceability, privacy/safety notes, claim limits, and fail-closed overclaim guardrails without a non-existent validator command.
 
 **Evidence:**
 - `distilled/templates/ui-proof.md`
 - `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/quick.md`, `distilled/workflows/verify.md`
 - `agents/planner.md`, `agents/executor.md`, `agents/verifier.md`, `distilled/templates/delegates/plan-checker.md`
-- `bin/lib/templates.mjs`, `bin/lib/ui-proof.mjs`, `bin/lib/health.mjs`, `bin/lib/phase.mjs`, `bin/lib/rendering.mjs`
+- `bin/lib/templates.mjs`, `bin/lib/health.mjs`, `bin/lib/phase.mjs`, `bin/lib/rendering.mjs`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.init.test.cjs`
-- GSD comparison: the upstream planner, executor, and verifier role patterns preserve lifecycle rigor, but they do not define UI proof slots or planned-vs-observed UI proof bundles.
+- GSD comparison: the upstream planner, executor, and verifier role patterns preserve lifecycle rigor, but they do not define browser-proof plan declarations or observation records.
 - OneShot QC source: `https://github.com/oneshot-repo/OneShot/tree/main/skills`
 - Vercel `agent-browser` docs: `https://github.com/vercel-labs/agent-browser/blob/main/skill-data/core/SKILL.md` and `https://agent-browser.dev/snapshots`
 - Playwright docs: `https://playwright.dev/docs/trace-viewer`, `https://playwright.dev/docs/next/screenshots`, and `https://playwright.dev/mcp/tools/tracing`

@@ -273,38 +273,49 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       'must_have_quality',
       'context_compliance',
       'goal_achievement',
+      'approach_alignment',
+    ];
+    const RETIRED_PLAN_CHECK_DIMENSIONS = [
       'scope_boundaries',
       'anti_regression_capture',
       'escalation_integrity',
       'closure_honesty',
       'high_leverage_review',
-      'approach_alignment',
     ];
 
-    test('Claude plan-checker has all 14 dimensions', () => {
+    test('Claude plan-checker has all 9 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
       assert.ok(fs.existsSync(checkerPath), 'Claude checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
       for (const dim of PLAN_CHECK_DIMENSIONS) {
         assert.ok(content.includes(dim), 'Claude checker must include dimension: ' + dim);
       }
+      for (const dim of RETIRED_PLAN_CHECK_DIMENSIONS) {
+        assert.ok(!content.includes(dim), 'Claude checker must not include retired dimension: ' + dim);
+      }
     });
 
-    test('OpenCode plan-checker has all 14 dimensions', () => {
+    test('OpenCode plan-checker has all 9 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md');
       assert.ok(fs.existsSync(checkerPath), 'OpenCode checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
       for (const dim of PLAN_CHECK_DIMENSIONS) {
         assert.ok(content.includes(dim), 'OpenCode checker must include dimension: ' + dim);
       }
+      for (const dim of RETIRED_PLAN_CHECK_DIMENSIONS) {
+        assert.ok(!content.includes(dim), 'OpenCode checker must not include retired dimension: ' + dim);
+      }
     });
 
-    test('Codex plan-checker has all 14 dimensions', () => {
+    test('Codex plan-checker has all 9 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml');
       assert.ok(fs.existsSync(checkerPath), 'Codex checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
       for (const dim of PLAN_CHECK_DIMENSIONS) {
         assert.ok(content.includes(dim), 'Codex checker must include dimension: ' + dim);
+      }
+      for (const dim of RETIRED_PLAN_CHECK_DIMENSIONS) {
+        assert.ok(!content.includes(dim), 'Codex checker must not include retired dimension: ' + dim);
       }
     });
 
