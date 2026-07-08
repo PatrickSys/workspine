@@ -1,6 +1,6 @@
 # Workspine
 
-A repo-native delivery spine for the part of AI coding that still needs human judgment: planning, checking, execution, verification, and handoff.
+Plan, execute, and verify AI-assisted work from files in your repo — for the part of AI coding that still needs human judgment: planning, checking, execution, verification, and handoff.
 
 Workspine keeps planning, execution, verification, handoff, and progress state in the repo so work survives cold starts, runtime switches, and session loss. The retained package and CLI contracts remain `gsdd-cli` / `gsdd`.
 
@@ -25,20 +25,20 @@ Skip the full lifecycle for tiny, obvious edits. Direct prompting in your usual 
 ## What This Is
 
 Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:
-- scaffolds a project planning workspace (`.planning/`)
+- scaffolds a project planning workspace (`.work/`)
 - generates compact open-standard workflow entrypoints as skills (`.agents/skills/gsdd-*/SKILL.md`)
-- generates an internal repo-local helper runtime at `.planning/bin/gsdd.mjs` for deterministic workflow commands run from the repo root
+- generates an internal repo-local helper runtime at `.work/bin/gsdd.mjs` for deterministic workflow commands run from the repo root
 - optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents, Codex CLI checker agent)
 
-It gives serious AI-assisted work one durable repo workflow spine for planning, checking, execution, verification, and handoff without pretending to be a hosted orchestration layer.
+It gives serious AI-assisted work one durable, repo-native workflow for planning, checking, execution, verification, and handoff — plain files, no hosted service.
 
-Workspine is the product name. The package, CLI commands, workflow prefixes, and workspace directory remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/` — these are retained technical contracts, not rename residue.
+Workspine is the product name. The package, CLI commands, workflow prefixes, and workspace directory remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.work/`; legacy `.planning/` workspaces are still read.
 
-Workspine began as a fork of Get Shit Done, whose long-horizon delivery spine proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native delivery spine with fewer public workflow surfaces, generated runtime surfaces from a portable core, evidence-gated closure, and provenance-aware continuity.
+Workspine began as a fork of Get Shit Done, whose long-horizon workflow proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native tool with fewer public workflows, generated runtime surfaces from a portable core, proof required before closing work, and decisions that keep their why.
 
 Launch proof posture:
-- Directly validated in repo truth: Claude Code, Codex CLI, OpenCode
-- Qualified support only: Cursor, Copilot, Gemini CLI can use the shared `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it; proof and ergonomics differ from the directly validated runtimes
+- Recorded launch proof in repo truth currently covers Claude Code, Codex CLI, and OpenCode paths
+- Qualified support only: Cursor, Copilot, Gemini CLI can use the shared `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it; proof and ergonomics differ from the recorded paths above
 - Codex CLI validation does not automatically cover Codex VS Code or the Codex app; use native discovery there when available, otherwise open or paste `.agents/skills/gsdd-*/SKILL.md`
 - Repo-local generated runtime surfaces are renderer-checked through `npx -y gsdd-cli health`, with deterministic repair through `npx -y gsdd-cli update` (bare `gsdd ...` is equivalent only when globally installed)
 - Public proof entrypoints: `docs/BROWNFIELD-PROOF.md`, `docs/proof/consumer-node-cli/README.md`, `docs/RUNTIME-SUPPORT.md`, `docs/VERIFICATION-DISCIPLINE.md`
@@ -59,7 +59,7 @@ npx -y gsdd-cli install --global
 npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 ```
 
-Global install writes selected Workspine skills and native agent surfaces into user-level agent homes. It does not create `.planning/` in the current repo.
+Global install writes selected Workspine skills and native agent surfaces into user-level agent homes. It does not create `.work/` in the current repo.
 
 Optional adapters:
 ```bash
@@ -72,18 +72,18 @@ npx -y gsdd-cli init --tools all
 ```
 
 Notes:
-- `npx -y gsdd-cli init` always generates open-standard skills at `.agents/skills/gsdd-*` plus the repo-local helper runtime at `.planning/bin/gsdd.mjs`. Workflow helper commands assume the repo root as the current working directory.
+- `npx -y gsdd-cli init` always generates open-standard skills at `.agents/skills/gsdd-*` plus the repo-local helper runtime at `.work/bin/gsdd.mjs`. Workflow helper commands assume the repo root as the current working directory.
 - `--tools ...` remains the manual/headless path; legacy runtime aliases such as `cursor`, `copilot`, and `gemini` are still supported for backward compatibility.
 - `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`.
 - `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`.
-- `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path and internal helper commands route through `.planning/bin/gsdd.mjs`.
+- `--tools codex` generates `.codex/agents/gsdd-plan-checker.toml`; the portable `.agents/skills/gsdd-plan/` surface remains the Codex entry path and internal helper commands route through `.work/bin/gsdd.mjs`.
 - Root `AGENTS.md` is only written when explicitly requested (`--tools agents`, `--tools all`, legacy runtime aliases, or the wizard governance opt-in). Governance and native adapter surfaces are optional ergonomics; the compact `.agents/skills/` files remain the baseline agent entrypoints.
 
 ## The Workflow
 
 ```
-npx -y gsdd-cli init       -> bootstrap (create .planning/, copy templates, generate skills/adapters)
-/gsdd-new-project          -> .planning/SPEC.md + .planning/ROADMAP.md  (questioning + codebase audit + research)
+npx -y gsdd-cli init       -> bootstrap (create .work/, copy templates, generate skills/adapters)
+/gsdd-new-project          -> .work/SPEC.md + .work/ROADMAP.md  (questioning + codebase audit + research)
 /gsdd-plan N               -> phases/N/PLAN.md      (task breakdown + research)
 /gsdd-execute N            -> code changes           (plan execution with quality gates)
 /gsdd-verify N             -> VERIFICATION.md        (goal-backward validation)
@@ -91,22 +91,14 @@ npx -y gsdd-cli init       -> bootstrap (create .planning/, copy templates, gene
 /gsdd-audit-milestone      -> MILESTONE-AUDIT.md     (cross-phase integration + requirements coverage)
 /gsdd-complete-milestone   -> milestones/vX.Y-*      (archive, evolve spec, collapse roadmap)
 /gsdd-new-milestone        -> updated SPEC.md + ROADMAP.md  (next milestone goals + phases)
-/gsdd-plan-milestone-gaps  -> gap closure phases in ROADMAP.md  (from audit results)
-/gsdd-quick                -> .planning/quick/NNN/   (sub-hour task outside phases)
-/gsdd-pause                -> .planning/.continue-here.md  (session checkpoint)
+/gsdd-plan                 -> amend/extend gap closure phases in ROADMAP.md  (from audit results)
+/gsdd-quick                -> .work/quick/NNN/   (sub-hour task outside phases)
+/gsdd-pause                -> .work/.continue-here.md  (session checkpoint)
 /gsdd-resume               -> restore context, route to next action
 /gsdd-progress             -> show status, route to next action
 ```
 
 The main operator spine is four workflow moves after bootstrap: `new-project -> plan -> execute -> verify`. The other public workflow surfaces are support lanes for milestone closeout, quick work, progress, pause/resume, and brownfield orientation.
-
-Helper command for long-running sessions:
-
-```
-npx -y gsdd-cli control-map [--json] [--with-ignored] -> computed repo/worktree/planning state plus local annotations
-npx -y gsdd-cli control-map annotate set|clear -> optional stale-aware local intent maintenance
-npx -y gsdd-cli closeout-report [--json] [--phase <N>] -> read-only replay of closeout blockers, warnings, fixes, and next safe action
-```
 
 ## Brownfield Entry Contract
 
@@ -127,7 +119,7 @@ Use the same three-way routing everywhere:
 | `audit-milestone.md` | Cross-phase integration audit, auth protection checks, requirement reconciliation, and orphan detection into `MILESTONE-AUDIT.md` |
 | `complete-milestone.md` | Milestone archive, spec evolution, and roadmap collapse |
 | `new-milestone.md` | Brownfield milestone continuation: goals, requirements, and roadmap phases |
-| `plan-milestone-gaps.md` | Gap-closure phases from `MILESTONE-AUDIT.md` results |
+| `plan.md` amend/extend mode | Gap-closure phases from `MILESTONE-AUDIT.md`, verification gaps, tech debt, brownfield amendments, or incident docs |
 | `quick.md` | Quick-work lane for sub-hour tasks outside the phase cycle |
 | `pause.md` | Session checkpoint writer with conversational handoff |
 | `resume.md` | Session context restorer with priority-ordered routing |
@@ -137,8 +129,8 @@ Use the same three-way routing everywhere:
 
 Architecture notes:
 - `bin/gsdd.mjs` remains the thin generator entrypoint, while vendor-specific rendering lives in adapter modules.
-- Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.planning/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
-- `control-map` is a helper command, not a lifecycle workflow: it computes repo/worktree/planning truth first and treats `.planning/.local/` annotations as local intent only. `control-map annotate` can maintain those annotations, but cannot create ownership, cleanup, or lifecycle authority.
+- Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.work/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
+- Repo/worktree status helpers compute from git and local workflow state first; local annotations are intent hints only and cannot create ownership, cleanup, or lifecycle authority.
 - Codex VS Code/app are separate surfaces from Codex CLI; do not claim the CLI proof for them unless they expose compatible skill discovery. Fallback is opening or pasting the generated `SKILL.md`.
 - `npx -y gsdd-cli health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `npx -y gsdd-cli update`.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
@@ -162,7 +154,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
 ## What Gets Created (Project Output)
 
 ```
-.planning/
+.work/
   SPEC.md
   ROADMAP.md
   config.json
@@ -173,7 +165,6 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-new-project/SKILL.md
   gsdd-new-milestone/SKILL.md
   gsdd-plan/SKILL.md
-  gsdd-plan-milestone-gaps/SKILL.md
   gsdd-execute/SKILL.md
   gsdd-verify/SKILL.md
   gsdd-verify-work/SKILL.md
@@ -196,7 +187,7 @@ Note: `parallelization: false` keeps the same mapper/researcher set but runs the
   gsdd-plan.md              # OpenCode-native specialized planner -> checker command surface
 .codex/agents/
   gsdd-plan-checker.toml    # Codex-native checker agent (read-only, high reasoning effort)
-.planning/
+.work/
   quick/              # quick task directories and LOG.md
   .continue-here.md   # session checkpoint (created by pause)
 ```
@@ -217,7 +208,6 @@ distilled/
     new-milestone.md
     pause.md
     plan.md
-    plan-milestone-gaps.md
     progress.md
     quick.md
     resume.md
@@ -227,8 +217,8 @@ distilled/
     spec.md
     roadmap.md
     agents.md              # full AGENTS.md template (for tool adapters)
-    agents.block.md        # bounded block payload for root AGENTS.md insertion
-    delegates/             # delegate instruction files (copied to .planning/templates/delegates/)
+    agents.block.md        # managed payload for root AGENTS.md insertion
+    delegates/             # delegate instruction files (copied to .work/templates/delegates/)
       mapper-tech.md
       mapper-arch.md
       mapper-quality.md

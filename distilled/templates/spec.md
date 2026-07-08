@@ -1,6 +1,6 @@
 # SPEC.md Template
 
-Use this template when creating `.planning/SPEC.md` - the project's single source of truth.
+Use this template when creating `.work/SPEC.md` - the project's single source of truth.
 
 > **Agentic PRD Constraint:** Do not write narrative prose or fluff. Use strict checklists, dense tables, and typed schemas. There is no artificial line limit, but every single line must be highly deterministic and actionable for a downstream Subagent.
 
@@ -105,5 +105,5 @@ If auditing an existing codebase during `init`:
 
 When a major milestone completes:
 1. The SPEC.md "Current State" section reflects the new state
-2. Completed phases have summaries in `.planning/phases/{N}-SUMMARY.md`
+2. Completed phases have summaries in `.work/phases/{N}-SUMMARY.md`
 3. SPEC.md itself stays lean - don't accumulate history here

@@ -17,7 +17,7 @@ Workspine uses subagents when isolation earns its cost: research, review, mappin
 
 Subagents must not become hidden implementation orchestration. Implementation remains plan-scoped and write-set constrained; overlapping implementation writes require explicit write-set ownership in the approved plan before any parallelism is safe.
 
-Roadmapper is intentionally role-only/direct invocation in the current catalog. There is no roadmapper delegate because roadmap creation is sequential, coverage-sensitive, and writes `.planning/ROADMAP.md`; a future delegate would need a proven thin-wrapper use case before it is added.
+Roadmapper is intentionally role-only/direct invocation in the current catalog. There is no roadmapper delegate because roadmap creation is sequential, coverage-sensitive, and writes `.work/ROADMAP.md` in default workspaces; a future delegate would need a proven thin-wrapper use case before it is added.
 
 Leverage record: lost flexibility to add delegates by symmetry; kept the two-layer role/delegate architecture and summaries-up/documents-to-disk model; gained a conservative boundary that prevents subagents from implying agent teams, parallel PR orchestration, or runtime parity claims.
 
@@ -50,11 +50,11 @@ The catalog contains 10 canonical roles across lifecycle, audit, and utility res
 
 ## Runtime Distribution
 
-`gsdd init` copies all role contracts (excluding this README) from `agents/` into `.planning/templates/roles/` in the consumer project. This gives consumer projects a portable, self-contained copy of the role library with no hard dependency on the GSDD framework repo at runtime.
+`gsdd init` copies all role contracts (excluding this README) from `agents/` into `.work/templates/roles/` in the consumer project. Legacy `.planning/` workspaces receive localized `.planning/templates/roles/` paths. This gives consumer projects a portable, self-contained copy of the role library with no hard dependency on the GSDD framework repo at runtime.
 
 - **Single source of truth:** `agents/*.md` in this repo. Consumer copies are generated, not edited.
-- **Delegates reference the local copy:** `distilled/templates/delegates/*.md` point to `.planning/templates/roles/<role>.md`, not back to this repo.
-- **Idempotent:** `gsdd init` skips the copy if `.planning/templates/roles/` already exists.
+- **Delegates reference the local copy:** `distilled/templates/delegates/*.md` point to `.work/templates/roles/<role>.md`, not back to this repo; legacy installs localize those paths to `.planning/templates/roles/<role>.md`.
+- **Idempotent:** `gsdd init` skips the copy if `.work/templates/roles/` already exists.
 - **Updates:** `gsdd update --templates` re-copies from latest framework sources with hash-based modification detection.
 
 Verifier note:

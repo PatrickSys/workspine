@@ -1,7 +1,7 @@
 # Authorization Matrix Template
 
 > OWASP-style authorization matrix for systematic auth verification.
-> Create `.planning/AUTH_MATRIX.md` using this template when your project has multiple user roles or protected resources.
+> Create `.work/AUTH_MATRIX.md` using this template when your project has multiple user roles or protected resources.
 
 ## When to Create This Matrix
 
@@ -73,6 +73,6 @@ The narrative auth check (Step 4) always runs regardless of whether this matrix 
 
 ## File Location
 
-Save your project's authorization matrix as `.planning/AUTH_MATRIX.md`.
+Save your project's authorization matrix as `.work/AUTH_MATRIX.md`.
 
 The integration checker will automatically detect and consume it when present. No configuration needed.

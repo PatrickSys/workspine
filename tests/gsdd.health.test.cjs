@@ -14,7 +14,6 @@ let tmpDir;
 beforeEach(() => {
   tmpDir = createTempProject();
 });
-
 afterEach(() => {
   cleanup(tmpDir);
 });
@@ -33,10 +32,6 @@ function writeFile(relativePath, content) {
   fs.writeFileSync(fullPath, content);
 }
 
-function writeDefaultUiProofArtifact() {
-  writeFile('artifacts/report.html', '<html><body>UI proof report</body></html>\n');
-}
-
 function writeAlignedTruthFixtures() {
   writeFile('distilled/DESIGN.md', `## 20. Workspace Health Diagnostics
 
@@ -51,7 +46,6 @@ function writeAlignedTruthFixtures() {
 | E7 | ERROR | x |
 | E8 | ERROR | x |
 | E9 | ERROR | x |
-| E10 | ERROR | x |
 | W1 | WARN | x |
 | W2 | WARN | x |
 | W3 | WARN | x |
@@ -63,7 +57,6 @@ function writeAlignedTruthFixtures() {
 | W9 | WARN | x |
 | W10 | WARN | x |
 | W11 | WARN | x |
-| W12 | WARN | x |
 | I1 | INFO | x |
 | I2 | INFO | x |
 | I3 | INFO | x |
@@ -93,9 +86,9 @@ function writeAlignedTruthFixtures() {
   ].join('\n'));
   writeFile('distilled/workflows/alpha.md', '# alpha\n');
   writeFile('distilled/workflows/beta.md', '# beta\n');
-  writeFile('.internal-research/gaps.md', 'See `.planning/SPEC.md` and `.planning/ROADMAP.md`.\n');
-  writeFile('.planning/SPEC.md', '- [ ] **[LAUNCH-07]**: Health\n');
-  writeFile('.planning/ROADMAP.md', '- [ ] **Phase 16: Framework Health & Truth Reconciliation** — [LAUNCH-07]\n');
+  writeFile('.internal-research/gaps.md', 'See `.work/SPEC.md` and `.work/ROADMAP.md`.\n');
+  writeFile('.work/SPEC.md', '- [ ] **[LAUNCH-07]**: Health\n');
+  writeFile('.work/ROADMAP.md', '- [ ] **Phase 16: Framework Health & Truth Reconciliation** — [LAUNCH-07]\n');
 }
 
 function writeWorkflowInventoryReadme({ heading = '## Workflow Surface', rows = ['alpha.md', 'beta.md'], treeLines }) {
@@ -135,13 +128,13 @@ function writeForkHonestAlignmentFixtures() {
     '- Status: CLOSED',
     '- Closure evidence: archived-with-ROADMAP routing now depends on the shipped ledger and matching archived audit artifact.',
   ].join('\n'));
-  writeFile('.planning/SPEC.md', [
+  writeFile('.work/SPEC.md', [
     '- [x] **[IDENT-01]**: Identity\n',
     '- [x] **[IDENT-02]**: Retained contracts\n',
     '- [x] **[PROOF-01]**: Public proof\n',
     '- [x] **[FLOW-04]**: Archive routing and health integrity\n',
   ].join(''));
-  writeFile('.planning/ROADMAP.md', [
+  writeFile('.work/ROADMAP.md', [
     '- [x] **Phase 23: Launch Posture Lock** — [IDENT-01]',
     '- [x] **Phase 24: Naming Contract Reconciliation** — [IDENT-02]',
     '- [x] **Phase 25: Public Proof Export** — [PROOF-01]',
@@ -149,50 +142,6 @@ function writeForkHonestAlignmentFixtures() {
     '- [ ] **Phase 27: Release Packaging Audit** — [PACK-01]',
     '',
   ].join('\n'));
-}
-
-function validUiProofBundle(overrides = {}) {
-  return {
-    proof_bundle_version: 1,
-    scope: {
-      work_item: 'quick-001-example-ui',
-      requirement_ids: ['quick-001'],
-      slot_ids: ['quick-001-ui-01'],
-      claim: 'Local reviewer can inspect changed UI proof metadata.',
-    },
-    route_state: { route: '/example', state: 'synthetic user' },
-    environment: { app_url: 'http://localhost:3000', data_state: 'synthetic' },
-    viewport: { width: 1280, height: 720 },
-    evidence_inputs: { kinds: ['test', 'runtime'], tools_used: ['manual'] },
-    commands_or_manual_steps: [{ manual_step: 'Open /example.', result: 'passed' }],
-    observations: [{
-      observation: 'Changed state is visible.',
-      claim: 'Local reviewer can inspect the changed UI proof metadata.',
-      route_state: { route: '/example', state: 'synthetic user' },
-      evidence_kind: 'runtime',
-      artifact_refs: ['artifacts/report.html'],
-      privacy: { data_classification: 'synthetic', raw_artifacts_safe_to_publish: false, retention: 'temporary_review' },
-      result: 'passed',
-      claim_limit: 'Does not prove unrelated UI states.',
-    }],
-    artifacts: [{
-      path: 'artifacts/report.html',
-      type: 'report',
-      visibility: 'local_only',
-      retention: 'temporary_review',
-      sensitivity: 'synthetic',
-      safe_to_publish: false,
-    }],
-    privacy: {
-      data_classification: 'synthetic',
-      redactions: [],
-      raw_artifacts_safe_to_publish: false,
-      retention: 'Keep raw artifacts only while needed for review.',
-    },
-    result: { claim_status: 'passed', comparison_status_by_slot: { 'quick-001-ui-01': 'satisfied' } },
-    claim_limits: ['Does not prove unrelated UI states.'],
-    ...overrides,
-  };
 }
 
 describe('Health — pre-init guard', () => {
@@ -247,7 +196,7 @@ describe('Health — healthy workspace', () => {
 describe('Health — ERROR: malformed config.json', () => {
   test('unparseable config.json → broken', async () => {
     await initWorkspace();
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{bad json!!!');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), '{bad json!!!');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     assert.strictEqual(result.exitCode, 1);
     const json = JSON.parse(result.output);
@@ -259,7 +208,7 @@ describe('Health — ERROR: malformed config.json', () => {
 describe('Health — ERROR: missing required config fields', () => {
   test('config.json missing researchDepth → E2', async () => {
     await initWorkspace();
-    const configPath = path.join(tmpDir, '.planning', 'config.json');
+    const configPath = path.join(tmpDir, '.work', 'config.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     delete config.researchDepth;
     fs.writeFileSync(configPath, JSON.stringify(config));
@@ -273,7 +222,7 @@ describe('Health — ERROR: missing required config fields', () => {
 describe('Health — ERROR: missing templates dir', () => {
   test('templates/ removed → E3 without child-template noise', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates'), { recursive: true, force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.strictEqual(json.status, 'broken');
@@ -288,7 +237,7 @@ describe('Health — ERROR: missing templates dir', () => {
 describe('Health — ERROR: missing roles dir', () => {
   test('roles/ removed → E4', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'roles'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates', 'roles'), { recursive: true, force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.errors.some((e) => e.id === 'E4'));
@@ -296,7 +245,7 @@ describe('Health — ERROR: missing roles dir', () => {
 
   test('roles/ exists but empty → E4', async () => {
     await initWorkspace();
-    const rolesDir = path.join(tmpDir, '.planning', 'templates', 'roles');
+    const rolesDir = path.join(tmpDir, '.work', 'templates', 'roles');
     for (const f of fs.readdirSync(rolesDir)) {
       fs.unlinkSync(path.join(rolesDir, f));
     }
@@ -309,7 +258,7 @@ describe('Health — ERROR: missing roles dir', () => {
 describe('Health — ERROR: missing delegates dir', () => {
   test('delegates/ removed → E5', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'delegates'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates', 'delegates'), { recursive: true, force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.errors.some((e) => e.id === 'E5'));
@@ -319,7 +268,7 @@ describe('Health — ERROR: missing delegates dir', () => {
 describe('Health — ERROR: missing research/codebase/root templates', () => {
   test('research/ removed → E6', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'research'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates', 'research'), { recursive: true, force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.errors.some((e) => e.id === 'E6'));
@@ -327,7 +276,7 @@ describe('Health — ERROR: missing research/codebase/root templates', () => {
 
   test('codebase/ removed → E7', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'codebase'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates', 'codebase'), { recursive: true, force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.errors.some((e) => e.id === 'E7'));
@@ -335,7 +284,7 @@ describe('Health — ERROR: missing research/codebase/root templates', () => {
 
   test('critical root template file removed → E8', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'spec.md'), { force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates', 'spec.md'), { force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.errors.some((e) => e.id === 'E8' && e.message.includes('spec.md')));
@@ -343,99 +292,17 @@ describe('Health — ERROR: missing research/codebase/root templates', () => {
 
   test('ui-proof root template removed → E8', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates', 'ui-proof.md'), { force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates', 'ui-proof.md'), { force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.errors.some((e) => e.id === 'E8' && e.message.includes('ui-proof.md')));
   });
 });
 
-describe('Health — ERROR: invalid UI proof bundle metadata', () => {
-  test('invalid known UI proof bundle → E10 without mutating files', async () => {
-    await initWorkspace();
-    const bundlePath = path.join(tmpDir, '.planning', 'ui-proof.json');
-    const invalidBundle = validUiProofBundle({ proof_claim: 'public' });
-    fs.writeFileSync(bundlePath, JSON.stringify(invalidBundle, null, 2));
-    const before = fs.readFileSync(bundlePath, 'utf-8');
-
-    const result = await runCliAsMain(tmpDir, ['health', '--json']);
-    const json = JSON.parse(result.output);
-
-    assert.strictEqual(json.status, 'broken');
-    assert.ok(json.errors.some((e) => e.id === 'E10' && e.message.includes('unsafe_public_proof_claim')));
-    assert.strictEqual(fs.readFileSync(bundlePath, 'utf-8'), before, 'health must not mutate UI proof bundles');
-  });
-
-  test('invalid nested brownfield UI proof bundle → E10', async () => {
-    await initWorkspace();
-    writeFile('.planning/brownfield-change/change-001/UI-PROOF.md', '```json\n{"proof_bundle_version":1}\n```\n');
-
-    const result = await runCliAsMain(tmpDir, ['health', '--json']);
-    const json = JSON.parse(result.output);
-
-    assert.strictEqual(result.exitCode, 1);
-    assert.ok(json.errors.some((e) => e.id === 'E10' && e.message.includes('brownfield-change/change-001/UI-PROOF.md')));
-  });
-
-  test('valid local-only known UI proof bundle → no E10', async () => {
-    await initWorkspace();
-    writeDefaultUiProofArtifact();
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'ui-proof.json'), JSON.stringify(validUiProofBundle(), null, 2));
-
-    const result = await runCliAsMain(tmpDir, ['health', '--json']);
-    const json = JSON.parse(result.output);
-
-    assert.ok(!json.errors.some((e) => e.id === 'E10'));
-  });
-
-  test('valid local-only dogfood UI proof bundle → no E10', async () => {
-    await initWorkspace();
-    writeDefaultUiProofArtifact();
-    writeFile('.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json', JSON.stringify(validUiProofBundle({
-      scope: {
-        work_item: 'phase-58-dogfood-ui-proof-loop',
-        requirement_ids: ['UIPROOF-10'],
-        slot_ids: ['ui-58-valid-scoped-proof'],
-        claim: 'Local-only dogfood UI proof validates metadata for a generated fixture.',
-      },
-      result: { claim_status: 'passed', comparison_status_by_slot: { 'ui-58-valid-scoped-proof': 'satisfied' } },
-    }), null, 2));
-
-    const result = await runCliAsMain(tmpDir, ['health', '--json']);
-    const json = JSON.parse(result.output);
-
-    assert.ok(!json.errors.some((e) => e.id === 'E10'));
-  });
-
-  test('unsafe public-style dogfood UI proof bundle → E10 without mutating files', async () => {
-    await initWorkspace();
-    const bundlePath = path.join(tmpDir, '.planning', 'phases', '58-dogfood-ui-proof-loop', 'proof-bundle.json');
-    const invalidBundle = validUiProofBundle({
-      proof_claims: ['public', 'tracked', 'delivery', 'release', 'publication'],
-      scope: {
-        work_item: 'phase-58-dogfood-ui-proof-loop',
-        requirement_ids: ['UIPROOF-10'],
-        slot_ids: ['ui-58-valid-scoped-proof'],
-        claim: 'Unsafe public-style dogfood UI proof must fail closed.',
-      },
-      result: { claim_status: 'passed', comparison_status_by_slot: { 'ui-58-valid-scoped-proof': 'satisfied' } },
-    });
-    writeFile('.planning/phases/58-dogfood-ui-proof-loop/proof-bundle.json', JSON.stringify(invalidBundle, null, 2));
-    const before = fs.readFileSync(bundlePath, 'utf-8');
-
-    const result = await runCliAsMain(tmpDir, ['health', '--json']);
-    const json = JSON.parse(result.output);
-
-    assert.strictEqual(json.status, 'broken');
-    assert.ok(json.errors.some((e) => e.id === 'E10' && e.message.includes('unsafe_public_proof_claim')));
-    assert.strictEqual(fs.readFileSync(bundlePath, 'utf-8'), before, 'health must not mutate dogfood UI proof bundles');
-  });
-});
-
 describe('Health — WARN: missing manifest', () => {
   test('manifest deleted → W1', async () => {
     await initWorkspace();
-    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
     if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
@@ -448,7 +315,7 @@ describe('Health — WARN: missing manifest', () => {
 describe('Health — WARN: modified template (hash mismatch)', () => {
   test('delegate file modified → W2', async () => {
     await initWorkspace();
-    const delegatesDir = path.join(tmpDir, '.planning', 'templates', 'delegates');
+    const delegatesDir = path.join(tmpDir, '.work', 'templates', 'delegates');
     const files = fs.readdirSync(delegatesDir).filter((f) => f.endsWith('.md'));
     assert.ok(files.length > 0, 'should have delegate files');
     const target = path.join(delegatesDir, files[0]);
@@ -464,7 +331,7 @@ describe('Health — WARN: modified template (hash mismatch)', () => {
 describe('Health — WARN: deleted template file (in manifest, not on disk)', () => {
   test('delegate file deleted → W3', async () => {
     await initWorkspace();
-    const delegatesDir = path.join(tmpDir, '.planning', 'templates', 'delegates');
+    const delegatesDir = path.join(tmpDir, '.work', 'templates', 'delegates');
     const files = fs.readdirSync(delegatesDir).filter((f) => f.endsWith('.md'));
     assert.ok(files.length > 0);
     fs.unlinkSync(path.join(delegatesDir, files[0]));
@@ -480,7 +347,7 @@ describe('Health — WARN: ROADMAP references nonexistent phase', () => {
   test('ROADMAP with active in-progress phase but no phase files → W4', async () => {
     await initWorkspace();
     const roadmapContent = `# Roadmap\n\n- [-] **Phase 1: Foundation**\n- [ ] **Phase 2: API**\n`;
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmapContent);
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), roadmapContent);
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.warnings.some((w) => w.id === 'W4'), 'should warn about missing phase dirs');
@@ -489,7 +356,7 @@ describe('Health — WARN: ROADMAP references nonexistent phase', () => {
   test('ROADMAP planned future phases without artifacts → no W4', async () => {
     await initWorkspace();
     const roadmapContent = `# Roadmap\n\n- [ ] **Phase 1: Foundation**\n- [ ] **Phase 2: API**\n`;
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), roadmapContent);
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), roadmapContent);
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(!json.warnings.some((w) => w.id === 'W4'), 'should ignore future planned phases');
@@ -498,10 +365,10 @@ describe('Health — WARN: ROADMAP references nonexistent phase', () => {
   test('active phase with only non-lifecycle artifacts → W4 without W5', async () => {
     await initWorkspace();
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       '# Roadmap\n\n- [x] **Phase 47: Synthesis And v1.7 Plan**\n'
     );
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '47-synthesis-and-v1-7-plan');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '47-synthesis-and-v1-7-plan');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '47-v1.7-IMPLEMENTATION-PLAN.md'),
@@ -521,7 +388,7 @@ describe('Health — WARN: ROADMAP references nonexistent phase', () => {
 describe('Health — WARN: phase with PLAN but no SUMMARY', () => {
   test('nested PLAN without SUMMARY → W5', async () => {
     await initWorkspace();
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-foundation');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Phase 1 Plan\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
@@ -531,7 +398,7 @@ describe('Health — WARN: phase with PLAN but no SUMMARY', () => {
 
   test('nested PLAN with SUMMARY → no W5', async () => {
     await initWorkspace();
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-foundation');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Phase 1 Plan\n');
     fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), '# Phase 1 Summary\n');
@@ -781,7 +648,7 @@ describe('Health — WARN: adapter and truth drift detection', () => {
 
   test('gaps.md command and branch references do not trigger W9', async () => {
     await initWorkspace();
-    writeFile('.internal-research/gaps.md', 'Use `/gsdd-verify` on `feat/example-branch` after reviewing `.planning/config.json`.\n');
+    writeFile('.internal-research/gaps.md', 'Use `/gsdd-verify` on `feat/example-branch` after reviewing `.work/config.json`.\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(!json.warnings.some((w) => w.id === 'W9'));
@@ -789,8 +656,8 @@ describe('Health — WARN: adapter and truth drift detection', () => {
 
   test('ROADMAP/SPEC requirement mismatch → W10', async () => {
     await initWorkspace();
-    writeFile('.planning/SPEC.md', '- [x] **[LAUNCH-07]**: Health\n');
-    writeFile('.planning/ROADMAP.md', '- [ ] **Phase 16: Framework Health & Truth Reconciliation** — [LAUNCH-07]\n');
+    writeFile('.work/SPEC.md', '- [x] **[LAUNCH-07]**: Health\n');
+    writeFile('.work/ROADMAP.md', '- [ ] **Phase 16: Framework Health & Truth Reconciliation** — [LAUNCH-07]\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.warnings.some((w) => w.id === 'W10'));
@@ -798,8 +665,8 @@ describe('Health — WARN: adapter and truth drift detection', () => {
 
   test('ROADMAP overview and Phase Details status mismatch → W10', async () => {
     await initWorkspace();
-    writeFile('.planning/SPEC.md', '- [ ] **[LAUNCH-07]**: Health\n');
-    writeFile('.planning/ROADMAP.md', [
+    writeFile('.work/SPEC.md', '- [ ] **[LAUNCH-07]**: Health\n');
+    writeFile('.work/ROADMAP.md', [
       '# Roadmap',
       '',
       '- [-] **Phase 16: Framework Health & Truth Reconciliation** — [LAUNCH-07]',
@@ -823,8 +690,8 @@ describe('Health — WARN: adapter and truth drift detection', () => {
 
   test('ROADMAP overview/detail mismatch still reports W10 when SPEC is missing', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'SPEC.md'), { force: true });
-    writeFile('.planning/ROADMAP.md', [
+    fs.rmSync(path.join(tmpDir, '.work', 'SPEC.md'), { force: true });
+    writeFile('.work/ROADMAP.md', [
       '# Roadmap',
       '',
       '- [-] **Phase 16: Framework Health & Truth Reconciliation**',
@@ -843,28 +710,28 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.match(warning.message, /overview status in_progress disagrees with Phase Details status done/);
   });
 
-  test('generated helper runtime drift under .planning/bin → W11 with npx-first update guidance', async () => {
+  test('generated helper runtime drift under .work/bin → W11 with npx-first update guidance', async () => {
     await initWorkspace();
-    fs.appendFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'), '\n// drift\n');
+    fs.appendFileSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'), '\n// drift\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     const warning = json.warnings.find((w) => w.id === 'W11');
     assert.ok(warning, 'should warn when installed generated runtime surfaces drift');
     assert.match(warning.message, /Renderer-backed generated runtime and workflow-helper surfaces/);
-    assert.match(warning.message, /\.planning\/bin\/gsdd\.mjs/);
+    assert.match(warning.message, /\.work\/bin\/gsdd\.mjs/);
     assert.match(warning.fix, /npx -y gsdd-cli update/);
   });
 
-  test('missing generated helper runtime under .planning/bin → W11 repair guidance', async () => {
+  test('missing generated helper runtime under .work/bin → W11 repair guidance', async () => {
     await initWorkspace();
-    for (const rel of ['.agents', '.planning/bin', '.claude', '.opencode', '.codex']) {
+    for (const rel of ['.agents', '.work/bin', '.claude', '.opencode', '.codex']) {
       fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
     }
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     const warning = json.warnings.find((w) => w.id === 'W11');
-    assert.ok(warning, 'missing .planning/bin helper should be repairable generated-surface drift');
-    assert.match(warning.message, /\.planning\/bin\/gsdd\.mjs/);
+    assert.ok(warning, 'missing .work/bin helper should be repairable generated-surface drift');
+    assert.match(warning.message, /\.work\/bin\/gsdd\.mjs/);
     assert.match(warning.fix, /npx -y gsdd-cli update/);
   });
 
@@ -892,7 +759,7 @@ describe('Health — WARN: adapter and truth drift detection', () => {
 describe('Health — INFO: version drift', () => {
   test('manifest frameworkVersion older than current framework → I1', async () => {
     await initWorkspace();
-    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
     manifest.frameworkVersion = 'v0.1';
     fs.writeFileSync(manifestPath, JSON.stringify(manifest));
@@ -918,13 +785,13 @@ describe('Health — INFO: adapter detection', () => {
 describe('Health — INFO: phase completion count', () => {
   test('ROADMAP phases counted → I2', async () => {
     await initWorkspace();
-    writeFile('.planning/ROADMAP.md', `# Roadmap
+    writeFile('.work/ROADMAP.md', `# Roadmap
 
 - [x] **Phase 1: Foundation**
 - [ ] **Phase 2: API**
 `);
-    writeFile('.planning/phases/01-foundation/01-SUMMARY.md', '# done\n');
-    writeFile('.planning/phases/02-api/02-SUMMARY.md', '# pending artifact\n');
+    writeFile('.work/phases/01-foundation/01-SUMMARY.md', '# done\n');
+    writeFile('.work/phases/02-api/02-SUMMARY.md', '# pending artifact\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(json.info.some((i) => i.id === 'I2' && i.message.includes('1/2')));
@@ -932,7 +799,7 @@ describe('Health — INFO: phase completion count', () => {
 
   test('I2 counts only the active milestone phases, not archived phases nested in details', async () => {
     await initWorkspace();
-    writeFile('.planning/ROADMAP.md', [
+    writeFile('.work/ROADMAP.md', [
       '# Roadmap',
       '',
       '<details open>',
@@ -984,7 +851,7 @@ describe('Health — JSON output mode', () => {
 describe('Health — verdict logic', () => {
   test('errors → broken with exit 1', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates'), { recursive: true, force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.strictEqual(json.status, 'broken');
@@ -993,7 +860,7 @@ describe('Health — verdict logic', () => {
 
   test('warnings only → degraded with exit 0', async () => {
     await initWorkspace();
-    const manifestPath = path.join(tmpDir, '.planning', 'generation-manifest.json');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
     if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
@@ -1022,7 +889,7 @@ describe('Health — human-readable output', () => {
 
   test('error output includes ERROR markers and fix instructions', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates'), { recursive: true, force: true });
     const result = await runCliAsMain(tmpDir, ['health']);
     assert.match(result.output, /ERROR:/);
     assert.match(result.output, /Fix:/);
@@ -1078,7 +945,7 @@ describe('Health — framework source mode', () => {
 
   test('source-like consumer repos do not suppress installed-project checks', async () => {
     await initWorkspace();
-    fs.rmSync(path.join(tmpDir, '.planning', 'templates'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.work', 'templates'), { recursive: true, force: true });
     fs.mkdirSync(path.join(tmpDir, 'distilled', 'templates'), { recursive: true });
     fs.mkdirSync(path.join(tmpDir, 'distilled', 'workflows'), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'consumer-app' }));

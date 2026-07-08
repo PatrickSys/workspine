@@ -1,4 +1,4 @@
-**Role contract:** Read `.planning/templates/roles/researcher.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/researcher.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 You are researching ONE dimension: what features exist in this domain.
 
@@ -24,7 +24,7 @@ Your output feeds SPEC requirements. Categorize explicitly:
 - [ ] v1 vs v2 recommendation for differentiators
 </quality_gate>
 
-Write to: `.planning/research/FEATURES.md`
-Use template: `.planning/templates/research/features.md` (if it exists)
+Write to: `.work/research/FEATURES.md`
+Use template: `.work/templates/research/features.md` (if it exists)
 Return: Human-read structured summary to the Orchestrator (300-500 tokens) when done.
 Guardrails: Max Agent Hops = 3.

@@ -2,11 +2,11 @@
 
 # Workspine
 
-Workspine is a repo-native delivery spine for AI-assisted software work: planning, checking, execution, verification, and handoff live in the repo so any agent or runtime can pick up where the last one stopped.
+Workspine is a Spec Driven Development framework for AI-assisted software work: planning, checking, execution, verification, and handoff live in the repo, so any agent or runtime can pick up where the last one stopped. Decisions keep their why.
 
-Directly validated today: Claude Code, Codex CLI, OpenCode. Qualified support: Cursor, Copilot, Gemini.
+Proof status: one real consumer lifecycle with Codex checker support. Qualified support: Cursor, Copilot, Gemini.
 
-The public product name is Workspine. The retained technical contracts remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/`.
+The public product name is Workspine. The retained technical contracts remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.work/`.
 
 [![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
@@ -29,10 +29,10 @@ Tracked consumer proof pack: [docs/proof/consumer-node-cli/README.md](docs/proof
 
 | Workflow | Writes | What for |
 |----------|--------|----------|
-| `gsdd-new-project` | `.planning/SPEC.md`, `ROADMAP.md` | Define the project and phases |
-| `gsdd-plan` | `.planning/phases/N/PLAN.md` | Research and review before any code gets written |
-| `gsdd-execute` | `.planning/phases/N/SUMMARY.md` | Implement the approved plan, nothing more |
-| `gsdd-verify` | `.planning/phases/N/VERIFICATION.md` | Confirm the plan's claims are actually true |
+| `gsdd-new-project` | `.work/SPEC.md`, `ROADMAP.md` | Define the project and phases |
+| `gsdd-plan` | `.work/phases/N/PLAN.md` | Research and review before any code gets written |
+| `gsdd-execute` | `.work/phases/N/SUMMARY.md` | Implement the approved plan, nothing more |
+| `gsdd-verify` | `.work/phases/N/VERIFICATION.md` | Confirm the plan's claims are actually true |
 
 The discipline: plan first, execute only what's approved, verify before closing. Each phase summary carries forward what was decided, so the next session starts with context instead of from scratch.
 
@@ -40,15 +40,15 @@ For agent continuity across long sessions, `gsdd next` reads `.work/` plus repo 
 
 `gsdd next` keeps the human surface tight and the agent surface structured. JSON packets include typed `next_action` values for CLI commands, workflow skills, manual review, and user-question gates. Blocking questions, decisions, graph rebuilds, and dogfood findings use explicit subcommands; duplicate question, decision, and dogfood IDs replay as unchanged when the content matches and fail unless `--replace` is passed when the content differs. The continuity graph records answer and supersession edges so future agents can reconstruct decision history without rereading raw transcripts.
 
-Workspine ships 14 workflows. The package and CLI are `gsdd-cli` / `gsdd-*` — retained as the technical contract under the Workspine product name.
+Workspine ships 13 workflows. The package and CLI are `gsdd-cli` / `gsdd-*` — retained as the technical contract under the Workspine product name.
 
 ---
 
 ## What This Is
 
-Workspine gives coding agents a durable workflow spine for work that spans sessions, agents, or runtimes. It does not host a control plane; it writes portable planning and proof artifacts into the repo.
+Workspine gives coding agents a durable workflow for work that spans sessions, agents, or runtimes. There is no hosted service; it writes portable planning and proof artifacts into the repo.
 
-Workspine began as a fork of Get Shit Done and keeps the verification-first delivery spine while stripping runtime lock-in.
+Workspine began as a fork of Get Shit Done and keeps the verification-first workflow while stripping runtime lock-in.
 
 ---
 
@@ -60,7 +60,42 @@ Workspine began as a fork of Get Shit Done and keeps the verification-first deli
 npx -y gsdd-cli init
 ```
 
-`init` is the guided install wizard for repo-local setup. It creates `.agents/skills/gsdd-*` workflow entrypoints and the `.planning/bin/gsdd*` helper runtime in the current repo; optional runtime adapters improve native discovery.
+This creates:
+
+1. `.work/` — durable workspace with templates, role contracts, and config
+2. `.agents/skills/gsdd-*` — compact open-standard workflow entrypoints for agents
+3. `.work/bin/gsdd.mjs` — repo-local helper runtime for deterministic workflow commands inside generated skills (run helper commands from the repo root)
+4. Optional tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex CLI agents, optional governance)
+
+Then pick the first workflow lane that matches your situation:
+
+- `gsdd-new-project` for greenfield work, fuzzy brownfield work, or milestone-shaped work
+- `gsdd-quick` for a concrete bounded brownfield change
+- `gsdd-map-codebase` first when the repo is unfamiliar, risky, or needs a deeper baseline before choosing a lane
+
+In a terminal, `npx -y gsdd-cli init` opens a guided install wizard. If you installed the package globally, `gsdd init` is the equivalent shorthand:
+
+- Step 1: select the runtimes/vendors you want to support
+- Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing
+- Step 3: configure planning defaults in the same guided flow
+
+Portable `.agents/skills/gsdd-*` skills and the repo-local `.work/bin/gsdd.mjs` helper runtime are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands assume the repo root as the current working directory.
+When those generated surfaces exist locally, `npx -y gsdd-cli health` checks them against current render output instead of asking you to trust manual review. If installed globally, `gsdd health` is equivalent.
+
+### Launch Proof Status
+
+- **Recorded proof:** the proof pack below records a full plan -> execute -> verify lifecycle on a real consumer project, including Codex checker support. Claude Code and OpenCode run the same generated workflow surface.
+- **Qualified support:** Cursor, Copilot, and Gemini CLI can use the shared `.agents/skills/` surface when their skill or slash discovery sees it; this release does not claim the same runtime proof or ergonomics.
+- **Runtime-surface freshness:** Installed generated skills and native adapters are renderer-checked locally; repair stays deterministic through `npx -y gsdd-cli update` or, when globally installed, `gsdd update`.
+
+Start with the public proof pack:
+
+- [Brownfield proof](docs/BROWNFIELD-PROOF.md)
+- [Exported consumer proof pack](docs/proof/consumer-node-cli/README.md)
+- [Runtime support matrix](docs/RUNTIME-SUPPORT.md)
+- [Verification discipline](docs/VERIFICATION-DISCIPLINE.md)
+
+### Quickstart (after init)
 
 Invoke after init:
 
@@ -85,7 +120,7 @@ npx -y gsdd-cli install --global --auto
 npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 ```
 
-Use `--auto` for non-interactive install into detected local agent homes. Use `--tools <targets>` when you want to override detection explicitly. When run in a TTY without `--tools` or `--auto`, `install --global` lets you select which agents to install. It does not create `.planning/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
+Use `--auto` for non-interactive install into detected local agent homes. Use `--tools <targets>` when you want to override detection explicitly. When run in a TTY without `--tools` or `--auto`, `install --global` lets you select which agents to install. It does not create `.work/` in the current repo. It writes Workspine-managed skills, native agent surfaces, and per-runtime manifests under the selected agent homes:
 
 | Target | Global surfaces |
 |--------|-----------------|
@@ -94,7 +129,7 @@ Use `--auto` for non-interactive install into detected local agent homes. Use `-
 | Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
 | GitHub Copilot CLI | `~/.agents/skills`, `~/.copilot/agents` |
 
-Install availability is not a parity claim. Claude Code, OpenCode, and Codex CLI remain the directly validated runtimes; GitHub Copilot CLI is available as a qualified global target.
+Install availability is not a parity claim. Repo proof currently covers Claude Code, OpenCode, and Codex CLI paths; GitHub Copilot CLI is available as a qualified global target.
 
 OpenCode honors `OPENCODE_CONFIG_DIR` for commands and agents; Workspine installs portable skills once in the shared agent-compatible global root.
 
@@ -108,11 +143,11 @@ OpenCode honors `OPENCODE_CONFIG_DIR` for commands and agents; Workspine install
 
 ### Team Use
 
-Commit `.planning/` so the team shares specs, roadmaps, phase plans, and verification reports. Use `commitDocs` in `.planning/config.json` to control whether documentation changes are expected as part of workflow execution. Each developer runs `init --tools <their-tool>` for their own repo-local runtime adapters without changing the shared delivery artifacts.
+Commit `.work/` so the team shares specs, roadmaps, phase plans, and verification reports. Use `commitDocs` in `.work/config.json` to control whether documentation changes are expected as part of workflow execution. Each developer runs `init --tools <their-tool>` for their own repo-local runtime adapters without changing the shared delivery artifacts.
 
 ### What to Track in Git
 
-Track `.planning/`, `.agents/skills/`, and any selected runtime adapters that are part of the team workflow. Track durable `.work/` contract and research files when they define shared milestone truth. Do not track `.planning/.local/` or mutable `.work` runtime files such as `state.json`, graph logs, open questions, evidence manifests, handoff notes, or raw dogfood drafts unless you deliberately export or sanitize them.
+Track `.work/`, `.agents/skills/`, and any selected runtime adapters that are part of the team workflow. Track durable `.work/` contract and research files when they define shared milestone truth. Do not track `.work/.local/` or mutable `.work` runtime files such as `state.json`, graph logs, open questions, evidence manifests, handoff notes, or raw dogfood drafts unless you deliberately export or sanitize them.
 
 ---
 
@@ -128,7 +163,7 @@ npx -y gsdd-cli models profile budget    # minimize cost
 
 ## Troubleshooting
 
-Inside a repo-local `.planning/` workspace, start with `npx -y gsdd-cli health`. It checks local generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. To repair or refresh a personal global install, rerun `npx -y gsdd-cli install --global --auto` or explicitly scope it with `npx -y gsdd-cli install --global --tools <targets>`. For details, see the [User Guide](docs/USER-GUIDE.md).
+Inside a repo-local `.work/` workspace, start with `npx -y gsdd-cli health`. It checks local generated runtime surfaces against current render output and reports whether `npx -y gsdd-cli update` can repair drift. To repair or refresh a personal global install, rerun `npx -y gsdd-cli install --global --auto` or explicitly scope it with `npx -y gsdd-cli install --global --tools <targets>`. For details, see the [User Guide](docs/USER-GUIDE.md).
 
 ---
 
@@ -139,12 +174,12 @@ Use Workspine when a feature takes more than one session, or when you need to sw
 | Tool | Good for | vs Workspine |
 |------|----------|--------------|
 | **Workspine** | Work that spans sessions, agents, or runtimes where plans and proof need to stay in the repo | — |
-| [GSD](https://github.com/gsd-build/get-shit-done) | Broad AI prompting suite — 81 commands, 78 workflows, 33 agents | Workspine is narrower: 14 workflows, fewer moving parts for the human in the loop |
+| [GSD](https://github.com/gsd-build/get-shit-done) | Broad AI prompting suite — 81 commands, 78 workflows, 33 agents | Workspine is narrower: 13 workflows, fewer moving parts for the human in the loop |
 | [OpenSpec](https://openspec.dev/) | Living spec + change proposals in a lightweight format | Workspine adds the execution, verification, and handoff layer on top of planning |
 | [LeanSpec](https://www.lean-spec.dev/docs/guide/first-principles) | Minimal specs that fit LLM context | Workspine adds workflow gates and runtime entrypoints for when you need the full structure |
 | [GitHub Spec Kit](https://github.com/github/spec-kit) | Spec-first planning workflows in `.specify/` | Similar space; Workspine is one CLI with one delivery loop instead of a broader ecosystem |
 | [Kiro](https://kiro.dev/docs/) | IDE-native agent dev with specs, steering, hooks, and MCP | Kiro is IDE-only; Workspine works across terminal and IDE agents that can read repo files |
-| [Tessl](https://tessl.io/enterprise/) | Hosted platform for distributing agent skills across teams | Tessl needs a control plane; Workspine is local-first with no hosted infrastructure |
+| [Tessl](https://tessl.io/enterprise/) | Hosted platform for distributing agent skills across teams | Tessl needs a hosted service; Workspine is local-first with no hosted infrastructure |
 
 <sub>Based on each tool's public docs as of May 2026. Open an issue if anything reads inaccurately.</sub>
 
@@ -163,10 +198,6 @@ npx -y gsdd-cli rigor                   # run planning/document guardrails
 npx -y gsdd-cli file-op                 # deterministic repo-local copy/delete helper
 npx -y gsdd-cli models profile quality  # maximize review rigor
 npx -y gsdd-cli models profile budget   # minimize cost
-npx -y gsdd-cli session-fingerprint     # capture session continuity metadata
-npx -y gsdd-cli ui-proof                # collect UI proof artifacts
-npx -y gsdd-cli control-map             # repo and planning state at a glance
-npx -y gsdd-cli closeout-report         # summarize closeout evidence
 npx -y gsdd-cli find-phase              # locate a roadmap phase
 npx -y gsdd-cli phase-status            # inspect or update phase status
 npx -y gsdd-cli verify                  # run verification discipline checks

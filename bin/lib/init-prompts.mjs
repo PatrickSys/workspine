@@ -1,5 +1,5 @@
 import * as readline from 'readline';
-import { DEFAULT_GIT_PROTOCOL, resolveCost, resolveRigor } from './models.mjs';
+import { DEFAULT_GIT_PROTOCOL, resolveCost, resolveRigor } from './config.mjs';
 import { buildRuntimeChoices, INIT_VERSION, resolveWizardAdapterTargets } from './init-runtime.mjs';
 
 const ANSI = {
@@ -79,8 +79,8 @@ export async function promptForConfig(cwd, { input = process.stdin, output = pro
     output,
     title: 'Planning docs in git',
     choices: [
-      { value: true, label: 'yes', description: 'Track .planning/ in git.' },
-      { value: false, label: 'no', description: 'Keep .planning/ local only.' },
+      { value: true, label: 'yes', description: 'Track .work/ in git.' },
+      { value: false, label: 'no', description: 'Keep .work/ local only.' },
     ],
     defaultIndex: 0,
   });

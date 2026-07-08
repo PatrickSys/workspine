@@ -119,26 +119,26 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'phases')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'research')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.cmd')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'spec.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'phases')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'research')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.cmd')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'spec.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'auth-matrix.md')),
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'delegates', 'plan-checker.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'auth-matrix.md')),
       'auth-matrix.md template must be distributed during init');
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'ui-proof.md')),
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'ui-proof.md')),
       'ui-proof.md template must be distributed during init');
     for (const file of ['CHANGE.md', 'HANDOFF.md', 'VERIFICATION.md']) {
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'brownfield-change', file)),
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'brownfield-change', file)),
         `brownfield-change/${file} template must be distributed during init`);
     }
 
-    const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+    const config = readJson(path.join(tmpDir, '.work', 'config.json'));
     assert.strictEqual(config.researchDepth, 'balanced');
     assert.strictEqual(config.parallelization, true);
     assert.strictEqual(config.commitDocs, true);
@@ -156,25 +156,23 @@ describe('gsdd init and update', () => {
       askBeforeDecide: false,
     });
 
-    const launcher = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'), 'utf-8');
+    const launcher = fs.readFileSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'), 'utf-8');
     assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\)/);
     assert.match(launcher, /import \{ cmdFileOp \} from '\.\/lib\/file-ops\.mjs';/);
-    assert.match(launcher, /import \{ cmdUiProof \} from '\.\/lib\/ui-proof\.mjs';/);
-    assert.match(launcher, /'ui-proof': cmdUiProof/);
     assert.doesNotMatch(launcher, /npm(?:\.cmd)?'.*exec.*--package=/s);
     assert.doesNotMatch(launcher, new RegExp(tmpDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.doesNotMatch(launcher, /Repos[\\/].+get-shit-done-distilled/i);
 
-    const shellShim = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd'), 'utf-8');
+    const shellShim = fs.readFileSync(path.join(tmpDir, '.work', 'bin', 'gsdd'), 'utf-8');
     assert.match(shellShim, /exec node "\$SCRIPT_DIR\/gsdd\.mjs" "\$@"/);
 
-    const cmdShim = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.cmd'), 'utf-8');
+    const cmdShim = fs.readFileSync(path.join(tmpDir, '.work', 'bin', 'gsdd.cmd'), 'utf-8');
     assert.match(cmdShim, /node "%~dp0gsdd\.mjs" %\*/);
 
-    const ps1Shim = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.ps1'), 'utf-8');
+    const ps1Shim = fs.readFileSync(path.join(tmpDir, '.work', 'bin', 'gsdd.ps1'), 'utf-8');
     assert.match(ps1Shim, /Join-Path \$scriptDir 'gsdd\.mjs'/);
 
-    const helperLib = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'lib', 'workspace-root.mjs'), 'utf-8');
+    const helperLib = fs.readFileSync(path.join(tmpDir, '.work', 'bin', 'lib', 'workspace-root.mjs'), 'utf-8');
     assert.match(helperLib, /resolveWorkspaceContext/);
 
     const newProjectSkill = fs.readFileSync(
@@ -185,10 +183,10 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(newProjectSkill, /active platform skill\/adapter/);
 
     const mapperTechTemplate = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md'),
+      path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md'),
       'utf-8'
     );
-    assert.match(mapperTechTemplate, /\.planning\/templates\/roles\/mapper\.md/);
+    assert.match(mapperTechTemplate, /\.work\/templates\/roles\/mapper\.md/);
     assert.doesNotMatch(mapperTechTemplate, /active platform skill\/adapter/);
 
     const requiredRoles = [
@@ -201,11 +199,11 @@ describe('gsdd init and update', () => {
       'executor.md',
     ];
     for (const role of requiredRoles) {
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles', role)));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'roles', role)));
     }
 
     const executorRole = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'roles', 'executor.md'),
+      path.join(tmpDir, '.work', 'templates', 'roles', 'executor.md'),
       'utf-8'
     );
     for (const token of [
@@ -261,7 +259,7 @@ describe('gsdd init and update', () => {
     }
 
     const synthRole = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'roles', 'synthesizer.md'),
+      path.join(tmpDir, '.work', 'templates', 'roles', 'synthesizer.md'),
       'utf-8'
     );
     for (const required of [
@@ -270,13 +268,13 @@ describe('gsdd init and update', () => {
       /<output_format>/,
       /<structured_returns>/,
       /<success_criteria>/,
-      /\.planning\/research\/STACK\.md/,
-      /\.planning\/research\/FEATURES\.md/,
-      /\.planning\/research\/ARCHITECTURE\.md/,
-      /\.planning\/research\/PITFALLS\.md/,
+      /\.work\/research\/STACK\.md/,
+      /\.work\/research\/FEATURES\.md/,
+      /\.work\/research\/ARCHITECTURE\.md/,
+      /\.work\/research\/PITFALLS\.md/,
       /If any required file is missing:/,
       /do not silently continue with a degraded synthesis/i,
-      /Write `\.planning\/research\/SUMMARY\.md`/,
+      /Write `\.work\/research\/SUMMARY\.md`/,
       /- Sources/,
       /- Research Flags/,
       /^sources:$/m,
@@ -284,18 +282,18 @@ describe('gsdd init and update', () => {
       /\*\*Missing files:\*\*/,
       /<scope_boundary>/,
       /does not do new web or codebase research/i,
-      /does not write `\.planning\/ROADMAP\.md`/i,
+      /does not write `\.work\/ROADMAP\.md`/i,
       /does not own git actions or commit output/i,
       /```yaml[\s\S]*executive_summary:/,
     ]) {
       assert.match(synthRole, required);
     }
-    for (const banned of [/~\/\.claude\//i, /docs: complete project research/i, /cat \.planning\/research\//i]) {
+    for (const banned of [/~\/\.claude\//i, /docs: complete project research/i, /cat \.work\/research\//i]) {
       assert.doesNotMatch(synthRole, banned);
     }
 
     const roadmapperRole = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'roles', 'roadmapper.md'),
+      path.join(tmpDir, '.work', 'templates', 'roles', 'roadmapper.md'),
       'utf-8'
     );
     for (const required of [
@@ -303,7 +301,7 @@ describe('gsdd init and update', () => {
       /<coverage_validation>/,
       /<structured_returns>/,
       /<success_criteria>/,
-      /Write `\.planning\/ROADMAP\.md`/,
+      /Write `\.work\/ROADMAP\.md`/,
       /## Phases/,
       /## Phase Details/,
       /`\*\*Status\*\*` must use one of: `\[ \]`, `\[-\]`, `\[x\]`/,
@@ -314,7 +312,7 @@ describe('gsdd init and update', () => {
       /## ROADMAP CREATED/,
       /## ROADMAP REVISED/,
       /## ROADMAP BLOCKED/,
-      /\*\*Artifact written:\*\* \.planning\/ROADMAP\.md/,
+      /\*\*Artifact written:\*\* \.work\/ROADMAP\.md/,
       /\*\*Status\*\*: \[ \]/,
       /revise the roadmap in place rather than rewriting it from scratch/i,
       /Options:/,
@@ -336,7 +334,7 @@ describe('gsdd init and update', () => {
     }
 
     const plannerRole = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'roles', 'planner.md'),
+      path.join(tmpDir, '.work', 'templates', 'roles', 'planner.md'),
       'utf-8'
     );
     for (const required of [
@@ -367,7 +365,7 @@ describe('gsdd init and update', () => {
     }
 
     const verifierRole = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'roles', 'verifier.md'),
+      path.join(tmpDir, '.work', 'templates', 'roles', 'verifier.md'),
       'utf-8'
     );
     for (const required of [
@@ -401,7 +399,7 @@ describe('gsdd init and update', () => {
       /^gaps:$/m,
       /<structured_returns>/,
       /Return a concise machine-usable summary to the orchestrator/i,
-      /^report: "\.planning\/phases\/01-foundation\/01-VERIFICATION\.md"$/m,
+      /^report: "\.work\/phases\/01-foundation\/01-VERIFICATION\.md"$/m,
     ]) {
       assert.match(verifierRole, required);
     }
@@ -463,7 +461,7 @@ describe('gsdd init and update', () => {
     }
 
     const planCheckerTemplate = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'delegates', 'plan-checker.md'),
+      path.join(tmpDir, '.work', 'templates', 'delegates', 'plan-checker.md'),
       'utf-8'
     );
     assert.match(planCheckerTemplate, /Return JSON only/);
@@ -479,7 +477,7 @@ describe('gsdd init and update', () => {
     for (const required of [
       /type="checkpoint:user"/,
       /type="checkpoint:review"/,
-      /node \.planning\/bin\/gsdd\.mjs phase-status \{N\} done/,
+      /node \.work\/bin\/gsdd\.mjs phase-status \{N\} done/,
       /DO NOT freelance/,
       /Checkpoint tasks are contract boundaries/i,
       /factual_discovery/,
@@ -491,7 +489,7 @@ describe('gsdd init and update', () => {
       /^assurance: self_checked$/m,
       /stale reference/i,
       /Mandatory-now context and task-scoped files read at the correct execution point/i,
-      /session-fingerprint write/i,
+      /next --json/i,
       /Authentication gates handled with the auth-gate protocol/i,
     ]) {
       assert.match(executeSkill, required);
@@ -552,7 +550,7 @@ describe('gsdd init and update', () => {
       'progress must remain agent: Plan because it is the read-only workflow');
   });
 
-  test('repo-local helper runtime is generated under .planning/bin as a self-contained workspace helper', async () => {
+  test('repo-local helper runtime is generated under .work/bin as a self-contained workspace helper', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
       const gsdd = await loadGsdd(tmpDir);
@@ -561,7 +559,7 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    const launcherPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const launcherPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
     const launcher = fs.readFileSync(launcherPath, 'utf-8');
 
     assert.match(launcher, /import \{ cmdFileOp \} from '\.\/lib\/file-ops\.mjs';/);
@@ -572,12 +570,12 @@ describe('gsdd init and update', () => {
     assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\);/);
     assert.doesNotMatch(launcher, /from 'gsdd-cli'/);
     assert.doesNotMatch(launcher, /from 'gsdd'/);
-    assert.match(launcher, /Usage: node \.planning\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
+    assert.match(launcher, /Usage: node \.work\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
     assert.match(launcher, /file-op <copy\|delete\|regex-sub>/);
-    assert.match(launcher, /verify <N>\s+Run direct phase artifact and UI-proof gate checks/);
+    assert.match(launcher, /verify <N>\s+Run direct phase artifact checks/);
     assert.match(launcher, /next \[--json\] \[--init\]/);
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'lib', 'next.mjs')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'lib', 'work-context.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'lib', 'next.mjs')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'lib', 'work-context.mjs')));
     assert.doesNotMatch(launcher, /\.agents\/bin\/gsdd\.mjs/);
     assert.doesNotMatch(launcher, /where\.exe/);
     assert.doesNotMatch(launcher, /gsdd\.cmd/);
@@ -597,7 +595,7 @@ describe('gsdd init and update', () => {
     fs.mkdirSync(nestedDir, { recursive: true });
 
     const result = spawnSync(process.execPath, [
-      path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'),
+      path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),
       'next',
       '--json',
     ], { cwd: nestedDir, encoding: 'utf-8' });
@@ -618,16 +616,16 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'brownfield-change'), { recursive: true });
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), [
+    fs.mkdirSync(path.join(tmpDir, '.work', 'brownfield-change'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), [
       '# Roadmap',
       '',
       '- [ ] **Phase 425589: Unrelated Roadmap Item** - [OTHER-01]',
       '',
     ].join('\n'));
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'), [
+    fs.writeFileSync(path.join(tmpDir, '.work', 'brownfield-change', 'CHANGE.md'), [
       '# Brownfield Change: PBI 425589',
       '',
       '## Current Status',
@@ -642,7 +640,7 @@ describe('gsdd init and update', () => {
     fs.mkdirSync(nestedDir, { recursive: true });
 
     let result = spawnSync(process.execPath, [
-      path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'),
+      path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),
       'lifecycle-preflight',
       'plan',
       'brownfield-change',
@@ -654,7 +652,7 @@ describe('gsdd init and update', () => {
     assert.strictEqual(parsed.authority, 'brownfield_change');
     assert.ok(!parsed.blockers.some((blocker) => blocker.code === 'missing_phase'));
 
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'), [
+    fs.writeFileSync(path.join(tmpDir, '.work', 'brownfield-change', 'CHANGE.md'), [
       '# Brownfield Change: Closed PBI',
       '',
       '## Current Status',
@@ -663,7 +661,7 @@ describe('gsdd init and update', () => {
     ].join('\n'));
 
     result = spawnSync(process.execPath, [
-      path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'),
+      path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),
       'lifecycle-preflight',
       'plan',
       'brownfield-change',
@@ -689,10 +687,10 @@ describe('gsdd init and update', () => {
     fs.mkdirSync(nestedDir, { recursive: true });
 
     const result = spawnSync(process.execPath, [
-      path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs'),
+      path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),
       'file-op',
       'copy',
-      '.planning/config.json',
+      '.work/config.json',
       '.planning/config-copy.json',
     ], { cwd: nestedDir, encoding: 'utf-8' });
 
@@ -710,7 +708,7 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.writeFileSync(roadmapPath, [
       '# Roadmap',
       '',
@@ -721,11 +719,11 @@ describe('gsdd init and update', () => {
       '',
     ].join('\n'));
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases'), { recursive: true });
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '01-PLAN.md'), '# Plan\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '01-PLAN.md'), '# Plan\n');
 
     const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
     fs.mkdirSync(nestedDir, { recursive: true });
-    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
 
     const preflight = spawnSync(process.execPath, [
       helperPath,
@@ -769,25 +767,25 @@ describe('gsdd init and update', () => {
     }
 
     const mapperTech = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'delegates', 'mapper-tech.md'),
+      path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md'),
       'utf-8'
     );
-    assert.match(mapperTech, /\.planning\/templates\/roles\/mapper\.md/);
+    assert.match(mapperTech, /\.work\/templates\/roles\/mapper\.md/);
 
     const researcherStack = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'delegates', 'researcher-stack.md'),
+      path.join(tmpDir, '.work', 'templates', 'delegates', 'researcher-stack.md'),
       'utf-8'
     );
-    assert.match(researcherStack, /\.planning\/templates\/roles\/researcher\.md/);
+    assert.match(researcherStack, /\.work\/templates\/roles\/researcher\.md/);
 
     const synthDelegate = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'delegates', 'researcher-synthesizer.md'),
+      path.join(tmpDir, '.work', 'templates', 'delegates', 'researcher-synthesizer.md'),
       'utf-8'
     );
-    assert.match(synthDelegate, /\.planning\/templates\/roles\/synthesizer\.md/);
+    assert.match(synthDelegate, /\.work\/templates\/roles\/synthesizer\.md/);
 
     const mapperRole = fs.readFileSync(
-      path.join(tmpDir, '.planning', 'templates', 'roles', 'mapper.md'),
+      path.join(tmpDir, '.work', 'templates', 'roles', 'mapper.md'),
       'utf-8'
     );
     assert.match(mapperRole, /\.env/);
@@ -1014,7 +1012,7 @@ describe('gsdd init and update', () => {
       title: 'Planning docs in git',
       multi: false,
       choices: [
-        { value: true, label: 'yes', description: 'Track .planning/ in git for history and team recovery.', selected: true, detected: false },
+        { value: true, label: 'yes', description: 'Track .work/ in git for history and team recovery.', selected: true, detected: false },
         { value: false, label: 'no', description: 'Keep planning docs local only and out of version control.', selected: false, detected: false },
       ],
     });
@@ -1152,7 +1150,7 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+    const config = readJson(path.join(tmpDir, '.work', 'config.json'));
     assert.strictEqual(config.researchDepth, 'balanced');
     assert.strictEqual(config.modelProfile, 'balanced');
     assert.strictEqual(config.initVersion, 'v1.1');
@@ -1211,9 +1209,9 @@ describe('gsdd init and update', () => {
     const claudeAgentPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
     const claudeCommandPath = path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md');
     const agentsPath = path.join(tmpDir, 'AGENTS.md');
-    const launcherPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
-    const shellShimPath = path.join(tmpDir, '.planning', 'bin', 'gsdd');
-    const cmdShimPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.cmd');
+    const launcherPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
+    const shellShimPath = path.join(tmpDir, '.work', 'bin', 'gsdd');
+    const cmdShimPath = path.join(tmpDir, '.work', 'bin', 'gsdd.cmd');
     fs.writeFileSync(claudeAgentPath, 'stale checker\n');
     fs.writeFileSync(claudeCommandPath, 'stale command\n');
     fs.writeFileSync(agentsPath, '# Local Rules\n\n<!-- BEGIN GSDD -->\nstale block\n<!-- END GSDD -->\n');
@@ -1239,7 +1237,7 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(updatedLauncher, /^stale launcher$/m);
     assert.match(updatedLauncher, /bootstrapHelperWorkspace\(import\.meta\.url\)/);
 
-    const updatedPs1Shim = fs.readFileSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.ps1'), 'utf-8');
+    const updatedPs1Shim = fs.readFileSync(path.join(tmpDir, '.work', 'bin', 'gsdd.ps1'), 'utf-8');
     assert.match(updatedPs1Shim, /Join-Path \$scriptDir 'gsdd\.mjs'/);
 
     const updatedShellShim = fs.readFileSync(shellShimPath, 'utf-8');
@@ -1292,7 +1290,7 @@ describe('gsdd init and update', () => {
         restoreStdin();
       }
 
-      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+      const config = readJson(path.join(tmpDir, '.work', 'config.json'));
       assert.strictEqual(config.autoAdvance, true);
       assert.strictEqual(config.researchDepth, 'balanced');
       assert.strictEqual(config.parallelization, true);
@@ -1309,7 +1307,7 @@ describe('gsdd init and update', () => {
       }
 
       assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
       assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')));
       assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')));
       assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
@@ -1347,7 +1345,7 @@ describe('gsdd init and update', () => {
         restoreStdin();
       }
 
-      const config = readJson(path.join(tmpDir, '.planning', 'config.json'));
+      const config = readJson(path.join(tmpDir, '.work', 'config.json'));
       const expectedKeys = [
         'researchDepth',
         'parallelization',
@@ -1364,7 +1362,7 @@ describe('gsdd init and update', () => {
       assert.strictEqual(config.initVersion, 'v1.1');
     });
 
-    test('--brief copies file to .planning/PROJECT_BRIEF.md', async () => {
+    test('--brief copies file to .work/PROJECT_BRIEF.md', async () => {
       const briefContent = '# Project Brief\n\nBuild a task manager app.\n';
       fs.writeFileSync(path.join(tmpDir, 'my-brief.md'), briefContent);
 
@@ -1376,12 +1374,12 @@ describe('gsdd init and update', () => {
         restoreStdin();
       }
 
-      const briefDest = path.join(tmpDir, '.planning', 'PROJECT_BRIEF.md');
+      const briefDest = path.join(tmpDir, '.work', 'PROJECT_BRIEF.md');
       assert.ok(fs.existsSync(briefDest));
       assert.strictEqual(fs.readFileSync(briefDest, 'utf-8'), briefContent);
     });
 
-    test('--brief with absolute path copies file to .planning/PROJECT_BRIEF.md', async () => {
+    test('--brief with absolute path copies file to .work/PROJECT_BRIEF.md', async () => {
       const briefContent = '# Brief\n\nAbsolute path test.\n';
       const absPath = path.join(tmpDir, 'abs-brief.md');
       fs.writeFileSync(absPath, briefContent);
@@ -1394,7 +1392,7 @@ describe('gsdd init and update', () => {
         restoreStdin();
       }
 
-      const briefDest = path.join(tmpDir, '.planning', 'PROJECT_BRIEF.md');
+      const briefDest = path.join(tmpDir, '.work', 'PROJECT_BRIEF.md');
       assert.ok(fs.existsSync(briefDest));
       assert.strictEqual(fs.readFileSync(briefDest, 'utf-8'), briefContent);
     });
@@ -1404,7 +1402,7 @@ describe('gsdd init and update', () => {
       try {
         const gsdd = await loadGsdd(tmpDir);
         await gsdd.cmdInit('--auto', '--tools', 'claude');
-        const configPath = path.join(tmpDir, '.planning', 'config.json');
+        const configPath = path.join(tmpDir, '.work', 'config.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         config.researchDepth = 'deep';
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -1803,9 +1801,9 @@ describe('gsdd init and update', () => {
         restoreStdin();
       }
 
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'phases')));
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'research')));
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'phases')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'research')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'config.json')));
     });
   });
 });

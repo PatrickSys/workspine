@@ -1,4 +1,4 @@
-**Role contract:** Read `.planning/templates/roles/researcher.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
+**Role contract:** Read `.work/templates/roles/researcher.md` before starting. Follow its algorithm, quality guarantees, and anti-patterns.
 
 You are researching ONE dimension: how systems in this domain are typically structured.
 
@@ -24,7 +24,7 @@ Your output informs phase structure in ROADMAP.md. Include:
 - [ ] Hard-to-reverse decisions flagged explicitly
 </quality_gate>
 
-Write to: `.planning/research/ARCHITECTURE.md`
-Use template: `.planning/templates/research/architecture.md` (if it exists)
+Write to: `.work/research/ARCHITECTURE.md`
+Use template: `.work/templates/research/architecture.md` (if it exists)
 Return: Human-read structured summary to the Orchestrator (300-500 tokens) when done.
 Guardrails: Max Agent Hops = 3.

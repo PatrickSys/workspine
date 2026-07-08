@@ -105,10 +105,11 @@ describe('next command bootstrap', () => {
 
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /Why:/);
-    assert.match(result.output, /Approval:/);
+    assert.match(result.output, /Where things stand/);
+    assert.match(result.output, /Waiting on you:/);
     assert.match(result.output, /Evidence required:/);
     assert.match(result.output, /Skipped inputs:/);
-    assert.match(result.output, /\.planning\/SPEC\.md: missing/);
+    assert.match(result.output, /\.work\/SPEC\.md: missing/);
   });
 });
 
@@ -515,7 +516,7 @@ describe('next command questions and decisions', () => {
 });
 
 describe('next command routing', () => {
-  test('missing legacy planning truth routes to Workspine-native planning, not false lifecycle progress', async () => {
+  test('missing Workspine lifecycle truth routes to Workspine-native planning, not false lifecycle progress', async () => {
     await initWork();
     fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
 
@@ -524,15 +525,16 @@ describe('next command routing', () => {
     assert.strictEqual(result.state, 'plan');
     assert.strictEqual(result.authority, 'work');
     assert.strictEqual(result.route_kind, 'work_native_plan');
-    assert.match(result.reason, /canonical `.planning` lifecycle truth is incomplete/);
-    assert.ok(result.inputs_skipped.includes('.planning/SPEC.md: missing'));
-    assert.ok(result.inputs_skipped.includes('.planning/ROADMAP.md: missing'));
-    assert.ok(result.inputs_skipped.includes('.planning/MILESTONES.md: missing'));
+    assert.match(result.reason, /canonical .work lifecycle truth is incomplete/);
+    assert.ok(result.inputs_skipped.includes('.work/SPEC.md: missing'));
+    assert.ok(result.inputs_skipped.includes('.work/ROADMAP.md: missing'));
+    assert.ok(result.inputs_skipped.includes('.work/MILESTONES.md: missing'));
   });
 
   test('active brownfield change routes to brownfield planning before unrelated roadmap phase preflight', async () => {
     await initWork();
     writeFile('.planning/SPEC.md', '# Spec\n');
+    writeJson('.planning/config.json', { initVersion: 1 });
     writeFile('.planning/MILESTONES.md', '# Milestones\n');
     writeFile('.planning/ROADMAP.md', [
       '# Roadmap',
@@ -582,6 +584,7 @@ describe('next command routing', () => {
   test('brownfield status controls routing without treating every non-closed change as planning', async () => {
     await initWork();
     writeFile('.planning/SPEC.md', '# Spec\n');
+    writeJson('.planning/config.json', { initVersion: 1 });
     writeFile('.planning/ROADMAP.md', '# Roadmap\n');
     writeFile('.planning/MILESTONES.md', '# Milestones\n');
     writeFile('.planning/brownfield-change/CHANGE.md', [
@@ -633,6 +636,7 @@ describe('next command routing', () => {
   test('active brownfield change blocks instead of silently choosing over work-milestone authority', async () => {
     await initWork();
     writeFile('.planning/SPEC.md', '# Spec\n');
+    writeJson('.planning/config.json', { initVersion: 1 });
     writeFile('.planning/ROADMAP.md', '# Roadmap\n');
     writeFile('.planning/MILESTONES.md', '# Milestones\n');
     writeFile('.planning/brownfield-change/CHANGE.md', [
@@ -664,6 +668,7 @@ describe('next command routing', () => {
   test('active brownfield change precedence over legacy unverified phase residue is explicit', async () => {
     await initWork();
     writeFile('.planning/SPEC.md', '# Spec\n');
+    writeJson('.planning/config.json', { initVersion: 1 });
     writeFile('.planning/ROADMAP.md', '# Roadmap\n');
     writeFile('.planning/MILESTONES.md', '# Milestones\n');
     writeFile('.planning/phases/01-stale/01-SUMMARY.md', '# stale summary\n');
@@ -688,6 +693,7 @@ describe('next command routing', () => {
   test('closed brownfield change does not hijack normal legacy verification routing', async () => {
     await initWork();
     writeFile('.planning/SPEC.md', '# Spec\n');
+    writeJson('.planning/config.json', { initVersion: 1 });
     writeFile('.planning/ROADMAP.md', '# Roadmap\n');
     writeFile('.planning/MILESTONES.md', '# Milestones\n');
     writeFile('.planning/phases/01-foundation/01-SUMMARY.md', '# Summary\n');
@@ -867,6 +873,7 @@ describe('next command routing', () => {
   test('legacy summaries without verification route to verify', async () => {
     await initWork();
     writeFile('.planning/SPEC.md', '# Spec\n');
+    writeJson('.planning/config.json', { initVersion: 1 });
     writeFile('.planning/ROADMAP.md', '# Roadmap\n');
     writeFile('.planning/MILESTONES.md', '# Milestones\n');
     writeFile('.planning/phases/01-foundation/01-SUMMARY.md', '# Summary\n');

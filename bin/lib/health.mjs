@@ -10,15 +10,18 @@ import { output } from './cli-utils.mjs';
 import { runTruthChecks, TRUTH_CHECK_IDS } from './health-truth.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
 import { evaluateRuntimeFreshness } from './runtime-freshness.mjs';
-import { findUiProofBundleFiles, readUiProofBundleFile, validateUiProofBundle } from './ui-proof.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+
+function statePath(stateDirName, relativePath = '') {
+  return relativePath ? `${stateDirName}/${relativePath}` : stateDirName;
+}
 
 /**
  * Build the structured health report without printing or mutating workspace
  * state. ctx should provide: { frameworkVersion, workflows }.
  */
 export function buildHealthReport(ctx, healthArgs = []) {
-    const { planningDir, workspaceRoot, invalid, error } = resolveWorkspaceContext(healthArgs);
+    const { planningDir, workspaceRoot, invalid, error, stateDirName = '.work' } = resolveWorkspaceContext(healthArgs);
     if (invalid) {
       return {
         status: 'broken',
@@ -30,13 +33,13 @@ export function buildHealthReport(ctx, healthArgs = []) {
     }
     const cwd = workspaceRoot;
     const frameworkSourceMode = isFrameworkSourceRepo(cwd);
-    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
+    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
 
     // Pre-init guard
     if (!existsSync(join(planningDir, 'config.json'))) {
       return {
         status: 'broken',
-        errors: [{ id: 'E1', severity: 'ERROR', message: '.planning/config.json missing', fix: 'Run `npx -y gsdd-cli init`' }],
+        errors: [{ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} missing`, fix: 'Run `npx -y gsdd-cli init`' }],
         warnings: [],
         info: [],
         humanMessage: 'Not initialized. Run `npx -y gsdd-cli init`. If `gsdd` is installed globally, `gsdd init` is also fine.',
@@ -62,7 +65,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
         errors.push({ id: 'E2', severity: 'ERROR', message: `config.json missing required fields: ${missing.join(', ')}`, fix: 'Run `npx -y gsdd-cli init` to regenerate' });
       }
     } catch {
-      errors.push({ id: 'E1', severity: 'ERROR', message: '.planning/config.json is unparseable', fix: 'Run `npx -y gsdd-cli init`' });
+      errors.push({ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} is unparseable`, fix: 'Run `npx -y gsdd-cli init`' });
     }
 
     // E3: templates/ missing
@@ -77,47 +80,47 @@ export function buildHealthReport(ctx, healthArgs = []) {
     const skipInstalledTemplateChecks = !hasTemplatesDir && frameworkSourceMode;
 
     if (!hasTemplatesDir && !skipInstalledTemplateChecks) {
-      errors.push({ id: 'E3', severity: 'ERROR', message: '.planning/templates/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
+      errors.push({ id: 'E3', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
     } else if (hasTemplatesDir) {
       // E4: roles/ missing or empty
       if (!hasRolesDir) {
-        errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const roleFiles = readdirSync(rolesDir).filter((f) => f.endsWith('.md'));
         if (roleFiles.length === 0) {
-          errors.push({ id: 'E4', severity: 'ERROR', message: '.planning/templates/roles/ has 0 role files', fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} has 0 role files`, fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
       }
 
       // E5: delegates/ missing or empty
       if (!hasDelegatesDir) {
-        errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const delegateFiles = readdirSync(delegatesDir).filter((f) => f.endsWith('.md'));
         if (delegateFiles.length === 0) {
-          errors.push({ id: 'E5', severity: 'ERROR', message: '.planning/templates/delegates/ has 0 delegate files', fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} has 0 delegate files`, fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
       }
 
       // E6: research/ missing or empty
       const researchDir = join(templatesDir, 'research');
       if (!existsSync(researchDir)) {
-        errors.push({ id: 'E6', severity: 'ERROR', message: '.planning/templates/research/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const researchFiles = readdirSync(researchDir).filter((f) => f.endsWith('.md'));
         if (researchFiles.length === 0) {
-          errors.push({ id: 'E6', severity: 'ERROR', message: '.planning/templates/research/ has 0 template files', fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} has 0 template files`, fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
       }
 
       // E7: codebase/ missing or empty
       const codebaseDir = join(templatesDir, 'codebase');
       if (!existsSync(codebaseDir)) {
-        errors.push({ id: 'E7', severity: 'ERROR', message: '.planning/templates/codebase/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const codebaseFiles = readdirSync(codebaseDir).filter((f) => f.endsWith('.md'));
         if (codebaseFiles.length === 0) {
-          errors.push({ id: 'E7', severity: 'ERROR', message: '.planning/templates/codebase/ has 0 template files', fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} has 0 template files`, fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
       }
 
@@ -125,34 +128,17 @@ export function buildHealthReport(ctx, healthArgs = []) {
       const requiredRootFiles = ['spec.md', 'roadmap.md', 'auth-matrix.md', 'ui-proof.md'];
       const missingRoot = requiredRootFiles.filter((f) => !existsSync(join(templatesDir, f)));
       if (missingRoot.length > 0) {
-        errors.push({ id: 'E8', severity: 'ERROR', message: `.planning/templates/ missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E8', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
       }
 
       const brownfieldChangeDir = join(templatesDir, 'brownfield-change');
       if (!existsSync(brownfieldChangeDir)) {
-        errors.push({ id: 'E9', severity: 'ERROR', message: '.planning/templates/brownfield-change/ missing', fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
       } else {
         const missingBrownfield = ['CHANGE.md', 'HANDOFF.md', 'VERIFICATION.md'].filter((file) => !existsSync(join(brownfieldChangeDir, file)));
         if (missingBrownfield.length > 0) {
-          errors.push({ id: 'E9', severity: 'ERROR', message: `.planning/templates/brownfield-change/ missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
         }
-      }
-    }
-
-    // E10: known UI proof bundles must satisfy deterministic metadata/privacy validation.
-    for (const bundlePath of findUiProofBundleFiles(planningDir)) {
-      const relativePath = relative(cwd, bundlePath).replace(/\\/g, '/');
-      const parsed = readUiProofBundleFile(bundlePath);
-      const validation = parsed.errors.length > 0
-        ? { valid: false, errors: parsed.errors }
-        : validateUiProofBundle(parsed.bundle, { requireLocalArtifactExists: true, workspaceRoot: cwd });
-      if (!validation.valid) {
-        errors.push({
-          id: 'E10',
-          severity: 'ERROR',
-          message: `${relativePath} has invalid UI proof metadata (${validation.errors.map((entry) => entry.code).join(', ')})`,
-          fix: 'Run `gsdd ui-proof validate <path>` and add required privacy metadata, claim limits, fixed evidence kinds, concise tool provenance, failure classification when failed or partial, observation artifact references, existing local artifact paths, and safe-to-publish handling.',
-        });
       }
     }
 
@@ -188,7 +174,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
       }
     }
 
-    // W4: ROADMAP.md references phases not found in .planning/phases/
+    // W4: ROADMAP.md references phases not found in the resolved state phases directory.
     const roadmapPath = join(planningDir, 'ROADMAP.md');
     const phasesDir = join(planningDir, 'phases');
     const roadmap = existsSync(roadmapPath) ? readFileSync(roadmapPath, 'utf-8') : null;
@@ -199,7 +185,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
         warnings.push({
           id: 'W4',
           severity: 'WARN',
-          message: `ROADMAP.md references active Phase ${phase.number} but no files found in .planning/phases/`,
+          message: `ROADMAP.md references active Phase ${phase.number} but no files found in ${statePath(stateDirName, 'phases/')}`,
           fix: 'Create missing phase dirs or update ROADMAP',
         });
       }
@@ -208,7 +194,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
     // W5: Phase dir has PLAN but no SUMMARY (stale in-progress)
     if (lifecycle.incompletePlans.length > 0) {
       for (const plan of lifecycle.incompletePlans) {
-        const expectedSummary = `.planning/phases/${plan.dir}/${plan.baseId}-SUMMARY.md`;
+        const expectedSummary = statePath(stateDirName, `phases/${plan.dir}/${plan.baseId}-SUMMARY.md`);
         warnings.push({
           id: 'W5',
           severity: 'WARN',
@@ -227,7 +213,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
       ? evaluateRuntimeFreshness({ cwd, workflows: ctx.workflows })
       : null;
 
-    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport }).map((warning) => {
+    warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport, stateDirName }).map((warning) => {
       if (warning.id !== 'W10') return warning;
       return {
         ...warning,
@@ -235,7 +221,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
           /^ROADMAP\/SPEC requirement status drift/,
           'ROADMAP lifecycle status drift (requirement checkbox and/or overview/detail phase status mismatch)'
         ),
-        fix: 'Reconcile .planning/ROADMAP.md overview/detail phase markers and .planning/SPEC.md requirement checkboxes',
+        fix: `Reconcile ${statePath(stateDirName, 'ROADMAP.md')} overview/detail phase markers and ${statePath(stateDirName, 'SPEC.md')} requirement checkboxes`,
       };
     }));
 
