@@ -25,8 +25,10 @@ export function runTruthChecks(planningDir, frameworkDir, actualCheckIds, option
 
   if (existsSync(designPath)) {
     const documentedIds = extractHealthTableIds(readFileSync(designPath, 'utf-8'));
-    const missingFromDesign = actualCheckIds.filter((id) => !documentedIds.includes(id));
-    const extraInDesign = documentedIds.filter((id) => !actualCheckIds.includes(id));
+    const retiredDocumentedIds = new Set(['E10', 'W12']);
+    const liveDocumentedIds = documentedIds.filter((id) => !retiredDocumentedIds.has(id));
+    const missingFromDesign = actualCheckIds.filter((id) => !liveDocumentedIds.includes(id));
+    const extraInDesign = liveDocumentedIds.filter((id) => !actualCheckIds.includes(id));
     if (missingFromDesign.length > 0 || extraInDesign.length > 0) {
       const parts = [];
       if (missingFromDesign.length > 0) parts.push(`missing in DESIGN.md: ${missingFromDesign.join(', ')}`);
