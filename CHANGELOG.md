@@ -1,3 +1,10 @@
+## [0.29.1](https://github.com/PatrickSys/workspine/compare/v0.29.0...v0.29.1) (2026-07-09)
+
+
+### Bug Fixes
+
+* ignore retired health ids in truth check ([dd02a6a](https://github.com/PatrickSys/workspine/commit/dd02a6a46246a0b609da26b57e0f16b451afbc51))
+
 # [0.29.0](https://github.com/PatrickSys/workspine/compare/v0.28.0...v0.29.0) (2026-07-08)
 
 
