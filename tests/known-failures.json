@@ -1,11 +1,4 @@
 {
   "comment": "Named, accepted failures the runner tolerates. Each entry needs a removal milestone. Empty this file as debts are paid.",
-  "allowed": [
-    {
-      "file": "tests/gsdd.invariants.test.cjs",
-      "test": "workflow/plan.md is under 640 lines",
-      "reason": "distilled/workflows/plan.md is 662 lines vs 640 cap; content diet is M1 scope (see M0b/M0c PR descriptions).",
-      "remove_in": "M1"
-    }
-  ]
+  "allowed": []
 }

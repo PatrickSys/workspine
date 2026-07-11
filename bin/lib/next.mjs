@@ -1,4 +1,4 @@
-import { join } from 'path';
+import { join, relative } from 'path';
 import { existsSync } from 'fs';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
@@ -121,6 +121,15 @@ function stateDirName(context) {
 function statePath(context, relativePath = '') {
   const dirName = stateDirName(context);
   return relativePath ? `${dirName}/${relativePath}` : dirName;
+}
+
+function milestonePath(context, relativePath = '') {
+  const milestoneDir = context?.milestone?.dir;
+  const root = context?.paths?.root;
+  const resolvedDir = milestoneDir && root
+    ? normalizeSlashes(relative(root, milestoneDir))
+    : statePath(context, 'milestone');
+  return relativePath ? `${resolvedDir}/${relativePath}` : resolvedDir;
 }
 
 function userQuestionAction(questionIds, description) {
@@ -303,13 +312,13 @@ function routeNext(ctx) {
 
   if (context.decisions.length > 0) inputsConsidered.push('.work/decisions/*.md');
   if (context.dogfood.length > 0) inputsConsidered.push('.work/dogfood/*.md');
-  if (context.milestone?.has_milestone) inputsConsidered.push('.work/milestone/MILESTONE.md');
-  else inputsSkipped.push('.work/milestone/MILESTONE.md: missing');
-  if (context.milestone?.has_roadmap) inputsConsidered.push('.work/milestone/ROADMAP.md');
-  else inputsSkipped.push('.work/milestone/ROADMAP.md: missing');
-  if (context.milestone?.has_audit) inputsConsidered.push('.work/milestone/AUDIT.md');
-  else inputsSkipped.push('.work/milestone/AUDIT.md: missing');
-  if (context.milestone?.phase_packet_count > 0) inputsConsidered.push('.work/milestone/phases/*');
+  if (context.milestone?.has_milestone) inputsConsidered.push(milestonePath(context, 'MILESTONE.md'));
+  else inputsSkipped.push(`${milestonePath(context, 'MILESTONE.md')}: missing`);
+  if (context.milestone?.has_roadmap) inputsConsidered.push(milestonePath(context, 'ROADMAP.md'));
+  else inputsSkipped.push(`${milestonePath(context, 'ROADMAP.md')}: missing`);
+  if (context.milestone?.has_audit) inputsConsidered.push(milestonePath(context, 'AUDIT.md'));
+  else inputsSkipped.push(`${milestonePath(context, 'AUDIT.md')}: missing`);
+  if (context.milestone?.phase_packet_count > 0) inputsConsidered.push(milestonePath(context, 'phases/*'));
   if (context.planning.has_brownfield_change) inputsConsidered.push(statePath(context, 'brownfield-change/CHANGE.md'));
 
   if (context.graph.invalid.length > 0) {
@@ -461,17 +470,17 @@ function routeNext(ctx) {
   if (['active', 'blocked', 'ready_for_verification'].includes(brownfieldStatus) && context.milestone?.exists) {
     return packet({
       state: 'blocked',
-      reason: 'Active brownfield-change authority and .work/milestone authority both exist; continuing would silently choose between two continuity roots.',
+      reason: `Active brownfield-change authority and ${milestonePath(context)} authority both exist; continuing would silently choose between two continuity roots.`,
       confidence: 'high',
       next_command: null,
-      next_action: manualReviewAction([statePath(context, 'brownfield-change/CHANGE.md'), '.work/milestone/MILESTONE.md', '.work/milestone/ROADMAP.md'], 'Resolve the authority conflict before routing to plan, execute, or verify.'),
+      next_action: manualReviewAction([statePath(context, 'brownfield-change/CHANGE.md'), milestonePath(context, 'MILESTONE.md'), milestonePath(context, 'ROADMAP.md')], 'Resolve the authority conflict before routing to plan, execute, or verify.'),
       authority: 'blocked',
       route_kind: 'authority_conflict',
       blocked_by: ['brownfield_change', 'work_milestone'],
       requires_user: false,
       constraints,
       evidence_required: ['One continuity authority must be selected or archived before continuing.'],
-      artifacts_to_read: [statePath(context, 'brownfield-change/CHANGE.md'), '.work/milestone/MILESTONE.md', '.work/milestone/ROADMAP.md'],
+      artifacts_to_read: [statePath(context, 'brownfield-change/CHANGE.md'), milestonePath(context, 'MILESTONE.md'), milestonePath(context, 'ROADMAP.md')],
       repo_warnings: repoWarningsFromControlMap(controlMap),
       privacy_notes: privacyNotes,
       inputs_considered: inputsConsidered,
@@ -631,13 +640,13 @@ function routeFromWorkMilestone(context, manifest) {
   if (milestone.roadmap_all_complete && !milestone.audit_passed) {
     return {
       state: 'audit',
-      reason: 'Workspine-native `.work/milestone` roadmap is complete and needs milestone audit.',
+      reason: `Workspine-native \`${milestonePath(context)}\` roadmap is complete and needs milestone audit.`,
     };
   }
   if (milestone.audit_passed && context.dogfood.length === 0 && manifest?.dogfood?.status !== 'captured') {
     return {
       state: 'dogfood',
-      reason: 'Workspine-native `.work/milestone` audit passed and no dogfood finding has been captured.',
+      reason: `Workspine-native \`${milestonePath(context)}\` audit passed and no dogfood finding has been captured.`,
     };
   }
   if (milestone.audit_passed && (context.dogfood.length > 0 || manifest?.dogfood?.status === 'captured')) {
@@ -645,22 +654,22 @@ function routeFromWorkMilestone(context, manifest) {
       state: 'ask_user',
       reason: 'Workspine-native milestone audit passed and dogfood exists, but declaring completion is a human gate.',
       next_command: 'gsdd-complete-milestone',
-      next_action: manualReviewAction(['.work/milestone/AUDIT.md', '.work/milestone/ROADMAP.md', '.work/evidence/manifest.json'], 'Review closure evidence with the user before running completion workflow.'),
+      next_action: manualReviewAction([milestonePath(context, 'AUDIT.md'), milestonePath(context, 'ROADMAP.md'), '.work/evidence/manifest.json'], 'Review closure evidence with the user before running completion workflow.'),
       questions: [{
         id: 'completion-approval',
         question: 'Approve declaring this Workspine-native milestone complete?',
-        default: 'No automatic completion; review `.work/milestone/AUDIT.md` and evidence first.',
+        default: `No automatic completion; review \`${milestonePath(context, 'AUDIT.md')}\` and evidence first.`,
         gate: 'completion',
         blocking: true,
       }],
-      evidence_required: ['Human approval after reviewing `.work/milestone/AUDIT.md` and the scoped closure limits.'],
-      artifacts_to_read: ['.work/milestone/AUDIT.md', '.work/milestone/ROADMAP.md', '.work/evidence/manifest.json'],
+      evidence_required: [`Human approval after reviewing \`${milestonePath(context, 'AUDIT.md')}\` and the scoped closure limits.`],
+      artifacts_to_read: [milestonePath(context, 'AUDIT.md'), milestonePath(context, 'ROADMAP.md'), '.work/evidence/manifest.json'],
     };
   }
   if (milestone.has_roadmap && milestone.phase_count > 0) {
     return {
       state: 'verify',
-      reason: 'Workspine-native `.work/milestone` phase packets exist and should be verified before closure.',
+      reason: `Workspine-native \`${milestonePath(context)}\` phase packets exist and should be verified before closure.`,
     };
   }
   return null;
@@ -719,12 +728,12 @@ function actionToLegacyCommand(action) {
 function defaultReadArtifacts(state, context) {
   if (state === 'execute') return ['.work/goal.md', '.work/focus/current.md'];
   if (state === 'verify') return context.milestone?.has_roadmap
-    ? ['.work/goal.md', '.work/milestone/ROADMAP.md', '.work/milestone/phases/*/*-VERIFY.md']
+    ? ['.work/goal.md', milestonePath(context, 'ROADMAP.md'), milestonePath(context, 'phases/*/*-VERIFY.md')]
     : ['.work/goal.md', '.work/evidence/manifest.json', statePath(context, 'phases/*/*-SUMMARY.md')];
   if (state === 'audit') return context.milestone?.has_roadmap
-    ? ['.work/goal.md', '.work/milestone/ROADMAP.md', '.work/milestone/phases/*/*-VERIFY.md']
+    ? ['.work/goal.md', milestonePath(context, 'ROADMAP.md'), milestonePath(context, 'phases/*/*-VERIFY.md')]
     : ['.work/goal.md', '.work/evidence/manifest.json', statePath(context, 'phases/**/*-VERIFICATION.md')];
-  if (state === 'fix_gaps') return ['.work/evidence/manifest.json', '.work/*-MILESTONE-AUDIT.md', '.work/milestone/AUDIT.md'];
+  if (state === 'fix_gaps') return ['.work/evidence/manifest.json', '.work/*-MILESTONE-AUDIT.md', milestonePath(context, 'AUDIT.md')];
   if (state === 'dogfood') return ['.work/goal.md', '.work/evidence/manifest.json'];
   if (state === 'pause') return ['.work/handoff/current.md'];
   if (state === 'complete') return ['.work/goal.md', '.work/evidence/manifest.json', '.work/dogfood/'];
