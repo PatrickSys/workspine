@@ -1,3 +1,10 @@
+## [0.29.2](https://github.com/PatrickSys/workspine/compare/v0.29.1...v0.29.2) (2026-07-11)
+
+
+### Bug Fixes
+
+* resolve active milestone from .work/milestones and retire paid known-failure ([953c12b](https://github.com/PatrickSys/workspine/commit/953c12b113d6ac89d33342741e7929f2cea94d11))
+
 ## [0.29.1](https://github.com/PatrickSys/workspine/compare/v0.29.0...v0.29.1) (2026-07-09)
 
 
