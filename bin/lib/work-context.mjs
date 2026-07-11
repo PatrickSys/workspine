@@ -91,6 +91,8 @@ const DEFAULT_WORK_GITIGNORE = [
   '!research/**',
   '!milestone/',
   '!milestone/**',
+  '!milestones/',
+  '!milestones/**',
   '!.gitignore',
   '',
 ].join('\n');
@@ -702,8 +704,39 @@ function listMarkdownFiles(dir) {
     .map((name) => normalizeSlashes(join(basename(dir), name)));
 }
 
-function inspectWorkMilestone(workDir) {
-  const milestoneDir = join(workDir, 'milestone');
+export function resolveActiveMilestoneDir(workDir) {
+  const pluralDir = join(workDir, 'milestones');
+  if (existsSync(pluralDir)) {
+    let candidates = [];
+    const candidateText = new Map();
+    try {
+      candidates = readdirSync(pluralDir).filter((name) => {
+        const milestonePath = join(pluralDir, name, 'MILESTONE.md');
+        if (!existsSync(milestonePath)) return false;
+        try {
+          candidateText.set(name, readTextIfExists(milestonePath) || '');
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    } catch {
+      candidates = [];
+    }
+    if (candidates.length > 0) {
+      const inProgress = candidates.filter((name) => {
+        const text = candidateText.get(name) || '';
+        return /^status:\s*in_progress\b/im.test(text);
+      });
+      const pool = inProgress.length > 0 ? inProgress : candidates;
+      return join(pluralDir, pool.sort().at(-1));
+    }
+  }
+  return join(workDir, 'milestone');
+}
+
+export function inspectWorkMilestone(workDir) {
+  const milestoneDir = resolveActiveMilestoneDir(workDir);
   const roadmapPath = join(milestoneDir, 'ROADMAP.md');
   const auditPath = join(milestoneDir, 'AUDIT.md');
   const milestonePath = join(milestoneDir, 'MILESTONE.md');
@@ -733,6 +766,7 @@ function inspectWorkMilestone(workDir) {
   const auditStatus = (audit || '').match(/^Status:\s*(.+)$/im)?.[1]?.trim() || null;
   return {
     exists: existsSync(milestoneDir),
+    dir: milestoneDir,
     has_milestone: existsSync(milestonePath),
     has_roadmap: existsSync(roadmapPath),
     has_audit: existsSync(auditPath),

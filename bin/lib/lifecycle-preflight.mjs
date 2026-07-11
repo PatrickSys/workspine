@@ -3,6 +3,7 @@ import { isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
 import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
+import { resolveActiveMilestoneDir } from './work-context.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const SURFACE_POLICIES = {
@@ -358,7 +359,7 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface, stateLabel }) {
 
 function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
   const workspaceRoot = resolve(planningDir, '..');
-  const milestoneDir = join(workspaceRoot, '.work', 'milestone');
+  const milestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
   const roadmapPath = join(milestoneDir, 'ROADMAP.md');
   const phasesDir = join(milestoneDir, 'phases');
 
@@ -409,7 +410,7 @@ function evaluateResumeWorkCheckpoint({ planningDir, checkpointPath }) {
   if (!existsSync(checkpointPath)) return null;
 
   const workspaceRoot = resolve(planningDir, '..');
-  const milestoneDir = join(workspaceRoot, '.work', 'milestone');
+  const milestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
   const roadmapPath = join(milestoneDir, 'ROADMAP.md');
   if (!existsSync(roadmapPath)) return null;
 
