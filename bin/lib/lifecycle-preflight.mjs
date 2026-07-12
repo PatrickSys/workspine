@@ -1,9 +1,16 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { isAbsolute, join, relative, resolve } from 'path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
 import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
-import { buildDecisionsDigest, resolveActiveMilestoneDir } from './work-context.mjs';
+import {
+  buildDecisionsDigest,
+  persistDecisionsDigest,
+  readDecisionRecords,
+  readJsonIfExists,
+  resolveActiveMilestoneDir,
+} from './work-context.mjs';
+import { parsePlanFrontmatter } from './phase.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const SURFACE_POLICIES = {
@@ -202,6 +209,20 @@ export function evaluateLifecyclePreflight({
     paths: normalizedPhase ? [`phase:${normalizedPhase}`] : [],
   });
 
+  if (decisionsDigest.directoryUnreadable) {
+    warnings.push({
+      code: 'decision_store_unreadable',
+      message: 'Decision store could not be enumerated; lifecycle preflight continues with an empty digest.',
+      artifacts: decisionsDigest.readErrors.map((entry) => entry.path),
+    });
+  }
+
+  if (surface === 'plan') {
+    persistDecisionsDigest(planningDir, { phase: normalizedPhase, digest: decisionsDigest });
+  } else if (surface === 'execute') {
+    warnings.push(...evaluateDecisionDispositionWarnings({ planningDir, phaseToken: normalizedPhase, lifecycle, workMilestone }));
+  }
+
   return {
     surface,
     phase: normalizedPhase,
@@ -215,11 +236,7 @@ export function evaluateLifecyclePreflight({
     reason: blockers[0]?.code ?? null,
     blockers,
     warnings,
-    decisionsDigest: {
-      ids: decisionsDigest.records.map((result) => result.record.meta.id),
-      text: decisionsDigest.text,
-      invalid: decisionsDigest.invalid,
-    },
+    decisionsDigest,
     planningState,
     controlMap: controlMap.summary,
     lifecycle: {
@@ -232,8 +249,12 @@ export function evaluateLifecyclePreflight({
         ? {
             phase: workMilestone?.phaseEntry?.number ?? null,
             status: workMilestone?.phaseEntry?.status ?? null,
-            roadmapPath: '.work/milestone/ROADMAP.md',
-            milestoneDir: '.work/milestone',
+            roadmapPath: workMilestone?.roadmapPath
+              ? relative(resolve(planningDir, '..'), workMilestone.roadmapPath).replace(/\\/g, '/')
+              : null,
+            milestoneDir: workMilestone?.milestoneDir
+              ? relative(resolve(planningDir, '..'), workMilestone.milestoneDir).replace(/\\/g, '/')
+              : null,
             source: resumeWorkCheckpoint ? 'checkpoint' : 'phase',
           }
         : null,
@@ -378,7 +399,21 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
   const phasesDir = join(milestoneDir, 'phases');
 
   if (!existsSync(roadmapPath)) {
-    return null;
+    const phaseArtifacts = collectWorkPhaseArtifacts({ workspaceRoot, phasesDir });
+    const planArtifacts = phaseArtifacts.filter((artifact) => artifact.kind === 'plan');
+    if (planArtifacts.length === 0) return null;
+    const phases = deriveWorkPlanPhases(planArtifacts);
+    const phaseEntry = phases.find((phase) => phase.number === phaseToken);
+    if (!phaseEntry) return null;
+    return {
+      milestoneDir,
+      roadmapPath,
+      phasesDir,
+      phases,
+      phaseEntry,
+      phaseArtifacts: phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken),
+      roadmapFallback: true,
+    };
   }
 
   const phases = parseWorkRoadmapPhases(readFileSync(roadmapPath, 'utf-8'));
@@ -394,7 +429,34 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
     phases,
     phaseEntry,
     phaseArtifacts: collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken }),
+    roadmapFallback: false,
   };
+}
+
+function deriveWorkPlanPhases(planArtifacts) {
+  const phases = new Map();
+  for (const artifact of planArtifacts) {
+    if (phases.has(artifact.phaseToken)) continue;
+    let frontmatter = {};
+    try {
+      frontmatter = parsePlanFrontmatter(readFileSync(artifact.path, 'utf-8'));
+    } catch {
+      continue;
+    }
+    phases.set(artifact.phaseToken, {
+      number: artifact.phaseToken,
+      title: artifact.displayPath,
+      status: normalizePlanPhaseStatus(frontmatter.status),
+    });
+  }
+  return [...phases.values()];
+}
+
+function normalizePlanPhaseStatus(rawStatus) {
+  const status = String(rawStatus || '').trim().toLowerCase();
+  if (['done', 'complete', 'completed', 'shipped', 'verified'].includes(status)) return 'done';
+  if (['in_progress', 'active'].includes(status)) return 'in_progress';
+  return 'pending';
 }
 
 function parseWorkRoadmapPhases(content) {
@@ -445,26 +507,87 @@ function evaluateResumeWorkCheckpoint({ planningDir, checkpointPath }) {
   };
 }
 
-function collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken }) {
+function collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken = null }) {
   if (!existsSync(phasesDir)) return [];
 
   return collectMarkdownFiles(phasesDir)
     .map((filePath) => {
-      const filename = filePath.split(/[\\/]/).pop();
-      const match = filename.match(/^(\d+(?:\.\d+)*[A-Za-z]?)-(.+?)\.md$/i);
-      if (!match || normalizePhaseToken(match[1]) !== phaseToken) return null;
+      const filename = basename(filePath);
+      const filenameMatch = filename.match(/^(\d+(?:\.\d+)*[A-Za-z]?)-(.+?)\.md$/i);
+      const parentMatch = basename(dirname(filePath)).match(/^(\d+(?:\.\d+)*[A-Za-z]?)-(.+)$/i);
+      const match = filenameMatch || (parentMatch && filename.match(/^(PLAN|EXECUTE|VERIFY|VERIFICATION)\.md$/i)
+        ? [filename, parentMatch[1], filename.slice(0, -3)]
+        : null);
+      if (!match || (phaseToken && normalizePhaseToken(match[1]) !== phaseToken)) return null;
 
       const kind = parseWorkArtifactKind(match[2]);
       if (!kind) return null;
 
       return {
-        phaseToken,
+        phaseToken: normalizePhaseToken(match[1]),
         kind,
         path: filePath,
         displayPath: relativeDisplayPath(workspaceRoot, filePath),
       };
     })
     .filter(Boolean);
+}
+
+function evaluateDecisionDispositionWarnings({ planningDir, phaseToken, lifecycle, workMilestone }) {
+  const state = readJsonIfExists(join(planningDir, 'state.json'));
+  const persisted = state.ok ? state.value?.lastDecisionsDigest : null;
+  if (!persisted || !Array.isArray(persisted.records) || persisted.records.length === 0) return [];
+
+  const planPath = findActivePlanPath({ planningDir, phaseToken, lifecycle, workMilestone });
+  const dispositions = planPath && existsSync(planPath)
+    ? parsePlanFrontmatter(readFileSync(planPath, 'utf-8')).decision_dispositions
+    : null;
+  const warnings = [];
+  const entries = Array.isArray(dispositions) ? dispositions : [];
+  const byId = new Map(entries.filter((entry) => entry?.id).map((entry) => [entry.id, entry]));
+  const missing = persisted.records.map((record) => record.id).filter((id) => !byId.has(id));
+  if (dispositions === null || missing.length > 0) {
+    warnings.push({
+      code: 'decision_dispositions_missing',
+      message: `PLAN.md decision dispositions are missing for persisted decision(s): ${(missing.length > 0 ? missing : persisted.records.map((record) => record.id)).join(', ')}.`,
+      artifacts: planPath ? [planPath] : [],
+    });
+  }
+
+  const current = readDecisionRecords(planningDir);
+  const currentById = new Map(current.records.map((record) => [record.meta.id, record]));
+  const stale = [];
+  for (const persistedRecord of persisted.records) {
+    const record = currentById.get(persistedRecord.id);
+    const disposition = byId.get(persistedRecord.id);
+    if (!record) {
+      stale.push(`${persistedRecord.id}: record missing`);
+      continue;
+    }
+    if (record.meta.status !== persistedRecord.status) {
+      stale.push(`${persistedRecord.id}: status changed from ${persistedRecord.status} to ${record.meta.status}`);
+    } else if (['superseded', 'invalidated'].includes(record.meta.status)) {
+      stale.push(`${persistedRecord.id}: record is ${record.meta.status}`);
+    } else if (disposition && record.meta.hash !== disposition.hash) {
+      stale.push(`${persistedRecord.id}: body hash changed since acknowledgement`);
+    }
+  }
+  if (stale.length > 0) {
+    warnings.push({
+      code: 'decision_ack_stale',
+      message: `Decision acknowledgements are stale: ${stale.join('; ')}.`,
+      artifacts: planPath ? [planPath] : [],
+    });
+  }
+  return warnings;
+}
+
+function findActivePlanPath({ planningDir, phaseToken, lifecycle, workMilestone }) {
+  const workPlan = workMilestone?.phaseArtifacts?.find((artifact) => artifact.kind === 'plan');
+  if (workPlan?.path) return workPlan.path;
+  const plan = lifecycle.phaseArtifacts?.find((artifact) => artifact.phaseToken === phaseToken && artifact.kind === 'plan');
+  if (!plan) return null;
+  return join(planningDir, 'phases', plan.dir, plan.name);
 }
 
 function collectMarkdownFiles(dir) {

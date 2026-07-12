@@ -80,6 +80,14 @@ function writeWorkMilestonePhase(root, phase = '7', { execute = false, verify = 
   if (verify) fs.writeFileSync(path.join(phaseDir, `${phase}-VERIFY.md`), '# verify\n');
 }
 
+function writeWorkMilestonePlanOnly(root, phase = '7', status = 'planned') {
+  const phaseDir = path.join(root, '.work', 'milestones', 'active-milestone', 'phases', `${phase}-decisions`);
+  fs.mkdirSync(phaseDir, { recursive: true });
+  fs.writeFileSync(path.join(root, '.work', 'milestones', 'active-milestone', 'MILESTONE.md'), '---\nstatus: in_progress\n---\n');
+  fs.writeFileSync(path.join(phaseDir, 'PLAN.md'), `---\nstatus: ${status}\n---\n# plan\n`);
+  return phaseDir;
+}
+
 async function importLifecycleStateModule() {
   return import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'lifecycle-state.mjs')).href}?t=${Date.now()}-${Math.random()}`);
 }
@@ -1288,6 +1296,40 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.authority, 'work_milestone');
     assert.strictEqual(output.reason, 'missing_execute');
     assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_execute'));
+  });
+
+  test('narrows milestones-only fallback without changing ROADMAP-present blocker outcomes', async () => {
+    writePreflightPhase(tmpDir, '30');
+    writeWorkMilestonePhase(tmpDir, '7');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'milestone', 'MILESTONE.md'), '---\nstatus: in_progress\n---\n');
+    let result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const roadmapPresent = JSON.parse(result.output);
+    const roadmapBlockers = roadmapPresent.blockers.map((blocker) => blocker.code);
+    assert.deepStrictEqual(roadmapBlockers, ['missing_execute']);
+
+    fs.rmSync(path.join(tmpDir, '.work', 'milestone', 'ROADMAP.md'));
+    fs.writeFileSync(
+      path.join(tmpDir, '.work', 'milestone', 'phases', '7-easy-global-install-auto-mode', '7-PLAN.md'),
+      '---\nstatus: planned\n---\n# plan\n'
+    );
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const milestonesOnly = JSON.parse(result.output);
+    assert.deepStrictEqual(milestonesOnly.blockers.map((blocker) => blocker.code), roadmapBlockers);
+    assert.ok(!milestonesOnly.blockers.some((blocker) => blocker.code === 'missing_roadmap'));
+    assert.strictEqual(milestonesOnly.authority, 'work_milestone');
+  });
+
+  test('derives a milestones-only phase from PLAN frontmatter and allows the repo-shaped plan preflight', async () => {
+    writeWorkMilestonePlanOnly(tmpDir, '4', 'draft_v2');
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '4']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.authority, 'work_milestone');
+    assert.strictEqual(output.lifecycle.workMilestone.phase, '4');
+    assert.strictEqual(output.lifecycle.workMilestone.roadmapPath, '.work/milestones/active-milestone/ROADMAP.md');
   });
 
   test('generated local helper lifecycle-preflight supports work-milestone authority', async () => {

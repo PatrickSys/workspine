@@ -501,6 +501,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 7. `context_compliance` - locked decisions are honored and deferred ideas stay out of scope
 8. `goal_achievement` - the plan, if executed perfectly, actually achieves the stated phase goal: goal addressed (tasks deliver the goal), success criteria reachable (each criterion traceable to a task verify output), and outcome observable (a human or automated check can confirm the goal was met)
 9. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. When `workflow.discuss: true`, missing, proofless, agent-discretion-only, or invalid APPROACH.md is a blocker before a plan can be accepted.
+10. `decision_compliance` - when `lastDecisionsDigest` is non-empty, the plan includes a complete `decision_dispositions` block keyed by every persisted decision id, preserves each persisted body hash, uses an allowed disposition, keeps required notes nonblank, and surfaces challenged items. When no persisted digest exists, report `skipped` and never fail the plan.
 
 The smaller dimension set still preserves the old failure coverage: scope boundaries are checked under `scope_sanity`, anti-regression and escalation under `context_compliance`, closure honesty and browser-proof specificity under `goal_achievement`, and second-pass review under the final shared-surface review before closure.
 ### Invoking the Checker
@@ -520,7 +521,7 @@ The smaller dimension set still preserves the old failure coverage: scope bounda
      "summary": "One sentence overall assessment",
      "issues": [
        {
-         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
+         "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment | decision_compliance",
          "severity": "blocker | warning",
          "description": "What is wrong",
          "plan": "01-PLAN",

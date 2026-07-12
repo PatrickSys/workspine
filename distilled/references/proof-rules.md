@@ -22,3 +22,14 @@ Failure-cause names for failed or partial browser/runtime proof:
 - `flaky_harness`: the proof path is unstable or nondeterministic in a way that
   prevents a trustworthy result.
 - `ambiguous_spec`: the expected behavior or acceptable result is unclear.
+
+## Decision dispositions
+
+When a plan boundary emits a non-empty decision digest, PLAN.md may acknowledge it with
+`decision_dispositions`: each entry names the decision `id`, the exact body `hash`, and one
+`disposition`: `applied`, `not-applicable`, or `challenged`. `not-applicable` and `challenged`
+entries require a nonblank `note`; `challenged` items are surfaced for user review. The digest
+is persisted only by the plan preflight, and later execution warns when an acknowledged record
+is missing, superseded, invalidated, or has a changed body hash. Decision metadata transitions
+do not change the body hash. Decision records may also carry the additive optional
+`invalidation_reason` field; rejected records remain on disk.

@@ -47,6 +47,8 @@ Verify these dimensions:
   - **Deferred excluded?** Deferred ideas from APPROACH.md must not appear in plan tasks -> `blocker` if found.
   - If `workflow.discuss` is `true` in the project config and no APPROACH.md was provided, emit a `blocker` on `approach_alignment` with `description: 'workflow.discuss is true but no APPROACH.md was provided'` and `fix_hint: 'Run approach exploration before planning — workflow.discuss=true requires an approved APPROACH.md before a plan can be emitted.'` If `workflow.discuss` is `false` or the key is absent and no APPROACH.md was provided, skip this dimension entirely.
 
+- `decision_compliance`: when `lastDecisionsDigest` is non-empty, verify that PLAN.md contains a complete `decision_dispositions` block keyed by every persisted decision id, with the persisted body hash and an allowed disposition. Notes must be nonblank for `not-applicable` and `challenged`, and challenged items must be surfaced to the user. When no persisted digest exists, report `skipped` and never fail the plan.
+
 Return JSON only as a single finding summary object with this shape:
 
 ```json
@@ -55,7 +57,7 @@ Return JSON only as a single finding summary object with this shape:
   "summary": "One sentence overall assessment",
   "issues": [
     {
-      "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment",
+      "dimension": "requirement_coverage | task_completeness | dependency_correctness | key_link_completeness | scope_sanity | must_have_quality | context_compliance | goal_achievement | approach_alignment | decision_compliance",
       "severity": "blocker | warning",
       "description": "What is wrong",
       "plan": "01-PLAN",

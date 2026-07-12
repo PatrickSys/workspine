@@ -274,6 +274,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       'context_compliance',
       'goal_achievement',
       'approach_alignment',
+      'decision_compliance',
     ];
     const RETIRED_PLAN_CHECK_DIMENSIONS = [
       'scope_boundaries',
@@ -283,7 +284,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       'high_leverage_review',
     ];
 
-    test('Claude plan-checker has all 9 dimensions', () => {
+    test('Claude plan-checker has all 10 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
       assert.ok(fs.existsSync(checkerPath), 'Claude checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
@@ -295,7 +296,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       }
     });
 
-    test('OpenCode plan-checker has all 9 dimensions', () => {
+    test('OpenCode plan-checker has all 10 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md');
       assert.ok(fs.existsSync(checkerPath), 'OpenCode checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
@@ -307,7 +308,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       }
     });
 
-    test('Codex plan-checker has all 9 dimensions', () => {
+    test('Codex plan-checker has all 10 dimensions', () => {
       const checkerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml');
       assert.ok(fs.existsSync(checkerPath), 'Codex checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
@@ -331,6 +332,15 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
         assert.ok(claudeHas && opencodeHas && codexHas,
           'dimension parity: all 3 runtimes must have ' + dim);
       }
+    });
+
+    test('all checker JSON enums list decision_compliance', () => {
+      const sources = [
+        fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), 'utf-8'),
+        fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8'),
+        fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'utf-8'),
+      ];
+      for (const source of sources) assert.match(source, /decision_compliance/);
     });
   });
 
