@@ -1,3 +1,10 @@
+# [0.32.0](https://github.com/PatrickSys/workspine/compare/v0.31.2...v0.32.0) (2026-07-12)
+
+
+### Features
+
+* gsdd journey ascii timeline of milestones and phases ([a3b8d82](https://github.com/PatrickSys/workspine/commit/a3b8d8276c37a3ef7dff1406627d52b5d1fac39a))
+
 ## [0.31.2](https://github.com/PatrickSys/workspine/compare/v0.31.1...v0.31.2) (2026-07-12)
 
 
