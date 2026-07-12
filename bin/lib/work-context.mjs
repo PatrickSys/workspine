@@ -165,6 +165,30 @@ function writeJsonIfMissing(filePath, value) {
   return true;
 }
 
+export function persistDecisionsDigest(workDir, {
+  phase = null,
+  digest,
+  now = new Date(),
+} = {}) {
+  const statePath = join(workDir, 'state.json');
+  const existing = readJsonIfExists(statePath);
+  if (!existing.ok) throw new Error(`cannot persist decisions digest: ${existing.error}`);
+  const state = existing.value && typeof existing.value === 'object' && !Array.isArray(existing.value)
+    ? { ...existing.value }
+    : defaultState(now);
+  state.lastDecisionsDigest = {
+    phase,
+    emitted_at: now.toISOString(),
+    records: (digest?.records || []).map((record) => ({
+      id: record.id,
+      hash: record.hash,
+      status: record.status,
+    })),
+  };
+  writeFileAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
+  return state.lastDecisionsDigest;
+}
+
 function writeTextIfMissing(filePath, value) {
   if (existsSync(filePath)) return false;
   writeFileAtomic(filePath, value);
@@ -687,22 +711,51 @@ export function writeDecisionRecord(workDir, input, {
   };
 }
 
-export function readDecisionRecords(workDir) {
+export function readDecisionRecords(workDir, { reader = null } = {}) {
   const decisionDir = join(workDir, 'decisions');
-  if (!existsSync(decisionDir)) return { records: [], invalid: [] };
+  const fsReader = reader || { existsSync, readdirSync, readFileSync };
+  let hasDirectory = false;
+  try {
+    hasDirectory = (fsReader.existsSync || existsSync)(decisionDir);
+  } catch (error) {
+    return {
+      records: [],
+      invalid: [],
+      readErrors: [{ path: decisionRecordPath(workDir, decisionDir), code: error.code || 'directory_read_error' }],
+      directoryUnreadable: true,
+    };
+  }
+  if (!hasDirectory) return { records: [], invalid: [], readErrors: [], directoryUnreadable: false };
+
+  let entries;
+  try {
+    entries = (fsReader.readdirSync || readdirSync)(decisionDir, { withFileTypes: true });
+  } catch (error) {
+    return {
+      records: [],
+      invalid: [],
+      readErrors: [{ path: decisionRecordPath(workDir, decisionDir), code: error.code || 'directory_read_error' }],
+      directoryUnreadable: true,
+    };
+  }
 
   const records = [];
   const invalid = [];
-  for (const entry of readdirSync(decisionDir, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
-    const filePath = join(decisionDir, entry.name);
+  const readErrors = [];
+  for (const entry of entries) {
+    const name = typeof entry === 'string' ? entry : entry.name;
+    const isFile = typeof entry === 'string' || typeof entry.isFile !== 'function' || entry.isFile();
+    if (!isFile || !name?.endsWith('.md')) continue;
+    const filePath = join(decisionDir, name);
     try {
-      records.push(parseDecisionRecord(readFileSync(filePath, 'utf-8'), filePath));
+      records.push(parseDecisionRecord((fsReader.readFileSync || readFileSync)(filePath, 'utf-8'), filePath));
     } catch (error) {
-      invalid.push({ path: decisionRecordPath(workDir, filePath), error: error.message });
+      const path = decisionRecordPath(workDir, filePath);
+      invalid.push({ path, error: error.message });
+      readErrors.push({ path, code: error.code || 'invalid_decision_record' });
     }
   }
-  return { records, invalid };
+  return { records, invalid, readErrors, directoryUnreadable: false };
 }
 
 export function recallDecisions({
@@ -759,23 +812,74 @@ export function recallDecisions({
   };
 }
 
-export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = new Date() } = {}) {
-  const recalled = recallDecisions({ workDir, status: 'active', limit: Infinity, now });
+export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = new Date(), reader = null } = {}) {
+  const scanned = readDecisionRecords(workDir, { reader });
+  if (scanned.directoryUnreadable) {
+    const digest = {
+      records: [],
+      text: renderDecisionsDigest([]),
+      counts: {
+        eligible: 0,
+        returned: 0,
+        excluded: { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0 },
+        invalid: 0,
+      },
+      truncated: false,
+      readErrors: scanned.readErrors,
+      ids: [],
+    };
+    Object.defineProperty(digest, 'directoryUnreadable', { value: true, enumerable: false });
+    return digest;
+  }
   const phaseRef = phase ? `phase:${phase}`.toLowerCase() : null;
   const pathRefs = normalizeDecisionPaths(paths);
-  const records = recalled.records
-    .map((result) => {
-      const recordRefs = `${result.record.meta.for || ''} ${result.record.meta.links || ''}`.toLowerCase();
+  const graph = buildDecisionEdgeMap(scanned.records);
+  const staleCutoff = new Date(toIsoDate(now)).getTime() - (DECISION_STALE_AFTER_DAYS * 24 * 60 * 60 * 1000);
+  const scoped = scanned.records
+    .filter((record) => {
+      if (pathRefs.length === 0) return true;
+      const refs = `${record.meta.for || ''} ${record.meta.links || ''}`.toLowerCase();
+      return pathRefs.some((pathRef) => refs.includes(pathRef) || pathRef.includes(refs));
+    })
+    .map((record) => {
+      const result = decorateRecallResult({ record, matches: true, score: 0, pathHits: 0, chainDistance: 0 }, graph, staleCutoff);
+      const recordRefs = `${record.meta.for || ''} ${record.meta.links || ''}`.toLowerCase();
       const phaseOverlap = phaseRef && recordRefs.includes(phaseRef) ? 1 : 0;
       const pathOverlap = pathRefs.some((pathRef) => recordRefs.includes(pathRef)) ? 1 : 0;
-      return { ...result, digestRelevance: (phaseOverlap * 100) + (pathOverlap * 50) + recencyValue(result.record.meta.updated_at) };
+      return { ...result, digestRelevance: (phaseOverlap * 100) + (pathOverlap * 50) + recencyValue(record.meta.updated_at) };
     })
-    .sort((left, right) => right.digestRelevance - left.digestRelevance || compareRecallResults(left, right))
-    .slice(0, DECISION_DIGEST_MAX_RECORDS);
+    .sort((left, right) => right.digestRelevance - left.digestRelevance || compareRecallResults(left, right));
+  const returnedResults = scoped.filter((result) => result.record.meta.status === 'active').slice(0, DECISION_DIGEST_MAX_RECORDS);
+  const returnedIds = new Set(returnedResults.map((result) => result.record.meta.id));
+  const excluded = { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0 };
+  for (const result of scoped) {
+    const status = result.record.meta.status;
+    if (status === 'invalidated') excluded.invalidated += 1;
+    else if (status === 'superseded') excluded.superseded += 1;
+    else if (status === 'candidate') excluded.candidate += 1;
+    else if (status === 'active' && !returnedIds.has(result.record.meta.id)) {
+      if (result.flags.includes('conflict')) excluded.conflict_flagged += 1;
+      else if (result.flags.includes('stale')) excluded.stale_flagged += 1;
+    }
+  }
+  const records = returnedResults.map((result) => ({
+    id: result.record.meta.id,
+    hash: result.record.meta.hash,
+    status: result.record.meta.status,
+  }));
+  const activeResults = returnedResults;
   return {
     records,
-    text: renderDecisionsDigest(records),
-    invalid: recalled.invalid,
+    text: renderDecisionsDigest(activeResults),
+    counts: {
+      eligible: scoped.filter((result) => result.record.meta.status === 'active').length,
+      returned: records.length,
+      excluded,
+      invalid: scanned.invalid.length,
+    },
+    truncated: scoped.filter((result) => result.record.meta.status === 'active').length > records.length,
+    readErrors: scanned.readErrors,
+    ids: records.map((record) => record.id),
   };
 }
 
@@ -812,6 +916,37 @@ export function parseDecisionRecord(content, filePath = null) {
 
 export function hashDecisionBody(body) {
   return createHash('sha256').update(String(body || '').replace(/\r\n/g, '\n')).digest('hex');
+}
+
+export function transitionDecisionRecord(workDir, id, operation, {
+  reason = null,
+  now = new Date(),
+} = {}) {
+  const record = readDecisionRecordById(workDir, id);
+  if (!record) throw new Error(`decision record not found: ${id}`);
+  const currentStatus = record.meta.status;
+  const allowed = {
+    promote: 'candidate',
+    reject: 'candidate',
+    invalidate: 'active',
+  }[operation];
+  if (!allowed) throw new Error(`unsupported decision operation ${operation}`);
+  if (currentStatus !== allowed) throw new Error(`cannot ${operation} record with status ${currentStatus}`);
+  if (operation === 'invalidate' && !String(reason || '').trim()) {
+    throw new Error('invalidate requires --reason <text>');
+  }
+
+  const next = {
+    ...record.meta,
+    status: operation === 'promote' ? 'active' : 'invalidated',
+    updated_at: now.toISOString(),
+    hash: record.meta.hash,
+    body: record.body,
+  };
+  if (operation === 'promote') next.source = 'user';
+  else next.invalidation_reason = String(reason || 'rejected').trim();
+  writeFileAtomic(record.filePath, renderDecisionRecord(next));
+  return parseDecisionRecord(renderDecisionRecord(next), record.filePath);
 }
 
 function normalizeDecisionInput(input = {}, { timestamp, repoRoot }) {
@@ -873,6 +1008,7 @@ function renderDecisionRecord(record) {
     ['superseded_by', record.superseded_by],
     ['legacy_ref', record.legacy_ref],
     ['source', record.source],
+    ['invalidation_reason', record.invalidation_reason],
     ['provenance', record.provenance],
     ['created_at', record.created_at],
     ['updated_at', record.updated_at],

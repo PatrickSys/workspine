@@ -5,11 +5,12 @@ import {
   DECISION_RECORD_TYPES,
   recallDecisions,
   renderDecisionsDigest,
+  transitionDecisionRecord,
   writeDecisionRecord,
 } from './work-context.mjs';
 
 const REMEMBER_USAGE = 'Usage: gsdd remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--code path:line] [--why "<why>"] [--by-user]';
-const DECISIONS_USAGE = 'Usage: gsdd decisions query "<terms>" [--path <path>]';
+const DECISIONS_USAGE = 'Usage: gsdd decisions query "<terms>" [--path <path>] | promote <id> | reject <id> [--reason <text>] | invalidate <id> --reason <text>';
 
 export function cmdRemember(...rawArgs) {
   const workspace = resolveWorkspaceContext(rawArgs);
@@ -51,8 +52,33 @@ export function cmdDecisions(...rawArgs) {
   const workspace = resolveWorkspaceContext(rawArgs);
   if (workspace.invalid) return fail(workspace.error);
   try {
-    const [subcommand, terms, ...args] = workspace.args;
-    if (subcommand !== 'query' || !terms || terms.startsWith('--')) return fail(DECISIONS_USAGE);
+    const [subcommand, subject, ...args] = workspace.args;
+    if (!subject || subject.startsWith('--')) return fail(DECISIONS_USAGE);
+    if (['promote', 'reject', 'invalidate'].includes(subcommand)) {
+      const reasonArgsValid = args.length === 0
+        || (args.length === 2 && args[0] === '--reason' && Boolean(args[1]));
+      if (subcommand === 'promote' && args.length > 0) {
+        return fail(DECISIONS_USAGE);
+      }
+      if (subcommand === 'invalidate' && !(args.length === 2 && args[0] === '--reason' && args[1])) {
+        return fail(DECISIONS_USAGE);
+      }
+      if (subcommand === 'reject' && !reasonArgsValid) {
+        return fail(DECISIONS_USAGE);
+      }
+      const reason = parseFlagValue(args, '--reason');
+      if (reason.invalid || (subcommand === 'invalidate' && !reason.value)) return fail(DECISIONS_USAGE);
+      const record = transitionDecisionRecord(workspace.planningDir, subject, subcommand, { reason: reason.value });
+      output({ record: {
+        id: record.meta.id,
+        status: record.meta.status,
+        ...(record.meta.invalidation_reason ? { invalidation_reason: record.meta.invalidation_reason } : {}),
+        updated_at: record.meta.updated_at,
+      } });
+      return;
+    }
+    if (subcommand !== 'query') return fail(DECISIONS_USAGE);
+    const terms = subject;
     const path = parseFlagValue(args, '--path');
     if (path.invalid || hasUnexpectedQueryArgs(args)) return fail(DECISIONS_USAGE);
     const recalled = recallDecisions({

@@ -8,6 +8,7 @@ export const PLAN_CHECK_DIMENSIONS = [
   'context_compliance',
   'goal_achievement',
   'approach_alignment',
+  'decision_compliance',
 ];
 
 export const MAX_CHECKER_CYCLES = 3;

@@ -199,6 +199,49 @@ function readTopLevelBlock(frontmatter, key) {
   return { scalar, nested };
 }
 
+function parseFrontmatterScalar(value) {
+  const withoutComment = stripInlineComment(value).trim();
+  if ((withoutComment.startsWith('"') && withoutComment.endsWith('"'))
+    || (withoutComment.startsWith("'") && withoutComment.endsWith("'"))) {
+    return withoutComment.slice(1, -1);
+  }
+  return withoutComment;
+}
+
+function readTopLevelListOfMaps(frontmatter, key) {
+  const lines = String(frontmatter || '').replace(/\r\n/g, '\n').split('\n');
+  const escapedKey = String(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const startIndex = lines.findIndex((line) => new RegExp(`^${escapedKey}:\\s*(.*)$`).test(line));
+  if (startIndex === -1) return null;
+  const inline = lines[startIndex].match(new RegExp(`^${escapedKey}:\\s*(.*)$`))?.[1]?.trim();
+  if (inline === '[]') return [];
+
+  const entries = [];
+  let current = null;
+  for (const line of lines.slice(startIndex + 1)) {
+    if (/^\S/.test(line)) break;
+    const item = line.match(/^\s*-\s*([^:]+):\s*(.*)$/);
+    if (item) {
+      if (current) entries.push(current);
+      current = { [item[1].trim()]: parseFrontmatterScalar(item[2]) };
+      continue;
+    }
+    const field = line.match(/^\s{2,}([^:]+):\s*(.*)$/);
+    if (field && current) current[field[1].trim()] = parseFrontmatterScalar(field[2]);
+  }
+  if (current) entries.push(current);
+  return entries;
+}
+
+export function parsePlanFrontmatter(content) {
+  const frontmatter = extractFrontmatter(content);
+  return {
+    raw: frontmatter,
+    status: readTopLevelScalar(frontmatter, 'status'),
+    decision_dispositions: readTopLevelListOfMaps(frontmatter, 'decision_dispositions'),
+  };
+}
+
 function legacyUiProofSlotsState(frontmatter) {
   const block = readTopLevelBlock(frontmatter, 'ui_proof_slots');
   if (!block) return null;

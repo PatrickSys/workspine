@@ -102,6 +102,7 @@ Execution flow:
        }
      ]
    }
+   The \`decision_compliance\` dimension is warnings-only this phase: inspect persisted \`lastDecisionsDigest\`, disposition hashes, required notes, and challenged-item surfacing; report \`skipped\` when the digest is empty.
    Status must be either "${CHECKER_STATUSES[0]}" or "${CHECKER_STATUSES[1]}". Use "passed" only when "issues": []; any blocker or warning must use "issues_found".
 9. If the checker returns \`passed\`, finish and summarize.
 10. If the checker returns \`issues_found\`, revise the existing plan files only where needed, then run the checker again.
