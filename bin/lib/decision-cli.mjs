@@ -9,7 +9,9 @@ import {
   writeDecisionRecord,
 } from './work-context.mjs';
 
-const REMEMBER_USAGE = 'Usage: gsdd remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--code path:line] [--why "<why>"] [--by-user]';
+const REMEMBER_USAGE = 'Usage: gsdd remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--code path:line] [--why "<why>"]';
+const REMEMBER_REMOVED_FLAG = ['--by', 'user'].join('-');
+const REMEMBER_REMOVED_MESSAGE = `${REMEMBER_REMOVED_FLAG} was removed; use gsdd decisions promote <id> to activate a candidate.`;
 const DECISIONS_USAGE = 'Usage: gsdd decisions query "<terms>" [--path <path>] | promote <id> | reject <id> [--reason <text>] | invalidate <id> --reason <text>';
 
 export function cmdRemember(...rawArgs) {
@@ -17,12 +19,12 @@ export function cmdRemember(...rawArgs) {
   if (workspace.invalid) return fail(workspace.error);
   try {
     const [text, ...args] = workspace.args;
+    if (args.includes(REMEMBER_REMOVED_FLAG)) return fail(REMEMBER_REMOVED_MESSAGE);
     const type = requireFlag(args, '--type', REMEMBER_USAGE);
     const scope = requireFlag(args, '--scope', REMEMBER_USAGE);
     const why = parseFlagValue(args, '--why').value || 'Captured through gsdd remember; verify before activation.';
     const code = parseFlagValue(args, '--code').value;
-    const byUser = args.includes('--by-user');
-    const status = byUser ? 'active' : 'candidate';
+    const status = 'candidate';
     if (!text || text.startsWith('--') || !DECISION_RECORD_TYPES.includes(type) || !DECISION_RECORD_SCOPES.includes(scope)) {
       return fail(REMEMBER_USAGE);
     }
@@ -32,7 +34,7 @@ export function cmdRemember(...rawArgs) {
       scope,
       decision: text,
       why,
-      source: byUser ? 'user' : 'agent-proposed',
+      source: 'agent-proposed',
       links: code ? { code } : null,
       body: `${text}\n\nWhy: ${why}`,
     }, { repoRoot: workspace.workspaceRoot });
