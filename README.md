@@ -194,6 +194,8 @@ npx -y gsdd-cli update --templates      # refresh runtime surfaces and template 
 npx -y gsdd-cli next --json             # read .work continuity and emit the next action packet
 npx -y gsdd-cli next --format human     # show the compact supervisor card
 npx -y gsdd-cli next --init             # bootstrap .work continuity state explicitly
+npx -y gsdd-cli remember "Use direct commits" --type rule --scope repo # (experimental)
+npx -y gsdd-cli decisions query "current git flow" --path bin/gsdd.mjs # (experimental)
 npx -y gsdd-cli rigor                   # run planning/document guardrails
 npx -y gsdd-cli file-op                 # deterministic repo-local copy/delete helper
 npx -y gsdd-cli models profile quality  # maximize review rigor
