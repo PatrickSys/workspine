@@ -1,3 +1,10 @@
+## [0.31.2](https://github.com/PatrickSys/workspine/compare/v0.31.1...v0.31.2) (2026-07-12)
+
+
+### Bug Fixes
+
+* remember always creates candidates; drop --by-user authority flag ([f8b1426](https://github.com/PatrickSys/workspine/commit/f8b142656b3758e9d2c6fb5254faba765a674346))
+
 ## [0.31.1](https://github.com/PatrickSys/workspine/compare/v0.31.0...v0.31.1) (2026-07-12)
 
 
