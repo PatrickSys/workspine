@@ -14,6 +14,11 @@ installed), `human` (a person confirmed).
   Playwright fallback), inspecting the rendered DOM and behavior — not
   screenshots alone. Record what was observed (see observation-record.md).
 
+Evidence class: `test`/`runtime`/`delivery` items are **deterministic** only when the command that produced them is recorded verbatim with its observed output. Manual/interactive browser proofs with a `No-command rationale` are **explicit-human-confirmation** evidence; they do not require a verbatim command and may satisfy `passed` alongside deterministic items. `code` and `human` are **judgment**. Judgment must never be presented as deterministic.
+
+<good-example>Ran `npm test -- --runInBand tests/auth.test.ts` → exit 0, "12 passed". Claim: auth middleware behavior verified for the covered cases.</good-example>
+<bad-example>"Tests pass" (no command, no output). Also bad: the plan said `npm test -- tests/auth.test.ts`, the summary reports `npm test -- tests/auth-new.test.ts` — a reworded command is a different claim.</bad-example>
+
 Failure-cause names for failed or partial browser/runtime proof:
 
 - `product_bug`: the product behavior or rendered UI is wrong.

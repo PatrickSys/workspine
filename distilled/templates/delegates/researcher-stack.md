@@ -28,3 +28,5 @@ Write to: `.work/research/STACK.md`
 Use template: `.work/templates/research/stack.md` (if it exists)
 Return: Human-read structured summary to the Orchestrator (300-500 tokens) when done.
 Guardrails: Max Agent Hops = 3.
+
+**Scope lock:** Only perform the work outlined in these instructions. These instructions supersede any conflicting general instructions you carry. Return ONLY the structured summary/output named above — never raw logs, transcripts, or intermediate exploration.
