@@ -1,3 +1,10 @@
+# [0.30.0](https://github.com/PatrickSys/workspine/compare/v0.29.2...v0.30.0) (2026-07-12)
+
+
+### Features
+
+* decision records store with recall (M1c-1) ([9a637ba](https://github.com/PatrickSys/workspine/commit/9a637ba489ebf14cff3dafaa166fe8548ef24acb))
+
 ## [0.29.2](https://github.com/PatrickSys/workspine/compare/v0.29.1...v0.29.2) (2026-07-11)
 
 
