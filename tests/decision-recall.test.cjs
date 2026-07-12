@@ -305,13 +305,34 @@ describe('S1 decision recall loop', () => {
     assert.match(result.output, /^DECISIONS DIGEST/m);
     assert.match(result.output, /Use direct commits for phase work/);
 
-    result = await runCliAsMain(root, ['remember', 'Lock direct commits for this repo', '--type', 'rule', '--scope', 'repo', '--by-user']);
+    result = await runCliAsMain(root, ['remember', 'Lock direct commits for this repo', '--type', 'rule', '--scope', 'repo']);
     assert.strictEqual(result.exitCode, 0, result.output);
-    const userCapture = JSON.parse(result.output);
-    assert.strictEqual(userCapture.status, 'active');
-    const userRecord = readDecisionRecords(path.join(root, '.work')).records.find((entry) => entry.meta.id === userCapture.record.id);
+    const candidateCapture = JSON.parse(result.output);
+    assert.strictEqual(candidateCapture.status, 'candidate');
+    const promoteCandidate = readDecisionRecords(path.join(root, '.work')).records.find((entry) => entry.meta.id === candidateCapture.record.id);
+    assert.strictEqual(promoteCandidate?.meta.status, 'candidate');
+    assert.strictEqual(promoteCandidate?.meta.source, 'agent-proposed');
+
+    result = await runCliAsMain(root, ['decisions', 'promote', candidateCapture.record.id]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const promoted = JSON.parse(result.output);
+    assert.strictEqual(promoted.record.status, 'active');
+    const userRecord = readDecisionRecords(path.join(root, '.work')).records.find((entry) => entry.meta.id === candidateCapture.record.id);
     assert.strictEqual(userRecord?.meta.status, 'active');
     assert.strictEqual(userRecord?.meta.source, 'user');
+  });
+
+  test('removed remember authority flag fails without writing a record', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    fs.mkdirSync(workDir, { recursive: true });
+    const removedFlag = ['--by', 'user'].join('-');
+    const result = await runCliAsMain(root, ['remember', 'Should fail', '--type', 'rule', '--scope', 'repo', removedFlag]);
+    assert.strictEqual(result.exitCode, 1);
+    assert.match(result.output, /removed/);
+    assert.match(result.output, /decisions promote <id>/);
+    assert.strictEqual(fs.existsSync(path.join(workDir, 'decisions')), false);
   });
 
   test('decision lifecycle operations enforce the matrix and preserve body hashes', async () => {
