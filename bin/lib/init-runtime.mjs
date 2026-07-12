@@ -183,6 +183,10 @@ Commands:
   health [--json]             Check workspace integrity (healthy/degraded/broken)
   next [--json] [--format auto|json|human] [--init]
                               Read \`.work\` continuity state and emit the next coherent agent action
+  remember "<text>" --type <t> --scope <s>
+                              Capture a candidate decision, rule, or lesson for later verification
+  decisions query "<terms>" [--path <path>]
+                              Recall matching decision records as a compact digest
   models [subcommand]         Inspect or update model profile / runtime overrides
   find-phase [N]              Show phase info as JSON (for agent consumption)
   verify <N>                  Run artifact checks for phase N

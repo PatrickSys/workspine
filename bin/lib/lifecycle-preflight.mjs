@@ -3,7 +3,7 @@ import { isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
 import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
-import { resolveActiveMilestoneDir } from './work-context.mjs';
+import { buildDecisionsDigest, resolveActiveMilestoneDir } from './work-context.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const SURFACE_POLICIES = {
@@ -193,6 +193,15 @@ export function evaluateLifecyclePreflight({
     });
   }
 
+  // Every lifecycle verb consumes the same active-decision digest. The JSON field keeps the
+  // existing machine-readable preflight contract intact while making the injected section
+  // available to plan, execute, verify, and resume callers alike.
+  const decisionsDigest = buildDecisionsDigest({
+    workDir: planningDir,
+    phase: normalizedPhase,
+    paths: normalizedPhase ? [`phase:${normalizedPhase}`] : [],
+  });
+
   return {
     surface,
     phase: normalizedPhase,
@@ -206,6 +215,11 @@ export function evaluateLifecyclePreflight({
     reason: blockers[0]?.code ?? null,
     blockers,
     warnings,
+    decisionsDigest: {
+      ids: decisionsDigest.records.map((result) => result.record.meta.id),
+      text: decisionsDigest.text,
+      invalid: decisionsDigest.invalid,
+    },
     planningState,
     controlMap: controlMap.summary,
     lifecycle: {

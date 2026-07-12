@@ -11,6 +11,8 @@ import {
   writeFileSync,
   writeSync,
 } from 'fs';
+import { execFileSync } from 'child_process';
+import { createHash, randomBytes } from 'crypto';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
 import { resolveStateDir } from './state-dir.mjs';
@@ -72,6 +74,13 @@ export const GRAPH_EVENT_TYPES = Object.freeze([
 
 export const PRIVACY_LEVELS = Object.freeze(['public', 'repo', 'local_only', 'secret_risk']);
 export const SOURCE_TYPES = Object.freeze(['chat', 'file', 'command', 'web', 'ideaspine', 'codebase-context', 'manual']);
+
+export const DECISION_RECORD_TYPES = Object.freeze(['decision', 'lesson', 'rule']);
+export const DECISION_RECORD_STATUSES = Object.freeze(['candidate', 'active', 'superseded', 'invalidated']);
+export const DECISION_RECORD_SCOPES = Object.freeze(['repo', 'global']);
+const DECISION_STALE_AFTER_DAYS = 90;
+const DECISION_DIGEST_MAX_RECORDS = 10;
+const DECISION_DIGEST_MAX_LINES = 15;
 
 const DEFAULT_WORK_GITIGNORE = [
   '# Workspine local runtime state',
@@ -589,6 +598,490 @@ export function recordDecision(workDir, decision, { now = new Date(), replace = 
   }
   rebuildGraphIndex(workDir, { now, write: true });
   return { status: 'ok', id: safeId, path: normalizeSlashes(relative(resolve(workDir, '..'), filePath)), event, events };
+}
+
+// Decision records are deliberately file-first. This is separate from the older graph-event
+// `recordDecision` API above so existing next/graph callers keep their established contract.
+export function writeDecisionRecord(workDir, input, {
+  now = new Date(),
+  replace = false,
+  repoRoot = resolve(workDir, '..'),
+  random = createDecisionRandomSuffix,
+  session = null,
+  agent = null,
+} = {}) {
+  const timestamp = toIsoDate(now);
+  const record = normalizeDecisionInput({ ...input, session: input.session || session, agent: input.agent || agent }, { timestamp, repoRoot });
+  const decisionDir = join(workDir, 'decisions');
+  ensureDir(decisionDir);
+
+  if (record.supersedes) {
+    const predecessor = readDecisionRecordById(workDir, record.supersedes);
+    if (!predecessor) {
+      throw new Error(`cannot supersede missing decision record ${record.supersedes}`);
+    }
+  }
+
+  let id = record.id || null;
+  let filePath = null;
+  let existing = null;
+  let complete = null;
+  let written = false;
+  const maxAttempts = record.id ? 1 : 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    id = record.id || createDecisionId(record.decision, random);
+    filePath = join(decisionDir, `${id}.md`);
+    existing = record.id && existsSync(filePath)
+      ? parseDecisionRecord(readFileSync(filePath, 'utf-8'), filePath)
+      : null;
+    if (existing && !replace) {
+      if (existing.body === record.body && existing.meta.decision === record.decision) {
+        return {
+          status: 'unchanged',
+          id,
+          path: decisionRecordPath(workDir, filePath),
+          record: existing,
+          duplicateWarnings: [],
+        };
+      }
+      throw new Error(`decision record ${id} already exists with different content; pass replace to overwrite it`);
+    }
+
+    complete = {
+      ...record,
+      id,
+      created_at: existing?.meta.created_at || timestamp,
+      updated_at: timestamp,
+      last_verified: record.last_verified || existing?.meta.last_verified || timestamp,
+    };
+    complete.hash = hashDecisionBody(complete.body);
+    const serialized = renderDecisionRecord(complete);
+    if (existing && replace) {
+      writeFileAtomic(filePath, serialized);
+      written = true;
+      break;
+    }
+    try {
+      writeFileSync(filePath, serialized, { flag: 'wx' });
+      written = true;
+      break;
+    } catch (error) {
+      if (!record.id && error.code === 'EEXIST') continue;
+      throw error;
+    }
+  }
+  if (!written) throw new Error('could not allocate a collision-free decision id after 3 attempts');
+
+  let superseded = null;
+  if (complete.supersedes) {
+    superseded = transitionSupersededRecord(workDir, complete.supersedes, complete.id, timestamp);
+  }
+
+  return {
+    status: 'ok',
+    id,
+    path: decisionRecordPath(workDir, filePath),
+    record: parseDecisionRecord(renderDecisionRecord(complete), filePath),
+    superseded,
+    duplicateWarnings: findDecisionIdentityOverlaps(workDir, complete),
+  };
+}
+
+export function readDecisionRecords(workDir) {
+  const decisionDir = join(workDir, 'decisions');
+  if (!existsSync(decisionDir)) return { records: [], invalid: [] };
+
+  const records = [];
+  const invalid = [];
+  for (const entry of readdirSync(decisionDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+    const filePath = join(decisionDir, entry.name);
+    try {
+      records.push(parseDecisionRecord(readFileSync(filePath, 'utf-8'), filePath));
+    } catch (error) {
+      invalid.push({ path: decisionRecordPath(workDir, filePath), error: error.message });
+    }
+  }
+  return { records, invalid };
+}
+
+export function recallDecisions({
+  workDir,
+  terms = '',
+  paths = [],
+  type = null,
+  status = null,
+  limit = Infinity,
+  now = new Date(),
+} = {}) {
+  if (!workDir) throw new Error('workDir is required');
+  const scanned = readDecisionRecords(workDir);
+  const termQuery = normalizeSearchTerms(terms);
+  const pathQuery = normalizeDecisionPaths(paths);
+  const requestedTypes = normalizeFilter(type);
+  const requestedStatuses = normalizeFilter(status);
+  const graph = buildDecisionEdgeMap(scanned.records);
+  const staleCutoff = new Date(toIsoDate(now)).getTime() - (DECISION_STALE_AFTER_DAYS * 24 * 60 * 60 * 1000);
+
+  const direct = scanned.records
+    .filter((record) => record.meta.status !== 'invalidated')
+    .filter((record) => requestedTypes.length === 0 || requestedTypes.includes(record.meta.type))
+    .filter((record) => requestedStatuses.length === 0 || requestedStatuses.includes(record.meta.status))
+    .map((record) => scoreDecisionRecord(record, { terms: termQuery, paths: pathQuery }))
+    .filter((result) => result.matches);
+
+  const selected = new Map(direct.map((result) => [result.record.meta.id, result]));
+  const queue = direct.map((result) => ({ id: result.record.meta.id, distance: 0 }));
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const neighbours = graph.neighbours.get(current.id) || [];
+    for (const neighbourId of neighbours) {
+      if (selected.has(neighbourId)) continue;
+      const record = graph.byId.get(neighbourId);
+      if (!record || record.meta.status === 'invalidated') continue;
+      if (requestedTypes.length > 0 && !requestedTypes.includes(record.meta.type)) continue;
+      if (requestedStatuses.length > 0 && !requestedStatuses.includes(record.meta.status)) continue;
+      const scored = scoreDecisionRecord(record, { terms: termQuery, paths: pathQuery });
+      selected.set(neighbourId, { ...scored, matches: true, chainDistance: current.distance + 1, score: scored.score - (current.distance + 1) });
+      queue.push({ id: neighbourId, distance: current.distance + 1 });
+    }
+  }
+
+  const records = [...selected.values()]
+    .map((result) => decorateRecallResult(result, graph, staleCutoff))
+    .sort(compareRecallResults)
+    .slice(0, Number.isFinite(Number(limit)) ? Math.max(0, Number(limit)) : Infinity);
+
+  return {
+    records,
+    invalid: scanned.invalid,
+    query: { terms: String(terms || ''), paths: pathQuery, type: requestedTypes, status: requestedStatuses },
+  };
+}
+
+export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = new Date() } = {}) {
+  const recalled = recallDecisions({ workDir, status: 'active', limit: Infinity, now });
+  const phaseRef = phase ? `phase:${phase}`.toLowerCase() : null;
+  const pathRefs = normalizeDecisionPaths(paths);
+  const records = recalled.records
+    .map((result) => {
+      const recordRefs = `${result.record.meta.for || ''} ${result.record.meta.links || ''}`.toLowerCase();
+      const phaseOverlap = phaseRef && recordRefs.includes(phaseRef) ? 1 : 0;
+      const pathOverlap = pathRefs.some((pathRef) => recordRefs.includes(pathRef)) ? 1 : 0;
+      return { ...result, digestRelevance: (phaseOverlap * 100) + (pathOverlap * 50) + recencyValue(result.record.meta.updated_at) };
+    })
+    .sort((left, right) => right.digestRelevance - left.digestRelevance || compareRecallResults(left, right))
+    .slice(0, DECISION_DIGEST_MAX_RECORDS);
+  return {
+    records,
+    text: renderDecisionsDigest(records),
+    invalid: recalled.invalid,
+  };
+}
+
+export function renderDecisionsDigest(results, { heading = 'DECISIONS DIGEST' } = {}) {
+  const lines = [`${heading} (${results.length} active)`];
+  for (const result of results.slice(0, DECISION_DIGEST_MAX_RECORDS)) {
+    const legacy = result.record.meta.legacy_ref ? ` [${result.record.meta.legacy_ref}]` : '';
+    const flags = result.flags.length > 0 ? ` (${result.flags.join(', ')})` : '';
+    lines.push(`- ${result.record.meta.id}${legacy} — ${result.record.meta.decision}${flags}`);
+  }
+  return lines.slice(0, DECISION_DIGEST_MAX_LINES).join('\n');
+}
+
+export function parseDecisionRecord(content, filePath = null) {
+  const normalized = String(content || '').replace(/\r\n/g, '\n');
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) throw new Error('decision record requires YAML-style frontmatter');
+  const meta = {};
+  for (const line of match[1].split('\n')) {
+    const separator = line.indexOf(':');
+    if (separator < 1) throw new Error(`invalid decision frontmatter line: ${line}`);
+    meta[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+  }
+  for (const field of ['id', 'type', 'status', 'scope', 'decision', 'why', 'for', 'provenance', 'created_at', 'updated_at', 'last_verified', 'hash']) {
+    if (!meta[field]) throw new Error(`decision record is missing ${field}`);
+  }
+  if (!DECISION_RECORD_TYPES.includes(meta.type)) throw new Error(`unsupported decision record type ${meta.type}`);
+  if (!DECISION_RECORD_STATUSES.includes(meta.status)) throw new Error(`unsupported decision record status ${meta.status}`);
+  if (!DECISION_RECORD_SCOPES.includes(meta.scope)) throw new Error(`unsupported decision record scope ${meta.scope}`);
+  const body = match[2].replace(/\n$/, '');
+  if (hashDecisionBody(body) !== meta.hash) throw new Error(`decision record hash mismatch for ${meta.id}`);
+  return { meta, body, filePath };
+}
+
+export function hashDecisionBody(body) {
+  return createHash('sha256').update(String(body || '').replace(/\r\n/g, '\n')).digest('hex');
+}
+
+function normalizeDecisionInput(input = {}, { timestamp, repoRoot }) {
+  const type = input.type || 'decision';
+  const status = input.status || 'candidate';
+  const scope = input.scope || 'repo';
+  if (!DECISION_RECORD_TYPES.includes(type)) throw new Error(`unsupported decision record type ${type}`);
+  if (!DECISION_RECORD_STATUSES.includes(status)) throw new Error(`unsupported decision record status ${status}`);
+  if (!DECISION_RECORD_SCOPES.includes(scope)) throw new Error(`unsupported decision record scope ${scope}`);
+
+  const decision = oneLine(input.decision || input.title, 'decision');
+  const why = oneLine(input.why || 'Captured for recall and explicit verification.', 'why');
+  const rawBody = String(input.body || '').replace(/\r\n/g, '\n').trimEnd();
+  if (!rawBody.trim()) throw new Error('decision record body is required');
+  const body = ensureDecisionEvidenceSection(rawBody);
+  const id = input.id ? normalizeDecisionId(input.id) : null;
+  const provenance = buildDecisionProvenance(repoRoot, input.provenance, input.session, input.agent);
+  return {
+    id,
+    type,
+    status,
+    scope,
+    decision,
+    why,
+    for: oneLine(input.for || input.forRefs || 'repo:current', 'for'),
+    links: formatDecisionLinks(input.links),
+    people: input.people ? oneLine(input.people, 'people') : null,
+    supersedes: input.supersedes ? normalizeDecisionId(input.supersedes) : null,
+    superseded_by: input.superseded_by ? normalizeDecisionId(input.superseded_by) : null,
+    legacy_ref: input.legacy_ref ? oneLine(input.legacy_ref, 'legacy_ref') : null,
+    source: input.source ? oneLine(input.source, 'source') : null,
+    provenance,
+    created_at: timestamp,
+    updated_at: timestamp,
+    last_verified: input.last_verified ? toIsoDate(input.last_verified) : timestamp,
+    body,
+  };
+}
+
+function ensureDecisionEvidenceSection(body) {
+  const header = body.match(/^## Evidence\s*$/m);
+  if (!header) return `## Evidence\n\n${body}`;
+  if (!body.slice(header.index + header[0].length).trim()) throw new Error('decision record body is required');
+  return body;
+}
+
+function renderDecisionRecord(record) {
+  const frontmatter = [
+    ['id', record.id],
+    ['type', record.type],
+    ['status', record.status],
+    ['scope', record.scope],
+    ['decision', record.decision],
+    ['why', record.why],
+    ['for', record.for],
+    ['links', record.links],
+    ['people', record.people],
+    ['supersedes', record.supersedes],
+    ['superseded_by', record.superseded_by],
+    ['legacy_ref', record.legacy_ref],
+    ['source', record.source],
+    ['provenance', record.provenance],
+    ['created_at', record.created_at],
+    ['updated_at', record.updated_at],
+    ['last_verified', record.last_verified],
+    ['hash', record.hash],
+  ]
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .map(([key, value]) => `${key}: ${oneLine(value, key)}`);
+  return ['---', ...frontmatter, '---', record.body, ''].join('\n');
+}
+
+function transitionSupersededRecord(workDir, predecessorId, successorId, timestamp) {
+  const predecessor = readDecisionRecordById(workDir, predecessorId);
+  if (!predecessor) throw new Error(`cannot supersede missing decision record ${predecessorId}`);
+  const next = {
+    ...predecessor.meta,
+    status: 'superseded',
+    superseded_by: successorId,
+    updated_at: timestamp,
+    hash: hashDecisionBody(predecessor.body),
+    body: predecessor.body,
+  };
+  writeFileAtomic(predecessor.filePath, renderDecisionRecord(next));
+  return { id: predecessorId, path: decisionRecordPath(workDir, predecessor.filePath) };
+}
+
+function readDecisionRecordById(workDir, id) {
+  const filePath = join(workDir, 'decisions', `${normalizeDecisionId(id)}.md`);
+  if (!existsSync(filePath)) return null;
+  return parseDecisionRecord(readFileSync(filePath, 'utf-8'), filePath);
+}
+
+function findDecisionIdentityOverlaps(workDir, candidate) {
+  const candidateTokens = identityTokens(candidate.decision);
+  if (candidateTokens.length === 0) return [];
+  return readDecisionRecords(workDir).records
+    .filter((record) => record.meta.id !== candidate.id && record.meta.status !== 'invalidated')
+    .map((record) => {
+      const existingTokens = identityTokens(record.meta.decision);
+      const overlap = candidateTokens.filter((token) => existingTokens.includes(token));
+      const ratio = overlap.length / Math.min(candidateTokens.length, Math.max(1, existingTokens.length));
+      return { id: record.meta.id, overlap, ratio };
+    })
+    .filter((entry) => entry.overlap.length >= 2 && entry.ratio >= 0.6)
+    .map((entry) => ({ ...entry, suggestion: `consider supersedes: ${entry.id}` }));
+}
+
+function buildDecisionEdgeMap(records) {
+  const byId = new Map(records.map((record) => [record.meta.id, record]));
+  const neighbours = new Map(records.map((record) => [record.meta.id, new Set()]));
+  const successors = new Map(records.map((record) => [record.meta.id, new Set()]));
+  const connect = (from, to) => {
+    if (!byId.has(from) || !byId.has(to)) return;
+    neighbours.get(from).add(to);
+    neighbours.get(to).add(from);
+    successors.get(from).add(to);
+  };
+  for (const record of records) {
+    if (record.meta.supersedes) connect(record.meta.supersedes, record.meta.id);
+    if (record.meta.superseded_by) connect(record.meta.id, record.meta.superseded_by);
+  }
+  return {
+    byId,
+    neighbours: new Map([...neighbours.entries()].map(([id, values]) => [id, [...values]])),
+    successors: new Map([...successors.entries()].map(([id, values]) => [id, [...values]])),
+  };
+}
+
+function scoreDecisionRecord(record, { terms, paths }) {
+  const searchable = `${record.meta.id}\n${record.meta.decision}\n${record.meta.why}\n${stripBoilerplateFor(record.meta.for)}\n${record.meta.links || ''}`.toLowerCase();
+  const refs = `${record.meta.for}\n${record.meta.links || ''}`.toLowerCase();
+  const pathHits = paths.filter((path) => refs.includes(path) || path.includes(refs)).length;
+  if (paths.length > 0 && pathHits === 0) return { record, matches: false, score: 0, pathHits: 0, chainDistance: 0 };
+  if (!terms.phrase && terms.tokens.length === 0) return { record, matches: true, score: pathHits * 20, pathHits, chainDistance: 0 };
+  const phraseHit = terms.phrase ? searchable.includes(terms.phrase) : false;
+  const tokenHits = terms.tokens.filter((token) => searchable.includes(token));
+  const threshold = terms.tokens.length <= 1 ? 1 : Math.max(1, Math.ceil(terms.tokens.length * 0.25));
+  const matches = phraseHit || tokenHits.length >= threshold;
+  return {
+    record,
+    matches,
+    score: (phraseHit ? 100 : 0) + (tokenHits.length * 10) + (pathHits * 20),
+    pathHits,
+    chainDistance: 0,
+  };
+}
+
+function stripBoilerplateFor(value) {
+  return String(value || '').replace(/\brepo:current\b/gi, '');
+}
+
+function decorateRecallResult(result, graph, staleCutoff) {
+  const successorIds = (graph.successors.get(result.record.meta.id) || [])
+    .filter((id) => ['candidate', 'active'].includes(graph.byId.get(id)?.meta.status));
+  const stale = new Date(result.record.meta.last_verified).getTime() < staleCutoff;
+  const flags = [];
+  if (stale) flags.push('stale');
+  if (successorIds.length >= 2) flags.push('conflict');
+  return {
+    ...result,
+    stale,
+    flags,
+    conflictSuccessors: successorIds,
+  };
+}
+
+function compareRecallResults(left, right) {
+  return right.score - left.score ||
+    left.chainDistance - right.chainDistance ||
+    recencyValue(right.record.meta.updated_at) - recencyValue(left.record.meta.updated_at) ||
+    left.record.meta.id.localeCompare(right.record.meta.id);
+}
+
+function normalizeSearchTerms(terms) {
+  const phrase = String(Array.isArray(terms) ? terms.join(' ') : terms || '').trim().toLowerCase();
+  const stopWords = new Set(['a', 'an', 'and', 'are', 'did', 'for', 'in', 'is', 'of', 'on', 'or', 'the', 'to', 'we', 'what', 'which', 'why', 'with']);
+  const tokens = [...new Set((phrase.match(/[a-z0-9_./:-]+/g) || []).flatMap((token) => {
+    const components = token.split('/');
+    return components.length > 1 && components.every((component) => /^[a-z0-9-]+$/.test(component))
+      ? components
+      : [token];
+  }).filter((token) => token.length > 1 && !stopWords.has(token)))];
+  return { phrase, tokens };
+}
+
+function normalizeDecisionPaths(paths) {
+  const values = Array.isArray(paths) ? paths : [paths];
+  return values
+    .filter(Boolean)
+    .flatMap((value) => String(value).split(','))
+    .map((value) => normalizeSlashes(value).trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function normalizeFilter(value) {
+  if (!value) return [];
+  return (Array.isArray(value) ? value : String(value).split(','))
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+}
+
+function createDecisionId(decision, random) {
+  return `${slugifyDecision(decision)}-${String(random()).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 4).padEnd(4, '0')}`;
+}
+
+function createDecisionRandomSuffix() {
+  return randomBytes(3).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 4);
+}
+
+function slugifyDecision(value) {
+  const slug = String(value || 'decision').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48).replace(/-+$/g, '');
+  return slug || 'decision';
+}
+
+function normalizeDecisionId(value) {
+  const id = String(value || '').trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]*-[a-z0-9]{4}$/.test(id)) {
+    throw new Error(`decision record id must be slug-4char: ${value}`);
+  }
+  return id;
+}
+
+function buildDecisionProvenance(repoRoot, label, session, agent) {
+  const branch = readGitValue(repoRoot, ['branch', '--show-current']) || 'detached';
+  const head = readGitValue(repoRoot, ['rev-parse', 'HEAD']) || 'unknown';
+  const parts = [label || null, `branch=${branch}`, `head=${head}`, `session=${session || process.env.CODEX_SESSION_ID || 'unknown'}`, `agent=${agent || process.env.CODEX_AGENT_ID || 'gsdd'}`];
+  return parts.filter(Boolean).join('; ');
+}
+
+function readGitValue(repoRoot, args) {
+  try {
+    return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function formatDecisionLinks(links) {
+  if (!links) return null;
+  if (typeof links === 'string') return oneLine(links, 'links');
+  return ['code', 'commit', 'pr']
+    .filter((key) => links[key])
+    .map((key) => `${key}=${oneLine(links[key], `links.${key}`)}`)
+    .join(', ') || null;
+}
+
+function oneLine(value, field) {
+  const normalized = String(value || '').replace(/\s*\r?\n\s*/g, ' ').trim();
+  if (!normalized) throw new Error(`decision record ${field} is required`);
+  return normalized;
+}
+
+function toIsoDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error(`invalid ISO date: ${value}`);
+  return date.toISOString();
+}
+
+function identityTokens(value) {
+  return [...new Set((String(value || '').toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter((token) => !['decision', 'record', 'rule'].includes(token)))];
+}
+
+function decisionRecordPath(workDir, filePath) {
+  return normalizeSlashes(relative(resolve(workDir, '..'), filePath));
+}
+
+function recencyValue(value) {
+  const timestamp = new Date(value || 0).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 export function captureDogfoodFinding(workDir, finding, { now = new Date(), replace = false } = {}) {
