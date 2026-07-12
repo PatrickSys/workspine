@@ -1,3 +1,10 @@
+# [0.31.0](https://github.com/PatrickSys/workspine/compare/v0.30.0...v0.31.0) (2026-07-12)
+
+
+### Features
+
+* decision digest accountability and lifecycle ops (M1c-2) ([59054e1](https://github.com/PatrickSys/workspine/commit/59054e1a258ccb4cffd3f2de009607fb8e576ea8))
+
 # [0.30.0](https://github.com/PatrickSys/workspine/compare/v0.29.2...v0.30.0) (2026-07-12)
 
 
