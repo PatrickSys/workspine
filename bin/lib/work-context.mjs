@@ -838,7 +838,9 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
   const scoped = scanned.records
     .filter((record) => {
       if (pathRefs.length === 0) return true;
-      const refs = `${record.meta.for || ''} ${record.meta.links || ''}`.toLowerCase();
+      const forRef = String(record.meta.for || '').trim().toLowerCase();
+      if (forRef === '' || forRef === 'repo:current') return true;
+      const refs = `${forRef} ${record.meta.links || ''}`;
       return pathRefs.some((pathRef) => refs.includes(pathRef) || pathRef.includes(refs));
     })
     .map((record) => {

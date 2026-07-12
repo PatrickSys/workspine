@@ -202,6 +202,22 @@ describe('S1 decision recall loop', () => {
     assert.match(digest.text, /^DECISIONS DIGEST \(10 active\)/);
   });
 
+  test('includes repo-wide decisions in unrelated phase digests while narrowing explicit scopes', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    const { buildDecisionsDigest, writeDecisionRecord } = await loadStore();
+    const now = new Date('2026-07-11T09:00:00.000Z');
+    writeDecisionRecord(workDir, record('repo-current-a1b2', 'Repo-wide standing rule'), { now, repoRoot: root });
+    writeDecisionRecord(workDir, record('phase-seven-c3d4', 'Phase-seven-only rule', { for: 'phase:7' }), { now, repoRoot: root });
+
+    const digest = buildDecisionsDigest({ workDir, phase: '99', paths: ['phase:99'], now });
+
+    assert.deepStrictEqual(digest.records.map((entry) => entry.id), ['repo-current-a1b2']);
+    assert.strictEqual(digest.counts.eligible, 1);
+    assert.strictEqual(digest.counts.returned, 1);
+  });
+
   test('returns the accountable digest shape and honest exclusion counts', async () => {
     const root = createTempProject();
     dirs.push(root);
