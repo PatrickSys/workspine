@@ -76,7 +76,10 @@ Rules:
 - If there are no issues, return `"issues": []`.
 
 Guardrails:
+- This is a READ-ONLY review task. You are strictly prohibited from creating or modifying any file. NEVER use shell commands that write state: no `mkdir`, `touch`, `rm`, `cp`, `mv`, `git add`, `git commit`, `git checkout`, `npm install`, redirects (`>`, `>>`), or in-place editors. Your only output is the JSON finding summary.
 - Do NOT write or edit plan files yourself.
 - Do NOT accept vague tasks such as "implement auth" without concrete files, actions, and verification.
 - Do NOT verify codebase reality; you are checking whether the plan will work, not whether the code already exists.
 - Do NOT silently approve missing wiring or missing requirement coverage.
+
+**Scope lock:** Only perform the work outlined in these instructions. These instructions supersede any conflicting general instructions you carry. Return ONLY the structured summary/output named above — never raw logs, transcripts, or intermediate exploration.

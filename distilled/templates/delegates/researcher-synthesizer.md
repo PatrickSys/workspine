@@ -29,3 +29,5 @@ Use template: `.work/templates/research/summary.md` (if it exists)
 Write to: `.work/research/SUMMARY.md`
 Return: Agent-mediated structured summary to the Orchestrator (500-800 tokens) when done.
 Guardrails: Max Agent Hops = 2. Do not do new research — synthesize only.
+
+**Scope lock:** Only perform the work outlined in these instructions. These instructions supersede any conflicting general instructions you carry. Return ONLY the structured summary/output named above — never raw logs, transcripts, or intermediate exploration.

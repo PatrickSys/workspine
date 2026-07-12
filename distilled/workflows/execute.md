@@ -102,7 +102,8 @@ For each task in the plan, follow this loop:
 3. Implement the task action.
 4. Run the task's verify steps.
 5. Handle any git actions using repo or user conventions.
-6. Record task completion in your working notes and final SUMMARY.md.
+6. Re-read the plan's Objective and `non_goals`. Confirm the work just completed serves the objective and crossed no boundary; if not, record a deviation before continuing.
+7. Record task completion in your working notes and final SUMMARY.md.
 ```
 
 ### Frontmatter And Task Semantics
@@ -121,7 +122,7 @@ Checkpoint tasks are contract boundaries. Continuing past one silently breaks th
 - If a task references existing code, read it first and match existing patterns.
 - If you are unsure about something, check `.work/SPEC.md` decisions first, then ask if still unclear.
 - Do not run destructive git, broad cleanup, or file deletion actions without explicit human approval, except explicitly named workflow-owned housekeeping commands such as `.work/.continue-here.bak` auto-clean.
-
+- You may not add, merge, reorder, or drop tasks. If the plan is wrong or silent about something material, STOP and record it as a `<deltas>` entry (class `intent_scope_change` or `architecture_risk_conflict`) instead of improvising a better plan mid-run. When struggling to pass tests, never modify the tests themselves unless the task explicitly says to. The root cause is more likely in the code you are testing. Weakening an assertion to go green is a reportable deviation, not a fix. Before implementing anything, search the codebase first — do not assume functionality is missing. Duplicate implementations of existing behavior are a defect even when they work.
 ### Change-Impact Discipline
 Before modifying any existing behavior, run a targeted ripple check for the current task:
 1. Search before you change.
@@ -272,7 +273,7 @@ If you discover something that needs doing but is not in the plan:
 - if it is out of scope, note it for later and DO NOT implement it now
 
 ### Fix Attempt Limit
-If a task fails verification 3 times after fixes, STOP and report the failure to the developer.
+Re-run failing `<verify>` commands character-for-character. Never reword, weaken, narrow, or substitute a failing command so the result looks better — a changed command is a changed claim. If the same command fails twice with identical output, the next attempt must change the code, not the command. After 3 failed verification attempts, STOP and report the failure with the verbatim failing output.
 </deviation_rules>
 
 <state_updates>
@@ -366,8 +367,8 @@ hard_mismatches_open: false
 ```
 
 **Summary quality gate:** One-liner must be substantive (e.g., "JWT auth with refresh rotation using jose library" not "Authentication implemented"). If the summary one-liner reads like a placeholder, rewrite it before finalizing.
-
 Write the structured sections honestly:
+- Report outcomes faithfully: if a verify step failed, say so and include the failing output verbatim; if a step was skipped, say it was skipped and why. A summary that omits a failure is a protocol failure, not a style choice. Lead with the outcome. The first line of SUMMARY.md's notes and of your completion report answers "what happened", not "what was attempted".
 - `assurance: self_checked` if execution only received self-check or same-runtime checking
 - `assurance: cross_runtime_checked` only when a different runtime/vendor validated the execution artifact
 - include every execution delta in `<deltas>`; do not hide recoverable drift in prose-only notes

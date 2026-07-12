@@ -25,3 +25,5 @@ Include:
 Write to: `.work/codebase/CONCERNS.md`
 Return: Routing summary to the Orchestrator (100-200 tokens) when done. If secrets found, STOP and report immediately.
 Guardrails: Max Agent Hops = 3. Hard stop on secrets.
+
+**Scope lock:** Only perform the work outlined in these instructions. These instructions supersede any conflicting general instructions you carry. Return ONLY the structured summary/output named above — never raw logs, transcripts, or intermediate exploration.

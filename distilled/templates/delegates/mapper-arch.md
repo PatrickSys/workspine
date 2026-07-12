@@ -24,3 +24,5 @@ Include:
 Write to: `.work/codebase/ARCHITECTURE.md`
 Return: Routing summary to the Orchestrator (100-200 tokens) when done.
 Guardrails: Max Agent Hops = 3. No static directory dumps.
+
+**Scope lock:** Only perform the work outlined in these instructions. These instructions supersede any conflicting general instructions you carry. Return ONLY the structured summary/output named above — never raw logs, transcripts, or intermediate exploration.

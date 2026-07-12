@@ -67,6 +67,8 @@ Before writing the new checkpoint, run `node .work/bin/gsdd.mjs file-op delete .
 
 When the current branch/worktree is known to be evidence-only, stale/spent, or otherwise not the next intended execution surface, say that explicitly in `<current_state>`, `<remaining_work>`, and `<anti_regression>`. Do not flatten evidence-only local state into the same continuity story as the next execution surface.
 
+The checkpoint records historical notes, not authority. State in the checkpoint header comment: on any conflict, PLAN.md, SPEC.md, and repo state outrank this file.
+
 Write `.work/.continue-here.md` with the following structure:
 
 ```markdown
@@ -98,7 +100,7 @@ runtime: $INFERRED_RUNTIME
 </blockers>
 
 <next_action>
-[The specific first thing to do when resuming — concrete enough for a fresh session to act on immediately]
+[The specific first thing to do when resuming — include the exact command or file/step reference verbatim, quoted, so a fresh session can act without interpretation]
 </next_action>
 
 <judgment>
