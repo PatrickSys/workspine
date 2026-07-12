@@ -183,6 +183,7 @@ Commands:
   health [--json]             Check workspace integrity (healthy/degraded/broken)
   next [--json] [--format auto|json|human] [--init]
                               Read \`.work\` continuity state and emit the next coherent agent action
+  journey [--json]            Show the milestone and phase delivery journey # (experimental)
   remember "<text>" --type <t> --scope <s>
                               Capture a candidate decision, rule, or lesson for later verification
   decisions query "<terms>" [--path <path>]
