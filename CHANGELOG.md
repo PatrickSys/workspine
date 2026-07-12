@@ -1,3 +1,10 @@
+## [0.31.1](https://github.com/PatrickSys/workspine/compare/v0.31.0...v0.31.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* repo-current decision records reach every phase digest ([192f736](https://github.com/PatrickSys/workspine/commit/192f7369843b076c64b121e5ae81d7d3648694ca))
+
 # [0.31.0](https://github.com/PatrickSys/workspine/compare/v0.30.0...v0.31.0) (2026-07-12)
 
 
