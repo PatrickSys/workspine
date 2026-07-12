@@ -1,6 +1,6 @@
 {
   "name": "gsdd-cli",
-  "version": "0.31.1",
+  "version": "0.31.2",
   "description": "Workspine — plan, execute, and verify AI-assisted work from files in your repo, with proof before done. Published as gsdd-cli.",
   "type": "module",
   "bin": {
