@@ -236,6 +236,9 @@ distilled/
       architecture.md
       pitfalls.md
       summary.md
+    research-agentic/
+      prompt-decomposition.json
+      scratchpad.md
     codebase/
       stack.md
       architecture.md
