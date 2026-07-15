@@ -82,3 +82,16 @@ Same algorithm, different scope. The scope is a context input, not a different r
 - **Tools required:** Web search, URL fetch, file read, file write; authoritative documentation API strongly recommended
 - **Parallelizable:** Yes -- 4 researchers (one per domain: stack, features, architecture, pitfalls) can run simultaneously
 - **Context budget:** High -- research is read-heavy with many external fetches. Keep output files focused to avoid downstream bloat.
+
+## Agentic Research Mode (MVP)
+
+When web research is enabled and question complexity is high, run a decomposition-first agentic loop:
+
+1. Decompose into sub-questions with completion criteria.
+2. Run parallel worker tracks for each sub-question.
+3. Maintain append-only scratchpad trace for long jobs.
+4. Synthesize into claim-level evidence + confidence.
+
+Use templates:
+- `distilled/templates/research/agentic-report.md`
+- `distilled/templates/research/agentic-scratchpad.md`
