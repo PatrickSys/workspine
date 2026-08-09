@@ -1,7 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, cpSync } from 'fs';
-import { dirname, join, isAbsolute } from 'path';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, readdirSync, unlinkSync, writeFileSync, cpSync } from 'fs';
+import { dirname, join, isAbsolute, relative, resolve, sep } from 'path';
 import { buildPlanningCliHelperEntries, renderSkillContent } from './rendering.mjs';
-import { buildManifest, readManifest, writeManifest } from './manifest.mjs';
+import { buildManifest, fileHash, readManifest, writeManifest } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs';
 import { installProjectTemplates, refreshTemplates } from './templates.mjs';
@@ -112,7 +112,7 @@ export function createCmdInit(ctx) {
     generateOpenStandardSkills(ctx.cwd, ctx.workflows, { stateDirName });
     console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
 
-    generatePlanningCliHelpers(ctx);
+    const runtimeGeneration = generatePlanningCliHelpers(ctx);
     console.log(`  - generated local workflow helpers (${stateDirName}/bin/gsdd*)`);
 
     for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {
@@ -121,9 +121,14 @@ export function createCmdInit(ctx) {
       console.log(`  - ${adapter.summary('generated')}`);
     }
 
-    const manifest = buildManifest({ planningDir, frameworkVersion: ctx.frameworkVersion });
+    const manifest = buildManifest({
+      planningDir,
+      frameworkVersion: ctx.frameworkVersion,
+      runtimeHelperPaths: runtimeGeneration.runtimeHelperPaths,
+    });
     writeManifest(planningDir, manifest);
     console.log('  - wrote generation manifest');
+    applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration.obsoleteRuntimeHelpers);
 
     console.log('\n\x1B[1m\x1B[32m✓ GSDD initialized.\x1B[0m');
     printInitSummary(interactiveSession.config ?? buildDefaultConfig({ autoAdvance: isAuto }));
@@ -146,6 +151,7 @@ export function createCmdUpdate(ctx) {
     const platforms = parsedTools.length > 0 ? requested.adapterTargets : detectPlatforms(ctx.adapters);
 
     let updated = false;
+    let runtimeGeneration = null;
 
     if (doTemplates) {
       refreshTemplates({ ...ctx, isDry });
@@ -166,7 +172,7 @@ export function createCmdUpdate(ctx) {
       if (isDry) {
         console.log(`  - would update local workflow helpers (${stateDirName}/bin/gsdd*)`);
       } else {
-        generatePlanningCliHelpers(ctx);
+        runtimeGeneration = generatePlanningCliHelpers(ctx);
         console.log(`  - updated local workflow helpers (${stateDirName}/bin/gsdd*)`);
       }
       updated = true;
@@ -193,10 +199,12 @@ export function createCmdUpdate(ctx) {
           planningDir,
           frameworkVersion: ctx.frameworkVersion,
           updateTemplates: doTemplates,
+          runtimeHelperPaths: runtimeGeneration?.runtimeHelperPaths ?? null,
         });
         if (manifest) {
           writeManifest(planningDir, manifest);
           console.log('  - updated generation manifest');
+          applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration?.obsoleteRuntimeHelpers ?? []);
         }
       }
       console.log('\nAdapters updated.\n');
@@ -228,11 +236,15 @@ function generateOpenStandardSkills(cwd, workflows, { stateDirName = '.work' } =
 }
 
 function generatePlanningCliHelpers({ packageName, packageVersion, planningDir, stateDirName = '.work' }) {
-  for (const entry of buildPlanningCliHelperEntries({
+  const entries = buildPlanningCliHelperEntries({
     packageName,
     packageVersion,
     stateDirName,
-  })) {
+  });
+  const runtimeContext = managedRuntimeContext(planningDir);
+  const obsoleteRuntimeHelpers = planObsoleteRuntimeHelperCleanup(planningDir, entries, runtimeContext);
+
+  for (const entry of entries) {
     const absolutePath = join(planningDir, entry.relativePath);
     mkdirSync(dirname(absolutePath), { recursive: true });
     writeFileSync(absolutePath, entry.content);
@@ -240,11 +252,177 @@ function generatePlanningCliHelpers({ packageName, packageVersion, planningDir, 
       chmodSync(absolutePath, 0o755);
     }
   }
+
+  return {
+    runtimeHelperPaths: entries.map((entry) => entry.relativePath),
+    obsoleteRuntimeHelpers,
+  };
 }
 
-function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates }) {
+function pathIsStrictlyInside(root, target) {
+  const pathWithinRoot = relative(root, target);
+  return pathWithinRoot !== ''
+    && pathWithinRoot !== '..'
+    && !pathWithinRoot.startsWith(`..${sep}`)
+    && !isAbsolute(pathWithinRoot);
+}
+
+function managedRuntimeContext(planningDir) {
+  const planningRoot = resolve(planningDir);
+  const runtimeRoot = resolve(planningDir, 'bin');
+  const realPlanningRoot = realpathSync(planningRoot);
+
+  let runtimeStat;
+  try {
+    runtimeStat = lstatSync(runtimeRoot);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return { runtimeRoot, realPlanningRoot, realRuntimeRoot: null };
+    }
+    throw error;
+  }
+
+  if (runtimeStat.isSymbolicLink() || !runtimeStat.isDirectory()) {
+    throw new Error('Refusing to write generated runtime helpers: bin/ must be a real directory inside the planning root.');
+  }
+
+  const realRuntimeRoot = realpathSync(runtimeRoot);
+  if (!pathIsStrictlyInside(realPlanningRoot, realRuntimeRoot)) {
+    throw new Error('Refusing to write generated runtime helpers: bin/ resolves outside the planning root.');
+  }
+
+  return { runtimeRoot, realPlanningRoot, realRuntimeRoot };
+}
+
+function fileIdentity(stat) {
+  return {
+    dev: stat.dev,
+    ino: stat.ino,
+    size: stat.size,
+    mtimeMs: stat.mtimeMs,
+    ctimeMs: stat.ctimeMs,
+  };
+}
+
+function sameFileIdentity(left, right) {
+  return left.dev === right.dev
+    && left.ino === right.ino
+    && left.size === right.size
+    && left.mtimeMs === right.mtimeMs
+    && left.ctimeMs === right.ctimeMs;
+}
+
+function warnPreservedRuntimeHelper(relativePath, reason) {
+  const displayPath = String(relativePath).replace(/[\r\n]+/g, '?');
+  console.log(`  - WARN: obsolete runtime helper ${displayPath} ${reason}; preserving it`);
+}
+
+function planObsoleteRuntimeHelperCleanup(planningDir, entries, runtimeContext) {
+  const existingHashes = readManifest(planningDir)?.runtimeHelpers;
+  if (!existingHashes || typeof existingHashes !== 'object' || Array.isArray(existingHashes)) return [];
+
+  const currentPaths = new Set(entries.map((entry) => entry.relativePath));
+  const candidates = [];
+
+  for (const [relativePath, expectedHash] of Object.entries(existingHashes)) {
+    if (currentPaths.has(relativePath)) continue;
+
+    const absolutePath = resolve(planningDir, relativePath);
+    if (!pathIsStrictlyInside(runtimeContext.runtimeRoot, absolutePath)) {
+      warnPreservedRuntimeHelper(relativePath, 'resolves outside the managed runtime root');
+      continue;
+    }
+
+    let stat;
+    try {
+      stat = lstatSync(absolutePath);
+    } catch (error) {
+      if (error?.code === 'ENOENT') continue;
+      warnPreservedRuntimeHelper(relativePath, 'could not be inspected safely');
+      continue;
+    }
+
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      warnPreservedRuntimeHelper(relativePath, 'is not a regular file');
+      continue;
+    }
+
+    let realTarget;
+    try {
+      const realRuntimeRoot = runtimeContext.realRuntimeRoot ?? realpathSync(runtimeContext.runtimeRoot);
+      realTarget = realpathSync(absolutePath);
+      if (!pathIsStrictlyInside(realRuntimeRoot, realTarget)) {
+        warnPreservedRuntimeHelper(relativePath, 'resolves outside the managed runtime root');
+        continue;
+      }
+    } catch {
+      warnPreservedRuntimeHelper(relativePath, 'could not be resolved safely');
+      continue;
+    }
+
+    let currentHash;
+    try {
+      currentHash = fileHash(absolutePath);
+    } catch {
+      warnPreservedRuntimeHelper(relativePath, 'could not be hashed safely');
+      continue;
+    }
+    if (currentHash !== expectedHash) {
+      warnPreservedRuntimeHelper(relativePath, 'was modified locally');
+      continue;
+    }
+
+    candidates.push({
+      relativePath,
+      absolutePath,
+      expectedHash,
+      realTarget,
+      identity: fileIdentity(stat),
+    });
+  }
+
+  return candidates;
+}
+
+function applyObsoleteRuntimeHelperCleanup(planningDir, candidates) {
+  if (candidates.length === 0) return;
+
+  let runtimeContext;
+  try {
+    runtimeContext = managedRuntimeContext(planningDir);
+  } catch {
+    for (const candidate of candidates) {
+      warnPreservedRuntimeHelper(candidate.relativePath, 'runtime root changed before removal');
+    }
+    return;
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const stat = lstatSync(candidate.absolutePath);
+      const realTarget = realpathSync(candidate.absolutePath);
+      const realRuntimeRoot = runtimeContext.realRuntimeRoot ?? realpathSync(runtimeContext.runtimeRoot);
+      const unchanged = !stat.isSymbolicLink()
+        && stat.isFile()
+        && pathIsStrictlyInside(realRuntimeRoot, realTarget)
+        && realTarget === candidate.realTarget
+        && sameFileIdentity(fileIdentity(stat), candidate.identity)
+        && fileHash(candidate.absolutePath) === candidate.expectedHash;
+      if (!unchanged) {
+        warnPreservedRuntimeHelper(candidate.relativePath, 'changed before removal');
+        continue;
+      }
+      unlinkSync(candidate.absolutePath);
+      console.log(`  - removed obsolete runtime helper ${candidate.relativePath}`);
+    } catch {
+      warnPreservedRuntimeHelper(candidate.relativePath, 'changed or could not be removed safely');
+    }
+  }
+}
+
+function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates, runtimeHelperPaths }) {
   const existingManifest = readManifest(planningDir);
-  const nextManifest = buildManifest({ planningDir, frameworkVersion });
+  const nextManifest = buildManifest({ planningDir, frameworkVersion, runtimeHelperPaths });
 
   if (existingManifest && !updateTemplates) {
     nextManifest.templates = existingManifest.templates ?? nextManifest.templates;

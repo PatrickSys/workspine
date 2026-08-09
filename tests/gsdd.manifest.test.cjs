@@ -4,6 +4,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const { createHash } = require('node:crypto');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -35,6 +36,14 @@ describe('generation manifest', () => {
     } finally {
       restoreStdin();
     }
+  }
+
+  function sha256(content) {
+    return createHash('sha256').update(content).digest('hex');
+  }
+
+  function writeManifest(manifestPath, manifest) {
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   }
 
   test('init writes generation-manifest.json with correct shape', async () => {
@@ -314,5 +323,156 @@ describe('generation manifest', () => {
     assert.strictEqual(result.exitCode, 0);
     assert.match(result.output, /removed orphan templates\/obsolete-template\.md/);
     assert.ok(!fs.existsSync(orphanPath));
+  });
+
+  test('update removes only hash-proven obsolete runtime helpers and unmanages preserved targets', async () => {
+    await initProject();
+
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = readJson(manifestPath);
+    const currentRuntimePaths = Object.keys(manifest.runtimeHelpers).sort();
+    const helpersDir = path.join(tmpDir, '.work', 'bin', 'lib');
+    const removablePath = path.join(helpersDir, 'obsolete-owned.mjs');
+    const modifiedPath = path.join(helpersDir, 'obsolete-modified.mjs');
+    const directoryPath = path.join(helpersDir, 'obsolete-directory');
+    const outsidePath = path.join(tmpDir, 'obsolete-outside.mjs');
+    const ownedContent = '// old generated helper\n';
+    const modifiedContent = '// local customization\n';
+
+    fs.writeFileSync(removablePath, ownedContent);
+    fs.writeFileSync(modifiedPath, modifiedContent);
+    fs.mkdirSync(directoryPath);
+    fs.writeFileSync(outsidePath, ownedContent);
+    manifest.runtimeHelpers['bin/lib/obsolete-owned.mjs'] = sha256(ownedContent);
+    manifest.runtimeHelpers['bin/lib/obsolete-modified.mjs'] = sha256(ownedContent);
+    manifest.runtimeHelpers['bin/lib/obsolete-directory'] = sha256('not a directory hash');
+    manifest.runtimeHelpers['bin/../../obsolete-outside.mjs'] = sha256(ownedContent);
+    writeManifest(manifestPath, manifest);
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /removed obsolete runtime helper bin\/lib\/obsolete-owned\.mjs/);
+    assert.match(result.output, /obsolete-modified\.mjs was modified locally; preserving it/);
+    assert.match(result.output, /obsolete-directory is not a regular file; preserving it/);
+    assert.match(result.output, /bin\/\.\.\/\.\.\/obsolete-outside\.mjs resolves outside the managed runtime root; preserving it/);
+    assert.doesNotMatch(result.output, new RegExp(tmpDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.ok(!fs.existsSync(removablePath));
+    assert.strictEqual(fs.readFileSync(modifiedPath, 'utf-8'), modifiedContent);
+    assert.ok(fs.lstatSync(directoryPath).isDirectory());
+    assert.strictEqual(fs.readFileSync(outsidePath, 'utf-8'), ownedContent);
+    assert.deepStrictEqual(Object.keys(readJson(manifestPath).runtimeHelpers).sort(), currentRuntimePaths);
+  });
+
+  test('repeated init removes an unchanged obsolete runtime helper after replacing manifest ownership', async () => {
+    await initProject();
+
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = readJson(manifestPath);
+    const currentRuntimePaths = Object.keys(manifest.runtimeHelpers).sort();
+    const obsoletePath = path.join(tmpDir, '.work', 'bin', 'lib', 'obsolete-reinit.mjs');
+    const content = '// obsolete init helper\n';
+    fs.writeFileSync(obsoletePath, content);
+    manifest.runtimeHelpers['bin/lib/obsolete-reinit.mjs'] = sha256(content);
+    writeManifest(manifestPath, manifest);
+
+    await initProject();
+
+    assert.ok(!fs.existsSync(obsoletePath));
+    assert.deepStrictEqual(Object.keys(readJson(manifestPath).runtimeHelpers).sort(), currentRuntimePaths);
+  });
+
+  test('update --dry leaves obsolete runtime helper bytes and raw manifest unchanged', async () => {
+    await initProject();
+
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = readJson(manifestPath);
+    const obsoletePath = path.join(tmpDir, '.work', 'bin', 'lib', 'obsolete-dry-run.mjs');
+    const content = '// obsolete dry-run helper\n';
+    fs.writeFileSync(obsoletePath, content);
+    manifest.runtimeHelpers['bin/lib/obsolete-dry-run.mjs'] = sha256(content);
+    writeManifest(manifestPath, manifest);
+    const manifestBefore = fs.readFileSync(manifestPath);
+
+    const result = await runCliAsMain(tmpDir, ['update', '--dry']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.deepStrictEqual(fs.readFileSync(manifestPath), manifestBefore);
+    assert.strictEqual(fs.readFileSync(obsoletePath, 'utf-8'), content);
+    assert.doesNotMatch(result.output, /removed obsolete runtime helper/);
+  });
+
+  test('update preserves obsolete runtime symlinks and realpath escapes', async (t) => {
+    await initProject();
+
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = readJson(manifestPath);
+    const currentRuntimePaths = Object.keys(manifest.runtimeHelpers).sort();
+    const outsideFile = path.join(tmpDir, 'outside-link-target.mjs');
+    const outsideDir = path.join(tmpDir, 'outside-link-directory');
+    const parentTarget = path.join(outsideDir, 'obsolete-parent.mjs');
+    const directLink = path.join(tmpDir, '.work', 'bin', 'lib', 'obsolete-link.mjs');
+    const danglingLink = path.join(tmpDir, '.work', 'bin', 'lib', 'obsolete-dangling.mjs');
+    const parentLink = path.join(tmpDir, '.work', 'bin', 'obsolete-link-dir');
+    const content = '// external user file\n';
+    fs.writeFileSync(outsideFile, content);
+    fs.mkdirSync(outsideDir);
+    fs.writeFileSync(parentTarget, content);
+    try {
+      fs.symlinkSync(outsideFile, directLink, 'file');
+      fs.symlinkSync(path.join(tmpDir, 'missing-link-target.mjs'), danglingLink, 'file');
+      fs.symlinkSync(outsideDir, parentLink, 'junction');
+    } catch (error) {
+      if (['EPERM', 'ENOTSUP', 'EACCES'].includes(error.code)) {
+        t.skip(`symlink creation unavailable in this environment: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    manifest.runtimeHelpers['bin/lib/obsolete-link.mjs'] = sha256(content);
+    manifest.runtimeHelpers['bin/lib/obsolete-dangling.mjs'] = sha256(content);
+    manifest.runtimeHelpers['bin/obsolete-link-dir/obsolete-parent.mjs'] = sha256(content);
+    writeManifest(manifestPath, manifest);
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /obsolete-link\.mjs is not a regular file; preserving it/);
+    assert.match(result.output, /obsolete-dangling\.mjs is not a regular file; preserving it/);
+    assert.match(result.output, /obsolete-link-dir\/obsolete-parent\.mjs resolves outside the managed runtime root; preserving it/);
+    assert.doesNotMatch(result.output, new RegExp(tmpDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.ok(fs.lstatSync(directLink).isSymbolicLink());
+    assert.ok(fs.lstatSync(danglingLink).isSymbolicLink());
+    assert.ok(fs.lstatSync(parentLink).isSymbolicLink());
+    assert.strictEqual(fs.readFileSync(outsideFile, 'utf-8'), content);
+    assert.strictEqual(fs.readFileSync(parentTarget, 'utf-8'), content);
+    assert.deepStrictEqual(Object.keys(readJson(manifestPath).runtimeHelpers).sort(), currentRuntimePaths);
+  });
+
+  test('update refuses a linked runtime root before writing helpers or manifest', async (t) => {
+    await initProject();
+
+    const runtimeRoot = path.join(tmpDir, '.work', 'bin');
+    const externalRoot = path.join(tmpDir, 'external-runtime-root');
+    const sentinelPath = path.join(externalRoot, 'sentinel.txt');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifestBefore = fs.readFileSync(manifestPath);
+    fs.rmSync(runtimeRoot, { recursive: true, force: true });
+    fs.mkdirSync(externalRoot);
+    fs.writeFileSync(sentinelPath, 'leave me alone\n');
+    try {
+      fs.symlinkSync(externalRoot, runtimeRoot, 'junction');
+    } catch (error) {
+      if (['EPERM', 'ENOTSUP', 'EACCES'].includes(error.code)) {
+        t.skip(`junction creation unavailable in this environment: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+
+    await assert.rejects(
+      () => runCliAsMain(tmpDir, ['update']),
+      /Refusing to write generated runtime helpers: bin\/ must be a real directory/
+    );
+    assert.deepStrictEqual(fs.readdirSync(externalRoot), ['sentinel.txt']);
+    assert.strictEqual(fs.readFileSync(sentinelPath, 'utf-8'), 'leave me alone\n');
+    assert.deepStrictEqual(fs.readFileSync(manifestPath), manifestBefore);
   });
 });

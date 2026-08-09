@@ -36,10 +36,15 @@ export function hashDirectory(dir, baseDir = dir) {
   return result;
 }
 
+function hashRelativeFiles(baseDir, relativePaths) {
+  const normalizedPaths = [...new Set(relativePaths.map((file) => String(file).replace(/\\/g, '/')))].sort();
+  return Object.fromEntries(normalizedPaths.map((file) => [file, fileHash(join(baseDir, file))]));
+}
+
 /**
  * Build a full manifest snapshot from installed project files.
  */
-export function buildManifest({ planningDir, frameworkVersion }) {
+export function buildManifest({ planningDir, frameworkVersion, runtimeHelperPaths = null }) {
   const templatesDir = join(planningDir, 'templates');
   const rolesDir = join(templatesDir, 'roles');
   const runtimeHelpersDir = join(planningDir, 'bin');
@@ -71,7 +76,9 @@ export function buildManifest({ planningDir, frameworkVersion }) {
     }
   }
 
-  const runtimeHelpersHashes = hashDirectory(runtimeHelpersDir, planningDir);
+  const runtimeHelpersHashes = Array.isArray(runtimeHelperPaths)
+    ? hashRelativeFiles(planningDir, runtimeHelperPaths)
+    : hashDirectory(runtimeHelpersDir, planningDir);
 
   return {
     frameworkVersion,
