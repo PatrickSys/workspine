@@ -174,7 +174,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
       }
     }
 
-    // W4: ROADMAP.md references phases not found in the resolved state phases directory.
+    // W4: ROADMAP.md references an active phase with no current PLAN/SUMMARY authority.
     const roadmapPath = join(planningDir, 'ROADMAP.md');
     const phasesDir = join(planningDir, 'phases');
     const roadmap = existsSync(roadmapPath) ? readFileSync(roadmapPath, 'utf-8') : null;
@@ -185,7 +185,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
         warnings.push({
           id: 'W4',
           severity: 'WARN',
-          message: `ROADMAP.md references active Phase ${phase.number} but no files found in ${statePath(stateDirName, 'phases/')}`,
+          message: `ROADMAP.md references active Phase ${phase.number} but no current PLAN or SUMMARY found in ${statePath(stateDirName, 'phases/')}`,
           fix: 'Create missing phase dirs or update ROADMAP',
         });
       }

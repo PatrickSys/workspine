@@ -541,6 +541,115 @@ describe('Phase 29 lifecycle-state helper', () => {
     cleanup(tmpDir);
   });
 
+  test('uses one strict status parser and partitions only the exact superseded chain', async () => {
+    const mod = await importLifecycleStateModule();
+    assert.strictEqual(mod.readPlanStatus('---\r\nstatus: "SuPeRsEdEd" # old chain\r\n---\r\n# plan\r\n'), 'superseded');
+    assert.strictEqual(mod.isSupersededPlanContent('---\nstatus: superseded\n---\n'), true);
+    assert.strictEqual(mod.isSupersededPlanContent('status: superseded\n'), false);
+    assert.strictEqual(mod.isSupersededPlanContent('---\n  status: superseded\n---\n'), false);
+    assert.strictEqual(mod.isSupersededPlanContent('---\n# status: superseded\n---\n'), false);
+    assert.strictEqual(mod.isSupersededPlanContent('---\nstatus: active\n---\nstatus: superseded\n'), false);
+    assert.strictEqual(mod.readPlanStatus('---\nstatus: active\'s\n---\n'), "active's");
+    assert.throws(() => mod.readPlanStatus('---\nstatus: "superseded\n---\n'), /unmatched quote/);
+    assert.throws(() => mod.readPlanStatus('---\nstatus: superseded\n'), /not closed/);
+
+    const planPath = path.join(tmpDir, '01-1-PLAN.md');
+    const summaryPath = path.join(tmpDir, '01-1-SUMMARY.md');
+    const verificationPath = path.join(tmpDir, '01-1-VERIFICATION.md');
+    const currentPlanPath = path.join(tmpDir, '01-2-PLAN.md');
+    const artifacts = [
+      { kind: 'plan', path: planPath, chainKey: 'one', name: '01-1-PLAN.md' },
+      { kind: 'summary', path: summaryPath, chainKey: 'one', name: '01-1-SUMMARY.md' },
+      { kind: 'verification', path: verificationPath, chainKey: 'one', name: '01-1-VERIFICATION.md' },
+      { kind: 'plan', path: currentPlanPath, chainKey: 'two', name: '01-2-PLAN.md' },
+    ];
+    const partition = mod.partitionPlanChains(artifacts, {
+      readFile: (filePath) => filePath === planPath ? '---\nstatus: superseded\n---\n' : '# current\n',
+    });
+    assert.deepStrictEqual(partition.historicalArtifacts.map((artifact) => artifact.name), ['01-1-PLAN.md', '01-1-SUMMARY.md']);
+    assert.deepStrictEqual(partition.currentArtifacts.map((artifact) => artifact.name), ['01-1-VERIFICATION.md', '01-2-PLAN.md']);
+    assert.throws(() => mod.partitionPlanChains(artifacts, { readFile: () => { throw new Error('injected read failure'); } }), /injected read failure/);
+    assert.throws(() => mod.partitionPlanChains([{ kind: 'plan', path: planPath, name: 'missing-key-PLAN.md' }]), /missing a normalized chain key/);
+    assert.throws(() => mod.partitionPlanChains([{ kind: 'summary', path: summaryPath, name: 'missing-key-SUMMARY.md' }]), /missing a normalized chain key/);
+
+    const nativePhases = path.join(tmpDir, '.work', 'milestone', 'phases');
+    const prefixed = mod.classifyNativePhaseArtifact({
+      workspaceRoot: tmpDir,
+      phasesDir: nativePhases,
+      filePath: path.join(nativePhases, '07-native', '07-EXECUTE.md'),
+    });
+    const bare = mod.classifyNativePhaseArtifact({
+      workspaceRoot: tmpDir,
+      phasesDir: nativePhases,
+      filePath: path.join(nativePhases, '08-native', 'VERIFY.md'),
+    });
+    assert.deepStrictEqual({ phaseToken: prefixed.phaseToken, kind: prefixed.kind, dir: prefixed.dir }, { phaseToken: '7', kind: 'execute', dir: '07-native' });
+    assert.deepStrictEqual({ phaseToken: bare.phaseToken, kind: bare.kind, dir: bare.dir }, { phaseToken: '8', kind: 'verification', dir: '08-native' });
+    assert.strictEqual(mod.classifyNativePhaseArtifact({ workspaceRoot: tmpDir, phasesDir: nativePhases, filePath: path.join(nativePhases, 'reference', 'PLAN.md') }), null);
+    assert.strictEqual(mod.classifyNativePhaseArtifact({ workspaceRoot: tmpDir, phasesDir: nativePhases, filePath: path.join(nativePhases, '01-native', '01-reference-PLAN.md') }), null);
+    fs.mkdirSync(path.join(nativePhases, 'nested', '10-native'), { recursive: true });
+    fs.writeFileSync(path.join(nativePhases, '09-PLAN.md'), '# top level packet\n');
+    fs.writeFileSync(path.join(nativePhases, 'nested', '10-native', '10-EXECUTE.md'), '# nested packet\n');
+    assert.deepStrictEqual(
+      mod.collectNativePhaseArtifacts({ workspaceRoot: tmpDir, phasesDir: nativePhases }).map((artifact) => [artifact.dir, artifact.phaseToken, artifact.kind]),
+      [['', '9', 'plan'], ['nested/10-native', '10', 'execute']]
+    );
+  });
+
+  test('keeps superseded standard plan and summary historical while preserving verification evidence', async () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 29: Current Work**\n');
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing');
+    fs.writeFileSync(path.join(phaseDir, '29-1-PLAN.md'), '---\nstatus: superseded\n---\n# old\n');
+    fs.writeFileSync(path.join(phaseDir, '29-1-SUMMARY.md'), '# old summary\n');
+    fs.writeFileSync(path.join(phaseDir, '29-1-VERIFICATION.md'), '# evidence\n');
+    fs.writeFileSync(path.join(phaseDir, '29-2-PLAN.md'), '# current\n');
+    fs.writeFileSync(path.join(phaseDir, '29-2-SUMMARY.md'), '# current summary\n');
+
+    const mod = await importLifecycleStateModule();
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    assert.deepStrictEqual(state.phaseArtifacts.map((artifact) => artifact.name), ['29-1-VERIFICATION.md', '29-2-PLAN.md', '29-2-SUMMARY.md']);
+    assert.deepStrictEqual(state.historicalPhaseArtifacts.map((artifact) => artifact.name), ['29-1-PLAN.md', '29-1-SUMMARY.md']);
+    assert.deepStrictEqual(state.incompletePlans, []);
+
+    const execute = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '29', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(execute.exitCode, 1, execute.output);
+    assert.strictEqual(JSON.parse(execute.output).reason, 'no_pending_plan');
+    fs.unlinkSync(path.join(phaseDir, '29-2-SUMMARY.md'));
+    const pendingExecute = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '29', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(pendingExecute.exitCode, 0, pendingExecute.output);
+    fs.writeFileSync(path.join(phaseDir, '29-2-SUMMARY.md'), '# current summary\n');
+    const verify = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '29', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(verify.exitCode, 0, verify.output);
+    const phaseModuleUrl = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'phase.mjs')).href;
+    const phase = await import(`${phaseModuleUrl}?t=${Date.now()}-${Math.random()}`);
+    const mixedReport = phase.buildPhaseVerificationReport('--workspace-root', tmpDir, '29');
+    assert.deepStrictEqual(mixedReport.result.plans, ['29-contract-inventory-and-claim-narrowing/29-2-PLAN.md']);
+    assert.deepStrictEqual(mixedReport.result.summaries, ['29-contract-inventory-and-claim-narrowing/29-2-SUMMARY.md']);
+    assert.deepStrictEqual(mixedReport.result.historical, {
+      plans: ['29-contract-inventory-and-claim-narrowing/29-1-PLAN.md'],
+      summaries: ['29-contract-inventory-and-claim-narrowing/29-1-SUMMARY.md'],
+    });
+
+    fs.unlinkSync(path.join(phaseDir, '29-2-PLAN.md'));
+    fs.unlinkSync(path.join(phaseDir, '29-2-SUMMARY.md'));
+    const report = phase.buildPhaseVerificationReport('--workspace-root', tmpDir, '29');
+    assert.strictEqual(report.exitCode, 1);
+    assert.deepStrictEqual(report.result.plans, []);
+    assert.deepStrictEqual(report.result.summaries, []);
+    assert.deepStrictEqual(report.result.historical, {
+      plans: ['29-contract-inventory-and-claim-narrowing/29-1-PLAN.md'],
+      summaries: ['29-contract-inventory-and-claim-narrowing/29-1-SUMMARY.md'],
+    });
+    assert.ok(report.result.prerequisite_status.blockers.some((blocker) => blocker.code === 'missing_phase_plan'));
+
+    const find = await runCliAsMain(tmpDir, ['find-phase', '29']);
+    assert.strictEqual(find.exitCode, 0, find.output);
+    const found = JSON.parse(find.output);
+    assert.deepStrictEqual(found.plans, []);
+    assert.deepStrictEqual(found.summaries, []);
+    assert.deepStrictEqual(found.historical, report.result.historical);
+  });
+
   test('derives active milestone posture from roadmap, milestone ledger, audits, and phase artifacts', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'ROADMAP.md'),
@@ -994,6 +1103,19 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.phase, '30');
   });
 
+  test('blocks standard execute for a historical-only plan chain with missing_plan', async () => {
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 30: Deterministic Lifecycle Gates**\n');
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates');
+    fs.writeFileSync(path.join(phaseDir, '30-PLAN.md'), '---\nstatus: superseded\n---\n# old plan\n');
+    fs.writeFileSync(path.join(phaseDir, '30-SUMMARY.md'), '# old summary\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'missing_plan');
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_plan'));
+  });
+
   test('owned-write preflight reports control-map warnings without blocking ordinary dirty state', async () => {
     initPreflightGitWorkspace(tmpDir);
     writePreflightPhase(tmpDir);
@@ -1298,6 +1420,40 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(output.blockers.some((blocker) => blocker.code === 'missing_execute'));
   });
 
+  test('native historical-only plan and execute block execute and verify through current authority', async () => {
+    writePreflightPhase(tmpDir, '30');
+    const phaseDir = path.join(tmpDir, '.work', 'milestone', 'phases', '7-easy-global-install-auto-mode');
+    writeWorkMilestonePhase(tmpDir, '7', { execute: true });
+    fs.writeFileSync(path.join(phaseDir, '7-PLAN.md'), '---\nstatus: superseded\n---\n# historical plan\n');
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    let output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'missing_plan');
+    assert.deepStrictEqual(output.blockers.map((blocker) => blocker.code), ['missing_plan']);
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'missing_plan');
+    assert.deepStrictEqual(output.blockers.map((blocker) => blocker.code), ['missing_plan', 'missing_execute']);
+  });
+
+  test('native preflight rejects stray nonnumeric and suffix-overmatch packets', async () => {
+    writePreflightPhase(tmpDir, '30');
+    fs.mkdirSync(path.join(tmpDir, '.work', 'milestone', 'phases'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.work', 'milestone', 'ROADMAP.md'), '# Roadmap\n\n- [ ] **Phase 7: Native packet**\n');
+    fs.mkdirSync(path.join(tmpDir, '.work', 'milestone', 'phases', 'reference'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'milestone', 'phases', '07-native'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.work', 'milestone', 'phases', 'reference', 'PLAN.md'), '# stray\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'milestone', 'phases', '07-native', '07-reference-PLAN.md'), '# suffix overmatch\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.deepStrictEqual(output.blockers.map((blocker) => blocker.code), ['missing_plan', 'missing_execute']);
+  });
+
   test('narrows milestones-only fallback without changing ROADMAP-present blocker outcomes', async () => {
     writePreflightPhase(tmpDir, '30');
     writeWorkMilestonePhase(tmpDir, '7');
@@ -1330,6 +1486,15 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.authority, 'work_milestone');
     assert.strictEqual(output.lifecycle.workMilestone.phase, '4');
     assert.strictEqual(output.lifecycle.workMilestone.roadmapPath, '.work/milestones/active-milestone/ROADMAP.md');
+  });
+
+  test('fails loud through the CLI when a native roadmap-fallback PLAN frontmatter is malformed', async () => {
+    const phaseDir = writeWorkMilestonePlanOnly(tmpDir, '4', 'planned');
+    fs.writeFileSync(path.join(phaseDir, 'PLAN.md'), '---\nstatus: superseded\n# missing closing delimiter\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '4']);
+    assert.strictEqual(result.exitCode, 1);
+    assert.match(result.output, /frontmatter starts with --- but is not closed/);
   });
 
   test('generated local helper lifecycle-preflight supports work-milestone authority', async () => {

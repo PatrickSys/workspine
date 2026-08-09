@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, readdirSync } from 'fs';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
-import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
+import { collectNativePhaseArtifacts, evaluateLifecycleState, normalizePhaseToken, partitionPlanChains } from './lifecycle-state.mjs';
 import {
   buildDecisionsDigest,
   persistDecisionsDigest,
@@ -399,10 +399,11 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
   const phasesDir = join(milestoneDir, 'phases');
 
   if (!existsSync(roadmapPath)) {
-    const phaseArtifacts = collectWorkPhaseArtifacts({ workspaceRoot, phasesDir });
-    const planArtifacts = phaseArtifacts.filter((artifact) => artifact.kind === 'plan');
-    if (planArtifacts.length === 0) return null;
-    const phases = deriveWorkPlanPhases(planArtifacts);
+    const allPhaseArtifacts = collectWorkPhaseArtifacts({ workspaceRoot, phasesDir });
+    const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute'] });
+    const allPlanArtifacts = allPhaseArtifacts.filter((artifact) => artifact.kind === 'plan');
+    if (allPlanArtifacts.length === 0) return null;
+    const phases = deriveWorkPlanPhases(allPlanArtifacts);
     const phaseEntry = phases.find((phase) => phase.number === phaseToken);
     if (!phaseEntry) return null;
     return {
@@ -411,7 +412,8 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
       phasesDir,
       phases,
       phaseEntry,
-      phaseArtifacts: phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken),
+      phaseArtifacts: partitioned.currentArtifacts.filter((artifact) => artifact.phaseToken === phaseToken),
+      historicalPhaseArtifacts: partitioned.historicalArtifacts.filter((artifact) => artifact.phaseToken === phaseToken),
       roadmapFallback: true,
     };
   }
@@ -422,13 +424,16 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
     return null;
   }
 
+  const allPhaseArtifacts = collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken });
+  const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute'] });
   return {
     milestoneDir,
     roadmapPath,
     phasesDir,
     phases,
     phaseEntry,
-    phaseArtifacts: collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken }),
+    phaseArtifacts: partitioned.currentArtifacts,
+    historicalPhaseArtifacts: partitioned.historicalArtifacts,
     roadmapFallback: false,
   };
 }
@@ -437,12 +442,7 @@ function deriveWorkPlanPhases(planArtifacts) {
   const phases = new Map();
   for (const artifact of planArtifacts) {
     if (phases.has(artifact.phaseToken)) continue;
-    let frontmatter = {};
-    try {
-      frontmatter = parsePlanFrontmatter(readFileSync(artifact.path, 'utf-8'));
-    } catch {
-      continue;
-    }
+    const frontmatter = parsePlanFrontmatter(readFileSync(artifact.path, 'utf-8'));
     phases.set(artifact.phaseToken, {
       number: artifact.phaseToken,
       title: artifact.displayPath,
@@ -508,29 +508,8 @@ function evaluateResumeWorkCheckpoint({ planningDir, checkpointPath }) {
 }
 
 function collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken = null }) {
-  if (!existsSync(phasesDir)) return [];
-
-  return collectMarkdownFiles(phasesDir)
-    .map((filePath) => {
-      const filename = basename(filePath);
-      const filenameMatch = filename.match(/^(\d+(?:\.\d+)*[A-Za-z]?)-(.+?)\.md$/i);
-      const parentMatch = basename(dirname(filePath)).match(/^(\d+(?:\.\d+)*[A-Za-z]?)-(.+)$/i);
-      const match = filenameMatch || (parentMatch && filename.match(/^(PLAN|EXECUTE|VERIFY|VERIFICATION)\.md$/i)
-        ? [filename, parentMatch[1], filename.slice(0, -3)]
-        : null);
-      if (!match || (phaseToken && normalizePhaseToken(match[1]) !== phaseToken)) return null;
-
-      const kind = parseWorkArtifactKind(match[2]);
-      if (!kind) return null;
-
-      return {
-        phaseToken: normalizePhaseToken(match[1]),
-        kind,
-        path: filePath,
-        displayPath: relativeDisplayPath(workspaceRoot, filePath),
-      };
-    })
-    .filter(Boolean);
+  return collectNativePhaseArtifacts({ workspaceRoot, phasesDir })
+    .filter((artifact) => !phaseToken || artifact.phaseToken === phaseToken);
 }
 
 function evaluateDecisionDispositionWarnings({ planningDir, phaseToken, lifecycle, workMilestone }) {
@@ -588,31 +567,6 @@ function findActivePlanPath({ planningDir, phaseToken, lifecycle, workMilestone 
   const plan = lifecycle.phaseArtifacts?.find((artifact) => artifact.phaseToken === phaseToken && artifact.kind === 'plan');
   if (!plan) return null;
   return join(planningDir, 'phases', plan.dir, plan.name);
-}
-
-function collectMarkdownFiles(dir) {
-  const files = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...collectMarkdownFiles(fullPath));
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
-function parseWorkArtifactKind(rawKind) {
-  const kind = String(rawKind || '').toLowerCase();
-  if (kind === 'plan') return 'plan';
-  if (kind === 'execute') return 'execute';
-  if (kind === 'verify' || kind === 'verification') return 'verification';
-  return null;
-}
-
-function relativeDisplayPath(root, filePath) {
-  return filePath.slice(root.length + 1).replace(/\\/g, '/');
 }
 
 function buildWorkPhaseBlockers({ workMilestone, phaseToken, surface }) {

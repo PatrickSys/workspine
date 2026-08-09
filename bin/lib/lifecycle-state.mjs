@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { basename, dirname, join, relative, resolve } from 'path';
 
 const BROWNFIELD_CHANGE_DIR = 'brownfield-change';
 
@@ -34,7 +34,8 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
 
   const phases = parseActiveRoadmapPhases(roadmap);
   const phaseStatusAlignment = evaluateRoadmapPhaseStatusAlignment(roadmap);
-  const phaseArtifacts = collectPhaseArtifacts(phasesDir);
+  const structuralPhaseArtifacts = collectPhaseArtifacts(phasesDir);
+  const { currentArtifacts: phaseArtifacts, historicalArtifacts: historicalPhaseArtifacts } = partitionPlanChains(structuralPhaseArtifacts);
   const enrichedPhases = phases.map((phase) => {
     const matchingArtifacts = phaseArtifacts.filter((artifact) => artifact.phaseToken === phase.number);
     const hasPlan = matchingArtifacts.some((artifact) => artifact.kind === 'plan');
@@ -86,6 +87,7 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     nextPhase: enrichedPhases.find((phase) => phase.status === 'not_started') || null,
     counts,
     phaseArtifacts,
+    historicalPhaseArtifacts,
     incompletePlans,
     brownfieldChange,
     nonPhaseState,
@@ -316,7 +318,7 @@ function collectPhaseArtifacts(phasesDir) {
   for (const entry of readdirSync(phasesDir, { withFileTypes: true })) {
     const entryPath = join(phasesDir, entry.name);
     if (entry.isFile()) {
-      const artifact = classifyPhaseArtifact('', entry.name);
+      const artifact = classifyPhaseArtifact('', entry.name, join(phasesDir, entry.name));
       if (artifact) artifacts.push(artifact);
       continue;
     }
@@ -325,7 +327,7 @@ function collectPhaseArtifacts(phasesDir) {
 
     for (const child of readdirSync(entryPath, { withFileTypes: true })) {
       if (!child.isFile()) continue;
-      const artifact = classifyPhaseArtifact(entry.name, child.name);
+      const artifact = classifyPhaseArtifact(entry.name, child.name, join(entryPath, child.name));
       if (artifact) artifacts.push(artifact);
     }
   }
@@ -333,7 +335,7 @@ function collectPhaseArtifacts(phasesDir) {
   return artifacts;
 }
 
-function classifyPhaseArtifact(dir, name) {
+function classifyPhaseArtifact(dir, name, path) {
   const baseIdMatch = name.match(/^(\d+(?:\.\d+)*[a-z]?(?:-\d+)?)/i);
   const phaseTokenMatch = (dir ? dir.match(/^(\d+(?:\.\d+)*[a-z]?)-/i) : null)
     || name.match(/^(\d+(?:\.\d+)*[a-z]?)/i);
@@ -350,10 +352,159 @@ function classifyPhaseArtifact(dir, name) {
     dir,
     name,
     displayPath: dir ? `${dir}/${name}` : name,
+    path: resolve(path),
     baseId: baseIdMatch[1],
+    chainKey: `${String(dir || '.').toLowerCase()}/${baseIdMatch[1].toLowerCase()}`,
     phaseToken: normalizePhaseToken(phaseTokenMatch[1]),
     kind,
   };
+}
+
+/**
+ * Read the scalar `status` from initial, top-level YAML-like frontmatter.
+ * This is deliberately narrow: lifecycle authority needs a stable marker, not
+ * a general YAML dependency or parser with broader semantics.
+ */
+export function readPlanStatus(content) {
+  const lines = normalizeContent(content).split('\n');
+  if (lines[0] !== '---') return null;
+
+  let closingIndex = -1;
+  for (let index = 1; index < lines.length; index += 1) {
+    if (lines[index] === '---') {
+      closingIndex = index;
+      break;
+    }
+  }
+  if (closingIndex === -1) {
+    throw new Error('PLAN frontmatter starts with --- but is not closed');
+  }
+
+  for (const line of lines.slice(1, closingIndex)) {
+    const match = line.match(/^status:\s*(.*)$/);
+    if (!match) continue;
+    const value = stripPlanInlineComment(match[1]).trim();
+    if (!value) return '';
+    const first = value[0];
+    if (first === '"' || first === "'") {
+      if (value.length < 2 || value.at(-1) !== first) {
+        throw new Error('PLAN status frontmatter scalar has an unmatched quote');
+      }
+      return value.slice(1, -1).trim().toLowerCase();
+    }
+    return value.toLowerCase();
+  }
+  return null;
+}
+
+export function isSupersededPlanContent(content) {
+  return readPlanStatus(content) === 'superseded';
+}
+
+/**
+ * Partition only a superseded PLAN and its exact configured chain companion.
+ * Verification and all unrelated evidence remain visible as current artifacts.
+ */
+export function partitionPlanChains(artifacts, { companionKinds = ['summary'], readFile = readFileSync } = {}) {
+  const source = Array.isArray(artifacts) ? artifacts : [];
+  const companionSet = new Set(companionKinds.map((kind) => String(kind).toLowerCase()));
+  const historicalChainKeys = new Set();
+  for (const artifact of source) {
+    const participatesInChain = artifact.kind === 'plan' || companionSet.has(artifact.kind);
+    if (participatesInChain && (typeof artifact.chainKey !== 'string' || !artifact.chainKey.trim())) {
+      throw new Error(`Plan-chain artifact is missing a normalized chain key: ${artifact.displayPath || artifact.name || 'unknown'}`);
+    }
+    if (artifact.kind !== 'plan') continue;
+    if (!artifact.path) throw new Error(`PLAN artifact is missing an absolute path: ${artifact.displayPath || artifact.name || 'unknown'}`);
+    if (isSupersededPlanContent(readFile(artifact.path, 'utf-8'))) {
+      historicalChainKeys.add(artifact.chainKey);
+    }
+  }
+
+  const currentArtifacts = [];
+  const historicalArtifacts = [];
+  for (const artifact of source) {
+    const historical = historicalChainKeys.has(artifact.chainKey)
+      && (artifact.kind === 'plan' || companionSet.has(artifact.kind));
+    (historical ? historicalArtifacts : currentArtifacts).push(artifact);
+  }
+  return { currentArtifacts, historicalArtifacts };
+}
+
+/**
+ * Classify a Workspine-native phase artifact without widening the filename
+ * contract. Bare names are valid only under a numeric phase directory.
+ */
+export function classifyNativePhaseArtifact({ workspaceRoot, phasesDir = null, filePath } = {}) {
+  if (!workspaceRoot || !filePath) return null;
+  const path = resolve(filePath);
+  const name = basename(path);
+  const phasePattern = '\\d+(?:\\.\\d+)*[A-Za-z]?';
+  const namedMatch = name.match(new RegExp(`^(${phasePattern})-(PLAN|EXECUTE|VERIFY|VERIFICATION)\\.md$`, 'i'));
+  const bareMatch = name.match(/^(PLAN|EXECUTE|VERIFY|VERIFICATION)\.md$/i);
+  const parentName = basename(dirname(path));
+  const parentMatch = parentName.match(new RegExp(`^(${phasePattern})(?:-|$)`, 'i'));
+  const match = namedMatch || (bareMatch && parentMatch ? [name, parentMatch[1], bareMatch[1]] : null);
+  if (!match) return null;
+
+  const rawKind = match[2].toLowerCase();
+  const kind = rawKind === 'plan' ? 'plan'
+    : rawKind === 'execute' ? 'execute'
+      : 'verification';
+  const phaseToken = normalizePhaseToken(match[1]);
+  const dir = phasesDir
+    ? relative(resolve(phasesDir), dirname(path)).replace(/\\/g, '/')
+    : parentName;
+  return {
+    dir,
+    name,
+    phaseToken,
+    kind,
+    path,
+    displayPath: relative(resolve(workspaceRoot), path).replace(/\\/g, '/'),
+    chainKey: `${dirname(path).toLowerCase()}/${phaseToken}`,
+  };
+}
+
+export function collectNativePhaseArtifacts({ workspaceRoot, phasesDir } = {}) {
+  if (!workspaceRoot || !phasesDir || !existsSync(phasesDir)) return [];
+  const artifacts = [];
+  const visit = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        visit(entryPath);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.md')) continue;
+      const artifact = classifyNativePhaseArtifact({ workspaceRoot, phasesDir, filePath: entryPath });
+      if (artifact) artifacts.push(artifact);
+    }
+  };
+  visit(phasesDir);
+  return artifacts;
+}
+
+function stripPlanInlineComment(value) {
+  const text = String(value || '');
+  let quote = null;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (quote === '"' && char === '\\') {
+        index += 1;
+        continue;
+      }
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '#') return text.slice(0, index);
+  }
+  return text;
 }
 
 function isNamedPhaseArtifact(name, baseId, kind) {

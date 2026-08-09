@@ -666,10 +666,10 @@ function routeFromWorkMilestone(context, manifest) {
       artifacts_to_read: [milestonePath(context, 'AUDIT.md'), milestonePath(context, 'ROADMAP.md'), '.work/evidence/manifest.json'],
     };
   }
-  if (milestone.has_roadmap && milestone.phase_count > 0) {
+  if (milestone.has_roadmap && milestone.actionable_phase_packet_count > 0) {
     return {
       state: 'verify',
-      reason: `Workspine-native \`${milestonePath(context)}\` phase packets exist and should be verified before closure.`,
+      reason: `Workspine-native \`${milestonePath(context)}\` has actionable phase packets that should be verified before closure.`,
     };
   }
   return null;

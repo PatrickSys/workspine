@@ -383,6 +383,23 @@ describe('Health — WARN: ROADMAP references nonexistent phase', () => {
     assert.ok(!json.warnings.some((w) => w.id === 'W5'),
       'non-lifecycle artifacts must not create stale PLAN/SUMMARY warnings');
   });
+
+  test('active phase with only a superseded chain → W4 without W5', async () => {
+    await initWorkspace();
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 2: API**\n');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '02-api');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '02-PLAN.md'), '---\nstatus: superseded\n---\n# old plan\n');
+    fs.writeFileSync(path.join(phaseDir, '02-SUMMARY.md'), '# old summary\n');
+    fs.writeFileSync(path.join(phaseDir, '02-VERIFICATION.md'), '# retained evidence\n');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((entry) => entry.id === 'W4' && /Phase 2/.test(entry.message));
+    assert.ok(warning, 'historical-only chains must be missing current lifecycle artifacts');
+    assert.match(warning.message, /no current PLAN or SUMMARY/);
+    assert.ok(!json.warnings.some((entry) => entry.id === 'W5'), 'historical PLAN must not be stale current work');
+  });
 });
 
 describe('Health — WARN: phase with PLAN but no SUMMARY', () => {

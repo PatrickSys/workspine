@@ -12,7 +12,7 @@ import {
 import { execFileSync } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
 import { basename, dirname, join, relative, resolve } from 'path';
-import { evaluateLifecycleState } from './lifecycle-state.mjs';
+import { collectNativePhaseArtifacts, evaluateLifecycleState, partitionPlanChains } from './lifecycle-state.mjs';
 import { resolveStateDir } from './state-dir.mjs';
 import { writeFileAtomic as replaceFileAtomically } from './atomic-write.mjs';
 
@@ -1280,7 +1280,7 @@ export function inspectWorkContext(cwd = process.cwd()) {
     current_phase: lifecycle.currentPhase?.number || null,
     next_phase: lifecycle.nextPhase?.number || null,
     counts: lifecycle.counts,
-    phases: scanPhaseEvidence(planningDir),
+    phases: scanPhaseEvidence(planningDir, lifecycle),
     state_dir_name: stateDirName,
   };
   return {
@@ -1348,7 +1348,7 @@ export function inspectWorkMilestone(workDir) {
   const roadmap = readTextIfExists(roadmapPath);
   const audit = readTextIfExists(auditPath);
   const phasesDir = join(milestoneDir, 'phases');
-  const phases = [];
+  const phaseEntries = [];
   if (existsSync(phasesDir)) {
     for (const dirName of readdirSync(phasesDir)) {
       const dirPath = join(phasesDir, dirName);
@@ -1358,14 +1358,22 @@ export function inspectWorkMilestone(workDir) {
       } catch {
         continue;
       }
-      phases.push({
-        dir: dirName,
-        plans: names.filter((name) => /-PLAN\.md$/i.test(name)),
-        executes: names.filter((name) => /-EXECUTE\.md$/i.test(name)),
-        verifies: names.filter((name) => /-VERIFY\.md$/i.test(name)),
-      });
+      phaseEntries.push(dirName);
     }
   }
+  const artifacts = collectNativePhaseArtifacts({ workspaceRoot: resolve(workDir, '..'), phasesDir });
+  for (const artifact of artifacts) {
+    if (!phaseEntries.includes(artifact.dir)) phaseEntries.push(artifact.dir);
+  }
+  const { currentArtifacts, historicalArtifacts } = partitionPlanChains(artifacts, { companionKinds: ['execute'] });
+  const phases = phaseEntries.map((dir) => ({
+    dir,
+    plans: currentArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'plan').map((artifact) => artifact.name),
+    executes: currentArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'execute').map((artifact) => artifact.name),
+    verifies: currentArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'verification').map((artifact) => artifact.name),
+    historical_plans: historicalArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'plan').map((artifact) => artifact.name),
+    historical_executes: historicalArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'execute').map((artifact) => artifact.name),
+  }));
   const roadmapPhaseLines = (roadmap || '').split(/\r?\n/).filter((line) => /^\s*-\s+\[[ x-]\]\s+\*\*Phase\s+/i.test(line));
   const completePhaseLines = roadmapPhaseLines.filter((line) => /^\s*-\s+\[x\]/i.test(line));
   const auditStatus = (audit || '').match(/^Status:\s*(.+)$/im)?.[1]?.trim() || null;
@@ -1377,6 +1385,8 @@ export function inspectWorkMilestone(workDir) {
     has_audit: existsSync(auditPath),
     phase_count: phases.length,
     phase_packet_count: phases.reduce((count, phase) => count + phase.plans.length + phase.executes.length + phase.verifies.length, 0),
+    actionable_phase_packet_count: phases.reduce((count, phase) => count + phase.plans.length + phase.executes.length, 0),
+    historical_phase_packet_count: phases.reduce((count, phase) => count + phase.historical_plans.length + phase.historical_executes.length, 0),
     roadmap_phase_count: roadmapPhaseLines.length,
     roadmap_complete_phase_count: completePhaseLines.length,
     roadmap_all_complete: roadmapPhaseLines.length > 0 && roadmapPhaseLines.length === completePhaseLines.length,
@@ -1386,25 +1396,40 @@ export function inspectWorkMilestone(workDir) {
   };
 }
 
-function scanPhaseEvidence(planningDir) {
+function scanPhaseEvidence(planningDir, lifecycle) {
+  const byDir = new Map();
   const phasesDir = join(planningDir, 'phases');
-  if (!existsSync(phasesDir)) return [];
-  const phases = [];
-  for (const dirName of readdirSync(phasesDir)) {
-    const dirPath = join(phasesDir, dirName);
-    if (!existsSync(dirPath)) continue;
-    let names = [];
-    try {
-      names = readdirSync(dirPath);
-    } catch {
-      continue;
+  if (existsSync(phasesDir)) {
+    for (const dir of readdirSync(phasesDir)) {
+      try {
+        readdirSync(join(phasesDir, dir));
+      } catch {
+        continue;
+      }
+      byDir.set(dir, {
+        dir,
+        plans: [], summaries: [], verifications: [],
+        historical_plans: [], historical_summaries: [],
+      });
     }
-    phases.push({
-      dir: dirName,
-      plans: names.filter((name) => /-PLAN\.md$/i.test(name)),
-      summaries: names.filter((name) => /-SUMMARY\.md$/i.test(name)),
-      verifications: names.filter((name) => /-VERIFICATION\.md$/i.test(name)),
+  }
+  for (const artifact of [...lifecycle.phaseArtifacts, ...lifecycle.historicalPhaseArtifacts]) {
+    if (!byDir.has(artifact.dir)) byDir.set(artifact.dir, {
+      dir: artifact.dir,
+      plans: [], summaries: [], verifications: [],
+      historical_plans: [], historical_summaries: [],
     });
   }
-  return phases;
+  for (const artifact of lifecycle.phaseArtifacts) {
+    const phase = byDir.get(artifact.dir);
+    if (artifact.kind === 'plan') phase.plans.push(artifact.name);
+    if (artifact.kind === 'summary') phase.summaries.push(artifact.name);
+    if (artifact.kind === 'verification') phase.verifications.push(artifact.name);
+  }
+  for (const artifact of lifecycle.historicalPhaseArtifacts) {
+    const phase = byDir.get(artifact.dir);
+    if (artifact.kind === 'plan') phase.historical_plans.push(artifact.name);
+    if (artifact.kind === 'summary') phase.historical_summaries.push(artifact.name);
+  }
+  return [...byDir.values()];
 }

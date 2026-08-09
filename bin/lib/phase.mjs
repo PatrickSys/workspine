@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, realpathSync } from 'fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
+import { evaluateLifecycleState, normalizePhaseToken, readPlanStatus } from './lifecycle-state.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const PHASE_STATUS_MARKERS = {
@@ -30,69 +31,6 @@ const PHASE_DETAIL_STATUS_RE = new RegExp(`^(\\s*\\*\\*Status\\*\\*:\\s*)${PHASE
 const DETAILS_OPEN_RE = /<details\b/i;
 const DETAILS_CLOSE_RE = /<\/details>/i;
 
-function findFiles(dir, prefix) {
-  if (!existsSync(dir)) return [];
-
-  const phaseArtifactPrefix = String(prefix).match(/^(\d+(?:\.\d+)*[a-z]?)-(PLAN|SUMMARY)$/i);
-  if (!phaseArtifactPrefix) {
-    return readdirSync(dir).filter((f) => f.startsWith(prefix) || f.startsWith(prefix.replace(/^0+/, '')));
-  }
-
-  const targetPhase = normalizePhaseToken(phaseArtifactPrefix[1]);
-  const targetKind = phaseArtifactPrefix[2].toUpperCase();
-
-  return listPhaseArtifacts(dir)
-    .filter((artifact) => artifact.phaseToken === targetPhase && artifact.kind === targetKind)
-    .map((artifact) => artifact.displayPath);
-}
-
-function listPhaseArtifacts(dir) {
-  if (!existsSync(dir)) return [];
-
-  const artifacts = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isFile()) {
-      const artifact = classifyPhaseArtifact('', entry.name);
-      if (artifact) artifacts.push(artifact);
-      continue;
-    }
-
-    if (!entry.isDirectory()) continue;
-
-    const entryPath = join(dir, entry.name);
-    for (const child of readdirSync(entryPath, { withFileTypes: true })) {
-      if (!child.isFile()) continue;
-      const artifact = classifyPhaseArtifact(entry.name, child.name);
-      if (artifact) artifacts.push(artifact);
-    }
-  }
-
-  return artifacts;
-}
-
-function classifyPhaseArtifact(dir, name) {
-  const baseIdMatch = name.match(/^(\d+(?:\.\d+)*[a-z]?(?:-\d+)?)/i);
-  const dirMatch = dir ? dir.match(/^(\d+(?:\.\d+)*[a-z]?)-/i) : null;
-  const nameMatch = name.match(/^(\d+(?:\.\d+)*[a-z]?)/i);
-  const phaseToken = normalizePhaseToken((dirMatch || nameMatch)?.[1] || '');
-
-  let kind = 'OTHER';
-  if (baseIdMatch && isNamedPhaseArtifact(name, baseIdMatch[1], 'PLAN')) kind = 'PLAN';
-  else if (baseIdMatch && isNamedPhaseArtifact(name, baseIdMatch[1], 'SUMMARY')) kind = 'SUMMARY';
-
-  return {
-    dir,
-    name,
-    displayPath: dir ? `${dir}/${name}` : name,
-    phaseToken,
-    kind,
-  };
-}
-
-function isNamedPhaseArtifact(name, baseId, kind) {
-  return name.toLowerCase() === `${baseId.toLowerCase()}-${kind.toLowerCase()}.md`;
-}
-
 function padPhase(n) {
   return String(n).padStart(2, '0');
 }
@@ -116,17 +54,6 @@ function parsePhaseStatuses(roadmap) {
     }
   }
   return phases;
-}
-
-function normalizePhaseToken(value) {
-  const raw = String(value).trim().toLowerCase();
-  const match = raw.match(/^(\d+(?:\.\d+)*)([a-z]?)$/i);
-  if (!match) return raw;
-
-  const numericSegments = match[1]
-    .split('.')
-    .map((segment) => String(parseInt(segment, 10)));
-  return `${numericSegments.join('.')}${match[2] || ''}`;
 }
 
 function extractPlanFileArtifacts(planContent, workspaceRoot) {
@@ -237,7 +164,7 @@ export function parsePlanFrontmatter(content) {
   const frontmatter = extractFrontmatter(content);
   return {
     raw: frontmatter,
-    status: readTopLevelScalar(frontmatter, 'status'),
+    status: readPlanStatus(content),
     decision_dispositions: readTopLevelListOfMaps(frontmatter, 'decision_dispositions'),
   };
 }
@@ -1064,25 +991,32 @@ export function cmdFindPhase(...args) {
 
   const phasesDir = join(planningDir, 'phases');
   const researchDir = join(planningDir, 'research');
+  const lifecycle = evaluateLifecycleState({ planningDir });
 
   if (phaseNum) {
-    const plans = findFiles(phasesDir, `${padPhase(phaseNum)}-PLAN`);
-    const summaries = findFiles(phasesDir, `${padPhase(phaseNum)}-SUMMARY`);
+    const phaseToken = normalizePhaseToken(phaseNum);
+    const artifacts = lifecycle.phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
+    const historicalArtifacts = lifecycle.historicalPhaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
+    const plans = artifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath);
+    const summaries = artifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath);
 
     output({
-      phase: normalizePhaseToken(phaseNum),
+      phase: phaseToken,
       directory: phasesDir,
       plans,
       summaries,
+      historical: {
+        plans: historicalArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath),
+        summaries: historicalArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath),
+      },
       hasResearch: existsSync(researchDir) && readdirSync(researchDir).length > 0,
       incomplete: plans.filter((p) => !summaries.some((s) => s.replace('SUMMARY', '') === p.replace('PLAN', ''))),
     });
     return;
   }
 
-  const allArtifacts = listPhaseArtifacts(phasesDir);
-  const plans = allArtifacts.filter((artifact) => artifact.kind === 'PLAN');
-  const summaries = allArtifacts.filter((artifact) => artifact.kind === 'SUMMARY');
+  const plans = lifecycle.phaseArtifacts.filter((artifact) => artifact.kind === 'plan');
+  const summaries = lifecycle.phaseArtifacts.filter((artifact) => artifact.kind === 'summary');
 
   const roadmap = readFileSync(roadmapPath, 'utf-8');
   const phases = parsePhaseStatuses(roadmap);
@@ -1111,8 +1045,12 @@ export function buildPhaseVerificationReport(...args) {
     return { ok: false, error: `No ${stateName}/ directory found.`, exitCode: 1 };
   }
   const phasesDir = join(planningDir, 'phases');
-  const matchingPlans = findFiles(phasesDir, `${padPhase(phaseNum)}-PLAN`);
-  const matchingSummaries = findFiles(phasesDir, `${padPhase(phaseNum)}-SUMMARY`);
+  const lifecycle = evaluateLifecycleState({ planningDir });
+  const phaseToken = normalizePhaseToken(phaseNum);
+  const matchingArtifacts = lifecycle.phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
+  const matchingHistoricalArtifacts = lifecycle.historicalPhaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
+  const matchingPlans = matchingArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath);
+  const matchingSummaries = matchingArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath);
   const prerequisiteBlockers = [];
   if (matchingPlans.length === 0) {
     prerequisiteBlockers.push({
@@ -1183,6 +1121,10 @@ export function buildPhaseVerificationReport(...args) {
     exists: matchingPlans.length > 0,
     plans: matchingPlans,
     summaries: matchingSummaries,
+    historical: {
+      plans: matchingHistoricalArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath),
+      summaries: matchingHistoricalArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath),
+    },
     artifacts,
     allExist: artifacts.every((artifact) => artifact.exists),
     artifact_status: artifactStatus,
