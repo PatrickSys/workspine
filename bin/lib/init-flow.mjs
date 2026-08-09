@@ -194,17 +194,17 @@ export function createCmdUpdate(ctx) {
     } else if (isDry) {
       console.log('\nDry run complete. No files were written.\n');
     } else {
-      if (existsSync(planningDir)) {
+      if (runtimeGeneration) {
         const manifest = buildUpdateManifest({
           planningDir,
           frameworkVersion: ctx.frameworkVersion,
           updateTemplates: doTemplates,
-          runtimeHelperPaths: runtimeGeneration?.runtimeHelperPaths ?? null,
+          runtimeHelperPaths: runtimeGeneration.runtimeHelperPaths,
         });
         if (manifest) {
           writeManifest(planningDir, manifest);
           console.log('  - updated generation manifest');
-          applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration?.obsoleteRuntimeHelpers ?? []);
+          applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration.obsoleteRuntimeHelpers);
         }
       }
       console.log('\nAdapters updated.\n');
@@ -243,10 +243,13 @@ function generatePlanningCliHelpers({ packageName, packageVersion, planningDir, 
   });
   const runtimeContext = managedRuntimeContext(planningDir);
   const obsoleteRuntimeHelpers = planObsoleteRuntimeHelperCleanup(planningDir, entries, runtimeContext);
+  const preflight = preflightGeneratedRuntimeHelperTargets(planningDir, entries, runtimeContext);
 
-  for (const entry of entries) {
-    const absolutePath = join(planningDir, entry.relativePath);
-    mkdirSync(dirname(absolutePath), { recursive: true });
+  for (const { entry, absolutePath } of preflight.targets) {
+    const currentContext = managedRuntimeContext(planningDir);
+    assertSameManagedRuntimeRoots(preflight.runtimeContext, currentContext);
+    // Best effort only: portable Node cannot close a hostile replacement race after this check.
+    assertSafeGeneratedRuntimeHelperTarget(currentContext, absolutePath, entry.relativePath, false);
     writeFileSync(absolutePath, entry.content);
     if (!absolutePath.endsWith('.cmd')) {
       chmodSync(absolutePath, 0o755);
@@ -271,13 +274,14 @@ function managedRuntimeContext(planningDir) {
   const planningRoot = resolve(planningDir);
   const runtimeRoot = resolve(planningDir, 'bin');
   const realPlanningRoot = realpathSync(planningRoot);
+  const planningRootIdentity = directoryIdentity(lstatSync(realPlanningRoot));
 
   let runtimeStat;
   try {
     runtimeStat = lstatSync(runtimeRoot);
   } catch (error) {
     if (error?.code === 'ENOENT') {
-      return { runtimeRoot, realPlanningRoot, realRuntimeRoot: null };
+      return { runtimeRoot, realPlanningRoot, realRuntimeRoot: null, planningRootIdentity, runtimeRootIdentity: null };
     }
     throw error;
   }
@@ -291,7 +295,149 @@ function managedRuntimeContext(planningDir) {
     throw new Error('Refusing to write generated runtime helpers: bin/ resolves outside the planning root.');
   }
 
-  return { runtimeRoot, realPlanningRoot, realRuntimeRoot };
+  return {
+    runtimeRoot,
+    realPlanningRoot,
+    realRuntimeRoot,
+    planningRootIdentity,
+    runtimeRootIdentity: directoryIdentity(runtimeStat),
+  };
+}
+
+function directoryIdentity(stat) {
+  return { dev: stat.dev, ino: stat.ino };
+}
+
+function sameDirectoryIdentity(left, right) {
+  if (!left || !right) return left === right;
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function sameManagedPlanningRoot(expected, current) {
+  return expected.realPlanningRoot === current.realPlanningRoot
+    && sameDirectoryIdentity(expected.planningRootIdentity, current.planningRootIdentity);
+}
+
+function assertSameManagedRuntimeRoots(expected, current) {
+  const runtimeRootChanged = expected.realRuntimeRoot !== current.realRuntimeRoot
+    || !sameDirectoryIdentity(expected.runtimeRootIdentity, current.runtimeRootIdentity);
+  if (!sameManagedPlanningRoot(expected, current) || runtimeRootChanged) {
+    throw new Error('Refusing to write generated runtime helpers: planning or runtime root changed during generation.');
+  }
+}
+
+function refuseGeneratedRuntimeHelperWrite(relativePath, reason) {
+  const displayPath = String(relativePath).replace(/[\r\n]+/g, '?');
+  throw new Error(`Refusing to write generated runtime helper ${displayPath}: ${reason}.`);
+}
+
+function ensureManagedRuntimeRoot(planningDir, runtimeContext) {
+  if (runtimeContext.realRuntimeRoot) return runtimeContext;
+
+  try {
+    mkdirSync(runtimeContext.runtimeRoot);
+  } catch (error) {
+    if (error?.code !== 'EEXIST') {
+      throw new Error('Refusing to write generated runtime helpers: bin/ could not be created safely.');
+    }
+  }
+
+  const createdContext = managedRuntimeContext(planningDir);
+  if (!createdContext.realRuntimeRoot) {
+    throw new Error('Refusing to write generated runtime helpers: bin/ could not be created safely.');
+  }
+  return createdContext;
+}
+
+function assertSafeGeneratedRuntimeHelperTarget(runtimeContext, absolutePath, relativePath, createParents) {
+  if (!runtimeContext.realRuntimeRoot || !pathIsStrictlyInside(runtimeContext.runtimeRoot, absolutePath)) {
+    refuseGeneratedRuntimeHelperWrite(relativePath, 'target must remain inside bin/');
+  }
+
+  const parentRelative = relative(runtimeContext.runtimeRoot, dirname(absolutePath));
+  const parentParts = parentRelative === '' ? [] : parentRelative.split(sep);
+  let currentPath = runtimeContext.runtimeRoot;
+
+  for (const part of parentParts) {
+    currentPath = join(currentPath, part);
+    let stat;
+    try {
+      stat = lstatSync(currentPath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT' || !createParents) {
+        refuseGeneratedRuntimeHelperWrite(relativePath, 'parent could not be inspected safely');
+      }
+      try {
+        mkdirSync(currentPath);
+      } catch (mkdirError) {
+        if (mkdirError?.code !== 'EEXIST') {
+          refuseGeneratedRuntimeHelperWrite(relativePath, 'parent could not be created safely');
+        }
+      }
+      try {
+        stat = lstatSync(currentPath);
+      } catch {
+        refuseGeneratedRuntimeHelperWrite(relativePath, 'parent could not be inspected safely');
+      }
+    }
+
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+      refuseGeneratedRuntimeHelperWrite(relativePath, 'parent must be a real directory inside bin/');
+    }
+
+    let realParent;
+    try {
+      realParent = realpathSync(currentPath);
+    } catch {
+      refuseGeneratedRuntimeHelperWrite(relativePath, 'parent could not be resolved safely');
+    }
+    if (realParent !== runtimeContext.realRuntimeRoot
+      && !pathIsStrictlyInside(runtimeContext.realRuntimeRoot, realParent)) {
+      refuseGeneratedRuntimeHelperWrite(relativePath, 'parent resolves outside bin/');
+    }
+  }
+
+  let targetStat;
+  try {
+    targetStat = lstatSync(absolutePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    refuseGeneratedRuntimeHelperWrite(relativePath, 'target could not be inspected safely');
+  }
+
+  if (targetStat.isSymbolicLink() || !targetStat.isFile()) {
+    refuseGeneratedRuntimeHelperWrite(relativePath, 'target must be a regular file inside bin/');
+  }
+
+  let realTarget;
+  try {
+    realTarget = realpathSync(absolutePath);
+  } catch {
+    refuseGeneratedRuntimeHelperWrite(relativePath, 'target could not be resolved safely');
+  }
+  if (!pathIsStrictlyInside(runtimeContext.realRuntimeRoot, realTarget)) {
+    refuseGeneratedRuntimeHelperWrite(relativePath, 'target resolves outside bin/');
+  }
+}
+
+function preflightGeneratedRuntimeHelperTargets(planningDir, entries, runtimeContext) {
+  const currentContext = managedRuntimeContext(planningDir);
+  if (!sameManagedPlanningRoot(runtimeContext, currentContext)) {
+    throw new Error('Refusing to write generated runtime helpers: planning root changed before preflight.');
+  }
+  const readyContext = ensureManagedRuntimeRoot(planningDir, currentContext);
+  if (!sameManagedPlanningRoot(runtimeContext, readyContext)) {
+    throw new Error('Refusing to write generated runtime helpers: planning root changed during preflight.');
+  }
+
+  const targets = entries.map((entry) => {
+    const absolutePath = resolve(planningDir, entry.relativePath);
+    const targetContext = managedRuntimeContext(planningDir);
+    assertSameManagedRuntimeRoots(readyContext, targetContext);
+    assertSafeGeneratedRuntimeHelperTarget(targetContext, absolutePath, entry.relativePath, true);
+    return { entry, absolutePath };
+  });
+  return { runtimeContext: readyContext, targets };
 }
 
 function fileIdentity(stat) {

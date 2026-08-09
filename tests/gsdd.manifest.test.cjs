@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const { createHash } = require('node:crypto');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('node:url');
 const {
   cleanup,
   createTempProject,
@@ -444,6 +445,119 @@ describe('generation manifest', () => {
     assert.strictEqual(fs.readFileSync(outsideFile, 'utf-8'), content);
     assert.strictEqual(fs.readFileSync(parentTarget, 'utf-8'), content);
     assert.deepStrictEqual(Object.keys(readJson(manifestPath).runtimeHelpers).sort(), currentRuntimePaths);
+  });
+
+  for (const command of ['init', 'update']) {
+    test(`${command} preflights every current helper before refusing a later target symlink`, async (t) => {
+      await initProject();
+
+      const runtimeRoot = path.join(tmpDir, '.work', 'bin');
+      const earlierHelper = path.join(runtimeRoot, 'gsdd.mjs');
+      const laterHelper = path.join(runtimeRoot, 'gsdd.ps1');
+      const outsidePath = path.join(tmpDir, `outside-current-${command}.ps1`);
+      const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+      const manifestBefore = fs.readFileSync(manifestPath);
+      const staleEarlierContent = '// deliberately stale earlier helper\n';
+      const outsideContent = '# external current-helper sentinel\n';
+      fs.writeFileSync(earlierHelper, staleEarlierContent);
+      fs.rmSync(laterHelper);
+      fs.writeFileSync(outsidePath, outsideContent);
+      try {
+        fs.symlinkSync(outsidePath, laterHelper, 'file');
+      } catch (error) {
+        if (['EPERM', 'ENOTSUP', 'EACCES'].includes(error.code)) {
+          t.skip(`symlink creation unavailable in this environment: ${error.code}`);
+          return;
+        }
+        throw error;
+      }
+
+      const run = command === 'init'
+        ? () => initProject()
+        : () => runCliAsMain(tmpDir, ['update']);
+      await assert.rejects(run, (error) => {
+        assert.match(error.message, /Refusing to write generated runtime helper bin\/gsdd\.ps1: target must be a regular file inside bin\//);
+        assert.doesNotMatch(error.message, new RegExp(tmpDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+        return true;
+      });
+      assert.strictEqual(fs.readFileSync(earlierHelper, 'utf-8'), staleEarlierContent);
+      assert.ok(fs.lstatSync(laterHelper).isSymbolicLink());
+      assert.strictEqual(fs.readFileSync(outsidePath, 'utf-8'), outsideContent);
+      assert.deepStrictEqual(fs.readFileSync(manifestPath), manifestBefore);
+    });
+  }
+
+  test('update preflights all helpers before refusing a current-helper parent junction', async (t) => {
+    await initProject();
+
+    const runtimeRoot = path.join(tmpDir, '.work', 'bin');
+    const earlierHelper = path.join(runtimeRoot, 'gsdd.mjs');
+    const helperLib = path.join(runtimeRoot, 'lib');
+    const outsideDir = path.join(tmpDir, 'outside-current-helper-parent');
+    const sentinelPath = path.join(outsideDir, 'sentinel.txt');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifestBefore = fs.readFileSync(manifestPath);
+    const staleEarlierContent = '// stale before parent preflight\n';
+    fs.writeFileSync(earlierHelper, staleEarlierContent);
+    fs.rmSync(helperLib, { recursive: true, force: true });
+    fs.mkdirSync(outsideDir);
+    fs.writeFileSync(sentinelPath, 'leave current helper parent alone\n');
+    try {
+      fs.symlinkSync(outsideDir, helperLib, 'junction');
+    } catch (error) {
+      if (['EPERM', 'ENOTSUP', 'EACCES'].includes(error.code)) {
+        t.skip(`junction creation unavailable in this environment: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+
+    await assert.rejects(
+      () => runCliAsMain(tmpDir, ['update']),
+      /Refusing to write generated runtime helper bin\/lib\/.*: parent must be a real directory inside bin\//
+    );
+    assert.strictEqual(fs.readFileSync(earlierHelper, 'utf-8'), staleEarlierContent);
+    assert.deepStrictEqual(fs.readdirSync(outsideDir), ['sentinel.txt']);
+    assert.strictEqual(fs.readFileSync(sentinelPath, 'utf-8'), 'leave current helper parent alone\n');
+    assert.deepStrictEqual(fs.readFileSync(manifestPath), manifestBefore);
+  });
+
+  test('update does not claim a planning root that appears after helper generation was skipped', async () => {
+    const initModulePath = path.join(__dirname, '..', 'bin', 'lib', 'init.mjs');
+    const { createCmdUpdate } = await import(`${pathToFileURL(initModulePath).href}?late-root=${Date.now()}`);
+    const planningDir = path.join(tmpDir, '.work');
+    const unmanagedPath = path.join(planningDir, 'bin', 'unmanaged.mjs');
+    const adapter = {
+      id: 'late-root',
+      name: 'late-root',
+      detect: () => true,
+      isInstalled: () => true,
+      generate: () => {
+        fs.mkdirSync(path.dirname(unmanagedPath), { recursive: true });
+        fs.writeFileSync(unmanagedPath, '// adapter-owned file\n');
+      },
+      summary: () => 'late-root adapter updated',
+    };
+    const lines = [];
+    const originalLog = console.log;
+    console.log = (...parts) => lines.push(parts.join(' '));
+    try {
+      createCmdUpdate({
+        cwd: tmpDir,
+        planningDir,
+        stateDirName: '.work',
+        adapters: { 'late-root': adapter },
+        workflows: [],
+        frameworkVersion: 'test',
+      })();
+    } finally {
+      console.log = originalLog;
+    }
+
+    assert.strictEqual(fs.readFileSync(unmanagedPath, 'utf-8'), '// adapter-owned file\n');
+    assert.ok(!fs.existsSync(path.join(planningDir, 'generation-manifest.json')));
+    assert.ok(lines.some((line) => line.includes('late-root adapter updated')));
+    assert.ok(lines.every((line) => !line.includes('generation manifest')));
   });
 
   test('update refuses a linked runtime root before writing helpers or manifest', async (t) => {
