@@ -6,6 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const DISTILLED_DIR = join(__dirname, '..', '..', 'distilled');
 const HELPER_LIB_FILES = Object.freeze([
+  'atomic-write.mjs',
   'cli-utils.mjs',
   'control-map.mjs',
   'file-ops.mjs',

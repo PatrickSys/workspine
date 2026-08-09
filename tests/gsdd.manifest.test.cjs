@@ -43,8 +43,16 @@ describe('generation manifest', () => {
     return createHash('sha256').update(content).digest('hex');
   }
 
-  function writeManifest(manifestPath, manifest) {
+  function writeRawManifest(manifestPath, manifest) {
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  }
+
+  async function loadAtomicWrite() {
+    return import(pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'atomic-write.mjs')).href);
+  }
+
+  async function loadGenerationManifest() {
+    return import(pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'manifest.mjs')).href);
   }
 
   test('init writes generation-manifest.json with correct shape', async () => {
@@ -71,6 +79,97 @@ describe('generation manifest', () => {
     assert.match(manifest.runtimeHelpers['bin/gsdd.mjs'], /^[a-f0-9]{64}$/);
     assert.match(manifest.runtimeHelpers['bin/gsdd'], /^[a-f0-9]{64}$/);
     assert.match(manifest.runtimeHelpers['bin/gsdd.cmd'], /^[a-f0-9]{64}$/);
+  });
+
+  test('writeManifest replaces an existing manifest with its exact JSON serialization', async () => {
+    const planningDir = path.join(tmpDir, '.work');
+    const manifestPath = path.join(planningDir, 'generation-manifest.json');
+    const nextManifest = { frameworkVersion: '0.32.0', runtimeHelpers: { 'bin/gsdd.mjs': 'next' } };
+    fs.mkdirSync(planningDir);
+    fs.writeFileSync(manifestPath, '{"old":true}');
+
+    const { writeManifest: writeGenerationManifest } = await loadGenerationManifest();
+    writeGenerationManifest(planningDir, nextManifest);
+
+    assert.deepStrictEqual(readJson(manifestPath), nextManifest);
+    assert.strictEqual(fs.readFileSync(manifestPath, 'utf-8'), JSON.stringify(nextManifest, null, 2));
+    assert.deepStrictEqual(
+      fs.readdirSync(planningDir).filter((name) => name.startsWith('.generation-manifest.json.')),
+      [],
+    );
+  });
+
+  test('atomic writer preserves the destination and removes its temp after a pre-rename failure', async () => {
+    const destinationPath = path.join(tmpDir, 'generation-manifest.json');
+    const tempPath = path.join(tmpDir, '.generation-manifest.json.failure.tmp');
+    const previousBytes = Buffer.from('{"old":true}');
+    const calls = [];
+    fs.writeFileSync(destinationPath, previousBytes);
+    const { createAtomicFileWriter } = await loadAtomicWrite();
+    const writer = createAtomicFileWriter({
+      createTempPath: () => tempPath,
+      operations: {
+        openSync: (...args) => {
+          calls.push('open');
+          return fs.openSync(...args);
+        },
+        writeFileSync: (...args) => {
+          calls.push('write');
+          return fs.writeFileSync(...args);
+        },
+        fsyncSync: (...args) => {
+          calls.push('sync');
+          return fs.fsyncSync(...args);
+        },
+        closeSync: (...args) => {
+          calls.push('close');
+          return fs.closeSync(...args);
+        },
+        renameSync: () => {
+          calls.push('rename');
+          const error = new Error('injected rename failure');
+          error.code = 'EIO';
+          throw error;
+        },
+        unlinkSync: (...args) => {
+          calls.push('unlink');
+          return fs.unlinkSync(...args);
+        },
+      },
+    });
+
+    assert.throws(() => writer(destinationPath, '{"new":true}'), /injected rename failure/);
+    assert.deepStrictEqual(calls, ['open', 'write', 'sync', 'close', 'rename', 'unlink']);
+    assert.deepStrictEqual(fs.readFileSync(destinationPath), previousBytes);
+    assert.ok(!fs.existsSync(tempPath));
+  });
+
+  test('atomic writer leaves an exclusive-create collision untouched', async () => {
+    const destinationPath = path.join(tmpDir, 'generation-manifest.json');
+    const tempPath = path.join(tmpDir, '.generation-manifest.json.collision.tmp');
+    const previousBytes = Buffer.from('{"old":true}');
+    const collisionBytes = Buffer.from('do not overwrite or remove');
+    fs.writeFileSync(destinationPath, previousBytes);
+    fs.writeFileSync(tempPath, collisionBytes);
+    const { createAtomicFileWriter } = await loadAtomicWrite();
+    const writer = createAtomicFileWriter({ createTempPath: () => tempPath });
+
+    assert.throws(() => writer(destinationPath, '{"new":true}'), (error) => error.code === 'EEXIST');
+    assert.deepStrictEqual(fs.readFileSync(destinationPath), previousBytes);
+    assert.deepStrictEqual(fs.readFileSync(tempPath), collisionBytes);
+  });
+
+  test('init installs and hashes the atomic-write helper required by generated work-context', async () => {
+    await initProject();
+
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = readJson(manifestPath);
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'lib', 'atomic-write.mjs');
+    const workContextPath = path.join(tmpDir, '.work', 'bin', 'lib', 'work-context.mjs');
+
+    assert.ok(fs.existsSync(helperPath));
+    assert.strictEqual(manifest.runtimeHelpers['bin/lib/atomic-write.mjs'], sha256(fs.readFileSync(helperPath)));
+    await import(pathToFileURL(workContextPath).href);
   });
 
   test('init produces non-empty research, codebase, and root manifest groups', async () => {
@@ -348,7 +447,7 @@ describe('generation manifest', () => {
     manifest.runtimeHelpers['bin/lib/obsolete-modified.mjs'] = sha256(ownedContent);
     manifest.runtimeHelpers['bin/lib/obsolete-directory'] = sha256('not a directory hash');
     manifest.runtimeHelpers['bin/../../obsolete-outside.mjs'] = sha256(ownedContent);
-    writeManifest(manifestPath, manifest);
+    writeRawManifest(manifestPath, manifest);
 
     const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -374,7 +473,7 @@ describe('generation manifest', () => {
     const content = '// obsolete init helper\n';
     fs.writeFileSync(obsoletePath, content);
     manifest.runtimeHelpers['bin/lib/obsolete-reinit.mjs'] = sha256(content);
-    writeManifest(manifestPath, manifest);
+    writeRawManifest(manifestPath, manifest);
 
     await initProject();
 
@@ -391,7 +490,7 @@ describe('generation manifest', () => {
     const content = '// obsolete dry-run helper\n';
     fs.writeFileSync(obsoletePath, content);
     manifest.runtimeHelpers['bin/lib/obsolete-dry-run.mjs'] = sha256(content);
-    writeManifest(manifestPath, manifest);
+    writeRawManifest(manifestPath, manifest);
     const manifestBefore = fs.readFileSync(manifestPath);
 
     const result = await runCliAsMain(tmpDir, ['update', '--dry']);
@@ -431,7 +530,7 @@ describe('generation manifest', () => {
     manifest.runtimeHelpers['bin/lib/obsolete-link.mjs'] = sha256(content);
     manifest.runtimeHelpers['bin/lib/obsolete-dangling.mjs'] = sha256(content);
     manifest.runtimeHelpers['bin/obsolete-link-dir/obsolete-parent.mjs'] = sha256(content);
-    writeManifest(manifestPath, manifest);
+    writeRawManifest(manifestPath, manifest);
 
     const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);

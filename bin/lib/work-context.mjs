@@ -6,8 +6,6 @@ import {
   openSync,
   readFileSync,
   readdirSync,
-  renameSync,
-  unlinkSync,
   writeFileSync,
   writeSync,
 } from 'fs';
@@ -16,6 +14,7 @@ import { createHash, randomBytes } from 'crypto';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
 import { resolveStateDir } from './state-dir.mjs';
+import { writeFileAtomic as replaceFileAtomically } from './atomic-write.mjs';
 
 export const WORK_DIR_NAME = '.work';
 
@@ -120,32 +119,7 @@ function ensureDir(dir) {
 
 function writeFileAtomic(filePath, content) {
   ensureDir(dirname(filePath));
-  const tempPath = join(dirname(filePath), `.${basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
-  let fd = null;
-  try {
-    fd = openSync(tempPath, 'w');
-    writeFileSync(fd, content);
-    fsyncSync(fd);
-    closeSync(fd);
-    fd = null;
-    renameSync(tempPath, filePath);
-  } catch (error) {
-    if (fd !== null) {
-      try {
-        closeSync(fd);
-      } catch {
-        // Best effort cleanup after a failed durable write.
-      }
-    }
-    if (existsSync(tempPath)) {
-      try {
-        unlinkSync(tempPath);
-      } catch {
-        // Best effort cleanup after a failed durable write.
-      }
-    }
-    throw error;
-  }
+  replaceFileAtomically(filePath, content);
 }
 
 function appendFileDurable(filePath, content) {

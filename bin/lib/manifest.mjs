@@ -1,8 +1,9 @@
 // manifest.mjs — Generation manifest for template versioning
 
 import { createHash } from 'crypto';
-import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
+import { writeFileAtomic } from './atomic-write.mjs';
 
 const MANIFEST_FILENAME = 'generation-manifest.json';
 
@@ -114,7 +115,7 @@ export function readManifest(planningDir) {
  */
 export function writeManifest(planningDir, manifest) {
   const manifestPath = join(planningDir, MANIFEST_FILENAME);
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  writeFileAtomic(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
 /**
