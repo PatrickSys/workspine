@@ -2698,6 +2698,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 **Decision rules:**
 - Read-only/reporting surfaces may warn on planning-state drift and continue. They must not refresh or mutate the planning fingerprint as a side effect.
+- Read-only current-status projections such as `journey` derive active phase status from the shared lifecycle evaluator over root `ROADMAP.md`. Nested milestone packets may add historical phases, but cannot override a matching current phase number.
 - Owned-write lifecycle surfaces must treat material planning-state drift as a stop or explicit acknowledgement boundary before writing summary, verification, milestone, roadmap, or checkpoint-cleanup artifacts.
 - No-baseline fingerprint state is not itself proof of drift. It should be classified explicitly, but it must not strand first-session users unless another contradiction exists.
 - Compressed judgment remains the four-section `<judgment>` shape (`active_constraints`, `unresolved_uncertainty`, `decision_posture`, `anti_regression`) and remains subordinate to operational state.

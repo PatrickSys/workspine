@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { basename, join } from 'path';
 import { output, parseFlagValue } from './cli-utils.mjs';
+import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
 import { parsePlanFrontmatter } from './phase.mjs';
 import { resolveStateDir } from './state-dir.mjs';
 import { readDecisionRecords, resolveActiveMilestoneDir } from './work-context.mjs';
@@ -123,6 +124,44 @@ function readMilestone(milestoneDir) {
   };
 }
 
+function roadmapPhaseDir(phase) {
+  const token = String(phase.number || '');
+  const integerToken = token.match(/^(\d+)([a-z]?)$/i);
+  const displayToken = integerToken
+    ? `${integerToken[1].padStart(2, '0')}${integerToken[2] || ''}`
+    : token;
+  const slug = asciiText(phase.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug ? `${displayToken}-${slug}` : displayToken;
+}
+
+function phaseTokenFromDir(dir) {
+  const match = String(dir || '').match(/^(\d+(?:\.\d+)*[a-z]?)(?:-|$)/i);
+  return match ? normalizePhaseToken(match[1]) : null;
+}
+
+function currentRoadmapPhases(stateDir) {
+  return evaluateLifecycleState({ planningDir: stateDir }).phases.map((phase) => ({
+    dir: roadmapPhaseDir(phase),
+    status: phase.status,
+    token: normalizePhaseToken(phase.number),
+  }));
+}
+
+function mergeCurrentPhases(historical, current) {
+  if (current.length === 0) return historical;
+  const currentTokens = new Set(current.map((phase) => phase.token));
+  return [
+    ...historical.filter((phase) => {
+      const token = phaseTokenFromDir(phase.dir);
+      return !token || !currentTokens.has(token);
+    }),
+    ...current.map(({ dir, status }) => ({ dir, status })),
+  ].sort((left, right) => left.dir.localeCompare(right.dir, undefined, { numeric: true, sensitivity: 'base' }));
+}
+
 function phaseGlyph(status) {
   if (DONE_STATUSES.has(status)) return '[x]';
   if (RUNNING_STATUSES.has(status)) return '[>]';
@@ -231,16 +270,20 @@ export function collectJourney({ cwd = process.cwd() } = {}) {
   const milestoneDirs = listMilestoneDirs(stateDir, resolvedActiveDir);
   const milestones = milestoneDirs.map(readMilestone);
   const activeIndex = resolvedActiveDir ? milestones.findIndex((milestone) => milestone.path === resolvedActiveDir) : -1;
+  const roadmapPhases = currentRoadmapPhases(stateDir);
   const recentData = collectRecent(cwd);
   const decisions = collectDecisions(stateDir);
 
   const journey = {
-    milestones: milestones.map((milestone, index) => ({
-      name: milestone.name,
-      status: milestone.status,
-      phases: milestone.phases,
-      active: index === activeIndex,
-    })),
+    milestones: milestones.map((milestone, index) => {
+      const active = index === activeIndex;
+      return {
+        name: milestone.name,
+        status: milestone.status,
+        phases: active ? mergeCurrentPhases(milestone.phases, roadmapPhases) : milestone.phases,
+        active,
+      };
+    }),
     recent: recentData.recent || { commits48h: 0, latest: null },
     decisions,
   };

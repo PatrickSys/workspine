@@ -105,6 +105,58 @@ describe('gsdd journey', () => {
     assert.strictEqual(json.decisions, null);
   });
 
+  test('projects root roadmap truth only into the active milestone while preserving unique history', async () => {
+    writeMilestone('m0-foundation', 'done', {
+      '01-base': '---\nstatus: shipped\n---\n',
+      '06-inactive-history': '---\nstatus: planned\n---\n',
+    });
+    writeMilestone('m1-delivery', 'in_progress', {
+      '00-history': '---\nstatus: shipped\n---\n',
+      '06-stale-status': '---\nstatus: planned\n---\n',
+      '09-unmatched-history': '---\nstatus: blocked\n---\n',
+      'legacy-note': '---\nstatus: planned\n---\n',
+    });
+    writeFile('.work/ROADMAP.md', [
+      '# Roadmap',
+      '',
+      '- [x] **Phase 6: Truth reconciliation**',
+      '- [x] **Phase 7: Decision delivery**',
+      '- [ ] **Phase 8: Execute discipline**',
+      '',
+    ].join('\n'));
+
+    const result = await runCliAsMain(tmpDir, ['journey', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const json = JSON.parse(result.output);
+    assert.deepStrictEqual(json.milestones[0].phases, [
+      { dir: '01-base', status: 'shipped' },
+      { dir: '06-inactive-history', status: 'planned' },
+    ]);
+    assert.deepStrictEqual(json.milestones[1].phases, [
+      { dir: '00-history', status: 'shipped' },
+      { dir: '06-truth-reconciliation', status: 'done' },
+      { dir: '07-decision-delivery', status: 'done' },
+      { dir: '08-execute-discipline', status: 'not_started' },
+      { dir: '09-unmatched-history', status: 'blocked' },
+      { dir: 'legacy-note', status: 'planned' },
+    ]);
+  });
+
+  test('surfaces root roadmap read failures instead of returning nested fallback JSON', async () => {
+    writeMilestone('m1-delivery', 'in_progress', {
+      '00-history': '---\nstatus: shipped\n---\n',
+    });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'ROADMAP.md'), { recursive: true });
+
+    await assert.rejects(
+      () => runCliAsMain(tmpDir, ['journey', '--json']),
+      (error) => {
+        assert.match(`${error?.code || ''} ${error?.message || ''} ${String(error)}`, /EISDIR|directory|ROADMAP/i);
+        return true;
+      }
+    );
+  });
+
   test('renders decision counts and a truncated latest choice', async () => {
     writeMilestone('m0-foundation', 'in_progress', {});
     await writeDecision('Keep the current architecture', {}, new Date('2026-07-11T09:00:00.000Z'));
