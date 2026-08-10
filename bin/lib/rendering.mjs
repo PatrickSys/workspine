@@ -96,6 +96,20 @@ const COMMANDS = {
   next: cmdNext,
 };
 
+const RESOLVER_BASED_COMMANDS = new Set([
+  'decisions',
+  'file-op',
+  'lifecycle-preflight',
+  'phase-status',
+  'remember',
+  'verify',
+]);
+
+function withWorkspaceAuthority(command, args) {
+  if (!RESOLVER_BASED_COMMANDS.has(command)) return args;
+  return [...args, '--workspace-root', HELPER_CONTEXT.cwd];
+}
+
 function printHelp() {
   console.log([
     'Usage: node ${helperPath} [--workspace-root <path>] <command> [args]',
@@ -127,8 +141,13 @@ function printHelp() {
 
 function applyWorkspaceRootOverride(workspaceRootArg) {
   if (!workspaceRootArg) {
-    bootstrapHelperWorkspace(import.meta.url);
-    HELPER_CONTEXT.cwd = process.cwd();
+    const helperRoot = bootstrapHelperWorkspace(import.meta.url);
+    if (!helperRoot) {
+      console.error('Unable to resolve the workspace that owns this generated helper.');
+      process.exitCode = 1;
+      return false;
+    }
+    HELPER_CONTEXT.cwd = helperRoot;
     return true;
   }
 
@@ -144,7 +163,7 @@ function applyWorkspaceRootOverride(workspaceRootArg) {
   try {
     process.chdir(context.workspaceRoot);
   } catch {
-    // best-effort: command handlers also resolve from GSDD_WORKSPACE_ROOT
+    // best-effort: the launcher also forwards workspace authority directly
   }
   return true;
 }
@@ -173,7 +192,7 @@ async function main() {
     return;
   }
 
-  await handler(...args);
+  await handler(...withWorkspaceAuthority(command, args));
 }
 
 await main();

@@ -598,7 +598,7 @@ describe('gsdd init and update', () => {
     assert.match(launcher, /import \{ cmdPhaseStatus, cmdVerify \} from '\.\/lib\/phase\.mjs';/);
     assert.match(launcher, /import \{ createCmdNext \} from '\.\/lib\/next\.mjs';/);
     assert.match(launcher, /import \{ bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext \} from '\.\/lib\/workspace-root\.mjs';/);
-    assert.match(launcher, /bootstrapHelperWorkspace\(import\.meta\.url\);/);
+    assert.match(launcher, /const helperRoot = bootstrapHelperWorkspace\(import\.meta\.url\);/);
     assert.doesNotMatch(launcher, /from 'gsdd-cli'/);
     assert.doesNotMatch(launcher, /from 'gsdd'/);
     assert.match(launcher, /Usage: node \.work\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
@@ -651,6 +651,92 @@ describe('gsdd init and update', () => {
     } finally {
       cleanup(foreignDir);
       cleanup(overrideDir);
+    }
+  });
+
+  test('generated resolver commands preserve an explicit workspace override when chdir fails', async () => {
+    const foreignDir = createTempProject();
+    const overrideDir = createTempProject();
+    try {
+      for (const root of [foreignDir, tmpDir, overrideDir]) {
+        const initialized = await runCliAsMain(root, ['init', '--auto', '--tools', 'agents']);
+        assert.strictEqual(initialized.exitCode, 0, initialized.output);
+      }
+
+      const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
+      const launcher = fs.readFileSync(helperPath, 'utf-8');
+      const launcherWithFailedChdir = launcher.replace(
+        '    process.chdir(context.workspaceRoot);',
+        "    throw new Error('forced explicit chdir failure');",
+      );
+      assert.notStrictEqual(launcherWithFailedChdir, launcher, 'fixture must patch the generated override chdir');
+      fs.writeFileSync(helperPath, launcherWithFailedChdir);
+
+      const foreignBefore = snapshotTree(foreignDir);
+      const helperOwnerBefore = snapshotTree(tmpDir);
+      const result = spawnSync(process.execPath, [
+        helperPath,
+        'remember',
+        'Explicit override remains authoritative when chdir fails.',
+        '--type',
+        'rule',
+        '--scope',
+        'repo',
+        '--workspace-root',
+        overrideDir,
+      ], { cwd: foreignDir, encoding: 'utf-8' });
+
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      const candidate = JSON.parse(result.stdout);
+      const candidateName = `${candidate.record.id}.md`;
+      assert.ok(fs.existsSync(path.join(overrideDir, '.work', 'decisions', candidateName)));
+      assert.strictEqual(fs.existsSync(path.join(foreignDir, '.work', 'decisions', candidateName)), false);
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work', 'decisions', candidateName)), false);
+      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'explicit override must not mutate the foreign cwd');
+      assert.deepStrictEqual(snapshotTree(tmpDir), helperOwnerBefore, 'explicit override must not mutate the helper-owning repo');
+    } finally {
+      cleanup(foreignDir);
+      cleanup(overrideDir);
+    }
+  });
+
+  test('generated resolver commands preserve helper workspace authority when bootstrap chdir fails', async () => {
+    const foreignDir = createTempProject();
+    try {
+      for (const root of [foreignDir, tmpDir]) {
+        const initialized = await runCliAsMain(root, ['init', '--auto', '--tools', 'agents']);
+        assert.strictEqual(initialized.exitCode, 0, initialized.output);
+      }
+
+      const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
+      const workspaceRootModulePath = path.join(tmpDir, '.work', 'bin', 'lib', 'workspace-root.mjs');
+      const workspaceRootModule = fs.readFileSync(workspaceRootModulePath, 'utf-8');
+      const moduleWithFailedChdir = workspaceRootModule.replace(
+        '    process.chdir(helperRoot);',
+        "    throw new Error('forced bootstrap chdir failure');",
+      );
+      assert.notStrictEqual(moduleWithFailedChdir, workspaceRootModule, 'fixture must patch the copied bootstrap chdir');
+      fs.writeFileSync(workspaceRootModulePath, moduleWithFailedChdir);
+
+      const foreignBefore = snapshotTree(foreignDir);
+      const result = spawnSync(process.execPath, [
+        helperPath,
+        'remember',
+        'Helper workspace remains authoritative when bootstrap chdir fails.',
+        '--type',
+        'rule',
+        '--scope',
+        'repo',
+      ], { cwd: foreignDir, encoding: 'utf-8' });
+
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      const candidate = JSON.parse(result.stdout);
+      const candidateName = `${candidate.record.id}.md`;
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'decisions', candidateName)));
+      assert.strictEqual(fs.existsSync(path.join(foreignDir, '.work', 'decisions', candidateName)), false);
+      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'helper bootstrap must not mutate the foreign cwd');
+    } finally {
+      cleanup(foreignDir);
     }
   });
 
