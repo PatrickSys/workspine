@@ -72,6 +72,62 @@ describe('gsdd journey', () => {
     assert.match(result.output, /phase 06 shipped\s+\[x] shipped/);
   });
 
+  test('renders superseded plans as historical and excludes them from progress', async () => {
+    writeMilestone('m1-delivery', 'in_progress', {
+      '01-shipped': '---\nstatus: shipped\n---\n',
+      '02-planned': '---\nstatus: planned\n---\n',
+      '03-historical': '---\nstatus: superseded\n---\n',
+    });
+
+    const result = await runCliAsMain(tmpDir, ['journey']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /m1-delivery\s+\[#####_____]\s+in_progress/);
+    assert.match(result.output, /phase 03 historical\s+\[~] superseded \(historical\)/);
+  });
+
+  test('keeps the existing journey JSON phase shape for superseded plans', async () => {
+    writeMilestone('m1-delivery', 'in_progress', {
+      '03-historical': '---\nstatus: superseded\n---\n',
+    });
+
+    const result = await runCliAsMain(tmpDir, ['journey', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const json = JSON.parse(result.output);
+    assert.deepStrictEqual(json.milestones[0].phases, [
+      { dir: '03-historical', status: 'superseded' },
+    ]);
+  });
+
+  test('fails loud for opened but malformed PLAN frontmatter', async () => {
+    writeMilestone('m1-delivery', 'in_progress', {
+      '03-historical': '---\nstatus: superseded\n',
+    });
+
+    await assert.rejects(
+      () => runCliAsMain(tmpDir, ['journey', '--json']),
+      /PLAN frontmatter starts with --- but is not closed/
+    );
+  });
+
+  test('keeps root ROADMAP lifecycle truth over a same-token superseded PLAN', async () => {
+    writeMilestone('m1-delivery', 'in_progress', {
+      '06-stale-history': '---\nstatus: superseded\n---\n',
+    });
+    writeFile('.work/ROADMAP.md', [
+      '# Roadmap',
+      '',
+      '- [x] **Phase 6: Truth reconciliation**',
+      '',
+    ].join('\n'));
+
+    const result = await runCliAsMain(tmpDir, ['journey', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const json = JSON.parse(result.output);
+    assert.deepStrictEqual(json.milestones[0].phases, [
+      { dir: '06-truth-reconciliation', status: 'done' },
+    ]);
+  });
+
   test('prints a friendly zero-milestone message', async () => {
     fs.mkdirSync(path.join(tmpDir, '.work'), { recursive: true });
     const result = await runCliAsMain(tmpDir, ['journey']);

@@ -33,6 +33,11 @@ Only after checking all three can a phase be called verified.
 Required context:
 - phase goal and success criteria
 - phase plan files and their must-haves when present
+
+<superseded_plan_contract>
+A PLAN is historical only when its initial top-level frontmatter `status` resolves to `superseded` under lifecycle authority; body text and filenames do not imply supersession. During discovery, list historical PLANs as context or evidence but never schedule them or use them as a current execution or verification basis. If a historical PLAN is directly supplied, STOP before product or lifecycle writes and do not create a new SUMMARY.md or VERIFICATION.md from it. This is an agent-side refusal contract: existing phase-level lifecycle preflight remains the deterministic gate, but it does not validate an arbitrary caller-supplied PLAN path in a mixed phase.
+</superseded_plan_contract>
+
 - phase summary files
 - the relevant codebase
 

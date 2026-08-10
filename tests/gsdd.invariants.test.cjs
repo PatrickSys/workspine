@@ -49,6 +49,12 @@ function readWorkflow(filename) {
   return fs.readFileSync(path.join(WORKFLOWS_DIR, filename), 'utf-8');
 }
 
+function extractSupersededPlanContract(content, label) {
+  const match = content.match(/<superseded_plan_contract>[\s\S]*?<\/superseded_plan_contract>/);
+  assert.ok(match, label + ' must define the superseded PLAN contract.');
+  return match[0];
+}
+
 function isGitTracked(relativePath) {
   try {
     execFileSync('git', ['ls-files', '--error-unmatch', relativePath], {
@@ -79,6 +85,44 @@ const HARDENED_ROLES = [
   'synthesizer.md',
   'verifier.md',
 ];
+
+describe('Superseded PLAN contract parity', () => {
+  test('authored execute and verify sources share the honest historical-plan refusal contract', () => {
+    const executeContract = extractSupersededPlanContract(readWorkflow('execute.md'), 'distilled/workflows/execute.md');
+    for (const token of [
+      /initial top-level frontmatter \`status\` resolves to \`superseded\` under lifecycle authority/,
+      /body text and filenames do not imply supersession/,
+      /STOP before product or lifecycle writes/,
+      /do not create a new SUMMARY\.md or VERIFICATION\.md/,
+      /agent-side refusal contract/,
+      /does not validate an arbitrary caller-supplied PLAN path/,
+    ]) {
+      assert.match(executeContract, token);
+    }
+
+    for (const [label, content, boundary] of [
+      ['distilled/workflows/execute.md', readWorkflow('execute.md'), '<multi_plan_orchestration>'],
+      ['distilled/workflows/verify.md', readWorkflow('verify.md'), 'If a previous `.work/phases/{phase_dir}/{phase_num}-VERIFICATION.md` exists'],
+      ['agents/executor.md', readRole('executor.md'), '## Core Algorithm'],
+      ['agents/verifier.md', readRole('verifier.md'), 'Discovery protocol:'],
+    ]) {
+      const contract = extractSupersededPlanContract(content, label);
+      assert.strictEqual(contract, executeContract, label + ' must preserve the exact superseded PLAN contract.');
+      assert.ok(content.indexOf(contract) < content.indexOf(boundary), label + ' must place the superseded PLAN contract before its selection or discovery branch.');
+    }
+
+    const checkpointCleanupMarker = 'node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok';
+    for (const [label, content] of [
+      ['distilled/workflows/execute.md', readWorkflow('execute.md')],
+      ['distilled/workflows/verify.md', readWorkflow('verify.md')],
+      ['agents/executor.md', readRole('executor.md')],
+    ]) {
+      const contract = extractSupersededPlanContract(content, label);
+      assert.notStrictEqual(content.indexOf(checkpointCleanupMarker), -1, label + ' must retain its checkpoint-cleanup marker.');
+      assert.ok(content.indexOf(contract) < content.indexOf(checkpointCleanupMarker), label + ' must refuse a directly supplied superseded PLAN before checkpoint cleanup can write.');
+    }
+  });
+});
 
 // --- I2: Role Section Structure ---
 

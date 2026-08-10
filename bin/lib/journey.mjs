@@ -4,8 +4,7 @@ import { execFileSync } from 'child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { basename, join } from 'path';
 import { output, parseFlagValue } from './cli-utils.mjs';
-import { evaluateLifecycleState, normalizePhaseToken } from './lifecycle-state.mjs';
-import { parsePlanFrontmatter } from './phase.mjs';
+import { evaluateLifecycleState, normalizePhaseToken, readPlanStatus } from './lifecycle-state.mjs';
 import { resolveStateDir } from './state-dir.mjs';
 import { readDecisionRecords, resolveActiveMilestoneDir } from './work-context.mjs';
 
@@ -101,15 +100,7 @@ function readPhases(milestoneDir) {
     .map((entry) => {
       const planPath = join(phasesDir, entry.name, 'PLAN.md');
       const content = readFileSafely(planPath);
-      let status = 'unknown';
-      if (content !== null) {
-        try {
-          status = normalizeStatus(parsePlanFrontmatter(content).status);
-        } catch {
-          status = 'unknown';
-        }
-      }
-      return { dir: entry.name, status };
+      return { dir: entry.name, status: normalizeStatus(content === null ? null : readPlanStatus(content)) };
     })
     .sort((left, right) => left.dir.localeCompare(right.dir));
 }
@@ -166,6 +157,7 @@ function phaseGlyph(status) {
   if (DONE_STATUSES.has(status)) return '[x]';
   if (RUNNING_STATUSES.has(status)) return '[>]';
   if (BLOCKED_STATUSES.has(status)) return '[!]';
+  if (status === 'superseded') return '[~]';
   if (PENDING_STATUSES.has(status)) return '[ ]';
   return '[?]';
 }
@@ -174,10 +166,15 @@ function isDone(status) {
   return DONE_STATUSES.has(normalizeStatus(status));
 }
 
+function isHistorical(status) {
+  return normalizeStatus(status) === 'superseded';
+}
+
 function progressBar(milestone) {
-  const total = milestone.phases.length;
+  const actionablePhases = milestone.phases.filter((phase) => !isHistorical(phase.status));
+  const total = actionablePhases.length;
   if (total === 0) return '[__________]';
-  const done = milestone.phases.filter((phase) => isDone(phase.status)).length;
+  const done = actionablePhases.filter((phase) => isDone(phase.status)).length;
   const filled = Math.round((done / total) * 10);
   return `[${'#'.repeat(filled)}${'_'.repeat(10 - filled)}]`;
 }
@@ -308,7 +305,9 @@ export function renderJourney(journey, { now = new Date() } = {}) {
     lines.push(`  ${name.padEnd(16)} ${progressBar(milestone)}  ${status}${here}`.trimEnd());
     if (milestone.active) {
       for (const phase of milestone.phases) {
-        lines.push(`    phase ${asciiText(phaseLabel(phase.dir)).padEnd(25)} ${phaseGlyph(normalizeStatus(phase.status))} ${asciiText(phase.status)}`);
+        const status = normalizeStatus(phase.status);
+        const label = status === 'superseded' ? 'superseded (historical)' : status;
+        lines.push(`    phase ${asciiText(phaseLabel(phase.dir)).padEnd(25)} ${phaseGlyph(status)} ${asciiText(label)}`);
       }
     }
   }

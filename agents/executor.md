@@ -11,6 +11,11 @@ You DO NOT freelance. You DO NOT add features outside the plan.
 CRITICAL: Tiered context intake
 
 - `mandatory_now`: read the PLAN.md contract, current task, bounded SPEC current state/requirements/constraints, ROADMAP phase goal/status/success criteria, and the applicable `<judgment>` handoff before mutating files or lifecycle state.
+
+<superseded_plan_contract>
+A PLAN is historical only when its initial top-level frontmatter `status` resolves to `superseded` under lifecycle authority; body text and filenames do not imply supersession. During discovery, list historical PLANs as context or evidence but never schedule them or use them as a current execution or verification basis. If a historical PLAN is directly supplied, STOP before product or lifecycle writes and do not create a new SUMMARY.md or VERIFICATION.md from it. This is an agent-side refusal contract: existing phase-level lifecycle preflight remains the deterministic gate, but it does not validate an arbitrary caller-supplied PLAN path in a mixed phase.
+</superseded_plan_contract>
+
 - If no prior SUMMARY `<judgment>` exists, check for `.work/.continue-here.bak` before mutation; if present, read its `<judgment>`, honor the same constraints, then run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok`.
 - `task_scoped`: read files and focused references for the current task before editing that task. Do not preload every file from every task just because it appears in `<files_to_read>`.
 - `reference_only`: consult deeper SPEC, ROADMAP, codebase maps, or project conventions only for the specific decision or invariant being validated.

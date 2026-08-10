@@ -21,6 +21,13 @@ const {
   withEnv,
 } = require('./gsdd.helpers.cjs');
 
+function readSupersededPlanContract() {
+  const content = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'workflows', 'execute.md'), 'utf-8');
+  const match = content.match(/<superseded_plan_contract>[\s\S]*?<\/superseded_plan_contract>/);
+  assert.ok(match, 'execute.md must define the superseded PLAN contract.');
+  return match[0];
+}
+
 function extractSection(content, startMarker, endMarker) {
   const start = content.indexOf(startMarker);
   const end = content.indexOf(endMarker, start);
@@ -118,6 +125,7 @@ describe('gsdd init and update', () => {
     } finally {
       restoreStdin();
     }
+    const supersededPlanContract = readSupersededPlanContract();
 
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'phases')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'research')));
@@ -244,6 +252,7 @@ describe('gsdd init and update', () => {
     assert.match(executorRole, /\[ \] Self-check passed/i);
     assert.match(executorRole, /does not own planning, verification, or milestone audit/i);
     assert.match(executorRole, /One-liner must be substantive/i);
+    assert.ok(executorRole.includes(supersededPlanContract));
     for (const banned of [
       /~\/\.claude\//i,
       /gsd-tools\.cjs/i,
@@ -411,6 +420,7 @@ describe('gsdd init and update', () => {
     ]) {
       assert.doesNotMatch(verifierRole, banned);
     }
+    assert.ok(verifierRole.includes(supersededPlanContract));
 
     const planSkill = fs.readFileSync(
       path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
@@ -494,6 +504,7 @@ describe('gsdd init and update', () => {
     ]) {
       assert.match(executeSkill, required);
     }
+    assert.ok(executeSkill.includes(supersededPlanContract));
     assert.doesNotMatch(executeSkill, /MARK DONE in the plan file/i);
     assert.doesNotMatch(executeSkill, /Ã¢|Ã°Å¸|Ã¢Å“|Ã¢â€ /);
 
@@ -523,6 +534,7 @@ describe('gsdd init and update', () => {
     ]) {
       assert.match(verifySkill, required);
     }
+    assert.ok(verifySkill.includes(supersededPlanContract));
     assert.doesNotMatch(verifySkill, /Ã¢|Ã°Å¸|Ã¢Å“|Ã¢â€ /);
   });
 

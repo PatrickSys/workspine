@@ -9,6 +9,11 @@ Load only the context needed for the next safe action. Use these tiers instead o
 
 ### mandatory_now
 Read before mutation: target `PLAN.md` frontmatter/current task/boundaries; bounded `.work/SPEC.md` current state, active requirement IDs, and relevant constraints; `.work/ROADMAP.md` phase goal/status/success criteria; immediately prior `.work/phases/*-SUMMARY.md` `<judgment>` when present; and the preflight result from `<lifecycle_preflight>`.
+
+<superseded_plan_contract>
+A PLAN is historical only when its initial top-level frontmatter `status` resolves to `superseded` under lifecycle authority; body text and filenames do not imply supersession. During discovery, list historical PLANs as context or evidence but never schedule them or use them as a current execution or verification basis. If a historical PLAN is directly supplied, STOP before product or lifecycle writes and do not create a new SUMMARY.md or VERIFICATION.md from it. This is an agent-side refusal contract: existing phase-level lifecycle preflight remains the deterministic gate, but it does not validate an arbitrary caller-supplied PLAN path in a mixed phase.
+</superseded_plan_contract>
+
 If no immediately prior SUMMARY `<judgment>` exists, check whether `.work/.continue-here.bak` exists before mutation. If it exists, read its `<judgment>`, honor `<anti_regression>`, `<active_constraints>`, and `<decision_posture>`, then run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` (workflow-owned auto-clean).
 
 ### task_scoped
@@ -38,17 +43,13 @@ Treat the preflight as an authorization seam over shared repo truth only:
 <control_map_check>Before code mutation, run `node .work/bin/gsdd.mjs control-map --json` when available. Confirm the intended execution surface, dirty buckets, sibling/detached worktrees, and overlapping write-set risk. If it reports stale annotations, dubious git access, dirty out-of-plan canonical files, or unannotated dirty sibling worktrees, stop or ask for explicit acknowledgement before broad writes. Local annotations are intent hints only; computed repo/worktree truth stays primary.
 </control_map_check>
 <runtime_contract>
-Execution uses the same `Runtime` and `Assurance` types as planning and verification.
-Infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
-Assurance is ordered: `unreviewed` -> `self_checked` -> `cross_runtime_checked`.
-Same-runtime helpers never count as cross-runtime evidence.
+Execution uses the same `Runtime` and `Assurance` types as planning and verification; infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
+Assurance is ordered: `unreviewed` -> `self_checked` -> `cross_runtime_checked`; same-runtime helpers never count as cross-runtime evidence.
 </runtime_contract>
 
 <assurance_check>
-Before executing tasks, read the plan artifact's `runtime`, `assurance`, and structured `<plan_check>` result.
-Use `unreviewed` before any executor check, `self_checked` for self/same-runtime checking, and `cross_runtime_checked` only for a different runtime/vendor checker.
-If execution begins from a stronger plan artifact into a weaker execution context, emit a structured `<assurance_check>` with `source_artifact`, `source_runtime`, `source_assurance`, `current_runtime`, `current_assurance`, `status`, and `warning`.
-If plan runtime/assurance is missing, use `status: unknown`.
+Before executing tasks, read the plan artifact's `runtime`, `assurance`, and structured `<plan_check>` result; use `unreviewed` before any executor check, `self_checked` for self/same-runtime checking, and `cross_runtime_checked` only for a different runtime/vendor checker.
+If execution begins from a stronger plan artifact into a weaker execution context, emit a structured `<assurance_check>` with `source_artifact`, `source_runtime`, `source_assurance`, `current_runtime`, `current_assurance`, `status`, and `warning`; if plan runtime/assurance is missing, use `status: unknown`.
 </assurance_check>
 
 <multi_plan_orchestration>
@@ -59,7 +60,6 @@ A phase often contains multiple plans. When invoked at the phase level (no speci
 2. For each plan, read its frontmatter `wave` field (default: `wave: 1` if absent).
 3. Group plans by wave number. Collect the set of distinct wave numbers and sort them ascending.
 4. Check for `*-SUMMARY.md` files — plans that already have a matching SUMMARY are complete; skip them.
-
 Present to the user:
 ```
 Phase {N} — {Name}
