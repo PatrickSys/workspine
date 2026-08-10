@@ -12,42 +12,56 @@ import {
 const REMEMBER_USAGE = 'Usage: gsdd remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--code path:line] [--why "<why>"]';
 const REMEMBER_REMOVED_FLAG = ['--by', 'user'].join('-');
 const REMEMBER_REMOVED_MESSAGE = `${REMEMBER_REMOVED_FLAG} was removed; use gsdd decisions promote <id> to activate a candidate.`;
+const REMEMBER_CANDIDATE_REMOVED_MESSAGE = `${REMEMBER_REMOVED_FLAG} was removed; generated remember records agent-proposed candidates only and cannot approve or activate them.`;
 const DECISIONS_USAGE = 'Usage: gsdd decisions query "<terms>" [--path <path>] | promote <id> | reject <id> [--reason <text>] | invalidate <id> --reason <text>';
+const DECISIONS_QUERY_USAGE = 'Usage: gsdd decisions query "<terms>" [--path <path>]';
 
 export function cmdRemember(...rawArgs) {
+  return runRemember(rawArgs, REMEMBER_REMOVED_MESSAGE);
+}
+
+export function cmdRememberCandidate(...rawArgs) {
+  return runRemember(rawArgs, REMEMBER_CANDIDATE_REMOVED_MESSAGE);
+}
+
+function runRemember(rawArgs, removedMessage) {
   const workspace = resolveWorkspaceContext(rawArgs);
   if (workspace.invalid) return fail(workspace.error);
   try {
     const [text, ...args] = workspace.args;
-    if (args.includes(REMEMBER_REMOVED_FLAG)) return fail(REMEMBER_REMOVED_MESSAGE);
-    const type = requireFlag(args, '--type', REMEMBER_USAGE);
-    const scope = requireFlag(args, '--scope', REMEMBER_USAGE);
-    const why = parseFlagValue(args, '--why').value || 'Captured through gsdd remember; verify before activation.';
-    const code = parseFlagValue(args, '--code').value;
-    const status = 'candidate';
-    if (!text || text.startsWith('--') || !DECISION_RECORD_TYPES.includes(type) || !DECISION_RECORD_SCOPES.includes(scope)) {
-      return fail(REMEMBER_USAGE);
-    }
-    const result = writeDecisionRecord(workspace.planningDir, {
-      type,
-      status,
-      scope,
-      decision: text,
-      why,
-      source: 'agent-proposed',
-      links: code ? { code } : null,
-      body: `${text}\n\nWhy: ${why}`,
-    }, { repoRoot: workspace.workspaceRoot });
-    output({
-      schema_version: 1,
-      operation: 'remember',
-      status,
-      record: { id: result.id, path: result.path },
-      duplicate_warnings: result.duplicateWarnings,
-    });
+    if (args.includes(REMEMBER_REMOVED_FLAG)) return fail(removedMessage);
+    return executeRememberCandidate(workspace, text, args);
   } catch (error) {
     fail(error.message);
   }
+}
+
+function executeRememberCandidate(workspace, text, args) {
+  const type = requireFlag(args, '--type', REMEMBER_USAGE);
+  const scope = requireFlag(args, '--scope', REMEMBER_USAGE);
+  const why = parseFlagValue(args, '--why').value || 'Captured through gsdd remember; verify before activation.';
+  const code = parseFlagValue(args, '--code').value;
+  const status = 'candidate';
+  if (!text || text.startsWith('--') || !DECISION_RECORD_TYPES.includes(type) || !DECISION_RECORD_SCOPES.includes(scope)) {
+    return fail(REMEMBER_USAGE);
+  }
+  const result = writeDecisionRecord(workspace.planningDir, {
+    type,
+    status,
+    scope,
+    decision: text,
+    why,
+    source: 'agent-proposed',
+    links: code ? { code } : null,
+    body: `${text}\n\nWhy: ${why}`,
+  }, { repoRoot: workspace.workspaceRoot });
+  output({
+    schema_version: 1,
+    operation: 'remember',
+    status,
+    record: { id: result.id, path: result.path },
+    duplicate_warnings: result.duplicateWarnings,
+  });
 }
 
 export function cmdDecisions(...rawArgs) {
@@ -80,19 +94,35 @@ export function cmdDecisions(...rawArgs) {
       return;
     }
     if (subcommand !== 'query') return fail(DECISIONS_USAGE);
-    const terms = subject;
-    const path = parseFlagValue(args, '--path');
-    if (path.invalid || hasUnexpectedQueryArgs(args)) return fail(DECISIONS_USAGE);
-    const recalled = recallDecisions({
-      workDir: workspace.planningDir,
-      terms,
-      paths: path.value ? [path.value] : [],
-      limit: 10,
-    });
-    console.log(renderDecisionQueryResults(recalled.records));
+    return queryDecisions(workspace, subject, args, DECISIONS_USAGE);
   } catch (error) {
     fail(error.message);
   }
+}
+
+export function cmdDecisionsQuery(...rawArgs) {
+  const workspace = resolveWorkspaceContext(rawArgs);
+  if (workspace.invalid) return fail(workspace.error);
+  try {
+    const [subcommand, terms, ...args] = workspace.args;
+    if (subcommand !== 'query') return fail(DECISIONS_QUERY_USAGE);
+    return queryDecisions(workspace, terms, args, DECISIONS_QUERY_USAGE);
+  } catch (error) {
+    fail(error.message);
+  }
+}
+
+function queryDecisions(workspace, terms, args, usage) {
+  if (!terms || terms.startsWith('--')) return fail(usage);
+  const path = parseFlagValue(args, '--path');
+  if (path.invalid || hasUnexpectedQueryArgs(args)) return fail(usage);
+  const recalled = recallDecisions({
+    workDir: workspace.planningDir,
+    terms,
+    paths: path.value ? [path.value] : [],
+    limit: 10,
+  });
+  console.log(renderDecisionQueryResults(recalled.records));
 }
 
 function requireFlag(args, name, usage) {

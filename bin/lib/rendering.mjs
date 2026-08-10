@@ -9,6 +9,7 @@ const HELPER_LIB_FILES = Object.freeze([
   'atomic-write.mjs',
   'cli-utils.mjs',
   'control-map.mjs',
+  'decision-cli.mjs',
   'file-ops.mjs',
   'lifecycle-preflight.mjs',
   'lifecycle-state.mjs',
@@ -63,6 +64,7 @@ import { cmdFileOp } from './lib/file-ops.mjs';
 import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
 import { cmdPhaseStatus, cmdVerify } from './lib/phase.mjs';
 import { buildControlMap } from './lib/control-map.mjs';
+import { cmdDecisionsQuery, cmdRememberCandidate } from './lib/decision-cli.mjs';
 import { createCmdNext } from './lib/next.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
 
@@ -85,9 +87,11 @@ function cmdControlMap(...controlArgs) {
 
 const COMMANDS = {
   'control-map': cmdControlMap,
+  decisions: cmdDecisionsQuery,
   'file-op': cmdFileOp,
   'lifecycle-preflight': cmdLifecyclePreflight,
   'phase-status': cmdPhaseStatus,
+  remember: cmdRememberCandidate,
   verify: cmdVerify,
   next: cmdNext,
 };
@@ -99,8 +103,12 @@ function printHelp() {
     'Local workflow helper commands:',
     '  control-map [--json] [--with-ignored]',
     '                               Print computed repo/worktree/workflow state for workflow-internal checks',
+    '  remember "<text>" --type <decision|lesson|rule> --scope <repo|global>',
+    '                               Capture an agent-proposed candidate; this is not approval',
+    '  decisions query "<terms>" [--path <path>]',
+    '                               Query stored decisions read-only; no transition commands',
     '  file-op <copy|delete|regex-sub>',
-    '                               Run deterministic workspace-confined file operations',
+    '                               Raw workspace-confined file mutation; outside decision authority protocol',
     '                               Example: node ${helperPath} file-op delete ${checkpointBackupPath} --missing ok',
     '  phase-status <N> <status>   Update ROADMAP.md phase status ([ ] / [-] / [x])',
     '                               Example: node ${helperPath} phase-status 1 done',

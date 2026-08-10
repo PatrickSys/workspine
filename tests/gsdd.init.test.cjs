@@ -62,6 +62,13 @@ function snapshotTree(directory, prefix = '') {
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function runGeneratedHelper(workspaceRoot, cwd, args) {
+  return spawnSync(process.execPath, [
+    path.join(workspaceRoot, '.work', 'bin', 'gsdd.mjs'),
+    ...args,
+  ], { cwd, encoding: 'utf-8' });
+}
+
 function createPromptStreams() {
   class FakeInput extends EventEmitter {
     constructor() {
@@ -604,6 +611,115 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(launcher, /where\.exe/);
     assert.doesNotMatch(launcher, /gsdd\.cmd/);
     assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'bin')), '.agents/bin must not be generated');
+  });
+
+  test('generated decision protocol captures candidates and exposes only read-only queries', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+
+    const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    const launcherPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
+    const launcher = fs.readFileSync(launcherPath, 'utf-8');
+
+    assert.match(launcher, /import \{ cmdDecisionsQuery, cmdRememberCandidate \} from '\.\/lib\/decision-cli\.mjs';/);
+    assert.match(launcher, /remember:\s*cmdRememberCandidate/);
+    assert.doesNotMatch(launcher, /remember:\s*cmdRemember(?:\s*[,}])/);
+    assert.match(launcher, /decisions:\s*cmdDecisionsQuery/);
+    assert.doesNotMatch(launcher, /decisions:\s*cmdDecisions(?:\s*[,}])/);
+
+    let result = runGeneratedHelper(tmpDir, nestedDir, [
+      'remember', 'Generated helper candidate remains non-authoritative.', '--type', 'rule', '--scope', 'repo',
+    ]);
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const candidate = JSON.parse(result.stdout);
+    assert.strictEqual(candidate.status, 'candidate');
+    const candidatePath = path.join(tmpDir, '.work', 'decisions', `${candidate.record.id}.md`);
+    const candidateBytes = fs.readFileSync(candidatePath, 'utf-8');
+    assert.match(candidateBytes, /^status: candidate$/m);
+    assert.match(candidateBytes, /^source: agent-proposed$/m);
+
+    const rememberByUserBefore = snapshotTree(tmpDir);
+    result = runGeneratedHelper(tmpDir, nestedDir, [
+      'remember', 'Generated helper cannot activate a candidate.', '--type', 'rule', '--scope', 'repo', '--by-user',
+    ]);
+    assert.notStrictEqual(result.status, 0, 'generated remember --by-user unexpectedly succeeded');
+    const rememberByUserOutput = `${result.stdout}${result.stderr}`;
+    assert.strictEqual(
+      rememberByUserOutput,
+      '--by-user was removed; generated remember records agent-proposed candidates only and cannot approve or activate them.\n',
+    );
+    assert.doesNotMatch(rememberByUserOutput, /\b(promote|reject|invalidate)\b/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), rememberByUserBefore, 'generated remember --by-user must not write the workspace');
+
+    const queryBefore = snapshotTree(tmpDir);
+    result = runGeneratedHelper(tmpDir, nestedDir, [
+      'decisions', 'query', 'Generated helper candidate',
+    ]);
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /^DECISION QUERY RESULTS \(1 record\)/m);
+    assert.match(result.stdout, /\[status: candidate\]/);
+    assert.match(result.stdout, new RegExp(candidate.record.id));
+    assert.deepStrictEqual(snapshotTree(tmpDir), queryBefore, 'successful generated query must not write the workspace');
+
+    result = runGeneratedHelper(tmpDir, nestedDir, ['next', '--json']);
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const next = JSON.parse(result.stdout);
+    assert.strictEqual(next.decisionsDigest.counts.excluded.candidate, 1);
+    assert.ok(!next.decisionsDigest.ids.includes(candidate.record.id));
+
+    const activeCapture = await runCliAsMain(tmpDir, [
+      'remember', 'Existing active record proves invalidation refusal.', '--type', 'rule', '--scope', 'repo',
+    ]);
+    assert.strictEqual(activeCapture.exitCode, 0, activeCapture.output);
+    const activeId = JSON.parse(activeCapture.output).record.id;
+    const promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId]);
+    assert.strictEqual(promoted.exitCode, 0, promoted.output);
+
+    const helperUsage = /Usage: gsdd decisions query "<terms>" \[--path <path>\]/;
+    const transitionCases = [
+      ['promote', candidate.record.id],
+      ['reject', candidate.record.id],
+      ['invalidate', activeId, '--reason', 'Must not be reachable from generated helper'],
+    ];
+    for (const decisionArgs of transitionCases) {
+      const before = snapshotTree(tmpDir);
+      result = runGeneratedHelper(tmpDir, nestedDir, ['decisions', ...decisionArgs]);
+      assert.notStrictEqual(result.status, 0, `${decisionArgs.join(' ')} unexpectedly succeeded`);
+      const output = `${result.stdout}${result.stderr}`;
+      assert.match(output, helperUsage);
+      assert.doesNotMatch(output, /\b(promote|reject|invalidate)\b/);
+      assert.doesNotMatch(output, /"record"\s*:/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, `${decisionArgs.join(' ')} must not write the workspace`);
+    }
+
+    const malformedCases = [
+      [],
+      ['inspect', candidate.record.id],
+      ['query'],
+      ['query', 'Generated helper candidate', '--path', 'src', 'unexpected'],
+    ];
+    for (const decisionArgs of malformedCases) {
+      const before = snapshotTree(tmpDir);
+      result = runGeneratedHelper(tmpDir, nestedDir, ['decisions', ...decisionArgs]);
+      assert.notStrictEqual(result.status, 0, `${decisionArgs.join(' ') || '(missing)'} unexpectedly succeeded`);
+      const output = `${result.stdout}${result.stderr}`;
+      assert.match(output, helperUsage);
+      assert.doesNotMatch(output, /\b(promote|reject|invalidate)\b/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, `${decisionArgs.join(' ') || '(missing)'} must not write the workspace`);
+    }
+
+    result = runGeneratedHelper(tmpDir, nestedDir, ['help']);
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /Capture an agent-proposed candidate; this is not approval/);
+    assert.match(result.stdout, /Query stored decisions read-only; no transition commands/);
+    assert.match(result.stdout, /Raw workspace-confined file mutation; outside decision authority protocol/);
+    assert.doesNotMatch(result.stdout, /\b(promote|reject|invalidate)\b/);
   });
 
   test('fresh repo-local helper projects active decisions from nested cwd without writing', async () => {

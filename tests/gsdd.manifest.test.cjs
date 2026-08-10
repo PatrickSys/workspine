@@ -172,6 +172,26 @@ describe('generation manifest', () => {
     await import(pathToFileURL(workContextPath).href);
   });
 
+  test('init and update preserve the decision CLI helper source bytes and manifest hash', async () => {
+    await initProject();
+
+    const sourcePath = path.join(__dirname, '..', 'bin', 'lib', 'decision-cli.mjs');
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'lib', 'decision-cli.mjs');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const sourceBytes = fs.readFileSync(sourcePath);
+    const sourceHash = sha256(sourceBytes);
+
+    assert.deepStrictEqual(fs.readFileSync(helperPath), sourceBytes);
+    assert.strictEqual(readJson(manifestPath).runtimeHelpers['bin/lib/decision-cli.mjs'], sourceHash);
+    await import(pathToFileURL(helperPath).href);
+
+    fs.rmSync(helperPath);
+    const update = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(update.exitCode, 0, update.output);
+    assert.deepStrictEqual(fs.readFileSync(helperPath), sourceBytes);
+    assert.strictEqual(readJson(manifestPath).runtimeHelpers['bin/lib/decision-cli.mjs'], sourceHash);
+  });
+
   test('init produces non-empty research, codebase, and root manifest groups', async () => {
     await initProject();
     const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
