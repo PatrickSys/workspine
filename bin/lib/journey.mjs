@@ -6,7 +6,8 @@ import { basename, join } from 'path';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { evaluateLifecycleState, normalizePhaseToken, readPlanStatus } from './lifecycle-state.mjs';
 import { resolveStateDir } from './state-dir.mjs';
-import { readDecisionRecords, resolveActiveMilestoneDir } from './work-context.mjs';
+import { getWorkPaths, readDecisionRecords, resolveActiveMilestoneDir } from './work-context.mjs';
+import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const DONE_STATUSES = new Set(['done', 'complete', 'completed', 'closed', 'passed', 'shipped', 'verified']);
 const RUNNING_STATUSES = new Set(['executing', 'in_progress']);
@@ -223,8 +224,8 @@ function latestDecision(records) {
   }, null);
 }
 
-function collectDecisions(stateDir) {
-  const scanned = readDecisionRecords(stateDir);
+function collectDecisions(workDir) {
+  const scanned = readDecisionRecords(workDir);
   const records = Array.isArray(scanned.records) ? scanned.records : [];
   if (records.length === 0) return null;
 
@@ -262,14 +263,16 @@ function renderDecisions(decisions) {
 }
 
 export function collectJourney({ cwd = process.cwd() } = {}) {
-  const { dir: stateDir } = resolveStateDir(cwd);
+  const { workspaceRoot } = resolveWorkspaceContext([], { cwd });
+  const { dir: stateDir } = resolveStateDir(workspaceRoot);
+  const decisionWorkDir = getWorkPaths(workspaceRoot).workDir;
   const resolvedActiveDir = resolveActiveMilestoneDir(stateDir);
   const milestoneDirs = listMilestoneDirs(stateDir, resolvedActiveDir);
   const milestones = milestoneDirs.map(readMilestone);
   const activeIndex = resolvedActiveDir ? milestones.findIndex((milestone) => milestone.path === resolvedActiveDir) : -1;
   const roadmapPhases = currentRoadmapPhases(stateDir);
-  const recentData = collectRecent(cwd);
-  const decisions = collectDecisions(stateDir);
+  const recentData = collectRecent(workspaceRoot);
+  const decisions = collectDecisions(decisionWorkDir);
 
   const journey = {
     milestones: milestones.map((milestone, index) => {

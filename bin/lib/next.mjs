@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
 import { resolveStateDir } from './state-dir.mjs';
+import { resolveWorkspaceContext } from './workspace-root.mjs';
 import {
   NEXT_STATES,
   addOpenQuestion,
@@ -987,8 +988,10 @@ function requireFlag(args, name, usage = NEXT_USAGE) {
 
 export function createCmdNext(ctx) {
   return function cmdNext(...args) {
+    const { workspaceRoot } = resolveWorkspaceContext([], { cwd: ctx.cwd });
+    const effectiveCtx = { ...ctx, cwd: workspaceRoot };
     const jsonMode = outputMode(args) === 'json';
-    const workPaths = getWorkPaths(ctx.cwd);
+    const workPaths = getWorkPaths(effectiveCtx.cwd);
     try {
       if (args.includes('--help') || args.includes('-h')) {
         console.log(NEXT_USAGE);
@@ -996,7 +999,7 @@ export function createCmdNext(ctx) {
       }
 
       if (args.includes('--init')) {
-        const result = ensureWorkStructure(ctx.cwd);
+        const result = ensureWorkStructure(effectiveCtx.cwd);
         const index = rebuildGraphIndex(result.paths.workDir, { write: true });
         const response = {
           schema_version: 1,
@@ -1009,7 +1012,7 @@ export function createCmdNext(ctx) {
             event_count: index.event_count,
             invalid_event_count: index.invalid_event_count,
           },
-          next: projectDecisionsDigest(ctx, routeNext(ctx)),
+          next: projectDecisionsDigest(effectiveCtx, routeNext(effectiveCtx)),
         };
         if (jsonMode) output(response);
         else {
@@ -1035,17 +1038,17 @@ export function createCmdNext(ctx) {
       }
 
       if (args[0] === 'question') {
-        handleQuestion(ctx, args.slice(1), jsonMode);
+        handleQuestion(effectiveCtx, args.slice(1), jsonMode);
         return;
       }
 
       if (args[0] === 'decision') {
-        handleDecision(ctx, args.slice(1), jsonMode);
+        handleDecision(effectiveCtx, args.slice(1), jsonMode);
         return;
       }
 
       if (args[0] === 'dogfood') {
-        handleDogfood(ctx, args.slice(1), jsonMode);
+        handleDogfood(effectiveCtx, args.slice(1), jsonMode);
         return;
       }
 
@@ -1056,7 +1059,7 @@ export function createCmdNext(ctx) {
         return;
       }
 
-      const result = projectDecisionsDigest(ctx, routeNext(ctx));
+      const result = projectDecisionsDigest(effectiveCtx, routeNext(effectiveCtx));
       if (jsonMode) output(result);
       else printHuman(result);
     } catch (error) {

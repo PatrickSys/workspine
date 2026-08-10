@@ -613,6 +613,47 @@ describe('gsdd init and update', () => {
     assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'bin')), '.agents/bin must not be generated');
   });
 
+  test('generated next resolves helper bootstrap and explicit workspace overrides at invocation time', async () => {
+    const foreignDir = createTempProject();
+    const overrideDir = createTempProject();
+    try {
+      for (const root of [foreignDir, tmpDir, overrideDir]) {
+        const initialized = await runCliAsMain(root, ['init', '--auto', '--tools', 'agents']);
+        assert.strictEqual(initialized.exitCode, 0, initialized.output);
+      }
+      const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
+      assert.ok(fs.existsSync(helperPath));
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work', 'state.json')), false);
+      assert.strictEqual(fs.existsSync(path.join(overrideDir, '.work', 'state.json')), false);
+      const foreignBefore = snapshotTree(foreignDir);
+
+      let result = spawnSync(process.execPath, [helperPath, 'next', '--init', '--json'], {
+        cwd: foreignDir,
+        encoding: 'utf-8',
+      });
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'state.json')));
+      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'helper bootstrap must not initialize the foreign cwd');
+      const helperTargetAfterBootstrap = snapshotTree(tmpDir);
+
+      result = spawnSync(process.execPath, [
+        helperPath,
+        'next',
+        '--init',
+        '--json',
+        '--workspace-root',
+        overrideDir,
+      ], { cwd: foreignDir, encoding: 'utf-8' });
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.ok(fs.existsSync(path.join(overrideDir, '.work', 'state.json')));
+      assert.deepStrictEqual(snapshotTree(tmpDir), helperTargetAfterBootstrap, 'explicit override must not mutate the helper-owning repo');
+      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'explicit override must not mutate the foreign cwd');
+    } finally {
+      cleanup(foreignDir);
+      cleanup(overrideDir);
+    }
+  });
+
   test('generated decision protocol captures candidates and exposes only read-only queries', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
@@ -720,6 +761,63 @@ describe('gsdd init and update', () => {
     assert.match(result.stdout, /Query stored decisions read-only; no transition commands/);
     assert.match(result.stdout, /Raw workspace-confined file mutation; outside decision authority protocol/);
     assert.doesNotMatch(result.stdout, /\b(promote|reject|invalidate)\b/);
+  });
+
+  test('fresh legacy helper refuses split decisions until next init then uses only canonical .work', async () => {
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(planningDir, { recursive: true });
+    fs.writeFileSync(path.join(planningDir, 'config.json'), '{}\n');
+    const update = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(update.exitCode, 0, update.output);
+    const helperPath = path.join(planningDir, 'bin', 'gsdd.mjs');
+    assert.ok(fs.existsSync(helperPath));
+
+    const { writeDecisionRecord, readDecisionRecords } = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs'));
+    writeDecisionRecord(planningDir, {
+      id: 'legacy-poison-a1b2',
+      type: 'rule',
+      status: 'active',
+      scope: 'repo',
+      decision: 'Legacy poison must never become decision authority',
+      why: 'This fixture proves generated helper isolation.',
+      for: 'repo:current',
+      body: 'Legacy evidence remains untouched.',
+    }, { repoRoot: tmpDir });
+    const planningBefore = snapshotTree(planningDir);
+    const nestedDir = path.join(tmpDir, 'src', 'nested');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    const runLegacyHelper = (args) => spawnSync(process.execPath, [helperPath, ...args], { cwd: nestedDir, encoding: 'utf-8' });
+    const refusal = /Decision commands require canonical \.work\/.+Run `gsdd next --init`.+not imported automatically/i;
+
+    for (const args of [
+      ['remember', 'Refuse before init', '--type', 'rule', '--scope', 'repo'],
+      ['decisions', 'query', 'Legacy poison'],
+    ]) {
+      const result = runLegacyHelper(args);
+      assert.notStrictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.match(`${result.stdout}${result.stderr}`, refusal);
+      assert.deepStrictEqual(snapshotTree(planningDir), planningBefore);
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+    }
+
+    const initNext = await runCliAsMain(tmpDir, ['next', '--init', '--json']);
+    assert.strictEqual(initNext.exitCode, 0, initNext.output);
+    let result = runLegacyHelper([
+      'remember', 'Generated helper canonical candidate', '--type', 'rule', '--scope', 'repo',
+    ]);
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const candidate = JSON.parse(result.stdout);
+    result = runLegacyHelper(['decisions', 'query', 'Legacy poison']);
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.strictEqual(result.stdout, 'DECISION QUERY RESULTS (0 records)\n');
+    result = runLegacyHelper(['decisions', 'query', 'Generated helper canonical candidate']);
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, new RegExp(candidate.record.id));
+    assert.match(result.stdout, /\[status: candidate\]/);
+
+    const canonical = readDecisionRecords(path.join(tmpDir, '.work')).records;
+    assert.deepStrictEqual(canonical.map((entry) => entry.meta.id), [candidate.record.id]);
+    assert.deepStrictEqual(snapshotTree(planningDir), planningBefore);
   });
 
   test('fresh repo-local helper projects active decisions from nested cwd without writing', async () => {

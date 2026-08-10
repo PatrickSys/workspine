@@ -11,6 +11,7 @@ import {
 } from './lifecycle-state.mjs';
 import {
   buildDecisionsDigest,
+  getWorkPaths,
   persistDecisionsDigest,
   readDecisionRecords,
   readJsonIfExists,
@@ -84,6 +85,7 @@ export function evaluateLifecyclePreflight({
   }
 
   const lifecycle = evaluateLifecycleState({ planningDir });
+  const decisionWorkDir = getWorkPaths(resolve(planningDir, '..')).workDir;
   const normalizedPhase = phaseNumber ? normalizePhaseToken(phaseNumber) : null;
   const usesBrownfieldAuthority = surface === 'plan' && normalizedPhase === 'brownfield-change';
   const usesPlanAmendAuthority = surface === 'plan' && normalizedPhase === 'amend';
@@ -210,7 +212,7 @@ export function evaluateLifecyclePreflight({
   // existing machine-readable preflight contract intact while making the injected section
   // available to plan, execute, verify, and resume callers alike.
   const decisionsDigest = buildDecisionsDigest({
-    workDir: planningDir,
+    workDir: decisionWorkDir,
     phase: normalizedPhase,
     paths: normalizedPhase ? [`phase:${normalizedPhase}`] : [],
   });
@@ -226,7 +228,13 @@ export function evaluateLifecyclePreflight({
   if (surface === 'plan') {
     persistDecisionsDigest(planningDir, { phase: normalizedPhase, digest: decisionsDigest });
   } else if (surface === 'execute') {
-    warnings.push(...evaluateDecisionDispositionWarnings({ planningDir, phaseToken: normalizedPhase, lifecycle, workMilestone }));
+    warnings.push(...evaluateDecisionDispositionWarnings({
+      planningDir,
+      decisionWorkDir,
+      phaseToken: normalizedPhase,
+      lifecycle,
+      workMilestone,
+    }));
   }
 
   return {
@@ -515,7 +523,7 @@ function collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken = null
     .filter((artifact) => !phaseToken || artifact.phaseToken === phaseToken);
 }
 
-function evaluateDecisionDispositionWarnings({ planningDir, phaseToken, lifecycle, workMilestone }) {
+function evaluateDecisionDispositionWarnings({ planningDir, decisionWorkDir, phaseToken, lifecycle, workMilestone }) {
   const state = readJsonIfExists(join(planningDir, 'state.json'));
   const persisted = state.ok ? state.value?.lastDecisionsDigest : null;
   if (!persisted || !Array.isArray(persisted.records) || persisted.records.length === 0) return [];
@@ -536,7 +544,7 @@ function evaluateDecisionDispositionWarnings({ planningDir, phaseToken, lifecycl
     });
   }
 
-  const current = readDecisionRecords(planningDir);
+  const current = readDecisionRecords(decisionWorkDir);
   const currentById = new Map(current.records.map((record) => [record.meta.id, record]));
   const stale = [];
   for (const persistedRecord of persisted.records) {

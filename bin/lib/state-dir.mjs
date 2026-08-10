@@ -1,8 +1,8 @@
 // state-dir.mjs — Single source of truth for the Workspine state directory.
 //
-// Workspine keeps everything in ONE folder: .work/. Older projects used
-// .planning/. This module is the only place that decides which folder the tool
-// reads and writes for a given repo root. No other module may hardcode the name.
+// New Workspine lifecycle state lives in .work/. Older projects used .planning/.
+// This module owns legacy lifecycle-root selection; work-native continuity and
+// decision authority remain canonical in .work/ even while lifecycle files are legacy.
 
 import { existsSync } from 'fs';
 import { join } from 'path';

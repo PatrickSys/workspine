@@ -56,10 +56,10 @@ function typedDecision(id, decision, overrides = {}) {
   };
 }
 
-async function writeTypedDecision(input, options = {}) {
+async function writeTypedDecision(input, options = {}, stateDirName = '.work') {
   const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
   const { writeDecisionRecord } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
-  return writeDecisionRecord(path.join(tmpDir, '.work'), input, { repoRoot: tmpDir, ...options });
+  return writeDecisionRecord(path.join(tmpDir, stateDirName), input, { repoRoot: tmpDir, ...options });
 }
 
 function snapshotTree(directory, prefix = '') {
@@ -327,6 +327,48 @@ describe('next command bootstrap', () => {
     assert.strictEqual(state.privacy.raw_transcript_ingestion, 'disabled');
     const manifest = readJson(path.join(tmpDir, '.work', 'evidence', 'manifest.json'));
     assert.strictEqual(manifest.privacy.raw_artifacts_safe_to_publish, false);
+  });
+
+  test('nested next init anchors canonical work at a legacy workspace root shared by nested decisions', async () => {
+    writeJson('.planning/config.json', { initVersion: 1 });
+    const poison = await writeTypedDecision(
+      typedDecision('legacy-poison-a1b2', 'Legacy poison remains non-authoritative.'),
+      {},
+      '.planning',
+    );
+    const poisonPath = path.join(tmpDir, '.planning', 'decisions', `${poison.id}.md`);
+    const poisonBytes = fs.readFileSync(poisonPath);
+    const planningBefore = snapshotTree(path.join(tmpDir, '.planning'));
+    const nestedDir = path.join(tmpDir, 'src', 'nested');
+    fs.mkdirSync(nestedDir, { recursive: true });
+
+    const initialized = await runCliAsMain(nestedDir, ['next', '--init', '--json']);
+
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    assert.strictEqual(JSON.parse(initialized.output).operation, 'next init');
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'state.json')));
+    assert.strictEqual(fs.existsSync(path.join(nestedDir, '.work')), false);
+    assert.strictEqual(fs.existsSync(path.join(nestedDir, 'goal.md')), false);
+
+    const remembered = await runCliAsMain(nestedDir, [
+      'remember', 'Nested command shares root authority', '--type', 'rule', '--scope', 'repo',
+    ]);
+    assert.strictEqual(remembered.exitCode, 0, remembered.output);
+    const id = JSON.parse(remembered.output).record.id;
+    const rootQuery = await runCliAsMain(tmpDir, ['decisions', 'query', 'Nested command shares root authority']);
+    assert.strictEqual(rootQuery.exitCode, 0, rootQuery.output);
+    assert.match(rootQuery.output, new RegExp(id));
+    const promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', id]);
+    assert.strictEqual(promoted.exitCode, 0, promoted.output);
+    const nestedNext = await runCliAsMain(nestedDir, ['next', '--json']);
+    assert.strictEqual(nestedNext.exitCode, 0, nestedNext.output);
+    assert.ok(JSON.parse(nestedNext.output).decisionsDigest.ids.includes(id));
+    const poisonQuery = await runCliAsMain(tmpDir, ['decisions', 'query', 'Legacy poison']);
+    assert.strictEqual(poisonQuery.exitCode, 0, poisonQuery.output);
+    assert.strictEqual(poisonQuery.output, 'DECISION QUERY RESULTS (0 records)');
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'decisions', `${id}.md`)));
+    assert.deepStrictEqual(fs.readFileSync(poisonPath), poisonBytes);
+    assert.deepStrictEqual(snapshotTree(path.join(tmpDir, '.planning')), planningBefore);
   });
 
   test('plain next emits json when stdout is captured', async () => {

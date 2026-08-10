@@ -13,10 +13,10 @@ import { execFileSync } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { collectNativePhaseArtifacts, evaluateLifecycleState, partitionPlanChains } from './lifecycle-state.mjs';
-import { resolveStateDir } from './state-dir.mjs';
+import { resolveStateDir, STATE_DIR_NAME } from './state-dir.mjs';
 import { writeFileAtomic as replaceFileAtomically } from './atomic-write.mjs';
 
-export const WORK_DIR_NAME = '.work';
+export const WORK_DIR_NAME = STATE_DIR_NAME;
 
 export const NEXT_STATES = Object.freeze([
   'ask_user',

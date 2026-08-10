@@ -1,11 +1,14 @@
+import { existsSync } from 'fs';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import {
   DECISION_RECORD_SCOPES,
   DECISION_RECORD_TYPES,
+  getWorkPaths,
   recallDecisions,
   renderDecisionQueryResults,
   transitionDecisionRecord,
+  WORK_DIR_NAME,
   writeDecisionRecord,
 } from './work-context.mjs';
 
@@ -28,15 +31,16 @@ function runRemember(rawArgs, removedMessage) {
   const workspace = resolveWorkspaceContext(rawArgs);
   if (workspace.invalid) return fail(workspace.error);
   try {
+    const workDir = resolveDecisionWorkDir(workspace);
     const [text, ...args] = workspace.args;
     if (args.includes(REMEMBER_REMOVED_FLAG)) return fail(removedMessage);
-    return executeRememberCandidate(workspace, text, args);
+    return executeRememberCandidate(workspace, workDir, text, args);
   } catch (error) {
     fail(error.message);
   }
 }
 
-function executeRememberCandidate(workspace, text, args) {
+function executeRememberCandidate(workspace, workDir, text, args) {
   const type = requireFlag(args, '--type', REMEMBER_USAGE);
   const scope = requireFlag(args, '--scope', REMEMBER_USAGE);
   const why = parseFlagValue(args, '--why').value || 'Captured through gsdd remember; verify before activation.';
@@ -45,7 +49,7 @@ function executeRememberCandidate(workspace, text, args) {
   if (!text || text.startsWith('--') || !DECISION_RECORD_TYPES.includes(type) || !DECISION_RECORD_SCOPES.includes(scope)) {
     return fail(REMEMBER_USAGE);
   }
-  const result = writeDecisionRecord(workspace.planningDir, {
+  const result = writeDecisionRecord(workDir, {
     type,
     status,
     scope,
@@ -68,6 +72,7 @@ export function cmdDecisions(...rawArgs) {
   const workspace = resolveWorkspaceContext(rawArgs);
   if (workspace.invalid) return fail(workspace.error);
   try {
+    const workDir = resolveDecisionWorkDir(workspace);
     const [subcommand, subject, ...args] = workspace.args;
     if (!subject || subject.startsWith('--')) return fail(DECISIONS_USAGE);
     if (['promote', 'reject', 'invalidate'].includes(subcommand)) {
@@ -84,7 +89,7 @@ export function cmdDecisions(...rawArgs) {
       }
       const reason = parseFlagValue(args, '--reason');
       if (reason.invalid || (subcommand === 'invalidate' && !reason.value)) return fail(DECISIONS_USAGE);
-      const record = transitionDecisionRecord(workspace.planningDir, subject, subcommand, { reason: reason.value });
+      const record = transitionDecisionRecord(workDir, subject, subcommand, { reason: reason.value });
       output({ record: {
         id: record.meta.id,
         status: record.meta.status,
@@ -94,7 +99,7 @@ export function cmdDecisions(...rawArgs) {
       return;
     }
     if (subcommand !== 'query') return fail(DECISIONS_USAGE);
-    return queryDecisions(workspace, subject, args, DECISIONS_USAGE);
+    return queryDecisions(workDir, subject, args, DECISIONS_USAGE);
   } catch (error) {
     fail(error.message);
   }
@@ -104,25 +109,39 @@ export function cmdDecisionsQuery(...rawArgs) {
   const workspace = resolveWorkspaceContext(rawArgs);
   if (workspace.invalid) return fail(workspace.error);
   try {
+    const workDir = resolveDecisionWorkDir(workspace);
     const [subcommand, terms, ...args] = workspace.args;
     if (subcommand !== 'query') return fail(DECISIONS_QUERY_USAGE);
-    return queryDecisions(workspace, terms, args, DECISIONS_QUERY_USAGE);
+    return queryDecisions(workDir, terms, args, DECISIONS_QUERY_USAGE);
   } catch (error) {
     fail(error.message);
   }
 }
 
-function queryDecisions(workspace, terms, args, usage) {
+function queryDecisions(workDir, terms, args, usage) {
   if (!terms || terms.startsWith('--')) return fail(usage);
   const path = parseFlagValue(args, '--path');
   if (path.invalid || hasUnexpectedQueryArgs(args)) return fail(usage);
   const recalled = recallDecisions({
-    workDir: workspace.planningDir,
+    workDir,
     terms,
     paths: path.value ? [path.value] : [],
     limit: 10,
   });
   console.log(renderDecisionQueryResults(recalled.records));
+}
+
+function resolveDecisionWorkDir(workspace) {
+  const { workDir } = getWorkPaths(workspace.workspaceRoot);
+  if (workspace.stateDirName !== WORK_DIR_NAME && !existsSync(workDir)) {
+    throw new Error(
+      `Decision commands require canonical ${WORK_DIR_NAME}/ authority. `
+      + `This repo only has legacy ${workspace.stateDirName}/ lifecycle state. `
+      + 'Run `gsdd next --init` first; migrate legacy lifecycle state explicitly when ready. '
+      + `Decisions from ${workspace.stateDirName}/ are not imported automatically.`,
+    );
+  }
+  return workDir;
 }
 
 function requireFlag(args, name, usage) {
