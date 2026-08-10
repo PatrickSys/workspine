@@ -271,6 +271,51 @@ describe('next command questions and decisions', () => {
     assert.match(fs.readFileSync(decisionPath, 'utf-8'), /Keep graph storage file-backed/);
     const events = fs.readFileSync(path.join(tmpDir, '.work', 'graph', 'events.jsonl'), 'utf-8');
     assert.match(events, /decision:jsonl-first/);
+
+    const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+    const { readDecisionRecords, buildDecisionsDigest } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+    const workDir = path.join(tmpDir, '.work');
+    const listMembership = (directory, prefix = '') => fs.readdirSync(directory, { withFileTypes: true })
+      .flatMap((entry) => {
+        const relativePath = path.join(prefix, entry.name);
+        return entry.isDirectory()
+          ? [`${relativePath}/`, ...listMembership(path.join(directory, entry.name), relativePath)]
+          : [relativePath];
+      })
+      .sort();
+    const snapshot = () => ({
+      decision: fs.readFileSync(decisionPath),
+      state: fs.readFileSync(path.join(workDir, 'state.json')),
+      events: fs.readFileSync(path.join(workDir, 'graph', 'events.jsonl')),
+      index: fs.readFileSync(path.join(workDir, 'graph', 'index.json')),
+      membership: listMembership(workDir),
+    });
+    const beforeScan = snapshot();
+    const scanned = readDecisionRecords(workDir);
+    const digest = buildDecisionsDigest({ workDir });
+    for (let index = 0; index < 2; index += 1) {
+      readDecisionRecords(workDir);
+      buildDecisionsDigest({ workDir });
+    }
+
+    assert.deepStrictEqual(scanned.records, []);
+    assert.deepStrictEqual(scanned.invalid, []);
+    assert.deepStrictEqual(scanned.readErrors, []);
+    assert.deepStrictEqual(scanned.legacyRecords, [{
+      id: 'jsonl-first',
+      path: '.work/decisions/jsonl-first.md',
+      format: 'next_graph_v1',
+    }]);
+    assert.deepStrictEqual(digest.legacyRecords, scanned.legacyRecords);
+    assert.strictEqual(digest.counts.excluded.legacy, 1);
+    assert.ok(!digest.ids.includes('jsonl-first'));
+    assert.ok(!digest.text.includes('JSONL first'));
+    const afterScan = snapshot();
+    assert.deepStrictEqual(afterScan.membership, beforeScan.membership);
+    assert.deepStrictEqual(afterScan.decision, beforeScan.decision);
+    assert.deepStrictEqual(afterScan.state, beforeScan.state);
+    assert.deepStrictEqual(afterScan.events, beforeScan.events);
+    assert.deepStrictEqual(afterScan.index, beforeScan.index);
   });
 
   test('same decision replay is unchanged and appends no graph events', async () => {

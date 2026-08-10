@@ -30,6 +30,29 @@ function record(id, decision, overrides = {}) {
   };
 }
 
+function legacyGraphRecord({
+  id = 'legacy-record',
+  createdAt = '2026-07-11T09:00:00.000Z',
+  privacy = 'repo',
+  supersedes = null,
+  title = 'Legacy graph record',
+  body = 'This remains non-authoritative.',
+} = {}) {
+  return [
+    '---',
+    `id: ${id}`,
+    `created_at: ${createdAt}`,
+    `privacy: ${privacy}`,
+    supersedes === null ? null : `supersedes: ${supersedes}`,
+    '---',
+    '',
+    `# ${title}`,
+    '',
+    body,
+    '',
+  ].filter((line) => line !== null).join('\n');
+}
+
 describe('S1 decision recall loop', () => {
   const dirs = [];
   afterEach(() => {
@@ -231,17 +254,127 @@ describe('S1 decision recall loop', () => {
     const digest = buildDecisionsDigest({ workDir, now });
 
     assert.deepStrictEqual(Object.keys(digest), [
-      'records', 'text', 'counts', 'truncated', 'readErrors', 'ids',
+      'records', 'legacyRecords', 'text', 'counts', 'truncated', 'readErrors', 'ids',
     ]);
     assert.ok(digest.records.every((entry) => Object.keys(entry).sort().join(',') === 'hash,id,status'));
+    assert.deepStrictEqual(digest.legacyRecords, []);
     assert.deepStrictEqual(digest.ids, digest.records.map((entry) => entry.id));
     assert.strictEqual(digest.counts.eligible, 1);
     assert.strictEqual(digest.counts.returned, 1);
     assert.strictEqual(digest.counts.excluded.candidate, 1);
     assert.strictEqual(digest.counts.excluded.invalidated, 1);
     assert.strictEqual(digest.counts.excluded.superseded, 1);
+    assert.strictEqual(digest.counts.excluded.legacy, 0);
     assert.strictEqual(digest.counts.invalid, 0);
     assert.strictEqual(digest.truncated, false);
+  });
+
+  test('keeps exact graph-era records separately from typed authority across scanner, recall, and digest', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    const { buildDecisionsDigest, readDecisionRecords, recallDecisions, recordDecision, writeDecisionRecord } = await loadStore();
+    const now = new Date('2026-07-11T09:00:00.000Z');
+    writeDecisionRecord(workDir, record('typed-active-a1b2', 'Typed active authority'), { now, repoRoot: root });
+    recordDecision(workDir, {
+      id: 'legacy-graph',
+      title: 'Legacy graph record',
+      body: 'This stays non-authoritative.',
+    }, { now });
+    fs.writeFileSync(path.join(workDir, 'decisions', 'legacy-near-miss.md'), [
+      '---',
+      'id: legacy-near-miss',
+      `created_at: ${now.toISOString()}`,
+      'privacy: repo',
+      'type: rule',
+      '---',
+      '',
+      '# Near miss',
+      '',
+      'Must remain invalid.',
+      '',
+    ].join('\n'));
+
+    const scanned = readDecisionRecords(workDir);
+    const recalled = recallDecisions({ workDir, now });
+    const digest = buildDecisionsDigest({ workDir, now });
+    const expectedLegacy = [{ id: 'legacy-graph', path: '.work/decisions/legacy-graph.md', format: 'next_graph_v1' }];
+
+    assert.deepStrictEqual(scanned.records.map((entry) => entry.meta.id), ['typed-active-a1b2']);
+    assert.deepStrictEqual(scanned.legacyRecords, expectedLegacy);
+    assert.deepStrictEqual(scanned.invalid.map((entry) => entry.path), ['.work/decisions/legacy-near-miss.md']);
+    assert.deepStrictEqual(recalled.records.map((entry) => entry.record.meta.id), ['typed-active-a1b2']);
+    assert.deepStrictEqual(recalled.legacyRecords, expectedLegacy);
+    assert.deepStrictEqual(digest.records.map((entry) => entry.id), ['typed-active-a1b2']);
+    assert.deepStrictEqual(digest.legacyRecords, expectedLegacy);
+    assert.strictEqual(digest.counts.excluded.legacy, 1);
+    assert.ok(!digest.ids.includes('legacy-graph'));
+    assert.ok(!digest.text.includes('Legacy graph record'));
+  });
+
+  test('recognizes only the exact graph-era envelope and preserves malformed near-misses as invalid evidence', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    const decisionDir = path.join(workDir, 'decisions');
+    fs.mkdirSync(decisionDir, { recursive: true });
+    const { parseDecisionRecord, readDecisionRecords } = await loadStore();
+    const writeLegacy = (name, content) => fs.writeFileSync(path.join(decisionDir, `${name}.md`), content);
+    const exact = legacyGraphRecord({ id: 'exact-legacy' });
+    writeLegacy('exact-legacy', exact);
+    assert.throws(() => parseDecisionRecord(exact), /missing type/);
+
+    const cases = [
+      ['reordered', legacyGraphRecord({ id: 'reordered' }).replace(
+        'id: reordered\ncreated_at: 2026-07-11T09:00:00.000Z\nprivacy: repo',
+        'created_at: 2026-07-11T09:00:00.000Z\nid: reordered\nprivacy: repo',
+      )],
+      ['duplicate', legacyGraphRecord({ id: 'duplicate' }).replace('created_at:', 'id: duplicate\ncreated_at:')],
+      ['unknown', legacyGraphRecord({ id: 'unknown' }).replace('privacy: repo', 'privacy: repo\nunknown: value')],
+      ['typed', legacyGraphRecord({ id: 'typed' }).replace('privacy: repo', 'privacy: repo\ntype: rule')],
+      ['whitespace', legacyGraphRecord({ id: 'whitespace' }).replace('id: whitespace', 'id:  whitespace')],
+      ['loose-time', legacyGraphRecord({ id: 'loose-time', createdAt: '2026-07-11T09:00:00Z' })],
+      ['invalid-time', legacyGraphRecord({ id: 'invalid-time', createdAt: '2026-02-30T09:00:00.000Z' })],
+      ['bad-privacy', legacyGraphRecord({ id: 'bad-privacy', privacy: 'private' })],
+      ['unsafe-id', legacyGraphRecord({ id: 'unsafe/id' })],
+      ['empty-supersedes', legacyGraphRecord({ id: 'empty-supersedes', supersedes: '' })],
+      ['unsafe-supersedes', legacyGraphRecord({ id: 'unsafe-supersedes', supersedes: 'unsafe/id' })],
+      ['filename-mismatch', legacyGraphRecord({ id: 'different-id' })],
+      ['malformed-delimiter', legacyGraphRecord({ id: 'malformed-delimiter' }).replace(/^---/, '--')],
+      ['preamble', `preamble\n${legacyGraphRecord({ id: 'preamble' })}`],
+      ['missing-heading', legacyGraphRecord({ id: 'missing-heading' }).replace('# Legacy graph record', 'Legacy graph record')],
+      ['blank-heading', legacyGraphRecord({ id: 'blank-heading', title: '   ' })],
+      ['non-h1-heading', legacyGraphRecord({ id: 'non-h1-heading' }).replace('# Legacy graph record', '## Legacy graph record')],
+      ['extra-blank', legacyGraphRecord({ id: 'extra-blank' }).replace('---\n\n# Legacy graph record', '---\n\n\n# Legacy graph record')],
+      ['missing-heading-blank', legacyGraphRecord({ id: 'missing-heading-blank' }).replace('# Legacy graph record\n\n', '# Legacy graph record\n')],
+      ['missing-final-lf', legacyGraphRecord({ id: 'missing-final-lf' }).slice(0, -1)],
+    ];
+    for (const [name, content] of cases) writeLegacy(name, content);
+
+    const scanned = readDecisionRecords(workDir);
+    assert.deepStrictEqual(scanned.legacyRecords, [{ id: 'exact-legacy', path: '.work/decisions/exact-legacy.md', format: 'next_graph_v1' }]);
+    assert.deepStrictEqual(scanned.records, []);
+    assert.deepStrictEqual(scanned.invalid.map((entry) => entry.path).sort(), cases.map(([name]) => `.work/decisions/${name}.md`).sort());
+    assert.strictEqual(scanned.readErrors.length, cases.length);
+  });
+
+  test('uses the actual legacy state-root name in read-only legacy path evidence', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const planningDir = path.join(root, '.planning');
+    const legacyPath = path.join(planningDir, 'decisions', 'planning-legacy.md');
+    fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+    const original = legacyGraphRecord({ id: 'planning-legacy' }).replace(/\n/g, '\r\n');
+    fs.writeFileSync(legacyPath, original);
+    const { buildDecisionsDigest, readDecisionRecords } = await loadStore();
+
+    const scanned = readDecisionRecords(planningDir);
+    const digest = buildDecisionsDigest({ workDir: planningDir });
+
+    assert.deepStrictEqual(scanned.legacyRecords, [{ id: 'planning-legacy', path: '.planning/decisions/planning-legacy.md', format: 'next_graph_v1' }]);
+    assert.deepStrictEqual(digest.legacyRecords, scanned.legacyRecords);
+    assert.strictEqual(digest.counts.excluded.legacy, 1);
+    assert.strictEqual(fs.readFileSync(legacyPath, 'utf-8'), original);
   });
 
   test('continues after injected decision read failures without filesystem permission tricks', async () => {
@@ -282,6 +415,8 @@ describe('S1 decision recall loop', () => {
     });
     assert.strictEqual(digest.directoryUnreadable, true);
     assert.deepStrictEqual(digest.records, []);
+    assert.deepStrictEqual(digest.legacyRecords, []);
+    assert.strictEqual(digest.counts.excluded.legacy, 0);
     assert.strictEqual(digest.counts.invalid, 0);
     assert.deepStrictEqual(digest.readErrors, [{ path: '.work/decisions', code: 'EIO' }]);
   });

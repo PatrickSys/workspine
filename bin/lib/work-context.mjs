@@ -694,12 +694,13 @@ export function readDecisionRecords(workDir, { reader = null } = {}) {
   } catch (error) {
     return {
       records: [],
+      legacyRecords: [],
       invalid: [],
       readErrors: [{ path: decisionRecordPath(workDir, decisionDir), code: error.code || 'directory_read_error' }],
       directoryUnreadable: true,
     };
   }
-  if (!hasDirectory) return { records: [], invalid: [], readErrors: [], directoryUnreadable: false };
+  if (!hasDirectory) return { records: [], legacyRecords: [], invalid: [], readErrors: [], directoryUnreadable: false };
 
   let entries;
   try {
@@ -707,6 +708,7 @@ export function readDecisionRecords(workDir, { reader = null } = {}) {
   } catch (error) {
     return {
       records: [],
+      legacyRecords: [],
       invalid: [],
       readErrors: [{ path: decisionRecordPath(workDir, decisionDir), code: error.code || 'directory_read_error' }],
       directoryUnreadable: true,
@@ -714,6 +716,7 @@ export function readDecisionRecords(workDir, { reader = null } = {}) {
   }
 
   const records = [];
+  const legacyRecords = [];
   const invalid = [];
   const readErrors = [];
   for (const entry of entries) {
@@ -722,14 +725,21 @@ export function readDecisionRecords(workDir, { reader = null } = {}) {
     if (!isFile || !name?.endsWith('.md')) continue;
     const filePath = join(decisionDir, name);
     try {
-      records.push(parseDecisionRecord((fsReader.readFileSync || readFileSync)(filePath, 'utf-8'), filePath));
+      const content = (fsReader.readFileSync || readFileSync)(filePath, 'utf-8');
+      try {
+        records.push(parseDecisionRecord(content, filePath));
+      } catch (typedError) {
+        const legacy = parseLegacyDecisionRecord(content, filePath, workDir);
+        if (!legacy) throw typedError;
+        legacyRecords.push(legacy);
+      }
     } catch (error) {
       const path = decisionRecordPath(workDir, filePath);
       invalid.push({ path, error: error.message });
       readErrors.push({ path, code: error.code || 'invalid_decision_record' });
     }
   }
-  return { records, invalid, readErrors, directoryUnreadable: false };
+  return { records, legacyRecords, invalid, readErrors, directoryUnreadable: false };
 }
 
 export function recallDecisions({
@@ -781,6 +791,7 @@ export function recallDecisions({
 
   return {
     records,
+    legacyRecords: scanned.legacyRecords,
     invalid: scanned.invalid,
     query: { terms: String(terms || ''), paths: pathQuery, type: requestedTypes, status: requestedStatuses },
   };
@@ -791,11 +802,12 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
   if (scanned.directoryUnreadable) {
     const digest = {
       records: [],
+      legacyRecords: [],
       text: renderDecisionsDigest([]),
       counts: {
         eligible: 0,
         returned: 0,
-        excluded: { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0 },
+        excluded: { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0, legacy: 0 },
         invalid: 0,
       },
       truncated: false,
@@ -827,7 +839,7 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
     .sort((left, right) => right.digestRelevance - left.digestRelevance || compareRecallResults(left, right));
   const returnedResults = scoped.filter((result) => result.record.meta.status === 'active').slice(0, DECISION_DIGEST_MAX_RECORDS);
   const returnedIds = new Set(returnedResults.map((result) => result.record.meta.id));
-  const excluded = { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0 };
+  const excluded = { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0, legacy: scanned.legacyRecords.length };
   for (const result of scoped) {
     const status = result.record.meta.status;
     if (status === 'invalidated') excluded.invalidated += 1;
@@ -846,6 +858,7 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
   const activeResults = returnedResults;
   return {
     records,
+    legacyRecords: scanned.legacyRecords,
     text: renderDecisionsDigest(activeResults),
     counts: {
       eligible: scoped.filter((result) => result.record.meta.status === 'active').length,
@@ -870,24 +883,66 @@ export function renderDecisionsDigest(results, { heading = 'DECISIONS DIGEST' } 
 }
 
 export function parseDecisionRecord(content, filePath = null) {
-  const normalized = String(content || '').replace(/\r\n/g, '\n');
-  const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) throw new Error('decision record requires YAML-style frontmatter');
-  const meta = {};
-  for (const line of match[1].split('\n')) {
-    const separator = line.indexOf(':');
-    if (separator < 1) throw new Error(`invalid decision frontmatter line: ${line}`);
-    meta[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
-  }
+  const envelope = parseDecisionFrontmatter(content);
+  if (!envelope) throw new Error('decision record requires YAML-style frontmatter');
+  const { meta, body } = envelope;
   for (const field of ['id', 'type', 'status', 'scope', 'decision', 'why', 'for', 'provenance', 'created_at', 'updated_at', 'last_verified', 'hash']) {
     if (!meta[field]) throw new Error(`decision record is missing ${field}`);
   }
   if (!DECISION_RECORD_TYPES.includes(meta.type)) throw new Error(`unsupported decision record type ${meta.type}`);
   if (!DECISION_RECORD_STATUSES.includes(meta.status)) throw new Error(`unsupported decision record status ${meta.status}`);
   if (!DECISION_RECORD_SCOPES.includes(meta.scope)) throw new Error(`unsupported decision record scope ${meta.scope}`);
-  const body = match[2].replace(/\n$/, '');
-  if (hashDecisionBody(body) !== meta.hash) throw new Error(`decision record hash mismatch for ${meta.id}`);
-  return { meta, body, filePath };
+  const normalizedBody = body.replace(/\n$/, '');
+  if (hashDecisionBody(normalizedBody) !== meta.hash) throw new Error(`decision record hash mismatch for ${meta.id}`);
+  return { meta, body: normalizedBody, filePath };
+}
+
+function parseDecisionFrontmatter(content) {
+  const normalized = String(content || '').replace(/\r\n/g, '\n');
+  const match = normalized.match(/^---\n([\s\S]*?)\n---(\n?)([\s\S]*)$/);
+  if (!match) return null;
+  const meta = {};
+  for (const line of match[1].split('\n')) {
+    const separator = line.indexOf(':');
+    if (separator < 1) throw new Error(`invalid decision frontmatter line: ${line}`);
+    meta[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+  }
+  return { frontmatter: match[1], meta, separator: match[2], body: match[3] };
+}
+
+function parseLegacyDecisionRecord(content, filePath, workDir) {
+  let envelope;
+  try {
+    envelope = parseDecisionFrontmatter(content);
+  } catch {
+    return null;
+  }
+  if (!envelope || envelope.separator !== '\n') return null;
+  const lines = envelope.frontmatter.split('\n');
+  if (lines.length !== 3 && lines.length !== 4) return null;
+  if (!lines[0].startsWith('id: ') || !lines[1].startsWith('created_at: ') || !lines[2].startsWith('privacy: ')) return null;
+  if (lines.length === 4 && !lines[3].startsWith('supersedes: ')) return null;
+  const id = lines[0].slice('id: '.length);
+  const createdAt = lines[1].slice('created_at: '.length);
+  const privacy = lines[2].slice('privacy: '.length);
+  const supersedes = lines.length === 4 ? lines[3].slice('supersedes: '.length) : null;
+  const expectedFrontmatter = [
+    `id: ${id}`,
+    `created_at: ${createdAt}`,
+    `privacy: ${privacy}`,
+    supersedes === null ? null : `supersedes: ${supersedes}`,
+  ].filter((line) => line !== null).join('\n');
+  if (envelope.frontmatter !== expectedFrontmatter) return null;
+  if (!/^[A-Za-z0-9._-]+$/.test(id) || basename(filePath, '.md') !== id) return null;
+  if (!PRIVACY_LEVELS.includes(privacy) || (supersedes !== null && !/^[A-Za-z0-9._-]+$/.test(supersedes))) return null;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(createdAt)) return null;
+  try {
+    if (new Date(createdAt).toISOString() !== createdAt) return null;
+  } catch {
+    return null;
+  }
+  if (!/^\n# (?=[^\n]*\S)[^\n]*\n\n[\s\S]*\n$/.test(envelope.body)) return null;
+  return { id, path: decisionRecordPath(workDir, filePath), format: 'next_graph_v1' };
 }
 
 export function hashDecisionBody(body) {
