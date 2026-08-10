@@ -50,14 +50,7 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     };
   });
 
-  const incompletePlans = phaseArtifacts.filter((artifact) => {
-    if (artifact.kind !== 'plan') return false;
-    return !phaseArtifacts.some((candidate) =>
-      candidate.dir === artifact.dir &&
-      candidate.baseId === artifact.baseId &&
-      candidate.kind === 'summary'
-    );
-  });
+  const incompletePlans = findUnpairedPlanArtifacts(phaseArtifacts, { companionKind: 'summary' });
 
   const counts = {
     total: enrichedPhases.length,
@@ -399,6 +392,32 @@ export function readPlanStatus(content) {
 
 export function isSupersededPlanContent(content) {
   return readPlanStatus(content) === 'superseded';
+}
+
+export function findUnpairedPlanArtifacts(artifacts, { companionKind } = {}) {
+  const source = Array.isArray(artifacts) ? artifacts : [];
+  const normalizedCompanionKind = String(companionKind || '').trim().toLowerCase();
+  if (!normalizedCompanionKind) {
+    throw new Error('companionKind is required');
+  }
+
+  const participatingArtifacts = source.filter(
+    (artifact) => artifact.kind === 'plan' || artifact.kind === normalizedCompanionKind
+  );
+  for (const artifact of participatingArtifacts) {
+    if (typeof artifact.chainKey !== 'string' || !artifact.chainKey.trim()) {
+      throw new Error(`Plan-chain artifact is missing a normalized chain key: ${artifact.displayPath || artifact.name || 'unknown'}`);
+    }
+  }
+
+  const companionChainKeys = new Set(
+    participatingArtifacts
+      .filter((artifact) => artifact.kind === normalizedCompanionKind)
+      .map((artifact) => artifact.chainKey)
+  );
+  return participatingArtifacts.filter(
+    (artifact) => artifact.kind === 'plan' && !companionChainKeys.has(artifact.chainKey)
+  );
 }
 
 /**

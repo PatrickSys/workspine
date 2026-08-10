@@ -1051,6 +1051,7 @@ export function buildPhaseVerificationReport(...args) {
   const matchingHistoricalArtifacts = lifecycle.historicalPhaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
   const matchingPlans = matchingArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath);
   const matchingSummaries = matchingArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath);
+  const incompletePlans = lifecycle.incompletePlans.filter((artifact) => artifact.phaseToken === phaseToken);
   const prerequisiteBlockers = [];
   if (matchingPlans.length === 0) {
     prerequisiteBlockers.push({
@@ -1061,14 +1062,14 @@ export function buildPhaseVerificationReport(...args) {
       fix_hint: `Run /gsdd-plan ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
     });
   }
-  if (matchingPlans.length > 0 && matchingSummaries.length === 0) {
-    prerequisiteBlockers.push({
+  if (matchingPlans.length > 0 && incompletePlans.length > 0) {
+    prerequisiteBlockers.push(...incompletePlans.map((plan) => ({
       code: 'missing_phase_summary',
       severity: 'blocker',
-      path: `${stateName}/phases/${padPhase(phaseNum)}-*/${padPhase(phaseNum)}-SUMMARY.md`,
-      message: `No SUMMARY.md artifact was found for phase ${normalizePhaseToken(phaseNum)}.`,
+      path: plan.displayPath,
+      message: `No matching SUMMARY.md artifact was found for ${plan.displayPath}.`,
       fix_hint: `Run /gsdd-execute ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
-    });
+    })));
   }
   const artifacts = matchingPlans.flatMap((planPath) => {
     const fullPath = join(phasesDir, planPath);
@@ -1105,7 +1106,7 @@ export function buildPhaseVerificationReport(...args) {
     ...(browserProofObservationStatus.warnings || []),
   ];
   const artifactStatus = evaluatePlanArtifacts(artifacts);
-  const legacyVerified = matchingPlans.length > 0 && matchingSummaries.length > 0;
+  const legacyVerified = matchingPlans.length > 0 && incompletePlans.length === 0;
   const blockedOn = [
     ...(prerequisiteBlockers.length > 0 ? ['prerequisites'] : []),
     ...(artifactStatus.satisfied ? [] : ['artifacts']),

@@ -596,6 +596,41 @@ describe('Phase 29 lifecycle-state helper', () => {
     );
   });
 
+  test('finds unpaired standard SUMMARY and native EXECUTE chains by normalized chain key', async () => {
+    const mod = await importLifecycleStateModule();
+    const standardPlan = { kind: 'plan', chainKey: 'standard/01-1', name: '01-1-PLAN.md' };
+    const unrelatedSummary = { kind: 'summary', chainKey: 'standard/01-2', name: '01-2-SUMMARY.md' };
+    const matchingSummary = { kind: 'summary', chainKey: 'standard/01-1', name: '01-1-SUMMARY.md' };
+    assert.deepStrictEqual(
+      mod.findUnpairedPlanArtifacts([standardPlan, unrelatedSummary], { companionKind: 'summary' }),
+      [standardPlan]
+    );
+    assert.deepStrictEqual(
+      mod.findUnpairedPlanArtifacts([standardPlan, unrelatedSummary, matchingSummary], { companionKind: 'summary' }),
+      []
+    );
+
+    const nativePlan = { kind: 'plan', chainKey: 'native/7-a', name: '7-PLAN.md' };
+    const unrelatedExecute = { kind: 'execute', chainKey: 'native/7-b', name: '7-EXECUTE.md' };
+    const matchingExecute = { kind: 'execute', chainKey: 'native/7-a', name: '7-EXECUTE.md' };
+    assert.deepStrictEqual(
+      mod.findUnpairedPlanArtifacts([nativePlan, unrelatedExecute], { companionKind: 'execute' }),
+      [nativePlan]
+    );
+    assert.deepStrictEqual(
+      mod.findUnpairedPlanArtifacts([nativePlan, unrelatedExecute, matchingExecute], { companionKind: 'execute' }),
+      []
+    );
+    assert.throws(
+      () => mod.findUnpairedPlanArtifacts([{ kind: 'plan', name: 'missing-key-PLAN.md' }], { companionKind: 'summary' }),
+      /missing a normalized chain key/
+    );
+    assert.throws(
+      () => mod.findUnpairedPlanArtifacts([{ kind: 'execute', name: 'missing-key-EXECUTE.md' }], { companionKind: 'execute' }),
+      /missing a normalized chain key/
+    );
+  });
+
   test('keeps superseded standard plan and summary historical while preserving verification evidence', async () => {
     fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 29: Current Work**\n');
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing');
@@ -1394,6 +1429,37 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(output.blockers.some((blocker) => blocker.code === 'no_pending_plan'));
   });
 
+  test('keeps a work-native plan pending until its exact-chain execute artifact exists', async () => {
+    writePreflightPhase(tmpDir, '30');
+    const milestoneDir = path.join(tmpDir, '.work', 'milestone');
+    const planDir = path.join(milestoneDir, 'phases', '7-plan-chain-a');
+    const unrelatedExecuteDir = path.join(milestoneDir, 'phases', '7-plan-chain-b');
+    fs.mkdirSync(planDir, { recursive: true });
+    fs.mkdirSync(unrelatedExecuteDir, { recursive: true });
+    fs.writeFileSync(path.join(milestoneDir, 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 7: Native chain pairing**\n');
+    fs.writeFileSync(path.join(planDir, '7-PLAN.md'), '# plan\n');
+    fs.writeFileSync(path.join(unrelatedExecuteDir, '7-EXECUTE.md'), '# unrelated execute\n');
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    let output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    output = JSON.parse(result.output);
+    const missingExecute = output.blockers.find((blocker) => blocker.code === 'missing_execute');
+    assert.deepStrictEqual(missingExecute?.artifacts, ['.work/milestone/phases/7-plan-chain-a/7-PLAN.md']);
+
+    fs.writeFileSync(path.join(planDir, '7-EXECUTE.md'), '# matching execute\n');
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).reason, 'no_pending_plan');
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+  });
+
   test('allows work-milestone verify after plan and execute artifacts exist', async () => {
     writePreflightPhase(tmpDir, '30');
     writeWorkMilestonePhase(tmpDir, '7', { execute: true });
@@ -2002,6 +2068,53 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     assert.strictEqual(output.legacy_verified, false);
     assert.deepStrictEqual(output.blocked_on, ['prerequisites']);
     assert.ok(output.prerequisite_status.blockers.some((blocker) => blocker.code === 'missing_phase_summary'));
+  });
+
+  test('phase verify requires a summary for each exact current plan chain', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-mixed-plan-chains');
+    const unmatchedPlan = '01-mixed-plan-chains/01-1-PLAN.md';
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '# Roadmap\n\n- [-] **Phase 1: Mixed Plan Chains**\n'
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-1-PLAN.md'),
+      '---\nbrowser_proof_required: false\nbrowser_proof_rationale: CLI-only chain verification.\n---\n# Phase 1 Plan\n'
+    );
+    fs.writeFileSync(path.join(phaseDir, '01-2-SUMMARY.md'), '# Orphan Phase 1 Summary\n');
+
+    const direct = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(direct.exitCode, 1, direct.output);
+    const directOutput = JSON.parse(direct.output);
+    const directBlocker = directOutput.prerequisite_status.blockers.find(
+      (blocker) => blocker.code === 'missing_phase_summary'
+    );
+    assert.strictEqual(directOutput.legacy_verified, false);
+    assert.strictEqual(directBlocker?.path, unmatchedPlan);
+
+    const preflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '1', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(preflight.exitCode, 1, preflight.output);
+    const preflightOutput = JSON.parse(preflight.output);
+    const preflightBlocker = preflightOutput.blockers.find((blocker) => blocker.code === 'missing_summary');
+    assert.deepStrictEqual(preflightBlocker?.artifacts, [unmatchedPlan]);
+
+    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const helper = spawnSync(process.execPath, [helperPath, 'verify', '1'], {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(helper.status, 1, helper.stderr || helper.stdout);
+    assert.deepStrictEqual(JSON.parse(helper.stdout), directOutput);
+
+    fs.writeFileSync(path.join(phaseDir, '01-1-SUMMARY.md'), '# Matching Phase 1 Summary\n');
+
+    const completedDirect = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(completedDirect.exitCode, 0, completedDirect.output);
+    assert.strictEqual(JSON.parse(completedDirect.output).verified, true);
+    const completedPreflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '1', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(completedPreflight.exitCode, 0, completedPreflight.output);
   });
 
   test('generated local helper runs direct phase verify checks', async () => {
@@ -2730,9 +2843,9 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     fs.writeFileSync(path.join(phaseDir, '01-1-PLAN.md'), planContent);
     fs.writeFileSync(path.join(phaseDir, '01-2-PLAN.md'), planContent);
     fs.writeFileSync(
-      path.join(phaseDir, '01-SUMMARY.md'),
+      path.join(phaseDir, '01-1-SUMMARY.md'),
       [
-        '# Phase 1 Summary',
+        '# Phase 1-1 Summary',
         '',
         '## Browser Proof Observation',
         '',
@@ -2747,6 +2860,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Claim limit: dashboard render proof only.',
       ].join('\n')
     );
+    fs.writeFileSync(path.join(phaseDir, '01-2-SUMMARY.md'), '# Phase 1-2 Summary\n');
 
     const result = await runCliAsMain(tmpDir, ['verify', '1']);
     assert.strictEqual(result.exitCode, 1, result.output);
@@ -2787,9 +2901,9 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     fs.writeFileSync(path.join(phaseDir, '01-1-PLAN.md'), planContent);
     fs.writeFileSync(path.join(phaseDir, '01-2-PLAN.md'), planContent);
     fs.writeFileSync(
-      path.join(phaseDir, '01-SUMMARY.md'),
+      path.join(phaseDir, '01-1-SUMMARY.md'),
       [
-        '# Phase 1 Summary',
+        '# Phase 1-1 Summary',
         '',
         '## Browser Proof Observation',
         '',
@@ -2803,6 +2917,12 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard-a.png - local-only',
         '- Result: passed',
         '- Claim limit: dashboard account A render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-2-SUMMARY.md'),
+      [
+        '# Phase 1-2 Summary',
         '',
         '## Browser Proof Observation',
         '',

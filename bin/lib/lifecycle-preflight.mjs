@@ -2,7 +2,13 @@ import { existsSync, readFileSync } from 'fs';
 import { isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
-import { collectNativePhaseArtifacts, evaluateLifecycleState, normalizePhaseToken, partitionPlanChains } from './lifecycle-state.mjs';
+import {
+  collectNativePhaseArtifacts,
+  evaluateLifecycleState,
+  findUnpairedPlanArtifacts,
+  normalizePhaseToken,
+  partitionPlanChains,
+} from './lifecycle-state.mjs';
 import {
   buildDecisionsDigest,
   persistDecisionsDigest,
@@ -333,10 +339,7 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface, stateLabel }) {
   }
 
   const planArtifacts = lifecycle.phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken && artifact.kind === 'plan');
-  const summaryArtifacts = lifecycle.phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken && artifact.kind === 'summary');
-  const pendingPlans = planArtifacts.filter(
-    (artifact) => !summaryArtifacts.some((candidate) => candidate.dir === artifact.dir && candidate.baseId === artifact.baseId)
-  );
+  const pendingPlans = lifecycle.incompletePlans.filter((artifact) => artifact.phaseToken === phaseToken);
 
   if (surface === 'execute') {
     if (planArtifacts.length === 0) {
@@ -378,12 +381,12 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface, stateLabel }) {
         )
       );
     }
-    if (summaryArtifacts.length === 0) {
+    if (pendingPlans.length > 0) {
       blockers.push(
         blocker(
           'missing_summary',
-          `Phase ${phaseToken} cannot be verified because no SUMMARY artifact exists yet.`,
-          [stateLabel('phases')]
+          `Phase ${phaseToken} cannot be verified because a current PLAN lacks its matching SUMMARY artifact.`,
+          pendingPlans.map((artifact) => artifact.displayPath)
         )
       );
     }
@@ -573,6 +576,7 @@ function buildWorkPhaseBlockers({ workMilestone, phaseToken, surface }) {
   const blockers = [];
   const planArtifacts = workMilestone.phaseArtifacts.filter((artifact) => artifact.kind === 'plan');
   const executeArtifacts = workMilestone.phaseArtifacts.filter((artifact) => artifact.kind === 'execute');
+  const pendingPlans = findUnpairedPlanArtifacts(workMilestone.phaseArtifacts, { companionKind: 'execute' });
 
   if (surface === 'execute') {
     if (planArtifacts.length === 0) {
@@ -583,7 +587,7 @@ function buildWorkPhaseBlockers({ workMilestone, phaseToken, surface }) {
           ['.work/milestone/phases/']
         )
       );
-    } else if (executeArtifacts.length > 0) {
+    } else if (pendingPlans.length === 0) {
       blockers.push(
         blocker(
           'no_pending_plan',
@@ -614,12 +618,16 @@ function buildWorkPhaseBlockers({ workMilestone, phaseToken, surface }) {
         )
       );
     }
-    if (executeArtifacts.length === 0) {
+    if ((planArtifacts.length === 0 && executeArtifacts.length === 0) || pendingPlans.length > 0) {
       blockers.push(
         blocker(
           'missing_execute',
-          `Phase ${phaseToken} cannot be verified because no .work EXECUTE artifact exists yet.`,
-          ['.work/milestone/phases/']
+          pendingPlans.length > 0
+            ? `Phase ${phaseToken} cannot be verified because a .work PLAN lacks its matching EXECUTE artifact.`
+            : `Phase ${phaseToken} cannot be verified because no .work EXECUTE artifact exists yet.`,
+          pendingPlans.length > 0
+            ? pendingPlans.map((artifact) => artifact.displayPath)
+            : ['.work/milestone/phases/']
         )
       );
     }
