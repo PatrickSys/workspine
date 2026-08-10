@@ -875,11 +875,24 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
 export function renderDecisionsDigest(results, { heading = 'DECISIONS DIGEST' } = {}) {
   const lines = [`${heading} (${results.length} active)`];
   for (const result of results.slice(0, DECISION_DIGEST_MAX_RECORDS)) {
-    const legacy = result.record.meta.legacy_ref ? ` [${result.record.meta.legacy_ref}]` : '';
-    const flags = result.flags.length > 0 ? ` (${result.flags.join(', ')})` : '';
-    lines.push(`- ${result.record.meta.id}${legacy} — ${result.record.meta.decision}${flags}`);
+    lines.push(formatDecisionResultLine(result));
   }
   return lines.slice(0, DECISION_DIGEST_MAX_LINES).join('\n');
+}
+
+export function renderDecisionQueryResults(results) {
+  const noun = results.length === 1 ? 'record' : 'records';
+  return [
+    `DECISION QUERY RESULTS (${results.length} ${noun})`,
+    ...results.map((result) => formatDecisionResultLine(result, { includeStatus: true })),
+  ].join('\n');
+}
+
+function formatDecisionResultLine(result, { includeStatus = false } = {}) {
+  const legacy = result.record.meta.legacy_ref ? ` [${result.record.meta.legacy_ref}]` : '';
+  const status = includeStatus ? ` [status: ${result.record.meta.status}]` : '';
+  const flags = result.flags.length > 0 ? ` (${result.flags.join(', ')})` : '';
+  return `- ${result.record.meta.id}${legacy}${status} — ${result.record.meta.decision}${flags}`;
 }
 
 export function parseDecisionRecord(content, filePath = null) {

@@ -1,5 +1,6 @@
 const { test, describe, afterEach } = require('node:test');
 const assert = require('node:assert');
+const { spawnSync } = require('node:child_process');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -51,6 +52,19 @@ function legacyGraphRecord({
     body,
     '',
   ].filter((line) => line !== null).join('\n');
+}
+
+function snapshotDecisionDirectory(workDir) {
+  const decisionDir = path.join(workDir, 'decisions');
+  const members = fs.readdirSync(decisionDir, { recursive: true })
+    .map((entry) => String(entry).replace(/\\/g, '/'))
+    .sort();
+  return {
+    members,
+    files: members
+      .filter((entry) => fs.statSync(path.join(decisionDir, entry)).isFile())
+      .map((entry) => [entry, fs.readFileSync(path.join(decisionDir, entry))]),
+  };
 }
 
 describe('S1 decision recall loop', () => {
@@ -421,7 +435,81 @@ describe('S1 decision recall loop', () => {
     assert.deepStrictEqual(digest.readErrors, [{ path: '.work/decisions', code: 'EIO' }]);
   });
 
-  test('CLI captures a candidate and queries a compact digest', async () => {
+  test('CLI query labels every non-invalidated result with its real status', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    const { writeDecisionRecord } = await loadStore();
+    const now = new Date();
+    writeDecisionRecord(workDir, record('query-active-a1b2', 'Shared query policy active', {
+      legacy_ref: 'legacy-active',
+    }), { now, repoRoot: root });
+    writeDecisionRecord(workDir, record('query-candidate-b2c3', 'Shared query policy candidate', {
+      status: 'candidate',
+      legacy_ref: 'legacy-candidate',
+      last_verified: '2000-01-01T00:00:00.000Z',
+    }), { now, repoRoot: root });
+    writeDecisionRecord(workDir, record('query-superseded-c3d4', 'Shared query policy superseded', {
+      status: 'superseded',
+    }), { now, repoRoot: root });
+    writeDecisionRecord(workDir, record('query-invalidated-d4e5', 'Shared query policy invalidated', {
+      status: 'invalidated',
+    }), { now, repoRoot: root });
+
+    const result = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'gsdd.mjs'), 'decisions', 'query', 'shared query policy'], {
+      cwd: root,
+      encoding: 'utf-8',
+    });
+
+    assert.strictEqual(result.status, 0, result.stderr);
+    assert.strictEqual(result.stdout, [
+      'DECISION QUERY RESULTS (3 records)',
+      '- query-active-a1b2 [legacy-active] [status: active] — Shared query policy active',
+      '- query-candidate-b2c3 [legacy-candidate] [status: candidate] — Shared query policy candidate (stale)',
+      '- query-superseded-c3d4 [status: superseded] — Shared query policy superseded',
+      '',
+    ].join('\n'));
+  });
+
+  test('CLI query keeps zero results, active digest bytes, and decision files unchanged', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    const { buildDecisionsDigest, recallDecisions, renderDecisionsDigest, writeDecisionRecord } = await loadStore();
+    const now = new Date();
+    writeDecisionRecord(workDir, record('digest-parity-a1b2', 'Preserve digest bytes', {
+      legacy_ref: 'legacy-digest',
+    }), { now, repoRoot: root });
+    const expectedDigest = [
+      'DECISIONS DIGEST (1 active)',
+      '- digest-parity-a1b2 [legacy-digest] — Preserve digest bytes',
+    ].join('\n');
+    const recalled = recallDecisions({ workDir, terms: 'preserve digest bytes', now });
+
+    assert.strictEqual(renderDecisionsDigest(recalled.records), expectedDigest);
+    assert.strictEqual(renderDecisionsDigest(recalled.records, { heading: 'CUSTOM DECISIONS' }), expectedDigest.replace('DECISIONS DIGEST', 'CUSTOM DECISIONS'));
+    assert.strictEqual(buildDecisionsDigest({ workDir, now }).text, expectedDigest);
+
+    const before = snapshotDecisionDirectory(workDir);
+    const empty = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'gsdd.mjs'), 'decisions', 'query', 'no matching decision'], {
+      cwd: root,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(empty.status, 0, empty.stderr);
+    assert.strictEqual(empty.stdout, 'DECISION QUERY RESULTS (0 records)\n');
+
+    for (let index = 0; index < 2; index += 1) {
+      const query = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'gsdd.mjs'), 'decisions', 'query', 'preserve digest bytes'], {
+        cwd: root,
+        encoding: 'utf-8',
+      });
+      assert.strictEqual(query.status, 0, query.stderr);
+      assert.strictEqual(query.stdout, `DECISION QUERY RESULTS (1 record)\n- digest-parity-a1b2 [legacy-digest] [status: active] — Preserve digest bytes\n`);
+    }
+    assert.deepStrictEqual(snapshotDecisionDirectory(workDir), before);
+  });
+
+  test('CLI captures a candidate and queries it as a candidate', async () => {
     const root = createTempProject();
     dirs.push(root);
     fs.mkdirSync(path.join(root, '.work'), { recursive: true });
@@ -437,7 +525,8 @@ describe('S1 decision recall loop', () => {
 
     result = await runCliAsMain(root, ['decisions', 'query', 'direct commits']);
     assert.strictEqual(result.exitCode, 0, result.output);
-    assert.match(result.output, /^DECISIONS DIGEST/m);
+    assert.match(result.output, /^DECISION QUERY RESULTS \(1 record\)/m);
+    assert.match(result.output, /\[status: candidate\]/);
     assert.match(result.output, /Use direct commits for phase work/);
 
     result = await runCliAsMain(root, ['remember', 'Lock direct commits for this repo', '--type', 'rule', '--scope', 'repo']);

@@ -4,7 +4,7 @@ import {
   DECISION_RECORD_SCOPES,
   DECISION_RECORD_TYPES,
   recallDecisions,
-  renderDecisionsDigest,
+  renderDecisionQueryResults,
   transitionDecisionRecord,
   writeDecisionRecord,
 } from './work-context.mjs';
@@ -89,7 +89,7 @@ export function cmdDecisions(...rawArgs) {
       paths: path.value ? [path.value] : [],
       limit: 10,
     });
-    console.log(renderDecisionsDigest(recalled.records));
+    console.log(renderDecisionQueryResults(recalled.records));
   } catch (error) {
     fail(error.message);
   }
