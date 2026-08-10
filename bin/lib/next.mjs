@@ -8,6 +8,7 @@ import {
   addOpenQuestion,
   answerQuestion,
   captureDogfoodFinding,
+  buildDecisionsDigest,
   ensureWorkStructure,
   getWorkPaths,
   inspectWorkContext,
@@ -634,6 +635,25 @@ function routeNext(ctx) {
   });
 }
 
+function hasDecisionsDigestSignal(digest) {
+  const excluded = digest.counts?.excluded || {};
+  return digest.records.length > 0
+    || digest.counts?.eligible > 0
+    || Object.values(excluded).some((count) => count > 0)
+    || digest.counts?.invalid > 0
+    || digest.legacyRecords.length > 0
+    || digest.readErrors.length > 0
+    || digest.truncated;
+}
+
+function projectDecisionsDigest(ctx, route) {
+  const decisionsDigest = buildDecisionsDigest({ workDir: getWorkPaths(ctx.cwd).workDir });
+  const inputsConsidered = hasDecisionsDigestSignal(decisionsDigest) && !route.inputs_considered.includes('.work/decisions/*.md')
+    ? [...route.inputs_considered, '.work/decisions/*.md']
+    : route.inputs_considered;
+  return { ...route, inputs_considered: inputsConsidered, decisionsDigest };
+}
+
 function routeFromWorkMilestone(context, manifest) {
   const milestone = context.milestone;
   if (!milestone?.exists) return null;
@@ -769,6 +789,7 @@ function findTrustGate(manifest) {
 }
 
 const CARD_WIDTH = 62;
+const DECISION_NOTICE_DETAIL_CAP = 3;
 
 const STATE_LABELS = {
   research: 'Look into the problem before planning',
@@ -834,6 +855,15 @@ export function renderNextCard(packetValue) {
   rows.push(cardFrame(''));
   rows.push(cardFrame('  Safety checks — this computer: not set up yet ·'));
   rows.push(cardFrame('                 server: not set up yet'));
+  if (hasDecisionsDigestSignal(packetValue.decisionsDigest || emptyDecisionsDigest())) {
+    const digest = packetValue.decisionsDigest;
+    const notices = decisionNotices(digest);
+    const active = digest.counts.returned > 0
+      ? `${digest.counts.returned} active`
+      : 'no active decisions';
+    rows.push(cardFrame(''));
+    pushCardLine(rows, 2, 2, `Decisions: ${active}; ${notices.length} notice${notices.length === 1 ? '' : 's'}.`);
+  }
   rows.push(bottom);
   return rows.join('\n');
 }
@@ -862,6 +892,78 @@ function printHuman(packetValue) {
   if (packetValue.inputs_skipped.length > 0) {
     console.log('\nSkipped inputs:');
     for (const item of packetValue.inputs_skipped) console.log(`- ${item}`);
+  }
+  if (hasDecisionsDigestSignal(packetValue.decisionsDigest || emptyDecisionsDigest())) {
+    printDecisionsDigest(packetValue.decisionsDigest);
+  }
+}
+
+function emptyDecisionsDigest() {
+  return {
+    records: [],
+    legacyRecords: [],
+    counts: { eligible: 0, returned: 0, excluded: {}, invalid: 0 },
+    truncated: false,
+    readErrors: [],
+  };
+}
+
+function decisionNotices(digest) {
+  const excluded = digest.counts.excluded || {};
+  const notices = [];
+  for (const status of ['candidate', 'superseded', 'invalidated']) {
+    const count = excluded[status] || 0;
+    if (count > 0) notices.push({ message: `${count} ${status} decision${count === 1 ? '' : 's'} excluded.` });
+  }
+  const activeOmitted = Math.max(0, (digest.counts.eligible || 0) - (digest.counts.returned || 0));
+  const stale = excluded.stale_flagged || 0;
+  const conflict = excluded.conflict_flagged || 0;
+  if (activeOmitted > 0 || digest.truncated || stale > 0 || conflict > 0) {
+    const reviewFlags = [
+      stale > 0 ? `${stale} stale-flagged` : null,
+      conflict > 0 ? `${conflict} conflict-flagged` : null,
+    ].filter(Boolean);
+    notices.push({
+      message: `${activeOmitted} additional active decision${activeOmitted === 1 ? '' : 's'} omitted by the digest cap${reviewFlags.length > 0 ? `; ${reviewFlags.join(' and ')} for review.` : '.'}`,
+    });
+  }
+  if (digest.legacyRecords.length > 0) {
+    const details = digest.legacyRecords
+      .slice(0, DECISION_NOTICE_DETAIL_CAP)
+      .map((record) => `Legacy metadata: ${record.id} (${record.path}; ${record.format}).`);
+    notices.push({
+      message: `${digest.legacyRecords.length} legacy decision record${digest.legacyRecords.length === 1 ? '' : 's'} ${digest.legacyRecords.length === 1 ? 'is' : 'are'} non-authoritative.`,
+      details,
+      omitted: digest.legacyRecords.length - details.length,
+      omittedLabel: 'legacy metadata entries',
+    });
+  }
+  const errorDetails = [...new Map((digest.readErrors || []).map((error) => [`${error.path}\u0000${error.code || 'unknown'}`, error])).values()];
+  const invalidOrUnreadable = Math.max(digest.counts.invalid || 0, errorDetails.length);
+  if (invalidOrUnreadable > 0) {
+    const details = errorDetails
+      .slice(0, DECISION_NOTICE_DETAIL_CAP)
+      .map((error) => `Invalid/read error: ${error.path} (${error.code || 'unknown'}).`);
+    notices.push({
+      message: `${invalidOrUnreadable} invalid or unreadable decision record${invalidOrUnreadable === 1 ? '' : 's'} detected.`,
+      details,
+      omitted: Math.max(invalidOrUnreadable, errorDetails.length) - details.length,
+      omittedLabel: 'invalid/read-error details',
+    });
+  }
+  return notices;
+}
+
+function printDecisionsDigest(digest) {
+  if (digest.records.length > 0) console.log(`\n${digest.text}`);
+  const notices = decisionNotices(digest);
+  if (notices.length > 0) {
+    console.log('\nDecision notices:');
+    for (const notice of notices) {
+      console.log(`- ${notice.message}`);
+      for (const detail of notice.details || []) console.log(`  - ${detail}`);
+      if (notice.omitted > 0) console.log(`  - ${notice.omitted} additional ${notice.omittedLabel} omitted.`);
+    }
   }
 }
 
@@ -907,7 +1009,7 @@ export function createCmdNext(ctx) {
             event_count: index.event_count,
             invalid_event_count: index.invalid_event_count,
           },
-          next: routeNext(ctx),
+          next: projectDecisionsDigest(ctx, routeNext(ctx)),
         };
         if (jsonMode) output(response);
         else {
@@ -954,7 +1056,7 @@ export function createCmdNext(ctx) {
         return;
       }
 
-      const result = routeNext(ctx);
+      const result = projectDecisionsDigest(ctx, routeNext(ctx));
       if (jsonMode) output(result);
       else printHuman(result);
     } catch (error) {

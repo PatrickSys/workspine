@@ -42,6 +42,38 @@ async function initWork() {
   return result;
 }
 
+function typedDecision(id, decision, overrides = {}) {
+  return {
+    id,
+    type: 'rule',
+    status: 'active',
+    scope: 'repo',
+    decision,
+    why: `${decision} is current authority.`,
+    for: 'repo:current',
+    body: `Evidence for ${decision}.`,
+    ...overrides,
+  };
+}
+
+async function writeTypedDecision(input, options = {}) {
+  const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+  const { writeDecisionRecord } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+  return writeDecisionRecord(path.join(tmpDir, '.work'), input, { repoRoot: tmpDir, ...options });
+}
+
+function snapshotTree(directory, prefix = '') {
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = path.join(prefix, entry.name);
+      const fullPath = path.join(directory, entry.name);
+      return entry.isDirectory()
+        ? [{ path: `${relativePath.replace(/\\/g, '/')}/`, directory: true }, ...snapshotTree(fullPath, relativePath)]
+        : [{ path: relativePath.replace(/\\/g, '/'), bytes: fs.readFileSync(fullPath) }];
+    })
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
 async function inspectWorkMilestone(workDir) {
   const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
   const mod = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
@@ -55,6 +87,201 @@ async function inspectWorkContext(cwd) {
 }
 
 describe('next command bootstrap', () => {
+  test('plain next projects active typed decisions without changing route fields', async () => {
+    await initWork();
+    const before = await runJson(['next', '--json']);
+    const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+    const { writeDecisionRecord } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+    const workDir = path.join(tmpDir, '.work');
+    writeDecisionRecord(workDir, {
+      id: 'active-next-a1b2',
+      status: 'active',
+      decision: 'Use the active decision projection.',
+      why: 'It is current authority.',
+      body: 'Active decision body.',
+    }, { repoRoot: tmpDir });
+    writeDecisionRecord(workDir, {
+      id: 'candidate-next-c3d4',
+      status: 'candidate',
+      decision: 'Candidate must stay excluded.',
+      why: 'It is not authority.',
+      body: 'Candidate decision body.',
+    }, { repoRoot: tmpDir });
+
+    const after = await runJson(['next', '--json']);
+
+    assert.deepStrictEqual(after.decisionsDigest.records.map((record) => record.id), ['active-next-a1b2']);
+    assert.strictEqual(after.decisionsDigest.counts.excluded.candidate, 1);
+    for (const field of ['state', 'reason', 'next_command', 'next_action', 'authority', 'blocked_by', 'questions', 'constraints', 'route_kind']) {
+      assert.deepStrictEqual(after[field], before[field], field);
+    }
+  });
+
+  test('plain next returns the unchanged empty digest for missing and initialized work', async () => {
+    const missing = await runJson(['next', '--json']);
+    assert.deepStrictEqual(missing.decisionsDigest, {
+      records: [], legacyRecords: [], text: 'DECISIONS DIGEST (0 active)',
+      counts: { eligible: 0, returned: 0, excluded: { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0, legacy: 0 }, invalid: 0 },
+      truncated: false, readErrors: [], ids: [],
+    });
+
+    const initialized = await initWork();
+    assert.deepStrictEqual(initialized.next.decisionsDigest, missing.decisionsDigest);
+  });
+
+  test('plain next only uses .work typed authority and projects signal evidence on an early route', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.work', 'decisions'), { recursive: true });
+    await writeTypedDecision(typedDecision('early-active-a1b2', 'Use .work before bootstrap.'));
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'decisions'), { recursive: true });
+    const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+    const { writeDecisionRecord } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+    writeDecisionRecord(path.join(tmpDir, '.planning'), typedDecision('planning-only-c3d4', 'Do not project planning authority.', {
+      body: 'PLANNING BODY MUST NOT LEAK.',
+    }), { repoRoot: tmpDir });
+
+    const result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'ask_user');
+    assert.deepStrictEqual(result.decisionsDigest.ids, ['early-active-a1b2']);
+    assert.ok(result.inputs_considered.includes('.work/decisions/*.md'));
+    assert.doesNotMatch(JSON.stringify(result), /planning-only-c3d4|PLANNING BODY MUST NOT LEAK/);
+  });
+
+  test('human next is quiet when no decision signal exists', async () => {
+    await initWork();
+    const packet = await runJson(['next', '--json']);
+    const result = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+    const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'next.mjs')).href;
+    const { renderNextCard } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+    const expected = [
+      renderNextCard(packet),
+      '\nConstraints:',
+      ...packet.constraints.map((item) => `- ${item}`),
+      '\nEvidence required:',
+      ...packet.evidence_required.map((item) => `- ${item}`),
+      '\nSkipped inputs:',
+      ...packet.inputs_skipped.map((item) => `- ${item}`),
+    ].join('\n');
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(result.output, expected);
+    assert.doesNotMatch(result.output, /Decision digest|Decision notices/);
+  });
+
+  test('human next shows active text and bounded excluded-record notices without leaking bodies', async () => {
+    await initWork();
+    await writeTypedDecision(typedDecision('active-human-a1b2', 'Use active human projection.', { body: 'ACTIVE BODY MUST NOT RENDER.' }));
+    await writeTypedDecision(typedDecision('candidate-human-c3d4', 'Candidate decision title.', {
+      status: 'candidate', body: 'CANDIDATE BODY MUST NOT RENDER.',
+    }));
+    await writeTypedDecision(typedDecision('invalid-human-e5f6', 'Invalid decision title.', {
+      status: 'invalidated', body: 'INVALID BODY MUST NOT RENDER.',
+    }));
+    await runJson(['next', 'decision', 'record', '--id', 'legacy-human', '--title', 'Legacy title must not render', '--body', 'LEGACY BODY MUST NOT RENDER.', '--json']);
+    writeFile('.work/decisions/malformed.md', 'MALFORMED BODY MUST NOT RENDER.');
+
+    const result = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /DECISIONS DIGEST \(1 active\)/);
+    assert.match(result.output, /Decisions: 1 active; 4 notices/);
+    assert.match(result.output, /Use active human projection/);
+    assert.match(result.output, /Decision notices:/);
+    assert.match(result.output, /candidate decision excluded/);
+    assert.match(result.output, /invalidated decision excluded/);
+    assert.match(result.output, /Legacy metadata: legacy-human \(.work\/decisions\/legacy-human.md; next_graph_v1\)/);
+    assert.match(result.output, /invalid or unreadable decision record detected/);
+    for (const leaked of ['ACTIVE BODY MUST NOT RENDER.', 'CANDIDATE BODY MUST NOT RENDER.', 'INVALID BODY MUST NOT RENDER.', 'LEGACY BODY MUST NOT RENDER.', 'MALFORMED BODY MUST NOT RENDER.', 'Candidate decision title.', 'Invalid decision title.', 'Legacy title must not render']) {
+      assert.doesNotMatch(result.output, new RegExp(leaked.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+  });
+
+  test('candidate-only and legacy-only human signals remain non-authoritative', async () => {
+    await initWork();
+    await writeTypedDecision(typedDecision('candidate-only-a1b2', 'Candidate title must not render.', {
+      status: 'candidate', body: 'CANDIDATE-ONLY BODY MUST NOT RENDER.',
+    }));
+    let result = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /Decisions: no active decisions; 1 notice/);
+    assert.match(result.output, /Decision notices:\n- 1 candidate decision excluded/);
+    assert.doesNotMatch(result.output, /DECISIONS DIGEST|Candidate title must not render|CANDIDATE-ONLY BODY MUST NOT RENDER/);
+
+    fs.rmSync(path.join(tmpDir, '.work', 'decisions', 'candidate-only-a1b2.md'));
+    await runJson(['next', 'decision', 'record', '--id', 'legacy-only', '--title', 'Legacy title must not render', '--body', 'LEGACY-ONLY BODY MUST NOT RENDER.', '--json']);
+    result = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /Decisions: no active decisions; 1 notice/);
+    assert.match(result.output, /Legacy metadata: legacy-only \(.work\/decisions\/legacy-only.md; next_graph_v1\)/);
+    assert.doesNotMatch(result.output, /DECISIONS DIGEST|Legacy title must not render|LEGACY-ONLY BODY MUST NOT RENDER/);
+  });
+
+  test('human next bounds legacy and invalid diagnostics without leaking high-cardinality bodies', async () => {
+    await initWork();
+    const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+    const { recordDecision } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+    const workDir = path.join(tmpDir, '.work');
+    for (let index = 0; index < 5; index += 1) {
+      recordDecision(workDir, {
+        id: `legacy-many-${index}`,
+        title: `Legacy title ${index} must not render`,
+        body: `LEGACY MANY BODY ${index} MUST NOT RENDER.`,
+      }, { now: new Date(`2026-08-0${index + 1}T00:00:00.000Z`) });
+      writeFile(`.work/decisions/malformed-many-${index}.md`, `MALFORMED MANY BODY ${index} MUST NOT RENDER.`);
+    }
+
+    const result = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /Decisions: no active decisions; 2 notices/);
+    assert.match(result.output, /5 legacy decision records are non-authoritative/);
+    assert.strictEqual((result.output.match(/Legacy metadata:/g) || []).length, 3);
+    assert.match(result.output, /2 additional legacy metadata entries omitted/);
+    assert.match(result.output, /5 invalid or unreadable decision records detected/);
+    assert.strictEqual((result.output.match(/invalid_decision_record/g) || []).length, 3);
+    assert.match(result.output, /2 additional invalid\/read-error details omitted/);
+    for (let index = 0; index < 5; index += 1) {
+      assert.doesNotMatch(result.output, new RegExp(`LEGACY MANY BODY ${index}|MALFORMED MANY BODY ${index}`));
+    }
+  });
+
+  test('human next describes stale and conflicting active records as digest-cap review debt', async () => {
+    await initWork();
+    const current = new Date();
+    const old = new Date(current);
+    old.setUTCDate(old.getUTCDate() - 91);
+    for (let index = 0; index < 10; index += 1) {
+      await writeTypedDecision(typedDecision(`current-cap-${String(index).padStart(4, '0')}`, `Current cap decision ${index}.`), { now: current });
+    }
+    await writeTypedDecision(typedDecision('stale-cap-a1b2', 'Stale active decision.', { last_verified: old.toISOString() }), { now: old });
+    await writeTypedDecision(typedDecision('conflict-base-c3d4', 'Conflict base decision.', { last_verified: current.toISOString() }), { now: old });
+    await writeTypedDecision(typedDecision('conflict-one-e5f6', 'First conflicting active decision.', { supersedes: 'conflict-base-c3d4', last_verified: current.toISOString() }), { now: old });
+    await writeTypedDecision(typedDecision('conflict-two-g7h8', 'Second conflicting active decision.', { supersedes: 'conflict-base-c3d4', last_verified: current.toISOString() }), { now: old });
+    const conflictBasePath = path.join(tmpDir, '.work', 'decisions', 'conflict-base-c3d4.md');
+    const conflictBase = fs.readFileSync(conflictBasePath, 'utf-8')
+      .replace('status: superseded', 'status: active')
+      .replace(/^superseded_by: .*\n/m, '');
+    fs.writeFileSync(conflictBasePath, conflictBase);
+
+    const result = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /4 additional active decisions omitted by the digest cap; 1 stale-flagged and 1 conflict-flagged for review/);
+    assert.doesNotMatch(result.output, /stale flagged decision excluded|conflict flagged decision excluded/);
+  });
+
+  test('plain next JSON and human replays preserve every .work byte and member', async () => {
+    await initWork();
+    await writeTypedDecision(typedDecision('replay-active-a1b2', 'Preserve all .work bytes.'));
+    await writeTypedDecision(typedDecision('replay-candidate-c3d4', 'Preserve candidate bytes.', { status: 'candidate' }));
+    writeFile('.work/research/evidence.md', 'Read-only replay evidence.\n');
+    const before = snapshotTree(path.join(tmpDir, '.work'));
+
+    for (let index = 0; index < 2; index += 1) {
+      await runJson(['next', '--json']);
+      const human = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+      assert.strictEqual(human.exitCode, 0, human.output);
+    }
+
+    assert.deepStrictEqual(snapshotTree(path.join(tmpDir, '.work')), before);
+  });
+
   test('next --help documents the continuity command surface', async () => {
     const result = await runCliAsMain(tmpDir, ['next', '--help']);
 

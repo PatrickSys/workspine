@@ -50,6 +50,18 @@ async function importModule(filePath) {
   return import(`${pathToFileURL(filePath).href}?t=${Date.now()}-${Math.random()}`);
 }
 
+function snapshotTree(directory, prefix = '') {
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = path.join(prefix, entry.name);
+      const fullPath = path.join(directory, entry.name);
+      return entry.isDirectory()
+        ? [{ path: `${relativePath.replace(/\\/g, '/')}/`, directory: true }, ...snapshotTree(fullPath, relativePath)]
+        : [{ path: relativePath.replace(/\\/g, '/'), bytes: fs.readFileSync(fullPath) }];
+    })
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
 function createPromptStreams() {
   class FakeInput extends EventEmitter {
     constructor() {
@@ -594,7 +606,7 @@ describe('gsdd init and update', () => {
     assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'bin')), '.agents/bin must not be generated');
   });
 
-  test('repo-local helper exposes next routing from nested cwd', async () => {
+  test('fresh repo-local helper projects active decisions from nested cwd without writing', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
       const gsdd = await loadGsdd(tmpDir);
@@ -606,7 +618,30 @@ describe('gsdd init and update', () => {
     const nestedDir = path.join(tmpDir, 'src', 'feature');
     fs.mkdirSync(nestedDir, { recursive: true });
 
-    const result = spawnSync(process.execPath, [
+    let captured = await runCliAsMain(tmpDir, [
+      'remember', 'The generated helper must read active authority.', '--type', 'rule', '--scope', 'repo',
+    ]);
+    assert.strictEqual(captured.exitCode, 0, captured.output);
+    const activeId = JSON.parse(captured.output).record.id;
+    let promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId]);
+    assert.strictEqual(promoted.exitCode, 0, promoted.output);
+    captured = await runCliAsMain(tmpDir, [
+      'remember', 'Candidate helper body must remain excluded.', '--type', 'rule', '--scope', 'repo',
+    ]);
+    assert.strictEqual(captured.exitCode, 0, captured.output);
+    const candidateId = JSON.parse(captured.output).record.id;
+    const initNext = await runCliAsMain(tmpDir, ['next', '--init', '--json']);
+    assert.strictEqual(initNext.exitCode, 0, initNext.output);
+    const initialized = JSON.parse(initNext.output);
+    assert.deepStrictEqual(initialized.next.decisionsDigest.ids, [activeId]);
+    assert.strictEqual(initialized.next.decisionsDigest.counts.excluded.candidate, 1);
+    const before = snapshotTree(path.join(tmpDir, '.work'));
+
+    const packageNext = await runCliAsMain(tmpDir, ['next', '--json']);
+    assert.strictEqual(packageNext.exitCode, 0, packageNext.output);
+    const packagePacket = JSON.parse(packageNext.output);
+
+    let result = spawnSync(process.execPath, [
       path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),
       'next',
       '--json',
@@ -617,6 +652,23 @@ describe('gsdd init and update', () => {
     assert.strictEqual(parsed.operation, 'next');
     assert.ok(parsed.next_action);
     assert.ok(parsed.inputs_considered.includes('repo truth: control-map'));
+    assert.deepStrictEqual(parsed.decisionsDigest.ids, [activeId]);
+    assert.strictEqual(parsed.decisionsDigest.counts.excluded.candidate, 1);
+    assert.deepStrictEqual(parsed.decisionsDigest, packagePacket.decisionsDigest);
+    assert.ok(parsed.inputs_considered.includes('.work/decisions/*.md'));
+    assert.doesNotMatch(JSON.stringify(parsed), new RegExp(candidateId));
+
+    result = spawnSync(process.execPath, [
+      path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),
+      'next',
+      '--format', 'human',
+    ], { cwd: nestedDir, encoding: 'utf-8' });
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /DECISIONS DIGEST \(1 active\)/);
+    assert.match(result.stdout, /The generated helper must read active authority/);
+    assert.match(result.stdout, /candidate decision excluded/);
+    assert.doesNotMatch(result.stdout, /Candidate helper body must remain excluded/);
+    assert.deepStrictEqual(snapshotTree(path.join(tmpDir, '.work')), before);
   });
 
   test('repo-local helper supports brownfield-change plan preflight from nested cwd', async () => {
