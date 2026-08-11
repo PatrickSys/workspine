@@ -2,7 +2,7 @@ import { join, relative } from 'path';
 import { existsSync } from 'fs';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
-import { resolveStateDir } from './state-dir.mjs';
+import { resolveStateDir, stateAuthorityGate } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import {
   NEXT_STATES,
@@ -988,11 +988,15 @@ function requireFlag(args, name, usage = NEXT_USAGE) {
 
 export function createCmdNext(ctx) {
   return function cmdNext(...args) {
-    const { workspaceRoot } = resolveWorkspaceContext([], { cwd: ctx.cwd });
-    const effectiveCtx = { ...ctx, cwd: workspaceRoot };
+    const workspace = resolveWorkspaceContext([], { cwd: ctx.cwd });
     const jsonMode = outputMode(args) === 'json';
-    const workPaths = getWorkPaths(effectiveCtx.cwd);
     try {
+      if (workspace.invalid) throw new Error(workspace.error);
+      const { workspaceRoot, state } = workspace;
+      const effectiveCtx = { ...ctx, cwd: workspaceRoot };
+      const workPaths = getWorkPaths(effectiveCtx.cwd);
+      const authorityGate = stateAuthorityGate(state);
+      if (!authorityGate.allowed) throw new Error(authorityGate.message);
       if (args.includes('--help') || args.includes('-h')) {
         console.log(NEXT_USAGE);
         return;

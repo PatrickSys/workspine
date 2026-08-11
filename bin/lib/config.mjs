@@ -8,7 +8,8 @@ import { join } from 'path';
 import { CLAUDE_MODEL_PROFILES } from '../adapters/claude.mjs';
 import { detectOpenCodeConfiguredModel } from '../adapters/opencode.mjs';
 import { parseFlagValue, output } from './cli-utils.mjs';
-import { resolveStateDir } from './state-dir.mjs';
+import { assertStateAuthority, resolveStateDir } from './state-dir.mjs';
+import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 export const DEFAULT_GIT_PROTOCOL = {
   branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
@@ -184,29 +185,30 @@ export function getRuntimeAgentModelState({ config, runtime, agentId, profileMap
 }
 
 export function cmdModels(...modelArgs) {
+  const cwd = resolveConfigCommandRoot();
+  if (!cwd) return;
   const subcommand = modelArgs[0] || 'show';
 
   switch (subcommand) {
     case 'show':
-      return cmdModelsShow();
+      return cmdModelsShow(cwd);
     case 'profile':
-      return cmdModelsProfile(modelArgs[1]);
+      return cmdModelsProfile(modelArgs[1], cwd);
     case 'agent-profile':
-      return cmdModelsAgentProfile(modelArgs.slice(1));
+      return cmdModelsAgentProfile(modelArgs.slice(1), cwd);
     case 'clear-agent-profile':
-      return cmdModelsClearAgentProfile(modelArgs.slice(1));
+      return cmdModelsClearAgentProfile(modelArgs.slice(1), cwd);
     case 'set':
-      return cmdModelsSetRuntimeOverride(modelArgs.slice(1));
+      return cmdModelsSetRuntimeOverride(modelArgs.slice(1), cwd);
     case 'clear':
-      return cmdModelsClearRuntimeOverride(modelArgs.slice(1));
+      return cmdModelsClearRuntimeOverride(modelArgs.slice(1), cwd);
     default:
       console.error('Usage: gsdd models [show|profile|agent-profile|clear-agent-profile|set|clear]');
       process.exitCode = 1;
   }
 }
 
-function cmdModelsShow() {
-  const cwd = process.cwd();
+function cmdModelsShow(cwd) {
   const config = loadProjectModelConfig(cwd);
   const ocCheckerOverride = getRuntimeModelOverride(config, 'opencode', 'plan-checker');
   const ocExplorerOverride = getRuntimeModelOverride(config, 'opencode', 'approach-explorer');
@@ -264,20 +266,20 @@ function cmdModelsShow() {
   });
 }
 
-function cmdModelsProfile(profile) {
+function cmdModelsProfile(profile, cwd) {
   if (!VALID_MODEL_PROFILES.includes(profile)) {
     console.error(`ERROR: Invalid profile "${profile}". Valid profiles: ${VALID_MODEL_PROFILES.join(', ')}`);
     process.exitCode = 1;
     return;
   }
 
-  if (!isProjectInitialized()) {
+  if (!isProjectInitialized(cwd)) {
     console.error('ERROR: Project not initialized. Run gsdd init first.');
     process.exitCode = 1;
     return;
   }
 
-  const result = loadConfigForMutation();
+  const result = loadConfigForMutation(cwd);
   if (!result.ok) {
     console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
@@ -285,12 +287,12 @@ function cmdModelsProfile(profile) {
   }
 
   result.config.modelProfile = profile;
-  writeProjectConfig(result.config);
+  writeProjectConfig(result.config, cwd);
   console.log(`  - set modelProfile to ${profile}`);
   console.log('  Run gsdd update to regenerate adapter files.');
 }
 
-function cmdModelsAgentProfile(args) {
+function cmdModelsAgentProfile(args, cwd) {
   const agent = parseFlagValue(args, '--agent').value;
   const profile = parseFlagValue(args, '--profile').value;
 
@@ -305,13 +307,13 @@ function cmdModelsAgentProfile(args) {
     return;
   }
 
-  if (!isProjectInitialized()) {
+  if (!isProjectInitialized(cwd)) {
     console.error('ERROR: Project not initialized. Run gsdd init first.');
     process.exitCode = 1;
     return;
   }
 
-  const result = loadConfigForMutation();
+  const result = loadConfigForMutation(cwd);
   if (!result.ok) {
     console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
@@ -320,12 +322,12 @@ function cmdModelsAgentProfile(args) {
 
   result.config.agentModelProfiles = result.config.agentModelProfiles || {};
   result.config.agentModelProfiles[agent] = profile;
-  writeProjectConfig(result.config);
+  writeProjectConfig(result.config, cwd);
   console.log(`  - set ${agent} semantic profile to ${profile}`);
   console.log('  Run gsdd update to regenerate adapter files.');
 }
 
-function cmdModelsClearAgentProfile(args) {
+function cmdModelsClearAgentProfile(args, cwd) {
   const agent = parseFlagValue(args, '--agent').value;
   if (!PORTABLE_AGENT_IDS.includes(agent)) {
     console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${PORTABLE_AGENT_IDS.join(', ')}`);
@@ -333,13 +335,13 @@ function cmdModelsClearAgentProfile(args) {
     return;
   }
 
-  if (!isProjectInitialized()) {
+  if (!isProjectInitialized(cwd)) {
     console.error('ERROR: Project not initialized. Run gsdd init first.');
     process.exitCode = 1;
     return;
   }
 
-  const result = loadConfigForMutation();
+  const result = loadConfigForMutation(cwd);
   if (!result.ok) {
     console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
@@ -352,12 +354,12 @@ function cmdModelsClearAgentProfile(args) {
       delete result.config.agentModelProfiles;
     }
   }
-  writeProjectConfig(result.config);
+  writeProjectConfig(result.config, cwd);
   console.log(`  - cleared semantic profile override for ${agent}`);
   console.log('  Run gsdd update to regenerate adapter files.');
 }
 
-function cmdModelsSetRuntimeOverride(args) {
+function cmdModelsSetRuntimeOverride(args, cwd) {
   const runtime = parseFlagValue(args, '--runtime').value;
   const agent = parseFlagValue(args, '--agent').value;
   const model = parseFlagValue(args, '--model').value;
@@ -383,13 +385,13 @@ function cmdModelsSetRuntimeOverride(args) {
     return;
   }
 
-  if (!isProjectInitialized()) {
+  if (!isProjectInitialized(cwd)) {
     console.error('ERROR: Project not initialized. Run gsdd init first.');
     process.exitCode = 1;
     return;
   }
 
-  const result = loadConfigForMutation();
+  const result = loadConfigForMutation(cwd);
   if (!result.ok) {
     console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
@@ -399,12 +401,12 @@ function cmdModelsSetRuntimeOverride(args) {
   result.config.runtimeModelOverrides = result.config.runtimeModelOverrides || {};
   result.config.runtimeModelOverrides[runtime] = result.config.runtimeModelOverrides[runtime] || {};
   result.config.runtimeModelOverrides[runtime][agent] = model.trim();
-  writeProjectConfig(result.config);
+  writeProjectConfig(result.config, cwd);
   console.log(`  - set ${runtime} runtime override for ${agent}`);
   console.log('  Run gsdd update to regenerate adapter files.');
 }
 
-function cmdModelsClearRuntimeOverride(args) {
+function cmdModelsClearRuntimeOverride(args, cwd) {
   const runtime = parseFlagValue(args, '--runtime').value;
   const agent = parseFlagValue(args, '--agent').value;
 
@@ -419,13 +421,13 @@ function cmdModelsClearRuntimeOverride(args) {
     return;
   }
 
-  if (!isProjectInitialized()) {
+  if (!isProjectInitialized(cwd)) {
     console.error('ERROR: Project not initialized. Run gsdd init first.');
     process.exitCode = 1;
     return;
   }
 
-  const result = loadConfigForMutation();
+  const result = loadConfigForMutation(cwd);
   if (!result.ok) {
     console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running model mutations.`);
     process.exitCode = 1;
@@ -441,7 +443,7 @@ function cmdModelsClearRuntimeOverride(args) {
       delete result.config.runtimeModelOverrides;
     }
   }
-  writeProjectConfig(result.config);
+  writeProjectConfig(result.config, cwd);
   console.log(`  - cleared ${runtime} runtime override for ${agent}`);
   console.log('  Run gsdd update to regenerate adapter files.');
 }
@@ -473,18 +475,20 @@ function printChangedFlags(before, after) {
 }
 
 export function cmdRigor(...rigorArgs) {
+  const cwd = resolveConfigCommandRoot();
+  if (!cwd) return;
   const [first, second] = rigorArgs;
-  if (!first || first === 'show') return cmdRigorShow();
-  if (RIGOR_STEPS.includes(first)) return cmdRigorSetStep(first, second);
-  if (RIGOR_LEVELS.includes(first)) return cmdRigorSetProfile(first);
+  if (!first || first === 'show') return cmdRigorShow(cwd);
+  if (RIGOR_STEPS.includes(first)) return cmdRigorSetStep(first, second, cwd);
+  if (RIGOR_LEVELS.includes(first)) return cmdRigorSetProfile(first, cwd);
   console.error(
     `ERROR: Invalid rigor argument "${first}". Usage: gsdd rigor [show | ${RIGOR_LEVELS.join('|')} | <${RIGOR_STEPS.join('|')}> <level>]`,
   );
   process.exitCode = 1;
 }
 
-function cmdRigorShow() {
-  const config = loadProjectModelConfig(process.cwd());
+function cmdRigorShow(cwd) {
+  const config = loadProjectModelConfig(cwd);
   const base = config.rigorProfile ?? 'medium';
   output({
     rigorProfile: base,
@@ -498,13 +502,13 @@ function cmdRigorShow() {
   });
 }
 
-function cmdRigorSetProfile(level) {
-  if (!isProjectInitialized()) {
+function cmdRigorSetProfile(level, cwd) {
+  if (!isProjectInitialized(cwd)) {
     console.error('ERROR: Project not initialized. Run gsdd init first.');
     process.exitCode = 1;
     return;
   }
-  const result = loadConfigForMutation();
+  const result = loadConfigForMutation(cwd);
   if (!result.ok) {
     console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running rigor mutations.`);
     process.exitCode = 1;
@@ -517,24 +521,24 @@ function cmdRigorSetProfile(level) {
   result.config.researchDepth = resolved.researchDepth;
   result.config.workflow = { ...resolved.workflow };
   const after = describeRigorFlags(result.config);
-  writeProjectConfig(result.config);
+  writeProjectConfig(result.config, cwd);
 
   console.log(`  - set rigor to ${level}`);
   printChangedFlags(before, after);
 }
 
-function cmdRigorSetStep(step, level) {
+function cmdRigorSetStep(step, level, cwd) {
   if (!RIGOR_LEVELS.includes(level)) {
     console.error(`ERROR: Invalid rigor level "${level}". Valid levels: ${RIGOR_LEVELS.join(', ')}`);
     process.exitCode = 1;
     return;
   }
-  if (!isProjectInitialized()) {
+  if (!isProjectInitialized(cwd)) {
     console.error('ERROR: Project not initialized. Run gsdd init first.');
     process.exitCode = 1;
     return;
   }
-  const result = loadConfigForMutation();
+  const result = loadConfigForMutation(cwd);
   if (!result.ok) {
     console.error(`ERROR: ${result.pathLabel} is malformed (${result.error}). Fix the file manually before running rigor mutations.`);
     process.exitCode = 1;
@@ -544,6 +548,23 @@ function cmdRigorSetStep(step, level) {
   result.config.rigorOverrides = result.config.rigorOverrides || {};
   const previous = result.config.rigorOverrides[step] ?? `(follows ${result.config.rigorProfile ?? 'medium'})`;
   result.config.rigorOverrides[step] = level;
-  writeProjectConfig(result.config);
+  writeProjectConfig(result.config, cwd);
   console.log(`  - set ${step} rigor override: ${previous} -> ${level}`);
+}
+
+function resolveConfigCommandRoot() {
+  const workspace = resolveWorkspaceContext([], { cwd: process.cwd() });
+  if (workspace.invalid) {
+    console.error(`ERROR: ${workspace.error}`);
+    process.exitCode = 1;
+    return null;
+  }
+  try {
+    assertStateAuthority(workspace.state);
+    return workspace.workspaceRoot;
+  } catch (error) {
+    console.error(`ERROR: ${error.message}`);
+    process.exitCode = 1;
+    return null;
+  }
 }

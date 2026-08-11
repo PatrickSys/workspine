@@ -11,6 +11,7 @@ import { runTruthChecks, TRUTH_CHECK_IDS } from './health-truth.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
 import { evaluateRuntimeFreshness } from './runtime-freshness.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { stateAuthorityGate } from './state-dir.mjs';
 
 function statePath(stateDirName, relativePath = '') {
   return relativePath ? `${stateDirName}/${relativePath}` : stateDirName;
@@ -21,7 +22,7 @@ function statePath(stateDirName, relativePath = '') {
  * state. ctx should provide: { frameworkVersion, workflows }.
  */
 export function buildHealthReport(ctx, healthArgs = []) {
-    const { planningDir, workspaceRoot, invalid, error, stateDirName = '.work' } = resolveWorkspaceContext(healthArgs);
+    const { planningDir, workspaceRoot, invalid, error, stateDirName = '.work', state } = resolveWorkspaceContext(healthArgs, { cwd: ctx.cwd });
     if (invalid) {
       return {
         status: 'broken',
@@ -29,6 +30,17 @@ export function buildHealthReport(ctx, healthArgs = []) {
         warnings: [],
         info: [],
         humanMessage: error,
+      };
+    }
+
+    const authorityGate = stateAuthorityGate(state);
+    if (!authorityGate.allowed) {
+      return {
+        status: 'broken',
+        errors: [{ id: 'E1', severity: 'ERROR', message: authorityGate.message, fix: authorityGate.message }],
+        warnings: [],
+        info: [],
+        humanMessage: authorityGate.message,
       };
     }
     const cwd = workspaceRoot;

@@ -8,6 +8,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import { evaluateLifecycleState, normalizePhaseToken, readPlanStatus } from './lifecycle-state.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { assertStateAuthority } from './state-dir.mjs';
 
 const PHASE_STATUS_MARKERS = {
   not_started: '[ ]',
@@ -932,12 +933,13 @@ export function updateRoadmapPhaseStatus(roadmap, phaseNumber, status) {
 }
 
 export function cmdPhaseStatus(...args) {
-  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  const { args: normalizedArgs, planningDir, state, invalid, error } = resolveWorkspaceContext(args);
   if (invalid) {
     console.error(error);
     process.exitCode = 1;
     return;
   }
+  if (!requireStateAuthority(state)) return;
   const roadmapPath = join(planningDir, 'ROADMAP.md');
   const stateName = basename(planningDir);
   const [phaseNumber, status] = normalizedArgs;
@@ -969,12 +971,13 @@ export function cmdPhaseStatus(...args) {
 }
 
 export function cmdFindPhase(...args) {
-  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  const { args: normalizedArgs, planningDir, state, invalid, error } = resolveWorkspaceContext(args);
   if (invalid) {
     output({ error });
     process.exitCode = 1;
     return;
   }
+  if (!requireStateAuthority(state)) return;
   const phaseNum = normalizedArgs[0];
   const stateName = basename(planningDir);
 
@@ -1150,6 +1153,13 @@ export function buildPhaseVerificationReport(...args) {
 }
 
 export function cmdVerify(...args) {
+  const workspace = resolveWorkspaceContext(args);
+  if (workspace.invalid) {
+    console.error(workspace.error);
+    process.exitCode = 1;
+    return;
+  }
+  if (!requireStateAuthority(workspace.state)) return;
   const report = buildPhaseVerificationReport(...args);
   if (!report.ok) {
     console.error(report.error);
@@ -1161,12 +1171,13 @@ export function cmdVerify(...args) {
 }
 
 export function cmdScaffold(...args) {
-  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  const { args: normalizedArgs, planningDir, state, invalid, error } = resolveWorkspaceContext(args);
   if (invalid) {
     console.error(error);
     process.exitCode = 1;
     return;
   }
+  if (!requireStateAuthority(state)) return;
   const kind = normalizedArgs[0];
   const phaseNum = normalizedArgs[1];
   const phaseName = normalizedArgs[2] || 'phase';
@@ -1186,4 +1197,15 @@ export function cmdScaffold(...args) {
     writeFileSync(planPath, `# Phase ${phaseNum} Plan\n\n## Goal\n- \n\n## Tasks\n- [ ] \n`);
   }
   output({ created, path: planPath.replace(/\\/g, '/'), phase: normalizePhaseToken(phaseNum) });
+}
+
+function requireStateAuthority(state) {
+  try {
+    assertStateAuthority(state);
+    return true;
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+    return false;
+  }
 }

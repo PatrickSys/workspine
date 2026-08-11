@@ -160,6 +160,20 @@ describe('Health — pre-init guard', () => {
     assert.ok(json.errors.length > 0);
     assert.strictEqual(json.errors[0].id, 'E1');
   });
+
+  test('supported legacy state is a blocking migration issue and remains byte-identical', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    const config = Buffer.from(JSON.stringify({ initVersion: 'v1.1', keep: true }));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), config);
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    assert.strictEqual(result.exitCode, 1);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.status, 'broken');
+    assert.strictEqual(parsed.errors[0].id, 'E1');
+    assert.match(parsed.errors[0].message, /Run `npx -y gsdd-cli init --migrate`\./);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.planning', 'config.json')), config);
+    assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+  });
 });
 
 describe('Health — healthy workspace', () => {

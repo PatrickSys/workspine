@@ -240,37 +240,25 @@ describe('gsdd journey', () => {
     });
   });
 
-  test('uses legacy lifecycle milestones but only canonical .work decision counts and latest choice', async () => {
-    writeFile('.planning/config.json', '{}\n');
-    writeFile('.planning/milestones/m1-legacy/MILESTONE.md', '---\nstatus: in_progress\n---\n');
-    await writeDecision('Canonical work authority', {}, new Date('2026-07-11T09:00:00.000Z'));
-    await writeDecision('Legacy poison is newer but ignored', { status: 'candidate' }, new Date('2026-07-11T10:00:00.000Z'), '.planning');
+  test('refuses dual lifecycle roots without changing either authority', async () => {
+    writeFile('.planning/config.json', JSON.stringify({ initVersion: 'v1.1' }));
+    writeFile('.planning/legacy.bin', Buffer.from([0, 255]));
+    writeFile('.work/current.bin', Buffer.from([255, 0]));
+    const legacy = fs.readFileSync(path.join(tmpDir, '.planning', 'legacy.bin'));
+    const current = fs.readFileSync(path.join(tmpDir, '.work', 'current.bin'));
 
-    const result = await runCliAsMain(tmpDir, ['journey', '--json']);
-    assert.strictEqual(result.exitCode, 0, result.output);
-    const json = JSON.parse(result.output);
-    assert.deepStrictEqual(json.milestones.map((entry) => entry.name), ['m1-legacy']);
-    assert.deepStrictEqual(json.decisions, {
-      active: 1,
-      candidate: 0,
-      invalidated: 0,
-      superseded: 0,
-      latest: 'Canonical work authority',
-    });
+    await assert.rejects(() => runCliAsMain(tmpDir, ['journey', '--json']), /Both `\.work\/` and `\.planning\/` exist/);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.planning', 'legacy.bin')), legacy);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'current.bin')), current);
   });
 
-  test('legacy-only decision records never render a journey decision strip', async () => {
-    writeFile('.planning/config.json', '{}\n');
+  test('refuses supported legacy lifecycle state and preserves its bytes', async () => {
+    writeFile('.planning/config.json', JSON.stringify({ initVersion: 'v1.1' }));
     writeFile('.planning/milestones/m1-legacy/MILESTONE.md', '---\nstatus: in_progress\n---\n');
-    await writeDecision('Legacy-only poison remains evidence', {}, new Date('2026-07-11T09:00:00.000Z'), '.planning');
+    const before = fs.readFileSync(path.join(tmpDir, '.planning', 'milestones', 'm1-legacy', 'MILESTONE.md'));
 
-    const human = await runCliAsMain(tmpDir, ['journey']);
-    assert.strictEqual(human.exitCode, 0, human.output);
-    assert.match(human.output, /m1-legacy/);
-    assert.doesNotMatch(human.output, /decisions:|latest:/);
-    const jsonResult = await runCliAsMain(tmpDir, ['journey', '--json']);
-    assert.strictEqual(jsonResult.exitCode, 0, jsonResult.output);
-    assert.strictEqual(JSON.parse(jsonResult.output).decisions, null);
+    await assert.rejects(() => runCliAsMain(tmpDir, ['journey']), /npx -y gsdd-cli init --migrate/);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.planning', 'milestones', 'm1-legacy', 'MILESTONE.md')), before);
     assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
   });
 

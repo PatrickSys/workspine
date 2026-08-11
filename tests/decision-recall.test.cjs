@@ -653,8 +653,8 @@ describe('S1 decision recall loop', () => {
   test('plan preflight persists the digest and execute preflight warns on missing or stale acknowledgements', async () => {
     const root = createTempProject();
     dirs.push(root);
-    const stateDir = path.join(root, '.planning');
-    const workDir = path.join(root, '.work');
+    const stateDir = path.join(root, '.work');
+    const workDir = stateDir;
     const phaseDir = path.join(stateDir, 'phases', '30-decisions');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(stateDir, 'config.json'), '{}\n');
@@ -664,12 +664,6 @@ describe('S1 decision recall loop', () => {
       repoRoot: root,
       now: new Date('2026-07-11T09:00:00.000Z'),
     });
-    const poison = writeDecisionRecord(stateDir, record('legacy-poison-a1b2', 'Legacy decision must not enter the digest', { for: 'phase:30' }), {
-      repoRoot: root,
-      now: new Date('2026-07-11T08:00:00.000Z'),
-    });
-    const poisonPath = path.join(stateDir, 'decisions', `${poison.id}.md`);
-    const poisonBytes = fs.readFileSync(poisonPath);
     fs.writeFileSync(path.join(phaseDir, '30-PLAN.md'), '# plan\n');
     let result = await runCliAsMain(root, ['lifecycle-preflight', 'plan', '30']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -711,7 +705,6 @@ describe('S1 decision recall loop', () => {
     const stateAfterExecute = fs.readFileSync(path.join(stateDir, 'state.json'), 'utf-8');
     assert.strictEqual(JSON.parse(stateAfterExecute).lastDecisionsDigest.emitted_at, persisted.emitted_at);
     assert.strictEqual(readDecisionRecords(workDir).records.find((entry) => entry.meta.id === decision.id).meta.hash, decision.record.meta.hash);
-    assert.deepStrictEqual(fs.readFileSync(poisonPath), poisonBytes);
   });
 
   test('README and help keep every decision backend command experimental and expose all verbs', async () => {
@@ -758,7 +751,7 @@ describe('S1 decision recall loop', () => {
   });
 
   test('legacy .planning-only workspaces refuse every decision command without changing any bytes or members', async () => {
-    const refusal = /Decision commands require canonical \.work\/.+Run `gsdd next --init`.+migrate legacy lifecycle state explicitly.+not imported automatically/i;
+    const refusal = /Legacy \.planning\/ state is not an active Workspine root.+npx -y gsdd-cli init --migrate/i;
     const cases = [
       ['remember', 'Do not split decision authority', '--type', 'rule', '--scope', 'repo'],
       ['decisions', 'query', 'legacy poison'],
@@ -772,10 +765,8 @@ describe('S1 decision recall loop', () => {
       dirs.push(root);
       const legacyDir = path.join(root, '.planning');
       fs.mkdirSync(legacyDir, { recursive: true });
-      fs.writeFileSync(path.join(legacyDir, 'config.json'), '{}\n');
-      const { writeDecisionRecord } = await loadStore();
-      writeDecisionRecord(legacyDir, record('legacy-candidate-a1b2', 'Legacy poison candidate', { status: 'candidate' }), { repoRoot: root });
-      writeDecisionRecord(legacyDir, record('legacy-active-a1b2', 'Legacy poison active'), { repoRoot: root });
+      fs.writeFileSync(path.join(legacyDir, 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+      fs.writeFileSync(path.join(legacyDir, 'sentinel.bin'), Buffer.from([0, 1, 255]));
       const before = snapshotTree(root);
 
       const result = await runCliAsMain(root, args);
@@ -787,25 +778,21 @@ describe('S1 decision recall loop', () => {
     }
   });
 
-  test('after next init package decisions use only .work and preserve legacy poison bytes', async () => {
+  test('after explicit migration package decisions use only .work and preserve legacy bytes', async () => {
     const root = createTempProject();
     dirs.push(root);
     const legacyDir = path.join(root, '.planning');
     const workDir = path.join(root, '.work');
     fs.mkdirSync(legacyDir, { recursive: true });
-    fs.writeFileSync(path.join(legacyDir, 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(legacyDir, 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
     const { readDecisionRecords, writeDecisionRecord } = await loadStore();
-    writeDecisionRecord(legacyDir, record('legacy-poison-a1b2', 'Legacy poison must stay invisible'), { repoRoot: root });
-    const legacyBefore = snapshotTree(legacyDir);
+    fs.writeFileSync(path.join(legacyDir, 'sentinel.bin'), Buffer.from([0, 1, 255]));
 
-    let result = await runCliAsMain(root, ['next', '--init', '--json']);
+    let result = await runCliAsMain(root, ['init', '--migrate', '--auto', '--tools', 'codex']);
     assert.strictEqual(result.exitCode, 0, result.output);
     result = await runCliAsMain(root, ['remember', 'Canonical work decision', '--type', 'rule', '--scope', 'repo']);
     assert.strictEqual(result.exitCode, 0, result.output);
     const id = JSON.parse(result.output).record.id;
-    result = await runCliAsMain(root, ['decisions', 'query', 'Legacy poison']);
-    assert.strictEqual(result.exitCode, 0, result.output);
-    assert.strictEqual(result.output, 'DECISION QUERY RESULTS (0 records)');
     result = await runCliAsMain(root, ['decisions', 'query', 'Canonical work decision']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, new RegExp(id));
@@ -816,6 +803,7 @@ describe('S1 decision recall loop', () => {
     assert.strictEqual(workRecords.length, 1);
     assert.strictEqual(workRecords[0].meta.id, id);
     assert.strictEqual(workRecords[0].meta.status, 'active');
-    assert.deepStrictEqual(snapshotTree(legacyDir), legacyBefore);
+    assert.strictEqual(fs.existsSync(legacyDir), false);
+    assert.deepStrictEqual(fs.readFileSync(path.join(workDir, 'sentinel.bin')), Buffer.from([0, 1, 255]));
   });
 });

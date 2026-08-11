@@ -849,61 +849,38 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(result.stdout, /\b(promote|reject|invalidate)\b/);
   });
 
-  test('fresh legacy helper refuses split decisions until next init then uses only canonical .work', async () => {
+  test('generated decisions refuse supported legacy and dual roots without changing bytes or members', async () => {
+    const init = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(init.exitCode, 0, init.output);
+    const workDir = path.join(tmpDir, '.work');
     const planningDir = path.join(tmpDir, '.planning');
-    fs.mkdirSync(planningDir, { recursive: true });
-    fs.writeFileSync(path.join(planningDir, 'config.json'), '{}\n');
-    const update = await runCliAsMain(tmpDir, ['update']);
-    assert.strictEqual(update.exitCode, 0, update.output);
+    fs.renameSync(workDir, planningDir);
     const helperPath = path.join(planningDir, 'bin', 'gsdd.mjs');
-    assert.ok(fs.existsSync(helperPath));
-
-    const { writeDecisionRecord, readDecisionRecords } = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs'));
-    writeDecisionRecord(planningDir, {
-      id: 'legacy-poison-a1b2',
-      type: 'rule',
-      status: 'active',
-      scope: 'repo',
-      decision: 'Legacy poison must never become decision authority',
-      why: 'This fixture proves generated helper isolation.',
-      for: 'repo:current',
-      body: 'Legacy evidence remains untouched.',
-    }, { repoRoot: tmpDir });
-    const planningBefore = snapshotTree(planningDir);
-    const nestedDir = path.join(tmpDir, 'src', 'nested');
-    fs.mkdirSync(nestedDir, { recursive: true });
-    const runLegacyHelper = (args) => spawnSync(process.execPath, [helperPath, ...args], { cwd: nestedDir, encoding: 'utf-8' });
-    const refusal = /Decision commands require canonical \.work\/.+Run `gsdd next --init`.+not imported automatically/i;
+    const beforeLegacy = snapshotTree(tmpDir);
 
     for (const args of [
-      ['remember', 'Refuse before init', '--type', 'rule', '--scope', 'repo'],
-      ['decisions', 'query', 'Legacy poison'],
+      ['remember', 'Refuse legacy authority', '--type', 'rule', '--scope', 'repo'],
+      ['decisions', 'query', 'anything'],
     ]) {
-      const result = runLegacyHelper(args);
+      const result = spawnSync(process.execPath, [helperPath, ...args], { cwd: tmpDir, encoding: 'utf-8' });
       assert.notStrictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-      assert.match(`${result.stdout}${result.stderr}`, refusal);
-      assert.deepStrictEqual(snapshotTree(planningDir), planningBefore);
-      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+      assert.match(`${result.stdout}${result.stderr}`, /npx -y gsdd-cli init --migrate/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), beforeLegacy);
     }
 
-    const initNext = await runCliAsMain(tmpDir, ['next', '--init', '--json']);
-    assert.strictEqual(initNext.exitCode, 0, initNext.output);
-    let result = runLegacyHelper([
-      'remember', 'Generated helper canonical candidate', '--type', 'rule', '--scope', 'repo',
-    ]);
-    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    const candidate = JSON.parse(result.stdout);
-    result = runLegacyHelper(['decisions', 'query', 'Legacy poison']);
-    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.strictEqual(result.stdout, 'DECISION QUERY RESULTS (0 records)\n');
-    result = runLegacyHelper(['decisions', 'query', 'Generated helper canonical candidate']);
-    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.match(result.stdout, new RegExp(candidate.record.id));
-    assert.match(result.stdout, /\[status: candidate\]/);
+    const controlMap = spawnSync(process.execPath, [helperPath, 'control-map'], { cwd: tmpDir, encoding: 'utf-8' });
+    assert.strictEqual(controlMap.status, 1, `${controlMap.stdout}\n${controlMap.stderr}`);
+    assert.strictEqual(controlMap.stdout, '');
+    assert.strictEqual(controlMap.stderr.trim(), 'ERROR: Legacy .planning/ state is not an active Workspine root. Run `npx -y gsdd-cli init --migrate`.');
+    assert.deepStrictEqual(snapshotTree(tmpDir), beforeLegacy);
 
-    const canonical = readDecisionRecords(path.join(tmpDir, '.work')).records;
-    assert.deepStrictEqual(canonical.map((entry) => entry.meta.id), [candidate.record.id]);
-    assert.deepStrictEqual(snapshotTree(planningDir), planningBefore);
+    fs.mkdirSync(workDir);
+    fs.writeFileSync(path.join(workDir, 'dual-sentinel.bin'), Buffer.from([0, 255]));
+    const beforeDual = snapshotTree(tmpDir);
+    const result = spawnSync(process.execPath, [helperPath, 'decisions', 'query', 'anything'], { cwd: tmpDir, encoding: 'utf-8' });
+    assert.notStrictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(`${result.stdout}${result.stderr}`, /Both `\.work\/` and `\.planning\/` exist/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), beforeDual);
   });
 
   test('fresh repo-local helper projects active decisions from nested cwd without writing', async () => {
@@ -1082,7 +1059,7 @@ describe('gsdd init and update', () => {
       '**Status**: [ ]',
       '',
     ].join('\n'));
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases'), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '01-PLAN.md'), '# Plan\n');
 
     const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
@@ -2171,20 +2148,14 @@ describe('gsdd init and update', () => {
   });
 
   describe('partial .planning/ resilience', () => {
-    test('init creates phases/ and research/ even when .planning/ already exists', async () => {
+    test('unattended init refuses an unsupported partial .planning/ before any write', async () => {
       fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+      const before = snapshotTree(tmpDir);
 
-      const restoreStdin = setNonInteractiveStdin();
-      try {
-        const gsdd = await loadGsdd(tmpDir);
-        await gsdd.cmdInit('--auto', '--tools', 'claude');
-      } finally {
-        restoreStdin();
-      }
-
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'phases')));
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'research')));
-      assert.ok(fs.existsSync(path.join(tmpDir, '.planning', 'config.json')));
+      const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+      assert.strictEqual(result.exitCode, 1);
+      assert.match(result.output, /Legacy \.planning\/ state is unsupported \(missing_config\)/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
     });
 
     test('init after pre-init guard rejection creates complete structure', async () => {
@@ -2203,6 +2174,92 @@ describe('gsdd init and update', () => {
       assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'phases')));
       assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'research')));
       assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'config.json')));
+    });
+
+    test('supported legacy state requires --migrate when init is unattended', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1', keep: true }));
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'consumer.bin'), Buffer.from([0, 1, 255]));
+      const before = snapshotTree(tmpDir);
+
+      const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+      assert.strictEqual(result.exitCode, 1);
+      assert.match(result.output, /Run `npx -y gsdd-cli init --migrate`\./);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    });
+
+    test('models and rigor commands refuse supported legacy state without writes', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+      const before = snapshotTree(tmpDir);
+      for (const args of [['models', 'show'], ['rigor', 'show']]) {
+        const result = await runCliAsMain(tmpDir, args);
+        assert.strictEqual(result.exitCode, 1, result.output);
+        assert.match(result.output, /npx -y gsdd-cli init --migrate/);
+        assert.deepStrictEqual(snapshotTree(tmpDir), before);
+      }
+    });
+
+    test('init --migrate moves supported legacy bytes, writes receipt, then continues on .work', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.planning', 'nested'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1', keep: true }));
+      const consumerBytes = Buffer.from([0, 1, 2, 13, 10, 255]);
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'nested', 'consumer.bin'), consumerBytes);
+
+      const result = await runCliAsMain(tmpDir, ['init', '--migrate', '--auto', '--tools', 'agents']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.planning')), false);
+      assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'nested', 'consumer.bin')), consumerBytes);
+      const receipt = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'migration-receipt.json'), 'utf8'));
+      assert.strictEqual(receipt.signature, 'S2-config-v1');
+      assert.strictEqual(receipt.detected_init_version, 'v1.1');
+      assert.strictEqual(receipt.method, 'same-parent-rename');
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
+    });
+
+    test('init --migrate refuses legacy decision content and receipt collisions before writes', async () => {
+      for (const collision of ['decisions', 'migration-receipt.json']) {
+        fs.rmSync(path.join(tmpDir, '.planning'), { recursive: true, force: true });
+        fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+        fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+        if (collision === 'decisions') {
+          fs.mkdirSync(path.join(tmpDir, '.planning', 'decisions'));
+          fs.writeFileSync(path.join(tmpDir, '.planning', 'decisions', 'legacy.md'), 'legacy');
+        } else {
+          fs.writeFileSync(path.join(tmpDir, '.planning', collision), '{}');
+        }
+        const before = snapshotTree(tmpDir);
+        const result = await runCliAsMain(tmpDir, ['init', '--migrate', '--auto', '--tools', 'agents']);
+        assert.strictEqual(result.exitCode, 1, result.output);
+        assert.match(result.output, collision === 'decisions' ? /nonempty_legacy_decisions/ : /migration_receipt_exists/);
+        assert.deepStrictEqual(snapshotTree(tmpDir), before);
+      }
+    });
+
+    test('nested migration writes only at the discovered Git root', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.git'));
+      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+      const nested = path.join(tmpDir, 'packages', 'app');
+      fs.mkdirSync(nested, { recursive: true });
+      const result = await runCliAsMain(nested, ['init', '--migrate', '--auto', '--tools', 'agents']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'migration-receipt.json')));
+      assert.strictEqual(fs.existsSync(path.join(nested, '.work')), false);
+      assert.strictEqual(fs.existsSync(path.join(nested, '.planning')), false);
+    });
+
+    test('dual roots refuse init before adapters, prompts, or workspace writes', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.work'));
+      fs.writeFileSync(path.join(tmpDir, '.work', 'sentinel.txt'), 'work');
+      fs.mkdirSync(path.join(tmpDir, '.planning'));
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'sentinel.txt'), 'planning');
+      const before = snapshotTree(tmpDir);
+
+      const result = await runCliAsMain(tmpDir, ['init', '--migrate', '--auto', '--tools', 'agents']);
+      assert.strictEqual(result.exitCode, 1);
+      assert.match(result.output, /Both `\.work\/` and `\.planning\/` exist/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
     });
   });
 });

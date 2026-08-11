@@ -1,6 +1,7 @@
 import { existsSync } from 'fs';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { assertStateAuthority } from './state-dir.mjs';
 import {
   DECISION_RECORD_SCOPES,
   DECISION_RECORD_TYPES,
@@ -31,6 +32,7 @@ function runRemember(rawArgs, removedMessage) {
   const workspace = resolveWorkspaceContext(rawArgs);
   if (workspace.invalid) return fail(workspace.error);
   try {
+    assertStateAuthority(workspace.state);
     const workDir = resolveDecisionWorkDir(workspace);
     const [text, ...args] = workspace.args;
     if (args.includes(REMEMBER_REMOVED_FLAG)) return fail(removedMessage);
@@ -72,6 +74,7 @@ export function cmdDecisions(...rawArgs) {
   const workspace = resolveWorkspaceContext(rawArgs);
   if (workspace.invalid) return fail(workspace.error);
   try {
+    assertStateAuthority(workspace.state);
     const workDir = resolveDecisionWorkDir(workspace);
     const [subcommand, subject, ...args] = workspace.args;
     if (!subject || subject.startsWith('--')) return fail(DECISIONS_USAGE);
@@ -109,6 +112,7 @@ export function cmdDecisionsQuery(...rawArgs) {
   const workspace = resolveWorkspaceContext(rawArgs);
   if (workspace.invalid) return fail(workspace.error);
   try {
+    assertStateAuthority(workspace.state);
     const workDir = resolveDecisionWorkDir(workspace);
     const [subcommand, terms, ...args] = workspace.args;
     if (subcommand !== 'query') return fail(DECISIONS_QUERY_USAGE);

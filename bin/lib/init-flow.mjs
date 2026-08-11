@@ -1,6 +1,14 @@
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, readdirSync, unlinkSync, writeFileSync, cpSync } from 'fs';
 import { dirname, join, isAbsolute, relative, resolve, sep } from 'path';
-import { buildPlanningCliHelperEntries, renderSkillContent } from './rendering.mjs';
+import {
+  buildPlanningCliHelperEntries,
+  getDelegateContent,
+  renderAgentsBoundedBlock,
+  renderAgentsFileContent,
+  renderOpenCodeCommandContent,
+  renderSkillContent,
+  upsertBoundedBlock,
+} from './rendering.mjs';
 import { buildManifest, fileHash, readManifest, writeManifest } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs';
@@ -14,6 +22,38 @@ import {
   resolveInteractiveInitSession,
 } from './init-runtime.mjs';
 import { createInitPromptApi } from './init-prompts.mjs';
+import { createAdapterRegistry } from '../adapters/index.mjs';
+import { migrateLegacyState } from './state-migration.mjs';
+import { resolveStateDir, stateAuthorityGate, MIGRATION_COMMAND } from './state-dir.mjs';
+import { resolveWorkspaceContext } from './workspace-root.mjs';
+
+function contextAtWorkspaceRoot(ctx, workspaceRoot) {
+  const state = resolveStateDir(workspaceRoot);
+  if (resolve(ctx.cwd) === resolve(workspaceRoot)) {
+    return { ...ctx, cwd: workspaceRoot, planningDir: state.dir, stateDirName: state.name };
+  }
+  const adapterContext = {
+    cwd: workspaceRoot,
+    workflows: ctx.workflows,
+    stateDirName: state.name,
+    renderAgentsBoundedBlock,
+    renderAgentsFileContent,
+    renderOpenCodeCommandContent,
+    renderSkillContent,
+    upsertBoundedBlock,
+    getDelegateContent,
+    loadProjectModelConfig: ctx.loadProjectModelConfig,
+    getRuntimeModelOverride: ctx.getRuntimeModelOverride,
+    resolveRuntimeAgentModel: ctx.resolveRuntimeAgentModel,
+  };
+  return {
+    ...ctx,
+    cwd: workspaceRoot,
+    planningDir: state.dir,
+    stateDirName: state.name,
+    adapters: createAdapterRegistry(adapterContext),
+  };
+}
 
 function validateKindContract(adapter, cwd) {
   if (!adapter.subagentFiles) return;
@@ -45,6 +85,7 @@ export function createCmdInit(ctx) {
     console.log('gsdd init - setting up GSDD workflow\n');
 
     const isAuto = parseAutoFlag(initArgs);
+    const wantsMigration = initArgs.includes('--migrate');
     const toolsFlag = parseFlagValue(initArgs, '--tools');
     const briefFlag = parseFlagValue(initArgs, '--brief');
     let briefSource = null;
@@ -77,14 +118,57 @@ export function createCmdInit(ctx) {
       return;
     }
 
+    const workspace = resolveWorkspaceContext([], { cwd: ctx.cwd });
+    if (workspace.invalid) {
+      console.error(`ERROR: ${workspace.error}`);
+      process.exitCode = 1;
+      return;
+    }
+    let initCtx = contextAtWorkspaceRoot(ctx, workspace.workspaceRoot);
+    let state = resolveStateDir(initCtx.cwd);
     const promptApi = ctx.initPromptApi || createInitPromptApi();
+
+    if (state.status === 'legacy_migratable') {
+      let approved = wantsMigration;
+      if (!approved && !isAuto && process.stdin.isTTY) {
+        approved = await promptApi.confirmLegacyMigration({ command: MIGRATION_COMMAND });
+      }
+      if (!approved) {
+        console.error(`ERROR: ${stateAuthorityGate(state).message}`);
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        migrateLegacyState(initCtx.cwd);
+      } catch (error) {
+        console.error(`ERROR: Legacy state migration failed: ${error.message}`);
+        process.exitCode = 1;
+        return;
+      }
+      initCtx = contextAtWorkspaceRoot(initCtx, initCtx.cwd);
+      state = resolveStateDir(initCtx.cwd);
+      const postMigrationGate = stateAuthorityGate(state);
+      if (!postMigrationGate.allowed || state.status !== 'current') {
+        console.error(`ERROR: Migration did not establish an active .work/ root${postMigrationGate.message ? `: ${postMigrationGate.message}` : '.'}`);
+        process.exitCode = 1;
+        return;
+      }
+    } else {
+      const gate = stateAuthorityGate(state);
+      if (!gate.allowed) {
+        console.error(`ERROR: ${gate.message}`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+
     const interactiveSession = await resolveInteractiveInitSession({
-      ctx,
+      ctx: initCtx,
       promptApi,
       parsedTools,
       isAuto,
     });
-    const { planningDir, stateDirName } = ctx;
+    const { planningDir, stateDirName } = initCtx;
 
     const existed = existsSync(planningDir);
     mkdirSync(join(planningDir, 'phases'), { recursive: true });
@@ -93,31 +177,31 @@ export function createCmdInit(ctx) {
       ? `  - ${stateDirName}/ already exists (ensured subdirectories)`
       : `  - created ${stateDirName}/ directory structure`);
 
-    installProjectTemplates(ctx);
+    installProjectTemplates(initCtx);
     await ensureConfig({
-      cwd: ctx.cwd,
+      cwd: initCtx.cwd,
       planningDir,
       isAuto,
       promptApi,
       preselectedConfig: interactiveSession.config,
       stateDirName,
     });
-    ensureGitignoreEntry(ctx.cwd, `${stateDirName}/.local/`, `  - ensured ${stateDirName}/.local/ is gitignored`);
+    ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/.local/`, `  - ensured ${stateDirName}/.local/ is gitignored`);
 
     if (briefSource) {
       cpSync(briefSource, join(planningDir, 'PROJECT_BRIEF.md'));
       console.log(`  - copied project brief to ${stateDirName}/PROJECT_BRIEF.md`);
     }
 
-    generateOpenStandardSkills(ctx.cwd, ctx.workflows, { stateDirName });
+    generateOpenStandardSkills(initCtx.cwd, initCtx.workflows, { stateDirName });
     console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
 
-    const runtimeGeneration = generatePlanningCliHelpers(ctx);
+    const runtimeGeneration = generatePlanningCliHelpers(initCtx);
     console.log(`  - generated local workflow helpers (${stateDirName}/bin/gsdd*)`);
 
-    for (const adapter of resolveAdapters(ctx.adapters, interactiveSession.adapterTargets)) {
+    for (const adapter of resolveAdapters(initCtx.adapters, interactiveSession.adapterTargets)) {
       adapter.generate();
-      validateKindContract(adapter, ctx.cwd);
+      validateKindContract(adapter, initCtx.cwd);
       console.log(`  - ${adapter.summary('generated')}`);
     }
 
@@ -140,6 +224,12 @@ export function createCmdInit(ctx) {
 
 export function createCmdUpdate(ctx) {
   return function cmdUpdate(...updateArgs) {
+    const gate = stateAuthorityGate(resolveStateDir(ctx.cwd));
+    if (!gate.allowed) {
+      console.error(`ERROR: ${gate.message}`);
+      process.exitCode = 1;
+      return;
+    }
     const isDry = updateArgs.includes('--dry');
     const doTemplates = updateArgs.includes('--templates');
     const { planningDir, stateDirName } = ctx;

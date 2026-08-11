@@ -129,7 +129,7 @@ describe('next command bootstrap', () => {
     assert.deepStrictEqual(initialized.next.decisionsDigest, missing.decisionsDigest);
   });
 
-  test('plain next only uses .work typed authority and projects signal evidence on an early route', async () => {
+  test('plain next refuses dual roots instead of silently selecting .work', async () => {
     fs.mkdirSync(path.join(tmpDir, '.work', 'decisions'), { recursive: true });
     await writeTypedDecision(typedDecision('early-active-a1b2', 'Use .work before bootstrap.'));
     fs.mkdirSync(path.join(tmpDir, '.planning', 'decisions'), { recursive: true });
@@ -139,11 +139,25 @@ describe('next command bootstrap', () => {
       body: 'PLANNING BODY MUST NOT LEAK.',
     }), { repoRoot: tmpDir });
 
-    const result = await runJson(['next', '--json']);
-    assert.strictEqual(result.state, 'ask_user');
-    assert.deepStrictEqual(result.decisionsDigest.ids, ['early-active-a1b2']);
-    assert.ok(result.inputs_considered.includes('.work/decisions/*.md'));
-    assert.doesNotMatch(JSON.stringify(result), /planning-only-c3d4|PLANNING BODY MUST NOT LEAK/);
+    const result = await runCliAsMain(tmpDir, ['next', '--json']);
+    assert.strictEqual(result.exitCode, 1);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.status, 'error');
+    assert.match(parsed.error, /Both `\.work\/` and `\.planning\/` exist/);
+    assert.doesNotMatch(result.output, /planning-only-c3d4|PLANNING BODY MUST NOT LEAK/);
+  });
+
+  test('legacy-only next and next --init refuse with the explicit init migration command', async () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+    const before = fs.readFileSync(path.join(tmpDir, '.planning', 'config.json'));
+    for (const args of [['next', '--json'], ['next', '--init', '--json']]) {
+      const result = await runCliAsMain(tmpDir, args);
+      assert.strictEqual(result.exitCode, 1);
+      assert.match(JSON.parse(result.output).error, /Run `npx -y gsdd-cli init --migrate`\./);
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+      assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.planning', 'config.json')), before);
+    }
   });
 
   test('human next is quiet when no decision signal exists', async () => {
@@ -329,14 +343,10 @@ describe('next command bootstrap', () => {
     assert.strictEqual(manifest.privacy.raw_artifacts_safe_to_publish, false);
   });
 
-  test('nested next init anchors canonical work at a legacy workspace root shared by nested decisions', async () => {
-    writeJson('.planning/config.json', { initVersion: 1 });
-    const poison = await writeTypedDecision(
-      typedDecision('legacy-poison-a1b2', 'Legacy poison remains non-authoritative.'),
-      {},
-      '.planning',
-    );
-    const poisonPath = path.join(tmpDir, '.planning', 'decisions', `${poison.id}.md`);
+  test('nested next init refuses a supported legacy workspace without creating a second root', async () => {
+    writeJson('.planning/config.json', { initVersion: 'v1.1' });
+    const poisonPath = path.join(tmpDir, '.planning', 'legacy.bin');
+    fs.writeFileSync(poisonPath, Buffer.from([0, 1, 255]));
     const poisonBytes = fs.readFileSync(poisonPath);
     const planningBefore = snapshotTree(path.join(tmpDir, '.planning'));
     const nestedDir = path.join(tmpDir, 'src', 'nested');
@@ -344,29 +354,11 @@ describe('next command bootstrap', () => {
 
     const initialized = await runCliAsMain(nestedDir, ['next', '--init', '--json']);
 
-    assert.strictEqual(initialized.exitCode, 0, initialized.output);
-    assert.strictEqual(JSON.parse(initialized.output).operation, 'next init');
-    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'state.json')));
+    assert.strictEqual(initialized.exitCode, 1, initialized.output);
+    assert.match(JSON.parse(initialized.output).error, /Run `npx -y gsdd-cli init --migrate`\./);
+    assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
     assert.strictEqual(fs.existsSync(path.join(nestedDir, '.work')), false);
     assert.strictEqual(fs.existsSync(path.join(nestedDir, 'goal.md')), false);
-
-    const remembered = await runCliAsMain(nestedDir, [
-      'remember', 'Nested command shares root authority', '--type', 'rule', '--scope', 'repo',
-    ]);
-    assert.strictEqual(remembered.exitCode, 0, remembered.output);
-    const id = JSON.parse(remembered.output).record.id;
-    const rootQuery = await runCliAsMain(tmpDir, ['decisions', 'query', 'Nested command shares root authority']);
-    assert.strictEqual(rootQuery.exitCode, 0, rootQuery.output);
-    assert.match(rootQuery.output, new RegExp(id));
-    const promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', id]);
-    assert.strictEqual(promoted.exitCode, 0, promoted.output);
-    const nestedNext = await runCliAsMain(nestedDir, ['next', '--json']);
-    assert.strictEqual(nestedNext.exitCode, 0, nestedNext.output);
-    assert.ok(JSON.parse(nestedNext.output).decisionsDigest.ids.includes(id));
-    const poisonQuery = await runCliAsMain(tmpDir, ['decisions', 'query', 'Legacy poison']);
-    assert.strictEqual(poisonQuery.exitCode, 0, poisonQuery.output);
-    assert.strictEqual(poisonQuery.output, 'DECISION QUERY RESULTS (0 records)');
-    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'decisions', `${id}.md`)));
     assert.deepStrictEqual(fs.readFileSync(poisonPath), poisonBytes);
     assert.deepStrictEqual(snapshotTree(path.join(tmpDir, '.planning')), planningBefore);
   });
@@ -845,7 +837,7 @@ describe('next command questions and decisions', () => {
 describe('next command routing', () => {
   test('missing Workspine lifecycle truth routes to Workspine-native planning, not false lifecycle progress', async () => {
     await initWork();
-    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work'), { recursive: true });
 
     const result = await runJson(['next', '--json']);
 
@@ -860,10 +852,10 @@ describe('next command routing', () => {
 
   test('active brownfield change routes to brownfield planning before unrelated roadmap phase preflight', async () => {
     await initWork();
-    writeFile('.planning/SPEC.md', '# Spec\n');
-    writeJson('.planning/config.json', { initVersion: 1 });
-    writeFile('.planning/MILESTONES.md', '# Milestones\n');
-    writeFile('.planning/ROADMAP.md', [
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeJson('.work/config.json', { initVersion: 1 });
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/ROADMAP.md', [
       '# Roadmap',
       '',
       '### v9.9.9 Unrelated Active Work',
@@ -871,7 +863,7 @@ describe('next command routing', () => {
       '- [ ] **Phase 425589: Unrelated Roadmap Item** — [OTHER-01]',
       '',
     ].join('\n'));
-    writeFile('.planning/brownfield-change/CHANGE.md', [
+    writeFile('.work/brownfield-change/CHANGE.md', [
       '---',
       'change: PBI-425589',
       'status: active',
@@ -897,8 +889,8 @@ describe('next command routing', () => {
     assert.strictEqual(result.route_kind, 'brownfield_change');
     assert.strictEqual(result.next_command, 'gsdd-plan');
     assert.match(result.reason, /bounded brownfield change/i);
-    assert.ok(result.artifacts_to_read.includes('.planning/brownfield-change/CHANGE.md'));
-    assert.ok(result.artifacts_to_write.includes('.planning/brownfield-change/HANDOFF.md'));
+    assert.ok(result.artifacts_to_read.includes('.work/brownfield-change/CHANGE.md'));
+    assert.ok(result.artifacts_to_write.includes('.work/brownfield-change/HANDOFF.md'));
 
     const preflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'brownfield-change']);
     assert.strictEqual(preflight.exitCode, 0, preflight.output);
@@ -910,11 +902,11 @@ describe('next command routing', () => {
 
   test('brownfield status controls routing without treating every non-closed change as planning', async () => {
     await initWork();
-    writeFile('.planning/SPEC.md', '# Spec\n');
-    writeJson('.planning/config.json', { initVersion: 1 });
-    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
-    writeFile('.planning/MILESTONES.md', '# Milestones\n');
-    writeFile('.planning/brownfield-change/CHANGE.md', [
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeJson('.work/config.json', { initVersion: 1 });
+    writeFile('.work/ROADMAP.md', '# Roadmap\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/brownfield-change/CHANGE.md', [
       '---',
       'change: PBI-425589',
       'status: active',
@@ -935,9 +927,9 @@ describe('next command routing', () => {
     assert.strictEqual(result.authority, 'brownfield_change');
     assert.strictEqual(result.route_kind, 'brownfield_change_verification');
     assert.strictEqual(result.next_command, null);
-    assert.ok(result.artifacts_to_write.includes('.planning/brownfield-change/VERIFICATION.md'));
+    assert.ok(result.artifacts_to_write.includes('.work/brownfield-change/VERIFICATION.md'));
 
-    writeFile('.planning/brownfield-change/CHANGE.md', [
+    writeFile('.work/brownfield-change/CHANGE.md', [
       '---',
       'change: PBI-425589',
       'status: active',
@@ -962,11 +954,11 @@ describe('next command routing', () => {
 
   test('active brownfield change blocks instead of silently choosing over work-milestone authority', async () => {
     await initWork();
-    writeFile('.planning/SPEC.md', '# Spec\n');
-    writeJson('.planning/config.json', { initVersion: 1 });
-    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
-    writeFile('.planning/MILESTONES.md', '# Milestones\n');
-    writeFile('.planning/brownfield-change/CHANGE.md', [
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeJson('.work/config.json', { initVersion: 1 });
+    writeFile('.work/ROADMAP.md', '# Roadmap\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/brownfield-change/CHANGE.md', [
       '# Brownfield Change: PBI Conflict',
       '',
       '## Current Status',
@@ -994,12 +986,12 @@ describe('next command routing', () => {
 
   test('active brownfield change precedence over legacy unverified phase residue is explicit', async () => {
     await initWork();
-    writeFile('.planning/SPEC.md', '# Spec\n');
-    writeJson('.planning/config.json', { initVersion: 1 });
-    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
-    writeFile('.planning/MILESTONES.md', '# Milestones\n');
-    writeFile('.planning/phases/01-stale/01-SUMMARY.md', '# stale summary\n');
-    writeFile('.planning/brownfield-change/CHANGE.md', [
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeJson('.work/config.json', { initVersion: 1 });
+    writeFile('.work/ROADMAP.md', '# Roadmap\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/phases/01-stale/01-SUMMARY.md', '# stale summary\n');
+    writeFile('.work/brownfield-change/CHANGE.md', [
       '# Brownfield Change: Active PBI',
       '',
       '## Current Status',
@@ -1019,12 +1011,12 @@ describe('next command routing', () => {
 
   test('closed brownfield change does not hijack normal legacy verification routing', async () => {
     await initWork();
-    writeFile('.planning/SPEC.md', '# Spec\n');
-    writeJson('.planning/config.json', { initVersion: 1 });
-    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
-    writeFile('.planning/MILESTONES.md', '# Milestones\n');
-    writeFile('.planning/phases/01-foundation/01-SUMMARY.md', '# Summary\n');
-    writeFile('.planning/brownfield-change/CHANGE.md', [
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeJson('.work/config.json', { initVersion: 1 });
+    writeFile('.work/ROADMAP.md', '# Roadmap\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/phases/01-foundation/01-SUMMARY.md', '# Summary\n');
+    writeFile('.work/brownfield-change/CHANGE.md', [
       '---',
       'change: PBI-425589',
       'status: active',
@@ -1046,7 +1038,6 @@ describe('next command routing', () => {
 
   test('work-native milestone audit prevents routing backward to plan', async () => {
     await initWork();
-    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
     writeFile('.work/milestone/MILESTONE.md', '# Milestone\n');
     writeFile('.work/milestone/ROADMAP.md', [
       '# Roadmap',
@@ -1278,13 +1269,13 @@ describe('next command routing', () => {
     assert.strictEqual(after.questions[0].id, 'completion-approval');
   });
 
-  test('legacy summaries without verification route to verify', async () => {
+  test('canonical summaries without verification route to verify', async () => {
     await initWork();
-    writeFile('.planning/SPEC.md', '# Spec\n');
-    writeJson('.planning/config.json', { initVersion: 1 });
-    writeFile('.planning/ROADMAP.md', '# Roadmap\n');
-    writeFile('.planning/MILESTONES.md', '# Milestones\n');
-    writeFile('.planning/phases/01-foundation/01-SUMMARY.md', '# Summary\n');
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeJson('.work/config.json', { initVersion: 1 });
+    writeFile('.work/ROADMAP.md', '# Roadmap\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/phases/01-foundation/01-SUMMARY.md', '# Summary\n');
 
     const result = await runJson(['next', '--json']);
     assert.strictEqual(result.state, 'verify');
@@ -1293,13 +1284,13 @@ describe('next command routing', () => {
 
   test('historical-only standard plan chain routes to plan rather than verification', async () => {
     await initWork();
-    writeFile('.planning/SPEC.md', '# Spec\n');
-    writeJson('.planning/config.json', { initVersion: 1 });
-    writeFile('.planning/ROADMAP.md', '# Roadmap\n\n- [-] **Phase 1: Historical chain**\n');
-    writeFile('.planning/MILESTONES.md', '# Milestones\n');
-    writeFile('.planning/phases/01-historical/01-PLAN.md', '---\nstatus: superseded\n---\n# old plan\n');
-    writeFile('.planning/phases/01-historical/01-SUMMARY.md', '# old summary\n');
-    writeFile('.planning/phases/01-historical/01-VERIFICATION.md', '# retained evidence\n');
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeJson('.work/config.json', { initVersion: 1 });
+    writeFile('.work/ROADMAP.md', '# Roadmap\n\n- [-] **Phase 1: Historical chain**\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/phases/01-historical/01-PLAN.md', '---\nstatus: superseded\n---\n# old plan\n');
+    writeFile('.work/phases/01-historical/01-SUMMARY.md', '# old summary\n');
+    writeFile('.work/phases/01-historical/01-VERIFICATION.md', '# retained evidence\n');
 
     const context = await inspectWorkContext(tmpDir);
     assert.deepStrictEqual(context.planning.phases, [{

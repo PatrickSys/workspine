@@ -168,10 +168,11 @@ Plan, execute, and verify AI-assisted work from files in your repo — with proo
 Usage: gsdd <command> [args]
 
 Commands:
-  init [--tools <platform>] [--auto] [--brief <file>]
+  init [--tools <platform>] [--auto] [--brief <file>] [--migrate]
                               Launch guided install wizard in TTYs, or use --tools for manual/headless setup
                               --auto: non-interactive mode with smart defaults (requires --tools)
                               --brief <file>: copy project brief to .work/PROJECT_BRIEF.md
+                              --migrate: explicitly move a supported legacy state tree to .work/ before setup
   install --global [--auto] [--tools <platform>] [--dry]
                               Install reusable Workspine skills and native runtime surfaces into agent home directories
                               --auto: non-interactive mode that installs detected local agent targets
@@ -228,7 +229,7 @@ Notes:
   - install --global never creates .work/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
   - use \`npx -y gsdd-cli install --global --auto\` for non-interactive global install into detected agent homes; use \`--tools <targets>\` to override detection explicitly
   - repair or refresh a global install by rerunning \`npx -y gsdd-cli install --global --auto\` or \`npx -y gsdd-cli install --global --tools <targets>\`; runtime probes stay in test harnesses
-  - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .work/ (legacy planning workspaces are still read)
+  - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .work/; legacy planning workspaces are still read only for explicit migration
   - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
   - \`npx -y gsdd-cli health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift

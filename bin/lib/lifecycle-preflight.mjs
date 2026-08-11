@@ -19,6 +19,7 @@ import {
 } from './work-context.mjs';
 import { parsePlanFrontmatter } from './phase.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { assertStateAuthority } from './state-dir.mjs';
 
 const SURFACE_POLICIES = {
   progress: {
@@ -795,9 +796,16 @@ function createStateLabeler(planningDir) {
 }
 
 export function cmdLifecyclePreflight(...args) {
-  const { args: normalizedArgs, planningDir, invalid, error } = resolveWorkspaceContext(args);
+  const { args: normalizedArgs, planningDir, state, invalid, error } = resolveWorkspaceContext(args);
   if (invalid) {
     console.error(error);
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    assertStateAuthority(state);
+  } catch (authorityError) {
+    console.error(authorityError.message);
     process.exitCode = 1;
     return;
   }

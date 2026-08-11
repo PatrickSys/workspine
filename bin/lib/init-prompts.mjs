@@ -12,6 +12,19 @@ const ANSI = {
 
 export function createInitPromptApi({ input = process.stdin, output = process.stdout } = {}) {
   return {
+    confirmLegacyMigration({ command }) {
+      return promptConfirm({
+        input,
+        output,
+        title: 'Legacy Workspine state detected',
+        prompt: `Move .planning/ to .work/ now? (${command})`,
+        defaultValue: true,
+        details: [
+          'The supported S2-config-v1 tree will be renamed in place and recorded before setup continues.',
+          'Workspine will not copy, merge, or delete consumer state.',
+        ],
+      });
+    },
     async runInitWizard({ cwd, adapters }) {
       output.write(`${ANSI.bold}${ANSI.cyan}GSDD Install Wizard${ANSI.reset}\n`);
       output.write(`${ANSI.dim}Portable skills are always installed. Select the runtimes you want GSDD to feel native in.${ANSI.reset}\n\n`);

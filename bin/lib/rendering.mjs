@@ -67,6 +67,7 @@ import { buildControlMap } from './lib/control-map.mjs';
 import { cmdDecisionsQuery, cmdRememberCandidate } from './lib/decision-cli.mjs';
 import { createCmdNext } from './lib/next.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
+import { assertStateAuthority } from './lib/state-dir.mjs';
 
 const HELPER_CONTEXT = {
   cwd: process.cwd(),
@@ -77,6 +78,18 @@ const cmdNext = createCmdNext(HELPER_CONTEXT);
 
 function cmdControlMap(...controlArgs) {
   const context = resolveWorkspaceContext([], { cwd: HELPER_CONTEXT.cwd });
+  if (context.invalid) {
+    console.error('ERROR: ' + context.error);
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    assertStateAuthority(context.state);
+  } catch (error) {
+    console.error('ERROR: ' + error.message);
+    process.exitCode = 1;
+    return;
+  }
   const report = buildControlMap({
     workspaceRoot: context.workspaceRoot,
     planningDir: context.planningDir,
@@ -272,7 +285,7 @@ function renderAgentsBoundedBlock(options = {}) {
   if (existsSync(blockPath)) return localizeStateDirReferences(readFileSync(blockPath, 'utf-8'), options).trim();
   const stateDirName = normalizeStateDirName(options.stateDirName);
   const planningLine = stateDirName === DEFAULT_STATE_DIR_NAME
-    ? 'Planning state: `.work/` (legacy `.planning/` workspaces are still read).'
+    ? 'Planning state: `.work/` (the sole active root; supported `.planning/` state requires explicit migration).'
     : 'Planning state: `.planning/` (legacy workspace; new Workspine projects use `.work/`).';
   return `## GSDD Governance (Generated)\n\n- Framework: GSDD\n- ${planningLine}\n- Workflows: .agents/skills/gsdd-*/SKILL.md`;
 }

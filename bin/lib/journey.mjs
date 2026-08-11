@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { basename, join } from 'path';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { evaluateLifecycleState, normalizePhaseToken, readPlanStatus } from './lifecycle-state.mjs';
-import { resolveStateDir } from './state-dir.mjs';
+import { assertStateAuthority, resolveStateDir } from './state-dir.mjs';
 import { getWorkPaths, readDecisionRecords, resolveActiveMilestoneDir } from './work-context.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
@@ -263,7 +263,10 @@ function renderDecisions(decisions) {
 }
 
 export function collectJourney({ cwd = process.cwd() } = {}) {
-  const { workspaceRoot } = resolveWorkspaceContext([], { cwd });
+  const workspace = resolveWorkspaceContext([], { cwd });
+  if (workspace.invalid) throw new Error(workspace.error);
+  const { workspaceRoot, state } = workspace;
+  assertStateAuthority(state);
   const { dir: stateDir } = resolveStateDir(workspaceRoot);
   const decisionWorkDir = getWorkPaths(workspaceRoot).workDir;
   const resolvedActiveDir = resolveActiveMilestoneDir(stateDir);

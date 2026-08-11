@@ -33,7 +33,7 @@ function initPreflightGitWorkspace(root) {
   git(['config', 'user.email', 'test@example.com'], root);
   git(['config', 'user.name', 'Test User'], root);
   git(['config', 'core.autocrlf', 'false'], root);
-  writeProjectFile(root, '.gitignore', '.planning/\n');
+  writeProjectFile(root, '.gitignore', '.work/\n');
   writeProjectFile(root, 'README.md', '# Test repo\n');
   git(['add', '.gitignore', 'README.md'], root);
   git(['commit', '-m', 'initial'], root);
@@ -45,10 +45,10 @@ function initPreflightGitWorkspace(root) {
 }
 
 function writePreflightPhase(root, phase = '30') {
-  const phaseDir = path.join(root, '.planning', 'phases', `${phase}-deterministic-lifecycle-gates`);
+  const phaseDir = path.join(root, '.work', 'phases', `${phase}-deterministic-lifecycle-gates`);
   fs.mkdirSync(phaseDir, { recursive: true });
   fs.writeFileSync(
-    path.join(root, '.planning', 'ROADMAP.md'),
+    path.join(root, '.work', 'ROADMAP.md'),
     [
       '# Roadmap',
       '',
@@ -57,8 +57,8 @@ function writePreflightPhase(root, phase = '30') {
       `- [ ] **Phase ${phase}: Deterministic Lifecycle Gates** - [ENGINE-02]`,
     ].join('\n')
   );
-  fs.writeFileSync(path.join(root, '.planning', 'SPEC.md'), '# Spec\n');
-  fs.writeFileSync(path.join(root, '.planning', 'config.json'), '{}\n');
+  fs.writeFileSync(path.join(root, '.work', 'SPEC.md'), '# Spec\n');
+  fs.writeFileSync(path.join(root, '.work', 'config.json'), '{}\n');
   fs.writeFileSync(path.join(phaseDir, `${phase}-PLAN.md`), '# plan\n');
 }
 
@@ -117,7 +117,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
 
   beforeEach(() => {
     tmpDir = createGsddTempProject();
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases'), { recursive: true });
   });
 
   afterEach(() => {
@@ -125,11 +125,11 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('file-op copy writes a checkpoint backup inside the workspace', async () => {
-    const source = path.join(tmpDir, '.planning', '.continue-here.md');
-    const backup = path.join(tmpDir, '.planning', '.continue-here.bak');
+    const source = path.join(tmpDir, '.work', '.continue-here.md');
+    const backup = path.join(tmpDir, '.work', '.continue-here.bak');
     fs.writeFileSync(source, '# checkpoint\n');
 
-    const result = await runCliAsMain(tmpDir, ['file-op', 'copy', '.planning/.continue-here.md', '.planning/.continue-here.bak']);
+    const result = await runCliAsMain(tmpDir, ['file-op', 'copy', '.work/.continue-here.md', '.work/.continue-here.bak']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
     const output = JSON.parse(result.output);
@@ -139,7 +139,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('file-op delete supports cleanup no-op semantics for missing files', async () => {
-    const result = await runCliAsMain(tmpDir, ['file-op', 'delete', '.planning/.continue-here.bak', '--missing', 'ok']);
+    const result = await runCliAsMain(tmpDir, ['file-op', 'delete', '.work/.continue-here.bak', '--missing', 'ok']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
     const output = JSON.parse(result.output);
@@ -149,10 +149,10 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('file-op regex-sub performs deterministic text mutation', async () => {
-    const target = path.join(tmpDir, '.planning', 'note.txt');
+    const target = path.join(tmpDir, '.work', 'note.txt');
     fs.writeFileSync(target, 'manual checkpoint cleanup\nmanual checkpoint cleanup\n');
 
-    const result = await runCliAsMain(tmpDir, ['file-op', 'regex-sub', '.planning/note.txt', 'manual checkpoint cleanup', 'gsdd file-op delete --missing ok']);
+    const result = await runCliAsMain(tmpDir, ['file-op', 'regex-sub', '.work/note.txt', 'manual checkpoint cleanup', 'gsdd file-op delete --missing ok']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
     const output = JSON.parse(result.output);
@@ -162,10 +162,10 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('file-op regex-sub reports one replacement when flags are non-global', async () => {
-    const target = path.join(tmpDir, '.planning', 'single.txt');
+    const target = path.join(tmpDir, '.work', 'single.txt');
     fs.writeFileSync(target, 'phase 18\nphase 18\n');
 
-    const result = await runCliAsMain(tmpDir, ['file-op', 'regex-sub', '.planning/single.txt', 'phase', 'step', '--flags', 'i']);
+    const result = await runCliAsMain(tmpDir, ['file-op', 'regex-sub', '.work/single.txt', 'phase', 'step', '--flags', 'i']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
     const output = JSON.parse(result.output);
@@ -176,13 +176,44 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('file-op delete fails loudly when a contract-significant file is missing', async () => {
-    const result = await runCliAsMain(tmpDir, ['file-op', 'delete', '.planning/.continue-here.md']);
+    const result = await runCliAsMain(tmpDir, ['file-op', 'delete', '.work/.continue-here.md']);
     assert.notStrictEqual(result.exitCode, 0, 'missing delete should fail');
     assert.match(result.output, /does not exist/i);
   });
 
+  test('file-op remains an explicit repair primitive across a legacy root', async () => {
+    const legacyDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(legacyDir);
+    fs.writeFileSync(path.join(legacyDir, 'repair.txt'), 'repair me\n');
+    const result = await runCliAsMain(tmpDir, ['file-op', 'copy', '.planning/repair.txt', '.planning/repair.bak']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(fs.readFileSync(path.join(legacyDir, 'repair.bak'), 'utf8'), 'repair me\n');
+  });
+
+  test('phase writers refuse supported legacy authority without changing it', async () => {
+    fs.rmSync(path.join(tmpDir, '.work'), { recursive: true, force: true });
+    const legacyDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(legacyDir);
+    fs.writeFileSync(path.join(legacyDir, 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+    fs.writeFileSync(path.join(legacyDir, 'ROADMAP.md'), '- [ ] **Phase 18: Legacy**\n');
+    const before = fs.readFileSync(path.join(legacyDir, 'ROADMAP.md'));
+    for (const args of [
+      ['phase-status', '18', 'done'],
+      ['find-phase', '18'],
+      ['verify', '18'],
+      ['scaffold', 'phase', '18', 'legacy'],
+      ['lifecycle-preflight', 'progress'],
+    ]) {
+      const result = await runCliAsMain(tmpDir, args);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.match(result.output, /npx -y gsdd-cli init --migrate/);
+      assert.deepStrictEqual(fs.readFileSync(path.join(legacyDir, 'ROADMAP.md')), before);
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+    }
+  });
+
   test('phase-status updates ROADMAP phase status markers through the helper', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.writeFileSync(
       roadmapPath,
       '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n- [ ] **Phase 19: Workflow UX & Provenance** - goal\n'
@@ -198,7 +229,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('phase-status supports letter-suffixed phase identifiers already used in roadmap truth', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.writeFileSync(
       roadmapPath,
       '# Roadmap\n\n- [ ] **Phase 9a: Truth Reconciliation** - goal\n- [ ] **Phase 10: Next Phase** - goal\n'
@@ -214,7 +245,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('phase-status supports star-bullet roadmap entries', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.writeFileSync(
       roadmapPath,
       '# Roadmap\n\n* [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
@@ -226,7 +257,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('phase-status updates overview and matching Phase Details status together', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.writeFileSync(
       roadmapPath,
       [
@@ -253,7 +284,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('phase-status ignores archived duplicate phase entries in details blocks', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.writeFileSync(
       roadmapPath,
       [
@@ -293,7 +324,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('phase-status supports dotted phase identifiers in overview and details', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.writeFileSync(
       roadmapPath,
       [
@@ -318,7 +349,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('phase-status fails loudly when a matching Phase Details section lacks Status', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     const original = [
       '# Roadmap',
       '',
@@ -339,7 +370,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('phase-status does not treat later non-phase heading status as the target detail status', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     const original = [
       '# Roadmap',
       '',
@@ -363,7 +394,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   });
 
   test('phase-status reports changed false when target phase already has requested status', async () => {
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     const original = '# Roadmap\n\n- [x] **Phase 18: Deterministic CLI Mechanics** - goal\n';
     fs.writeFileSync(roadmapPath, original);
 
@@ -377,7 +408,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
 
   test('phase-status finds the workspace root when the main CLI runs from a nested directory', async () => {
     const nestedDir = path.join(tmpDir, 'src', 'nested');
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.mkdirSync(nestedDir, { recursive: true });
     fs.writeFileSync(
       roadmapPath,
@@ -391,8 +422,8 @@ describe('Phase 18 deterministic CLI mechanics', () => {
 
   test('generated helper runtime resolves the workspace root from a nested directory', async () => {
     const nestedDir = path.join(tmpDir, 'packages', 'feature');
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
-    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
 
     const gsdd = await loadGsdd(tmpDir);
     await gsdd.cmdInit('--auto', '--tools', 'claude');
@@ -423,7 +454,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
 
   test('phase-status fails loudly for invalid status values', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
     );
 
@@ -441,7 +472,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
   test('helper commands fail loudly when --workspace-root targets the wrong path', async () => {
     const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done', '--workspace-root', path.join(tmpDir, 'missing-root')]);
     assert.notStrictEqual(result.exitCode, 0, 'invalid workspace-root target should fail');
-    assert.match(result.output, /Workspace root does not contain \.work\/ or \.planning\//);
+    assert.match(result.output, /Workspace root is not a real directory/);
   });
 
   test('help text documents file-op, phase-status, and lifecycle-preflight commands', async () => {
@@ -457,7 +488,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'all']);
     assert.strictEqual(initResult.exitCode, 0, initResult.output);
 
-    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
     const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
     fs.mkdirSync(nestedDir, { recursive: true });
 
@@ -468,32 +499,26 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.strictEqual(result.status, 0, result.stderr || result.stdout);
 
     const output = result.stdout;
-    assert.match(output, /node \.planning\/bin\/gsdd\.mjs file-op/);
-    assert.match(output, /node \.planning\/bin\/gsdd\.mjs phase-status/);
-    assert.match(output, /node \.planning\/bin\/gsdd\.mjs verify 1/);
-    assert.match(output, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
-    assert.doesNotMatch(output, /node \.work\/bin\/gsdd\.mjs/);
+    assert.match(output, /node \.work\/bin\/gsdd\.mjs file-op/);
+    assert.match(output, /node \.work\/bin\/gsdd\.mjs phase-status/);
+    assert.match(output, /node \.work\/bin\/gsdd\.mjs verify 1/);
+    assert.match(output, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
     assert.doesNotMatch(output, /\.agents\/bin\/gsdd\.mjs/);
 
     const generatedSkill = fs.readFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-execute', 'SKILL.md'), 'utf-8');
-    assert.match(generatedSkill, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
-    assert.doesNotMatch(generatedSkill, /node \.work\/bin\/gsdd\.mjs/);
+    assert.match(generatedSkill, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
 
-    const executorRole = fs.readFileSync(path.join(tmpDir, '.planning', 'templates', 'roles', 'executor.md'), 'utf-8');
-    assert.match(executorRole, /node \.planning\/bin\/gsdd\.mjs next --json/);
-    assert.doesNotMatch(executorRole, /node \.work\/bin\/gsdd\.mjs/);
+    const executorRole = fs.readFileSync(path.join(tmpDir, '.work', 'templates', 'roles', 'executor.md'), 'utf-8');
+    assert.match(executorRole, /node \.work\/bin\/gsdd\.mjs next --json/);
 
     const rootAgents = fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf-8');
-    assert.match(rootAgents, /helpers in `\.planning\/bin\/`/);
-    assert.doesNotMatch(rootAgents, /\.work\/bin/);
+    assert.match(rootAgents, /helpers in `\.work\/bin\/`/);
 
     const claudeSkill = fs.readFileSync(path.join(tmpDir, '.claude', 'skills', 'gsdd-execute', 'SKILL.md'), 'utf-8');
-    assert.match(claudeSkill, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
-    assert.doesNotMatch(claudeSkill, /node \.work\/bin\/gsdd\.mjs/);
+    assert.match(claudeSkill, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
 
     const openCodeCommand = fs.readFileSync(path.join(tmpDir, '.opencode', 'commands', 'gsdd-execute.md'), 'utf-8');
-    assert.match(openCodeCommand, /node \.planning\/bin\/gsdd\.mjs lifecycle-preflight/);
-    assert.doesNotMatch(openCodeCommand, /node \.work\/bin\/gsdd\.mjs/);
+    assert.match(openCodeCommand, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
   });
 
   test('state-dir localization does not rewrite longer dot-work prefixes', async () => {
@@ -507,7 +532,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
 
   test('a later successful in-process CLI run clears an earlier phase-command failure exit code', async () => {
     const gsdd = await loadGsdd(tmpDir);
-    const roadmapPath = path.join(tmpDir, '.planning', 'ROADMAP.md');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     const previousCwd = process.cwd();
 
     fs.writeFileSync(
@@ -534,7 +559,7 @@ describe('Phase 29 lifecycle-state helper', () => {
 
   beforeEach(() => {
     tmpDir = createGsddTempProject();
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '29-contract-inventory-and-claim-narrowing'), { recursive: true });
   });
 
   afterEach(() => {
@@ -632,8 +657,8 @@ describe('Phase 29 lifecycle-state helper', () => {
   });
 
   test('keeps superseded standard plan and summary historical while preserving verification evidence', async () => {
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 29: Current Work**\n');
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 29: Current Work**\n');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '29-contract-inventory-and-claim-narrowing');
     fs.writeFileSync(path.join(phaseDir, '29-1-PLAN.md'), '---\nstatus: superseded\n---\n# old\n');
     fs.writeFileSync(path.join(phaseDir, '29-1-SUMMARY.md'), '# old summary\n');
     fs.writeFileSync(path.join(phaseDir, '29-1-VERIFICATION.md'), '# evidence\n');
@@ -641,7 +666,7 @@ describe('Phase 29 lifecycle-state helper', () => {
     fs.writeFileSync(path.join(phaseDir, '29-2-SUMMARY.md'), '# current summary\n');
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
     assert.deepStrictEqual(state.phaseArtifacts.map((artifact) => artifact.name), ['29-1-VERIFICATION.md', '29-2-PLAN.md', '29-2-SUMMARY.md']);
     assert.deepStrictEqual(state.historicalPhaseArtifacts.map((artifact) => artifact.name), ['29-1-PLAN.md', '29-1-SUMMARY.md']);
     assert.deepStrictEqual(state.incompletePlans, []);
@@ -687,7 +712,7 @@ describe('Phase 29 lifecycle-state helper', () => {
 
   test('derives active milestone posture from roadmap, milestone ledger, audits, and phase artifacts', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -705,7 +730,7 @@ describe('Phase 29 lifecycle-state helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'SPEC.md'),
+      path.join(tmpDir, '.work', 'SPEC.md'),
       [
         '- [x] **[ENGINE-01]**: Lifecycle mutability boundaries',
         '- [ ] **[ENGINE-02]**: Shared lifecycle evaluator',
@@ -713,7 +738,7 @@ describe('Phase 29 lifecycle-state helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'MILESTONES.md'),
+      path.join(tmpDir, '.work', 'MILESTONES.md'),
       [
         '# Milestones',
         '',
@@ -724,13 +749,13 @@ describe('Phase 29 lifecycle-state helper', () => {
         '- Status: in progress',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'v1.2.0-MILESTONE-AUDIT.md'), '# v1.2.0 audit\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing', '29-PLAN.md'), '# plan\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing', '29-SUMMARY.md'), '# summary\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing', '30-PLAN.md'), '# phase 30 plan\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'v1.2.0-MILESTONE-AUDIT.md'), '# v1.2.0 audit\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '29-contract-inventory-and-claim-narrowing', '29-PLAN.md'), '# plan\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '29-contract-inventory-and-claim-narrowing', '29-SUMMARY.md'), '# summary\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '29-contract-inventory-and-claim-narrowing', '30-PLAN.md'), '# phase 30 plan\n');
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.strictEqual(state.currentMilestone.version, 'v1.3.0');
     assert.strictEqual(state.currentMilestone.archiveState, 'active');
@@ -748,7 +773,7 @@ describe('Phase 29 lifecycle-state helper', () => {
 
   test('treats shipped ledger plus matching audit artifact as archived milestone truth', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -757,9 +782,9 @@ describe('Phase 29 lifecycle-state helper', () => {
         '- [x] **Phase 28: Tracked Public Proof Closure** — [PROOF-01]',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '- [x] **[PROOF-01]**: Tracked public proof\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '- [x] **[PROOF-01]**: Tracked public proof\n');
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'MILESTONES.md'),
+      path.join(tmpDir, '.work', 'MILESTONES.md'),
       [
         '# Milestones',
         '',
@@ -767,11 +792,11 @@ describe('Phase 29 lifecycle-state helper', () => {
         '- Status: shipped',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'v1.2.0-MILESTONE-AUDIT.md'), '# audit\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'phases', '29-contract-inventory-and-claim-narrowing', '28-SUMMARY.md'), '# historical summary\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'v1.2.0-MILESTONE-AUDIT.md'), '# audit\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '29-contract-inventory-and-claim-narrowing', '28-SUMMARY.md'), '# historical summary\n');
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.strictEqual(state.currentMilestone.version, 'v1.2.0');
     assert.strictEqual(state.currentMilestone.shippedInLedger, true);
@@ -780,9 +805,9 @@ describe('Phase 29 lifecycle-state helper', () => {
   });
 
   test('classifies nested phase plan artifacts by parent phase directory instead of plan filename', async () => {
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock'), { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -791,18 +816,18 @@ describe('Phase 29 lifecycle-state helper', () => {
         '- [ ] **Phase 34: Identity And Story Lock** — [LSC-01]',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '- [ ] **[LSC-01]**: story lock\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '- [ ] **[LSC-01]**: story lock\n');
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
       '# nested plan\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '34-APPROACH.md'),
+      path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock', '34-APPROACH.md'),
       '# approach\n'
     );
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.ok(
       state.phaseArtifacts.some((artifact) => artifact.displayPath === '34-identity-and-story-lock/01-PLAN.md' && artifact.kind === 'plan' && artifact.phaseToken === '34'),
@@ -811,9 +836,9 @@ describe('Phase 29 lifecycle-state helper', () => {
   });
 
   test('does not classify implementation-plan handoff artifacts as executable phase plans', async () => {
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan'), { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -822,22 +847,22 @@ describe('Phase 29 lifecycle-state helper', () => {
         '- [x] **Phase 47: Synthesis, Minimal Hardening, And v1.7 Plan** — [REL-04]',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '- [x] **[REL-04]**: v1.7 plan\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '- [x] **[REL-04]**: v1.7 plan\n');
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan', '47-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan', '47-PLAN.md'),
       '# executable phase plan\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan', '47-SUMMARY.md'),
+      path.join(tmpDir, '.work', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan', '47-SUMMARY.md'),
       '# phase summary\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan', '47-v1.7-IMPLEMENTATION-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan', '47-v1.7-IMPLEMENTATION-PLAN.md'),
       '# next-milestone implementation plan candidate\n'
     );
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.ok(
       state.phaseArtifacts.some((artifact) => artifact.displayPath.endsWith('47-v1.7-IMPLEMENTATION-PLAN.md') && artifact.kind === 'other'),
@@ -848,9 +873,9 @@ describe('Phase 29 lifecycle-state helper', () => {
   });
 
   test('phase CLI ignores implementation-plan handoff artifacts when finding executable plans', async () => {
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan'), { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -860,7 +885,7 @@ describe('Phase 29 lifecycle-state helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan', '47-v1.7-IMPLEMENTATION-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '47-synthesis-minimal-hardening-and-v1-7-plan', '47-v1.7-IMPLEMENTATION-PLAN.md'),
       '# next-milestone implementation plan candidate\n'
     );
 
@@ -876,9 +901,9 @@ describe('Phase 29 lifecycle-state helper', () => {
   });
 
   test('derives active brownfield change continuity from CHANGE.md and HANDOFF.md without a roadmap', async () => {
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'brownfield-change'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'brownfield-change'), { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'),
+      path.join(tmpDir, '.work', 'brownfield-change', 'CHANGE.md'),
       [
         '---',
         'change: CHANGE-041',
@@ -923,7 +948,7 @@ describe('Phase 29 lifecycle-state helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'brownfield-change', 'HANDOFF.md'),
+      path.join(tmpDir, '.work', 'brownfield-change', 'HANDOFF.md'),
       [
         '---',
         'change: CHANGE-041',
@@ -955,7 +980,7 @@ describe('Phase 29 lifecycle-state helper', () => {
     );
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.strictEqual(state.nonPhaseState, 'active_brownfield_change');
     assert.strictEqual(state.brownfieldChange.exists, true);
@@ -973,9 +998,9 @@ describe('Phase 29 lifecycle-state helper', () => {
   });
 
   test('prefers Current Status posture over stale CHANGE.md frontmatter status', async () => {
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'brownfield-change'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'brownfield-change'), { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'brownfield-change', 'CHANGE.md'),
+      path.join(tmpDir, '.work', 'brownfield-change', 'CHANGE.md'),
       [
         '---',
         'change: CHANGE-042',
@@ -997,13 +1022,13 @@ describe('Phase 29 lifecycle-state helper', () => {
     );
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.strictEqual(state.brownfieldChange.currentStatus, 'ready_for_verification');
   });
 
   test('closed brownfield change is historical context, not active non-phase state', async () => {
-    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    const changeDir = path.join(tmpDir, '.work', 'brownfield-change');
     fs.mkdirSync(changeDir, { recursive: true });
     fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
       '---',
@@ -1019,7 +1044,7 @@ describe('Phase 29 lifecycle-state helper', () => {
     ].join('\n'));
 
     const { evaluateLifecycleState } = await importLifecycleStateModule();
-    const state = evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.strictEqual(state.brownfieldChange.exists, true);
     assert.strictEqual(state.brownfieldChange.currentStatus, 'closed');
@@ -1028,7 +1053,7 @@ describe('Phase 29 lifecycle-state helper', () => {
 
   test('reports overview and Phase Details status mismatches in lifecycle state', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1043,7 +1068,7 @@ describe('Phase 29 lifecycle-state helper', () => {
     );
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.deepStrictEqual(state.phaseStatusAlignment.mismatches, [
       'Phase 29 overview status done disagrees with Phase Details status in_progress',
@@ -1053,7 +1078,7 @@ describe('Phase 29 lifecycle-state helper', () => {
 
   test('ignores archived duplicate overview and detail statuses when checking active roadmap alignment', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1081,7 +1106,7 @@ describe('Phase 29 lifecycle-state helper', () => {
     );
 
     const mod = await importLifecycleStateModule();
-    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.planning') });
+    const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
 
     assert.deepStrictEqual(state.phaseStatusAlignment.mismatches, []);
     assert.strictEqual(state.counts.total, 1);
@@ -1094,7 +1119,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   beforeEach(() => {
     tmpDir = createGsddTempProject();
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates'), { recursive: true });
   });
 
   afterEach(() => {
@@ -1110,7 +1135,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('allows execute when the target phase has a pending plan and explicit phase-status mutation', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1122,7 +1147,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
       '# plan\n'
     );
 
@@ -1139,8 +1164,8 @@ describe('Phase 30 lifecycle-preflight helper', () => {
   });
 
   test('blocks standard execute for a historical-only plan chain with missing_plan', async () => {
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 30: Deterministic Lifecycle Gates**\n');
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 30: Deterministic Lifecycle Gates**\n');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates');
     fs.writeFileSync(path.join(phaseDir, '30-PLAN.md'), '---\nstatus: superseded\n---\n# old plan\n');
     fs.writeFileSync(path.join(phaseDir, '30-SUMMARY.md'), '# old summary\n');
 
@@ -1169,14 +1194,14 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('control-map reports checkpoint and annotation labels from the resolved legacy state dir', async () => {
     initPreflightGitWorkspace(tmpDir);
-    writeProjectFile(tmpDir, '.planning/.continue-here.md', '# checkpoint\n');
+    writeProjectFile(tmpDir, '.work/.continue-here.md', '# checkpoint\n');
 
     const { buildControlMap } = await importControlMapModule();
     const output = buildControlMap({ workspaceRoot: tmpDir });
 
     assert.strictEqual(output.workflow_state.checkpoint.exists, true);
-    assert.strictEqual(output.workflow_state.checkpoint.path, '.planning/.continue-here.md');
-    assert.strictEqual(output.default_annotations_path, '.planning/.local/control-map.annotations.json');
+    assert.strictEqual(output.workflow_state.checkpoint.path, '.work/.continue-here.md');
+    assert.strictEqual(output.default_annotations_path, '.work/.local/control-map.annotations.json');
   });
 
   test('control-map reports checkpoint and annotation labels from the resolved .work state dir', async () => {
@@ -1199,7 +1224,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
   test('owned-write preflight blocks on block-level control-map overlap risks', async () => {
     initPreflightGitWorkspace(tmpDir);
     writePreflightPhase(tmpDir);
-    writeProjectFile(tmpDir, '.planning/.local/control-map.annotations.json', JSON.stringify({
+    writeProjectFile(tmpDir, '.work/.local/control-map.annotations.json', JSON.stringify({
       schema_version: 1,
       worktrees: [{
         id: 'canonical',
@@ -1227,7 +1252,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
   test('read-only progress does not consume control-map risks as blockers', async () => {
     initPreflightGitWorkspace(tmpDir);
     writePreflightPhase(tmpDir);
-    writeProjectFile(tmpDir, '.planning/.local/control-map.annotations.json', JSON.stringify({
+    writeProjectFile(tmpDir, '.work/.local/control-map.annotations.json', JSON.stringify({
       schema_version: 1,
       worktrees: [{
         id: 'canonical',
@@ -1253,7 +1278,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(initResult.exitCode, 0, initResult.output);
     initPreflightGitWorkspace(tmpDir);
     writePreflightPhase(tmpDir);
-    writeProjectFile(tmpDir, '.planning/.local/control-map.annotations.json', JSON.stringify({
+    writeProjectFile(tmpDir, '.work/.local/control-map.annotations.json', JSON.stringify({
       schema_version: 1,
       worktrees: [{
         id: 'canonical',
@@ -1264,7 +1289,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     }, null, 2));
     writeProjectFile(tmpDir, 'src/app.js', 'dirty implementation\n');
 
-    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
     const result = spawnSync(process.execPath, [helperPath, 'lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status'], {
       cwd: tmpDir,
       encoding: 'utf-8',
@@ -1278,7 +1303,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('allows plan when the target phase has no summary and no explicit lifecycle mutation', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1301,7 +1326,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('allows plan amend as an owned write before mutating roadmap', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1310,8 +1335,8 @@ describe('Phase 30 lifecycle-preflight helper', () => {
         '- [x] **Phase 58: Dogfood UI Proof Loop** — [UIPROOF-10]',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), '{}\n');
 
     const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'amend']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -1329,7 +1354,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     const nestedDir = path.join(tmpDir, 'apps', 'web');
     fs.mkdirSync(nestedDir, { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1339,7 +1364,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
       '# plan\n'
     );
 
@@ -1352,9 +1377,9 @@ describe('Phase 30 lifecycle-preflight helper', () => {
   });
 
   test('allows execute when the pending plan uses nested 01-PLAN.md naming inside the phase directory', async () => {
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock'), { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1364,7 +1389,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
       '# nested plan\n'
     );
 
@@ -1379,7 +1404,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('blocks verify when the target phase has no summary artifact yet', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1390,7 +1415,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
       '# plan\n'
     );
 
@@ -1404,7 +1429,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
   });
 
   test('rejects lifecycle mutation requests on read-only progress', async () => {
-    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work'), { recursive: true });
 
     const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'progress', '--expects-mutation', 'phase-status']);
     assert.strictEqual(result.exitCode, 1, result.output);
@@ -1569,7 +1594,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     writePreflightPhase(tmpDir, '30');
     writeWorkMilestonePhase(tmpDir, '7', { execute: true });
 
-    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
     const result = spawnSync(process.execPath, [helperPath, 'lifecycle-preflight', 'verify', '7', '--expects-mutation', 'phase-status'], {
       cwd: tmpDir,
       encoding: 'utf-8',
@@ -1584,7 +1609,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('blocks plan when the target phase is already complete', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1593,8 +1618,8 @@ describe('Phase 30 lifecycle-preflight helper', () => {
         '- [x] **Phase 30: Deterministic Lifecycle Gates** - [ENGINE-02]',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), '{}\n');
 
     const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '30']);
     assert.strictEqual(result.exitCode, 1, result.output);
@@ -1605,7 +1630,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
   });
 
   test('allows resume without checkpoint when active brownfield CHANGE.md exists', async () => {
-    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    const changeDir = path.join(tmpDir, '.work', 'brownfield-change');
     fs.mkdirSync(changeDir, { recursive: true });
     fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
       '---',
@@ -1633,7 +1658,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
   });
 
   test('closed brownfield CHANGE.md does not bypass missing resume checkpoint preflight', async () => {
-    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    const changeDir = path.join(tmpDir, '.work', 'brownfield-change');
     fs.mkdirSync(changeDir, { recursive: true });
     fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
       '# Brownfield Change: Closed Work',
@@ -1651,10 +1676,10 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.reason, 'missing_checkpoint');
     const checkpointBlocker = output.blockers.find((blocker) => blocker.code === 'missing_checkpoint');
     assert.ok(checkpointBlocker);
-    assert.match(checkpointBlocker.message, /\.planning\/\.continue-here\.md/);
+    assert.match(checkpointBlocker.message, /\.work\/\.continue-here\.md/);
     assert.deepStrictEqual(checkpointBlocker.artifacts, [
-      '.planning/.continue-here.md',
-      '.planning/brownfield-change/CHANGE.md',
+      '.work/.continue-here.md',
+      '.work/brownfield-change/CHANGE.md',
     ]);
   });
 
@@ -1685,10 +1710,10 @@ describe('Phase 30 lifecycle-preflight helper', () => {
   });
 
   test('allows explicit brownfield-change plan preflight without roadmap phase membership', async () => {
-    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    const changeDir = path.join(tmpDir, '.work', 'brownfield-change');
     fs.mkdirSync(changeDir, { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1698,8 +1723,8 @@ describe('Phase 30 lifecycle-preflight helper', () => {
         '',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '# Spec\n');
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), '{}\n');
     fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
       '---',
       'change: PBI-425589',
@@ -1724,7 +1749,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.allowed, true);
     assert.strictEqual(output.authority, 'brownfield_change');
     assert.strictEqual(output.phase, 'brownfield-change');
-    assert.strictEqual(output.lifecycle.brownfieldChange.path, '.planning/brownfield-change/CHANGE.md');
+    assert.strictEqual(output.lifecycle.brownfieldChange.path, '.work/brownfield-change/CHANGE.md');
     assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
   });
 
@@ -1773,7 +1798,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(output.reason, 'missing_brownfield_change');
     assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
 
-    const changeDir = path.join(tmpDir, '.planning', 'brownfield-change');
+    const changeDir = path.join(tmpDir, '.work', 'brownfield-change');
     fs.mkdirSync(changeDir, { recursive: true });
     fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
       '---',
@@ -1799,7 +1824,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('warns when lifecycle preflight sees overview/detail status mismatch', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1815,11 +1840,11 @@ describe('Phase 30 lifecycle-preflight helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
       '# plan\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
       '# summary\n'
     );
 
@@ -1832,7 +1857,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('blocks terminal milestone preflight when roadmap overview/detail status mismatches', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1848,15 +1873,15 @@ describe('Phase 30 lifecycle-preflight helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
       '# plan\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
       '# summary\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-VERIFICATION.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-VERIFICATION.md'),
       '# verification\n'
     );
 
@@ -1870,7 +1895,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('allows audit-milestone preflight when active milestone uses level-two heading', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1886,17 +1911,17 @@ describe('Phase 30 lifecycle-preflight helper', () => {
         '',
       ].join('\n')
     );
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'SPEC.md'), '- [x] **[ENGINE-02]**: lifecycle gates\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '- [x] **[ENGINE-02]**: lifecycle gates\n');
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
       '# plan\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
       '# summary\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-VERIFICATION.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-VERIFICATION.md'),
       '# verification\n'
     );
 
@@ -1911,7 +1936,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
 
   test('blocks complete-milestone preflight when roadmap overview/detail status mismatches', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
         '# Roadmap',
         '',
@@ -1927,15 +1952,15 @@ describe('Phase 30 lifecycle-preflight helper', () => {
       ].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'),
       '# plan\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-SUMMARY.md'),
       '# summary\n'
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '30-deterministic-lifecycle-gates', '30-VERIFICATION.md'),
+      path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-VERIFICATION.md'),
       '# verification\n'
     );
 
@@ -1953,7 +1978,7 @@ describe('verify command nested phase plans', () => {
 
   beforeEach(() => {
     tmpDir = createGsddTempProject();
-    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock'), { recursive: true });
     fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
   });
 
@@ -1963,7 +1988,7 @@ describe('verify command nested phase plans', () => {
 
   test('finds nested 01-PLAN.md when verifying a phase', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
       [
         '---',
         'browser_proof_required: false',
@@ -1981,7 +2006,7 @@ describe('verify command nested phase plans', () => {
       ['const a = 1;', 'const b = 2;', 'export const sum = a + b;'].join('\n')
     );
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-SUMMARY.md'),
+      path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock', '01-SUMMARY.md'),
       '# Phase 34 Summary\n'
     );
 
@@ -1996,7 +2021,7 @@ describe('verify command nested phase plans', () => {
 
   test('reports RENAME and MOVE plan artifacts by destination path', async () => {
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
+      path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock', '01-PLAN.md'),
       [
         '---',
         'browser_proof_required: false',
@@ -2013,7 +2038,7 @@ describe('verify command nested phase plans', () => {
     fs.writeFileSync(path.join(tmpDir, 'src', 'new.js'), 'export const renamed = true;\n');
     fs.writeFileSync(path.join(tmpDir, 'src', 'b.js'), 'export const moved = true;\n');
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'phases', '34-identity-and-story-lock', '01-SUMMARY.md'),
+      path.join(tmpDir, '.work', 'phases', '34-identity-and-story-lock', '01-SUMMARY.md'),
       '# Phase 34 Summary\n'
     );
 
@@ -2033,7 +2058,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   beforeEach(() => {
     tmpDir = createGsddTempProject();
-    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work'), { recursive: true });
   });
 
   afterEach(() => {
@@ -2056,7 +2081,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify fails closed when summary is missing', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-summary-missing');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-summary-missing');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nbrowser_proof_required: false\nbrowser_proof_rationale: CLI-only work.\n---\n# Phase 1 Plan\n');
 
@@ -2072,11 +2097,11 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify requires a summary for each exact current plan chain', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-mixed-plan-chains');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-mixed-plan-chains');
     const unmatchedPlan = '01-mixed-plan-chains/01-1-PLAN.md';
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
-      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      path.join(tmpDir, '.work', 'ROADMAP.md'),
       '# Roadmap\n\n- [-] **Phase 1: Mixed Plan Chains**\n'
     );
     fs.writeFileSync(
@@ -2100,7 +2125,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
     const preflightBlocker = preflightOutput.blockers.find((blocker) => blocker.code === 'missing_summary');
     assert.deepStrictEqual(preflightBlocker?.artifacts, [unmatchedPlan]);
 
-    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
     const helper = spawnSync(process.execPath, [helperPath, 'verify', '1'], {
       cwd: tmpDir,
       encoding: 'utf-8',
@@ -2119,12 +2144,12 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('generated local helper runs direct phase verify checks', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-helper-verify');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-helper-verify');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nbrowser_proof_required: false\nbrowser_proof_rationale: CLI-only helper verification.\n---\n# Phase 1 Plan\n');
     fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
 
-    const helperPath = path.join(tmpDir, '.planning', 'bin', 'gsdd.mjs');
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
     const result = spawnSync(process.execPath, [helperPath, 'verify', '1'], {
       cwd: tmpDir,
       encoding: 'utf-8',
@@ -2137,7 +2162,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verification builder matches direct verify result shape', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-builder-verify');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-builder-verify');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nbrowser_proof_required: false\nbrowser_proof_rationale: CLI-only builder verification.\n---\n# Phase 1 Plan\n');
     fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
@@ -2155,7 +2180,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks required browser proof when the plan section is missing', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-missing');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-missing');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2181,7 +2206,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks missing browser proof declaration', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-declaration');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-declaration');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '# Phase 1 Plan\n');
     fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');
@@ -2199,7 +2224,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks legacy no-UI proof declarations with placeholder rationale', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-retired-browser-proof');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-retired-browser-proof');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2226,7 +2251,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks legacy non-empty ui-proof slots pending migration', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-legacy-ui-proof-slots');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-legacy-ui-proof-slots');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2257,7 +2282,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify normalizes scalar comments and rejects placeholder rationale values', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-scalars');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-scalars');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2285,7 +2310,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks incomplete browser proof sections without evidence command or no-command rationale', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-incomplete');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-incomplete');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2301,7 +2326,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Viewports: desktop and mobile.',
         'Runtime path: agent-browser.',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-incomplete/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-incomplete/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2320,7 +2345,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks placeholder browser proof plan fields', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-placeholders');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-placeholders');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2337,7 +2362,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Runtime path: agent-browser.',
         'Evidence command: [Runnable command]',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-placeholders/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-placeholders/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2355,7 +2380,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks required browser proof when no observation is recorded', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-observation-missing');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-observation-missing');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2373,7 +2398,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-observation-missing/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-observation-missing/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2391,7 +2416,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify passes required browser proof with a complete observation record', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-observed');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-observed');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2409,7 +2434,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-observed/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-observed/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2428,7 +2453,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Evidence command: npm run test:e2e -- --grep dashboard',
         '- Observed: dashboard widgets rendered without console errors.',
         '- Artifacts:',
-        '  - .planning/phases/01-browser-proof-observed/artifacts/dashboard.png - local-only',
+        '  - .work/phases/01-browser-proof-observed/artifacts/dashboard.png - local-only',
         '- Result: passed',
         '- Claim limit: dashboard render proof only.',
       ].join('\n')
@@ -2444,7 +2469,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks failed browser proof observations', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-failed');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-failed');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2462,7 +2487,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-failed/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-failed/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2480,7 +2505,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard',
         '- Observed: dashboard widget failed to render.',
-        '- Artifacts: .planning/phases/01-browser-proof-failed/artifacts/dashboard.png - local-only',
+        '- Artifacts: .work/phases/01-browser-proof-failed/artifacts/dashboard.png - local-only',
         '- Result: failed product_bug',
         '- Claim limit: dashboard render proof only.',
       ].join('\n')
@@ -2498,7 +2523,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks failed browser proof observations even when another observation passes', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-mixed-result');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-mixed-result');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2516,7 +2541,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-mixed-result/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-mixed-result/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2534,7 +2559,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard',
         '- Observed: dashboard widgets rendered without console errors.',
-        '- Artifacts: .planning/phases/01-browser-proof-mixed-result/artifacts/dashboard.png - local-only',
+        '- Artifacts: .work/phases/01-browser-proof-mixed-result/artifacts/dashboard.png - local-only',
         '- Result: passed',
         '- Claim limit: dashboard render proof only.',
         '',
@@ -2547,7 +2572,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard',
         '- Observed: dashboard widget failed to render on mobile.',
-        '- Artifacts: .planning/phases/01-browser-proof-mixed-result/artifacts/dashboard-mobile.png - local-only',
+        '- Artifacts: .work/phases/01-browser-proof-mixed-result/artifacts/dashboard-mobile.png - local-only',
         '- Result: partial product_bug',
         '- Claim limit: dashboard mobile render proof only.',
       ].join('\n')
@@ -2565,7 +2590,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks single-plan browser proof when observation references another plan', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-wrong-plan');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-wrong-plan');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2583,7 +2608,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-wrong-plan/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-wrong-plan/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2601,7 +2626,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard',
         '- Observed: dashboard widgets rendered without console errors.',
-        '- Artifacts: .planning/phases/01-browser-proof-wrong-plan/artifacts/dashboard.png - local-only',
+        '- Artifacts: .work/phases/01-browser-proof-wrong-plan/artifacts/dashboard.png - local-only',
         '- Result: passed',
         '- Claim limit: dashboard render proof only.',
       ].join('\n')
@@ -2620,7 +2645,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks linked browser proof observation outside workspace', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-outside-link');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-outside-link');
     fs.mkdirSync(phaseDir, { recursive: true });
     const outsideRecord = path.join(path.dirname(tmpDir), `outside-browser-proof-${Date.now()}.md`);
     fs.writeFileSync(outsideRecord, '## Browser Proof Observation\n\n- Result: passed\n');
@@ -2641,7 +2666,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-outside-link/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-outside-link/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2666,7 +2691,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks URL browser proof observation links', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-url-link');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-url-link');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2684,7 +2709,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-url-link/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-url-link/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2710,7 +2735,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks linked browser proof observation symlink escape', async (t) => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-symlink-link');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-symlink-link');
     fs.mkdirSync(phaseDir, { recursive: true });
     const outsideRecord = path.join(path.dirname(tmpDir), `outside-browser-proof-${Date.now()}.md`);
     const symlinkRecord = path.join(phaseDir, 'linked-observation.md');
@@ -2740,7 +2765,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-symlink-link/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-symlink-link/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2758,7 +2783,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify reports linked browser proof observation directories instead of throwing', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-directory-link');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-directory-link');
     fs.mkdirSync(path.join(phaseDir, 'observations'), { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2776,7 +2801,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
         'Observations: dashboard widgets render without console errors.',
-        'Artifacts: .planning/phases/01-browser-proof-directory-link/artifacts/dashboard.png, local_only.',
+        'Artifacts: .work/phases/01-browser-proof-directory-link/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
@@ -2794,7 +2819,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify keeps legacy no-UI proof plans compatible', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-legacy-no-ui-proof');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-legacy-no-ui-proof');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
       path.join(phaseDir, '01-PLAN.md'),
@@ -2821,7 +2846,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks multi-plan browser proof when observations do not identify each plan', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-multi');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-multi');
     fs.mkdirSync(phaseDir, { recursive: true });
     const planContent = [
       '---',
@@ -2837,7 +2862,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       'Evidence kind: runtime',
       'Evidence command: npm run test:e2e -- --grep dashboard',
       'Observations: dashboard widgets render without console errors.',
-      'Artifacts: .planning/phases/01-browser-proof-multi/artifacts/dashboard.png, local_only.',
+      'Artifacts: .work/phases/01-browser-proof-multi/artifacts/dashboard.png, local_only.',
       'Claim limit: dashboard render proof only.',
     ].join('\n');
     fs.writeFileSync(path.join(phaseDir, '01-1-PLAN.md'), planContent);
@@ -2855,7 +2880,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard',
         '- Observed: dashboard widgets rendered without console errors.',
-        '- Artifacts: .planning/phases/01-browser-proof-multi/artifacts/dashboard.png - local-only',
+        '- Artifacts: .work/phases/01-browser-proof-multi/artifacts/dashboard.png - local-only',
         '- Result: passed',
         '- Claim limit: dashboard render proof only.',
       ].join('\n')
@@ -2879,7 +2904,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify passes multi-plan browser proof when observations reference each required plan', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-browser-proof-multi-observed');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-multi-observed');
     fs.mkdirSync(phaseDir, { recursive: true });
     const planContent = [
       '---',
@@ -2895,7 +2920,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       'Evidence kind: runtime',
       'Evidence command: npm run test:e2e -- --grep dashboard',
       'Observations: dashboard widgets render without console errors.',
-      'Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard.png, local_only.',
+      'Artifacts: .work/phases/01-browser-proof-multi-observed/artifacts/dashboard.png, local_only.',
       'Claim limit: dashboard render proof only.',
     ].join('\n');
     fs.writeFileSync(path.join(phaseDir, '01-1-PLAN.md'), planContent);
@@ -2914,7 +2939,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard-a',
         '- Observed: dashboard widgets rendered without console errors.',
-        '- Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard-a.png - local-only',
+        '- Artifacts: .work/phases/01-browser-proof-multi-observed/artifacts/dashboard-a.png - local-only',
         '- Result: passed',
         '- Claim limit: dashboard account A render proof only.',
       ].join('\n')
@@ -2933,7 +2958,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard-b',
         '- Observed: dashboard widgets rendered without console errors.',
-        '- Artifacts: .planning/phases/01-browser-proof-multi-observed/artifacts/dashboard-b.png - local-only',
+        '- Artifacts: .work/phases/01-browser-proof-multi-observed/artifacts/dashboard-b.png - local-only',
         '- Result: passed',
         '- Claim limit: dashboard account B render proof only.',
       ].join('\n')
@@ -2949,7 +2974,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify blocks when planned file artifacts are unsatisfied', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-artifact-proof');
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-artifact-proof');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), '---\nbrowser_proof_required: false\nbrowser_proof_rationale: File-artifact verification only.\n---\n<task id="01-01" type="auto">\n  <files>\n    - CREATE: src/missing.js\n  </files>\n</task>\n');
     fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# Phase 1 Summary\n');

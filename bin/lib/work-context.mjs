@@ -13,7 +13,7 @@ import { execFileSync } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
 import { basename, dirname, join, relative, resolve } from 'path';
 import { collectNativePhaseArtifacts, evaluateLifecycleState, partitionPlanChains } from './lifecycle-state.mjs';
-import { resolveStateDir, STATE_DIR_NAME } from './state-dir.mjs';
+import { resolveStateDir, stateAuthorityGate, STATE_DIR_NAME } from './state-dir.mjs';
 import { writeFileAtomic as replaceFileAtomically } from './atomic-write.mjs';
 
 export const WORK_DIR_NAME = STATE_DIR_NAME;
@@ -1334,7 +1334,8 @@ export function inspectWorkContext(cwd = process.cwd()) {
   const questions = readOpenQuestions(paths.workDir);
   const evidence = readJsonIfExists(paths.evidenceManifest);
   const graph = readGraphEvents(paths.workDir);
-  const { dir: planningDir, name: stateDirName, migrationNotice } = resolveStateDir(paths.root);
+  const stateRoot = resolveStateDir(paths.root);
+  const { dir: planningDir, name: stateDirName, migrationNotice } = stateRoot;
   const lifecycle = evaluateLifecycleState({ planningDir });
   const planning = {
     exists: existsSync(planningDir),
@@ -1361,6 +1362,8 @@ export function inspectWorkContext(cwd = process.cwd()) {
     evidence,
     graph,
     planning,
+    state_root: stateRoot,
+    authority_gate: stateAuthorityGate(stateRoot),
     migration_notice: migrationNotice,
     milestone: inspectWorkMilestone(paths.workDir),
     focus_exists: existsSync(paths.focus),
