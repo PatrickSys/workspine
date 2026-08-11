@@ -31,10 +31,11 @@ Failure-cause names for failed or partial browser/runtime proof:
 ## Decision dispositions
 
 When a plan boundary emits a non-empty decision digest, PLAN.md may acknowledge it with
-`decision_dispositions`: each entry names the decision `id`, the exact body `hash`, and one
+`decision_dispositions`: each entry names the decision `id`, the exact body `hash`, the persisted
+`authority_fingerprint`, and one
 `disposition`: `applied`, `not-applicable`, or `challenged`. `not-applicable` and `challenged`
 entries require a nonblank `note`; `challenged` items are surfaced for user review. The digest
-is persisted only by the plan preflight, and later execution warns when an acknowledged record
-is missing, superseded, invalidated, or has a changed body hash. Decision metadata transitions
-do not change the body hash. Decision records may also carry the additive optional
+is persisted only by the plan preflight, and later execution warns when the persisted/current
+authority membership differs or an acknowledged id, body hash, status, authority, or fingerprint
+drifts. Decision records may also carry the additive optional
 `invalidation_reason` field; rejected records remain on disk.

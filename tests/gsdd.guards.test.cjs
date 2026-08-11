@@ -4100,3 +4100,52 @@ describe('G40 - Provenance And Write-Gate Contracts', () => {
       'audit-milestone.md must not present durable results when the audit file was not written. FIX: Keep the fail-closed write gate wording.');
   });
 });
+
+describe('G56 - Cooperative Decision Authority Contract', () => {
+  test('public authority surfaces keep approval record-local and non-authenticated', () => {
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const design = fs.readFileSync(DESIGN_MD, 'utf-8');
+    const help = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs'), 'utf-8');
+    const grammar = /decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>/;
+
+    assert.match(readme, grammar);
+    assert.match(design, grammar);
+    assert.match(help, grammar);
+    assert.match(readme, /cooperative.*owner assertion.*human authentication/i);
+    assert.match(design, /unreceipted_active|malformed_assertion/);
+    assert.doesNotMatch(help, /promote <id>\s+Promote a candidate decision to active authority/);
+
+    for (const file of ['distilled/workflows/plan.md', 'distilled/references/proof-rules.md', 'distilled/templates/delegates/plan-checker.md']) {
+      assert.match(fs.readFileSync(path.join(ROOT, file), 'utf-8'), /authority_fingerprint/,
+        `${file} must require the persisted authority fingerprint in decision_dispositions.`);
+    }
+  });
+
+  test('fresh checker contracts pass and compare the exact persisted decision snapshot', () => {
+    const surfaces = [
+      ['portable plan workflow', fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'plan.md'), 'utf-8')],
+      ['plan-checker delegate', fs.readFileSync(path.join(ROOT, 'distilled', 'templates', 'delegates', 'plan-checker.md'), 'utf-8')],
+      ['Claude adapter', fs.readFileSync(path.join(ROOT, 'bin', 'adapters', 'claude.mjs'), 'utf-8')],
+      ['OpenCode adapter', fs.readFileSync(path.join(ROOT, 'bin', 'adapters', 'opencode.mjs'), 'utf-8')],
+    ];
+
+    for (const [name, source] of surfaces) {
+      const renderedSource = source.replaceAll('\\`', '`');
+      const inputStart = Math.max(
+        renderedSource.indexOf('Pass only explicit inputs to the checker:'),
+        renderedSource.indexOf('invoke it in a fresh context with only these explicit inputs:'),
+        renderedSource.indexOf('Read only the explicit inputs provided by the orchestrator:')
+      );
+      const contract = renderedSource.slice(inputStart, inputStart + 1800);
+      assert.ok(inputStart >= 0, `${name} must keep the decision snapshot in the explicit checker input contract.`);
+      assert.match(contract, /exact persisted `lastDecisionsDigest` snapshot/i,
+        `${name} must pass the exact persisted decision snapshot, not a recomputed or summarized substitute.`);
+      assert.match(contract, /(?:absent[\s\S]{0,80}`skipped`|`skipped`[\s\S]{0,80}absent)/i,
+        `${name} must report skipped only for an absent digest.`);
+      assert.match(contract, /explicitly persisted empty snapshot[\s\S]{0,100}remain empty/i,
+        `${name} must preserve an explicit empty snapshot.`);
+      assert.match(contract, /decision_dispositions[\s\S]*body hash[\s\S]*authority_fingerprint[\s\S]*snapshot/i,
+        `${name} must compare dispositions against the snapshot's body hash and authority fingerprint.`);
+    }
+  });
+});

@@ -777,11 +777,7 @@ describe('gsdd init and update', () => {
     ]);
     assert.notStrictEqual(result.status, 0, 'generated remember --by-user unexpectedly succeeded');
     const rememberByUserOutput = `${result.stdout}${result.stderr}`;
-    assert.strictEqual(
-      rememberByUserOutput,
-      '--by-user was removed; generated remember records agent-proposed candidates only and cannot approve or activate them.\n',
-    );
-    assert.doesNotMatch(rememberByUserOutput, /\b(promote|reject|invalidate)\b/);
+    assert.match(rememberByUserOutput, /^--by-user was removed; generated remember records agent-proposed candidates only and cannot approve or activate them; use the main CLI with gsdd decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>\.\n$/);
     assert.deepStrictEqual(snapshotTree(tmpDir), rememberByUserBefore, 'generated remember --by-user must not write the workspace');
 
     const queryBefore = snapshotTree(tmpDir);
@@ -805,12 +801,39 @@ describe('gsdd init and update', () => {
     ]);
     assert.strictEqual(activeCapture.exitCode, 0, activeCapture.output);
     const activeId = JSON.parse(activeCapture.output).record.id;
-    const promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId]);
+    const promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId, '--authority', 'owner', '--approval-ref', 'owner-review-generated']);
     assert.strictEqual(promoted.exitCode, 0, promoted.output);
+
+    const unreceiptedCapture = await runCliAsMain(tmpDir, [
+      'remember', 'Generated helper reads unreceipted classification.', '--type', 'rule', '--scope', 'repo',
+    ]);
+    assert.strictEqual(unreceiptedCapture.exitCode, 0, unreceiptedCapture.output);
+    const malformedCapture = await runCliAsMain(tmpDir, [
+      'remember', 'Generated helper reads malformed classification.', '--type', 'rule', '--scope', 'repo',
+    ]);
+    assert.strictEqual(malformedCapture.exitCode, 0, malformedCapture.output);
+    const malformedId = JSON.parse(malformedCapture.output).record.id;
+    const unreceiptedId = JSON.parse(unreceiptedCapture.output).record.id;
+    const unreceiptedPath = path.join(tmpDir, '.work', 'decisions', `${unreceiptedId}.md`);
+    const malformedPath = path.join(tmpDir, '.work', 'decisions', `${malformedId}.md`);
+    fs.writeFileSync(unreceiptedPath, fs.readFileSync(unreceiptedPath, 'utf-8').replace('status: candidate\n', 'status: active\n'));
+    fs.writeFileSync(malformedPath, fs.readFileSync(malformedPath, 'utf-8').replace('status: candidate\n', 'status: active\napproval_authority: \n'));
+
+    for (const [terms, authority] of [
+      ['Existing active record proves invalidation refusal', 'owner_asserted'],
+      ['Generated helper reads unreceipted classification', 'unreceipted_active'],
+      ['Generated helper reads malformed classification', 'malformed_assertion'],
+    ]) {
+      const before = snapshotTree(tmpDir);
+      result = runGeneratedHelper(tmpDir, nestedDir, ['decisions', 'query', terms]);
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.match(result.stdout, new RegExp(`\\[authority: ${authority}\\]`));
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, `generated ${authority} query must not write the workspace`);
+    }
 
     const helperUsage = /Usage: gsdd decisions query "<terms>" \[--path <path>\]/;
     const transitionCases = [
-      ['promote', candidate.record.id],
+      ['promote', candidate.record.id, '--authority', 'owner', '--approval-ref', 'generated-refusal'],
       ['reject', candidate.record.id],
       ['invalidate', activeId, '--reason', 'Must not be reachable from generated helper'],
     ];
@@ -900,7 +923,7 @@ describe('gsdd init and update', () => {
     ]);
     assert.strictEqual(captured.exitCode, 0, captured.output);
     const activeId = JSON.parse(captured.output).record.id;
-    let promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId]);
+    let promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId, '--authority', 'owner', '--approval-ref', 'owner-review-nested']);
     assert.strictEqual(promoted.exitCode, 0, promoted.output);
     captured = await runCliAsMain(tmpDir, [
       'remember', 'Candidate helper body must remain excluded.', '--type', 'rule', '--scope', 'repo',

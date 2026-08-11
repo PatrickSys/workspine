@@ -197,7 +197,7 @@ npx -y gsdd-cli next --init             # bootstrap .work continuity state expli
 npx -y gsdd-cli journey                 # show the milestone and phase delivery journey, including decisions and mistakes # (experimental)
 npx -y gsdd-cli remember "Use direct commits" --type rule --scope repo # (experimental)
 npx -y gsdd-cli decisions query "current git flow" --path bin/gsdd.mjs # (experimental)
-npx -y gsdd-cli decisions promote <id> # (experimental)
+npx -y gsdd-cli decisions promote <id> --authority owner --approval-ref <non-sensitive-ref> # (experimental)
 npx -y gsdd-cli decisions reject <id> --reason "No longer applicable" # (experimental)
 npx -y gsdd-cli decisions invalidate <id> --reason "Superseded by the current policy" # (experimental)
 npx -y gsdd-cli rigor                   # run planning/document guardrails
@@ -210,6 +210,8 @@ npx -y gsdd-cli verify                  # run verification discipline checks
 npx -y gsdd-cli scaffold                # scaffold planning surfaces
 npx -y gsdd-cli help                    # print command help
 ```
+
+Decision promotion is a cooperative, auditable owner assertion rather than human authentication. The assertion is stored on the same decision record and binds the exact decision id, body hash, authority label, non-sensitive reference, and timestamp. Candidate provenance remains `agent-proposed`; older active records without a complete assertion stay readable but require review until explicitly re-attested. The generated `.work/bin/gsdd.mjs` helper remains candidate/query-only.
 
 Full reference: [User Guide](docs/USER-GUIDE.md) · [Runtime Support](docs/RUNTIME-SUPPORT.md) · [Verification Discipline](docs/VERIFICATION-DISCIPLINE.md)
 

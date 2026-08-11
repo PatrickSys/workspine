@@ -15,7 +15,6 @@ import {
   buildDecisionsDigest,
   getWorkPaths,
   persistDecisionsDigest,
-  readDecisionRecords,
   readJsonIfExists,
   resolveActiveMilestoneDir,
 } from './work-context.mjs';
@@ -275,7 +274,7 @@ export function evaluateLifecyclePreflight({
   } else if (surface === 'execute') {
     warnings.push(...evaluateDecisionDispositionWarnings({
       planningDir,
-      decisionWorkDir,
+      decisionsDigest,
       planPath: planSelection?.plan?.path || (selection?.status === 'selected' && selection.candidate.plans?.length === 1 ? selection.candidate.plans[0].path : null),
     }));
   }
@@ -574,10 +573,10 @@ function collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken = null
     .filter((artifact) => !phaseToken || artifact.phaseToken === phaseToken);
 }
 
-function evaluateDecisionDispositionWarnings({ planningDir, decisionWorkDir, planPath = null }) {
+function evaluateDecisionDispositionWarnings({ planningDir, decisionsDigest, planPath = null }) {
   const state = readJsonIfExists(join(planningDir, 'state.json'));
   const persisted = state.ok ? state.value?.lastDecisionsDigest : null;
-  if (!persisted || !Array.isArray(persisted.records) || persisted.records.length === 0) return [];
+  if (!persisted || !Array.isArray(persisted.records)) return [];
 
   const dispositions = planPath && existsSync(planPath)
     ? parsePlanFrontmatter(readFileSync(planPath, 'utf-8')).decision_dispositions
@@ -594,22 +593,28 @@ function evaluateDecisionDispositionWarnings({ planningDir, decisionWorkDir, pla
     });
   }
 
-  const current = readDecisionRecords(decisionWorkDir);
-  const currentById = new Map(current.records.map((record) => [record.meta.id, record]));
+  const currentRecords = Array.isArray(decisionsDigest?.records) ? decisionsDigest.records : [];
+  const currentById = new Map(currentRecords.map((record) => [record.id, record]));
   const stale = [];
   for (const persistedRecord of persisted.records) {
     const record = currentById.get(persistedRecord.id);
     const disposition = byId.get(persistedRecord.id);
     if (!record) {
-      stale.push(`${persistedRecord.id}: record missing`);
+      stale.push(`${persistedRecord.id}: record was removed or is no longer owner-asserted`);
       continue;
     }
-    if (record.meta.status !== persistedRecord.status) {
-      stale.push(`${persistedRecord.id}: status changed from ${persistedRecord.status} to ${record.meta.status}`);
-    } else if (['superseded', 'invalidated'].includes(record.meta.status)) {
-      stale.push(`${persistedRecord.id}: record is ${record.meta.status}`);
-    } else if (disposition && record.meta.hash !== disposition.hash) {
-      stale.push(`${persistedRecord.id}: body hash changed since acknowledgement`);
+    for (const field of ['id', 'hash', 'status', 'authority', 'authority_fingerprint']) {
+      if (record[field] !== persistedRecord[field]) {
+        stale.push(`${persistedRecord.id}: ${field} changed since the persisted authority snapshot`);
+        break;
+      }
+    }
+    if (disposition && disposition.hash !== persistedRecord.hash) stale.push(`${persistedRecord.id}: PLAN body hash differs from the persisted authority snapshot`);
+    if (disposition && disposition.authority_fingerprint !== persistedRecord.authority_fingerprint) stale.push(`${persistedRecord.id}: PLAN authority fingerprint differs from the persisted authority snapshot`);
+  }
+  for (const record of currentRecords) {
+    if (!persisted.records.some((persistedRecord) => persistedRecord.id === record.id)) {
+      stale.push(`${record.id}: new owner-asserted decision was added after the persisted authority snapshot`);
     }
   }
   if (stale.length > 0) {

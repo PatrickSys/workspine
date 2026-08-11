@@ -903,7 +903,21 @@ function emptyDecisionsDigest() {
   return {
     records: [],
     legacyRecords: [],
-    counts: { eligible: 0, returned: 0, excluded: {}, invalid: 0 },
+    counts: {
+      eligible: 0,
+      returned: 0,
+      excluded: {
+        candidate: 0,
+        superseded: 0,
+        invalidated: 0,
+        stale_flagged: 0,
+        conflict_flagged: 0,
+        unreceipted_active: 0,
+        malformed_assertion: 0,
+        legacy: 0,
+      },
+      invalid: 0,
+    },
     truncated: false,
     readErrors: [],
   };
@@ -915,6 +929,20 @@ function decisionNotices(digest) {
   for (const status of ['candidate', 'superseded', 'invalidated']) {
     const count = excluded[status] || 0;
     if (count > 0) notices.push({ message: `${count} ${status} decision${count === 1 ? '' : 's'} excluded.` });
+  }
+  const unreceipted = excluded.unreceipted_active || 0;
+  if (unreceipted > 0) {
+    const verb = unreceipted === 1 ? 'requires' : 'require';
+    notices.push({
+      message: `${unreceipted} unreceipted active decision${unreceipted === 1 ? '' : 's'} ${verb} owner review.`,
+    });
+  }
+  const malformed = excluded.malformed_assertion || 0;
+  if (malformed > 0) {
+    const verb = malformed === 1 ? 'has' : 'have';
+    notices.push({
+      message: `${malformed} active decision${malformed === 1 ? '' : 's'} ${verb} malformed owner assertion${malformed === 1 ? '' : 's'} and require${malformed === 1 ? 's' : ''} review.`,
+    });
   }
   const activeOmitted = Math.max(0, (digest.counts.eligible || 0) - (digest.counts.returned || 0));
   const stale = excluded.stale_flagged || 0;

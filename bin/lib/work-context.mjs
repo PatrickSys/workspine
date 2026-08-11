@@ -77,9 +77,19 @@ export const SOURCE_TYPES = Object.freeze(['chat', 'file', 'command', 'web', 'id
 export const DECISION_RECORD_TYPES = Object.freeze(['decision', 'lesson', 'rule']);
 export const DECISION_RECORD_STATUSES = Object.freeze(['candidate', 'active', 'superseded', 'invalidated']);
 export const DECISION_RECORD_SCOPES = Object.freeze(['repo', 'global']);
+export const DECISION_AUTHORITY_CLASSIFICATIONS = Object.freeze([
+  'candidate',
+  'owner_asserted',
+  'unreceipted_active',
+  'malformed_assertion',
+  'non_authoritative',
+]);
 const DECISION_STALE_AFTER_DAYS = 90;
 const DECISION_DIGEST_MAX_RECORDS = 10;
 const DECISION_DIGEST_MAX_LINES = 15;
+const APPROVAL_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,127}$/;
+const SENSITIVE_APPROVAL_REF_RE = /(secret|token|password|passwd|bearer|api[-_]?key|credential|private[-_]?key)/i;
+const TOKEN_SHAPED_APPROVAL_REF_RE = /^(?:sk(?:[-_]|$)|pk(?:[-_]|$)|gh[pousr]_|github_pat_|xox[baprs]-|eyJ|(?:AKIA|ASIA)[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{16,})/i;
 
 const DEFAULT_WORK_GITIGNORE = [
   '# Workspine local runtime state',
@@ -157,6 +167,8 @@ export function persistDecisionsDigest(workDir, {
       id: record.id,
       hash: record.hash,
       status: record.status,
+      authority: record.authority,
+      authority_fingerprint: record.authority_fingerprint,
     })),
   };
   writeFileAtomic(statePath, `${JSON.stringify(state, null, 2)}\n`);
@@ -807,7 +819,16 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
       counts: {
         eligible: 0,
         returned: 0,
-        excluded: { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0, legacy: 0 },
+        excluded: {
+          candidate: 0,
+          superseded: 0,
+          invalidated: 0,
+          stale_flagged: 0,
+          conflict_flagged: 0,
+          unreceipted_active: 0,
+          malformed_assertion: 0,
+          legacy: 0,
+        },
         invalid: 0,
       },
       truncated: false,
@@ -837,23 +858,41 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
       return { ...result, digestRelevance: (phaseOverlap * 100) + (pathOverlap * 50) + recencyValue(record.meta.updated_at) };
     })
     .sort((left, right) => right.digestRelevance - left.digestRelevance || compareRecallResults(left, right));
-  const returnedResults = scoped.filter((result) => result.record.meta.status === 'active').slice(0, DECISION_DIGEST_MAX_RECORDS);
+  const authoritativeActive = scoped.filter((result) => (
+    result.record.meta.status === 'active' && result.authority.authoritative
+  ));
+  const returnedResults = authoritativeActive.slice(0, DECISION_DIGEST_MAX_RECORDS);
   const returnedIds = new Set(returnedResults.map((result) => result.record.meta.id));
-  const excluded = { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0, legacy: scanned.legacyRecords.length };
+  const excluded = {
+    candidate: 0,
+    superseded: 0,
+    invalidated: 0,
+    stale_flagged: 0,
+    conflict_flagged: 0,
+    unreceipted_active: 0,
+    malformed_assertion: 0,
+    legacy: scanned.legacyRecords.length,
+  };
   for (const result of scoped) {
     const status = result.record.meta.status;
     if (status === 'invalidated') excluded.invalidated += 1;
     else if (status === 'superseded') excluded.superseded += 1;
     else if (status === 'candidate') excluded.candidate += 1;
-    else if (status === 'active' && !returnedIds.has(result.record.meta.id)) {
-      if (result.flags.includes('conflict')) excluded.conflict_flagged += 1;
-      else if (result.flags.includes('stale')) excluded.stale_flagged += 1;
+    else if (status === 'active') {
+      if (result.authority.classification === 'unreceipted_active') excluded.unreceipted_active += 1;
+      else if (result.authority.classification === 'malformed_assertion') excluded.malformed_assertion += 1;
+      else if (!returnedIds.has(result.record.meta.id)) {
+        if (result.flags.includes('conflict')) excluded.conflict_flagged += 1;
+        else if (result.flags.includes('stale')) excluded.stale_flagged += 1;
+      }
     }
   }
   const records = returnedResults.map((result) => ({
     id: result.record.meta.id,
     hash: result.record.meta.hash,
     status: result.record.meta.status,
+    authority: result.authority.classification,
+    authority_fingerprint: result.authority.fingerprint,
   }));
   const activeResults = returnedResults;
   return {
@@ -861,12 +900,12 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
     legacyRecords: scanned.legacyRecords,
     text: renderDecisionsDigest(activeResults),
     counts: {
-      eligible: scoped.filter((result) => result.record.meta.status === 'active').length,
+      eligible: authoritativeActive.length,
       returned: records.length,
       excluded,
       invalid: scanned.invalid.length,
     },
-    truncated: scoped.filter((result) => result.record.meta.status === 'active').length > records.length,
+    truncated: authoritativeActive.length > records.length,
     readErrors: scanned.readErrors,
     ids: records.map((record) => record.id),
   };
@@ -891,8 +930,9 @@ export function renderDecisionQueryResults(results) {
 function formatDecisionResultLine(result, { includeStatus = false } = {}) {
   const legacy = result.record.meta.legacy_ref ? ` [${result.record.meta.legacy_ref}]` : '';
   const status = includeStatus ? ` [status: ${result.record.meta.status}]` : '';
+  const authority = includeStatus ? ` [authority: ${result.authority?.classification || classifyDecisionAuthority(result.record).classification}]` : '';
   const flags = result.flags.length > 0 ? ` (${result.flags.join(', ')})` : '';
-  return `- ${result.record.meta.id}${legacy}${status} — ${result.record.meta.decision}${flags}`;
+  return `- ${result.record.meta.id}${legacy}${status}${authority} — ${result.record.meta.decision}${flags}`;
 }
 
 export function parseDecisionRecord(content, filePath = null) {
@@ -918,7 +958,9 @@ function parseDecisionFrontmatter(content) {
   for (const line of match[1].split('\n')) {
     const separator = line.indexOf(':');
     if (separator < 1) throw new Error(`invalid decision frontmatter line: ${line}`);
-    meta[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+    const key = line.slice(0, separator).trim();
+    if (Object.hasOwn(meta, key)) throw new Error(`duplicate decision frontmatter key: ${key}`);
+    meta[key] = line.slice(separator + 1).trim();
   }
   return { frontmatter: match[1], meta, separator: match[2], body: match[3] };
 }
@@ -962,8 +1004,80 @@ export function hashDecisionBody(body) {
   return createHash('sha256').update(String(body || '').replace(/\r\n/g, '\n')).digest('hex');
 }
 
+export function isValidApprovalReference(value) {
+  const normalized = normalizeApprovalReference(value);
+  return Boolean(normalized)
+    && APPROVAL_REF_RE.test(normalized)
+    && !SENSITIVE_APPROVAL_REF_RE.test(normalized)
+    && !TOKEN_SHAPED_APPROVAL_REF_RE.test(normalized)
+    && !/^[a-f0-9]{32,}$/i.test(normalized);
+}
+
+export function normalizeApprovalReference(value) {
+  return String(value || '').trim();
+}
+
+export function computeDecisionAuthorityFingerprint({
+  id,
+  bodyHash,
+  authority,
+  approvalRef,
+  approvedAt,
+} = {}) {
+  return createHash('sha256')
+    .update([id, bodyHash, authority, approvalRef, approvedAt].map((value) => String(value || '')).join('\u0000'))
+    .digest('hex');
+}
+
+export function classifyDecisionAuthority(record) {
+  const meta = record?.meta || record || {};
+  const status = meta.status;
+  if (status === 'candidate') {
+    const hasAssertion = ['approval_authority', 'approval_ref', 'approval_body_hash', 'approved_at', 'authority_fingerprint']
+      .some((field) => Object.hasOwn(meta, field));
+    return hasAssertion
+      ? { classification: 'malformed_assertion', authoritative: false, fingerprint: null, reason: 'candidate carries approval metadata' }
+      : { classification: 'candidate', authoritative: false, fingerprint: null, reason: 'candidate requires explicit owner assertion' };
+  }
+  if (status !== 'active') {
+    return { classification: 'non_authoritative', authoritative: false, fingerprint: null, reason: `status is ${status || 'unknown'}` };
+  }
+
+  const fields = ['approval_authority', 'approval_ref', 'approval_body_hash', 'approved_at', 'authority_fingerprint'];
+  const present = fields.filter((field) => Object.hasOwn(meta, field));
+  if (present.length === 0) {
+    return { classification: 'unreceipted_active', authoritative: false, fingerprint: null, reason: 'active record has no owner assertion' };
+  }
+  let approvedAtIsCanonical = false;
+  try {
+    approvedAtIsCanonical = toIsoDate(meta.approved_at) === meta.approved_at;
+  } catch {
+    approvedAtIsCanonical = false;
+  }
+  if (present.length !== fields.length
+    || meta.approval_authority !== 'owner'
+    || !isValidApprovalReference(meta.approval_ref)
+    || meta.approval_body_hash !== meta.hash
+    || !approvedAtIsCanonical) {
+    return { classification: 'malformed_assertion', authoritative: false, fingerprint: null, reason: 'active record has malformed owner assertion' };
+  }
+  const fingerprint = computeDecisionAuthorityFingerprint({
+    id: meta.id,
+    bodyHash: meta.hash,
+    authority: meta.approval_authority,
+    approvalRef: meta.approval_ref,
+    approvedAt: meta.approved_at,
+  });
+  if (meta.authority_fingerprint !== fingerprint) {
+    return { classification: 'malformed_assertion', authoritative: false, fingerprint: null, reason: 'owner assertion fingerprint does not match' };
+  }
+  return { classification: 'owner_asserted', authoritative: true, fingerprint, reason: null };
+}
+
 export function transitionDecisionRecord(workDir, id, operation, {
   reason = null,
+  authority = null,
+  approvalRef = null,
   now = new Date(),
 } = {}) {
   const record = readDecisionRecordById(workDir, id);
@@ -975,7 +1089,26 @@ export function transitionDecisionRecord(workDir, id, operation, {
     invalidate: 'active',
   }[operation];
   if (!allowed) throw new Error(`unsupported decision operation ${operation}`);
-  if (currentStatus !== allowed) throw new Error(`cannot ${operation} record with status ${currentStatus}`);
+  if (operation === 'promote') {
+    approvalRef = normalizeApprovalReference(approvalRef);
+    if (authority !== 'owner' || !isValidApprovalReference(approvalRef)) {
+      throw new Error('promote requires --authority owner --approval-ref <non-sensitive-ref>');
+    }
+    const classification = classifyDecisionAuthority(record);
+    if (!['candidate', 'unreceipted_active'].includes(classification.classification)) {
+      if (classification.classification === 'malformed_assertion') {
+        throw new Error('cannot promote record with malformed owner assertion; review the record before retrying');
+      }
+      if (classification.classification === 'owner_asserted') {
+        throw new Error(`cannot promote record with status ${currentStatus}; record is already owner-asserted`);
+      }
+    }
+    if (!['candidate', 'active'].includes(currentStatus)) {
+      throw new Error(`cannot promote record with status ${currentStatus}`);
+    }
+  } else if (currentStatus !== allowed) {
+    throw new Error(`cannot ${operation} record with status ${currentStatus}`);
+  }
   if (operation === 'invalidate' && !String(reason || '').trim()) {
     throw new Error('invalidate requires --reason <text>');
   }
@@ -987,8 +1120,19 @@ export function transitionDecisionRecord(workDir, id, operation, {
     hash: record.meta.hash,
     body: record.body,
   };
-  if (operation === 'promote') next.source = 'user';
-  else next.invalidation_reason = String(reason || 'rejected').trim();
+  if (operation === 'promote') {
+    next.approval_authority = authority;
+    next.approval_ref = approvalRef;
+    next.approval_body_hash = record.meta.hash;
+    next.approved_at = now.toISOString();
+    next.authority_fingerprint = computeDecisionAuthorityFingerprint({
+      id: record.meta.id,
+      bodyHash: record.meta.hash,
+      authority,
+      approvalRef,
+      approvedAt: next.approved_at,
+    });
+  } else next.invalidation_reason = String(reason || 'rejected').trim();
   writeFileAtomic(record.filePath, renderDecisionRecord(next));
   return parseDecisionRecord(renderDecisionRecord(next), record.filePath);
 }
@@ -1022,6 +1166,11 @@ function normalizeDecisionInput(input = {}, { timestamp, repoRoot }) {
     superseded_by: input.superseded_by ? normalizeDecisionId(input.superseded_by) : null,
     legacy_ref: input.legacy_ref ? oneLine(input.legacy_ref, 'legacy_ref') : null,
     source: input.source ? oneLine(input.source, 'source') : null,
+    approval_authority: input.approval_authority ? oneLine(input.approval_authority, 'approval_authority') : null,
+    approval_ref: input.approval_ref ? oneLine(input.approval_ref, 'approval_ref') : null,
+    approval_body_hash: input.approval_body_hash ? oneLine(input.approval_body_hash, 'approval_body_hash') : null,
+    approved_at: input.approved_at ? oneLine(input.approved_at, 'approved_at') : null,
+    authority_fingerprint: input.authority_fingerprint ? oneLine(input.authority_fingerprint, 'authority_fingerprint') : null,
     provenance,
     created_at: timestamp,
     updated_at: timestamp,
@@ -1052,6 +1201,11 @@ function renderDecisionRecord(record) {
     ['superseded_by', record.superseded_by],
     ['legacy_ref', record.legacy_ref],
     ['source', record.source],
+    ['approval_authority', record.approval_authority],
+    ['approval_ref', record.approval_ref],
+    ['approval_body_hash', record.approval_body_hash],
+    ['approved_at', record.approved_at],
+    ['authority_fingerprint', record.authority_fingerprint],
     ['invalidation_reason', record.invalidation_reason],
     ['provenance', record.provenance],
     ['created_at', record.created_at],
@@ -1156,6 +1310,7 @@ function decorateRecallResult(result, graph, staleCutoff) {
     stale,
     flags,
     conflictSuccessors: successorIds,
+    authority: classifyDecisionAuthority(result.record),
   };
 }
 

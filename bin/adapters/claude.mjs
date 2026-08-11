@@ -87,6 +87,7 @@ Execution flow:
    - approach decisions from \`.work/phases/*-APPROACH.md\` (if exists)
    - relevant phase research file(s)
    - produced \`.work/phases/*-PLAN.md\` file(s)
+   - the exact persisted \`lastDecisionsDigest\` snapshot from the successful plan preflight, if present, including an explicitly persisted empty snapshot
 8. Require the checker to return a single JSON object with this shape:
    {
      "status": "issues_found",
@@ -102,7 +103,7 @@ Execution flow:
        }
      ]
    }
-   The \`decision_compliance\` dimension is warnings-only this phase: inspect persisted \`lastDecisionsDigest\`, disposition hashes, required notes, and challenged-item surfacing; report \`skipped\` when the digest is empty.
+   The \`decision_compliance\` dimension is warnings-only this phase: compare every PLAN \`decision_dispositions\` body hash and \`authority_fingerprint\` directly to that snapshot, inspect required notes and challenged-item surfacing, report \`skipped\` when the digest is absent, and require an explicitly persisted empty snapshot to remain empty rather than substituting a recomputed digest.
    Status must be either "${CHECKER_STATUSES[0]}" or "${CHECKER_STATUSES[1]}". Use "passed" only when "issues": []; any blocker or warning must use "issues_found".
 9. If the checker returns \`passed\`, finish and summarize.
 10. If the checker returns \`issues_found\`, revise the existing plan files only where needed, then run the checker again.

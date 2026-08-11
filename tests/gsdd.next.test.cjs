@@ -62,6 +62,17 @@ async function writeTypedDecision(input, options = {}, stateDirName = '.work') {
   return writeDecisionRecord(path.join(tmpDir, stateDirName), input, { repoRoot: tmpDir, ...options });
 }
 
+async function writeOwnerDecision(input, options = {}) {
+  const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+  const { writeDecisionRecord, transitionDecisionRecord } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+  const candidate = writeDecisionRecord(path.join(tmpDir, '.work'), { ...input, status: 'candidate' }, { repoRoot: tmpDir, ...options });
+  return transitionDecisionRecord(path.join(tmpDir, '.work'), candidate.id, 'promote', {
+    authority: 'owner',
+    approvalRef: `next-review-${candidate.id}`,
+    now: options.now || new Date(),
+  });
+}
+
 function snapshotTree(directory, prefix = '') {
   return fs.readdirSync(directory, { withFileTypes: true })
     .flatMap((entry) => {
@@ -95,11 +106,15 @@ describe('next command bootstrap', () => {
     const workDir = path.join(tmpDir, '.work');
     writeDecisionRecord(workDir, {
       id: 'active-next-a1b2',
-      status: 'active',
+      status: 'candidate',
       decision: 'Use the active decision projection.',
       why: 'It is current authority.',
       body: 'Active decision body.',
     }, { repoRoot: tmpDir });
+    const promoted = await runCliAsMain(tmpDir, [
+      'decisions', 'promote', 'active-next-a1b2', '--authority', 'owner', '--approval-ref', 'next-fixture',
+    ]);
+    assert.strictEqual(promoted.exitCode, 0, promoted.output);
     writeDecisionRecord(workDir, {
       id: 'candidate-next-c3d4',
       status: 'candidate',
@@ -117,11 +132,54 @@ describe('next command bootstrap', () => {
     }
   });
 
+  test('plain next excludes unreceipted active records and emits bounded review debt', async () => {
+    await initWork();
+    await writeTypedDecision(typedDecision('legacy-review-a1b2', 'Legacy active requires owner review.', {
+      source: 'manual',
+    }));
+
+    const json = await runJson(['next', '--json']);
+    assert.deepStrictEqual(json.decisionsDigest.records, []);
+    assert.strictEqual(json.decisionsDigest.counts.excluded.unreceipted_active, 1);
+    assert.strictEqual(json.decisionsDigest.counts.returned, 0);
+
+    const human = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+    assert.strictEqual(human.exitCode, 0, human.output);
+    assert.match(human.output, /unreceipted active/i);
+    assert.match(human.output, /review/i);
+    assert.doesNotMatch(human.output, /Legacy active requires owner review\./);
+    assert.doesNotMatch(human.output, /0 additional active decisions omitted by the digest cap/);
+  });
+
+  test('human next uses singular grammar for malformed authority assertions', async () => {
+    await initWork();
+    const record = await writeTypedDecision(typedDecision('malformed-singular-a1b2', 'Malformed assertion singular grammar.'));
+    const filePath = path.join(tmpDir, '.work', 'decisions', `${record.id}.md`);
+    fs.writeFileSync(filePath, fs.readFileSync(filePath, 'utf-8').replace('status: active\n', 'status: active\napproval_authority: \n'));
+    const human = await runCliAsMain(tmpDir, ['next', '--format', 'human']);
+    assert.strictEqual(human.exitCode, 0, human.output);
+    assert.match(human.output, /1 active decision has malformed owner assertion and requires review/);
+  });
+
   test('plain next returns the unchanged empty digest for missing and initialized work', async () => {
     const missing = await runJson(['next', '--json']);
     assert.deepStrictEqual(missing.decisionsDigest, {
       records: [], legacyRecords: [], text: 'DECISIONS DIGEST (0 active)',
-      counts: { eligible: 0, returned: 0, excluded: { candidate: 0, superseded: 0, invalidated: 0, stale_flagged: 0, conflict_flagged: 0, legacy: 0 }, invalid: 0 },
+      counts: {
+        eligible: 0,
+        returned: 0,
+        excluded: {
+          candidate: 0,
+          superseded: 0,
+          invalidated: 0,
+          stale_flagged: 0,
+          conflict_flagged: 0,
+          unreceipted_active: 0,
+          malformed_assertion: 0,
+          legacy: 0,
+        },
+        invalid: 0,
+      },
       truncated: false, readErrors: [], ids: [],
     });
 
@@ -131,7 +189,7 @@ describe('next command bootstrap', () => {
 
   test('plain next refuses dual roots instead of silently selecting .work', async () => {
     fs.mkdirSync(path.join(tmpDir, '.work', 'decisions'), { recursive: true });
-    await writeTypedDecision(typedDecision('early-active-a1b2', 'Use .work before bootstrap.'));
+    await writeOwnerDecision(typedDecision('early-active-a1b2', 'Use .work before bootstrap.'));
     fs.mkdirSync(path.join(tmpDir, '.planning', 'decisions'), { recursive: true });
     const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
     const { writeDecisionRecord } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
@@ -183,7 +241,7 @@ describe('next command bootstrap', () => {
 
   test('human next shows active text and bounded excluded-record notices without leaking bodies', async () => {
     await initWork();
-    await writeTypedDecision(typedDecision('active-human-a1b2', 'Use active human projection.', { body: 'ACTIVE BODY MUST NOT RENDER.' }));
+    await writeOwnerDecision(typedDecision('active-human-a1b2', 'Use active human projection.', { body: 'ACTIVE BODY MUST NOT RENDER.' }));
     await writeTypedDecision(typedDecision('candidate-human-c3d4', 'Candidate decision title.', {
       status: 'candidate', body: 'CANDIDATE BODY MUST NOT RENDER.',
     }));
@@ -262,12 +320,12 @@ describe('next command bootstrap', () => {
     const old = new Date(current);
     old.setUTCDate(old.getUTCDate() - 91);
     for (let index = 0; index < 10; index += 1) {
-      await writeTypedDecision(typedDecision(`current-cap-${String(index).padStart(4, '0')}`, `Current cap decision ${index}.`), { now: current });
+      await writeOwnerDecision(typedDecision(`current-cap-${String(index).padStart(4, '0')}`, `Current cap decision ${index}.`), { now: current });
     }
-    await writeTypedDecision(typedDecision('stale-cap-a1b2', 'Stale active decision.', { last_verified: old.toISOString() }), { now: old });
-    await writeTypedDecision(typedDecision('conflict-base-c3d4', 'Conflict base decision.', { last_verified: current.toISOString() }), { now: old });
-    await writeTypedDecision(typedDecision('conflict-one-e5f6', 'First conflicting active decision.', { supersedes: 'conflict-base-c3d4', last_verified: current.toISOString() }), { now: old });
-    await writeTypedDecision(typedDecision('conflict-two-g7h8', 'Second conflicting active decision.', { supersedes: 'conflict-base-c3d4', last_verified: current.toISOString() }), { now: old });
+    await writeOwnerDecision(typedDecision('stale-cap-a1b2', 'Stale active decision.', { last_verified: old.toISOString() }), { now: old });
+    await writeOwnerDecision(typedDecision('conflict-base-c3d4', 'Conflict base decision.', { last_verified: current.toISOString() }), { now: old });
+    await writeOwnerDecision(typedDecision('conflict-one-e5f6', 'First conflicting active decision.', { supersedes: 'conflict-base-c3d4', last_verified: current.toISOString() }), { now: old });
+    await writeOwnerDecision(typedDecision('conflict-two-g7h8', 'Second conflicting active decision.', { supersedes: 'conflict-base-c3d4', last_verified: current.toISOString() }), { now: old });
     const conflictBasePath = path.join(tmpDir, '.work', 'decisions', 'conflict-base-c3d4.md');
     const conflictBase = fs.readFileSync(conflictBasePath, 'utf-8')
       .replace('status: superseded', 'status: active')
@@ -282,7 +340,7 @@ describe('next command bootstrap', () => {
 
   test('plain next JSON and human replays preserve every .work byte and member', async () => {
     await initWork();
-    await writeTypedDecision(typedDecision('replay-active-a1b2', 'Preserve all .work bytes.'));
+    await writeOwnerDecision(typedDecision('replay-active-a1b2', 'Preserve all .work bytes.'));
     await writeTypedDecision(typedDecision('replay-candidate-c3d4', 'Preserve candidate bytes.', { status: 'candidate' }));
     writeFile('.work/research/evidence.md', 'Read-only replay evidence.\n');
     const before = snapshotTree(path.join(tmpDir, '.work'));

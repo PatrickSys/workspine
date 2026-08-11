@@ -2943,6 +2943,9 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - Treat `.work` as the source of truth for `gsdd next` continuity routing, focus packets, work-native milestone state, decisions, questions, evidence pointers, dogfood findings, and bounded auto-gate state.
 - Keep `.planning` readable as legacy lifecycle input. Existing `gsdd-plan`, `gsdd-execute`, `gsdd-verify`, audit, complete-milestone, phase-status, and helper write paths continue to work against `.planning` until each surface is deliberately bridged or migrated.
 - Require routing and preflight output to report authority explicitly, using scoped values such as `work_milestone`, `planning`, or `blocked/conflict`; `.work` authority must not silently mask repo truth, PR truth, or unrelated `.planning` blockers.
+- Keep decision authority cooperative and record-local: `gsdd decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>` is the only supported promotion grammar. Persist `approval_authority`, `approval_ref`, `approval_body_hash`, `approved_at`, and one recomputable `authority_fingerprint` beside the existing typed record while preserving proposal `source`.
+- Classify typed records separately from lifecycle status: candidates are non-authoritative, complete assertions are `owner_asserted`, active records without an assertion are `unreceipted_active`, and partial or mismatched assertion metadata is `malformed_assertion`. Only `owner_asserted` active records enter the digest; legacy ambiguity remains readable and becomes bounded review debt.
+- Treat the owner assertion as an auditable cooperative protocol, not authentication, a signature, a credential, or a filesystem sandbox. Do not add a receipt store, identity provider, approval database, or generated-helper transition surface; `.work/bin/gsdd.mjs` remains capture/query-only.
 - Include `brownfield_change` as an explicit scoped authority for existing bounded-change artifacts. This is a compatibility bridge, not a new lifecycle root: it reuses the current `gsdd-plan` workflow and the brownfield-change folder contract.
 - Preserve repo/control-map truth as the highest authority for branch, PR, worktree, dirty-state, and delivery claims. `.work` can carry intent and continuity; it cannot convert local prose into integrated repo truth.
 - Define execute-until-gate as task-bounded automation, not session-bounded autonomy. Auto mode may run typed, reviewed, `type=auto` tasks and bounded verification/repair cycles only until a human gate, verification gap, repeated blocker, authority conflict, trust boundary, or scope expansion stops it.
@@ -2956,7 +2959,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - Gained: a clear continuity authority for `gsdd next`, explicit migration semantics, safer execute-until-gate foundations, repo-policy-driven tracking, a brownfield compatibility bridge for bounded consumer changes, and a typed authority boundary that prevents future auto mode from running on stale or contradictory state.
 
 **Evidence:**
-- `bin/lib/next.mjs`, `bin/lib/work-context.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `bin/lib/decision-cli.mjs`, `bin/lib/next.mjs`, `bin/lib/work-context.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/init-runtime.mjs`
 - `tests/gsdd.next.test.cjs` and `tests/phase.test.cjs`
 - `README.md` for the public `.work` tracking policy
 - PR #116, merged 2026-06-29 with merge commit `b91a138c42f2ab3ff7376317031208c7a716decd`: `https://github.com/PatrickSys/workspine/pull/116`

@@ -8,6 +8,8 @@ import {
   getWorkPaths,
   recallDecisions,
   renderDecisionQueryResults,
+  classifyDecisionAuthority,
+  isValidApprovalReference,
   transitionDecisionRecord,
   WORK_DIR_NAME,
   writeDecisionRecord,
@@ -15,9 +17,10 @@ import {
 
 const REMEMBER_USAGE = 'Usage: gsdd remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--code path:line] [--why "<why>"]';
 const REMEMBER_REMOVED_FLAG = ['--by', 'user'].join('-');
-const REMEMBER_REMOVED_MESSAGE = `${REMEMBER_REMOVED_FLAG} was removed; use gsdd decisions promote <id> to activate a candidate.`;
-const REMEMBER_CANDIDATE_REMOVED_MESSAGE = `${REMEMBER_REMOVED_FLAG} was removed; generated remember records agent-proposed candidates only and cannot approve or activate them.`;
-const DECISIONS_USAGE = 'Usage: gsdd decisions query "<terms>" [--path <path>] | promote <id> | reject <id> [--reason <text>] | invalidate <id> --reason <text>';
+const REMEMBER_PROMOTION_GRAMMAR = 'gsdd decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>';
+const REMEMBER_REMOVED_MESSAGE = `${REMEMBER_REMOVED_FLAG} was removed; use ${REMEMBER_PROMOTION_GRAMMAR} to activate a candidate.`;
+const REMEMBER_CANDIDATE_REMOVED_MESSAGE = `${REMEMBER_REMOVED_FLAG} was removed; generated remember records agent-proposed candidates only and cannot approve or activate them; use the main CLI with ${REMEMBER_PROMOTION_GRAMMAR}.`;
+const DECISIONS_USAGE = 'Usage: gsdd decisions query "<terms>" [--path <path>] | promote <id> --authority owner --approval-ref <non-sensitive-ref> | reject <id> [--reason <text>] | invalidate <id> --reason <text>';
 const DECISIONS_QUERY_USAGE = 'Usage: gsdd decisions query "<terms>" [--path <path>]';
 
 export function cmdRemember(...rawArgs) {
@@ -79,11 +82,26 @@ export function cmdDecisions(...rawArgs) {
     const [subcommand, subject, ...args] = workspace.args;
     if (!subject || subject.startsWith('--')) return fail(DECISIONS_USAGE);
     if (['promote', 'reject', 'invalidate'].includes(subcommand)) {
+      if (subcommand === 'promote') {
+        const promotion = parsePromotionArgs(args);
+        if (!promotion) return fail(DECISIONS_USAGE);
+        const record = transitionDecisionRecord(workDir, subject, subcommand, promotion);
+        output({ record: {
+          id: record.meta.id,
+          status: record.meta.status,
+          authority: classifyDecisionAuthority(record).classification,
+          source: record.meta.source || null,
+          approval_authority: record.meta.approval_authority || null,
+          approval_ref: record.meta.approval_ref || null,
+          approval_body_hash: record.meta.approval_body_hash || null,
+          approved_at: record.meta.approved_at || null,
+          authority_fingerprint: record.meta.authority_fingerprint || null,
+          updated_at: record.meta.updated_at,
+        } });
+        return;
+      }
       const reasonArgsValid = args.length === 0
         || (args.length === 2 && args[0] === '--reason' && Boolean(args[1]));
-      if (subcommand === 'promote' && args.length > 0) {
-        return fail(DECISIONS_USAGE);
-      }
       if (subcommand === 'invalidate' && !(args.length === 2 && args[0] === '--reason' && args[1])) {
         return fail(DECISIONS_USAGE);
       }
@@ -106,6 +124,17 @@ export function cmdDecisions(...rawArgs) {
   } catch (error) {
     fail(error.message);
   }
+}
+
+function parsePromotionArgs(args) {
+  if (args.length !== 4
+    || args[0] !== '--authority'
+    || args[1] !== 'owner'
+    || args[2] !== '--approval-ref'
+    || !isValidApprovalReference(args[3])) {
+    return null;
+  }
+  return { authority: 'owner', approvalRef: args[3] };
 }
 
 export function cmdDecisionsQuery(...rawArgs) {

@@ -16,6 +16,17 @@ async function loadStore() {
   return import(`${WORK_CONTEXT_URL}?t=${Date.now()}-${Math.random()}`);
 }
 
+async function writeOwnerRecord(workDir, input, options = {}) {
+  const { writeDecisionRecord, transitionDecisionRecord } = await loadStore();
+  const candidate = writeDecisionRecord(workDir, { ...input, status: 'candidate' }, options);
+  const promoted = transitionDecisionRecord(workDir, candidate.id, 'promote', {
+    authority: 'owner',
+    approvalRef: `test-review-${candidate.id}`,
+    now: options.now || new Date(),
+  });
+  return { ...promoted, id: promoted.meta.id };
+}
+
 function record(id, decision, overrides = {}) {
   return {
     id,
@@ -244,7 +255,7 @@ describe('S1 decision recall loop', () => {
     const now = new Date('2026-07-11T09:00:00.000Z');
     for (let index = 0; index < 12; index += 1) {
       const suffix = `${index}`.padStart(4, '0');
-      writeDecisionRecord(workDir, record(`digest-rule-${suffix}`, `Digest standing rule ${index}`), { now, repoRoot: root });
+      await writeOwnerRecord(workDir, record(`digest-rule-${suffix}`, `Digest standing rule ${index}`), { now, repoRoot: root });
     }
     const digest = buildDecisionsDigest({ workDir, now });
     assert.ok(digest.records.length <= 10);
@@ -256,10 +267,10 @@ describe('S1 decision recall loop', () => {
     const root = createTempProject();
     dirs.push(root);
     const workDir = path.join(root, '.work');
-    const { buildDecisionsDigest, writeDecisionRecord } = await loadStore();
+    const { buildDecisionsDigest } = await loadStore();
     const now = new Date('2026-07-11T09:00:00.000Z');
-    writeDecisionRecord(workDir, record('repo-current-a1b2', 'Repo-wide standing rule'), { now, repoRoot: root });
-    writeDecisionRecord(workDir, record('phase-seven-c3d4', 'Phase-seven-only rule', { for: 'phase:7' }), { now, repoRoot: root });
+    await writeOwnerRecord(workDir, record('repo-current-a1b2', 'Repo-wide standing rule'), { now, repoRoot: root });
+    await writeOwnerRecord(workDir, record('phase-seven-c3d4', 'Phase-seven-only rule', { for: 'phase:7' }), { now, repoRoot: root });
 
     const digest = buildDecisionsDigest({ workDir, phase: '99', paths: ['phase:99'], now });
 
@@ -276,14 +287,14 @@ describe('S1 decision recall loop', () => {
     const now = new Date('2026-07-11T09:00:00.000Z');
     writeDecisionRecord(workDir, record('candidate-a1b2', 'Candidate rule', { status: 'candidate' }), { now, repoRoot: root });
     writeDecisionRecord(workDir, record('invalidated-b2c3', 'Invalidated rule', { status: 'invalidated' }), { now, repoRoot: root });
-    writeDecisionRecord(workDir, record('base-rule-c3d4', 'Superseded rule'), { now, repoRoot: root });
-    writeDecisionRecord(workDir, record('new-rule-d4e5', 'Replacement rule', { supersedes: 'base-rule-c3d4' }), { now, repoRoot: root });
+    await writeOwnerRecord(workDir, record('base-rule-c3d4', 'Superseded rule'), { now, repoRoot: root });
+    await writeOwnerRecord(workDir, record('new-rule-d4e5', 'Replacement rule', { supersedes: 'base-rule-c3d4' }), { now, repoRoot: root });
     const digest = buildDecisionsDigest({ workDir, now });
 
     assert.deepStrictEqual(Object.keys(digest), [
       'records', 'legacyRecords', 'text', 'counts', 'truncated', 'readErrors', 'ids',
     ]);
-    assert.ok(digest.records.every((entry) => Object.keys(entry).sort().join(',') === 'hash,id,status'));
+    assert.ok(digest.records.every((entry) => Object.keys(entry).sort().join(',') === 'authority,authority_fingerprint,hash,id,status'));
     assert.deepStrictEqual(digest.legacyRecords, []);
     assert.deepStrictEqual(digest.ids, digest.records.map((entry) => entry.id));
     assert.strictEqual(digest.counts.eligible, 1);
@@ -302,7 +313,7 @@ describe('S1 decision recall loop', () => {
     const workDir = path.join(root, '.work');
     const { buildDecisionsDigest, readDecisionRecords, recallDecisions, recordDecision, writeDecisionRecord } = await loadStore();
     const now = new Date('2026-07-11T09:00:00.000Z');
-    writeDecisionRecord(workDir, record('typed-active-a1b2', 'Typed active authority'), { now, repoRoot: root });
+    await writeOwnerRecord(workDir, record('typed-active-a1b2', 'Typed active authority'), { now, repoRoot: root });
     recordDecision(workDir, {
       id: 'legacy-graph',
       title: 'Legacy graph record',
@@ -410,7 +421,7 @@ describe('S1 decision recall loop', () => {
     const workDir = path.join(root, '.work');
     const { buildDecisionsDigest, writeDecisionRecord } = await loadStore();
     const now = new Date('2026-07-11T09:00:00.000Z');
-    const written = writeDecisionRecord(workDir, record('readable-a1b2', 'Readable rule'), { now, repoRoot: root });
+    const written = await writeOwnerRecord(workDir, record('readable-a1b2', 'Readable rule'), { now, repoRoot: root });
     const raw = fs.readFileSync(path.join(workDir, 'decisions', `${written.id}.md`), 'utf-8');
     const reader = {
       existsSync: () => true,
@@ -454,7 +465,7 @@ describe('S1 decision recall loop', () => {
     const workDir = path.join(root, '.work');
     const { writeDecisionRecord } = await loadStore();
     const now = new Date();
-    writeDecisionRecord(workDir, record('query-active-a1b2', 'Shared query policy active', {
+    await writeOwnerRecord(workDir, record('query-active-a1b2', 'Shared query policy active', {
       legacy_ref: 'legacy-active',
     }), { now, repoRoot: root });
     writeDecisionRecord(workDir, record('query-candidate-b2c3', 'Shared query policy candidate', {
@@ -477,9 +488,9 @@ describe('S1 decision recall loop', () => {
     assert.strictEqual(result.status, 0, result.stderr);
     assert.strictEqual(result.stdout, [
       'DECISION QUERY RESULTS (3 records)',
-      '- query-active-a1b2 [legacy-active] [status: active] — Shared query policy active',
-      '- query-candidate-b2c3 [legacy-candidate] [status: candidate] — Shared query policy candidate (stale)',
-      '- query-superseded-c3d4 [status: superseded] — Shared query policy superseded',
+      '- query-active-a1b2 [legacy-active] [status: active] [authority: owner_asserted] — Shared query policy active',
+      '- query-candidate-b2c3 [legacy-candidate] [status: candidate] [authority: candidate] — Shared query policy candidate (stale)',
+      '- query-superseded-c3d4 [status: superseded] [authority: non_authoritative] — Shared query policy superseded',
       '',
     ].join('\n'));
   });
@@ -490,7 +501,7 @@ describe('S1 decision recall loop', () => {
     const workDir = path.join(root, '.work');
     const { buildDecisionsDigest, recallDecisions, renderDecisionsDigest, writeDecisionRecord } = await loadStore();
     const now = new Date();
-    writeDecisionRecord(workDir, record('digest-parity-a1b2', 'Preserve digest bytes', {
+    await writeOwnerRecord(workDir, record('digest-parity-a1b2', 'Preserve digest bytes', {
       legacy_ref: 'legacy-digest',
     }), { now, repoRoot: root });
     const expectedDigest = [
@@ -517,7 +528,7 @@ describe('S1 decision recall loop', () => {
         encoding: 'utf-8',
       });
       assert.strictEqual(query.status, 0, query.stderr);
-      assert.strictEqual(query.stdout, `DECISION QUERY RESULTS (1 record)\n- digest-parity-a1b2 [legacy-digest] [status: active] — Preserve digest bytes\n`);
+       assert.strictEqual(query.stdout, `DECISION QUERY RESULTS (1 record)\n- digest-parity-a1b2 [legacy-digest] [status: active] [authority: owner_asserted] — Preserve digest bytes\n`);
     }
     assert.deepStrictEqual(snapshotDecisionDirectory(workDir), before);
   });
@@ -549,13 +560,15 @@ describe('S1 decision recall loop', () => {
     assert.strictEqual(promoteCandidate?.meta.status, 'candidate');
     assert.strictEqual(promoteCandidate?.meta.source, 'agent-proposed');
 
+    const candidatePath = path.join(root, '.work', 'decisions', `${candidateCapture.record.id}.md`);
+    const beforeBarePromotion = fs.readFileSync(candidatePath);
     result = await runCliAsMain(root, ['decisions', 'promote', candidateCapture.record.id]);
-    assert.strictEqual(result.exitCode, 0, result.output);
-    const promoted = JSON.parse(result.output);
-    assert.strictEqual(promoted.record.status, 'active');
-    const userRecord = readDecisionRecords(path.join(root, '.work')).records.find((entry) => entry.meta.id === candidateCapture.record.id);
-    assert.strictEqual(userRecord?.meta.status, 'active');
-    assert.strictEqual(userRecord?.meta.source, 'user');
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /Usage: gsdd decisions/);
+    assert.deepStrictEqual(fs.readFileSync(candidatePath), beforeBarePromotion);
+    const stillCandidate = readDecisionRecords(path.join(root, '.work')).records.find((entry) => entry.meta.id === candidateCapture.record.id);
+    assert.strictEqual(stillCandidate?.meta.status, 'candidate');
+    assert.strictEqual(stillCandidate?.meta.source, 'agent-proposed');
   });
 
   test('removed remember authority flag fails without writing a record', async () => {
@@ -581,16 +594,18 @@ describe('S1 decision recall loop', () => {
     const { readDecisionRecords } = await loadStore();
     const candidatePath = path.join(workDir, 'decisions', `${candidateId}.md`);
     const candidateBefore = readDecisionRecords(workDir).records.find((entry) => entry.meta.id === candidateId);
-    result = await runCliAsMain(root, ['decisions', 'promote', candidateId]);
+    result = await runCliAsMain(root, ['decisions', 'promote', candidateId, '--authority', 'owner', '--approval-ref', 'owner-review-2026-08-11']);
     assert.strictEqual(result.exitCode, 0, result.output);
     const promoted = JSON.parse(result.output);
     assert.deepStrictEqual(promoted.record.status, 'active');
     const active = readDecisionRecords(workDir).records.find((entry) => entry.meta.id === candidateId);
     assert.strictEqual(active.meta.hash, candidateBefore.meta.hash);
-    assert.strictEqual(active.meta.source, 'user');
+    assert.strictEqual(active.meta.source, candidateBefore.meta.source);
+    assert.strictEqual(active.meta.approval_authority, 'owner');
+    assert.strictEqual(active.meta.approval_body_hash, candidateBefore.meta.hash);
     assert.ok(fs.existsSync(candidatePath));
 
-    result = await runCliAsMain(root, ['decisions', 'promote', candidateId]);
+    result = await runCliAsMain(root, ['decisions', 'promote', candidateId, '--authority', 'owner', '--approval-ref', 'owner-review-2026-08-11']);
     assert.strictEqual(result.exitCode, 1);
     assert.match(result.output, new RegExp(`cannot promote record with status active`));
     result = await runCliAsMain(root, ['decisions', 'invalidate', candidateId]);
@@ -637,10 +652,15 @@ describe('S1 decision recall loop', () => {
 
     for (const [operation, status] of cases) {
       const id = `${operation}-${status}-a1b2`;
-      writeDecisionRecord(workDir, record(id, `${operation} ${status} refusal`, { status }), { repoRoot: root });
+      if (status === 'active') {
+        await writeOwnerRecord(workDir, record(id, `${operation} ${status} refusal`, { status }), { repoRoot: root });
+      } else {
+        writeDecisionRecord(workDir, record(id, `${operation} ${status} refusal`, { status }), { repoRoot: root });
+      }
       const filePath = path.join(workDir, 'decisions', `${id}.md`);
       const before = fs.readFileSync(filePath, 'utf-8');
       const args = ['decisions', operation, id];
+      if (operation === 'promote') args.push('--authority', 'owner', '--approval-ref', 'refusal-matrix');
       if (operation === 'invalidate') args.push('--reason', 'matrix regression');
       const result = await runCliAsMain(root, args);
 
@@ -648,6 +668,155 @@ describe('S1 decision recall loop', () => {
       assert.match(result.output, new RegExp(`cannot ${operation} record with status ${status}`));
       assert.strictEqual(fs.readFileSync(filePath, 'utf-8'), before);
     }
+  });
+
+  test('authority matrix binds explicit owner assertions without rewriting proposal provenance', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    fs.mkdirSync(workDir, { recursive: true });
+    const store = await loadStore();
+
+    let result = await runCliAsMain(root, [
+      'remember', 'Explicit owner assertion is required.', '--type', 'rule', '--scope', 'repo',
+    ]);
+    const candidateId = JSON.parse(result.output).record.id;
+    const candidatePath = path.join(workDir, 'decisions', `${candidateId}.md`);
+    const candidateBytes = fs.readFileSync(candidatePath);
+
+    for (const args of [
+      [],
+      ['--authority'],
+      ['--authority', 'owner'],
+      ['--authority', 'owner', '--approval-ref'],
+      ['--authority', 'owner', '--approval-ref', 'secret-token'],
+      ['--authority', 'owner', '--approval-ref', 'owner-review', '--approval-ref', 'duplicate'],
+      ['--authority', 'owner', '--approval-ref', 'owner-review', '--unexpected', 'flag'],
+      ['--authority', 'owner', '--approval-ref', 'AKIAIOSFODNN7EXAMPLE'],
+      ['--authority', 'owner', '--approval-ref', 'ASIAIOSFODNN7EXAMPLE'],
+      ['--authority', 'owner', '--approval-ref', 'AIzaSyDUMMYKEYWITHENOUGHCHARACTERS1234'],
+    ]) {
+      result = await runCliAsMain(root, ['decisions', 'promote', candidateId, ...args]);
+      assert.strictEqual(result.exitCode, 1, `${args.join(' ')} unexpectedly succeeded: ${result.output}`);
+      assert.match(result.output, /Usage: gsdd decisions/);
+      assert.deepStrictEqual(fs.readFileSync(candidatePath), candidateBytes, `${args.join(' ')} changed the candidate`);
+    }
+
+    result = await runCliAsMain(root, [
+      'decisions', 'promote', candidateId, '--authority', 'owner', '--approval-ref', 'owner-review-42',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const promoted = store.readDecisionRecords(workDir).records.find((entry) => entry.meta.id === candidateId);
+    assert.strictEqual(promoted.meta.status, 'active');
+    assert.strictEqual(promoted.meta.source, 'agent-proposed');
+    assert.strictEqual(promoted.meta.approval_authority, 'owner');
+    assert.strictEqual(promoted.meta.approval_ref, 'owner-review-42');
+    assert.strictEqual(promoted.meta.approval_body_hash, promoted.meta.hash);
+    assert.strictEqual(promoted.meta.authority_fingerprint, store.computeDecisionAuthorityFingerprint({
+      id: promoted.meta.id,
+      bodyHash: promoted.meta.hash,
+      authority: promoted.meta.approval_authority,
+      approvalRef: promoted.meta.approval_ref,
+      approvedAt: promoted.meta.approved_at,
+    }));
+    const promotedBytes = fs.readFileSync(candidatePath);
+
+    result = await runCliAsMain(root, [
+      'decisions', 'promote', candidateId, '--authority', 'owner', '--approval-ref', 'owner-review-42',
+    ]);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /cannot promote record with status active|already owner-asserted/);
+    assert.deepStrictEqual(fs.readFileSync(candidatePath), promotedBytes);
+
+    result = await runCliAsMain(root, ['decisions', 'query', 'Explicit owner assertion']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /\[status: active\] \[authority: owner_asserted\]/);
+
+    const legacy = store.writeDecisionRecord(workDir, record('legacy-unreceipted-a1b2', 'Legacy active needs review', {
+      source: 'manual',
+    }), { repoRoot: root });
+    const legacyPath = path.join(workDir, 'decisions', 'legacy-unreceipted-a1b2.md');
+    const legacyBefore = fs.readFileSync(legacyPath);
+    const digestBefore = store.buildDecisionsDigest({ workDir });
+    assert.ok(!digestBefore.ids.includes(legacy.id));
+    assert.strictEqual(digestBefore.counts.excluded.unreceipted_active, 1);
+
+    result = await runCliAsMain(root, ['decisions', 'query', 'Legacy active needs review']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /\[status: active\] \[authority: unreceipted_active\]/);
+
+    result = await runCliAsMain(root, [
+      'decisions', 'promote', legacy.id, '--authority', 'owner', '--approval-ref', 'legacy-review',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const reattested = store.readDecisionRecords(workDir).records.find((entry) => entry.meta.id === legacy.id);
+    assert.strictEqual(reattested.meta.source, 'manual');
+    assert.strictEqual(reattested.meta.hash, legacy.record.meta.hash);
+    assert.strictEqual(reattested.body, legacy.record.body);
+    assert.notDeepStrictEqual(fs.readFileSync(legacyPath), legacyBefore);
+    assert.strictEqual(store.classifyDecisionAuthority(reattested).classification, 'owner_asserted');
+
+    const partial = store.writeDecisionRecord(workDir, record('partial-assertion-c3d4', 'Partial assertion refuses', {
+      source: 'manual',
+    }), { repoRoot: root });
+    const partialPath = path.join(workDir, 'decisions', 'partial-assertion-c3d4.md');
+    const partialBytes = fs.readFileSync(partialPath, 'utf-8').replace('source: manual\n', 'source: manual\napproval_authority: owner\n');
+    fs.writeFileSync(partialPath, partialBytes);
+    result = await runCliAsMain(root, [
+      'decisions', 'promote', partial.id, '--authority', 'owner', '--approval-ref', 'partial-review',
+    ]);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /malformed|review/i);
+    assert.strictEqual(fs.readFileSync(partialPath, 'utf-8'), partialBytes);
+    assert.strictEqual(store.classifyDecisionAuthority(store.readDecisionRecords(workDir).records.find((entry) => entry.meta.id === partial.id)).classification, 'malformed_assertion');
+
+    const nested = path.join(root, 'src', 'nested');
+    fs.mkdirSync(nested, { recursive: true });
+    result = await runCliAsMain(nested, ['decisions', 'query', 'Explicit owner assertion']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, new RegExp(candidateId));
+  });
+
+  test('canonicalizes padded approval references before validation, storage, and fingerprinting', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    const store = await loadStore();
+    const candidate = store.writeDecisionRecord(workDir, record('padded-ref-a1b2', 'Padded approval references stay canonical.', { status: 'candidate' }), { repoRoot: root });
+
+    const result = await runCliAsMain(root, [
+      'decisions', 'promote', candidate.id, '--authority', 'owner', '--approval-ref', '  owner-review-padded  ',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const promoted = store.readDecisionRecords(workDir).records.find((entry) => entry.meta.id === candidate.id);
+    assert.strictEqual(promoted.meta.approval_ref, 'owner-review-padded');
+    assert.strictEqual(store.classifyDecisionAuthority(promoted).classification, 'owner_asserted');
+    assert.strictEqual(JSON.parse(result.output).record.authority, 'owner_asserted');
+  });
+
+  test('treats empty or partial receipt keys and duplicate keys as malformed without writes', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    const decisionDir = path.join(workDir, 'decisions');
+    fs.mkdirSync(decisionDir, { recursive: true });
+    const store = await loadStore();
+    const initial = store.writeDecisionRecord(workDir, record('empty-receipt-a1b2', 'Empty receipt fields are malformed.'), { repoRoot: root });
+    const partialPath = path.join(decisionDir, `${initial.id}.md`);
+    const partialBytes = fs.readFileSync(partialPath, 'utf-8').replace('status: active\n', 'status: active\napproval_authority: \n');
+    fs.writeFileSync(partialPath, partialBytes);
+    const partial = store.readDecisionRecords(workDir).records.find((entry) => entry.meta.id === initial.id);
+    assert.strictEqual(store.classifyDecisionAuthority(partial).classification, 'malformed_assertion');
+
+    const duplicatePath = path.join(decisionDir, 'duplicate-receipt-c3d4.md');
+    const duplicateBytes = fs.readFileSync(partialPath, 'utf-8').replace('id: empty-receipt-a1b2', 'id: duplicate-receipt-c3d4\nid: duplicate-receipt-c3d4');
+    fs.writeFileSync(duplicatePath, duplicateBytes);
+    const before = snapshotDecisionDirectory(workDir);
+    const result = await runCliAsMain(root, ['decisions', 'promote', 'duplicate-receipt-c3d4', '--authority', 'owner', '--approval-ref', 'duplicate-review']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /decision record not found|duplicate decision frontmatter/i);
+    assert.deepStrictEqual(snapshotDecisionDirectory(workDir), before);
+    assert.throws(() => store.parseDecisionRecord(duplicateBytes), /duplicate decision frontmatter key: id/);
   });
 
   test('plan preflight persists the digest and execute preflight warns on missing or stale acknowledgements', async () => {
@@ -660,27 +829,37 @@ describe('S1 decision recall loop', () => {
     fs.writeFileSync(path.join(stateDir, 'config.json'), '{}\n');
     fs.writeFileSync(path.join(stateDir, 'ROADMAP.md'), '- [ ] **Phase 30: Decisions**\n');
     const { writeDecisionRecord, readDecisionRecords } = await loadStore();
-    const decision = writeDecisionRecord(workDir, record('phase-rule-a1b2', 'Phase-bound rule', { for: 'phase:30' }), {
+    const decision = writeDecisionRecord(workDir, record('phase-rule-a1b2', 'Phase-bound rule', { for: 'phase:30', status: 'candidate' }), {
       repoRoot: root,
       now: new Date('2026-07-11T09:00:00.000Z'),
     });
+    let result = await runCliAsMain(root, ['decisions', 'promote', decision.id, '--authority', 'owner', '--approval-ref', 'phase-review-30']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    decision.record = (await loadStore()).readDecisionRecords(workDir).records.find((entry) => entry.meta.id === decision.id);
     fs.writeFileSync(path.join(phaseDir, '30-PLAN.md'), '# plan\n');
-    let result = await runCliAsMain(root, ['lifecycle-preflight', 'plan', '30']);
+    result = await runCliAsMain(root, ['lifecycle-preflight', 'plan', '30']);
     assert.strictEqual(result.exitCode, 0, result.output);
     const persisted = JSON.parse(fs.readFileSync(path.join(stateDir, 'state.json'), 'utf-8')).lastDecisionsDigest;
-    assert.deepStrictEqual(persisted.records, [{ id: decision.id, hash: decision.record.meta.hash, status: 'active' }]);
-    const writeDispositionPlan = (hashLine = null) => fs.writeFileSync(path.join(phaseDir, '30-PLAN.md'), [
+    assert.deepStrictEqual(persisted.records, [{
+      id: decision.id,
+      hash: decision.record.meta.hash,
+      status: 'active',
+      authority: 'owner_asserted',
+      authority_fingerprint: decision.record.meta.authority_fingerprint,
+    }]);
+    const writeDispositionPlan = (hashLine = null, fingerprintLine = null) => fs.writeFileSync(path.join(phaseDir, '30-PLAN.md'), [
       '---',
       'status: planned',
       'decision_dispositions:',
       `  - id: ${decision.id}`,
       ...(hashLine ? [`    ${hashLine}`] : []),
+      ...(fingerprintLine ? [`    ${fingerprintLine}`] : []),
       '    disposition: applied',
       '    note: ""',
       '---',
       '# plan',
     ].join('\n'));
-    writeDispositionPlan(`hash: ${decision.record.meta.hash}`);
+    writeDispositionPlan(`hash: ${decision.record.meta.hash}`, `authority_fingerprint: ${decision.record.meta.authority_fingerprint}`);
     result = await runCliAsMain(root, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
     assert.strictEqual(result.exitCode, 0, result.output);
     let output = JSON.parse(result.output);
@@ -688,7 +867,7 @@ describe('S1 decision recall loop', () => {
     assert.ok(!output.warnings.some((warning) => warning.code === 'decision_ack_stale'));
 
     for (const hashLine of ['hash: ""', null]) {
-      writeDispositionPlan(hashLine);
+      writeDispositionPlan(hashLine, `authority_fingerprint: ${decision.record.meta.authority_fingerprint}`);
       result = await runCliAsMain(root, ['lifecycle-preflight', 'execute', '30', '--expects-mutation', 'phase-status']);
       assert.strictEqual(result.exitCode, 0, result.output);
       output = JSON.parse(result.output);
@@ -705,6 +884,47 @@ describe('S1 decision recall loop', () => {
     const stateAfterExecute = fs.readFileSync(path.join(stateDir, 'state.json'), 'utf-8');
     assert.strictEqual(JSON.parse(stateAfterExecute).lastDecisionsDigest.emitted_at, persisted.emitted_at);
     assert.strictEqual(readDecisionRecords(workDir).records.find((entry) => entry.meta.id === decision.id).meta.hash, decision.record.meta.hash);
+  });
+
+  test('execute acknowledgement checks compare persisted and current authority projections bidirectionally', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const stateDir = path.join(root, '.work');
+    const phaseDir = path.join(stateDir, 'phases', '31-authority');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(stateDir, 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(stateDir, 'ROADMAP.md'), '- [ ] **Phase 31: Authority**\n');
+    const store = await loadStore();
+    const original = await writeOwnerRecord(stateDir, record('persisted-authority-a1b2', 'Persisted authority must be rechecked.', { for: 'phase:31' }), { repoRoot: root });
+    const writePlan = (records) => fs.writeFileSync(path.join(phaseDir, '31-PLAN.md'), [
+      '---', 'status: planned', 'decision_dispositions:',
+      ...records.flatMap((entry) => [`  - id: ${entry.meta.id}`, `    hash: ${entry.meta.hash}`, `    authority_fingerprint: ${entry.meta.authority_fingerprint}`, '    disposition: applied', '    note: ""']),
+      '---', '# plan',
+    ].join('\n'));
+    writePlan([original]);
+    let result = await runCliAsMain(root, ['lifecycle-preflight', 'plan', '31']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const added = await writeOwnerRecord(stateDir, record('new-authority-c3d4', 'New asserted authority is stale until acknowledged.', { for: 'phase:31' }), { repoRoot: root });
+    result = await runCliAsMain(root, ['lifecycle-preflight', 'execute', '31', '--expects-mutation', 'phase-status']);
+    let output = JSON.parse(result.output);
+    assert.match(output.warnings.find((warning) => warning.code === 'decision_ack_stale').message, /new-authority-c3d4/);
+
+    writePlan([original, added]);
+    result = await runCliAsMain(root, ['lifecycle-preflight', 'plan', '31']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const originalPath = path.join(stateDir, 'decisions', `${original.id}.md`);
+    fs.writeFileSync(originalPath, fs.readFileSync(originalPath, 'utf-8').replace(/^authority_fingerprint: .*\n/m, 'authority_fingerprint: stale\n'));
+    result = await runCliAsMain(root, ['lifecycle-preflight', 'execute', '31', '--expects-mutation', 'phase-status']);
+    output = JSON.parse(result.output);
+    assert.match(output.warnings.find((warning) => warning.code === 'decision_ack_stale').message, /persisted-authority-a1b2/);
+
+    const state = JSON.parse(fs.readFileSync(path.join(stateDir, 'state.json'), 'utf-8'));
+    state.lastDecisionsDigest.records = [];
+    fs.writeFileSync(path.join(stateDir, 'state.json'), `${JSON.stringify(state, null, 2)}\n`);
+    result = await runCliAsMain(root, ['lifecycle-preflight', 'execute', '31', '--expects-mutation', 'phase-status']);
+    output = JSON.parse(result.output);
+    assert.ok(output.warnings.some((warning) => warning.code === 'decision_ack_stale'), output.warnings.map((warning) => warning.code).join(','));
   });
 
   test('README and help keep every decision backend command experimental and expose all verbs', async () => {
@@ -726,7 +946,7 @@ describe('S1 decision recall loop', () => {
     dirs.push(root);
     const workDir = path.join(root, '.work');
     const { writeDecisionRecord } = await loadStore();
-    writeDecisionRecord(workDir, record('preflight-rule-a1b2', 'Preflight must inject active decisions'), {
+    await writeOwnerRecord(workDir, record('preflight-rule-a1b2', 'Preflight must inject active decisions'), {
       now: new Date('2026-07-11T09:00:00.000Z'),
       repoRoot: root,
     });
@@ -796,7 +1016,7 @@ describe('S1 decision recall loop', () => {
     result = await runCliAsMain(root, ['decisions', 'query', 'Canonical work decision']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, new RegExp(id));
-    result = await runCliAsMain(root, ['decisions', 'promote', id]);
+    result = await runCliAsMain(root, ['decisions', 'promote', id, '--authority', 'owner', '--approval-ref', 'migration-review']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
     const workRecords = readDecisionRecords(workDir).records;

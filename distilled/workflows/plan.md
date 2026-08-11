@@ -501,7 +501,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 7. `context_compliance` - locked decisions are honored and deferred ideas stay out of scope
 8. `goal_achievement` - the plan, if executed perfectly, actually achieves the stated phase goal: goal addressed (tasks deliver the goal), success criteria reachable (each criterion traceable to a task verify output), and outcome observable (a human or automated check can confirm the goal was met)
 9. `approach_alignment` - when APPROACH.md exists, plans implement the chosen approaches, not alternatives. Blocker if plan contradicts an explicit user choice. Warning if plan drifts from recommendation without justification. When `workflow.discuss: true`, missing, proofless, agent-discretion-only, or invalid APPROACH.md is a blocker before a plan can be accepted.
-10. `decision_compliance` - when `lastDecisionsDigest` is non-empty, the plan includes a complete `decision_dispositions` block keyed by every persisted decision id, preserves each persisted body hash, uses an allowed disposition, keeps required notes nonblank, and surfaces challenged items. When no persisted digest exists, report `skipped` and never fail the plan.
+10. `decision_compliance` - when `lastDecisionsDigest` exists, the plan includes a complete `decision_dispositions` block keyed by every persisted decision id, preserves each persisted body hash and `authority_fingerprint`, uses an allowed disposition, keeps required notes nonblank, and surfaces challenged items. An explicitly persisted empty digest must remain empty at execution; when no persisted digest exists, report `skipped` and never fail the plan.
 
 The smaller dimension set still preserves the old failure coverage: scope boundaries are checked under `scope_sanity`, anti-regression and escalation under `context_compliance`, closure honesty and browser-proof specificity under `goal_achievement`, and second-pass review under the final shared-surface review before closure.
 ### Invoking the Checker
@@ -514,6 +514,8 @@ The smaller dimension set still preserves the old failure coverage: scope bounda
    - approach decisions from `.work/phases/*-APPROACH.md` (if exists)
    - relevant phase research file(s)
    - produced `.work/phases/*-PLAN.md` file(s)
+   - the exact persisted `lastDecisionsDigest` snapshot from the successful plan preflight, if present, including an explicitly persisted empty snapshot
+   For `decision_compliance`, compare every PLAN `decision_dispositions` body hash and `authority_fingerprint` directly to that snapshot. When the digest is absent, report `skipped`; an explicitly persisted empty snapshot must remain empty and must not be replaced with a recomputed digest.
 4. Require the checker to return a single JSON object:
    ```json
    {

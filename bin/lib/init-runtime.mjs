@@ -189,7 +189,8 @@ Commands:
                               Capture a candidate decision, rule, or lesson for later verification
   decisions query "<terms>" [--path <path>]
                               Recall matching decision records as a compact digest
-  decisions promote <id>     Promote a candidate decision to active authority
+  decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>
+                              Promote or re-attest one decision through the auditable cooperative owner protocol
   decisions reject <id> [--reason <text>]
                               Reject a candidate decision without deleting its record
   decisions invalidate <id> --reason <text>

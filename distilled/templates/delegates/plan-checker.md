@@ -9,6 +9,9 @@ Read only the explicit inputs provided by the orchestrator:
 - approach decisions from `.work/phases/*-APPROACH.md` (if provided)
 - any relevant phase research file
 - the produced `.work/phases/*-PLAN.md` file(s)
+- the exact persisted `lastDecisionsDigest` snapshot from the successful plan preflight, if present, including an explicitly persisted empty snapshot
+
+For `decision_compliance`, compare every PLAN `decision_dispositions` body hash and `authority_fingerprint` directly to that snapshot. When the digest is absent, report `skipped`; an explicitly persisted empty snapshot must remain empty and must not be replaced with a recomputed digest.
 
 Do NOT inherit the planner's hidden reasoning. Treat the current plans as untrusted drafts that must prove they will achieve the phase goal before execution.
 
@@ -47,7 +50,7 @@ Verify these dimensions:
   - **Deferred excluded?** Deferred ideas from APPROACH.md must not appear in plan tasks -> `blocker` if found.
   - If `workflow.discuss` is `true` in the project config and no APPROACH.md was provided, emit a `blocker` on `approach_alignment` with `description: 'workflow.discuss is true but no APPROACH.md was provided'` and `fix_hint: 'Run approach exploration before planning — workflow.discuss=true requires an approved APPROACH.md before a plan can be emitted.'` If `workflow.discuss` is `false` or the key is absent and no APPROACH.md was provided, skip this dimension entirely.
 
-- `decision_compliance`: when `lastDecisionsDigest` is non-empty, verify that PLAN.md contains a complete `decision_dispositions` block keyed by every persisted decision id, with the persisted body hash and an allowed disposition. Notes must be nonblank for `not-applicable` and `challenged`, and challenged items must be surfaced to the user. When no persisted digest exists, report `skipped` and never fail the plan.
+- `decision_compliance`: when `lastDecisionsDigest` exists, verify that PLAN.md contains a complete `decision_dispositions` block keyed by every persisted decision id, with the persisted body hash, `authority_fingerprint`, and an allowed disposition. Notes must be nonblank for `not-applicable` and `challenged`, and challenged items must be surfaced to the user. An explicitly persisted empty digest must remain empty at execution; when no persisted digest exists, report `skipped` and never fail the plan.
 
 Return JSON only as a single finding summary object with this shape:
 
