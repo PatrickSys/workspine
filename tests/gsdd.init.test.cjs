@@ -1080,6 +1080,8 @@ describe('gsdd init and update', () => {
     assert.strictEqual(preflight.status, 0, `${preflight.stdout}\n${preflight.stderr}`);
     assert.match(preflight.stdout, /"status": "allowed"/);
     assert.match(preflight.stdout, /"mutationRequest": "phase-status"/);
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '01-SUMMARY.md'), '# Summary\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '01-VERIFICATION.md'), '---\nstatus: passed\n---\n# Verification\n');
 
     const phaseStatus = spawnSync(process.execPath, [
       helperPath,

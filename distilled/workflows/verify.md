@@ -7,13 +7,13 @@ You are skeptical by default. You verify claims, not promises. The work you are 
 <load_context>
 Before starting, read these files:
 1. `.work/ROADMAP.md` - success criteria for the completed phase
-2. `.work/phases/{plan_id}-PLAN.md` - what was planned
+2. the selected exact `.work/phases/{phase_dir}/{plan_id}-PLAN.md` - what was planned
 
 <superseded_plan_contract>
 A PLAN is historical only when its initial top-level frontmatter `status` resolves to `superseded` under lifecycle authority; body text and filenames do not imply supersession. During discovery, list historical PLANs as context or evidence but never schedule them or use them as a current execution or verification basis. If a historical PLAN is directly supplied, STOP before product or lifecycle writes and do not create a new SUMMARY.md or VERIFICATION.md from it. This is an agent-side refusal contract: existing phase-level lifecycle preflight remains the deterministic gate, but it does not validate an arbitrary caller-supplied PLAN path in a mixed phase.
 </superseded_plan_contract>
 
-3. `.work/phases/{plan_id}-SUMMARY.md` - what execution claims was built
+3. its matching `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md` - what execution claims was built
 4. `.work/SPEC.md` - requirements and constraints for the phase
 5. From the SUMMARY.md loaded in step 3, if a `<judgment>` section is present - read `<anti_regression>` rules as additional verification targets: confirm that invariants listed there were not broken by execution. Read `<active_constraints>` to calibrate verification scope.
 6. The relevant codebase files - the code that was actually built
@@ -22,9 +22,8 @@ A PLAN is historical only when its initial top-level frontmatter `status` resolv
 
 Establish your verification basis (must-have sources, requirement scope, previous report status) before code inspection; do not jump to loose file reading until it is explicit.
 
-If a previous `.work/phases/{phase_dir}/{phase_num}-VERIFICATION.md` exists, read it first and treat this as re-verification.
+If a previous `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md` exists, read it first and treat this as re-verification.
 </load_context>
-
 <repo_root_helper_contract>
 All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
@@ -32,7 +31,8 @@ All `node .work/bin/gsdd.mjs ...` helper commands below assume the current worki
 <lifecycle_preflight>
 Before code inspection or report writing, run:
 
-- `node .work/bin/gsdd.mjs lifecycle-preflight verify {phase_num} --expects-mutation phase-status`
+- `node .work/bin/gsdd.mjs lifecycle-preflight verify {phase_identity} --plan phases/{phase_dir}/{plan_id}-PLAN.md --expects-mutation phase-status`
+Use the emitted exact `{phase_identity}` and `{phase_dir}/{plan_id}` chain throughout this workflow. The conventional `{phase_num}` alias is valid only when it resolves uniquely.
 
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring lifecycle eligibility from prompt-local prose.
 
@@ -244,7 +244,7 @@ Recording rules:
 </git_delivery_collection>
 
 <report_format>
-Write `.work/phases/{phase_dir}/{phase_num}-VERIFICATION.md` with structured frontmatter first:
+Write `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md` with structured frontmatter first:
 ```markdown
 ---
 phase: 01-foundation
@@ -366,13 +366,13 @@ Based on the verification result:
 ### `passed`
 
 - phase is ready to move forward
-- write `status: passed` in VERIFICATION.md, then run `node .work/bin/gsdd.mjs phase-status {phase_num} done`
+- write `status: passed` in VERIFICATION.md, then run `node .work/bin/gsdd.mjs phase-status {phase_identity} done`
 - communicate that the phase goal was verified successfully
 
 ### `gaps_found`
 
-- write `status: gaps_found` in VERIFICATION.md and leave ROADMAP.md open (`[-]` or `[ ]`); if it is currently `[x]`, run `node .work/bin/gsdd.mjs phase-status {phase_num} in_progress`
-- do not run `phase-status {phase_num} done`
+- write `status: gaps_found` in VERIFICATION.md and leave ROADMAP.md open (`[-]` or `[ ]`); if it is currently `[x]`, run `node .work/bin/gsdd.mjs phase-status {phase_identity} in_progress`
+- do not run `phase-status {phase_identity} done`
 
 Present a focused recommendation:
 
@@ -385,13 +385,13 @@ Present a focused recommendation:
 - list the exact manual checks
 - state the expected outcome for each one
 - do not convert human-needed status into passed until those checks are acknowledged
-- write `status: human_needed` in VERIFICATION.md and leave ROADMAP.md open (`[-]` or `[ ]`); if it is currently `[x]`, run `node .work/bin/gsdd.mjs phase-status {phase_num} in_progress`
-- do not run `phase-status {phase_num} done`
+- write `status: human_needed` in VERIFICATION.md and leave ROADMAP.md open (`[-]` or `[ ]`); if it is currently `[x]`, run `node .work/bin/gsdd.mjs phase-status {phase_identity} in_progress`
+- do not run `phase-status {phase_identity} done`
 </next_steps>
 <persistence>
 MANDATORY: Write the verification report to disk.
 
-File: `.work/phases/{phase_dir}/{phase_num}-VERIFICATION.md`
+File: `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md`
 
 This is non-negotiable. Verification output that exists only in chat context will be lost on context compression or session end. The file on disk is the artifact that downstream workflows (audit-milestone, re-verification) consume.
 
@@ -399,9 +399,9 @@ If you cannot write the file (permissions, path issue), STOP and report the bloc
 
 Before any ROADMAP closure step, confirm the required phase `SUMMARY.md` still exists on disk. If `SUMMARY.md` is missing, STOP and report the blocker — do NOT treat verification as terminally successful and do NOT close ROADMAP state from conversation context alone.
 
-After writing VERIFICATION.md, if `status: passed`, run `node .work/bin/gsdd.mjs phase-status {phase_num} done` to close the phase entry in `.work/ROADMAP.md`. Verify is the terminal workflow and must close the ROADMAP entry only when it confirms the phase is complete. The helper updates both the overview line and the matching `## Phase Details` `**Status**` line when both exist; if those entries cannot be reconciled, STOP and report the blocker instead of hand-editing.
+After writing VERIFICATION.md, if `status: passed`, run `node .work/bin/gsdd.mjs phase-status {phase_identity} done` to close the phase entry in `.work/ROADMAP.md`. Verify is terminal only when every current PLAN in that exact phase identity has its matching SUMMARY and a `status: passed` VERIFICATION artifact. The helper updates both the overview line and matching `## Phase Details` status; if those entries cannot be reconciled, STOP and report the blocker instead of hand-editing.
 
-If `status: gaps_found` or `status: human_needed`, do not close ROADMAP.md. If ROADMAP currently marks the phase `[x]`, run `node .work/bin/gsdd.mjs phase-status {phase_num} in_progress` to reopen/reconcile both status locations before reporting the result.
+If `status: gaps_found` or `status: human_needed`, do not close ROADMAP.md. If ROADMAP currently marks the phase `[x]`, run `node .work/bin/gsdd.mjs phase-status {phase_identity} in_progress` to reopen/reconcile both status locations before reporting the result.
 </persistence>
 
 <success_criteria>
@@ -431,7 +431,7 @@ Verification is done when all of these are true:
 Report the verification result to the user, then present the next step:
 
 ---
-**Completed:** Phase verification — created `.work/phases/{phase_dir}/{phase_num}-VERIFICATION.md`.
+**Completed:** Phase verification — created `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md`.
 If status is `passed`: **Next step:** `/gsdd-progress` — route to the next phase or milestone audit.
 If status is `gaps_found`: **Next step:** `/gsdd-plan` — re-plan to close the identified gaps.
 If status is `human_needed`: **Next step:** `/gsdd-verify-work`, then rerun `/gsdd-verify` with UAT results.

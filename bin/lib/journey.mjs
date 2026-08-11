@@ -2,9 +2,9 @@
 
 import { execFileSync } from 'child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { basename, join } from 'path';
+import { basename, join, relative } from 'path';
 import { output, parseFlagValue } from './cli-utils.mjs';
-import { evaluateLifecycleState, normalizePhaseToken, readPlanStatus } from './lifecycle-state.mjs';
+import { collectNativePhaseArtifacts, evaluateLifecycleState, normalizePhaseToken, partitionPlanChains, readPlanStatus } from './lifecycle-state.mjs';
 import { assertStateAuthority, resolveStateDir } from './state-dir.mjs';
 import { getWorkPaths, readDecisionRecords, resolveActiveMilestoneDir } from './work-context.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
@@ -85,33 +85,49 @@ function listMilestoneDirs(stateDir, resolvedDir = resolveActiveMilestoneDir(sta
   return dirs.sort((left, right) => basename(left).localeCompare(basename(right)));
 }
 
-function readPhases(milestoneDir) {
+function readPhases(milestoneDir, workspaceRoot, stateDir) {
   const phasesDir = join(milestoneDir, 'phases');
   if (!existsSync(phasesDir)) return [];
-
-  let entries;
+  const partition = partitionPlanChains(
+    collectNativePhaseArtifacts({ workspaceRoot, phasesDir }),
+    { companionKinds: ['execute', 'verification'] }
+  );
+  const identityPrefix = relative(stateDir, phasesDir).replace(/\\/g, '/');
+  const classified = [...partition.currentArtifacts, ...partition.historicalArtifacts]
+    .filter((artifact) => artifact.kind === 'plan')
+    .map((plan) => {
+      const content = readFileSafely(plan.path);
+      return {
+        dir: plan.dir || plan.name,
+        status: normalizeStatus(content === null ? null : readPlanStatus(content)),
+        identity: `${identityPrefix}/${plan.dir}`,
+        plan: relative(stateDir, plan.path).replace(/\\/g, '/'),
+      };
+    });
+  // Keep older bare, nonnumeric PLAN.md packets visible as read-only history.
+  // They deliberately remain outside the lifecycle resolver, which accepts only
+  // classified phase packets for mutation and exact identity selection.
+  let legacy = [];
   try {
-    entries = readdirSync(phasesDir, { withFileTypes: true });
+    legacy = readdirSync(phasesDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && existsSync(join(phasesDir, entry.name, 'PLAN.md')))
+      .filter((entry) => !classified.some((phase) => phase.dir === entry.name))
+      .map((entry) => {
+        const content = readFileSafely(join(phasesDir, entry.name, 'PLAN.md'));
+        return { dir: entry.name, status: normalizeStatus(content === null ? null : readPlanStatus(content)) };
+      });
   } catch {
-    return [];
+    // A partially readable state directory is represented by the classified inventory only.
   }
-
-  return entries
-    .filter((entry) => entry.isDirectory() && existsSync(join(phasesDir, entry.name, 'PLAN.md')))
-    .map((entry) => {
-      const planPath = join(phasesDir, entry.name, 'PLAN.md');
-      const content = readFileSafely(planPath);
-      return { dir: entry.name, status: normalizeStatus(content === null ? null : readPlanStatus(content)) };
-    })
-    .sort((left, right) => left.dir.localeCompare(right.dir));
+  return [...classified, ...legacy].sort((left, right) => left.dir.localeCompare(right.dir));
 }
 
-function readMilestone(milestoneDir) {
+function readMilestone(milestoneDir, workspaceRoot, stateDir) {
   const content = readFileSafely(join(milestoneDir, 'MILESTONE.md'));
   return {
     name: basename(milestoneDir),
     status: statusFromMarkdown(content),
-    phases: readPhases(milestoneDir),
+    phases: readPhases(milestoneDir, workspaceRoot, stateDir),
     path: milestoneDir,
   };
 }
@@ -135,11 +151,30 @@ function phaseTokenFromDir(dir) {
 }
 
 function currentRoadmapPhases(stateDir) {
-  return evaluateLifecycleState({ planningDir: stateDir }).phases.map((phase) => ({
-    dir: roadmapPhaseDir(phase),
-    status: phase.status,
-    token: normalizePhaseToken(phase.number),
-  }));
+  const lifecycle = evaluateLifecycleState({ planningDir: stateDir });
+  return lifecycle.phases.map((phase) => {
+    const token = normalizePhaseToken(phase.number);
+    const directories = [...new Set(
+      lifecycle.phaseArtifacts
+        .filter((artifact) => artifact.kind === 'plan' && artifact.phaseToken === token)
+        .map((artifact) => artifact.dir)
+    )].sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }));
+    const identity = directories.length === 1
+      ? (directories[0] ? `phases/${directories[0]}` : `ROADMAP.md#phase-${token}`)
+      : null;
+    const plans = lifecycle.phaseArtifacts
+      .filter((artifact) => artifact.kind === 'plan' && artifact.phaseToken === token)
+      .map((artifact) => `phases/${artifact.displayPath}`)
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }));
+    return {
+      dir: roadmapPhaseDir(phase),
+      status: phase.status,
+      token,
+      ...(identity ? { identity } : {}),
+      ...(directories.length > 1 ? { choices: directories.map((dir) => `phases/${dir}`) } : {}),
+      ...(plans.length > 0 ? { plans } : {}),
+    };
+  });
 }
 
 function mergeCurrentPhases(historical, current) {
@@ -271,22 +306,40 @@ export function collectJourney({ cwd = process.cwd() } = {}) {
   const decisionWorkDir = getWorkPaths(workspaceRoot).workDir;
   const resolvedActiveDir = resolveActiveMilestoneDir(stateDir);
   const milestoneDirs = listMilestoneDirs(stateDir, resolvedActiveDir);
-  const milestones = milestoneDirs.map(readMilestone);
+  const milestones = milestoneDirs.map((milestoneDir) => readMilestone(milestoneDir, workspaceRoot, stateDir));
   const activeIndex = resolvedActiveDir ? milestones.findIndex((milestone) => milestone.path === resolvedActiveDir) : -1;
   const roadmapPhases = currentRoadmapPhases(stateDir);
   const recentData = collectRecent(workspaceRoot);
   const decisions = collectDecisions(decisionWorkDir);
 
+  // A root ROADMAP is its own authority.  Do not project it into a native
+  // milestone merely because their phase tokens overlap: that hid the source
+  // of truth and let a reader mistake two independent lifecycle packets for
+  // one chain.
+  const rootRoadmap = roadmapPhases.length > 0
+    ? [{
+        name: 'roadmap',
+        status: 'in_progress',
+        phases: roadmapPhases.map(({ dir, status, identity, choices, plans }) => ({
+          dir,
+          status,
+          ...(identity ? { identity } : {}),
+          ...(choices ? { choices } : {}),
+          ...(plans ? { plans } : {}),
+        })),
+        active: true,
+      }]
+    : [];
   const journey = {
-    milestones: milestones.map((milestone, index) => {
-      const active = index === activeIndex;
-      return {
+    milestones: [
+      ...rootRoadmap,
+      ...milestones.map((milestone, index) => ({
         name: milestone.name,
         status: milestone.status,
-        phases: active ? mergeCurrentPhases(milestone.phases, roadmapPhases) : milestone.phases,
-        active,
-      };
-    }),
+        phases: milestone.phases,
+        active: index === activeIndex,
+      })),
+    ],
     recent: recentData.recent || { commits48h: 0, latest: null },
     decisions,
   };

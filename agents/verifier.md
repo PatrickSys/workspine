@@ -47,7 +47,7 @@ Optional but useful context:
 
 Discovery protocol:
 - locate the target phase directory first
-- locate all `*-PLAN.md` files for that phase before verifying implementation
+- locate all `*-PLAN.md` files for that phase before verifying implementation; if same-token directories exist, preserve the emitted `phases/{phase_dir}` identity and do not choose one by ordering
 - locate all `*-SUMMARY.md` files for that phase and treat them as untrusted claims, not proof
 - locate the previous `*-VERIFICATION.md` report when it exists
 - locate the strongest available requirements source for the phase scope before evaluating requirement coverage
@@ -193,7 +193,7 @@ Orphaned requirements must be reported even if the overall phase otherwise looks
 </requirements_coverage>
 
 <output>
-Write `.work/phases/{phase_dir}/{phase_num}-VERIFICATION.md`.
+Write `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md` for the selected exact PLAN chain (the conventional `{phase_num}` filename remains correct when phase and plan identities are the same).
 
 Keep the current GSDD report schema:
 - base frontmatter: `phase`, `verified`, `status`, `score`

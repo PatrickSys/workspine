@@ -94,7 +94,7 @@ describe('gsdd journey', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     const json = JSON.parse(result.output);
     assert.deepStrictEqual(json.milestones[0].phases, [
-      { dir: '03-historical', status: 'superseded' },
+      { dir: '03-historical', status: 'superseded', identity: 'milestones/m1-delivery/phases/03-historical', plan: 'milestones/m1-delivery/phases/03-historical/PLAN.md' },
     ]);
   });
 
@@ -152,8 +152,8 @@ describe('gsdd journey', () => {
     assert.strictEqual(json.milestones.length, 2);
     assert.deepStrictEqual(json.milestones.map((milestone) => milestone.phases.length), [2, 2]);
     assert.deepStrictEqual(json.milestones[1].phases, [
-      { dir: '03-running', status: 'executing' },
-      { dir: '04-malformed', status: 'unknown' },
+      { dir: '03-running', status: 'executing', identity: 'milestones/m1-delivery/phases/03-running', plan: 'milestones/m1-delivery/phases/03-running/PLAN.md' },
+      { dir: '04-malformed', status: 'unknown', identity: 'milestones/m1-delivery/phases/04-malformed', plan: 'milestones/m1-delivery/phases/04-malformed/PLAN.md' },
     ]);
     assert.strictEqual(json.milestones[0].active, false);
     assert.strictEqual(json.milestones[1].active, true);
@@ -161,7 +161,7 @@ describe('gsdd journey', () => {
     assert.strictEqual(json.decisions, null);
   });
 
-  test('projects root roadmap truth only into the active milestone while preserving unique history', async () => {
+  test('keeps root roadmap truth separate from native milestones while preserving unique history', async () => {
     writeMilestone('m0-foundation', 'done', {
       '01-base': '---\nstatus: shipped\n---\n',
       '06-inactive-history': '---\nstatus: planned\n---\n',
@@ -185,17 +185,68 @@ describe('gsdd journey', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     const json = JSON.parse(result.output);
     assert.deepStrictEqual(json.milestones[0].phases, [
-      { dir: '01-base', status: 'shipped' },
-      { dir: '06-inactive-history', status: 'planned' },
-    ]);
-    assert.deepStrictEqual(json.milestones[1].phases, [
-      { dir: '00-history', status: 'shipped' },
       { dir: '06-truth-reconciliation', status: 'done' },
       { dir: '07-decision-delivery', status: 'done' },
       { dir: '08-execute-discipline', status: 'not_started' },
-      { dir: '09-unmatched-history', status: 'blocked' },
+    ]);
+    assert.strictEqual(json.milestones[0].name, 'roadmap');
+    assert.strictEqual(json.milestones[0].active, true);
+    assert.deepStrictEqual(json.milestones[1].phases, [
+      { dir: '01-base', status: 'shipped', identity: 'milestones/m0-foundation/phases/01-base', plan: 'milestones/m0-foundation/phases/01-base/PLAN.md' },
+      { dir: '06-inactive-history', status: 'planned', identity: 'milestones/m0-foundation/phases/06-inactive-history', plan: 'milestones/m0-foundation/phases/06-inactive-history/PLAN.md' },
+    ]);
+    assert.deepStrictEqual(json.milestones[2].phases, [
+      { dir: '00-history', status: 'shipped', identity: 'milestones/m1-delivery/phases/00-history', plan: 'milestones/m1-delivery/phases/00-history/PLAN.md' },
+      { dir: '06-stale-status', status: 'planned', identity: 'milestones/m1-delivery/phases/06-stale-status', plan: 'milestones/m1-delivery/phases/06-stale-status/PLAN.md' },
+      { dir: '09-unmatched-history', status: 'blocked', identity: 'milestones/m1-delivery/phases/09-unmatched-history', plan: 'milestones/m1-delivery/phases/09-unmatched-history/PLAN.md' },
       { dir: 'legacy-note', status: 'planned' },
     ]);
+  });
+
+  test('renders a root ROADMAP as a usable journey without inventing a milestone', async () => {
+    writeFile('.work/ROADMAP.md', '# Roadmap\n\n- [-] **Phase 1: Start here**\n');
+
+    const result = await runCliAsMain(tmpDir, ['journey', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const json = JSON.parse(result.output);
+    assert.deepStrictEqual(json.milestones, [{
+      name: 'roadmap',
+      status: 'in_progress',
+      phases: [{ dir: '01-start-here', status: 'in_progress' }],
+      active: true,
+    }]);
+  });
+
+  test('exposes exact standard plan identities and same-token choices without merging authority', async () => {
+    writeFile('.work/ROADMAP.md', '# Roadmap\n\n- [ ] **Phase 11: Identity**\n');
+    writeFile('.work/phases/11-first/11-1-PLAN.md', '# plan\n');
+    writeFile('.work/phases/11-second/11-2-PLAN.md', '# plan\n');
+
+    const result = await runCliAsMain(tmpDir, ['journey', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const phase = JSON.parse(result.output).milestones[0].phases[0];
+    assert.deepStrictEqual(phase.choices, ['phases/11-first', 'phases/11-second']);
+    assert.strictEqual(phase.identity, undefined);
+  });
+
+  test('uses the shared native inventory for named PLAN packets and exposes exact plan paths', async () => {
+    writeFile('.work/milestone/MILESTONE.md', '---\nstatus: in_progress\n---\n');
+    writeFile('.work/milestone/phases/07-native/7-PLAN.md', '---\nstatus: planned\n---\n');
+    writeFile('.work/ROADMAP.md', '# Roadmap\n\n- [ ] **Phase 7: Root plan**\n');
+    writeFile('.work/phases/07-root/7-PLAN.md', '# plan\n');
+
+    const result = await runCliAsMain(tmpDir, ['journey', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const json = JSON.parse(result.output);
+    const root = json.milestones.find((milestone) => milestone.name === 'roadmap');
+    const native = json.milestones.find((milestone) => milestone.name === 'milestone');
+    assert.deepStrictEqual(root.phases[0].plans, ['phases/07-root/7-PLAN.md']);
+    assert.deepStrictEqual(native.phases, [{
+      dir: '07-native',
+      status: 'planned',
+      identity: 'milestone/phases/07-native',
+      plan: 'milestone/phases/07-native/7-PLAN.md',
+    }]);
   });
 
   test('surfaces root roadmap read failures instead of returning nested fallback JSON', async () => {

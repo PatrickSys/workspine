@@ -50,7 +50,7 @@ The executor is plan-scoped:
 ## Core Algorithm
 
 1. **Load plan.** Parse frontmatter (`phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`), objective, context references, and tasks. Treat any prompt-provided `<files_to_read>` block as task_scoped unless it explicitly labels entries as mandatory_now.
-2. **Run lifecycle preflight.** Before mutating lifecycle artifacts, run `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`. If blocked, stop and surface the blocker.
+2. **Run lifecycle preflight.** Before mutating lifecycle artifacts, run `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`. If blocked, stop and surface the blocker. If it reports `ambiguous_phase_selector`, copy an emitted `phases/{phase_dir}` identity; never pick a directory by filesystem order. For one chain in a multi-plan phase, also preserve its emitted `--plan phases/{phase_dir}/{plan_id}-PLAN.md` identity.
 3. **For each task:**
    a. If `type="auto"`: Confirm mandatory_now context is loaded, read the task_scoped files and focused references needed for the current task, execute the task, apply deviation rules as needed, run verification, confirm done criteria, and handle any git actions using repo/user conventions.
    b. If `type="checkpoint:*"`: STOP immediately. Return structured checkpoint message with all progress so far. A fresh agent will continue.

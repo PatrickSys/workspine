@@ -102,7 +102,7 @@ describe('Superseded PLAN contract parity', () => {
 
     for (const [label, content, boundary] of [
       ['distilled/workflows/execute.md', readWorkflow('execute.md'), '<multi_plan_orchestration>'],
-      ['distilled/workflows/verify.md', readWorkflow('verify.md'), 'If a previous `.work/phases/{phase_dir}/{phase_num}-VERIFICATION.md` exists'],
+      ['distilled/workflows/verify.md', readWorkflow('verify.md'), 'If a previous `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md` exists'],
       ['agents/executor.md', readRole('executor.md'), '## Core Algorithm'],
       ['agents/verifier.md', readRole('verifier.md'), 'Discovery protocol:'],
     ]) {

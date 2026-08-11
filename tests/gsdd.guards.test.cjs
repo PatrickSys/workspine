@@ -3926,7 +3926,7 @@ describe('G44 - Engine Contract Hardening', () => {
       ['plan.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight plan \{phase_num\}/],
       ['plan.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight plan brownfield-change/],
       ['execute.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
-      ['verify.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight verify \{phase_num\} --expects-mutation phase-status/],
+      ['verify.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight verify \{phase_identity\} --plan phases\/\{phase_dir\}\/\{plan_id\}-PLAN\.md --expects-mutation phase-status/],
       ['audit-milestone.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight audit-milestone/],
       ['complete-milestone.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight complete-milestone/],
       ['new-milestone.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight new-milestone/],

@@ -35,7 +35,10 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
   const phases = parseActiveRoadmapPhases(roadmap);
   const phaseStatusAlignment = evaluateRoadmapPhaseStatusAlignment(roadmap);
   const structuralPhaseArtifacts = collectPhaseArtifacts(phasesDir);
-  const { currentArtifacts: phaseArtifacts, historicalArtifacts: historicalPhaseArtifacts } = partitionPlanChains(structuralPhaseArtifacts);
+  const { currentArtifacts: phaseArtifacts, historicalArtifacts: historicalPhaseArtifacts } = partitionPlanChains(
+    structuralPhaseArtifacts,
+    { companionKinds: ['summary', 'verification'] }
+  );
   const enrichedPhases = phases.map((phase) => {
     const matchingArtifacts = phaseArtifacts.filter((artifact) => artifact.phaseToken === phase.number);
     const hasPlan = matchingArtifacts.some((artifact) => artifact.kind === 'plan');
@@ -421,10 +424,277 @@ export function findUnpairedPlanArtifacts(artifacts, { companionKind } = {}) {
 }
 
 /**
+ * Resolve a standard roadmap phase selector without allowing same-token
+ * directories to collapse into the first filesystem entry.  The emitted
+ * `phases/<directory>` spelling is the stable escape hatch for ambiguity.
+ */
+export function resolveStandardPhaseSelection({ lifecycle, selector } = {}) {
+  if (!lifecycle) throw new Error('lifecycle is required');
+  const rawSelector = String(selector || '').trim().replace(/\\/g, '/');
+  if (!rawSelector) return { status: 'missing' };
+  if (rawSelector.startsWith('/') || rawSelector.includes('..')) {
+    return { status: 'invalid', reason: 'invalid_phase_selector' };
+  }
+
+  const plans = (lifecycle.phaseArtifacts || []).filter((artifact) => artifact.kind === 'plan');
+  const candidateForDir = (dir) => {
+    const currentPlans = plans.filter((artifact) => artifact.dir === dir);
+    if (currentPlans.length === 0) return null;
+    const phaseToken = currentPlans[0].phaseToken;
+    return {
+      authority: 'planning',
+      phaseToken,
+      dir,
+      identity: dir ? `phases/${dir}` : `ROADMAP.md#phase-${phaseToken}`,
+      plans: currentPlans.sort(compareArtifactPaths),
+    };
+  };
+
+  if (rawSelector.startsWith('phases/')) {
+    const dir = rawSelector.slice('phases/'.length);
+    if (!dir || dir.split('/').some((part) => !part)) return { status: 'invalid', reason: 'invalid_phase_selector' };
+    const candidate = candidateForDir(dir);
+    return candidate ? { status: 'selected', candidate } : { status: 'missing' };
+  }
+
+  const rootIdentity = rawSelector.match(/^ROADMAP\.md#phase-(\d+(?:\.\d+)*[a-z]?)$/i);
+  if (rootIdentity) {
+    const candidate = candidateForDir('');
+    const phaseToken = normalizePhaseToken(rootIdentity[1]);
+    if (candidate && candidate.phaseToken === phaseToken) return { status: 'selected', candidate };
+    const rootPhase = (lifecycle.phases || []).find((phase) => phase.number === phaseToken);
+    return rootPhase
+      ? {
+          status: 'selected',
+          candidate: { authority: 'planning', phaseToken, dir: null, identity: `ROADMAP.md#phase-${phaseToken}`, plans: [] },
+        }
+      : { status: 'missing' };
+  }
+
+  if (rawSelector.includes('/')) return { status: 'invalid', reason: 'invalid_phase_selector' };
+  const phaseToken = normalizePhaseToken(rawSelector);
+  const candidates = [...new Set(plans.filter((artifact) => artifact.phaseToken === phaseToken).map((artifact) => artifact.dir))]
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }))
+    .map(candidateForDir)
+    .filter(Boolean);
+  if (candidates.length === 1) return { status: 'selected', candidate: candidates[0] };
+  if (candidates.length > 1) return { status: 'ambiguous', choices: candidates.map((candidate) => candidate.identity) };
+
+  const rootPhase = (lifecycle.phases || []).find((phase) => phase.number === phaseToken);
+  if (!rootPhase) return { status: 'missing' };
+  return {
+    status: 'selected',
+    candidate: {
+      authority: 'planning',
+      phaseToken,
+      dir: null,
+      identity: `ROADMAP.md#phase-${phaseToken}`,
+      plans: [],
+    },
+  };
+}
+
+/** Select one current standard plan by its emitted state-relative path. */
+export function resolveStandardPlanSelection({ lifecycle, planPath, phaseSelection = null } = {}) {
+  if (!lifecycle) throw new Error('lifecycle is required');
+  const rawPath = String(planPath || '').trim().replace(/\\/g, '/');
+  if (!rawPath || rawPath.startsWith('/') || rawPath.includes('..') || !rawPath.startsWith('phases/')) {
+    return { status: 'invalid', reason: 'invalid_plan_selector' };
+  }
+  const relativePath = rawPath.slice('phases/'.length);
+  const plan = (lifecycle.phaseArtifacts || []).find(
+    (artifact) => artifact.kind === 'plan' && artifact.displayPath === relativePath
+  );
+  if (!plan) return { status: 'missing' };
+  if (phaseSelection?.status === 'selected' && phaseSelection.candidate.dir !== plan.dir) {
+    return { status: 'invalid', reason: 'plan_phase_mismatch' };
+  }
+  return { status: 'selected', plan };
+}
+
+/** Select one current native PLAN by its emitted milestone-relative path. */
+export function resolveNativePlanSelection({ workspaceRoot, phasesDir, identityPrefix = 'milestone/phases', planPath, phaseSelection = null } = {}) {
+  const rawPath = String(planPath || '').trim().replace(/\\/g, '/');
+  if (!workspaceRoot || !phasesDir || !rawPath || rawPath.startsWith('/') || rawPath.includes('..') || !rawPath.startsWith(`${identityPrefix}/`)) {
+    return { status: 'invalid', reason: 'invalid_plan_selector' };
+  }
+  const relativePath = rawPath.slice(identityPrefix.length + 1);
+  if (!relativePath) return { status: 'invalid', reason: 'invalid_plan_selector' };
+  const partition = partitionPlanChains(
+    collectNativePhaseArtifacts({ workspaceRoot, phasesDir }),
+    { companionKinds: ['execute', 'verification'] }
+  );
+  const plan = partition.currentArtifacts.find((artifact) => (
+    artifact.kind === 'plan'
+      && relative(resolve(phasesDir), artifact.path).replace(/\\/g, '/') === relativePath
+  ));
+  if (!plan) return { status: 'missing' };
+  if (phaseSelection?.status === 'selected' && (
+    phaseSelection.candidate.authority !== 'native' || phaseSelection.candidate.dir !== plan.dir
+  )) {
+    return { status: 'invalid', reason: 'plan_phase_mismatch' };
+  }
+  return { status: 'selected', plan, emittedPath: `${identityPrefix}/${relativePath}` };
+}
+
+/** Resolve a PLAN selector against exactly one already-selected lifecycle authority. */
+export function resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath, phaseSelection = null } = {}) {
+  const authority = phaseSelection?.status === 'selected' ? phaseSelection.candidate.authority : null;
+  if (authority === 'native' || String(planPath || '').replace(/\\/g, '/').startsWith(`${nativeIdentityPrefix}/`)) {
+    return resolveNativePlanSelection({
+      workspaceRoot,
+      phasesDir: nativePhasesDir,
+      identityPrefix: nativeIdentityPrefix,
+      planPath,
+      phaseSelection,
+    });
+  }
+  return resolveStandardPlanSelection({ lifecycle, planPath, phaseSelection });
+}
+
+/** Resolve a Workspine-native milestone phase using the same classifier family. */
+export function resolveNativePhaseSelection({ workspaceRoot, phasesDir, selector, identityPrefix = 'milestone/phases' } = {}) {
+  const rawSelector = String(selector || '').trim().replace(/\\/g, '/');
+  if (!workspaceRoot || !phasesDir || !rawSelector) return { status: 'missing' };
+  if (rawSelector.startsWith('/') || rawSelector.includes('..')) return { status: 'invalid', reason: 'invalid_phase_selector' };
+  const partition = partitionPlanChains(
+    collectNativePhaseArtifacts({ workspaceRoot, phasesDir }),
+    { companionKinds: ['execute', 'verification'] }
+  );
+  const plans = partition.currentArtifacts.filter((artifact) => artifact.kind === 'plan');
+  const candidateForDir = (dir) => {
+    const currentPlans = plans.filter((artifact) => artifact.dir === dir);
+    if (currentPlans.length === 0) return null;
+    const phaseToken = currentPlans[0].phaseToken;
+    return {
+      authority: 'native',
+      phaseToken,
+      dir,
+      identity: `${identityPrefix}/${dir}`,
+      plans: currentPlans.sort(compareArtifactPaths),
+      artifacts: partition.currentArtifacts.filter((artifact) => artifact.dir === dir && artifact.phaseToken === phaseToken),
+    };
+  };
+  if (rawSelector.startsWith(`${identityPrefix}/`)) {
+    const dir = rawSelector.slice(identityPrefix.length + 1);
+    if (!dir || dir.split('/').some((part) => !part)) return { status: 'invalid', reason: 'invalid_phase_selector' };
+    const candidate = candidateForDir(dir);
+    return candidate ? { status: 'selected', candidate } : { status: 'missing' };
+  }
+  if (rawSelector.includes('/')) return { status: 'invalid', reason: 'invalid_phase_selector' };
+  const phaseToken = normalizePhaseToken(rawSelector);
+  const candidates = [...new Set(plans.filter((artifact) => artifact.phaseToken === phaseToken).map((artifact) => artifact.dir))]
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }))
+    .map(candidateForDir)
+    .filter(Boolean);
+  if (candidates.length === 1) return { status: 'selected', candidate: candidates[0] };
+  if (candidates.length > 1) return { status: 'ambiguous', choices: candidates.map((candidate) => candidate.identity) };
+  return { status: 'missing' };
+}
+
+/** Combine standard and native candidates before accepting a bare phase token. */
+export function resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector } = {}) {
+  const standard = resolveStandardPhaseSelection({ lifecycle, selector });
+  const native = resolveNativePhaseSelection({
+    workspaceRoot,
+    phasesDir: nativePhasesDir,
+    selector,
+    identityPrefix: nativeIdentityPrefix,
+  });
+  const raw = String(selector || '');
+  const standardExact = raw.startsWith('phases/') || raw.startsWith('ROADMAP.md#phase-');
+  const nativeExact = nativeIdentityPrefix && raw.startsWith(`${nativeIdentityPrefix}/`);
+  if (standardExact) return { ...standard, standard, native };
+  if (nativeExact) return { ...native, standard, native };
+  const choices = [
+    ...(standard.status === 'selected' ? [standard.candidate.identity] : standard.choices || []),
+    ...(native.status === 'selected' ? [native.candidate.identity] : native.choices || []),
+  ].sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }));
+  if (choices.length > 1) return { status: 'ambiguous', choices, standard, native };
+  if (standard.status === 'selected') return { ...standard, standard, native };
+  if (native.status === 'selected') return { ...native, standard, native };
+  if (standard.status === 'invalid') return { ...standard, standard, native };
+  if (native.status === 'invalid') return { ...native, standard, native };
+  return { status: 'missing', standard, native };
+}
+
+/**
+ * Return the exact closure status for the selected current standard chains.
+ * A verification artifact is evidence only when its own frontmatter states
+ * `status: passed`; filename proximity and other chains cannot satisfy it.
+ */
+export function evaluateStandardPlanClosure({ lifecycle, selection, readFile = readFileSync } = {}) {
+  if (!lifecycle || !selection?.candidate) throw new Error('selected phase identity is required');
+  const plans = selection.candidate.plans || [];
+  const artifacts = lifecycle.phaseArtifacts || [];
+  const chains = plans.map((plan) => {
+    const matching = artifacts.filter((artifact) => artifact.chainKey === plan.chainKey);
+    const summary = matching.find((artifact) => artifact.kind === 'summary') || null;
+    const verification = matching.find((artifact) => artifact.kind === 'verification') || null;
+    let verificationStatus = null;
+    let verificationError = null;
+    if (verification) {
+      try {
+        verificationStatus = readPlanStatus(readFile(verification.path, 'utf-8'));
+      } catch (error) {
+        verificationError = error.message;
+      }
+    }
+    return {
+      plan,
+      summary,
+      verification,
+      verificationStatus,
+      verificationError,
+      complete: Boolean(summary && verification && verificationStatus === 'passed'),
+    };
+  });
+  return {
+    complete: plans.length > 0 && chains.every((chain) => chain.complete),
+    chains,
+  };
+}
+
+export function evaluateNativePlanClosure({ selection, readFile = readFileSync } = {}) {
+  if (!selection?.candidate) throw new Error('selected native phase identity is required');
+  const chains = (selection.candidate.plans || []).map((plan) => {
+    const matching = (selection.candidate.artifacts || []).filter((artifact) => artifact.chainKey === plan.chainKey);
+    const execute = matching.find((artifact) => artifact.kind === 'execute') || null;
+    const verification = matching.find((artifact) => artifact.kind === 'verification') || null;
+    let verificationStatus = null;
+    let verificationError = null;
+    if (verification) {
+      try {
+        verificationStatus = readPlanStatus(readFile(verification.path, 'utf-8'));
+      } catch (error) {
+        verificationError = error.message;
+      }
+    }
+    return {
+      plan,
+      execute,
+      verification,
+      verificationStatus,
+      verificationError,
+      complete: Boolean(execute && verification && verificationStatus === 'passed'),
+    };
+  });
+  return { complete: chains.length > 0 && chains.every((chain) => chain.complete), chains };
+}
+
+function compareArtifactPaths(left, right) {
+  return String(left.displayPath || left.name || '').localeCompare(
+    String(right.displayPath || right.name || ''),
+    undefined,
+    { numeric: true, sensitivity: 'base' }
+  );
+}
+
+/**
  * Partition only a superseded PLAN and its exact configured chain companion.
  * Verification and all unrelated evidence remain visible as current artifacts.
  */
-export function partitionPlanChains(artifacts, { companionKinds = ['summary'], readFile = readFileSync } = {}) {
+export function partitionPlanChains(artifacts, { companionKinds = ['summary', 'verification', 'execute'], readFile = readFileSync } = {}) {
   const source = Array.isArray(artifacts) ? artifacts : [];
   const companionSet = new Set(companionKinds.map((kind) => String(kind).toLowerCase()));
   const historicalChainKeys = new Set();

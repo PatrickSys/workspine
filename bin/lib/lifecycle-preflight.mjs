@@ -8,6 +8,8 @@ import {
   findUnpairedPlanArtifacts,
   normalizePhaseToken,
   partitionPlanChains,
+  resolveLifecyclePlanSelection,
+  resolveLifecyclePhaseSelection,
 } from './lifecycle-state.mjs';
 import {
   buildDecisionsDigest,
@@ -73,6 +75,9 @@ export function evaluateLifecyclePreflight({
   planningDir,
   surface,
   phaseNumber = null,
+  planPath = null,
+  planFlagPresent = false,
+  duplicatePlanFlag = false,
   expectsMutation = 'none',
   controlMapReport = null,
 } = {}) {
@@ -86,17 +91,33 @@ export function evaluateLifecyclePreflight({
   }
 
   const lifecycle = evaluateLifecycleState({ planningDir });
-  const decisionWorkDir = getWorkPaths(resolve(planningDir, '..')).workDir;
-  const normalizedPhase = phaseNumber ? normalizePhaseToken(phaseNumber) : null;
+  const workspaceRoot = resolve(planningDir, '..');
+  const decisionWorkDir = getWorkPaths(workspaceRoot).workDir;
+  const nativeMilestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
+  const nativePhasesDir = join(nativeMilestoneDir, 'phases');
+  const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
+  const selection = phaseNumber ? resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector: phaseNumber }) : null;
+  const normalizedPhase = selection?.candidate?.phaseToken || (phaseNumber ? normalizePhaseToken(phaseNumber) : null);
   const usesBrownfieldAuthority = surface === 'plan' && normalizedPhase === 'brownfield-change';
   const usesPlanAmendAuthority = surface === 'plan' && normalizedPhase === 'amend';
-  const workMilestone = normalizedPhase ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase }) : null;
+  const usesNativeAuthority = selection?.candidate?.authority === 'native';
   const checkpointPath = join(planningDir, '.continue-here.md');
   const stateLabel = createStateLabeler(planningDir);
   const resumeWorkCheckpoint = surface === 'resume'
     ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath })
     : null;
-  const usesWorkAuthority = Boolean(workMilestone?.phaseEntry || resumeWorkCheckpoint);
+  const planSelection = planPath
+    ? resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath, phaseSelection: selection })
+    : null;
+  let workMilestone = normalizedPhase && (usesNativeAuthority || selection?.status !== 'selected')
+    ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase })
+    : null;
+  if (usesNativeAuthority && workMilestone) {
+    const selectedChain = planSelection?.status === 'selected' ? planSelection.plan.chainKey : null;
+    const selectedArtifacts = (selection.candidate.artifacts || []).filter((artifact) => !selectedChain || artifact.chainKey === selectedChain);
+    workMilestone = { ...workMilestone, phaseArtifacts: selectedArtifacts, historicalPhaseArtifacts: [] };
+  }
+  const usesWorkAuthority = Boolean((workMilestone?.phaseEntry && (usesNativeAuthority || selection?.status !== 'selected')) || resumeWorkCheckpoint);
   const usesAlternateAuthority = usesWorkAuthority || usesBrownfieldAuthority || usesPlanAmendAuthority;
   const ownedWrites = usesPlanAmendAuthority
     ? [...policy.ownedWrites, 'roadmap', 'phase-directories']
@@ -104,6 +125,29 @@ export function evaluateLifecyclePreflight({
   const specPath = join(planningDir, 'SPEC.md');
   const milestonesPath = join(planningDir, 'MILESTONES.md');
   const blockers = [];
+
+  if (selection?.status === 'ambiguous') {
+    blockers.push(blocker(
+      'ambiguous_phase_selector',
+      `Phase selector ${phaseNumber} matches multiple current identities; use one of: ${selection.choices.join(', ')}.`,
+      selection.choices
+    ));
+  } else if (selection && !['selected', 'missing'].includes(selection.status)) {
+    blockers.push(blocker(
+      selection.reason || 'invalid_phase_selector',
+      `Phase selector ${phaseNumber} is not an emitted lifecycle identity.`,
+      []
+    ));
+  }
+  if (planFlagPresent && (duplicatePlanFlag || !planPath || planPath.startsWith('--'))) {
+    blockers.push(blocker('invalid_plan_selector', 'The --plan option requires one emitted PLAN path.', []));
+  } else if (planSelection && planSelection.status !== 'selected') {
+    blockers.push(blocker(
+      planSelection.reason || 'missing_plan_selector',
+      `Plan selector ${planPath} does not identify one current PLAN chain.`,
+      []
+    ));
+  }
 
   if (!existsSync(planningDir)) {
     blockers.push(blocker('missing_planning_dir', `${stateLabel('.')} does not exist yet.`, [stateLabel('.')]));
@@ -146,8 +190,8 @@ export function evaluateLifecyclePreflight({
   if (normalizedPhase && !usesBrownfieldAuthority && !usesPlanAmendAuthority) {
     blockers.push(
       ...(usesWorkAuthority
-        ? buildWorkPhaseBlockers({ workMilestone, phaseToken: normalizedPhase, surface })
-        : buildPhaseBlockers({ lifecycle, phaseToken: normalizedPhase, surface, stateLabel }))
+        ? buildWorkPhaseBlockers({ workMilestone, phaseToken: normalizedPhase, surface, planSelection })
+        : buildPhaseBlockers({ lifecycle, phaseToken: normalizedPhase, surface, stateLabel, selection, planSelection }))
     );
   }
 
@@ -232,15 +276,16 @@ export function evaluateLifecyclePreflight({
     warnings.push(...evaluateDecisionDispositionWarnings({
       planningDir,
       decisionWorkDir,
-      phaseToken: normalizedPhase,
-      lifecycle,
-      workMilestone,
+      planPath: planSelection?.plan?.path || (selection?.status === 'selected' && selection.candidate.plans?.length === 1 ? selection.candidate.plans[0].path : null),
     }));
   }
 
   return {
     surface,
     phase: normalizedPhase,
+    plan: planSelection?.status === 'selected'
+      ? (planSelection.emittedPath || `phases/${planSelection.plan.displayPath}`)
+      : null,
     classification: policy.classification,
     ownedWrites,
     explicitLifecycleMutation: policy.explicitLifecycleMutation,
@@ -333,7 +378,7 @@ function controlMapNotice(risk, stateLabel) {
   };
 }
 
-function buildPhaseBlockers({ lifecycle, phaseToken, surface, stateLabel }) {
+function buildPhaseBlockers({ lifecycle, phaseToken, surface, stateLabel, selection = null, planSelection = null }) {
   const blockers = [];
   const phaseEntry = lifecycle.phases.find((phase) => phase.number === phaseToken);
   if (!phaseEntry) {
@@ -347,8 +392,13 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface, stateLabel }) {
     return blockers;
   }
 
-  const planArtifacts = lifecycle.phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken && artifact.kind === 'plan');
-  const pendingPlans = lifecycle.incompletePlans.filter((artifact) => artifact.phaseToken === phaseToken);
+  const selectedDir = selection?.status === 'selected' ? selection.candidate.dir : null;
+  const selectedChain = planSelection?.plan?.chainKey || null;
+  const inSelection = (artifact) => artifact.phaseToken === phaseToken
+    && (selectedDir === null || artifact.dir === selectedDir)
+    && (!selectedChain || artifact.chainKey === selectedChain);
+  const planArtifacts = lifecycle.phaseArtifacts.filter((artifact) => artifact.kind === 'plan' && inSelection(artifact));
+  const pendingPlans = lifecycle.incompletePlans.filter(inSelection);
 
   if (surface === 'execute') {
     if (planArtifacts.length === 0) {
@@ -412,7 +462,7 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
 
   if (!existsSync(roadmapPath)) {
     const allPhaseArtifacts = collectWorkPhaseArtifacts({ workspaceRoot, phasesDir });
-    const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute'] });
+    const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute', 'verification'] });
     const allPlanArtifacts = allPhaseArtifacts.filter((artifact) => artifact.kind === 'plan');
     if (allPlanArtifacts.length === 0) return null;
     const phases = deriveWorkPlanPhases(allPlanArtifacts);
@@ -437,7 +487,7 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
   }
 
   const allPhaseArtifacts = collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken });
-  const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute'] });
+  const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute', 'verification'] });
   return {
     milestoneDir,
     roadmapPath,
@@ -524,12 +574,11 @@ function collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken = null
     .filter((artifact) => !phaseToken || artifact.phaseToken === phaseToken);
 }
 
-function evaluateDecisionDispositionWarnings({ planningDir, decisionWorkDir, phaseToken, lifecycle, workMilestone }) {
+function evaluateDecisionDispositionWarnings({ planningDir, decisionWorkDir, planPath = null }) {
   const state = readJsonIfExists(join(planningDir, 'state.json'));
   const persisted = state.ok ? state.value?.lastDecisionsDigest : null;
   if (!persisted || !Array.isArray(persisted.records) || persisted.records.length === 0) return [];
 
-  const planPath = findActivePlanPath({ planningDir, phaseToken, lifecycle, workMilestone });
   const dispositions = planPath && existsSync(planPath)
     ? parsePlanFrontmatter(readFileSync(planPath, 'utf-8')).decision_dispositions
     : null;
@@ -573,19 +622,13 @@ function evaluateDecisionDispositionWarnings({ planningDir, decisionWorkDir, pha
   return warnings;
 }
 
-function findActivePlanPath({ planningDir, phaseToken, lifecycle, workMilestone }) {
-  const workPlan = workMilestone?.phaseArtifacts?.find((artifact) => artifact.kind === 'plan');
-  if (workPlan?.path) return workPlan.path;
-  const plan = lifecycle.phaseArtifacts?.find((artifact) => artifact.phaseToken === phaseToken && artifact.kind === 'plan');
-  if (!plan) return null;
-  return join(planningDir, 'phases', plan.dir, plan.name);
-}
-
-function buildWorkPhaseBlockers({ workMilestone, phaseToken, surface }) {
+function buildWorkPhaseBlockers({ workMilestone, phaseToken, surface, planSelection = null }) {
   const blockers = [];
-  const planArtifacts = workMilestone.phaseArtifacts.filter((artifact) => artifact.kind === 'plan');
-  const executeArtifacts = workMilestone.phaseArtifacts.filter((artifact) => artifact.kind === 'execute');
-  const pendingPlans = findUnpairedPlanArtifacts(workMilestone.phaseArtifacts, { companionKind: 'execute' });
+  const selectedChain = planSelection?.status === 'selected' ? planSelection.plan.chainKey : null;
+  const selectedArtifacts = workMilestone.phaseArtifacts.filter((artifact) => !selectedChain || artifact.chainKey === selectedChain);
+  const planArtifacts = selectedArtifacts.filter((artifact) => artifact.kind === 'plan');
+  const executeArtifacts = selectedArtifacts.filter((artifact) => artifact.kind === 'execute');
+  const pendingPlans = findUnpairedPlanArtifacts(selectedArtifacts, { companionKind: 'execute' });
 
   if (surface === 'execute') {
     if (planArtifacts.length === 0) {
@@ -820,6 +863,9 @@ export function cmdLifecyclePreflight(...args) {
 
   let phaseNumber = maybePhase && !maybePhase.startsWith('--') ? maybePhase : null;
   let expectsMutation = 'none';
+  let planPath = null;
+  let planFlagPresent = false;
+  let duplicatePlanFlag = false;
 
   const flagArgs = phaseNumber ? rest : [maybePhase, ...rest].filter(Boolean);
   for (let index = 0; index < flagArgs.length; index += 1) {
@@ -827,11 +873,16 @@ export function cmdLifecyclePreflight(...args) {
     if (arg === '--expects-mutation') {
       expectsMutation = flagArgs[index + 1] ?? 'none';
       index += 1;
+    } else if (arg === '--plan') {
+      if (planFlagPresent) duplicatePlanFlag = true;
+      planFlagPresent = true;
+      planPath = flagArgs[index + 1] ?? null;
+      index += 1;
     }
   }
 
   try {
-    const result = evaluateLifecyclePreflight({ planningDir, surface, phaseNumber, expectsMutation });
+    const result = evaluateLifecyclePreflight({ planningDir, surface, phaseNumber, planPath, planFlagPresent, duplicatePlanFlag, expectsMutation });
     output(result);
     if (!result.allowed) {
       process.exitCode = 1;

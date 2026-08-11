@@ -1436,7 +1436,7 @@ export function inspectWorkMilestone(workDir) {
   for (const artifact of artifacts) {
     if (!phaseEntries.includes(artifact.dir)) phaseEntries.push(artifact.dir);
   }
-  const { currentArtifacts, historicalArtifacts } = partitionPlanChains(artifacts, { companionKinds: ['execute'] });
+  const { currentArtifacts, historicalArtifacts } = partitionPlanChains(artifacts, { companionKinds: ['execute', 'verification'] });
   const phases = phaseEntries.map((dir) => ({
     dir,
     plans: currentArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'plan').map((artifact) => artifact.name),
@@ -1444,6 +1444,7 @@ export function inspectWorkMilestone(workDir) {
     verifies: currentArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'verification').map((artifact) => artifact.name),
     historical_plans: historicalArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'plan').map((artifact) => artifact.name),
     historical_executes: historicalArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'execute').map((artifact) => artifact.name),
+    historical_verifies: historicalArtifacts.filter((artifact) => artifact.dir === dir && artifact.kind === 'verification').map((artifact) => artifact.name),
   }));
   const roadmapPhaseLines = (roadmap || '').split(/\r?\n/).filter((line) => /^\s*-\s+\[[ x-]\]\s+\*\*Phase\s+/i.test(line));
   const completePhaseLines = roadmapPhaseLines.filter((line) => /^\s*-\s+\[x\]/i.test(line));
@@ -1457,7 +1458,7 @@ export function inspectWorkMilestone(workDir) {
     phase_count: phases.length,
     phase_packet_count: phases.reduce((count, phase) => count + phase.plans.length + phase.executes.length + phase.verifies.length, 0),
     actionable_phase_packet_count: phases.reduce((count, phase) => count + phase.plans.length + phase.executes.length, 0),
-    historical_phase_packet_count: phases.reduce((count, phase) => count + phase.historical_plans.length + phase.historical_executes.length, 0),
+    historical_phase_packet_count: phases.reduce((count, phase) => count + phase.historical_plans.length + phase.historical_executes.length + phase.historical_verifies.length, 0),
     roadmap_phase_count: roadmapPhaseLines.length,
     roadmap_complete_phase_count: completePhaseLines.length,
     roadmap_all_complete: roadmapPhaseLines.length > 0 && roadmapPhaseLines.length === completePhaseLines.length,

@@ -6,7 +6,16 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, realpathSync } from 'fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
-import { evaluateLifecycleState, normalizePhaseToken, readPlanStatus } from './lifecycle-state.mjs';
+import {
+  evaluateLifecycleState,
+  evaluateNativePlanClosure,
+  evaluateStandardPlanClosure,
+  normalizePhaseToken,
+  readPlanStatus,
+  resolveLifecyclePlanSelection,
+  resolveLifecyclePhaseSelection,
+} from './lifecycle-state.mjs';
+import { getWorkPaths, resolveActiveMilestoneDir } from './work-context.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { assertStateAuthority } from './state-dir.mjs';
 
@@ -940,7 +949,6 @@ export function cmdPhaseStatus(...args) {
     return;
   }
   if (!requireStateAuthority(state)) return;
-  const roadmapPath = join(planningDir, 'ROADMAP.md');
   const stateName = basename(planningDir);
   const [phaseNumber, status] = normalizedArgs;
 
@@ -950,20 +958,71 @@ export function cmdPhaseStatus(...args) {
     return;
   }
 
-  if (!existsSync(roadmapPath)) {
-    console.error('No ROADMAP.md found. Run the new-project workflow first.');
-    process.exitCode = 1;
-    return;
-  }
-
   try {
+    const lifecycle = evaluateLifecycleState({ planningDir });
+    const workspaceRoot = resolve(planningDir, '..');
+    const workDir = getWorkPaths(workspaceRoot).workDir;
+    const nativeMilestoneDir = resolveActiveMilestoneDir(workDir);
+    const nativePhasesDir = join(nativeMilestoneDir, 'phases');
+    const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
+    const selection = resolveLifecyclePhaseSelection({
+      lifecycle,
+      workspaceRoot,
+      nativePhasesDir,
+      nativeIdentityPrefix,
+      selector: phaseNumber,
+    });
+    if (selection.status !== 'selected') {
+      output({
+        error: selection.status === 'ambiguous' ? 'ambiguous_phase_selector' : selection.reason || 'missing_phase',
+        phase: phaseNumber,
+        choices: selection.choices || [],
+      });
+      process.exitCode = 1;
+      return;
+    }
+    const isNative = selection.candidate.authority === 'native';
+    const roadmapPath = isNative ? join(nativeMilestoneDir, 'ROADMAP.md') : join(planningDir, 'ROADMAP.md');
+    if (!existsSync(roadmapPath)) {
+      console.error('No ROADMAP.md found. Run the new-project workflow first.');
+      process.exitCode = 1;
+      return;
+    }
     const roadmap = readFileSync(roadmapPath, 'utf-8');
-    const updated = updateRoadmapPhaseStatus(roadmap, phaseNumber, status);
+    const updated = updateRoadmapPhaseStatus(roadmap, selection.candidate.phaseToken, status);
     const changed = updated !== roadmap;
+    if (status === 'done') {
+      const closure = isNative
+        ? evaluateNativePlanClosure({ selection })
+        : evaluateStandardPlanClosure({ lifecycle, selection });
+      if (!closure.complete) {
+        output({
+          error: 'incomplete_phase_closure',
+          phase: selection.candidate.phaseToken,
+          identity: selection.candidate.identity,
+          chains: closure.chains.map((chain) => ({
+            plan: chain.plan.displayPath,
+            ...(isNative ? { execute: chain.execute?.displayPath || null } : { summary: chain.summary?.displayPath || null }),
+            verification: chain.verification?.displayPath || null,
+            verificationStatus: chain.verificationStatus,
+            verificationError: chain.verificationError,
+            complete: chain.complete,
+          })),
+        });
+        process.exitCode = 1;
+        return;
+      }
+    }
     if (changed) {
       writeFileSync(roadmapPath, updated);
     }
-    output({ phase: phaseNumber, status, roadmap: `${stateName}/ROADMAP.md`, changed });
+    output({
+      phase: selection.candidate.phaseToken,
+      identity: selection.candidate.identity,
+      status,
+      roadmap: relative(workspaceRoot, roadmapPath).replace(/\\/g, '/'),
+      changed,
+    });
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
@@ -986,26 +1045,40 @@ export function cmdFindPhase(...args) {
     return;
   }
 
-  const roadmapPath = join(planningDir, 'ROADMAP.md');
-  if (!existsSync(roadmapPath)) {
-    output({ error: 'No ROADMAP.md found. Run the new-project workflow first.' });
-    return;
-  }
-
+  const workspaceRoot = resolve(planningDir, '..');
   const phasesDir = join(planningDir, 'phases');
   const researchDir = join(planningDir, 'research');
   const lifecycle = evaluateLifecycleState({ planningDir });
 
   if (phaseNum) {
-    const phaseToken = normalizePhaseToken(phaseNum);
-    const artifacts = lifecycle.phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
-    const historicalArtifacts = lifecycle.historicalPhaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
+    const nativeMilestoneDir = resolveActiveMilestoneDir(getWorkPaths(workspaceRoot).workDir);
+    const nativePhasesDir = join(nativeMilestoneDir, 'phases');
+    const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
+    const selection = resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector: phaseNum });
+    if (selection.status !== 'selected') {
+      output({
+        error: selection.status === 'ambiguous' ? 'ambiguous_phase_selector' : selection.reason || 'missing_phase',
+        phase: phaseNum,
+        choices: selection.choices || [],
+      });
+      process.exitCode = 1;
+      return;
+    }
+    const isNative = selection.candidate.authority === 'native';
+    const artifacts = isNative
+      ? selection.candidate.artifacts || []
+      : lifecycle.phaseArtifacts.filter((artifact) => artifact.phaseToken === selection.candidate.phaseToken && (selection.candidate.dir === null || artifact.dir === selection.candidate.dir));
+    const historicalArtifacts = isNative
+      ? []
+      : lifecycle.historicalPhaseArtifacts.filter((artifact) => artifact.phaseToken === selection.candidate.phaseToken && (selection.candidate.dir === null || artifact.dir === selection.candidate.dir));
     const plans = artifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath);
-    const summaries = artifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath);
+    const summaries = artifacts.filter((artifact) => artifact.kind === (isNative ? 'execute' : 'summary')).map((artifact) => artifact.displayPath);
 
     output({
-      phase: phaseToken,
-      directory: phasesDir,
+      phase: selection.candidate.phaseToken,
+      identity: selection.candidate.identity,
+      authority: selection.candidate.authority,
+      directory: isNative ? nativePhasesDir : phasesDir,
       plans,
       summaries,
       historical: {
@@ -1015,6 +1088,12 @@ export function cmdFindPhase(...args) {
       hasResearch: existsSync(researchDir) && readdirSync(researchDir).length > 0,
       incomplete: plans.filter((p) => !summaries.some((s) => s.replace('SUMMARY', '') === p.replace('PLAN', ''))),
     });
+    return;
+  }
+
+  const roadmapPath = join(planningDir, 'ROADMAP.md');
+  if (!existsSync(roadmapPath)) {
+    output({ error: 'No ROADMAP.md found. Run the new-project workflow first.' });
     return;
   }
 
@@ -1039,6 +1118,10 @@ export function buildPhaseVerificationReport(...args) {
     return { ok: false, error, exitCode: 1 };
   }
   const phaseNum = normalizedArgs[0];
+  const planFlagIndex = normalizedArgs.indexOf('--plan');
+  const planFlagPresent = planFlagIndex !== -1;
+  const duplicatePlanFlag = normalizedArgs.filter((arg) => arg === '--plan').length > 1;
+  const requestedPlan = planFlagPresent ? normalizedArgs[planFlagIndex + 1] || null : null;
   if (!phaseNum) {
     return { ok: false, error: 'Usage: gsdd verify <phase-number>', exitCode: 1 };
   }
@@ -1049,12 +1132,111 @@ export function buildPhaseVerificationReport(...args) {
   }
   const phasesDir = join(planningDir, 'phases');
   const lifecycle = evaluateLifecycleState({ planningDir });
-  const phaseToken = normalizePhaseToken(phaseNum);
-  const matchingArtifacts = lifecycle.phaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
-  const matchingHistoricalArtifacts = lifecycle.historicalPhaseArtifacts.filter((artifact) => artifact.phaseToken === phaseToken);
+  if (planFlagPresent && (duplicatePlanFlag || !requestedPlan || requestedPlan.startsWith('--'))) {
+    return { ok: true, result: { error: 'invalid_plan_selector', phase: phaseNum, plan: requestedPlan }, exitCode: 1 };
+  }
+  const nativeMilestoneDir = resolveActiveMilestoneDir(getWorkPaths(workspaceRoot).workDir);
+  const nativePhasesDir = join(nativeMilestoneDir, 'phases');
+  const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
+  let phaseSelection = resolveLifecyclePhaseSelection({
+    lifecycle,
+    workspaceRoot,
+    nativePhasesDir,
+    nativeIdentityPrefix,
+    selector: phaseNum,
+  });
+  if (phaseSelection.status === 'missing' && !requestedPlan) {
+    phaseSelection = {
+      status: 'selected',
+      candidate: {
+        authority: 'planning',
+        phaseToken: normalizePhaseToken(phaseNum),
+        dir: null,
+        identity: `ROADMAP.md#phase-${normalizePhaseToken(phaseNum)}`,
+        plans: [],
+      },
+    };
+  }
+  if (phaseSelection.status !== 'selected') {
+    return {
+      ok: true,
+      result: {
+        error: phaseSelection.status === 'ambiguous' ? 'ambiguous_phase_selector' : phaseSelection.reason || 'missing_phase',
+        phase: normalizePhaseToken(phaseNum),
+        choices: phaseSelection.choices || [],
+      },
+      exitCode: 1,
+    };
+  }
+  if (phaseSelection.candidate.authority === 'native') {
+    const planSelection = requestedPlan
+      ? resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath: requestedPlan, phaseSelection })
+      : null;
+    if (planSelection && planSelection.status !== 'selected') {
+      return {
+        ok: true,
+        result: { error: planSelection.reason || 'missing_plan_selector', phase: phaseSelection.candidate.phaseToken, identity: phaseSelection.candidate.identity, plan: requestedPlan },
+        exitCode: 1,
+      };
+    }
+    const selectedChain = planSelection?.plan?.chainKey || null;
+    const scopedSelection = selectedChain
+      ? {
+          ...phaseSelection,
+          candidate: {
+            ...phaseSelection.candidate,
+            plans: phaseSelection.candidate.plans.filter((plan) => plan.chainKey === selectedChain),
+            artifacts: (phaseSelection.candidate.artifacts || []).filter((artifact) => artifact.chainKey === selectedChain),
+          },
+        }
+      : phaseSelection;
+    const closure = evaluateNativePlanClosure({ selection: scopedSelection });
+    const artifacts = scopedSelection.candidate.artifacts || [];
+    const result = {
+      phase: scopedSelection.candidate.phaseToken,
+      identity: scopedSelection.candidate.identity,
+      ...(planSelection?.emittedPath ? { plan: planSelection.emittedPath } : {}),
+      exists: scopedSelection.candidate.plans.length > 0,
+      plans: scopedSelection.candidate.plans.map((artifact) => artifact.displayPath),
+      executes: artifacts.filter((artifact) => artifact.kind === 'execute').map((artifact) => artifact.displayPath),
+      verifications: artifacts.filter((artifact) => artifact.kind === 'verification').map((artifact) => artifact.displayPath),
+      verified: closure.complete,
+      native_verified: closure.complete,
+      prerequisite_status: { satisfied: closure.complete, blockers: closure.complete ? [] : [{ code: 'incomplete_native_phase_closure', severity: 'blocker' }] },
+      blocked_on: closure.complete ? [] : ['prerequisites'],
+      blocks_verification: !closure.complete,
+    };
+    return { ok: true, result, exitCode: closure.complete ? 0 : 1 };
+  }
+  const planSelection = requestedPlan
+    ? resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath: requestedPlan, phaseSelection })
+    : null;
+  if (planSelection && planSelection.status !== 'selected') {
+    return {
+      ok: true,
+      result: {
+        error: planSelection.reason || 'missing_plan_selector',
+        phase: phaseSelection.candidate.phaseToken,
+        identity: phaseSelection.candidate.identity,
+        plan: requestedPlan,
+      },
+      exitCode: 1,
+    };
+  }
+  const phaseToken = phaseSelection.candidate.phaseToken;
+  const matchingArtifacts = lifecycle.phaseArtifacts.filter((artifact) => (
+    phaseSelection.candidate.dir === null
+      ? artifact.phaseToken === phaseToken
+      : artifact.dir === phaseSelection.candidate.dir
+  ) && (!planSelection || artifact.chainKey === planSelection.plan.chainKey));
+  const matchingHistoricalArtifacts = lifecycle.historicalPhaseArtifacts.filter((artifact) => (
+    phaseSelection.candidate.dir === null
+      ? artifact.phaseToken === phaseToken
+      : artifact.dir === phaseSelection.candidate.dir
+  ));
   const matchingPlans = matchingArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath);
   const matchingSummaries = matchingArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath);
-  const incompletePlans = lifecycle.incompletePlans.filter((artifact) => artifact.phaseToken === phaseToken);
+  const incompletePlans = lifecycle.incompletePlans.filter((artifact) => matchingPlans.includes(artifact.displayPath));
   const prerequisiteBlockers = [];
   if (matchingPlans.length === 0) {
     prerequisiteBlockers.push({
@@ -1122,6 +1304,7 @@ export function buildPhaseVerificationReport(...args) {
 
   const result = {
     phase: normalizePhaseToken(phaseNum),
+    identity: phaseSelection.candidate.identity,
     exists: matchingPlans.length > 0,
     plans: matchingPlans,
     summaries: matchingSummaries,

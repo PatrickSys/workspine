@@ -1083,12 +1083,13 @@ describe('next command routing', () => {
     const milestone = await inspectWorkMilestone(path.join(tmpDir, '.work'));
     assert.deepStrictEqual(milestone.phases[0].plans, []);
     assert.deepStrictEqual(milestone.phases[0].executes, []);
-    assert.deepStrictEqual(milestone.phases[0].verifies, ['01-VERIFY.md']);
+    assert.deepStrictEqual(milestone.phases[0].verifies, []);
     assert.deepStrictEqual(milestone.phases[0].historical_plans, ['01-PLAN.md']);
     assert.deepStrictEqual(milestone.phases[0].historical_executes, ['01-EXECUTE.md']);
-    assert.strictEqual(milestone.phase_packet_count, 1);
+    assert.deepStrictEqual(milestone.phases[0].historical_verifies, ['01-VERIFY.md']);
+    assert.strictEqual(milestone.phase_packet_count, 0);
     assert.strictEqual(milestone.actionable_phase_packet_count, 0);
-    assert.strictEqual(milestone.historical_phase_packet_count, 2);
+    assert.strictEqual(milestone.historical_phase_packet_count, 3);
 
     const result = await runJson(['next', '--json']);
     assert.notStrictEqual(result.state, 'verify');
@@ -1125,7 +1126,7 @@ describe('next command routing', () => {
     assert.notStrictEqual(result.state, 'verify');
   });
 
-  test('native same-directory packets partition only the superseded phase token and preserve current verify routing', async () => {
+  test('native same-directory packets keep a superseded chain fully historical and preserve current verify routing', async () => {
     await initWork();
     writeFile('.work/milestone/MILESTONE.md', '# Milestone\n');
     writeFile('.work/milestone/ROADMAP.md', '# Roadmap\n\n- [ ] **Phase 1: Mixed packets**\n');
@@ -1141,13 +1142,14 @@ describe('next command routing', () => {
       dir: 'mixed',
       plans: ['02-PLAN.md'],
       executes: ['02-EXECUTE.md'],
-      verifies: ['01-VERIFY.md', '02-VERIFY.md'],
+      verifies: ['02-VERIFY.md'],
       historical_plans: ['01-PLAN.md'],
       historical_executes: ['01-EXECUTE.md'],
+      historical_verifies: ['01-VERIFY.md'],
     });
-    assert.strictEqual(milestone.phase_packet_count, 4);
+    assert.strictEqual(milestone.phase_packet_count, 3);
     assert.strictEqual(milestone.actionable_phase_packet_count, 2);
-    assert.strictEqual(milestone.historical_phase_packet_count, 2);
+    assert.strictEqual(milestone.historical_phase_packet_count, 3);
 
     const result = await runJson(['next', '--json']);
     assert.strictEqual(result.state, 'verify');
@@ -1282,7 +1284,7 @@ describe('next command routing', () => {
     assert.match(result.reason, /summaries exist without matching verification/);
   });
 
-  test('historical-only standard plan chain routes to plan rather than verification', async () => {
+  test('historical-only standard plan chain keeps every companion historical and routes to plan', async () => {
     await initWork();
     writeFile('.work/SPEC.md', '# Spec\n');
     writeJson('.work/config.json', { initVersion: 1 });
@@ -1297,7 +1299,7 @@ describe('next command routing', () => {
       dir: '01-historical',
       plans: [],
       summaries: [],
-      verifications: ['01-VERIFICATION.md'],
+      verifications: [],
       historical_plans: ['01-PLAN.md'],
       historical_summaries: ['01-SUMMARY.md'],
     }]);

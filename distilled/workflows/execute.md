@@ -25,7 +25,6 @@ Consult deeper `.work/SPEC.md` and `.work/ROADMAP.md` sections only for the spec
 ### deferred_or_conditional
 Read only when the current task or a deviation needs them: older phase summaries and broader historical context beyond the mandatory-now handoff.
 </load_context>
-
 <repo_root_helper_contract>
 All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
@@ -33,6 +32,7 @@ All `node .work/bin/gsdd.mjs ...` helper commands below assume the current worki
 <lifecycle_preflight>
 Before implementing or mutating any lifecycle artifact, run:
 - `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
+On `ambiguous_phase_selector`, use the emitted `phases/{phase_dir}` identity; for one plan, retain `--plan phases/{phase_dir}/{plan_id}-PLAN.md` through preflight and summary creation.
 If the preflight result is `blocked`, STOP and surface the blocker instead of inferring eligibility from workflow-local prose.
 
 Treat the preflight as an authorization seam over shared repo truth only:

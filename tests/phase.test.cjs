@@ -28,6 +28,14 @@ function writeProjectFile(root, relativePath, content) {
   fs.writeFileSync(fullPath, content);
 }
 
+function writePassedStandardChain(root, phase = '18') {
+  const dir = path.join(root, '.work', 'phases', `${phase}-closure`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${phase}-PLAN.md`), '# plan\n');
+  fs.writeFileSync(path.join(dir, `${phase}-SUMMARY.md`), '# summary\n');
+  fs.writeFileSync(path.join(dir, `${phase}-VERIFICATION.md`), '---\nstatus: passed\n---\n# verification\n');
+}
+
 function initPreflightGitWorkspace(root) {
   git(['init'], root);
   git(['config', 'user.email', 'test@example.com'], root);
@@ -223,6 +231,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[-\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
 
+    writePassedStandardChain(tmpDir, '18');
     result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[x\] \*\*Phase 18: Deterministic CLI Mechanics\*\*/);
@@ -250,6 +259,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
       roadmapPath,
       '# Roadmap\n\n* [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
     );
+    writePassedStandardChain(tmpDir, '18');
 
     const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -274,6 +284,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
         '',
       ].join('\n')
     );
+    writePassedStandardChain(tmpDir, '18');
 
     const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -397,6 +408,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     const original = '# Roadmap\n\n- [x] **Phase 18: Deterministic CLI Mechanics** - goal\n';
     fs.writeFileSync(roadmapPath, original);
+    writePassedStandardChain(tmpDir, '18');
 
     const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -414,6 +426,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
       roadmapPath,
       '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
     );
+    writePassedStandardChain(tmpDir, '18');
 
     const result = await runCliAsMain(nestedDir, ['phase-status', '18', 'done']);
     assert.strictEqual(result.exitCode, 0, result.output);
@@ -432,6 +445,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
       roadmapPath,
       '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
     );
+    writePassedStandardChain(tmpDir, '18');
 
     const output = execFileSync(
       process.execPath,
@@ -457,6 +471,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
       path.join(tmpDir, '.work', 'ROADMAP.md'),
       '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
     );
+    writePassedStandardChain(tmpDir, '18');
 
     const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'complete']);
     assert.notStrictEqual(result.exitCode, 0, 'invalid phase status should fail');
@@ -539,6 +554,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
       roadmapPath,
       '# Roadmap\n\n- [ ] **Phase 18: Deterministic CLI Mechanics** - goal\n'
     );
+    writePassedStandardChain(tmpDir, '18');
 
     process.chdir(tmpDir);
     try {
@@ -566,7 +582,7 @@ describe('Phase 29 lifecycle-state helper', () => {
     cleanup(tmpDir);
   });
 
-  test('uses one strict status parser and partitions only the exact superseded chain', async () => {
+  test('uses one strict status parser and partitions the complete exact superseded chain', async () => {
     const mod = await importLifecycleStateModule();
     assert.strictEqual(mod.readPlanStatus('---\r\nstatus: "SuPeRsEdEd" # old chain\r\n---\r\n# plan\r\n'), 'superseded');
     assert.strictEqual(mod.isSupersededPlanContent('---\nstatus: superseded\n---\n'), true);
@@ -591,8 +607,8 @@ describe('Phase 29 lifecycle-state helper', () => {
     const partition = mod.partitionPlanChains(artifacts, {
       readFile: (filePath) => filePath === planPath ? '---\nstatus: superseded\n---\n' : '# current\n',
     });
-    assert.deepStrictEqual(partition.historicalArtifacts.map((artifact) => artifact.name), ['01-1-PLAN.md', '01-1-SUMMARY.md']);
-    assert.deepStrictEqual(partition.currentArtifacts.map((artifact) => artifact.name), ['01-1-VERIFICATION.md', '01-2-PLAN.md']);
+    assert.deepStrictEqual(partition.historicalArtifacts.map((artifact) => artifact.name), ['01-1-PLAN.md', '01-1-SUMMARY.md', '01-1-VERIFICATION.md']);
+    assert.deepStrictEqual(partition.currentArtifacts.map((artifact) => artifact.name), ['01-2-PLAN.md']);
     assert.throws(() => mod.partitionPlanChains(artifacts, { readFile: () => { throw new Error('injected read failure'); } }), /injected read failure/);
     assert.throws(() => mod.partitionPlanChains([{ kind: 'plan', path: planPath, name: 'missing-key-PLAN.md' }]), /missing a normalized chain key/);
     assert.throws(() => mod.partitionPlanChains([{ kind: 'summary', path: summaryPath, name: 'missing-key-SUMMARY.md' }]), /missing a normalized chain key/);
@@ -656,7 +672,7 @@ describe('Phase 29 lifecycle-state helper', () => {
     );
   });
 
-  test('keeps superseded standard plan and summary historical while preserving verification evidence', async () => {
+  test('keeps every superseded standard chain companion historical', async () => {
     fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), '# Roadmap\n\n- [-] **Phase 29: Current Work**\n');
     const phaseDir = path.join(tmpDir, '.work', 'phases', '29-contract-inventory-and-claim-narrowing');
     fs.writeFileSync(path.join(phaseDir, '29-1-PLAN.md'), '---\nstatus: superseded\n---\n# old\n');
@@ -667,8 +683,8 @@ describe('Phase 29 lifecycle-state helper', () => {
 
     const mod = await importLifecycleStateModule();
     const state = mod.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
-    assert.deepStrictEqual(state.phaseArtifacts.map((artifact) => artifact.name), ['29-1-VERIFICATION.md', '29-2-PLAN.md', '29-2-SUMMARY.md']);
-    assert.deepStrictEqual(state.historicalPhaseArtifacts.map((artifact) => artifact.name), ['29-1-PLAN.md', '29-1-SUMMARY.md']);
+    assert.deepStrictEqual(state.phaseArtifacts.map((artifact) => artifact.name), ['29-2-PLAN.md', '29-2-SUMMARY.md']);
+    assert.deepStrictEqual(state.historicalPhaseArtifacts.map((artifact) => artifact.name), ['29-1-PLAN.md', '29-1-SUMMARY.md', '29-1-VERIFICATION.md']);
     assert.deepStrictEqual(state.incompletePlans, []);
 
     const execute = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '29', '--expects-mutation', 'phase-status']);
@@ -1111,6 +1127,166 @@ describe('Phase 29 lifecycle-state helper', () => {
     assert.deepStrictEqual(state.phaseStatusAlignment.mismatches, []);
     assert.strictEqual(state.counts.total, 1);
     assert.strictEqual(state.nextPhase.number, '1');
+  });
+});
+
+describe('Phase 04 exact lifecycle identity and closure', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createGsddTempProject();
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '11-first'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.work', 'phases', '11-second'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.work', 'SPEC.md'), '# Spec\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), '{}\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), '# Roadmap\n\n- [ ] **Phase 11: Exact closure**\n');
+  });
+
+  afterEach(() => cleanup(tmpDir));
+
+  test('never silently selects a colliding phase token', async () => {
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '11-first', '11-PLAN.md'), '# first\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '11-second', '11-PLAN.md'), '# second\n');
+
+    const result = await runCliAsMain(tmpDir, ['verify', '11']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const body = JSON.parse(result.output);
+    assert.strictEqual(body.error, 'ambiguous_phase_selector');
+    assert.deepStrictEqual(body.choices, ['phases/11-first', 'phases/11-second']);
+
+    const preflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', '11', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(preflight.exitCode, 1, preflight.output);
+    assert.strictEqual(JSON.parse(preflight.output).reason, 'ambiguous_phase_selector');
+  });
+
+  test('preflight accepts an exact current PLAN selector but refuses path escape and phase mismatch', async () => {
+    const first = path.join(tmpDir, '.work', 'phases', '11-first');
+    fs.writeFileSync(path.join(first, '11-PLAN.md'), '# plan\n');
+    fs.writeFileSync(path.join(first, '11-SUMMARY.md'), '# summary\n');
+
+    const exact = await runCliAsMain(tmpDir, [
+      'lifecycle-preflight', 'verify', 'phases/11-first', '--plan', 'phases/11-first/11-PLAN.md', '--expects-mutation', 'phase-status',
+    ]);
+    assert.strictEqual(exact.exitCode, 0, exact.output);
+    assert.strictEqual(JSON.parse(exact.output).plan, 'phases/11-first/11-PLAN.md');
+
+    const escaped = await runCliAsMain(tmpDir, [
+      'lifecycle-preflight', 'verify', 'phases/11-first', '--plan', 'phases/11-first/../11-second/11-PLAN.md', '--expects-mutation', 'phase-status',
+    ]);
+    assert.strictEqual(escaped.exitCode, 1, escaped.output);
+    assert.strictEqual(JSON.parse(escaped.output).reason, 'invalid_plan_selector');
+  });
+
+  test('does not mark a phase done until every current plan has a passed exact verification chain', async () => {
+    const first = path.join(tmpDir, '.work', 'phases', '11-first');
+    for (const [dir, base] of [[first, '11-1'], [first, '11-2']]) {
+      fs.writeFileSync(path.join(dir, `${base}-PLAN.md`), '# plan\n');
+      fs.writeFileSync(path.join(dir, `${base}-SUMMARY.md`), '# summary\n');
+    }
+    fs.writeFileSync(path.join(first, '11-1-VERIFICATION.md'), '---\nstatus: passed\n---\n# verified\n');
+    fs.writeFileSync(path.join(first, '11-2-VERIFICATION.md'), '---\nstatus: gaps_found\n---\n# gaps\n');
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
+    const before = fs.readFileSync(roadmapPath, 'utf8');
+
+    const blocked = await runCliAsMain(tmpDir, ['phase-status', 'phases/11-first', 'done']);
+    assert.strictEqual(blocked.exitCode, 1, blocked.output);
+    assert.deepStrictEqual(fs.readFileSync(roadmapPath, 'utf8'), before);
+
+    fs.writeFileSync(path.join(first, '11-2-VERIFICATION.md'), '---\nstatus: passed\n---\n# verified\n');
+    const complete = await runCliAsMain(tmpDir, ['phase-status', 'phases/11-first', 'done']);
+    assert.strictEqual(complete.exitCode, 0, complete.output);
+  });
+
+  test('refuses a bare standard/native collision without changing either ROADMAP and accepts exact authorities', async () => {
+    const standard = path.join(tmpDir, '.work', 'phases', '11-first');
+    fs.writeFileSync(path.join(standard, '11-PLAN.md'), '# plan\n');
+    fs.writeFileSync(path.join(standard, '11-SUMMARY.md'), '# summary\n');
+    fs.writeFileSync(path.join(standard, '11-VERIFICATION.md'), '---\nstatus: passed\n---\n');
+    const native = path.join(tmpDir, '.work', 'milestone', 'phases', '11-native');
+    fs.mkdirSync(native, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.work', 'milestone', 'ROADMAP.md'), '# Native\n\n- [ ] **Phase 11: Native**\n');
+    fs.writeFileSync(path.join(native, '11-PLAN.md'), '# plan\n');
+    fs.writeFileSync(path.join(native, '11-EXECUTE.md'), '# execute\n');
+    fs.writeFileSync(path.join(native, '11-VERIFY.md'), '---\nstatus: passed\n---\n');
+    const standardRoadmap = path.join(tmpDir, '.work', 'ROADMAP.md');
+    const nativeRoadmap = path.join(tmpDir, '.work', 'milestone', 'ROADMAP.md');
+    const beforeStandard = fs.readFileSync(standardRoadmap, 'utf8');
+    const beforeNative = fs.readFileSync(nativeRoadmap, 'utf8');
+
+    const bare = await runCliAsMain(tmpDir, ['phase-status', '11', 'done']);
+    assert.strictEqual(bare.exitCode, 1, bare.output);
+    assert.strictEqual(JSON.parse(bare.output).error, 'ambiguous_phase_selector');
+    assert.deepStrictEqual(fs.readFileSync(standardRoadmap, 'utf8'), beforeStandard);
+    assert.deepStrictEqual(fs.readFileSync(nativeRoadmap, 'utf8'), beforeNative);
+
+    const exactStandard = await runCliAsMain(tmpDir, ['phase-status', 'phases/11-first', 'done']);
+    assert.strictEqual(exactStandard.exitCode, 0, exactStandard.output);
+    const exactNative = await runCliAsMain(tmpDir, ['phase-status', 'milestone/phases/11-native', 'done']);
+    assert.strictEqual(exactNative.exitCode, 0, exactNative.output);
+  });
+
+  test('rechecks closure when done is requested for an already-done phase', async () => {
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
+    fs.writeFileSync(roadmapPath, '# Roadmap\n\n- [x] **Phase 11: Exact closure**\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '11-first', '11-PLAN.md'), '# plan\n');
+    const before = fs.readFileSync(roadmapPath, 'utf8');
+    const result = await runCliAsMain(tmpDir, ['phase-status', 'phases/11-first', 'done']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).error, 'incomplete_phase_closure');
+    assert.deepStrictEqual(fs.readFileSync(roadmapPath, 'utf8'), before);
+  });
+
+  test('find-phase shares the exact resolver and refuses colliding selectors', async () => {
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '11-first', '11-PLAN.md'), '# first\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '11-second', '11-PLAN.md'), '# second\n');
+    const result = await runCliAsMain(tmpDir, ['find-phase', '11']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.deepStrictEqual(JSON.parse(result.output).choices, ['phases/11-first', 'phases/11-second']);
+  });
+
+  test('rejects malformed or duplicate --plan selectors in verify and preflight', async () => {
+    const first = path.join(tmpDir, '.work', 'phases', '11-first');
+    fs.writeFileSync(path.join(first, '11-PLAN.md'), '# plan\n');
+    fs.writeFileSync(path.join(first, '11-SUMMARY.md'), '# summary\n');
+    for (const args of [
+      ['verify', 'phases/11-first', '--plan'],
+      ['verify', 'phases/11-first', '--plan', '--other'],
+      ['verify', 'phases/11-first', '--plan', 'phases/11-first/11-PLAN.md', '--plan', 'phases/11-first/11-PLAN.md'],
+      ['lifecycle-preflight', 'verify', 'phases/11-first', '--plan', '--expects-mutation', 'phase-status'],
+      ['lifecycle-preflight', 'verify', 'phases/11-first', '--plan', 'phases/11-first/11-PLAN.md', '--plan', 'phases/11-first/11-PLAN.md', '--expects-mutation', 'phase-status'],
+    ]) {
+      const result = await runCliAsMain(tmpDir, args);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      const body = JSON.parse(result.output);
+      assert.ok(body.error === 'invalid_plan_selector' || body.reason === 'invalid_plan_selector', result.output);
+    }
+  });
+
+  test('native exact closure requires matching execute and passed verification', async () => {
+    const native = path.join(tmpDir, '.work', 'milestone', 'phases', '11-native');
+    const sibling = path.join(tmpDir, '.work', 'milestone', 'phases', '11-sibling');
+    fs.mkdirSync(native, { recursive: true });
+    fs.mkdirSync(sibling, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.work', 'milestone', 'ROADMAP.md'), '# Native\n\n- [ ] **Phase 11: Native**\n');
+    fs.writeFileSync(path.join(native, '11-PLAN.md'), '# plan\n');
+    fs.writeFileSync(path.join(sibling, '11-PLAN.md'), '# pending sibling\n');
+    let result = await runCliAsMain(tmpDir, ['phase-status', 'milestone/phases/11-native', 'done']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    fs.writeFileSync(path.join(native, '11-EXECUTE.md'), '# execute\n');
+    fs.writeFileSync(path.join(native, '11-VERIFY.md'), '---\nstatus: gaps_found\n---\n');
+    result = await runCliAsMain(tmpDir, ['phase-status', 'milestone/phases/11-native', 'done']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    fs.writeFileSync(path.join(native, '11-VERIFY.md'), '---\nstatus: passed\n---\n');
+    result = await runCliAsMain(tmpDir, ['verify', 'milestone/phases/11-native', '--plan', 'milestone/phases/11-native/11-PLAN.md']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', 'milestone/phases/11-native', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).authority, 'work_milestone');
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-preflight', 'verify', 'milestone/phases/11-native', '--plan', 'milestone/phases/11-native/11-PLAN.md', '--expects-mutation', 'phase-status',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).plan, 'milestone/phases/11-native/11-PLAN.md');
   });
 });
 

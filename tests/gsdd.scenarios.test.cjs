@@ -866,7 +866,7 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
         'Do not run phase preflight before target classification',
       ]],
       ['gsdd-execute', ['node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
-      ['gsdd-verify', ['node .work/bin/gsdd.mjs lifecycle-preflight verify {phase_num} --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
+      ['gsdd-verify', ['node .work/bin/gsdd.mjs lifecycle-preflight verify {phase_identity} --plan phases/{phase_dir}/{plan_id}-PLAN.md --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
       ['gsdd-audit-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight audit-milestone']],
       ['gsdd-complete-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight complete-milestone']],
       ['gsdd-new-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight new-milestone']],
