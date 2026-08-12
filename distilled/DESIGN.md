@@ -2262,6 +2262,10 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ## D51 - Deterministic Runtime Surface Freshness
 **Decision (2026-04-17, revised 2026-04-22, revised 2026-04-24):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When `.agents/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `npx -y gsdd-cli health` must compare those generated files against current render output and route any drift back through `npx -y gsdd-cli update`. Bare `gsdd health/update` remains valid only for global installs.
+
+**Current disposition (2026-08-12):** `.work/bin/gsdd.mjs` is the sole active lifecycle and helper root. A retained `.planning/` directory is an explicit migration or diagnostic input only: normal lifecycle commands neither select it nor write to it, and a dual-root workspace blocks mutation instead of falling back to legacy state.
+
+**Historical helper-location record (superseded):** The original rollout placed the generated helper in the legacy planning root. The self-contained helper rationale below is retained as provenance, but its former location and lifecycle-write authority are superseded by the current `.work/` contract.
 **Context:**
 - Phase 29 narrowed the runtime story to a dual-canonical boundary: distilled/workflows/* is the authored source contract and generated runtime-facing files are the consumed local surfaces.
 - That narrowing was honest but still left I42 open because the repo could not yet prove that installed generated files stayed aligned with the current authored source without reviewer memory.
@@ -2271,16 +2275,16 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic.
 - Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally.
 - Route drift through deterministic repair (`npx -y gsdd-cli update` or targeted `npx -y gsdd-cli update --tools <runtime>`) instead of treating the fix as a manual review exercise.
-- Treat the portable runtime surface as more than skill markdown: keep workflow discovery under `.agents/skills/`, generate the repo-local helper runtime at `.planning/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .planning/bin/gsdd.mjs ...` instead of bare `gsdd ...`, and keep human install/update/health guidance on `npx -y gsdd-cli ...` unless a global install is explicitly present.
+- Treat the portable runtime surface as more than skill markdown: keep workflow discovery under `.agents/skills/`, generate the repo-local helper runtime at `.work/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .work/bin/gsdd.mjs ...` instead of bare `gsdd ...`, and keep human install/update/health guidance on `npx -y gsdd-cli ...` unless a global install is explicitly present.
 - Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist.
 **Why this fits the codebase:**
 - It extends the existing render/update/health pattern instead of inventing a new state file or hidden synchronization layer.
 - It keeps the dual-canonical runtime contract honest: authored source and consumed generated files are distinct surfaces, but the boundary is now mechanically checked where the generated surface is actually installed.
-- It moves helper-command resolution from ambient machine state into generated repo state under `.planning/bin`, which is the seam `init` and `update` already own deterministically.
+- It moves helper-command resolution from ambient machine state into generated repo state under `.work/bin`, which is the seam `init` and `update` already own deterministically.
 - It preserves framework-source honesty by warning only on installed drift, not on intentionally absent generated directories.
 **Evidence:**
-- .planning/SPEC.md (ENGINE-05)
-- .planning/ROADMAP.md runtime-freshness milestone entry
+- `.work/SPEC.md` (current recovery authority)
+- `.work/ROADMAP.md` runtime-freshness milestone entry
 - .internal-research/gaps.md (I42 closure)
 - bin/lib/runtime-freshness.mjs
 - bin/lib/health.mjs
@@ -2295,12 +2299,12 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Consequences:**
 - `npx -y gsdd-cli health` can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline.
 - `npx -y gsdd-cli update` becomes the explicit repair path for authored/generated runtime-surface drift.
-- Fresh consumer repos now carry their own deterministic helper-command seam under `.planning/bin`, so lifecycle/file-op/status calls no longer depend on whichever `gsdd` binary happens to be present on PATH.
+- Fresh consumer repos now carry their own deterministic helper-command seam under `.work/bin`, so lifecycle/file-op/status calls no longer depend on whichever `gsdd` binary happens to be present on PATH.
 - Public support wording can stay compact without implying that generated files are trustworthy merely because they were generated once.
 - Claude Code and Codex CLI remain the mandatory live/native validation floor for the hardened runtime boundary, while other runtimes stay honest about their proof level.
 - Native adapters and root governance remain optional prompt/convenience surfaces; the token-saving story comes from compact skill entrypoints and repo-local artifacts, not from installing every adapter everywhere.
 **GSD comparison:** GSD keeps runtime-facing workflow surfaces closer to the Claude-authored source and does not have to model a generated multi-runtime freshness boundary explicitly. GSDD does, because authored workflow source and consumed runtime surfaces are intentionally separated.
-**GSDD implementation:** bin/lib/runtime-freshness.mjs, bin/lib/health.mjs, bin/lib/health-truth.mjs, bin/lib/rendering.mjs, bin/adapters/claude.mjs, bin/adapters/opencode.mjs, bin/adapters/codex.mjs, README.md, docs/RUNTIME-SUPPORT.md, distilled/README.md, .planning/SPEC.md, .internal-research/TODO.md, .internal-research/gaps.md, tests/phase.test.cjs, tests/gsdd.health.test.cjs, tests/gsdd.plan.adapters.test.cjs, tests/gsdd.guards.test.cjs, tests/gsdd.scenarios.test.cjs
+**GSDD implementation:** bin/lib/runtime-freshness.mjs, bin/lib/health.mjs, bin/lib/health-truth.mjs, bin/lib/rendering.mjs, bin/adapters/claude.mjs, bin/adapters/opencode.mjs, bin/adapters/codex.mjs, README.md, docs/RUNTIME-SUPPORT.md, distilled/README.md, `.work/SPEC.md`, .internal-research/TODO.md, .internal-research/gaps.md, tests/phase.test.cjs, tests/gsdd.health.test.cjs, tests/gsdd.plan.adapters.test.cjs, tests/gsdd.guards.test.cjs, tests/gsdd.scenarios.test.cjs
 
 ---
 
@@ -2619,21 +2623,23 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ## D58 - Local Workflow Helper Launcher
 
-**Decision (2026-04-22, revised 2026-04-23):** Workflow-embedded CLI helper commands must run through a generated local helper runtime under `.planning/bin/`, with `.planning/bin/gsdd.mjs` as the canonical launcher and copied support modules under `.planning/bin/lib/`, instead of assuming a bare `gsdd` binary is available on the consumer repo's PATH or proxying helper execution back through `npm exec` at workflow runtime.
+**Historical decision (2026-04-22, revised 2026-04-23; superseded helper location):** Workflow-embedded CLI helper commands needed a generated local runtime rather than a bare `gsdd` binary on the consumer repo's PATH or an `npm exec` trampoline at workflow runtime.
+
+**Current disposition (2026-08-12):** `.work/bin/gsdd.mjs` is the sole active lifecycle and helper root. It is generated with its support modules under `.work/bin/lib/`; retained legacy `.planning/` state may be inspected only by explicit migration or diagnostic logic and is never a normal helper-write target.
 
 **Context:**
 - Public onboarding already leads with `npx gsdd-cli init`, which works even when the package is not globally installed.
 - The authored workflow surfaces had drifted into a different assumption: embedded helper commands such as `lifecycle-preflight`, `file-op`, and `phase-status` were written as bare `gsdd ...` invocations.
 - That split contract caused consumer friction in the exact place the deterministic helper seam was supposed to help: a workflow could initialize successfully, then fail later because the repo did not have a global `gsdd` on PATH.
 - The helper surface must stay out of `.agents/` ownership so it does not pollute unrelated `.agents` folders or leak into generated governance.
-- The first `.planning/bin/gsdd.mjs` repair still left the wrong runtime dependency in place: the generated file was a trampoline back through `npm exec --package=gsdd-cli@... -- gsdd ...`, so helper execution still depended on npm/package resolution and shell quirks at the exact moment deterministic local mechanics were supposed to be the reliable fallback.
+- The historical first helper repair still left the wrong runtime dependency in place: its generated file was a trampoline back through `npm exec --package=gsdd-cli@... -- gsdd ...`, so helper execution still depended on npm/package resolution and shell quirks at the exact moment deterministic local mechanics were supposed to be the reliable fallback.
 
 **Decision:**
-- Generate `.planning/bin/gsdd.mjs` as a self-contained local helper runtime plus repo-local shell shims (`.planning/bin/gsdd`, `.planning/bin/gsdd.cmd`, `.planning/bin/gsdd.ps1`) on `gsdd init` for every initialized workspace.
-- Regenerate that helper surface on `gsdd update` whenever `.planning/` exists.
-- Copy the minimal helper support modules into `.planning/bin/lib/` so workflow-time helper execution needs only Node, not npm/package-manager resolution.
+- Generate `.work/bin/gsdd.mjs` as a self-contained local helper runtime plus repo-local shell shims (`.work/bin/gsdd`, `.work/bin/gsdd.cmd`, `.work/bin/gsdd.ps1`) on `gsdd init` for every initialized workspace.
+- Regenerate that helper surface on `gsdd update` for the active `.work/` root.
+- Copy the minimal helper support modules into `.work/bin/lib/` so workflow-time helper execution needs only Node, not npm/package-manager resolution.
 - Bootstrap the workspace root from the generated helper location and shared root-resolution logic so helper commands operate on repo truth instead of raw `process.cwd()`.
-- Route workflow-embedded helper commands through `node .planning/bin/gsdd.mjs ...` for the deterministic helper seam:
+- Route workflow-embedded helper commands through `node .work/bin/gsdd.mjs ...` for the deterministic helper seam:
   - `lifecycle-preflight`
   - `file-op`
   - `phase-status`
@@ -2642,7 +2648,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Why this fits the codebase:**
 - It preserves the existing skills-first architecture instead of inventing a second discovery or governance path.
 - It fixes the actual consumer DX failure at the point where workflows invoke deterministic helper commands.
-- It keeps ownership aligned with `.planning/`, which already holds the other local runtime mechanics and generation-manifest state.
+- It keeps ownership aligned with `.work/`, the sole active local runtime and lifecycle root.
 - It removes npm/package fetches from the helper hot path, which is the stronger cross-platform ownership model for Linux, WSL, and Windows consumers.
 - It lets both the generated helper runtime and the main CLI share one root-resolution seam instead of relying on repo-root `cwd` as an unstated precondition.
 
@@ -2667,7 +2673,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 **Consequences:**
 - Consumer repos no longer need a global `gsdd` binary or workflow-time `npm exec` trampoline for embedded helper mechanics after init.
-- Helper-command freshness is now owned under `.planning/` without widening `.agents` install detection.
+- Helper-command freshness is now owned under `.work/` without widening `.agents` install detection.
 - Generated governance remains compact and routing-focused because helper-surface instructions stay out of `AGENTS.md`.
 - Cross-platform proof is stronger for the local-helper seam itself, but direct live validation still needs to stay conservative by environment: the repo now has focused tests plus Windows fixture proof; Linux/WSL live consumer validation remains a separate evidence question.
 
@@ -2926,7 +2932,9 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 ## D64 - Work-Native Continuity Authority
 
-**Decision (2026-06-29; revised 2026-06-30):** `.work` becomes the canonical continuity surface for `gsdd next` and future work-native state, while `.planning` remains readable legacy lifecycle input during migration and for existing workflows that still own their write paths. The authority used by routing, preflight, verification, and auto-gate packets must be explicit in machine-readable output. Repo policy, not Workspine itself, decides whether `.work` is committed or local-only; in the Workspine framework repo, `.work` is local dogfood/runtime state and should not be tracked. During migration, `gsdd next` may also route existing `.planning` brownfield-change authority into `gsdd-plan` without treating `.planning` ROADMAP phases as the only valid plan target.
+**Historical decision (2026-06-29; revised 2026-06-30; superseded lifecycle bridge):** `.work` became the canonical continuity surface for `gsdd next` and future work-native state while a temporary legacy lifecycle bridge was considered. The rationale below preserves that migration decision, but its former legacy write-path compatibility is superseded.
+
+**Current disposition (2026-08-12):** `.work/bin/gsdd.mjs` is the sole active lifecycle and helper root. `.planning/` is a retained legacy migration or diagnostic input only; lifecycle preflight blocks a dual-root workspace before mutation, and normal plan, execute, verify, audit, completion, status, and helper commands neither select nor write the legacy root.
 
 **Context:**
 - PR #116 merged the first `gsdd next` / `.work` continuity slice, but the framework repo still had split truth: `.work/milestone` described a locally implemented continuity milestone while `.planning` still described v2.0.0 parallel orchestration and P65/P66.
@@ -2937,12 +2945,12 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 **Decision:**
 - Treat `.work` as the source of truth for `gsdd next` continuity routing, focus packets, work-native milestone state, decisions, questions, evidence pointers, dogfood findings, and bounded auto-gate state.
-- Keep `.planning` readable as legacy lifecycle input. Existing `gsdd-plan`, `gsdd-execute`, `gsdd-verify`, audit, complete-milestone, phase-status, and helper write paths continue to work against `.planning` until each surface is deliberately bridged or migrated.
-- Require routing and preflight output to report authority explicitly, using scoped values such as `work_milestone`, `planning`, or `blocked/conflict`; `.work` authority must not silently mask repo truth, PR truth, or unrelated `.planning` blockers.
+- Keep `.planning` readable only as an explicit legacy migration or diagnostic input. Existing `gsdd-plan`, `gsdd-execute`, `gsdd-verify`, audit, complete-milestone, phase-status, and helper write paths use `.work`; a dual-root workspace is a blocker, not a compatibility fallback.
+- Require routing and preflight output to report authority explicitly, using current `.work` scope or `blocked/conflict`; `.work` authority must not silently mask repo truth, PR truth, or a retained legacy-root blocker.
 - Keep decision authority cooperative and record-local: `gsdd decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>` is the only supported promotion grammar. Persist `approval_authority`, `approval_ref`, `approval_body_hash`, `approved_at`, and one recomputable `authority_fingerprint` beside the existing typed record while preserving proposal `source`.
 - Classify typed records separately from lifecycle status: candidates are non-authoritative, complete assertions are `owner_asserted`, active records without an assertion are `unreceipted_active`, and partial or mismatched assertion metadata is `malformed_assertion`. Only `owner_asserted` active records enter the digest; legacy ambiguity remains readable and becomes bounded review debt.
 - Treat the owner assertion as an auditable cooperative protocol, not authentication, a signature, a credential, or a filesystem sandbox. Do not add a receipt store, identity provider, approval database, or generated-helper transition surface; `.work/bin/gsdd.mjs` remains capture/query-only.
-- Include `brownfield_change` as an explicit scoped authority for existing bounded-change artifacts. This is a compatibility bridge, not a new lifecycle root: it reuses the current `gsdd-plan` workflow and the brownfield-change folder contract.
+- Include `brownfield_change` as an explicit scoped authority for existing bounded-change artifacts under `.work`. This is a compatibility bridge, not a new lifecycle root: it reuses the current `gsdd-plan` workflow and the brownfield-change folder contract.
 - Preserve repo/control-map truth as the highest authority for branch, PR, worktree, dirty-state, and delivery claims. `.work` can carry intent and continuity; it cannot convert local prose into integrated repo truth.
 - Define execute-until-gate as task-bounded automation, not session-bounded autonomy. Auto mode may run typed, reviewed, `type=auto` tasks and bounded verification/repair cycles only until a human gate, verification gap, repeated blocker, authority conflict, trust boundary, or scope expansion stops it.
 - Keep milestone completion user-owned. `gsdd next` may route to completion approval, but it must not mark a milestone complete autonomously.
@@ -2951,7 +2959,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 **Leverage:**
 - Lost: the old clean "v2.0.0 parallel PR orchestration next" story and the convenience of treating `.planning` as the only lifecycle state root.
-- Kept: repo-native files, plain markdown workflow contracts, existing `.planning` compatibility, computed-first control-map authority, plan/execute/verify separation, and human-owned completion.
+- Kept: repo-native files, plain markdown workflow contracts, explicit legacy migration diagnosis, computed-first control-map authority, plan/execute/verify separation, and human-owned completion.
 - Gained: a clear continuity authority for `gsdd next`, explicit migration semantics, safer execute-until-gate foundations, repo-policy-driven tracking, a brownfield compatibility bridge for bounded consumer changes, and a typed authority boundary that prevents future auto mode from running on stale or contradictory state.
 
 **Evidence:**
@@ -2972,8 +2980,8 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - GitHub Copilot repository instructions docs: `https://docs.github.com/en/copilot/concepts/prompting/response-customization`
 
 **Consequences:**
-- Future `gsdd next` and auto-gate work should start by reconciling `.work`, `.planning`, repo/control-map, PR truth, and active brownfield-change authority into one conservative next action or one explicit blocker.
-- Future milestones must not say "P65 shipped, start P66" unless repo, PR, `.work`, and legacy `.planning` truth agree.
+- Future `gsdd next` and auto-gate work should start from `.work`, repo/control-map, PR truth, and active brownfield-change authority; a retained `.planning/` root is an explicit migration diagnostic or blocker, never a parallel command authority.
+- Future milestones must not say "P65 shipped, start P66" unless repo, PR, `.work`, and any retained legacy evidence have been reconciled without a dual-root lifecycle conflict.
 - Future auto mode must expose typed gates, loop guards, evidence requirements, stop reasons, and authority source in JSON. It must never rely on prose such as "continue autonomously" as execution permission.
 - Future framework work should not add tracked `.work` runtime state by default. Durable product changes belong in source/design/workflow/test files; `.work` dogfood state remains local unless explicitly promoted.
 

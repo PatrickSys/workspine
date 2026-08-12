@@ -206,6 +206,40 @@ describe('public surface language gate', () => {
     }
   });
 
+  test('design records legacy planning helpers as historical rather than current command authority', () => {
+    const design = fs.readFileSync(path.join(ROOT, 'distilled', 'DESIGN.md'), 'utf-8');
+    const decisionHeadings = [
+      'D51 - Deterministic Runtime Surface Freshness',
+      'D58 - Local Workflow Helper Launcher',
+      'D64 - Work-Native Continuity Authority',
+    ];
+
+    for (const heading of decisionHeadings) {
+      const sectionStart = design.indexOf(`## ${heading}`);
+      assert.notStrictEqual(sectionStart, -1, `DESIGN must retain ${heading}`);
+      const nextSection = design.indexOf('\n## ', sectionStart + heading.length);
+      const section = design.slice(sectionStart, nextSection === -1 ? undefined : nextSection);
+      const disposition = section.match(/\*\*Current disposition \(2026-08-12\):\*\*([^\n]+)/);
+
+      assert.ok(disposition, `${heading} must contain an explicit current disposition`);
+      assert.match(
+        disposition[1],
+        /\.work\/bin\/gsdd\.mjs.*sole active lifecycle and helper root/i,
+        `${heading} must name .work/bin/gsdd.mjs as the sole active lifecycle and helper root`
+      );
+      assert.match(
+        disposition[1],
+        /\.planning\/.*(?:legacy|migration|diagnostic)|(?:legacy|migration|diagnostic).*\.planning\//i,
+        `${heading} must limit .planning to legacy migration or diagnostic handling`
+      );
+      assert.match(
+        disposition[1],
+        /(?:blocks mutation|never .*write|neither select nor write)/i,
+        `${heading} must rule out .planning as a current lifecycle write authority`
+      );
+    }
+  });
+
   test('documents the main and generated helper command boundary from fresh render output', async () => {
     const mainSource = fs.readFileSync(path.join(ROOT, 'bin', 'gsdd.mjs'), 'utf-8');
     const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
