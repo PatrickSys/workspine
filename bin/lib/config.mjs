@@ -17,16 +17,14 @@ export const DEFAULT_GIT_PROTOCOL = {
   pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
 };
 
-// The rigor knob: one setting that decides how much the assistant does on its own
-// versus how much it shows you and asks. low = autopilot; max = most hands-on.
-// showCode + askBeforeDecide are read by the workflow markdown (=== true means on,
-// a missing key means off), so existing projects whose config predates these flags
-// are unaffected.
+// Rigor controls the current workflow's alignment and quality gates. Model profiles
+// remain a separate cost/quality selection axis. `max` is accepted only for stored
+// configuration and CLI compatibility; it resolves to the currently implemented
+// high gates rather than promising a distinct interaction mode.
 export const RIGOR_PROFILES = {
-  low:    { researchDepth: 'fast',     workflow: { research: false, discuss: false, planCheck: false, verifier: true, showCode: false, askBeforeDecide: false } },
-  medium: { researchDepth: 'balanced', workflow: { research: true,  discuss: false, planCheck: true,  verifier: true, showCode: false, askBeforeDecide: false } },
-  high:   { researchDepth: 'deep',     workflow: { research: true,  discuss: true,  planCheck: true,  verifier: true, showCode: true,  askBeforeDecide: false } },
-  max:    { researchDepth: 'deep',     workflow: { research: true,  discuss: true,  planCheck: true,  verifier: true, showCode: true,  askBeforeDecide: true  } },
+  low:    { researchDepth: 'fast',     workflow: { research: false, discuss: false, planCheck: false, verifier: true } },
+  medium: { researchDepth: 'balanced', workflow: { research: true,  discuss: false, planCheck: true,  verifier: true } },
+  high:   { researchDepth: 'deep',     workflow: { research: true,  discuss: true,  planCheck: true,  verifier: true } },
 };
 
 // Legacy rigor names map silently to the new levels so old configs and callers keep
@@ -44,7 +42,7 @@ export const COST_PROFILES = {
 
 export function resolveRigor(id) {
   const key = RIGOR_ALIASES[id] ?? id;
-  return RIGOR_PROFILES[key] ?? RIGOR_PROFILES.medium;
+  return RIGOR_PROFILES[key === 'max' ? 'high' : key] ?? RIGOR_PROFILES.medium;
 }
 export function resolveCost(id)  { return COST_PROFILES[id]  ?? COST_PROFILES.balanced;  }
 
@@ -57,7 +55,9 @@ export function resolveStepRigor(config, step) {
 }
 
 export function effectiveRigorLevel(config, step) {
-  return config?.rigorOverrides?.[step] ?? config?.rigorProfile ?? 'medium';
+  const requested = config?.rigorOverrides?.[step] ?? config?.rigorProfile ?? 'medium';
+  const normalized = RIGOR_ALIASES[requested] ?? requested;
+  return normalized === 'max' ? 'high' : (RIGOR_PROFILES[normalized] ? normalized : 'medium');
 }
 
 export const VALID_MODEL_PROFILES = ['quality', 'balanced', 'budget'];
@@ -461,9 +461,27 @@ function describeRigorFlags(config) {
     discuss: w.discuss,
     planCheck: w.planCheck,
     verifier: w.verifier,
-    showCode: w.showCode,
-    askBeforeDecide: w.askBeforeDecide,
   };
+}
+
+function activeWorkflow(config, profile) {
+  const stored = config.workflow ?? {};
+  const fallback = resolveRigor(profile).workflow;
+  return {
+    research: stored.research ?? fallback.research,
+    discuss: stored.discuss ?? fallback.discuss,
+    planCheck: stored.planCheck ?? fallback.planCheck,
+    verifier: stored.verifier ?? fallback.verifier,
+  };
+}
+
+function deprecatedRigorNoOps(config) {
+  const workflow = config.workflow ?? {};
+  return Object.fromEntries(
+    ['showCode', 'askBeforeDecide']
+      .filter((key) => Object.hasOwn(workflow, key))
+      .map((key) => [key, 'ignored deprecated no-op']),
+  );
 }
 
 function printChangedFlags(before, after) {
@@ -490,6 +508,8 @@ export function cmdRigor(...rigorArgs) {
 function cmdRigorShow(cwd) {
   const config = loadProjectModelConfig(cwd);
   const base = config.rigorProfile ?? 'medium';
+  const requested = [base, ...Object.values(config.rigorOverrides ?? {})];
+  const usesMaxCompatibility = requested.includes('max');
   output({
     rigorProfile: base,
     rigorOverrides: config.rigorOverrides ?? {},
@@ -498,7 +518,11 @@ function cmdRigorShow(cwd) {
       execute: effectiveRigorLevel(config, 'execute'),
       verify: effectiveRigorLevel(config, 'verify'),
     },
-    workflow: config.workflow ?? resolveRigor(base).workflow,
+    workflow: activeWorkflow(config, base),
+    deprecatedNoOps: deprecatedRigorNoOps(config),
+    compatibility: usesMaxCompatibility
+      ? { max: 'Accepted for compatibility; it uses the current high rigor gates.' }
+      : undefined,
   });
 }
 
@@ -523,7 +547,7 @@ function cmdRigorSetProfile(level, cwd) {
   const after = describeRigorFlags(result.config);
   writeProjectConfig(result.config, cwd);
 
-  console.log(`  - set rigor to ${level}`);
+  console.log(`  - set rigor to ${level}${level === 'max' ? ' (compatibility input; uses high gates)' : ''}`);
   printChangedFlags(before, after);
 }
 

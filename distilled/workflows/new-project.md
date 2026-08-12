@@ -8,7 +8,7 @@ Your output: SPEC.md (the single source of truth) and ROADMAP.md (the execution 
 <auto_mode>
 Check `.work/config.json` for `autoAdvance: true`. If NOT set, skip this section entirely.
 
-When `autoAdvance: true`, this workflow runs non-interactively:
+When `autoAdvance: true`, this workflow runs non-interactively only for brief-driven `SPEC.md` and `ROADMAP.md` bootstrap. It does not authorize any later lifecycle work.
 
 1. **Input:** Read `.work/PROJECT_BRIEF.md`. If it does not exist, stop with a clear error: "Auto mode requires a project brief. Provide one via `npx -y gsdd-cli init --auto --tools <runtime> --brief <path>` or place it at `.work/PROJECT_BRIEF.md`."
 
@@ -33,11 +33,12 @@ Before starting, read these files (if they exist):
 4. Project root files: `package.json`, `README.md`, main entry point, `.gitignore`
 5. `.work/config.json` — The deterministic project settings. Key fields:
    - `researchDepth`: balanced | fast | deep — controls research thoroughness
+   - `rigorProfile`: low | medium | high (with compatibility-only max accepted from older configs) — controls alignment and quality gates
    - `parallelization`: true | false - whether to run delegate work in parallel when the platform supports it; when false, run the same delegates sequentially
    - `workflow.research`: true | false - whether to do domain research before spec
    - `workflow.planCheck`: true | false — whether plan-check agent runs later
    - `workflow.verifier`: true | false — whether verifier runs after execution
-   - `modelProfile`: balanced | quality | budget — model selection hint
+   - `modelProfile`: balanced | quality | budget — separate model cost/quality selection hint
    - `gitProtocol`: advisory git guidance only — follow repo/user conventions first and never invent phase/plan/task git naming by default
 6. Any existing `.work/SPEC.md` or `.work/ROADMAP.md` (if resuming)
 7. `.work/brownfield-change/CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` (when present as the widening input from an active bounded change)

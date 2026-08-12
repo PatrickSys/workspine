@@ -1634,6 +1634,13 @@ describe('G8 — Auto-Mode Contract', () => {
     );
   });
 
+  test('auto_mode scopes autoAdvance to brief-driven SPEC and ROADMAP bootstrap', () => {
+    const autoSection = newProjectContent.match(/<auto_mode>([\s\S]*?)<\/auto_mode>/);
+    assert.ok(autoSection, 'new-project.md must have <auto_mode> section');
+    assert.match(autoSection[1], /brief-driven.*SPEC\.md.*ROADMAP\.md|SPEC\.md.*ROADMAP\.md.*brief/i,
+      'auto_mode must name its brief-driven SPEC/ROADMAP bootstrap scope. FIX: Add the explicit bootstrap boundary.');
+  });
+
   test('auto_mode does not imply lifecycle auto-progression', () => {
     const autoSection = newProjectContent.match(/<auto_mode>([\s\S]*?)<\/auto_mode>/);
     assert.ok(autoSection, 'new-project.md must have <auto_mode> section');

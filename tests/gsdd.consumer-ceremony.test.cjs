@@ -33,6 +33,7 @@ async function runWizardInit(tmpDir, { selectedRuntimes = ['claude'], adapterTar
         selectedRuntimes,
         adapterTargets,
         config: {
+          rigorProfile: rigor,
           ...models.resolveRigor(rigor),
           ...models.resolveCost(cost),
           commitDocs,
@@ -87,6 +88,8 @@ describe('consumer ceremony reduction', () => {
     assert.strictEqual(config.workflow.discuss, false);
     assert.strictEqual(config.workflow.planCheck, true);
     assert.strictEqual(config.workflow.verifier, true);
+    assert.ok(!('showCode' in config.workflow));
+    assert.ok(!('askBeforeDecide' in config.workflow));
     assert.deepStrictEqual(Object.keys(config.gitProtocol).sort(), ['branch', 'commit', 'pr']);
   });
 

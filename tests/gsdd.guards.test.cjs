@@ -2807,6 +2807,42 @@ describe('Phase 18 deterministic CLI guards', () => {
       'Help text must document phase-status. FIX: Add phase-status command to cmdHelp output.');
     assert.match(output, /lifecycle-preflight <surface> \[phase\]/,
       'Help text must document lifecycle-preflight. FIX: Add lifecycle-preflight command to cmdHelp output.');
+    assert.match(output, /rigor \[show\|low\|medium\|high\|max\|<plan\|execute\|verify> <level>\]/,
+      'Help text must document rigor configuration. FIX: Add the rigor command to cmdHelp output.');
+    assert.match(output, /new-project bootstrap/i,
+      'Help text must scope repo-local init --auto to new-project bootstrap. FIX: Add the bootstrap-only note.');
+  });
+
+  test('public configuration surfaces describe only active rigor behavior', () => {
+    const prompts = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init-prompts.mjs'), 'utf-8');
+    const help = fs.readFileSync(INIT_RUNTIME_MODULE, 'utf-8');
+    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const design = fs.readFileSync(DESIGN_MD, 'utf-8');
+    const newProject = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'new-project.md'), 'utf-8');
+
+    assert.match(prompts, /value: 'low'[\s\S]*value: 'medium'[\s\S]*value: 'high'/,
+      'Guided setup must offer low, medium, and high rigor. FIX: Keep the wizard aligned with implemented gates.');
+    assert.doesNotMatch(prompts, /value: 'max'/,
+      'Guided setup must not offer the compatibility-only max input. FIX: Remove max from prompt choices.');
+    assert.match(readme, /Model profiles.*cost.*quality[\s\S]*rigor.*alignment.*quality gates/i,
+      'README must keep model cost/quality separate from rigor gates. FIX: Rewrite the configuration introduction.');
+    assert.match(readme, /gsdd rigor.*Inspect or update configuration|gsdd rigor.*inspect.*configuration/i,
+      'README must describe rigor as configuration inspection/update. FIX: Correct the CLI reference.');
+    assert.match(design, /\.work\/config\.json[\s\S]*brief-driven[\s\S]*SPEC\.md \+ ROADMAP\.md/i,
+      'DESIGN must use the current .work bootstrap paths and bounded outcome. FIX: Correct the headless-mode decision.');
+    assert.match(newProject, /brief-driven.*SPEC\.md.*ROADMAP\.md|SPEC\.md.*ROADMAP\.md.*brief/i,
+      'new-project must state the brief-driven bootstrap boundary. FIX: Add the bounded autoAdvance contract.');
+
+    for (const [label, content] of [
+      ['guided setup', prompts],
+      ['help', help],
+      ['README', readme],
+      ['DESIGN', design],
+      ['new-project workflow', newProject],
+    ]) {
+      assert.doesNotMatch(content, /shows? (?:you )?the code|ask(?:s)? before deciding|running screen/i,
+        `${label} must not promise the retired interaction behavior. FIX: Remove the inert-feature claim.`);
+    }
   });
 
   test('local helper renderer emits a self-contained helper runtime and platform shims', async () => {

@@ -110,6 +110,8 @@ npx -y gsdd-cli init --auto --tools all
 npx -y gsdd-cli init --auto --tools codex --brief path/to/brief.md
 ```
 
+For repo-local setup, `init --auto` sets the legacy-named `autoAdvance` key only for brief-driven `gsdd-new-project` creation of `SPEC.md` and `ROADMAP.md`. It stops before plan, execute, verify, release, or delivery. This is separate from global-install `--auto`, which refreshes detected existing agent homes.
+
 ### Global Agent Install
 
 If `gsdd-cli` is installed globally, install reusable Workspine surfaces into your agent homes:
@@ -153,13 +155,17 @@ Track `.work/`, `.agents/skills/`, and any selected runtime adapters that are pa
 
 ## Configuration
 
-Use model profiles to tune cost and rigor:
+Model profiles choose model cost and quality. Rigor is a separate configuration axis for workflow alignment and quality gates:
 
 ```bash
-npx -y gsdd-cli models profile quality   # maximize rigor
-npx -y gsdd-cli models profile balanced  # default balance
-npx -y gsdd-cli models profile budget    # minimize cost
+npx -y gsdd-cli models profile quality   # maximize model quality
+npx -y gsdd-cli models profile balanced  # default cost/quality balance
+npx -y gsdd-cli models profile budget    # minimize model cost
+npx -y gsdd-cli rigor                    # inspect configuration and effective rigor gates
+npx -y gsdd-cli rigor high               # update configuration to the high rigor gates
 ```
+
+`gsdd rigor` inspects or updates configuration; it does not itself run planning or document guardrails.
 
 ## Troubleshooting
 
@@ -201,9 +207,9 @@ npx -y gsdd-cli decisions query "current git flow" --path bin/gsdd.mjs # (experi
 npx -y gsdd-cli decisions promote <id> --authority owner --approval-ref <non-sensitive-ref> # (experimental)
 npx -y gsdd-cli decisions reject <id> --reason "No longer applicable" # (experimental)
 npx -y gsdd-cli decisions invalidate <id> --reason "Superseded by the current policy" # (experimental)
-npx -y gsdd-cli rigor                   # run planning/document guardrails
+npx -y gsdd-cli rigor                   # inspect or update rigor configuration
 npx -y gsdd-cli file-op                 # deterministic repo-local copy/delete helper
-npx -y gsdd-cli models profile quality  # maximize review rigor
+npx -y gsdd-cli models profile quality  # prefer model quality
 npx -y gsdd-cli models profile budget   # minimize cost
 npx -y gsdd-cli find-phase              # locate a roadmap phase
 npx -y gsdd-cli phase-status            # inspect or update phase status

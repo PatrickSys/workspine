@@ -179,8 +179,6 @@ describe('gsdd init and update', () => {
       discuss: false,
       planCheck: true,
       verifier: true,
-      showCode: false,
-      askBeforeDecide: false,
     });
 
     const launcher = fs.readFileSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'), 'utf-8');
@@ -1875,7 +1873,7 @@ describe('gsdd init and update', () => {
       assert.strictEqual(config.autoAdvance, true);
       assert.strictEqual(config.researchDepth, 'balanced');
       assert.strictEqual(config.parallelization, true);
-      assert.deepStrictEqual(config.workflow, { research: true, discuss: false, planCheck: true, verifier: true, showCode: false, askBeforeDecide: false });
+      assert.deepStrictEqual(config.workflow, { research: true, discuss: false, planCheck: true, verifier: true });
     });
 
     test('--auto --tools all generates shared, helper, and native runtime surfaces', async () => {
@@ -1990,6 +1988,30 @@ describe('gsdd init and update', () => {
         await gsdd.cmdInit('--auto', '--tools', 'claude');
         const reread = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         assert.strictEqual(reread.researchDepth, 'deep', 're-init must not overwrite existing config');
+      } finally {
+        restoreStdin();
+      }
+    });
+
+    test('repeat init and update preserve legacy config bytes without rewriting them', async () => {
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--auto', '--tools', 'claude');
+        const configPath = path.join(tmpDir, '.work', 'config.json');
+        const legacy = [
+          '{',
+          '  "rigorProfile": "max",',
+          '  "workflow": { "showCode": true, "askBeforeDecide": true },',
+          '  "consumerOwned": "keep-this-byte-shape"',
+          '}\n',
+        ].join('\n');
+        fs.writeFileSync(configPath, legacy);
+
+        await gsdd.cmdInit('--auto', '--tools', 'claude');
+        await gsdd.cmdUpdate('--tools', 'claude');
+
+        assert.strictEqual(fs.readFileSync(configPath, 'utf-8'), legacy);
       } finally {
         restoreStdin();
       }

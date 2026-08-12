@@ -67,12 +67,11 @@ export async function promptForConfig(cwd, { input = process.stdin, output = pro
   const rigor = await promptSingleSelect({
     input,
     output,
-    title: 'Rigor - how much the assistant does on its own vs. shows you and asks',
+    title: 'Rigor - workflow alignment and quality gates',
     choices: [
-      { value: 'low', label: 'low', description: 'Autopilot. Skips research, plan-check, and asking - it proceeds on its best guess.' },
-      { value: 'medium', label: 'medium', description: 'Recommended default. Research + a fresh-context plan-check. No helpers, no extra asking.' },
-      { value: 'high', label: 'high', description: 'Helpers propose options; shows you the code before writing; asks when something is genuinely unclear.' },
-      { value: 'max', label: 'max', description: 'Most hands-on. Asks before deciding and shows the running screen. Pick low if you just want it to go.' },
+      { value: 'low', label: 'low', description: 'Least ceremony: skips research, discussion, and plan-check; verifier remains enabled.' },
+      { value: 'medium', label: 'medium', description: 'Recommended default: research and a fresh-context plan check.' },
+      { value: 'high', label: 'high', description: 'Deep research plus discussion, plan-check, and verifier gates.' },
     ],
     defaultIndex: 1,
   });

@@ -620,13 +620,14 @@ Design principle unchanged: derive state from primary artifacts (ROADMAP.md, SPE
 auto-approves requirements and roadmap, auto-advances to plan phase. Implemented across 5 workflow files
 with `AskUserQuestion` API gates.
 
-**GSDD:** `npx -y gsdd-cli init --auto --tools <platform>` — non-interactive CLI bootstrap. Workflow-level auto mode
-via `autoAdvance: true` in `.planning/config.json` + `<auto_mode>` section in `new-project.md`.
+**GSDD:** `npx -y gsdd-cli init --auto --tools <platform>` — non-interactive repo-local bootstrap. It sets the legacy-named
+`autoAdvance: true` key in `.work/config.json`; the `<auto_mode>` section in `new-project.md` reads it only for brief-driven
+`SPEC.md` + `ROADMAP.md` creation.
 
 **Key design choices:**
 
 1. **Brief-file over argument-passing.** GSD passes the idea document as a workflow argument or pasted text.
-   GSDD uses a well-known file path (`.planning/PROJECT_BRIEF.md`) because:
+   GSDD uses a well-known file path (`.work/PROJECT_BRIEF.md`) because:
    - File reads work on every agent platform (portable)
    - Brief can be inspected and edited before the workflow runs
    - Matches GSDD's "documents to disk" principle (D10)

@@ -822,14 +822,12 @@ function printInitSummary(config) {
   console.log(`  - parallelization: ${config.parallelization}`);
   console.log(`  - commitDocs: ${config.commitDocs}`);
   console.log(`  - modelProfile: ${config.modelProfile}`);
-  if (typeof config.autoAdvance === 'boolean') console.log(`  - autoAdvance: ${config.autoAdvance}`);
+  if (typeof config.autoAdvance === 'boolean') console.log(`  - autoAdvance: ${config.autoAdvance} (new-project bootstrap only)`);
   if (config.workflow) {
     console.log(`  - workflow.research: ${config.workflow.research}`);
     console.log(`  - workflow.discuss: ${config.workflow.discuss}`);
     console.log(`  - workflow.planCheck: ${config.workflow.planCheck}`);
     console.log(`  - workflow.verifier: ${config.workflow.verifier}`);
-    console.log(`  - workflow.showCode: ${config.workflow.showCode}`);
-    console.log(`  - workflow.askBeforeDecide: ${config.workflow.askBeforeDecide}`);
   }
   console.log('');
 }

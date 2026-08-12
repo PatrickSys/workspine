@@ -333,7 +333,7 @@ describe('gsdd models and model propagation', () => {
       assert.strictEqual(config.modelProfile, 'quality');
     });
 
-    test('rigor <level> sets rigorProfile and rewrites the resolved workflow flags', async () => {
+    test('rigor max remains a compatibility input but resets to the current high gates', async () => {
       writeProjectConfig(tmpDir, {});
       const result = await runCliAsMain(tmpDir, ['rigor', 'max']);
       assert.strictEqual(result.exitCode, 0);
@@ -341,8 +341,70 @@ describe('gsdd models and model propagation', () => {
       const config = readJson(path.join(tmpDir, '.work', 'config.json'));
       assert.strictEqual(config.rigorProfile, 'max');
       assert.strictEqual(config.researchDepth, 'deep');
-      assert.strictEqual(config.workflow.showCode, true);
-      assert.strictEqual(config.workflow.askBeforeDecide, true);
+      assert.deepStrictEqual(config.workflow, {
+        research: true,
+        discuss: true,
+        planCheck: true,
+        verifier: true,
+      });
+    });
+
+    test('rigor show preserves legacy keys while reporting them as ignored no-ops', async () => {
+      writeProjectConfig(tmpDir, {
+        rigorProfile: 'max',
+        workflow: {
+          research: true,
+          discuss: true,
+          planCheck: true,
+          verifier: true,
+          showCode: true,
+          askBeforeDecide: true,
+        },
+      });
+      const configPath = path.join(tmpDir, '.work', 'config.json');
+      const before = fs.readFileSync(configPath, 'utf-8');
+
+      const result = await runCliAsMain(tmpDir, ['rigor', 'show']);
+      assert.strictEqual(result.exitCode, 0);
+
+      const payload = JSON.parse(result.output);
+      assert.deepStrictEqual(payload.effective, { plan: 'high', execute: 'high', verify: 'high' });
+      assert.deepStrictEqual(payload.workflow, {
+        research: true,
+        discuss: true,
+        planCheck: true,
+        verifier: true,
+      });
+      assert.deepStrictEqual(payload.deprecatedNoOps, {
+        showCode: 'ignored deprecated no-op',
+        askBeforeDecide: 'ignored deprecated no-op',
+      });
+      assert.match(payload.compatibility.max, /uses the current high rigor gates/i);
+      assert.strictEqual(fs.readFileSync(configPath, 'utf-8'), before);
+    });
+
+    test('explicit rigor reset replaces legacy workflow keys with the canonical active shape', async () => {
+      writeProjectConfig(tmpDir, {
+        workflow: {
+          research: true,
+          discuss: true,
+          planCheck: true,
+          verifier: true,
+          showCode: true,
+          askBeforeDecide: true,
+        },
+      });
+
+      const result = await runCliAsMain(tmpDir, ['rigor', 'high']);
+      assert.strictEqual(result.exitCode, 0);
+
+      const config = readJson(path.join(tmpDir, '.work', 'config.json'));
+      assert.deepStrictEqual(config.workflow, {
+        research: true,
+        discuss: true,
+        planCheck: true,
+        verifier: true,
+      });
     });
 
     test('rigor <step> <level> writes a per-step override without touching the base level', async () => {
@@ -719,19 +781,18 @@ describe('gsdd models and model propagation', () => {
   });
 
   describe('rigor and cost resolvers', () => {
-    test('RIGOR_PROFILES has the four canonical levels with the six-flag workflow shape', async () => {
+    test('RIGOR_PROFILES has the three canonical levels with only active workflow gates', async () => {
       const models = await import('../bin/lib/config.mjs');
-      assert.deepStrictEqual(Object.keys(models.RIGOR_PROFILES), ['low', 'medium', 'high', 'max']);
-      for (const level of ['low', 'medium', 'high', 'max']) {
+      assert.deepStrictEqual(Object.keys(models.RIGOR_PROFILES), ['low', 'medium', 'high']);
+      for (const level of ['low', 'medium', 'high']) {
         const w = models.RIGOR_PROFILES[level].workflow;
-        for (const flag of ['research', 'discuss', 'planCheck', 'verifier', 'showCode', 'askBeforeDecide']) {
+        for (const flag of ['research', 'discuss', 'planCheck', 'verifier']) {
           assert.ok(flag in w, `${level}.workflow.${flag} present`);
         }
+        assert.ok(!('showCode' in w), `${level}.workflow.showCode is not a current gate`);
+        assert.ok(!('askBeforeDecide' in w), `${level}.workflow.askBeforeDecide is not a current gate`);
       }
-      assert.strictEqual(models.RIGOR_PROFILES.low.workflow.showCode, false);
-      assert.strictEqual(models.RIGOR_PROFILES.medium.workflow.askBeforeDecide, false);
-      assert.strictEqual(models.RIGOR_PROFILES.high.workflow.showCode, true);
-      assert.strictEqual(models.RIGOR_PROFILES.max.workflow.askBeforeDecide, true);
+      assert.strictEqual(models.resolveRigor('max'), models.RIGOR_PROFILES.high);
     });
 
     test('legacy rigor names alias to the new levels', async () => {
@@ -745,9 +806,9 @@ describe('gsdd models and model propagation', () => {
       const models = await import('../bin/lib/config.mjs');
       const config = { rigorProfile: 'low', rigorOverrides: { verify: 'max' } };
       assert.strictEqual(models.resolveStepRigor(config, 'plan'), models.RIGOR_PROFILES.low);
-      assert.strictEqual(models.resolveStepRigor(config, 'verify'), models.RIGOR_PROFILES.max);
+      assert.strictEqual(models.resolveStepRigor(config, 'verify'), models.RIGOR_PROFILES.high);
       assert.strictEqual(models.effectiveRigorLevel(config, 'plan'), 'low');
-      assert.strictEqual(models.effectiveRigorLevel(config, 'verify'), 'max');
+      assert.strictEqual(models.effectiveRigorLevel(config, 'verify'), 'high');
       assert.strictEqual(models.resolveStepRigor({}, 'plan'), models.RIGOR_PROFILES.medium);
     });
 
@@ -778,7 +839,7 @@ describe('gsdd models and model propagation', () => {
       }
     });
 
-    test('buildDefaultConfig output schema has all legacy keys', async () => {
+    test('buildDefaultConfig output schema has only current rigor gates', async () => {
       const models = await import('../bin/lib/config.mjs');
       const config = models.buildDefaultConfig();
       assert.ok('researchDepth' in config);
@@ -791,8 +852,8 @@ describe('gsdd models and model propagation', () => {
       assert.ok('discuss' in config.workflow);
       assert.ok('planCheck' in config.workflow);
       assert.ok('verifier' in config.workflow);
-      assert.ok('showCode' in config.workflow);
-      assert.ok('askBeforeDecide' in config.workflow);
+      assert.ok(!('showCode' in config.workflow));
+      assert.ok(!('askBeforeDecide' in config.workflow));
       assert.ok('gitProtocol' in config);
       assert.ok('initVersion' in config);
       assert.strictEqual(config.workflow.verifier, true);
