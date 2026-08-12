@@ -9,6 +9,7 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const { execFileSync } = require('node:child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
@@ -1833,9 +1834,42 @@ describe('G12 — Documentation Accuracy Guards', () => {
       'package.json description must avoid banned jargon and launch-proof overclaims. FIX: Keep package metadata plain and proof-first.');
   });
 
-  test('package.json exposes npm test alias for README test command', () => {
-    assert.strictEqual(pkg.scripts.test, 'npm run test:gsdd',
-      'package.json must expose "npm test" as an alias to test:gsdd. FIX: Add a test script alias.');
+  test('packed package exposes only its runtime/reference closure and no source-only test contract', () => {
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsdd-pack-dry-run-cache-'));
+    let packed;
+    try {
+      const npmArgs = ['pack', '--dry-run', '--json', '--ignore-scripts'];
+      const command = process.platform === 'win32' ? 'cmd.exe' : 'npm';
+      const commandArgs = process.platform === 'win32'
+        ? ['/d', '/s', '/c', `npm ${npmArgs.join(' ')}`]
+        : npmArgs;
+      packed = JSON.parse(execFileSync(command, commandArgs, {
+        cwd: ROOT,
+        encoding: 'utf-8',
+        env: { ...process.env, npm_config_cache: cacheDir },
+      }));
+    } finally {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+    }
+    const packedPaths = new Set(packed[0].files.map(({ path: filePath }) => filePath));
+
+    for (const requiredPath of [
+      'distilled/references/proof-rules.md',
+      'distilled/references/observation-record.md',
+      'bin/lib/candidate-provenance.mjs',
+      'bin/lib/manifest.mjs',
+    ]) {
+      assert.ok(packedPaths.has(requiredPath),
+        `npm pack --dry-run must include ${requiredPath}. FIX: Keep the explicit runtime/reference closure in package.json#files.`);
+    }
+    for (const excludedPath of ['tests/', '.work/', '.planning/']) {
+      assert.ok(![...packedPaths].some((filePath) => filePath.startsWith(excludedPath)),
+        `npm pack --dry-run must exclude ${excludedPath}. FIX: Do not ship source-only test or planning state.`);
+    }
+    assert.ok(!pkg.files.includes('distilled/'),
+      'package.json must not publish the entire distilled/ directory wholesale. FIX: Keep the allowlist narrow.');
+    assert.ok(!Object.hasOwn(pkg.scripts, 'test') && !Object.hasOwn(pkg.scripts, 'test:gsdd'),
+      'package.json must not advertise source-only test scripts whose runner is excluded from the tarball. FIX: Remove test and test:gsdd.');
   });
 });
 
@@ -2156,7 +2190,7 @@ describe('G43 - Release Packaging Invariants', () => {
 
     assert.ok(!pkg.files.includes('distilled/'),
       'package.json must not publish the entire distilled/ directory wholesale. FIX: Enumerate the required distilled surfaces explicitly.');
-    for (const requiredPath of ['distilled/DESIGN.md', 'distilled/README.md', 'distilled/templates/', 'distilled/workflows/']) {
+    for (const requiredPath of ['distilled/DESIGN.md', 'distilled/README.md', 'distilled/templates/', 'distilled/workflows/', 'distilled/references/']) {
       assert.ok(pkg.files.includes(requiredPath),
         `package.json must publish ${requiredPath}. FIX: Keep runtime-required distilled sources in the tarball.`);
     }

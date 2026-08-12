@@ -3810,8 +3810,8 @@ describe('G43 - Release Packaging Audit', () => {
     const releaseConfig = fs.readFileSync(path.join(ROOT, '.releaserc.json'), 'utf-8');
     const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
 
-    assert.match(releaseWorkflow, /Run tests[\s\S]*npm run test:gsdd/i,
-      'release.yml must run the full GSDD test suite before publishing. FIX: Keep npm run test:gsdd in the release workflow.');
+    assert.match(releaseWorkflow, /Run tests[\s\S]*node tests\/run-all\.cjs --covers=gsdd\.next-card\.test\.cjs/i,
+      'release.yml must run the full source GSDD test suite directly before publishing. FIX: Invoke tests/run-all.cjs with the existing coverage target.');
     assert.match(releaseWorkflow, /Audit packed tarball surface[\s\S]*npm pack --dry-run --json/i,
       'release.yml must audit the packed tarball before publishing. FIX: Add an npm pack --dry-run --json step before release.');
     assert.match(releaseWorkflow, /id-token: write/i,
@@ -3846,6 +3846,25 @@ describe('G43 - Release Packaging Audit', () => {
       'package.json must block manual or feature-branch npm publish. FIX: Keep the prepublishOnly release-workflow guard.');
     assert.match(packageJson.devDependencies['semantic-release'] || '', /\^25\./,
       'package.json must keep semantic-release on v25+ so @semantic-release/npm supports OIDC trusted publishing. FIX: Upgrade semantic-release.');
+  });
+
+  test('smoke workflow verifies a disposable installed tarball instead of source checkout paths', () => {
+    const smokeWorkflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'smoke.yml'), 'utf-8');
+
+    assert.match(smokeWorkflow, /node tests\/run-all\.cjs --covers=gsdd\.next-card\.test\.cjs/,
+      'smoke.yml must run the source suite directly. FIX: Invoke tests/run-all.cjs with the existing coverage target.');
+    assert.match(smokeWorkflow, /npm pack --ignore-scripts --pack-destination "\$PACK_DIR"/,
+      'smoke.yml must put the real tarball in a disposable pack directory. FIX: Use npm pack --pack-destination "$PACK_DIR".');
+    for (const requiredReference of ['distilled/references/proof-rules.md', 'distilled/references/observation-record.md']) {
+      assert.match(smokeWorkflow, new RegExp(`test -f "\\$PACKAGE_DIR/${requiredReference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+        `smoke.yml must assert installed ${requiredReference}. FIX: Check the reference inside node_modules/gsdd-cli.`);
+    }
+    assert.match(smokeWorkflow, /test ! -e "\$PACKAGE_DIR\/tests"/,
+      'smoke.yml must assert source tests are absent from the installed package. FIX: Check the installed package, not the checkout.');
+    assert.match(smokeWorkflow, /pkg\.scripts\?\.test \|\| pkg\.scripts\?\.\['test:gsdd'\]/,
+      'smoke.yml must reject source-only test scripts in the installed package metadata. FIX: Inspect installed package.json.');
+    assert.match(smokeWorkflow, /node_modules\/.bin\/gsdd help/,
+      'smoke.yml must run gsdd help from the disposable installed package. FIX: Execute the installed binary.');
   });
 });
 

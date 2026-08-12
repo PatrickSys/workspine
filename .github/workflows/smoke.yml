@@ -30,11 +30,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TARBALL="$GITHUB_WORKSPACE/$(npm pack --silent)"
+          PACK_DIR="$(mktemp -d)"
           INSTALL_DIR="$(mktemp -d)"
+          npm pack --ignore-scripts --pack-destination "$PACK_DIR" --silent >/dev/null
+          TARBALL="$(find "$PACK_DIR" -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          test -n "$TARBALL"
           cd "$INSTALL_DIR"
           npm init -y >/dev/null
-          npm install --no-save "$TARBALL" >/dev/null
+          npm install --ignore-scripts --no-save "$TARBALL" >/dev/null
+          PACKAGE_DIR="$INSTALL_DIR/node_modules/gsdd-cli"
+          test -f "$PACKAGE_DIR/distilled/references/proof-rules.md"
+          test -f "$PACKAGE_DIR/distilled/references/observation-record.md"
+          test ! -e "$PACKAGE_DIR/tests"
+          node -e "const pkg=require(process.argv[1]); if (pkg.scripts?.test || pkg.scripts?.['test:gsdd']) process.exit(1)" "$PACKAGE_DIR/package.json"
           ./node_modules/.bin/gsdd help
       - name: Full test suite (includes the next-card snapshot)
-        run: npm test
+        run: node tests/run-all.cjs --covers=gsdd.next-card.test.cjs
