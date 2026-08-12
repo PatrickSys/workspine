@@ -438,14 +438,16 @@ If any self-check fails, fix it and re-check before reporting completion.
 After each task (verification passed, done criteria met):
 
 1. Stage task-related files individually (never `git add .` or `git add -A`).
-2. If the repo or user expects a commit here, use the existing project convention.
-3. Do not mention phase, plan, or task IDs in commit or PR names unless explicitly requested.
-4. Record any relevant commit hash for SUMMARY.md when a commit is made.
+2. If the repo or user expects a Workspine-directed commit here, before staging run `node .work/bin/gsdd.mjs git-identity check`. Capture/show its author and committer identities, config origins, and fingerprint. Missing, placeholder, mismatch, or other refusal stops before staging. An unusual bot/CI-style identity requires cooperative explicit current-run confirmation for that exact fingerprint, then rerun with `--confirm <fingerprint>`; this is workflow evidence, not authentication.
+3. Immediately before the owned `git commit`, rerun `node .work/bin/gsdd.mjs git-identity check --expect <fingerprint>` (and the same `--confirm <fingerprint>` when confirmation was required). Drift or any refusal stops the commit. Record the fingerprint and resulting commit OID in SUMMARY.md. Do not run this check for planning, local lifecycle work, verification, or any other no-commit operation.
+4. Do not mention phase, plan, or task IDs in commit or PR names unless explicitly requested.
+5. Record any relevant commit hash for SUMMARY.md when a commit is made.
 
 Git rules:
 - Repo and user conventions win first.
-- `.work/config.json -> gitProtocol` is advisory only.
+- `.work/config.json -> gitProtocol` is authoritative delivery guidance. Resolve branch, commit, and PR rules with the current user/approved plan and repository/team conventions; conflicts stop rather than being guessed.
 - Do not force one commit per task unless the repo or user asked for that.
+- **No default push or PR:** local commit is the default. Push or PR creation occurs only when the resolved current user/approved-plan request, repository/team convention, and configured `gitProtocol` explicitly call for it.
 
 <quality_guarantees>
 - **Git stays repo-native.** The executor does not invent branch names, PR timing, or phase-scoped commit formats.

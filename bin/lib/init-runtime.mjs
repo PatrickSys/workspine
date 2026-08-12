@@ -204,6 +204,8 @@ Commands:
   phase-status <N> <status>   Update ROADMAP.md phase status ([ ] / [-] / [x])
   lifecycle-preflight <surface> [phase]
                               Inspect deterministic lifecycle gate results for a workflow surface
+  git-identity check [--expect <fingerprint>] [--confirm <fingerprint>]
+                              Inspect the current worktree Git identity read-only before an owned commit
   help                        Show this summary
 
 Platforms (for --tools):

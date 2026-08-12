@@ -23,6 +23,7 @@ import { createCmdJourney } from './lib/journey.mjs';
 import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
 import { resolveStateDir } from './lib/state-dir.mjs';
+import { createCmdGitIdentity } from './lib/git-identity.mjs';
 import { FRAMEWORK_VERSION, WORKFLOWS } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -71,6 +72,7 @@ const cmdInstall = createCmdInstall(INIT_CONTEXT);
 const cmdHealth = createCmdHealth(INIT_CONTEXT);
 const cmdNext = createCmdNext(INIT_CONTEXT);
 const cmdJourney = createCmdJourney(INIT_CONTEXT);
+const cmdGitIdentity = createCmdGitIdentity(INIT_CONTEXT);
 
 const cmdUpdate = (...updateArgs) => {
   const { args: normalizedArgs, workspaceRoot, invalid, error } = resolveWorkspaceContext(updateArgs, { cwd: INIT_CONTEXT.cwd });
@@ -94,6 +96,7 @@ const COMMANDS = {
   remember: cmdRemember,
   decisions: cmdDecisions,
   journey: cmdJourney,
+  'git-identity': cmdGitIdentity,
   'find-phase': cmdFindPhase,
   'phase-status': cmdPhaseStatus,
   verify: cmdVerify,
@@ -128,4 +131,4 @@ if (IS_MAIN) {
     if (typeof process.stdin.unref === 'function') process.stdin.unref();
   }
 }
-export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdJourney, cmdFileOp, cmdLifecyclePreflight, cmdRemember, cmdDecisions, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdJourney, cmdGitIdentity, cmdFileOp, cmdLifecyclePreflight, cmdRemember, cmdDecisions, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

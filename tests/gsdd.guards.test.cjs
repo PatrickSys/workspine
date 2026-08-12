@@ -18,6 +18,7 @@ const INIT_MODULE = path.join(ROOT, 'bin', 'lib', 'init.mjs');
 const INIT_RUNTIME_MODULE = path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs');
 const LIFECYCLE_STATE_MODULE = path.join(ROOT, 'bin', 'lib', 'lifecycle-state.mjs');
 const LIFECYCLE_PREFLIGHT_MODULE = path.join(ROOT, 'bin', 'lib', 'lifecycle-preflight.mjs');
+const GIT_IDENTITY_MODULE = path.join(ROOT, 'bin', 'lib', 'git-identity.mjs');
 const TEMPLATES_MODULE = path.join(ROOT, 'bin', 'lib', 'templates.mjs');
 const README_MD = path.join(ROOT, 'README.md');
 const DISTILLED_README_MD = path.join(ROOT, 'distilled', 'README.md');
@@ -1433,7 +1434,7 @@ describe('G22 - Workflow Completion Routing', () => {
       /SUMMARY\.md/,
       /evidence/i,
       /verification/i,
-      /PR creation/i,
+      /No default push or PR/i,
     ]) {
       assert.match(content, pattern,
         `execute.md must preserve hard-rule invariant ${pattern}. FIX: Restore the guardrail while keeping tiered reads.`);
@@ -3160,9 +3161,23 @@ describe('G36 - Git Branch Safety', () => {
       'execute.md naming hygiene must cover internal milestone labels. FIX: Extend the naming rule to milestone labels.');
   });
 
-  test('execute.md git rules require PR creation after committing on a feature branch', () => {
-    assert.match(gitRulesSection, /PR creation|create a PR/i,
-      'execute.md must instruct the executor to create a PR after committing on a feature branch. FIX: Add a PR creation rule to the git rules section.');
+  test('execute.md resolves delivery through gitProtocol without default push or PR creation', () => {
+    assert.match(gitRulesSection, /gitProtocol.*authoritative/i,
+      'execute.md must treat configured gitProtocol as the delivery contract. FIX: Bind delivery decisions to gitProtocol.');
+    assert.match(gitRulesSection, /No default push or PR/i,
+      'execute.md must forbid default external delivery. FIX: Add the no-default-push/PR boundary.');
+    assert.doesNotMatch(gitRulesSection, /gitProtocol.*advisory only/i,
+      'execute.md must not downgrade gitProtocol to advisory prose. FIX: Remove advisory-only wording.');
+  });
+
+  test('identity inspector remains a read-only package command', () => {
+    const source = fs.readFileSync(GIT_IDENTITY_MODULE, 'utf-8');
+    assert.match(source, /createCmdGitIdentity/,
+      'git-identity helper must expose the package command factory.');
+    assert.doesNotMatch(source, /\bgit\s+(add|commit|push|checkout)\b|config\s+--(add|replace|unset)/i,
+      'git-identity helper must not contain Git mutation commands.');
+    assert.match(fs.readFileSync(GSDD_PATH, 'utf-8'), /'git-identity': cmdGitIdentity/,
+      'package CLI must register git-identity.');
   });
 
   test('recorded PR incidents remain explicit regression fixtures for public naming hygiene', () => {

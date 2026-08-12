@@ -179,9 +179,7 @@ git add src/routes/users.ts src/app/users/page.tsx tests/users.route.test.ts
 # Commit message — conventional type prefix
 git commit -m "feat: wire users page to real route"
 ```
-
 **Conventional commit type reference** (advisory — repo/user conventions override):
-
 | Type | Use when |
 |------|----------|
 | `feat` | New user-facing feature |
@@ -192,16 +190,17 @@ git commit -m "feat: wire users page to real route"
 | `docs` | Documentation only |
 | `style` | Formatting, whitespace, no logic change |
 | `chore` | Build, tooling, dependencies |
-
 Git rules:
 - **Repo and user conventions win first.** This table is a reference, not a mandate.
-- `.work/config.json -> gitProtocol` is advisory only.
+- `.work/config.json -> gitProtocol` is authoritative delivery guidance. Resolve its branch, commit, and PR rules together with the current user or approved plan and repository/team conventions; if they conflict, stop rather than guessing.
 - **Stage only files listed in the plan's `files-modified` frontmatter.** Never use `git add .` or `git add -A`. If you need to stage a file not in `files-modified`, record it as a deviation.
 - **Wrong-branch check:** Before significant implementation begins, verify HEAD is not `main` or `master` if repo convention expects a feature branch; if it is, STOP and hard-warn the user before proceeding.
 - **Transition-safety warning pass:** Before significant implementation begins, inspect staged, unstaged, untracked, unpushed, PR-less, stale/spent, and mixed-scope branch signals. Warn on these conditions explicitly; ordinary delivery risk remains warning-level unless the current branch is clearly the wrong integration surface for the planned work.
 - Do not mention phase, plan, task, or requirement IDs, or internal milestone labels, in commit messages, PR titles, or PR bodies unless explicitly requested.
 - Do not force one commit per task unless the repo or user asked for that.
-- **PR creation:** After committing work on a feature branch, create a PR before reporting completion unless the user or plan explicitly says otherwise.
+- **Commit-boundary identity check:** Only when this executor is about to make a Workspine-directed commit, before staging run `node .work/bin/gsdd.mjs git-identity check`. Capture and show the inspected author/committer identities, configuration origins, and fingerprint. A missing, placeholder, mismatch, or other refusal stops before staging. For an unusual bot/CI-style identity, obtain a cooperative explicit current-run confirmation for that exact fingerprint, then rerun with `--confirm <fingerprint>`; this is auditable workflow evidence, not authentication.
+- **Immediate recheck:** Immediately before the owned `git commit`, rerun `node .work/bin/gsdd.mjs git-identity check --expect <fingerprint>` (and the same `--confirm <fingerprint>` when confirmation was required). Drift or any refusal stops the commit. Record the fingerprint and resulting commit OID in SUMMARY.md. Do not run this identity check for planning, local lifecycle files, verification, or any other no-commit operation.
+- **No default push or PR:** A local commit remains local by default. Push or PR creation occurs only when the resolved current user/approved-plan request, repository/team convention, and configured `gitProtocol` explicitly call for it. Never create either as a default side effect.
 </execution_loop>
 
 <deviation_rules>

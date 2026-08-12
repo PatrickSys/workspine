@@ -613,6 +613,82 @@ describe('gsdd init and update', () => {
     assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'bin')), '.agents/bin must not be generated');
   });
 
+  test('generated helper copies and exposes the read-only git-identity check', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--auto', '--tools', 'agents');
+    } finally {
+      restoreStdin();
+    }
+    execFileSync('git', ['-C', tmpDir, 'init'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', tmpDir, 'config', 'user.name', 'Generated Helper User']);
+    execFileSync('git', ['-C', tmpDir, 'config', 'user.email', 'generated@company.test']);
+
+    const source = fs.readFileSync(path.join(__dirname, '..', 'bin', 'lib', 'git-identity.mjs'), 'utf-8');
+    const copied = fs.readFileSync(path.join(tmpDir, '.work', 'bin', 'lib', 'git-identity.mjs'), 'utf-8');
+    assert.strictEqual(copied, source, 'generated helper must use the source identity inspector bytes');
+
+    const result = runGeneratedHelper(tmpDir, tmpDir, ['git-identity', 'check']);
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.strictEqual(JSON.parse(result.stdout).identity.classification, 'valid');
+  });
+
+  test('generated git-identity resolves helper ownership and a top-level workspace override at invocation time', async () => {
+    const foreignDir = createTempProject();
+    const targetDir = createTempProject();
+    try {
+      for (const root of [tmpDir, targetDir]) {
+        const initialized = await runCliAsMain(root, ['init', '--auto', '--tools', 'agents']);
+        assert.strictEqual(initialized.exitCode, 0, initialized.output);
+      }
+      for (const [root, name, email] of [
+        [tmpDir, 'Owner Identity', 'owner@company.test'],
+        [foreignDir, 'Foreign Identity', 'foreign@company.test'],
+        [targetDir, 'Override Identity', 'override@company.test'],
+      ]) {
+        execFileSync('git', ['-C', root, 'init'], { stdio: 'ignore' });
+        execFileSync('git', ['-C', root, 'config', 'user.name', name]);
+        execFileSync('git', ['-C', root, 'config', 'user.email', email]);
+      }
+
+      const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
+      const before = new Map([
+        [tmpDir, snapshotTree(tmpDir)],
+        [foreignDir, snapshotTree(foreignDir)],
+        [targetDir, snapshotTree(targetDir)],
+      ]);
+
+      let result = spawnSync(process.execPath, [helperPath, 'git-identity', 'check'], {
+        cwd: foreignDir,
+        encoding: 'utf-8',
+      });
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      const ownerReport = JSON.parse(result.stdout);
+      assert.strictEqual(ownerReport.repository.worktree, path.resolve(tmpDir).replace(/\\/g, '/'));
+      assert.strictEqual(ownerReport.config.name.value, 'Owner Identity');
+      assert.match(ownerReport.fingerprint, /^[a-f0-9]{64}$/);
+
+      result = spawnSync(process.execPath, [helperPath, '--workspace-root', targetDir, 'git-identity', 'check'], {
+        cwd: foreignDir,
+        encoding: 'utf-8',
+      });
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      const overrideReport = JSON.parse(result.stdout);
+      assert.strictEqual(overrideReport.repository.worktree, path.resolve(targetDir).replace(/\\/g, '/'));
+      assert.strictEqual(overrideReport.config.name.value, 'Override Identity');
+      assert.match(overrideReport.fingerprint, /^[a-f0-9]{64}$/);
+      assert.notStrictEqual(overrideReport.fingerprint, ownerReport.fingerprint);
+
+      for (const [root, snapshot] of before) {
+        assert.deepStrictEqual(snapshotTree(root), snapshot, 'generated identity inspection must not change any selected or foreign repository');
+      }
+    } finally {
+      cleanup(foreignDir);
+      cleanup(targetDir);
+    }
+  });
+
   test('generated next resolves helper bootstrap and explicit workspace overrides at invocation time', async () => {
     const foreignDir = createTempProject();
     const overrideDir = createTempProject();

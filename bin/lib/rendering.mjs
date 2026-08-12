@@ -11,6 +11,7 @@ const HELPER_LIB_FILES = Object.freeze([
   'control-map.mjs',
   'decision-cli.mjs',
   'file-ops.mjs',
+  'git-identity.mjs',
   'lifecycle-preflight.mjs',
   'lifecycle-state.mjs',
   'next.mjs',
@@ -61,6 +62,7 @@ function renderPlanningCliLauncher({ stateDirName = DEFAULT_STATE_DIR_NAME } = {
   return `#!/usr/bin/env node
 
 import { cmdFileOp } from './lib/file-ops.mjs';
+import { createCmdGitIdentity } from './lib/git-identity.mjs';
 import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
 import { cmdPhaseStatus, cmdVerify } from './lib/phase.mjs';
 import { buildControlMap } from './lib/control-map.mjs';
@@ -75,6 +77,7 @@ const HELPER_CONTEXT = {
   frameworkVersion: 'generated-helper',
 };
 const cmdNext = createCmdNext(HELPER_CONTEXT);
+const cmdGitIdentity = createCmdGitIdentity(HELPER_CONTEXT);
 
 function cmdControlMap(...controlArgs) {
   const context = resolveWorkspaceContext([], { cwd: HELPER_CONTEXT.cwd });
@@ -102,6 +105,7 @@ const COMMANDS = {
   'control-map': cmdControlMap,
   decisions: cmdDecisionsQuery,
   'file-op': cmdFileOp,
+  'git-identity': cmdGitIdentity,
   'lifecycle-preflight': cmdLifecyclePreflight,
   'phase-status': cmdPhaseStatus,
   remember: cmdRememberCandidate,
@@ -137,6 +141,8 @@ function printHelp() {
     '  file-op <copy|delete|regex-sub>',
     '                               Raw workspace-confined file mutation; outside decision authority protocol',
     '                               Example: node ${helperPath} file-op delete ${checkpointBackupPath} --missing ok',
+    '  git-identity check [--expect <fingerprint>] [--confirm <fingerprint>]',
+    '                               Inspect the exact worktree identity read-only before an owned commit',
     '  phase-status <N> <status>   Update ROADMAP.md phase status ([ ] / [-] / [x])',
     '                               Example: node ${helperPath} phase-status 1 done',
     '  verify <N>                  Run direct phase artifact checks',

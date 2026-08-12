@@ -172,6 +172,17 @@ describe('generation manifest', () => {
     await import(pathToFileURL(workContextPath).href);
   });
 
+  test('init installs and hashes the read-only git-identity helper', async () => {
+    await initProject();
+
+    const manifest = readJson(path.join(tmpDir, '.work', 'generation-manifest.json'));
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'lib', 'git-identity.mjs');
+    const sourcePath = path.join(__dirname, '..', 'bin', 'lib', 'git-identity.mjs');
+
+    assert.strictEqual(fs.readFileSync(helperPath, 'utf-8'), fs.readFileSync(sourcePath, 'utf-8'));
+    assert.strictEqual(manifest.runtimeHelpers['bin/lib/git-identity.mjs'], sha256(fs.readFileSync(helperPath)));
+  });
+
   test('init and update preserve the decision CLI helper source bytes and manifest hash', async () => {
     await initProject();
 

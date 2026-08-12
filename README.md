@@ -189,6 +189,7 @@ Use Workspine when a feature takes more than one session, or when you need to sw
 
 ```bash
 npx -y gsdd-cli health                  # workspace integrity check
+npx -y gsdd-cli git-identity check      # read-only identity check before an owned commit
 npx -y gsdd-cli update                  # regenerate stale runtime surfaces
 npx -y gsdd-cli update --templates      # refresh runtime surfaces and template payloads
 npx -y gsdd-cli next --json             # read .work continuity and emit the next action packet

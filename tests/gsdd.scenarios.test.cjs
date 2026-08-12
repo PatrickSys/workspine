@@ -1007,7 +1007,7 @@ describe('S5 — Config-to-Content Propagation', () => {
     );
   });
 
-  test('auto config has gitProtocol with all 3 fields and execute references gitProtocol', () => {
+  test('auto config has gitProtocol with all 3 fields and generated execute contracts keep it authoritative', () => {
     const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf-8'));
     assert.ok(config.gitProtocol, 'config must have gitProtocol');
     assert.ok(config.gitProtocol.branch, 'gitProtocol must have branch');
@@ -1020,6 +1020,15 @@ describe('S5 — Config-to-Content Propagation', () => {
       content.includes('gitProtocol'),
       'execute skill must reference gitProtocol by name, not just any git string'
     );
+    assert.match(content, /gitProtocol.*authoritative/i,
+      'generated execute skill must treat gitProtocol as authoritative delivery guidance.');
+    assert.match(content, /No default push or PR/i,
+      'generated execute skill must forbid default push or PR creation.');
+    assert.doesNotMatch(content, /gitProtocol.*advisory only/i,
+      'generated execute skill must not retain the advisory-only downgrade.');
+    const executor = fs.readFileSync(path.join(tmpDir, '.work', 'templates', 'roles', 'executor.md'), 'utf-8');
+    assert.match(executor, /git-identity check/, 'generated executor role must include the commit-boundary identity check.');
+    assert.match(executor, /No default push or PR/i, 'generated executor role must forbid default external delivery.');
   });
 
   test('auto config has modelProfile = balanced', () => {
