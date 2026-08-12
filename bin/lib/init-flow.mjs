@@ -82,12 +82,21 @@ function validateKindContract(adapter, cwd) {
 
 export function createCmdInit(ctx) {
   return async function cmdInit(...initArgs) {
+    const workspace = resolveWorkspaceContext(initArgs, { cwd: ctx.cwd });
+    if (workspace.invalid) {
+      console.error(`ERROR: ${workspace.error}`);
+      process.exitCode = 1;
+      return;
+    }
+    const normalizedArgs = workspace.args;
+    let initCtx = contextAtWorkspaceRoot(ctx, workspace.workspaceRoot);
+
     console.log('gsdd init - setting up GSDD workflow\n');
 
-    const isAuto = parseAutoFlag(initArgs);
-    const wantsMigration = initArgs.includes('--migrate');
-    const toolsFlag = parseFlagValue(initArgs, '--tools');
-    const briefFlag = parseFlagValue(initArgs, '--brief');
+    const isAuto = parseAutoFlag(normalizedArgs);
+    const wantsMigration = normalizedArgs.includes('--migrate');
+    const toolsFlag = parseFlagValue(normalizedArgs, '--tools');
+    const briefFlag = parseFlagValue(normalizedArgs, '--brief');
     let briefSource = null;
 
     if (toolsFlag.invalid) {
@@ -103,7 +112,7 @@ export function createCmdInit(ctx) {
     }
 
     if (briefFlag.value) {
-      briefSource = isAbsolute(briefFlag.value) ? briefFlag.value : join(ctx.cwd, briefFlag.value);
+      briefSource = isAbsolute(briefFlag.value) ? briefFlag.value : join(initCtx.cwd, briefFlag.value);
       if (!existsSync(briefSource)) {
         console.error(`ERROR: Brief file not found: ${briefFlag.value}`);
         process.exitCode = 1;
@@ -111,20 +120,13 @@ export function createCmdInit(ctx) {
       }
     }
 
-    const parsedTools = parseToolsFlag(initArgs);
+    const parsedTools = parseToolsFlag(normalizedArgs);
     if (isAuto && parsedTools.length === 0) {
       console.error('ERROR: --auto requires --tools <platform>. Example: npx -y gsdd-cli init --auto --tools claude');
       process.exitCode = 1;
       return;
     }
 
-    const workspace = resolveWorkspaceContext([], { cwd: ctx.cwd });
-    if (workspace.invalid) {
-      console.error(`ERROR: ${workspace.error}`);
-      process.exitCode = 1;
-      return;
-    }
-    let initCtx = contextAtWorkspaceRoot(ctx, workspace.workspaceRoot);
     let state = resolveStateDir(initCtx.cwd);
     const promptApi = ctx.initPromptApi || createInitPromptApi();
 

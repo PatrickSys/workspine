@@ -56,11 +56,24 @@ function snapshotTree(directory, prefix = '') {
     .flatMap((entry) => {
       const relativePath = path.join(prefix, entry.name);
       const fullPath = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        return [{
+          path: relativePath.split(path.sep).join('/'),
+          link: fs.readlinkSync(fullPath),
+        }];
+      }
       return entry.isDirectory()
         ? [{ path: `${relativePath.replace(/\\/g, '/')}/`, directory: true }, ...snapshotTree(fullPath, relativePath)]
         : [{ path: relativePath.replace(/\\/g, '/'), bytes: fs.readFileSync(fullPath) }];
     })
     .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function runPublicCli(cwd, args) {
+  return spawnSync(process.execPath, [
+    path.join(__dirname, '..', 'bin', 'gsdd.mjs'),
+    ...args,
+  ], { cwd, encoding: 'utf-8' });
 }
 
 function runGeneratedHelper(workspaceRoot, cwd, args) {
@@ -135,6 +148,126 @@ describe('gsdd init and update', () => {
 
   afterEach(() => {
     cleanup(tmpDir);
+  });
+
+  test('public init honors a command-scoped workspace root from a foreign marked cwd', () => {
+    const foreignRoot = createTempProject();
+    const targetRoot = createTempProject();
+    const foreignCwd = path.join(foreignRoot, 'nested', 'invocation');
+    fs.mkdirSync(path.join(foreignRoot, '.git'));
+    fs.mkdirSync(foreignCwd, { recursive: true });
+    const foreignBefore = snapshotTree(foreignRoot);
+    const targetBefore = snapshotTree(targetRoot);
+
+    try {
+      const result = runPublicCli(foreignCwd, [
+        'init', '--workspace-root', targetRoot, '--auto', '--tools', 'agents',
+      ]);
+
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.ok(fs.existsSync(path.join(targetRoot, '.work', 'config.json')));
+      assert.strictEqual(fs.existsSync(path.join(targetRoot, '.planning')), false);
+      assert.deepStrictEqual(snapshotTree(foreignRoot), foreignBefore,
+        'foreign marked workspace must remain byte-identical');
+      assert.notDeepStrictEqual(snapshotTree(targetRoot), targetBefore,
+        'the explicit target must receive the initialization output');
+    } finally {
+      cleanup(foreignRoot);
+      cleanup(targetRoot);
+    }
+  });
+
+  test('public init resolves a relative brief from the explicit workspace root', () => {
+    const foreignRoot = createTempProject();
+    const targetRoot = createTempProject();
+    const foreignCwd = path.join(foreignRoot, 'nested', 'invocation');
+    const targetBrief = 'Target brief is authoritative.\n';
+    fs.mkdirSync(path.join(foreignRoot, '.git'));
+    fs.mkdirSync(foreignCwd, { recursive: true });
+    fs.writeFileSync(path.join(foreignCwd, 'brief.md'), 'Foreign brief must not be read.\n');
+    fs.writeFileSync(path.join(targetRoot, 'brief.md'), targetBrief);
+    const foreignBefore = snapshotTree(foreignRoot);
+
+    try {
+      const result = runPublicCli(foreignCwd, [
+        'init', '--workspace-root', targetRoot, '--brief', 'brief.md', '--auto', '--tools', 'agents',
+      ]);
+
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.strictEqual(
+        fs.readFileSync(path.join(targetRoot, '.work', 'PROJECT_BRIEF.md'), 'utf-8'),
+        targetBrief,
+      );
+      assert.deepStrictEqual(snapshotTree(foreignRoot), foreignBefore,
+        'foreign cwd and its conflicting brief must remain byte-identical');
+    } finally {
+      cleanup(foreignRoot);
+      cleanup(targetRoot);
+    }
+  });
+
+  test('public init refuses invalid explicit workspace roots before any write', (t) => {
+    const foreignRoot = createTempProject();
+    const foreignCwd = path.join(foreignRoot, 'nested', 'invocation');
+    const invalidParent = createTempProject();
+    const absentRoot = path.join(invalidParent, 'absent-root');
+    const fileRoot = path.join(invalidParent, 'regular-file-root');
+    const realRoot = path.join(invalidParent, 'real-root');
+    const linkedRoot = path.join(invalidParent, 'linked-root');
+    fs.mkdirSync(path.join(foreignRoot, '.git'));
+    fs.mkdirSync(foreignCwd, { recursive: true });
+    fs.writeFileSync(fileRoot, 'not a directory\n');
+    fs.mkdirSync(realRoot);
+
+    const invalidCases = [
+      {
+        name: 'missing value',
+        args: ['init', '--workspace-root', '--auto', '--tools', 'agents'],
+        expected: /Usage: --workspace-root <path>/,
+      },
+      {
+        name: 'absent root',
+        args: ['init', '--workspace-root', absentRoot, '--auto', '--tools', 'agents'],
+        expected: /Workspace root is not a real directory/,
+      },
+      {
+        name: 'regular-file root',
+        args: ['init', '--workspace-root', fileRoot, '--auto', '--tools', 'agents'],
+        expected: /Workspace root is not a real directory/,
+      },
+    ];
+
+    try {
+      try {
+        fs.symlinkSync(realRoot, linkedRoot, 'junction');
+        invalidCases.push({
+          name: 'linked root',
+          args: ['init', '--workspace-root', linkedRoot, '--auto', '--tools', 'agents'],
+          expected: /Workspace root is not a real directory/,
+        });
+      } catch (error) {
+        if (!['EPERM', 'EACCES', 'ENOTSUP'].includes(error?.code)) throw error;
+        t.diagnostic(`linked-root coverage skipped: ${error.code}`);
+      }
+
+      for (const invalidCase of invalidCases) {
+        const before = new Map([
+          [foreignRoot, snapshotTree(foreignRoot)],
+          [invalidParent, snapshotTree(invalidParent)],
+        ]);
+        const result = runPublicCli(foreignCwd, invalidCase.args);
+
+        assert.notStrictEqual(result.status, 0, `${invalidCase.name} unexpectedly succeeded`);
+        assert.match(`${result.stdout}\n${result.stderr}`, invalidCase.expected);
+        for (const [root, snapshot] of before) {
+          assert.deepStrictEqual(snapshotTree(root), snapshot,
+            `${invalidCase.name} must not change ${root}`);
+        }
+      }
+    } finally {
+      cleanup(foreignRoot);
+      cleanup(invalidParent);
+    }
   });
 
   test('generated helper includes the candidate provenance dependency required by phase verification', async () => {
