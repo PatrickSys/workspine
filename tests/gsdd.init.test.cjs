@@ -1623,6 +1623,110 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(agents, /old block/);
   });
 
+  test('repeat init preserves unknown templates without adopting them into generation ownership', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'agents');
+      const unknown = path.join(tmpDir, '.work', 'templates', 'team-notes.md');
+      fs.writeFileSync(unknown, '# Team-owned template\n');
+
+      await gsdd.cmdInit('--tools', 'agents');
+
+      assert.strictEqual(fs.readFileSync(unknown, 'utf-8'), '# Team-owned template\n');
+      const manifest = readJson(path.join(tmpDir, '.work', 'generation-manifest.json'));
+      assert.ok(!Object.hasOwn(manifest.templates.root, 'team-notes.md'));
+    } finally {
+      restoreStdin();
+    }
+  });
+
+  for (const [name, setup] of [
+    ['config-only', (root) => fs.writeFileSync(path.join(root, '.work', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }))],
+    ['phase-only', (root) => fs.writeFileSync(path.join(root, '.work', 'phases', 'notes.md'), '# Existing phase note\n')],
+  ]) {
+    test(`init bootstraps ${name} .work state without adopting unrelated bytes`, async () => {
+      const stateDir = path.join(tmpDir, '.work');
+      fs.mkdirSync(path.join(stateDir, 'phases'), { recursive: true });
+      setup(tmpDir);
+      const unrelated = path.join(stateDir, 'phases', 'notes.md');
+      if (!fs.existsSync(unrelated)) fs.writeFileSync(unrelated, '# Existing phase note\n');
+      const beforeUnrelated = fs.readFileSync(unrelated, 'utf-8');
+      const restoreStdin = setNonInteractiveStdin();
+      try {
+        const gsdd = await loadGsdd(tmpDir);
+        await gsdd.cmdInit('--tools', 'agents');
+      } finally {
+        restoreStdin();
+      }
+
+      const manifest = readJson(path.join(stateDir, 'generation-manifest.json'));
+      assert.strictEqual(fs.readFileSync(unrelated, 'utf-8'), beforeUnrelated);
+      assert.ok(manifest.templates.delegates['mapper-tech.md']);
+      assert.ok(!Object.hasOwn(manifest.templates.root, 'notes.md'));
+    });
+  }
+
+  test('repeat init reconciles commitDocs false by restoring the configured ignore entry', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'agents');
+      const configPath = path.join(tmpDir, '.work', 'config.json');
+      const config = readJson(configPath);
+      config.commitDocs = false;
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      fs.writeFileSync(path.join(tmpDir, '.gitignore'), 'node_modules/\n');
+
+      await gsdd.cmdInit('--tools', 'agents');
+
+      assert.match(fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf-8'), /^\.work\/$/m);
+    } finally {
+      restoreStdin();
+    }
+  });
+
+  test('repeat init applies default commitDocs semantics to an older partial config', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'agents');
+      fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+      fs.writeFileSync(path.join(tmpDir, '.gitignore'), '.work/\n');
+      const before = snapshotTree(tmpDir);
+
+      const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+
+      assert.notStrictEqual(result.exitCode, 0, result.output);
+      assert.match(result.output, /commitDocs is true/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    } finally {
+      restoreStdin();
+    }
+  });
+
+  test('repeat init refuses an ambiguous commitDocs true ignore entry before any workspace write', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'agents');
+      const configPath = path.join(tmpDir, '.work', 'config.json');
+      const config = readJson(configPath);
+      config.commitDocs = true;
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      fs.writeFileSync(path.join(tmpDir, '.gitignore'), 'node_modules/\n.work/\n');
+      const before = snapshotTree(tmpDir);
+
+      const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+      assert.notStrictEqual(result.exitCode, 0, result.output);
+      assert.match(result.output, /commitDocs is true/);
+
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    } finally {
+      restoreStdin();
+    }
+  });
+
   test('legacy --tools cursor still writes AGENTS.md for backward compatibility', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {

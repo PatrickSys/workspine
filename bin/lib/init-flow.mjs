@@ -12,7 +12,7 @@ import {
 import { buildManifest, fileHash, readManifest, writeManifest } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs';
-import { installProjectTemplates, refreshTemplates } from './templates.mjs';
+import { applyTemplateRefresh, explicitTemplateOwnership, installProjectTemplates, planTemplateRefresh, refreshTemplates, validateTemplateOwnership, validateTemplateSources } from './templates.mjs';
 import {
   detectPlatforms,
   getAdaptersToUpdate,
@@ -171,6 +171,28 @@ export function createCmdInit(ctx) {
     const { planningDir, stateDirName } = initCtx;
 
     const existed = existsSync(planningDir);
+    // Existing state is consumer data. Validate template ownership and tracking
+    // policy before mkdir/config/generated-surface writes can change anything.
+    let templatePlan;
+    let selectedConfig;
+    try {
+      validateTemplateSources(initCtx);
+      const hasGeneratedTemplateState = existsSync(join(planningDir, 'templates'))
+        || existsSync(join(planningDir, 'generation-manifest.json'));
+      templatePlan = existed && hasGeneratedTemplateState
+        ? planTemplateRefresh({ ...initCtx, planningDir, stateDirName })
+        : null;
+      selectedConfig = readSelectedConfig({
+        planningDir,
+        isAuto,
+        preselectedConfig: interactiveSession.config,
+      });
+      preflightCommitDocsOwnership(initCtx.cwd, stateDirName, selectedConfig);
+    } catch (error) {
+      console.error(`ERROR: ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
     mkdirSync(join(planningDir, 'phases'), { recursive: true });
     mkdirSync(join(planningDir, 'research'), { recursive: true });
     console.log(existed
@@ -178,6 +200,7 @@ export function createCmdInit(ctx) {
       : `  - created ${stateDirName}/ directory structure`);
 
     installProjectTemplates(initCtx);
+    if (templatePlan) applyTemplateRefresh(templatePlan);
     await ensureConfig({
       cwd: initCtx.cwd,
       planningDir,
@@ -186,6 +209,9 @@ export function createCmdInit(ctx) {
       preselectedConfig: interactiveSession.config,
       stateDirName,
     });
+    if (!selectedConfig.commitDocs) {
+      ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/`, `  - ensured ${stateDirName}/ is gitignored`);
+    }
     ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/.local/`, `  - ensured ${stateDirName}/.local/ is gitignored`);
 
     if (briefSource) {
@@ -209,6 +235,7 @@ export function createCmdInit(ctx) {
       planningDir,
       frameworkVersion: ctx.frameworkVersion,
       runtimeHelperPaths: runtimeGeneration.runtimeHelperPaths,
+      templateOwnership: templatePlan?.ownership ?? explicitTemplateOwnership(initCtx),
     });
     writeManifest(planningDir, manifest);
     console.log('  - wrote generation manifest');
@@ -243,8 +270,21 @@ export function createCmdUpdate(ctx) {
     let updated = false;
     let runtimeGeneration = null;
 
+    let templateOwnership = null;
+    try {
+      if (doTemplates) {
+        templateOwnership = refreshTemplates({ ...ctx, isDry });
+      } else if (existsSync(planningDir)) {
+        // Updating helpers/adapters may write a new manifest: require valid
+        // prior template ownership before any unrelated generated surface.
+        validateTemplateOwnership(planningDir);
+      }
+    } catch (error) {
+      console.error(`ERROR: ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
     if (doTemplates) {
-      refreshTemplates({ ...ctx, isDry });
       updated = true;
     }
 
@@ -290,6 +330,7 @@ export function createCmdUpdate(ctx) {
           frameworkVersion: ctx.frameworkVersion,
           updateTemplates: doTemplates,
           runtimeHelperPaths: runtimeGeneration.runtimeHelperPaths,
+          templateOwnership,
         });
         if (manifest) {
           writeManifest(planningDir, manifest);
@@ -656,9 +697,17 @@ function applyObsoleteRuntimeHelperCleanup(planningDir, candidates) {
   }
 }
 
-function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates, runtimeHelperPaths }) {
+function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates, runtimeHelperPaths, templateOwnership = null }) {
   const existingManifest = readManifest(planningDir);
-  const nextManifest = buildManifest({ planningDir, frameworkVersion, runtimeHelperPaths });
+  const preservedOwnership = !updateTemplates && existingManifest
+    ? { templates: existingManifest.templates, roles: existingManifest.roles }
+    : null;
+  const nextManifest = buildManifest({
+    planningDir,
+    frameworkVersion,
+    runtimeHelperPaths,
+    templateOwnership: templateOwnership ?? preservedOwnership,
+  });
 
   if (existingManifest && !updateTemplates) {
     nextManifest.templates = existingManifest.templates ?? nextManifest.templates;
@@ -725,6 +774,34 @@ async function ensureConfig({ cwd, planningDir, stateDirName = '.work', isAuto, 
   writeFileSync(configFile, JSON.stringify(selected, null, 2));
   console.log(`  - saved ${stateDirName}/config.json (guided wizard)\n`);
   if (!selected.commitDocs) ensureGitignoreEntry(cwd, ignoreEntry, ignoreMsg);
+}
+
+function readSelectedConfig({ planningDir, isAuto, preselectedConfig }) {
+  const defaults = buildDefaultConfig({ autoAdvance: isAuto });
+  const configFile = join(planningDir, 'config.json');
+  if (existsSync(configFile)) {
+    try {
+      const existing = JSON.parse(readFileSync(configFile, 'utf-8'));
+      return {
+        ...defaults,
+        ...existing,
+        workflow: { ...defaults.workflow, ...(existing.workflow ?? {}) },
+      };
+    } catch {
+      throw new Error('Refusing init: existing config.json is invalid. Repair it before retrying.');
+    }
+  }
+  return preselectedConfig ?? defaults;
+}
+
+function preflightCommitDocsOwnership(cwd, stateDirName, config) {
+  if (!config?.commitDocs) return;
+  const gitignorePath = join(cwd, '.gitignore');
+  if (!existsSync(gitignorePath)) return;
+  const ignored = readFileSync(gitignorePath, 'utf-8').split(/\r?\n/);
+  if (ignored.includes(`${stateDirName}/`)) {
+    throw new Error(`Refusing init: ${stateDirName}/ is already ignored but commitDocs is true. Remove that user-owned ignore entry manually, then retry.`);
+  }
 }
 
 function ensureGitignoreEntry(cwd, entry, message) {

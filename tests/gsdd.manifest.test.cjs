@@ -47,12 +47,28 @@ describe('generation manifest', () => {
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   }
 
+  function snapshotTree(directory, prefix = '') {
+    return fs.readdirSync(directory, { withFileTypes: true })
+      .flatMap((entry) => {
+        const relative = path.join(prefix, entry.name);
+        const full = path.join(directory, entry.name);
+        return entry.isDirectory()
+          ? [{ path: `${relative.replace(/\\/g, '/')}/`, directory: true }, ...snapshotTree(full, relative)]
+          : [{ path: relative.replace(/\\/g, '/'), bytes: fs.readFileSync(full) }];
+      })
+      .sort((left, right) => left.path.localeCompare(right.path));
+  }
+
   async function loadAtomicWrite() {
     return import(pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'atomic-write.mjs')).href);
   }
 
   async function loadGenerationManifest() {
     return import(pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'manifest.mjs')).href);
+  }
+
+  async function loadTemplates() {
+    return import(pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'templates.mjs')).href);
   }
 
   test('init writes generation-manifest.json with correct shape', async () => {
@@ -321,6 +337,32 @@ describe('generation manifest', () => {
     assert.strictEqual(afterContent, beforeContent);
   });
 
+  test('update without --templates refuses corrupt template ownership before helper writes', async () => {
+    await initProject();
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    fs.writeFileSync(manifestPath, '{not-json');
+    const before = snapshotTree(tmpDir);
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+
+    assert.notStrictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /generation manifest ownership is missing or corrupt/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('update refuses an existing planning root without a manifest before any workspace write', async () => {
+    await initProject();
+    fs.rmSync(path.join(tmpDir, '.work', 'generation-manifest.json'));
+    fs.rmSync(path.join(tmpDir, '.work', 'templates'), { recursive: true, force: true });
+    const before = snapshotTree(tmpDir);
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+
+    assert.notStrictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /generation manifest ownership is missing or corrupt/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
   test('update does not generate GSDD skills for unrelated .agents/skills directories', async () => {
     const unrelatedSkillDir = path.join(tmpDir, '.agents', 'skills', 'custom-agent');
     fs.mkdirSync(unrelatedSkillDir, { recursive: true });
@@ -444,7 +486,7 @@ describe('generation manifest', () => {
     assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles')));
   });
 
-  test('update --templates removes orphaned root templates', async () => {
+  test('update --templates preserves unknown root templates and does not adopt them into the manifest', async () => {
     await initProject();
 
     const orphanPath = path.join(tmpDir, '.work', 'templates', 'obsolete-template.md');
@@ -452,8 +494,192 @@ describe('generation manifest', () => {
 
     const result = await runCliAsMain(tmpDir, ['update', '--templates']);
     assert.strictEqual(result.exitCode, 0);
-    assert.match(result.output, /removed orphan templates\/obsolete-template\.md/);
-    assert.ok(!fs.existsSync(orphanPath));
+    assert.doesNotMatch(result.output, /removed orphan templates\/obsolete-template\.md/);
+    assert.strictEqual(fs.readFileSync(orphanPath, 'utf-8'), '# Obsolete');
+    assert.ok(!Object.hasOwn(readJson(path.join(tmpDir, '.work', 'generation-manifest.json')).templates.root, 'obsolete-template.md'));
+  });
+
+  test('update --templates writes a receipt-bound byte-exact recovery copy before replacing a modified managed template', async () => {
+    await initProject();
+
+    const relativeTarget = 'templates/delegates/mapper-tech.md';
+    const delegatePath = path.join(tmpDir, '.work', ...relativeTarget.split('/'));
+    const original = Buffer.from('consumer-owned bytes\n');
+    fs.writeFileSync(delegatePath, original);
+
+    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const recoveryDir = path.join(tmpDir, '.work', '.local', 'template-recovery');
+    const receiptPaths = fs.readdirSync(recoveryDir).filter((entry) => entry.endsWith('.json'));
+    assert.strictEqual(receiptPaths.length, 1, 'one receipt must bind the preserved original bytes');
+    const receipt = readJson(path.join(recoveryDir, receiptPaths[0]));
+    assert.strictEqual(receipt.targetPath, relativeTarget);
+    assert.strictEqual(receipt.action, 'replace');
+    assert.strictEqual(receipt.oldHash, sha256(original));
+    assert.ok(receipt.recoveryPath.startsWith('.work/.local/template-recovery/'));
+    assert.deepStrictEqual(
+      fs.readFileSync(path.join(tmpDir, ...receipt.recoveryPath.split('/'))),
+      original,
+      'recovery bytes must exactly match the consumer-modified managed content',
+    );
+    assert.notDeepStrictEqual(fs.readFileSync(delegatePath), original, 'managed target must be refreshed after recovery succeeds');
+  });
+
+  test('a later conflicting recovery artifact blocks every earlier template change before writes', async () => {
+    await initProject();
+    const first = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
+    const later = path.join(tmpDir, '.work', 'templates', 'delegates', 'plan-checker.md');
+    fs.writeFileSync(first, 'first consumer modification\n');
+    fs.writeFileSync(later, 'later consumer modification\n');
+    const manifest = readJson(path.join(tmpDir, '.work', 'generation-manifest.json'));
+    const firstHash = sha256(fs.readFileSync(first));
+    const laterHash = sha256(fs.readFileSync(later));
+    const sourceLater = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'templates', 'delegates', 'plan-checker.md'));
+    const identity = sha256(`templates/delegates/plan-checker.md\0${laterHash}\0${sha256(sourceLater)}\0replace`);
+    const recovery = path.join(tmpDir, '.work', '.local', 'template-recovery');
+    fs.mkdirSync(recovery, { recursive: true });
+    fs.writeFileSync(path.join(recovery, `${identity}.original`), 'conflicting bytes');
+    const before = snapshotTree(tmpDir);
+
+    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+
+    assert.notStrictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /conflicting recovery bytes/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    assert.strictEqual(manifest.templates.delegates['mapper-tech.md'], sha256(fs.readFileSync(path.join(__dirname, '..', 'distilled', 'templates', 'delegates', 'mapper-tech.md'))));
+    assert.strictEqual(firstHash, sha256(Buffer.from('first consumer modification\n')));
+  });
+
+  test('ordinary framework-owned upgrades replace changed source bytes without recovery or warning', async () => {
+    await initProject();
+    const target = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
+    const sourceRoot = path.join(tmpDir, 'upgrade-source');
+    const agentsDir = path.join(tmpDir, 'upgrade-agents');
+    fs.cpSync(path.join(__dirname, '..', 'distilled'), sourceRoot, { recursive: true });
+    fs.cpSync(path.join(__dirname, '..', 'agents'), agentsDir, { recursive: true });
+    const upgradedSource = path.join(sourceRoot, 'templates', 'delegates', 'mapper-tech.md');
+    const oldHash = sha256(fs.readFileSync(target));
+    fs.appendFileSync(upgradedSource, '\n<!-- framework upgrade -->\n');
+    const { refreshTemplates } = await loadTemplates();
+    let output = '';
+    const originalLog = console.log;
+    console.log = (...parts) => { output += `${parts.join(' ')}\n`; };
+    let ownership;
+    try {
+      ownership = refreshTemplates({ planningDir: path.join(tmpDir, '.work'), distilledDir: sourceRoot, agentsDir });
+    } finally {
+      console.log = originalLog;
+    }
+
+    assert.doesNotMatch(output, /preserving a recovery copy/);
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.work', '.local', 'template-recovery')));
+    assert.notStrictEqual(sha256(fs.readFileSync(target)), oldHash);
+    assert.strictEqual(ownership.templates.delegates['mapper-tech.md'], sha256(fs.readFileSync(target)));
+  });
+
+  test('CLI retry converges from matching recovery bytes and receipt without replacing recovery', async () => {
+    await initProject();
+    const targetPath = 'templates/delegates/mapper-tech.md';
+    const target = path.join(tmpDir, '.work', ...targetPath.split('/'));
+    const original = Buffer.from('consumer retry bytes\n');
+    fs.writeFileSync(target, original);
+    const oldHash = sha256(original);
+    const source = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'templates', 'delegates', 'mapper-tech.md'));
+    const newHash = sha256(source);
+    const identity = sha256(`${targetPath}\0${oldHash}\0${newHash}\0replace`);
+    const recoveryDir = path.join(tmpDir, '.work', '.local', 'template-recovery');
+    fs.mkdirSync(recoveryDir, { recursive: true });
+    const recoveryBytes = path.join(recoveryDir, `${identity}.original`);
+    const receiptPath = path.join(recoveryDir, `${identity}.json`);
+    const recoveryPath = `.work/.local/template-recovery/${identity}.original`;
+    fs.writeFileSync(recoveryBytes, original);
+    fs.writeFileSync(receiptPath, JSON.stringify({ targetPath, action: 'replace', oldHash, newHash, recoveryPath }, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.deepStrictEqual(fs.readFileSync(recoveryBytes), original);
+    assert.strictEqual(fs.readFileSync(receiptPath, 'utf-8'), JSON.stringify({ targetPath, action: 'replace', oldHash, newHash, recoveryPath }, null, 2));
+    assert.notDeepStrictEqual(fs.readFileSync(target), original);
+  });
+
+  test('fresh template install refuses a linked source tree before creating a destination', async (t) => {
+    const sourceRoot = path.join(tmpDir, 'source');
+    const planningDir = path.join(tmpDir, 'fresh-work');
+    const agentsDir = path.join(tmpDir, 'agents');
+    fs.mkdirSync(path.join(sourceRoot, 'templates'), { recursive: true });
+    fs.mkdirSync(agentsDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'outside.md'), '# outside\n');
+    try {
+      fs.symlinkSync(path.join(tmpDir, 'outside.md'), path.join(sourceRoot, 'templates', 'linked.md'));
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) {
+        t.skip(`platform cannot create test symlink: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    const { installProjectTemplates } = await loadTemplates();
+
+    assert.throws(
+      () => installProjectTemplates({ planningDir, distilledDir: sourceRoot, agentsDir }),
+      /framework templates\/linked\.md must be a regular file/,
+    );
+    assert.ok(!fs.existsSync(path.join(planningDir, 'templates')), 'unsafe source must be refused before destination creation');
+  });
+
+  test('root-level linked source template refuses refresh before an existing managed target is removed', async (t) => {
+    await initProject();
+    const sourceRoot = path.join(tmpDir, 'linked-root-source');
+    const agentsDir = path.join(tmpDir, 'linked-root-agents');
+    fs.cpSync(path.join(__dirname, '..', 'distilled'), sourceRoot, { recursive: true });
+    fs.cpSync(path.join(__dirname, '..', 'agents'), agentsDir, { recursive: true });
+    const sourceTemplate = path.join(sourceRoot, 'templates', 'spec.md');
+    fs.rmSync(sourceTemplate);
+    fs.writeFileSync(path.join(tmpDir, 'linked-root-outside.md'), '# outside\n');
+    try {
+      fs.symlinkSync(path.join(tmpDir, 'linked-root-outside.md'), sourceTemplate);
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) {
+        t.skip(`platform cannot create root template link: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    const before = snapshotTree(tmpDir);
+    const { refreshTemplates } = await loadTemplates();
+
+    assert.throws(
+      () => refreshTemplates({ planningDir: path.join(tmpDir, '.work'), distilledDir: sourceRoot, agentsDir }),
+      /framework templates\/spec\.md must be a regular file/,
+    );
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('fresh template install refuses a linked source directory before creating a destination', async (t) => {
+    const sourceRoot = path.join(tmpDir, 'directory-source');
+    const planningDir = path.join(tmpDir, 'directory-fresh-work');
+    const agentsDir = path.join(tmpDir, 'directory-agents');
+    fs.mkdirSync(path.join(sourceRoot, 'templates'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'outside-directory'), { recursive: true });
+    fs.mkdirSync(agentsDir, { recursive: true });
+    try {
+      fs.symlinkSync(path.join(tmpDir, 'outside-directory'), path.join(sourceRoot, 'templates', 'delegates'), 'junction');
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) {
+        t.skip(`platform cannot create test directory link: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    const { installProjectTemplates } = await loadTemplates();
+
+    assert.throws(
+      () => installProjectTemplates({ planningDir, distilledDir: sourceRoot, agentsDir }),
+      /framework delegates source root must be a real directory/,
+    );
+    assert.ok(!fs.existsSync(path.join(planningDir, 'templates')), 'linked source directory must be refused before destination creation');
   });
 
   test('update removes only hash-proven obsolete runtime helpers and unmanages preserved targets', async () => {

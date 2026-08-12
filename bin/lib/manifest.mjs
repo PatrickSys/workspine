@@ -45,36 +45,13 @@ function hashRelativeFiles(baseDir, relativePaths) {
 /**
  * Build a full manifest snapshot from installed project files.
  */
-export function buildManifest({ planningDir, frameworkVersion, runtimeHelperPaths = null }) {
-  const templatesDir = join(planningDir, 'templates');
-  const rolesDir = join(templatesDir, 'roles');
+export function buildManifest({ planningDir, frameworkVersion, runtimeHelperPaths = null, templateOwnership }) {
   const runtimeHelpersDir = join(planningDir, 'bin');
 
-  // Template subcategories
-  const delegatesHashes = hashDirectory(join(templatesDir, 'delegates'), join(templatesDir, 'delegates'));
-  const researchHashes = hashDirectory(join(templatesDir, 'research'), join(templatesDir, 'research'));
-  const codebaseHashes = hashDirectory(join(templatesDir, 'codebase'), join(templatesDir, 'codebase'));
-  const brownfieldChangeHashes = hashDirectory(join(templatesDir, 'brownfield-change'), join(templatesDir, 'brownfield-change'));
-
-  // Root-level template .md files (agents.block.md, spec.md, roadmap.md, etc.)
-  const rootHashes = {};
-  if (existsSync(templatesDir)) {
-    for (const entry of readdirSync(templatesDir)) {
-      const fullPath = join(templatesDir, entry);
-      if (statSync(fullPath).isFile() && entry.endsWith('.md')) {
-        rootHashes[entry] = fileHash(fullPath);
-      }
-    }
-  }
-
-  // Role contracts
-  const rolesHashes = {};
-  if (existsSync(rolesDir)) {
-    for (const entry of readdirSync(rolesDir)) {
-      if (entry.endsWith('.md')) {
-        rolesHashes[entry] = fileHash(join(rolesDir, entry));
-      }
-    }
+  // Generation ownership is always source-derived by init/update. A fallback
+  // directory snapshot would silently adopt consumer files on any mutation path.
+  if (!templateOwnership?.templates || !templateOwnership?.roles) {
+    throw new Error('Refusing to build generation manifest without explicit template ownership. Re-run init/update with validated template sources.');
   }
 
   const runtimeHelpersHashes = Array.isArray(runtimeHelperPaths)
@@ -85,13 +62,9 @@ export function buildManifest({ planningDir, frameworkVersion, runtimeHelperPath
     frameworkVersion,
     generatedAt: new Date().toISOString(),
     templates: {
-      delegates: delegatesHashes,
-      research: researchHashes,
-      codebase: codebaseHashes,
-      brownfieldChange: brownfieldChangeHashes,
-      root: rootHashes,
+      ...templateOwnership.templates,
     },
-    roles: rolesHashes,
+    roles: templateOwnership.roles,
     runtimeHelpers: runtimeHelpersHashes,
   };
 }
