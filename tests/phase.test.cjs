@@ -1885,6 +1885,82 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     }
   });
 
+  test('resume preflight refuses a malformed present checkpoint without rewriting it', async () => {
+    const checkpointPath = path.join(tmpDir, '.work', '.continue-here.md');
+    fs.writeFileSync(checkpointPath, '---\nworkflow: phase\n---\n<current_state>only one section</current_state>\n');
+    const before = fs.readFileSync(checkpointPath);
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'resume']);
+
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'malformed_checkpoint');
+    const checkpointBlocker = output.blockers.find((blocker) => blocker.code === 'malformed_checkpoint');
+    assert.ok(checkpointBlocker);
+    assert.match(checkpointBlocker.message, /repair .*\.work\/\.continue-here\.md/i);
+    assert.deepStrictEqual(fs.readFileSync(checkpointPath), before, 'preflight must not repair or consume malformed checkpoint bytes');
+  });
+
+  test('resume preflight refuses a checkpoint symlink without rewriting its target', async (t) => {
+    const checkpointPath = path.join(tmpDir, '.work', '.continue-here.md');
+    const targetPath = path.join(tmpDir, '.work', 'checkpoint-target.md');
+    fs.writeFileSync(targetPath, [
+      '---',
+      'workflow: phase',
+      'phase: 30',
+      'timestamp: 2026-08-12T10:00:00.000Z',
+      'runtime: codex-cli',
+      '---',
+      '<current_state>target</current_state>',
+      '<completed_work>target</completed_work>',
+      '<remaining_work>target</remaining_work>',
+      '<decisions>target</decisions>',
+      '<blockers>target</blockers>',
+      '<next_action>target</next_action>',
+    ].join('\n'));
+    try {
+      fs.symlinkSync(targetPath, checkpointPath, 'file');
+    } catch (error) {
+      if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) {
+        t.skip('symlink creation requires unavailable Windows privileges');
+        return;
+      }
+      throw error;
+    }
+    const beforeTarget = fs.readFileSync(targetPath);
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'resume']);
+
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'malformed_checkpoint');
+    assert.strictEqual(fs.lstatSync(checkpointPath).isSymbolicLink(), true);
+    assert.deepStrictEqual(fs.readFileSync(targetPath), beforeTarget, 'resume preflight must not consume or rewrite a checkpoint symlink target');
+  });
+
+  test('resume preflight refuses a dangling checkpoint symlink without creating or exposing its target', async (t) => {
+    const checkpointPath = path.join(tmpDir, '.work', '.continue-here.md');
+    const targetPath = path.join(tmpDir, '.work', 'checkpoint-dangling-target.md');
+    try {
+      fs.symlinkSync(targetPath, checkpointPath, 'file');
+    } catch (error) {
+      if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) {
+        t.skip('symlink creation requires unavailable Windows privileges');
+        return;
+      }
+      throw error;
+    }
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'resume']);
+
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.reason, 'malformed_checkpoint');
+    assert.doesNotMatch(JSON.stringify(output), /checkpoint-dangling-target/);
+    assert.strictEqual(fs.existsSync(targetPath), false, 'resume preflight must not create a dangling checkpoint target');
+    assert.strictEqual(fs.lstatSync(checkpointPath).isSymbolicLink(), true);
+  });
+
   test('allows explicit brownfield-change plan preflight without roadmap phase membership', async () => {
     const changeDir = path.join(tmpDir, '.work', 'brownfield-change');
     fs.mkdirSync(changeDir, { recursive: true });

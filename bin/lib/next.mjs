@@ -88,6 +88,7 @@ function packet(overrides) {
     inputs_considered: overrides.inputs_considered || [],
     inputs_skipped: overrides.inputs_skipped || [],
     trace_refs: overrides.trace_refs || [],
+    continuity: overrides.continuity || null,
   };
 }
 
@@ -636,6 +637,68 @@ function routeNext(ctx) {
   });
 }
 
+function continuityProjection(context, route) {
+  const checkpointReadback = context.checkpoint || {
+    path: `${stateDirName(context)}/.continue-here.md`,
+    status: 'absent',
+    frontmatter: null,
+    sections: null,
+    judgment: null,
+    errors: [],
+  };
+  const manifest = context.evidence.ok ? context.evidence.value : null;
+  const state = context.state.ok ? context.state.value : null;
+  const stateWorkflow = state?.workflow || state?.milestone || state || null;
+  const stateSource = state?.workflow ? 'workflow' : state?.milestone ? 'milestone' : 'root';
+  const trustGates = Array.isArray(manifest?.trust_gates) ? manifest.trust_gates : [];
+  const unresolvedTrustGate = trustGates.find((gate) => gate?.approved !== true);
+  const approval = unresolvedTrustGate
+    ? { value: 'pending', source: `${stateDirName(context)}/evidence/manifest.json#trust_gates` }
+    : stateWorkflow?.human_gate && Object.hasOwn(stateWorkflow.human_gate, 'approved')
+      ? { value: stateWorkflow.human_gate.approved === true ? 'approved' : 'pending', source: `${stateDirName(context)}/state.json#${stateSource}.human_gate` }
+      : stateWorkflow?.plan && Object.hasOwn(stateWorkflow.plan, 'approved')
+        ? { value: stateWorkflow.plan.approved === true ? 'approved' : 'not_approved', source: `${stateDirName(context)}/state.json#${stateSource}.plan.approved` }
+        : { value: 'not_recorded', source: 'structured_state_or_lifecycle_not_recorded' };
+  const result = typeof stateWorkflow?.execution?.status === 'string'
+    ? { value: stateWorkflow.execution.status, source: `${stateDirName(context)}/state.json#${stateSource}.execution.status` }
+    : { value: 'not_recorded', source: 'structured_state_or_lifecycle_not_recorded' };
+  const verification = typeof stateWorkflow?.verification?.status === 'string'
+    ? { value: stateWorkflow.verification.status, source: `${stateDirName(context)}/state.json#${stateSource}.verification.status` }
+    : typeof manifest?.verification?.status === 'string'
+      ? { value: manifest.verification.status, source: `${stateDirName(context)}/evidence/manifest.json#verification.status` }
+      : { value: 'not_recorded', source: 'structured_state_or_lifecycle_not_recorded' };
+  const checkpoint = {
+    ...checkpointReadback,
+    narrative_identity: {
+      workflow: checkpointReadback.frontmatter?.workflow || null,
+      phase: checkpointReadback.frontmatter?.phase || null,
+      authority: 'non_authoritative_checkpoint_prose',
+    },
+  };
+  return {
+    workspace_root: normalizeSlashes(context.paths.root),
+    state_root: stateDirName(context),
+    work_identity: {
+      authority: route.authority || 'unknown',
+      current_phase: context.planning.current_phase || null,
+      next_phase: context.planning.next_phase || null,
+      route_kind: route.route_kind || 'unknown',
+    },
+    checkpoint,
+    posture: {
+      approval,
+      result,
+      verification,
+    },
+    blockers: {
+      codes: route.blocked_by || [],
+      reason: ['blocked', 'ask_user'].includes(route.state) ? route.reason : null,
+      questions: ['blocked', 'ask_user'].includes(route.state) ? route.questions || [] : [],
+    },
+    next_action: route.next_action || null,
+  };
+}
+
 function hasDecisionsDigestSignal(digest) {
   const excluded = digest.counts?.excluded || {};
   return digest.records.length > 0
@@ -652,7 +715,8 @@ function projectDecisionsDigest(ctx, route) {
   const inputsConsidered = hasDecisionsDigestSignal(decisionsDigest) && !route.inputs_considered.includes('.work/decisions/*.md')
     ? [...route.inputs_considered, '.work/decisions/*.md']
     : route.inputs_considered;
-  return { ...route, inputs_considered: inputsConsidered, decisionsDigest };
+  const projectedRoute = { ...route, inputs_considered: inputsConsidered, decisionsDigest };
+  return { ...projectedRoute, continuity: continuityProjection(inspectWorkContext(ctx.cwd), projectedRoute) };
 }
 
 function routeFromWorkMilestone(context, manifest) {

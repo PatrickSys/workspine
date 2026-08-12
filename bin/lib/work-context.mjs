@@ -6,6 +6,7 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  lstatSync,
   writeFileSync,
   writeSync,
 } from 'fs';
@@ -306,6 +307,7 @@ export function getWorkPaths(cwd = process.cwd()) {
     evidenceManifest: join(workDir, 'evidence', 'manifest.json'),
     focus: join(workDir, 'focus', 'current.md'),
     handoff: join(workDir, 'handoff', 'current.md'),
+    checkpoint: join(workDir, '.continue-here.md'),
     milestoneDir: join(workDir, 'milestone'),
     rootGoal: join(root, 'goal.md'),
   };
@@ -1483,6 +1485,138 @@ export function captureDogfoodFinding(workDir, finding, { now = new Date(), repl
   return { status: 'ok', id: safeId, path: normalizeSlashes(relative(resolve(workDir, '..'), filePath)), event };
 }
 
+const CHECKPOINT_FRONTMATTER_FIELDS = Object.freeze(['workflow', 'phase', 'timestamp', 'runtime']);
+const CHECKPOINT_REQUIRED_SECTIONS = Object.freeze([
+  'current_state',
+  'completed_work',
+  'remaining_work',
+  'decisions',
+  'blockers',
+  'next_action',
+]);
+const CHECKPOINT_JUDGMENT_SECTIONS = Object.freeze([
+  'active_constraints',
+  'unresolved_uncertainty',
+  'decision_posture',
+  'anti_regression',
+]);
+const CHECKPOINT_ERROR_LIMIT = 12;
+const CHECKPOINT_MAX_BYTES = 256 * 1024;
+
+function checkpointError(errors, message) {
+  if (errors.length < CHECKPOINT_ERROR_LIMIT) errors.push(message);
+}
+
+function parseCheckpointFrontmatter(content, errors) {
+  if (!content.startsWith('---\n')) {
+    checkpointError(errors, 'checkpoint must begin with a YAML frontmatter delimiter');
+    return { frontmatter: {}, body: content };
+  }
+  const end = content.indexOf('\n---\n', 4);
+  if (end === -1) {
+    checkpointError(errors, 'checkpoint frontmatter is not closed');
+    return { frontmatter: {}, body: '' };
+  }
+  const frontmatter = {};
+  const seen = new Set();
+  const lines = content.slice(4, end).split('\n');
+  for (const line of lines) {
+    const match = line.match(/^([a-z_]+):\s*(.*)$/);
+    if (!match) {
+      checkpointError(errors, 'invalid checkpoint frontmatter line');
+      continue;
+    }
+    const [, key, value] = match;
+    if (!CHECKPOINT_FRONTMATTER_FIELDS.includes(key)) {
+      checkpointError(errors, `unsupported checkpoint frontmatter field: ${key}`);
+      continue;
+    }
+    if (seen.has(key)) {
+      checkpointError(errors, `duplicate checkpoint frontmatter field: ${key}`);
+      continue;
+    }
+    seen.add(key);
+    if (!value.trim()) checkpointError(errors, `empty checkpoint frontmatter field: ${key}`);
+    frontmatter[key] = value.trim();
+  }
+  for (const key of CHECKPOINT_FRONTMATTER_FIELDS) {
+    if (!seen.has(key)) checkpointError(errors, `missing checkpoint frontmatter field: ${key}`);
+  }
+  if (frontmatter.workflow && !['phase', 'quick', 'generic'].includes(frontmatter.workflow)) {
+    checkpointError(errors, 'unsupported checkpoint workflow');
+  }
+  if (frontmatter.timestamp && Number.isNaN(Date.parse(frontmatter.timestamp))) {
+    checkpointError(errors, 'invalid checkpoint timestamp');
+  }
+  return { frontmatter, body: content.slice(end + 5) };
+}
+
+function extractCheckpointSections(content, sectionNames, errors, label = 'checkpoint') {
+  const sections = {};
+  for (const name of sectionNames) {
+    const matcher = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'g');
+    const matches = [...content.matchAll(matcher)];
+    if (matches.length === 0) {
+      checkpointError(errors, `missing ${label} section: ${name}`);
+      continue;
+    }
+    if (matches.length > 1) {
+      checkpointError(errors, `duplicate ${label} section: ${name}`);
+      continue;
+    }
+    sections[name] = matches[0][1].trim();
+  }
+  return sections;
+}
+
+/**
+ * Read the explicit pause checkpoint without modifying it. Its prose is local
+ * continuity context only; lifecycle and repository artifacts remain authority.
+ */
+export function readContinuityCheckpoint(planningDir) {
+  const resolvedPlanningDir = resolve(planningDir);
+  const workspaceRoot = resolve(resolvedPlanningDir, '..');
+  const checkpointPath = join(resolvedPlanningDir, '.continue-here.md');
+  const path = normalizeSlashes(relative(workspaceRoot, checkpointPath));
+  const base = { path, status: 'absent', frontmatter: null, sections: null, judgment: null, errors: [] };
+
+  try {
+    const entry = lstatSync(checkpointPath);
+    if (!entry.isFile()) return { ...base, status: 'unreadable', errors: ['cannot read checkpoint'] };
+    if (entry.size > CHECKPOINT_MAX_BYTES) return { ...base, status: 'malformed', errors: ['checkpoint exceeds read limit'] };
+  } catch (error) {
+    if (error?.code === 'ENOENT') return base;
+    return { ...base, status: 'unreadable', errors: ['cannot read checkpoint'] };
+  }
+
+  let content;
+  try {
+    content = readFileSync(checkpointPath, 'utf-8').replace(/\r\n/g, '\n');
+  } catch {
+    return { ...base, status: 'unreadable', errors: ['cannot read checkpoint'] };
+  }
+
+  const errors = [];
+  const { frontmatter, body } = parseCheckpointFrontmatter(content, errors);
+  const sections = extractCheckpointSections(body, CHECKPOINT_REQUIRED_SECTIONS, errors);
+  const judgmentMatches = [...body.matchAll(/<judgment>([\s\S]*?)<\/judgment>/g)];
+  let judgment = null;
+  if (judgmentMatches.length > 1) {
+    checkpointError(errors, 'duplicate checkpoint judgment block');
+  } else if (judgmentMatches.length === 1) {
+    judgment = extractCheckpointSections(judgmentMatches[0][1], CHECKPOINT_JUDGMENT_SECTIONS, errors, 'checkpoint judgment');
+  }
+
+  return {
+    path,
+    status: errors.length === 0 ? 'valid' : 'malformed',
+    frontmatter,
+    sections,
+    judgment,
+    errors,
+  };
+}
+
 export function inspectWorkContext(cwd = process.cwd()) {
   const paths = getWorkPaths(cwd);
   const state = readJsonIfExists(paths.state);
@@ -1520,6 +1654,7 @@ export function inspectWorkContext(cwd = process.cwd()) {
     state_root: stateRoot,
     authority_gate: stateAuthorityGate(stateRoot),
     migration_notice: migrationNotice,
+    checkpoint: readContinuityCheckpoint(planningDir),
     milestone: inspectWorkMilestone(paths.workDir),
     focus_exists: existsSync(paths.focus),
     handoff_exists: existsSync(paths.handoff),

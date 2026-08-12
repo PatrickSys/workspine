@@ -2,7 +2,7 @@
 
 # Workspine
 
-Workspine is a Spec Driven Development framework for AI-assisted software work: planning, checking, execution, verification, and handoff live in the repo, so any agent or runtime can pick up where the last one stopped. Decisions keep their why.
+Workspine is a Spec Driven Development framework for AI-assisted software work: planning, checking, execution, verification, and handoff live in the repo. Explicit persisted artifacts let another agent or runtime pick up the work; decisions keep their why.
 
 Proof status: one real consumer lifecycle with Codex checker support. Qualified support: Cursor, Copilot, Gemini.
 
@@ -36,7 +36,7 @@ Tracked consumer proof pack: [docs/proof/consumer-node-cli/README.md](docs/proof
 
 The discipline: plan first, execute only what's approved, verify before closing. Each phase summary carries forward what was decided, so the next session starts with context instead of from scratch.
 
-For agent continuity across long sessions, `gsdd next` reads `.work/` plus repo truth and emits the next coherent action as a structured packet. Use `gsdd next --init` to bootstrap `.work`; plain `gsdd next` is read-only. Captured stdout defaults to JSON; use `gsdd next --format human` for the compact supervisor card.
+For agent continuity across long sessions, explicitly run `gsdd-pause` to write `.work/.continue-here.md`. `gsdd next` then reads that file, `.work/`, and repo truth into a structured, read-only packet; the checkpoint is context beneath PLAN/SPEC/lifecycle/Git truth. Use `gsdd next --init` to bootstrap `.work`; plain `gsdd next` never creates a background compaction or automatic context-transfer hook. Captured stdout defaults to JSON; use `gsdd next --format human` for the compact supervisor card.
 
 `gsdd next` keeps the human surface tight and the agent surface structured. JSON packets include typed `next_action` values for CLI commands, workflow skills, manual review, and user-question gates. Blocking questions, decisions, graph rebuilds, and dogfood findings use explicit subcommands; duplicate question, decision, and dogfood IDs replay as unchanged when the content matches and fail unless `--replace` is passed when the content differs. The continuity graph records answer and supersession edges so future agents can reconstruct decision history without rereading raw transcripts.
 

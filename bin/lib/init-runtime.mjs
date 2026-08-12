@@ -214,7 +214,7 @@ Commands:
                               --dry: preview changes without writing files
   health [--json]             Check workspace integrity (healthy/degraded/broken)
   next [--json] [--format auto|json|human] [--init]
-                              Read \`.work\` continuity state and emit the next coherent agent action
+                              Read explicit file-backed \`.work\` continuity and emit the next coherent agent action
   journey [--json]            Show the milestone and phase delivery journey # (experimental)
   remember "<text>" --type <t> --scope <s>
                               Capture a candidate decision, rule, or lesson for later verification
@@ -266,7 +266,7 @@ Notes:
   - repo-local \`init --auto\` sets the legacy-named \`autoAdvance\` key only for brief-driven \`gsdd-new-project\` SPEC/ROADMAP bootstrap; it never chains plan, execute, verify, release, or delivery
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
   - \`npx -y gsdd-cli health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift
-  - \`npx -y gsdd-cli next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed next-action packet
+  - \`npx -y gsdd-cli next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed packet, including any explicit pause checkpoint; it never runs a background compaction or context-transfer hook
   - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
   - recorded launch proof in this repo currently covers Claude Code, OpenCode, and Codex CLI paths
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance

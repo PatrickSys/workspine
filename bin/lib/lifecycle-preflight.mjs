@@ -16,6 +16,7 @@ import {
   getWorkPaths,
   persistDecisionsDigest,
   readJsonIfExists,
+  readContinuityCheckpoint,
   resolveActiveMilestoneDir,
 } from './work-context.mjs';
 import { parsePlanFrontmatter } from './phase.mjs';
@@ -102,8 +103,11 @@ export function evaluateLifecyclePreflight({
   const usesNativeAuthority = selection?.candidate?.authority === 'native';
   const checkpointPath = join(planningDir, '.continue-here.md');
   const stateLabel = createStateLabeler(planningDir);
+  const continuityCheckpoint = surface === 'resume'
+    ? readContinuityCheckpoint(planningDir)
+    : null;
   const resumeWorkCheckpoint = surface === 'resume'
-    ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath })
+    ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath, checkpoint: continuityCheckpoint })
     : null;
   const planSelection = planPath
     ? resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath, phaseSelection: selection })
@@ -224,10 +228,18 @@ export function evaluateLifecyclePreflight({
     }
   }
 
-  if (surface === 'resume' && !existsSync(checkpointPath) && lifecycle.nonPhaseState !== 'active_brownfield_change') {
+  if (surface === 'resume' && continuityCheckpoint?.status === 'absent' && lifecycle.nonPhaseState !== 'active_brownfield_change') {
     const checkpointLabel = stateLabel('.continue-here.md');
     const brownfieldLabel = stateLabel('brownfield-change', 'CHANGE.md');
     blockers.push(blocker('missing_checkpoint', `resume requires ${checkpointLabel} unless an active ${brownfieldLabel} continuity anchor exists.`, [checkpointLabel, brownfieldLabel]));
+  }
+  if (surface === 'resume' && continuityCheckpoint && ['malformed', 'unreadable'].includes(continuityCheckpoint.status)) {
+    const checkpointLabel = stateLabel('.continue-here.md');
+    blockers.push(blocker(
+      'malformed_checkpoint',
+      `Repair ${checkpointLabel} before resuming; it is present but ${continuityCheckpoint.status} and will not be consumed.`,
+      [checkpointLabel]
+    ));
   }
 
   const warnings = [];
@@ -543,22 +555,16 @@ function parseWorkPhaseStatus(rawStatus) {
   return 'pending';
 }
 
-function evaluateResumeWorkCheckpoint({ planningDir, checkpointPath }) {
-  if (!existsSync(checkpointPath)) return null;
+function evaluateResumeWorkCheckpoint({ planningDir, checkpointPath, checkpoint }) {
+  if (!existsSync(checkpointPath) || checkpoint?.status !== 'valid') return null;
 
   const workspaceRoot = resolve(planningDir, '..');
   const milestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
   const roadmapPath = join(milestoneDir, 'ROADMAP.md');
   if (!existsSync(roadmapPath)) return null;
 
-  let content = '';
-  try {
-    content = readFileSync(checkpointPath, 'utf-8');
-  } catch {
-    return null;
-  }
-
-  if (!/(^|[`"'(\s])\.work[\\/]+milestone([`"')\s/]|$)/i.test(content)) {
+  const checkpointText = Object.values(checkpoint.sections || {}).join('\n');
+  if (!/(^|[`"'(\s])\.work[\\/]+milestone([`"')\s/]|$)/i.test(checkpointText)) {
     return null;
   }
 

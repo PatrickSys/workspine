@@ -25,7 +25,7 @@ Before loading checkpoint state or cleaning up any checkpoint file, run:
 
 - `node .work/bin/gsdd.mjs lifecycle-preflight resume`
 
-If the preflight result is `blocked`, STOP and report the blocker instead of inferring resume eligibility from workflow-local prose.
+If the preflight result is `blocked`, STOP and report the blocker instead of inferring resume eligibility from workflow-local prose. A malformed or unreadable present checkpoint is an explicit repair blocker; do not silently treat it as absent or consume it.
 
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject resume
@@ -50,6 +50,8 @@ Check for project artifacts in order:
 </detect_state>
 
 <load_artifacts>
+First run `node .work/bin/gsdd.mjs next --json` for the shared, read-only continuity packet. Use it to identify the resolved workspace/state roots, checkpoint classification, structured posture, blockers, and typed next action; then reconcile it with the primary artifacts below. The packet does not replace PLAN.md, SPEC.md, lifecycle artifacts, or live Git/worktree truth.
+
 Read the following files and extract state:
 
 **ROADMAP.md:**

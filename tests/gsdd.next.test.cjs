@@ -97,7 +97,194 @@ async function inspectWorkContext(cwd) {
   return mod.inspectWorkContext(cwd);
 }
 
+async function readContinuityCheckpoint(cwd = tmpDir) {
+  const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+  const mod = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+  return mod.readContinuityCheckpoint(path.join(cwd, '.work'));
+}
+
+function writeCheckpoint(content) {
+  writeFile('.work/.continue-here.md', content);
+}
+
+const VALID_CHECKPOINT = [
+  '---',
+  'workflow: phase',
+  'phase: 04-continuity',
+  'timestamp: 2026-08-12T10:00:00.000Z',
+  'runtime: codex-cli',
+  '---',
+  '',
+  '<current_state>',
+  'Implementing the continuity projection.',
+  '</current_state>',
+  '',
+  '<completed_work>',
+  'The first focused test is red.',
+  '</completed_work>',
+  '',
+  '<remaining_work>',
+  'Add the shared parser.',
+  '</remaining_work>',
+  '',
+  '<decisions>',
+  'Checkpoint prose remains non-authoritative.',
+  '</decisions>',
+  '',
+  '<blockers>',
+  'None.',
+  '</blockers>',
+  '',
+  '<next_action>',
+  'Run the focused test.',
+  '</next_action>',
+].join('\n');
+
 describe('next command bootstrap', () => {
+  test('next projects a valid explicit checkpoint without changing the workspace', async () => {
+    await initWork();
+    writeCheckpoint(VALID_CHECKPOINT);
+    const before = snapshotTree(tmpDir);
+
+    const packet = await runJson(['next', '--json']);
+    const replay = await runJson(['next', '--json']);
+
+    assert.deepStrictEqual(packet.continuity.workspace_root, tmpDir.replace(/\\/g, '/'));
+    assert.strictEqual(packet.continuity.state_root, '.work');
+    assert.strictEqual(packet.continuity.checkpoint.status, 'valid');
+    assert.strictEqual(packet.continuity.checkpoint.path, '.work/.continue-here.md');
+    assert.strictEqual(packet.continuity.checkpoint.frontmatter.workflow, 'phase');
+    assert.strictEqual(packet.continuity.checkpoint.sections.next_action, 'Run the focused test.');
+    assert.deepStrictEqual(replay.continuity, packet.continuity, 'separate next processes must return the same continuity projection');
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'next must not rewrite a valid checkpoint or derived state');
+  });
+
+  test('next makes a malformed present checkpoint explicit without treating it as authority', async () => {
+    await initWork();
+    writeCheckpoint('---\nworkflow: phase\n---\n<current_state>incomplete</current_state>\n');
+    const before = snapshotTree(tmpDir);
+
+    const packet = await runJson(['next', '--json']);
+
+    assert.strictEqual(packet.continuity.checkpoint.status, 'malformed');
+    assert.ok(packet.continuity.checkpoint.errors.some((error) => /missing checkpoint frontmatter field: phase/.test(error)));
+    assert.strictEqual(packet.continuity.posture.approval.value, 'not_recorded');
+    assert.match(packet.continuity.posture.approval.source, /structured_state_or_lifecycle/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'next must preserve malformed checkpoint bytes for repair');
+  });
+
+  test('checkpoint parser classifies absent, CRLF-valid, duplicate, unreadable, and oversized inputs without leaking content', async () => {
+    let checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'absent');
+
+    writeCheckpoint(VALID_CHECKPOINT.replace(/\n/g, '\r\n'));
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid');
+
+    writeCheckpoint(`${VALID_CHECKPOINT}\n<next_action>duplicate</next_action>\n`);
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('duplicate checkpoint section: next_action'));
+
+    fs.rmSync(path.join(tmpDir, '.work', '.continue-here.md'));
+    fs.mkdirSync(path.join(tmpDir, '.work', '.continue-here.md'));
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'unreadable');
+    assert.deepStrictEqual(checkpoint.errors, ['cannot read checkpoint']);
+
+    fs.rmSync(path.join(tmpDir, '.work', '.continue-here.md'), { recursive: true });
+    writeCheckpoint(`${VALID_CHECKPOINT}\n${'x'.repeat(300 * 1024)}`);
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.deepStrictEqual(checkpoint.errors, ['checkpoint exceeds read limit']);
+  });
+
+  test('next rejects a checkpoint symlink without reading or rewriting its target', async (t) => {
+    await initWork();
+    const targetPath = path.join(tmpDir, '.work', 'checkpoint-target.md');
+    const checkpointPath = path.join(tmpDir, '.work', '.continue-here.md');
+    fs.writeFileSync(targetPath, VALID_CHECKPOINT);
+    try {
+      fs.symlinkSync(targetPath, checkpointPath, 'file');
+    } catch (error) {
+      if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) {
+        t.skip('symlink creation requires unavailable Windows privileges');
+        return;
+      }
+      throw error;
+    }
+    const beforeTarget = fs.readFileSync(targetPath);
+
+    const packet = await runJson(['next', '--json']);
+
+    assert.strictEqual(packet.continuity.checkpoint.status, 'unreadable');
+    assert.deepStrictEqual(packet.continuity.checkpoint.errors, ['cannot read checkpoint']);
+    assert.strictEqual(fs.lstatSync(checkpointPath).isSymbolicLink(), true);
+    assert.deepStrictEqual(fs.readFileSync(targetPath), beforeTarget, 'next must not consume or rewrite a checkpoint symlink target');
+  });
+
+  test('next rejects a dangling checkpoint symlink without creating or exposing its target', async (t) => {
+    await initWork();
+    const targetPath = path.join(tmpDir, '.work', 'checkpoint-dangling-target.md');
+    const checkpointPath = path.join(tmpDir, '.work', '.continue-here.md');
+    try {
+      fs.symlinkSync(targetPath, checkpointPath, 'file');
+    } catch (error) {
+      if (process.platform === 'win32' && ['EPERM', 'EACCES'].includes(error.code)) {
+        t.skip('symlink creation requires unavailable Windows privileges');
+        return;
+      }
+      throw error;
+    }
+
+    const packet = await runJson(['next', '--json']);
+
+    assert.strictEqual(packet.continuity.checkpoint.status, 'unreadable');
+    assert.deepStrictEqual(packet.continuity.checkpoint.errors, ['cannot read checkpoint']);
+    assert.doesNotMatch(JSON.stringify(packet), /checkpoint-dangling-target/);
+    assert.strictEqual(fs.existsSync(targetPath), false, 'next must not create a dangling checkpoint target');
+    assert.strictEqual(fs.lstatSync(checkpointPath).isSymbolicLink(), true);
+  });
+
+  test('continuity mirrors state workflow sources and keeps checkpoint identity narrative-only', async () => {
+    await initWork();
+    writeCheckpoint(VALID_CHECKPOINT);
+    writeJson('.work/state.json', {
+      schema_version: 1,
+      status: 'active',
+      workflow: {
+        human_gate: { approved: true },
+        plan: { approved: true },
+        execution: { status: 'complete' },
+        verification: { status: 'passed' },
+      },
+    });
+    writeJson('.work/evidence/manifest.json', { verification: { status: 'gaps_found' } });
+
+    const packet = await runJson(['next', '--json']);
+
+    assert.deepStrictEqual(packet.continuity.posture, {
+      approval: { value: 'approved', source: '.work/state.json#workflow.human_gate' },
+      result: { value: 'complete', source: '.work/state.json#workflow.execution.status' },
+      verification: { value: 'passed', source: '.work/state.json#workflow.verification.status' },
+    });
+    assert.deepStrictEqual(packet.continuity.checkpoint.narrative_identity, {
+      workflow: 'phase', phase: '04-continuity', authority: 'non_authoritative_checkpoint_prose',
+    });
+  });
+
+  test('continuity retains the route reason and questions for an ask-user state', async () => {
+    await initWork();
+    writeJson('.work/state.json', { workflow: { human_gate: { reason: 'Owner must decide.', question: 'Approve?', approved: false } } });
+
+    const packet = await runJson(['next', '--json']);
+
+    assert.strictEqual(packet.state, 'ask_user');
+    assert.deepStrictEqual(packet.continuity.blockers, {
+      codes: [], reason: 'Owner must decide.', questions: [{ reason: 'Owner must decide.', question: 'Approve?', approved: false }],
+    });
+  });
+
   test('plain next projects active typed decisions without changing route fields', async () => {
     await initWork();
     const before = await runJson(['next', '--json']);
@@ -1267,6 +1454,10 @@ describe('next command routing', () => {
     assert.strictEqual(result.state, 'ask_user');
     assert.strictEqual(result.questions[0].id, 'live-browser');
     assert.match(result.reason, /private UI state/);
+    assert.deepStrictEqual(result.continuity.posture.approval, {
+      value: 'pending',
+      source: '.work/evidence/manifest.json#trust_gates',
+    });
   });
 
   test("trust gates take precedence over state-derived execution routes", async () => {

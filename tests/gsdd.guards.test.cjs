@@ -4121,6 +4121,24 @@ describe('G40 - Provenance And Write-Gate Contracts', () => {
       'pause.md must require draft-first checkpointing. FIX: Add artifact-derived draft wording to <gather_state>.');
     assert.match(content, /Ask at most 3 high-signal questions total/i,
       'pause.md must cap checkpoint corrections at 3 questions. FIX: Add the three-question cap to <gather_state>.');
+    assert.match(content, /not an automatic compaction or context-transfer hook/i,
+      'pause.md must make explicit checkpointing distinct from automatic context transfer. FIX: State the no-hook boundary.');
+  });
+
+  test('continuity workflows and public copy describe shared readback without automatic transfer claims', () => {
+    const resume = fs.readFileSync(path.join(workflowsDir, 'resume.md'), 'utf-8');
+    const progress = fs.readFileSync(path.join(workflowsDir, 'progress.md'), 'utf-8');
+    const rootReadme = fs.readFileSync(README_MD, 'utf-8');
+    const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
+
+    assert.match(resume, /next --json.*shared, read-only continuity packet/i,
+      'resume.md must consume the shared continuity readback. FIX: Add next --json before artifact reconciliation.');
+    assert.match(progress, /next --json.*deterministic, read-only continuity packet/i,
+      'progress.md must consume the shared continuity readback. FIX: Add next --json before status derivation.');
+    assert.match(rootReadme, /never creates a background compaction or automatic context-transfer hook/i,
+      'README.md must not imply automatic session transfer. FIX: State the explicit file-backed boundary.');
+    assert.match(distilledReadme, /no background compaction or automatic context transfer is implied/i,
+      'distilled README must retain the explicit no-automation claim limit. FIX: State the boundary.');
   });
 
   test('resume.md reconciles checkpoint, planning, and git/worktree truth with explicit mismatch acknowledgement', () => {

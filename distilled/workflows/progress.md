@@ -30,6 +30,8 @@ All `node .work/bin/gsdd.mjs ...` helper references below assume the current wor
 
 <process>
 
+Run `node .work/bin/gsdd.mjs next --json` first for a deterministic, read-only continuity packet. Use its checkpoint classification and typed next action as readback, while ROADMAP.md, SPEC.md, lifecycle artifacts, and live Git/worktree truth remain authoritative.
+
 <check_existence>
 Check for project artifacts in order:
 

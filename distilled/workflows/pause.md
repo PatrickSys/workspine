@@ -67,7 +67,7 @@ Before writing the new checkpoint, run `node .work/bin/gsdd.mjs file-op delete .
 
 When the current branch/worktree is known to be evidence-only, stale/spent, or otherwise not the next intended execution surface, say that explicitly in `<current_state>`, `<remaining_work>`, and `<anti_regression>`. Do not flatten evidence-only local state into the same continuity story as the next execution surface.
 
-The checkpoint records historical notes, not authority. State in the checkpoint header comment: on any conflict, PLAN.md, SPEC.md, and repo state outrank this file.
+The checkpoint records historical notes, not authority. State in the checkpoint header comment: on any conflict, PLAN.md, SPEC.md, lifecycle artifacts, and repo state outrank this file. Writing this file is an explicit pause action; it is not an automatic compaction or context-transfer hook.
 
 Write `.work/.continue-here.md` with the following structure:
 
@@ -119,7 +119,7 @@ runtime: $INFERRED_RUNTIME
 </judgment>
 ```
 
-The checkpoint is project-scoped (lives at `.work/.continue-here.md`, not inside a phase directory) so resume always knows where to look.
+The checkpoint is project-scoped (lives at `.work/.continue-here.md`, not inside a phase directory) so resume always knows where to look. Keep the frontmatter and six required sections exactly as shown: `gsdd next --json` and resume preflight share this file-backed contract.
 </write_checkpoint>
 
 **MANDATORY: `.work/.continue-here.md` must exist on disk after writing. If the file was not created, STOP and report the failure. The entire purpose of this workflow is to persist context — a failed write means the pause did nothing.**

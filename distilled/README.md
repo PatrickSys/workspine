@@ -2,7 +2,7 @@
 
 Plan, execute, and verify AI-assisted work from files in your repo — for the part of AI coding that still needs human judgment: planning, checking, execution, verification, and handoff.
 
-Workspine keeps planning, execution, verification, handoff, and progress state in the repo so work survives cold starts, runtime switches, and session loss. The retained package and CLI contracts remain `gsdd-cli` / `gsdd`.
+Workspine keeps planning, execution, verification, handoff, and progress state in the repo. For a session boundary, explicitly write a checkpoint with `gsdd-pause`, then read it back with `gsdd next --json`; no background compaction or automatic context transfer is implied. The retained package and CLI contracts remain `gsdd-cli` / `gsdd`.
 
 ## Why It Matters
 

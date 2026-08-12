@@ -4,6 +4,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const os = require('node:os');
 const { execFileSync } = require('node:child_process');
 const fs = require('fs');
 const path = require('path');
@@ -1043,6 +1044,53 @@ describe('gsdd init and update', () => {
     assert.match(result.stdout, /candidate decision excluded/);
     assert.doesNotMatch(result.stdout, /Candidate helper body must remain excluded/);
     assert.deepStrictEqual(snapshotTree(path.join(tmpDir, '.work')), before);
+  });
+
+  test('fresh repo-local helper matches package continuity from nested and explicit workspace roots', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit();
+    } finally {
+      restoreStdin();
+    }
+    fs.writeFileSync(path.join(tmpDir, '.work', '.continue-here.md'), [
+      '---',
+      'workflow: generic',
+      'phase: null',
+      'timestamp: 2026-08-12T10:00:00.000Z',
+      'runtime: codex-cli',
+      '---',
+      '',
+      '<current_state>Continuity fixture.</current_state>',
+      '<completed_work>Generated helper exists.</completed_work>',
+      '<remaining_work>Compare packets.</remaining_work>',
+      '<decisions>Prose is not authority.</decisions>',
+      '<blockers>None.</blockers>',
+      '<next_action>Run next.</next_action>',
+    ].join('\n'));
+    const nestedDir = path.join(tmpDir, 'src', 'feature');
+    fs.mkdirSync(nestedDir, { recursive: true });
+    const foreignDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsdd-continuity-foreign-'));
+    const before = snapshotTree(tmpDir);
+    const foreignBefore = snapshotTree(foreignDir);
+
+    try {
+      const packageResult = await runCliAsMain(tmpDir, ['next', '--json']);
+      assert.strictEqual(packageResult.exitCode, 0, packageResult.output);
+      const packagePacket = JSON.parse(packageResult.output);
+      const nested = runGeneratedHelper(tmpDir, nestedDir, ['next', '--json']);
+      assert.strictEqual(nested.status, 0, `${nested.stdout}\n${nested.stderr}`);
+      const explicit = runGeneratedHelper(tmpDir, foreignDir, ['--workspace-root', tmpDir, 'next', '--json']);
+      assert.strictEqual(explicit.status, 0, `${explicit.stdout}\n${explicit.stderr}`);
+
+      assert.deepStrictEqual(JSON.parse(nested.stdout).continuity, packagePacket.continuity);
+      assert.deepStrictEqual(JSON.parse(explicit.stdout).continuity, packagePacket.continuity);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, 'all continuity reads must preserve generated workspace bytes');
+      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'explicit workspace-root must not write the foreign current directory');
+    } finally {
+      cleanup(foreignDir);
+    }
   });
 
   test('repo-local helper supports brownfield-change plan preflight from nested cwd', async () => {
