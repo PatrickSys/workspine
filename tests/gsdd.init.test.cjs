@@ -1956,16 +1956,26 @@ describe('gsdd init and update', () => {
   });
 
   describe('global install', () => {
-    test('resolveGlobalInstallRoots honors explicit env without leaking process env', async () => {
+    test('resolveGlobalInstallRoots honors explicit non-isolated runtime homes without leaking process env', async () => {
       const previousXdg = process.env.XDG_CONFIG_HOME;
       process.env.XDG_CONFIG_HOME = path.join(tmpDir, 'ambient-config');
       try {
         const { resolveGlobalInstallRoots } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}`);
-        const roots = resolveGlobalInstallRoots({
-          homeDir: path.join(tmpDir, 'home'),
-          env: {},
-        });
-        assert.strictEqual(roots.opencode, path.join(tmpDir, 'home', '.config', 'opencode'));
+        const homeDir = path.join(tmpDir, 'home');
+        const env = {
+          XDG_CONFIG_HOME: path.join(tmpDir, 'explicit-config'),
+          CLAUDE_CONFIG_DIR: path.join(tmpDir, 'explicit-claude'),
+          OPENCODE_CONFIG_DIR: path.join(tmpDir, 'explicit-opencode'),
+          CODEX_HOME: path.join(tmpDir, 'explicit-codex'),
+          COPILOT_HOME: path.join(tmpDir, 'explicit-copilot'),
+        };
+        const roots = resolveGlobalInstallRoots({ homeDir, env });
+        assert.strictEqual(roots.configHome, env.XDG_CONFIG_HOME);
+        assert.strictEqual(roots.claude, env.CLAUDE_CONFIG_DIR);
+        assert.strictEqual(roots.opencode, env.OPENCODE_CONFIG_DIR);
+        assert.strictEqual(roots.codex, env.CODEX_HOME);
+        assert.strictEqual(roots.copilot, env.COPILOT_HOME);
+        assert.strictEqual(roots.agentSkills, path.join(homeDir, '.agents'));
       } finally {
         if (previousXdg === undefined) {
           delete process.env.XDG_CONFIG_HOME;
@@ -2151,7 +2161,11 @@ describe('gsdd init and update', () => {
           const result = await runCliAsMain(tmpDir, ['install', '--global', '--auto']);
           assert.strictEqual(result.exitCode, 1);
           assert.match(result.output, /No supported agent homes were detected for --auto/);
-          assert.match(result.output, /--tools claude,opencode,codex,copilot/);
+          const { GLOBAL_AGENT_OPTIONS } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-auto-targets`);
+          for (const { id } of GLOBAL_AGENT_OPTIONS) {
+            assert.match(result.output, new RegExp(`npx -y gsdd-cli install --global --tools ${id}`));
+          }
+          assert.doesNotMatch(result.output, /Create an agent config home first/);
         });
 
         assert.ok(!fs.existsSync(path.join(homeDir, '.agents')));

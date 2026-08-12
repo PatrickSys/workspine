@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const { execFileSync } = require('node:child_process');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const ROOT = path.join(__dirname, '..');
 const GSDD_PATH = path.join(ROOT, 'bin', 'gsdd.mjs');
@@ -722,6 +723,33 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must describe the global agent install path. FIX: Add explicit global/local install contract text.');
     assert.match(readme, /does not create `.work\/`/i,
       'README.md must state that global install does not bootstrap repo-local planning state. FIX: Add global install boundary wording.');
+  });
+
+  test('global install help and public guidance match the shared supported-target metadata', async () => {
+    const { GLOBAL_AGENT_OPTIONS, getHelpText } = await import(`${pathToFileURL(INIT_RUNTIME_MODULE).href}?targets=${Date.now()}`);
+    const targetIds = GLOBAL_AGENT_OPTIONS.map(({ id }) => id);
+    const helpSection = getHelpText().split('Global install targets:')[1].split('\n\nNotes:')[0];
+    const helpIds = [...helpSection.matchAll(/^  ([a-z]+)\s{2,}/gm)]
+      .map((match) => match[1])
+      .filter((id) => id !== 'all');
+    assert.deepStrictEqual(helpIds, targetIds,
+      'Global install help target rows must be rendered from GLOBAL_AGENT_OPTIONS in order.');
+
+    const explicitList = targetIds.join(',');
+    const publicGuides = [
+      README_MD,
+      path.join(ROOT, 'docs', 'USER-GUIDE.md'),
+      path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'),
+    ];
+    for (const filePath of publicGuides) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      assert.ok(content.includes(explicitList),
+        `${path.relative(ROOT, filePath)} must list the exact supported global target IDs from metadata.`);
+      assert.match(content, /fresh/i,
+        `${path.relative(ROOT, filePath)} must explain the fresh global-install path.`);
+      assert.match(content, /--auto[\s\S]{0,180}detected existing|detected existing[\s\S]{0,180}--auto/i,
+        `${path.relative(ROOT, filePath)} must reserve --auto wording for detected existing homes.`);
+    }
   });
 
   test('public docs distinguish skills entrypoints from the internal helper runtime', () => {

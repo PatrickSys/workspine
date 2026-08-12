@@ -33,31 +33,19 @@ import {
   writeManifestTrackedFile,
 } from './global-manifest.mjs';
 import { parseFlagValue } from './cli-utils.mjs';
+import { GLOBAL_AGENT_OPTIONS } from './init-runtime.mjs';
 
-export const GLOBAL_AGENT_OPTIONS = [
-  {
-    id: 'claude',
-    label: 'Claude Code',
-    description: 'Install global skills, slash-command alias, and native GSDD agents under ~/.claude.',
-  },
-  {
-    id: 'opencode',
-    label: 'OpenCode',
-    description: 'Install shared global skills under ~/.agents plus slash commands and native GSDD agents under ~/.config/opencode.',
-  },
-  {
-    id: 'codex',
-    label: 'Codex CLI',
-    description: 'Install shared global skills under ~/.agents and native GSDD agents under ~/.codex.',
-  },
-  {
-    id: 'copilot',
-    label: 'GitHub Copilot CLI',
-    description: 'Install shared global skills under ~/.agents and Copilot agent profiles under ~/.copilot.',
-  },
-];
+export { GLOBAL_AGENT_OPTIONS } from './init-runtime.mjs';
 
 const GLOBAL_AGENT_IDS = GLOBAL_AGENT_OPTIONS.map((option) => option.id);
+
+function supportedGlobalTargets() {
+  return GLOBAL_AGENT_IDS.join(',');
+}
+
+function explicitGlobalInstallCommands() {
+  return GLOBAL_AGENT_IDS.map((target) => `npx -y gsdd-cli install --global --tools ${target}`);
+}
 
 function getHomeDir() {
   return process.env.GSDD_TEST_HOME || os.homedir();
@@ -68,18 +56,22 @@ function getConfigHome(homeDir, env = process.env) {
 }
 
 export function resolveGlobalInstallRoots({ homeDir = getHomeDir(), env = process.env } = {}) {
-  const configHome = getConfigHome(homeDir, env);
-  const agentSkills = join(homeDir, '.agents');
+  const isolatedHome = env.GSDD_TEST_HOME || null;
+  const effectiveHome = isolatedHome || homeDir;
+  const configHome = isolatedHome ? join(effectiveHome, '.config') : getConfigHome(effectiveHome, env);
+  const agentSkills = join(effectiveHome, '.agents');
   return {
-    home: homeDir,
+    home: effectiveHome,
     configHome,
-    claude: env.CLAUDE_CONFIG_DIR || join(homeDir, '.claude'),
-    opencode: env.OPENCODE_CONFIG_DIR || join(configHome, 'opencode'),
+    claude: isolatedHome ? join(effectiveHome, '.claude') : (env.CLAUDE_CONFIG_DIR || join(effectiveHome, '.claude')),
+    opencode: isolatedHome ? join(configHome, 'opencode') : (env.OPENCODE_CONFIG_DIR || join(configHome, 'opencode')),
     agentSkills,
     opencodeSkills: agentSkills,
-    codex: env.CODEX_HOME || join(homeDir, '.codex'),
+    codex: isolatedHome ? join(effectiveHome, '.codex') : (env.CODEX_HOME || join(effectiveHome, '.codex')),
     codexSkills: agentSkills,
-    copilot: env.COPILOT_HOME || env.COPILOT_CONFIG_DIR || join(homeDir, '.copilot'),
+    copilot: isolatedHome
+      ? join(effectiveHome, '.copilot')
+      : (env.COPILOT_HOME || env.COPILOT_CONFIG_DIR || join(effectiveHome, '.copilot')),
     copilotSkills: agentSkills,
   };
 }
@@ -99,7 +91,7 @@ function normalizeGlobalTools(rawTools) {
 function validateGlobalTools(tools) {
   const invalid = tools.filter((tool) => !GLOBAL_AGENT_IDS.includes(tool));
   if (invalid.length === 0) return null;
-  return `ERROR: unsupported global install target(s): ${invalid.join(', ')}. Use --tools claude,opencode,codex,copilot or --tools all.`;
+  return `ERROR: unsupported global install target(s): ${invalid.join(', ')}. Use --tools ${supportedGlobalTargets()} or --tools all.`;
 }
 
 function detectGlobalInstallTargets(roots) {
@@ -350,21 +342,30 @@ function writeInstallSpec(plan, ctx) {
   return results;
 }
 
-function installTarget({ target, roots, ctx, dryRun }) {
+function planInstallTarget({ target, roots, ctx }) {
   const plans = buildGlobalInstallSpecs(target, roots, ctx).map(preflightInstallSpec);
   const blocked = plans.flatMap((plan) => plan.blocked);
-  const results = dryRun || blocked.length > 0
-    ? plans.flatMap((plan) => plan.results)
-    : plans.flatMap((plan) => writeInstallSpec(plan, ctx));
-
   const rootDir = plans.map((plan) => plan.rootDir).join(', ');
 
   return {
     target,
+    plans,
     rootDir,
     manifest: plans.map((plan) => `${plan.rootDir}/${GLOBAL_MANIFEST_FILENAME}`).join(', '),
-    results,
     blocked,
+  };
+}
+
+function completeInstallTarget(installPlan, { ctx, dryRun, selectedSetBlocked }) {
+  const { plans, ...report } = installPlan;
+  const results = dryRun || selectedSetBlocked
+    ? plans.flatMap((entry) => entry.results)
+    : plans.flatMap((entry) => writeInstallSpec(entry, ctx));
+
+  return {
+    ...report,
+    results,
+    selectedSetBlocked,
     writtenCount: results.filter((result) => result.status === 'written').length,
     unchangedCount: results.filter((result) => result.status === 'unchanged').length,
     wouldWriteCount: results.filter((result) => result.status === 'would_write').length,
@@ -568,7 +569,7 @@ export function createCmdInstall(ctx) {
       return;
     }
 
-    const roots = resolveGlobalInstallRoots();
+    const roots = resolveGlobalInstallRoots(ctx.globalInstallRootOptions);
     const targets = await resolveGlobalInstallTargets({
       args: installArgs,
       promptApi: ctx.globalInstallPromptApi,
@@ -578,8 +579,8 @@ export function createCmdInstall(ctx) {
 
     if (targets.length === 0) {
       const autoHint = autoFlag
-        ? 'No supported agent homes were detected for --auto. Create an agent config home first or use --tools claude,opencode,codex,copilot explicitly.'
-        : 'Use --tools claude,opencode,codex,copilot or run interactively.';
+        ? `No supported agent homes were detected for --auto. Choose one explicitly:\n  ${explicitGlobalInstallCommands().join('\n  ')}`
+        : `Use --tools ${supportedGlobalTargets()} or run interactively.`;
       console.error(`ERROR: no global install targets selected. ${autoHint}`);
       process.exitCode = 1;
       return;
@@ -594,17 +595,24 @@ export function createCmdInstall(ctx) {
 
     console.log(`Workspine global install - installing runtime surfaces${dryRun ? ' (dry run)' : ''}\n`);
 
-    const reports = targets.map((target) => installTarget({
+    const installPlans = targets.map((target) => planInstallTarget({
       target,
       roots,
       ctx,
+    }));
+    const selectedSetBlocked = installPlans.some((plan) => plan.blocked.length > 0);
+    const reports = installPlans.map((plan) => completeInstallTarget(plan, {
+      ctx,
       dryRun,
+      selectedSetBlocked,
     }));
 
     let hasBlocked = false;
     for (const report of reports) {
       const actionSummary = dryRun
         ? `${report.wouldWriteCount} file(s) would be written, ${report.wouldRemoveCount} stale file(s) would be removed`
+        : selectedSetBlocked
+          ? `${report.wouldWriteCount} file(s) not written; selected set blocked during preflight`
         : `${report.writtenCount} written, ${report.unchangedCount} unchanged, ${report.removedCount} stale removed`;
       console.log(`  - ${report.target}: ${actionSummary} (${report.rootDir})`);
       if (report.blocked.length > 0) {

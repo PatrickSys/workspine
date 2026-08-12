@@ -129,6 +129,24 @@ function assertIncludesDisplayPath(content, filePath) {
   assert.match(content, new RegExp(escapeRegex(displayPath(filePath))));
 }
 
+function snapshotTree(rootDir) {
+  if (!fs.existsSync(rootDir)) return [];
+  const files = [];
+  const visit = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const absolutePath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push([`${path.relative(rootDir, absolutePath).replace(/\\/g, '/')}/`, null]);
+        visit(absolutePath);
+      } else {
+        files.push([path.relative(rootDir, absolutePath).replace(/\\/g, '/'), fs.readFileSync(absolutePath)]);
+      }
+    }
+  };
+  visit(rootDir);
+  return files.sort(([left], [right]) => left.localeCompare(right));
+}
+
 describe('global install pressure loop', () => {
   test('README-driven first-time user loop works through the public CLI surface', async () => {
     const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf-8');
@@ -346,20 +364,17 @@ describe('global install pressure loop', () => {
     }
   });
 
-  test('global command files reference custom install roots with Windows-safe display paths', async () => {
-    const homeDir = createTempProject();
+  test('global command files reference isolated roots with Windows-safe display paths', async () => {
+    const parentDir = createTempProject();
+    const homeDir = path.join(parentDir, 'Home With Spaces');
     const repoDir = createTempProject();
-    const claudeRoot = path.join(homeDir, 'Claude Home With Spaces');
-    const configHome = path.join(homeDir, 'Config Home With Spaces');
+    const claudeRoot = path.join(homeDir, '.claude');
+    const configHome = path.join(homeDir, '.config');
     const restoreStdin = setNonInteractiveStdin();
     const previousExitCode = process.exitCode;
 
     try {
-      await withEnv({
-        GSDD_TEST_HOME: homeDir,
-        CLAUDE_CONFIG_DIR: claudeRoot,
-        XDG_CONFIG_HOME: configHome,
-      }, async () => {
+      await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
         const gsdd = await loadGsdd(repoDir);
         await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude,opencode'));
       });
@@ -370,6 +385,103 @@ describe('global install pressure loop', () => {
       const opencodeRoot = path.join(configHome, 'opencode');
       const opencodeCommand = fs.readFileSync(path.join(opencodeRoot, 'commands', 'gsdd-plan.md'), 'utf-8');
       assertIncludesDisplayPath(opencodeCommand, path.join(homeDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'));
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(parentDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('an isolated global install ignores every inherited runtime-home redirect', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const ambientDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const ambientHomes = {
+      XDG_CONFIG_HOME: path.join(ambientDir, 'xdg-config'),
+      CLAUDE_CONFIG_DIR: path.join(ambientDir, 'claude'),
+      OPENCODE_CONFIG_DIR: path.join(ambientDir, 'opencode'),
+      CODEX_HOME: path.join(ambientDir, 'codex'),
+      COPILOT_HOME: path.join(ambientDir, 'copilot-home'),
+      COPILOT_CONFIG_DIR: path.join(ambientDir, 'copilot-config'),
+    };
+
+    try {
+      for (const directory of Object.values(ambientHomes)) {
+        writeFile(path.join(directory, 'sentinel.txt'), `ambient:${directory}`);
+      }
+      const before = snapshotTree(ambientDir);
+
+      const output = await withEnv({ GSDD_TEST_HOME: homeDir, ...ambientHomes }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        return captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'all'));
+      });
+
+      assert.match(output, /Global install complete/);
+      assert.deepStrictEqual(snapshotTree(ambientDir), before,
+        'GSDD_TEST_HOME must contain every managed root even when runtime homes are inherited');
+      assert.ok(fs.existsSync(path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md')));
+      assert.ok(fs.existsSync(path.join(homeDir, '.config', 'opencode', 'commands', 'gsdd-plan.md')));
+      assert.ok(fs.existsSync(path.join(homeDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+      assert.ok(fs.existsSync(path.join(homeDir, '.copilot', 'agents', 'gsdd-plan-checker.agent.md')));
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+      cleanup(ambientDir);
+    }
+  });
+
+  test('fresh --auto refuses without writes and prints one exact explicit command per supported target', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+
+    try {
+      const before = snapshotTree(homeDir);
+      const [{ GLOBAL_AGENT_OPTIONS }, result] = await Promise.all([
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-targets`),
+        withEnv({ GSDD_TEST_HOME: homeDir }, async () => runCliAsMain(repoDir, [
+        'install', '--global', '--auto',
+        ])),
+      ]);
+
+      assert.strictEqual(result.exitCode, 1);
+      assert.match(result.output, /No supported agent homes were detected for --auto/);
+      for (const { id: target } of GLOBAL_AGENT_OPTIONS) {
+        assert.match(result.output, new RegExp(`npx -y gsdd-cli install --global --tools ${target}`));
+      }
+      assert.deepStrictEqual(snapshotTree(homeDir), before,
+        'fresh --auto must remain a marker-free zero-write refusal');
+    } finally {
+      restoreStdin();
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('a later selected-target conflict preflights the whole set before any target writes', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const conflictingCodexAgent = path.join(homeDir, '.codex', 'agents', 'gsdd-plan-checker.toml');
+
+    try {
+      writeFile(conflictingCodexAgent, 'user-owned codex agent\n');
+      const before = snapshotTree(homeDir);
+      const output = await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        return captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude,codex'));
+      });
+
+      assert.strictEqual(process.exitCode, 1);
+      assert.match(output, /gsdd-plan-checker\.toml/);
+      assert.deepStrictEqual(snapshotTree(homeDir), before,
+        'a preflight conflict in a later target must prevent earlier selected-target writes');
     } finally {
       restoreStdin();
       process.exitCode = previousExitCode;
@@ -387,14 +499,19 @@ describe('global install pressure loop', () => {
     const previousExitCode = process.exitCode;
 
     try {
-      await withEnv({
-        GSDD_TEST_HOME: homeDir,
-        XDG_CONFIG_HOME: configHome,
-        OPENCODE_CONFIG_DIR: opencodeConfigDir,
-      }, async () => {
-        const gsdd = await loadGsdd(repoDir);
-        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'opencode'));
-      });
+      const [{ createCliContext }, { createCmdInstall }] = await Promise.all([
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'gsdd.mjs')).href}?t=${Date.now()}-custom-root-ctx`),
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-custom-root-install`),
+      ]);
+      const ctx = createCliContext(repoDir);
+      ctx.globalInstallRootOptions = {
+        homeDir,
+        env: {
+          XDG_CONFIG_HOME: configHome,
+          OPENCODE_CONFIG_DIR: opencodeConfigDir,
+        },
+      };
+      await captureLogs(() => createCmdInstall(ctx)('--global', '--tools', 'opencode'));
 
       const skillRoot = path.join(homeDir, '.agents');
       assert.ok(fs.existsSync(path.join(skillRoot, 'skills', 'gsdd-plan', 'SKILL.md')));

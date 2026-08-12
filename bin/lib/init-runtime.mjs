@@ -37,6 +37,37 @@ const RUNTIME_OPTIONS = [
   },
 ];
 
+export const GLOBAL_AGENT_OPTIONS = [
+  {
+    id: 'claude',
+    label: 'Claude Code',
+    description: 'Install global skills, slash-command alias, and native GSDD agents under ~/.claude.',
+  },
+  {
+    id: 'opencode',
+    label: 'OpenCode',
+    description: 'Install shared global skills under ~/.agents plus slash commands and native GSDD agents under ~/.config/opencode.',
+  },
+  {
+    id: 'codex',
+    label: 'Codex CLI',
+    description: 'Install shared global skills under ~/.agents and native GSDD agents under ~/.codex.',
+  },
+  {
+    id: 'copilot',
+    label: 'GitHub Copilot CLI',
+    description: 'Install shared global skills under ~/.agents and Copilot agent profiles under ~/.copilot.',
+  },
+];
+
+function renderGlobalInstallTargetHelp() {
+  const width = Math.max(...GLOBAL_AGENT_OPTIONS.map(({ id }) => id.length));
+  return [
+    ...GLOBAL_AGENT_OPTIONS.map(({ id, description }) => `  ${id.padEnd(width)}  ${description}`),
+    `  ${'all'.padEnd(width)}  Install all global targets above`,
+  ].join('\n');
+}
+
 export const INIT_VERSION = 'v1.1';
 
 export function normalizeRequestedTools(requestedTools) {
@@ -175,7 +206,7 @@ Commands:
                               --migrate: explicitly move a supported legacy state tree to .work/ before setup
   install --global [--auto] [--tools <platform>] [--dry]
                               Install reusable Workspine skills and native runtime surfaces into agent home directories
-                              --auto: non-interactive mode that installs detected local agent targets
+                              --auto: refresh detected existing agent homes; if none exist, print exact target commands without writing
                               In TTYs, omitting --tools opens an agent picker
   update [--tools <platform>] [--templates] [--dry]
                               Regenerate adapters from latest framework sources
@@ -219,18 +250,14 @@ Platforms (for --tools):
   all       Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)
 
 Global install targets:
-  claude    Install ~/.claude skills, commands, and agents
-  opencode  Install ~/.agents skills plus ~/.config/opencode commands and agents
-  codex     Install ~/.agents skills plus ~/.codex agents
-  copilot   Install ~/.agents skills plus ~/.copilot agent profiles
-  all       Install all global targets above
+${renderGlobalInstallTargetHelp()}
 
 Notes:
-  - use \`npx -y gsdd-cli init\` for repo-local setup; use \`npx -y gsdd-cli install --global --auto\` when you want reusable skills in detected agent homes
+  - use \`npx -y gsdd-cli init\` for repo-local setup; for a fresh global install choose targets interactively or pass \`--tools <targets>\`
   - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
   - init also generates a local .work/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - install --global never creates .work/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
-  - use \`npx -y gsdd-cli install --global --auto\` for non-interactive global install into detected agent homes; use \`--tools <targets>\` to override detection explicitly
+  - use \`npx -y gsdd-cli install --global --auto\` to refresh detected existing agent homes; in a fresh/headless home use \`--tools <targets>\`
   - repair or refresh a global install by rerunning \`npx -y gsdd-cli install --global --auto\` or \`npx -y gsdd-cli install --global --tools <targets>\`; runtime probes stay in test harnesses
   - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .work/; legacy planning workspaces are still read only for explicit migration
   - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
@@ -261,7 +288,7 @@ Examples:
   npx -y gsdd-cli init --tools all
   npx -y gsdd-cli install --global
   npx -y gsdd-cli install --global --auto
-  npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
+  npx -y gsdd-cli install --global --tools ${GLOBAL_AGENT_OPTIONS.map(({ id }) => id).join(',')}
   npx -y gsdd-cli update
   npx -y gsdd-cli next --json
   npx -y gsdd-cli next --format human

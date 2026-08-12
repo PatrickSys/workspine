@@ -13,7 +13,7 @@ For a new project or a broad brownfield effort:
 3. Review the plan from `gsdd-plan` before starting `gsdd-execute`.
 4. Run `gsdd-verify` before calling the phase done.
 
-Use `npx -y gsdd-cli init` for repo-local setup. Use `npx -y gsdd-cli install --global --auto` to install reusable Workspine skills and native runtime surfaces into detected agent homes without creating `.work/` in the current repo.
+Use `npx -y gsdd-cli init` for repo-local setup. For reusable global surfaces, run `npx -y gsdd-cli install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. Use `--auto` to refresh detected existing homes; global install never creates `.work/` in the current repo.
 
 For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky repo, use `gsdd-map-codebase` before choosing between `gsdd-quick` and `gsdd-new-project`.
 
@@ -192,7 +192,7 @@ npx -y gsdd-cli install --global --auto
 npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 ```
 
-Use `--auto` for non-interactive global install into detected local agent homes. Use `--tools <targets>` when you want to install a specific target set regardless of detection.
+For a fresh install, choose targets interactively or pass `--tools <targets>`. Use `--auto` for a non-interactive refresh of detected existing agent homes. If none are detected, it writes nothing and prints one exact command per supported target.
 
 Global install writes Workspine-managed files under selected agent homes and records per-runtime manifests. It does not bootstrap project planning state.
 
@@ -247,7 +247,7 @@ Normal user flow:
 2. Enter workflows through your runtime surface: `/gsdd-*` or `$gsdd-*`.
 3. Use `npx -y gsdd-cli health` to check repo-local generated surfaces.
 4. Use `npx -y gsdd-cli update` when repo-local generated surfaces drift or you want the latest shipped output.
-5. For personal global installs, rerun `npx -y gsdd-cli install --global --auto` to repair or refresh detected agent homes, or use `npx -y gsdd-cli install --global --tools <targets>` to scope the target set explicitly.
+5. For personal global installs, rerun `npx -y gsdd-cli install --global --auto` to repair or refresh detected existing agent homes, or use `npx -y gsdd-cli install --global --tools <targets>` for a fresh or explicitly scoped target set.
 
 Surface split:
 
@@ -285,7 +285,7 @@ Other CLI commands that remain available outside the first-run path:
 
 ## Configuration Reference
 
-`npx -y gsdd-cli init` creates `.work/config.json` interactively (or with defaults via `--auto`).
+`npx -y gsdd-cli init` creates `.work/config.json` interactively (or with defaults via repo-local `init --auto --tools <targets>`).
 
 ### Full config.json Schema
 
