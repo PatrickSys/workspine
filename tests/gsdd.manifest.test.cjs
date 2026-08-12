@@ -91,6 +91,7 @@ describe('generation manifest', () => {
     assert.ok(Object.keys(manifest.templates.delegates).length >= 10);
     assert.ok(Object.keys(manifest.roles).length >= 9);
     assert.ok(Object.keys(manifest.runtimeHelpers).includes('bin/gsdd.mjs'));
+    assert.ok(Object.keys(manifest.runtimeHelpers).includes('bin/lib/candidate-provenance.mjs'));
     assert.match(Object.values(manifest.templates.delegates)[0], /^[a-f0-9]{64}$/);
     assert.match(manifest.runtimeHelpers['bin/gsdd.mjs'], /^[a-f0-9]{64}$/);
     assert.match(manifest.runtimeHelpers['bin/gsdd'], /^[a-f0-9]{64}$/);

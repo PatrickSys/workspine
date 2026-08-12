@@ -5,6 +5,7 @@
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -26,6 +27,73 @@ function writeProjectFile(root, relativePath, content) {
   const fullPath = path.join(root, relativePath);
   fs.mkdirSync(path.dirname(fullPath), { recursive: true });
   fs.writeFileSync(fullPath, content);
+}
+
+function snapshotTree(directory, prefix = '') {
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = path.join(prefix, entry.name);
+      const fullPath = path.join(directory, entry.name);
+      if (fs.lstatSync(fullPath).isSymbolicLink()) return [{ path: relativePath.replace(/\\/g, '/'), link: fs.readlinkSync(fullPath) }];
+      return entry.isDirectory()
+        ? [{ path: `${relativePath.replace(/\\/g, '/')}/`, directory: true }, ...snapshotTree(fullPath, relativePath)]
+        : [{ path: relativePath.replace(/\\/g, '/'), bytes: fs.readFileSync(fullPath) }];
+    })
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function sha256(content) {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function initCandidateProofGitRepository(root, artifactPath = 'src/candidate.js') {
+  git(['init'], root);
+  git(['config', 'user.email', 'test@example.com'], root);
+  git(['config', 'user.name', 'Test User'], root);
+  git(['config', 'core.autocrlf', 'false'], root);
+  writeProjectFile(root, '.gitignore', '.work/\n');
+  writeProjectFile(root, artifactPath, 'export const candidate = true;\n');
+  git(['add', '.gitignore', artifactPath], root);
+  git(['commit', '-m', 'candidate fixture'], root);
+}
+
+function captureCandidateReceipt(root, planPath, artifactPath, { evidenceKind = 'runtime', excludePaths = ['.work', '.planning'] } = {}) {
+  const pathspecs = ['.', ...excludePaths.map((entry) => `:(exclude,literal)${entry.replace(/\\/g, '/')}`)];
+  const status = execFileSync('git', ['-c', 'core.quotePath=true', 'status', '--porcelain=v1', '--untracked-files=all', '--', ...pathspecs], {
+    cwd: root,
+    encoding: 'utf-8',
+  }).replace(/\r\n/g, '\n');
+  return {
+    commit: git(['rev-parse', '--verify', 'HEAD'], root),
+    dirtyFingerprint: `sha256:${sha256(Buffer.from(status, 'utf-8'))}`,
+    dirtyEntries: status.split('\n').filter(Boolean).length,
+    planSha256: `sha256:${sha256(fs.readFileSync(path.join(root, '.work', 'phases', planPath)))}`,
+    artifactSha256: `sha256:${sha256(fs.readFileSync(path.join(root, artifactPath)))}`,
+    runtimeIdentity: evidenceKind === 'runtime'
+      ? `artifact:${artifactPath}`
+      : 'not_applicable: repeatable test evidence has no live runtime identity',
+  };
+}
+
+function writeCandidateProofFixture(root, phaseName, { evidenceKind = 'runtime', runtimeIdentity } = {}) {
+  const phaseDir = path.join(root, '.work', 'phases', phaseName);
+  const planRelativePath = `${phaseName}/01-PLAN.md`;
+  fs.mkdirSync(phaseDir, { recursive: true });
+  fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), [
+    '---', 'browser_proof_required: true', 'browser_proof_rationale: rendered proof.', '---',
+    '## Browser Proof Plan', 'Routes/states: /dashboard.', 'Viewports: desktop.', 'Runtime path: agent-browser.',
+    `Evidence kind: ${evidenceKind}`, 'Evidence command: npm run test:e2e', 'Candidate identity:', '  - src/candidate.js',
+    'Observations: dashboard renders.', 'Artifacts: local-only.', 'Claim limit: dashboard only.',
+  ].join('\n'));
+  const receipt = captureCandidateReceipt(root, planRelativePath, 'src/candidate.js', { evidenceKind });
+  fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), [
+    '## Browser Proof Observation', `- Plan: ${planRelativePath}`, '- Flow: /dashboard.', '- Viewports: desktop.',
+    '- Runtime path: agent-browser.', `- Evidence kind: ${evidenceKind}`, '- Evidence command: npm run test:e2e',
+    `- Candidate commit: ${receipt.commit}`, `- Candidate dirty fingerprint: ${receipt.dirtyFingerprint}`, `- Candidate dirty entries: ${receipt.dirtyEntries}`,
+    `- Plan sha256: ${receipt.planSha256}`, '- Candidate artifacts:', `  - src/candidate.js | ${receipt.artifactSha256}`,
+    `- Runtime identity: ${runtimeIdentity || receipt.runtimeIdentity}`, '- Observed: dashboard renders.', '- Artifacts: local-only.', '- Result: passed', '- Claim limit: dashboard only.',
+  ].join('\n'));
+  return { phaseDir, receipt };
 }
 
 function writePassedStandardChain(root, phase = '18') {
@@ -2668,6 +2736,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify passes required browser proof with a complete observation record', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    initCandidateProofGitRepository(tmpDir);
     const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-observed');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(
@@ -2685,11 +2754,14 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         'Runtime path: agent-browser.',
         'Evidence kind: runtime',
         'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Candidate identity:',
+        '  - src/candidate.js',
         'Observations: dashboard widgets render without console errors.',
         'Artifacts: .work/phases/01-browser-proof-observed/artifacts/dashboard.png, local_only.',
         'Claim limit: dashboard render proof only.',
       ].join('\n')
     );
+    const receipt = captureCandidateReceipt(tmpDir, '01-browser-proof-observed/01-PLAN.md', 'src/candidate.js');
     fs.writeFileSync(
       path.join(phaseDir, '01-SUMMARY.md'),
       [
@@ -2703,6 +2775,13 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Runtime path: agent-browser.',
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard',
+        `- Candidate commit: ${receipt.commit}`,
+        `- Candidate dirty fingerprint: ${receipt.dirtyFingerprint}`,
+        `- Candidate dirty entries: ${receipt.dirtyEntries}`,
+        `- Plan sha256: ${receipt.planSha256}`,
+        '- Candidate artifacts:',
+        `  - src/candidate.js | ${receipt.artifactSha256}`,
+        `- Runtime identity: ${receipt.runtimeIdentity}`,
         '- Observed: dashboard widgets rendered without console errors.',
         '- Artifacts:',
         '  - .work/phases/01-browser-proof-observed/artifacts/dashboard.png - local-only',
@@ -2717,6 +2796,257 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
     assert.strictEqual(output.verified, true);
     assert.strictEqual(output.browser_proof_status.satisfied, true);
+  });
+
+  test('phase verify refuses required browser proof without a candidate identity declaration', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    initCandidateProofGitRepository(tmpDir);
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-candidate-required');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(phaseDir, '01-PLAN.md'),
+      [
+        '---',
+        'browser_proof_required: true',
+        'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+        '---',
+        '# Phase 1 Plan',
+        '',
+        '## Browser Proof Plan',
+        'Routes/states: /dashboard after loading current account.',
+        'Viewports: desktop and mobile.',
+        'Runtime path: agent-browser.',
+        'Evidence kind: runtime',
+        'Evidence command: npm run test:e2e -- --grep dashboard',
+        'Observations: dashboard widgets render without console errors.',
+        'Artifacts: .work/phases/01-browser-proof-candidate-required/artifacts/dashboard.png, local_only.',
+        'Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+    fs.writeFileSync(
+      path.join(phaseDir, '01-SUMMARY.md'),
+      [
+        '# Phase 1 Summary',
+        '',
+        '## Browser Proof Observation',
+        '',
+        '- Plan: 01-browser-proof-candidate-required/01-PLAN.md',
+        '- Flow: /dashboard after loading current account.',
+        '- Viewports: desktop and mobile.',
+        '- Runtime path: agent-browser.',
+        '- Evidence kind: runtime',
+        '- Evidence command: npm run test:e2e -- --grep dashboard',
+        '- Observed: dashboard widgets rendered without console errors.',
+        '- Artifacts: .work/phases/01-browser-proof-candidate-required/artifacts/dashboard.png - local-only',
+        '- Result: passed',
+        '- Claim limit: dashboard render proof only.',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => blocker.code === 'missing_candidate_identity'));
+  });
+
+  test('phase verify refuses case-variant .WORK candidate inputs without writing the fixture', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    initCandidateProofGitRepository(tmpDir);
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-state-root-alias');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.work', 'secret.txt'), 'private candidate\n');
+    const planPath = path.join(phaseDir, '01-PLAN.md');
+    fs.writeFileSync(planPath, [
+      '---', 'browser_proof_required: true', 'browser_proof_rationale: rendered proof.', '---',
+      '## Browser Proof Plan', 'Routes/states: /dashboard.', 'Viewports: desktop.', 'Runtime path: agent-browser.',
+      'Evidence kind: runtime', 'Evidence command: npm run test:e2e', 'Candidate identity:', '  - .WORK/secret.txt',
+      'Observations: dashboard renders.', 'Artifacts: local-only.', 'Claim limit: dashboard only.',
+    ].join('\n'));
+    const receipt = captureCandidateReceipt(tmpDir, '01-browser-proof-state-root-alias/01-PLAN.md', '.work/secret.txt');
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), [
+      '## Browser Proof Observation', '- Plan: 01-browser-proof-state-root-alias/01-PLAN.md', '- Flow: /dashboard.',
+      '- Viewports: desktop.', '- Runtime path: agent-browser.', '- Evidence kind: runtime', '- Evidence command: npm run test:e2e',
+      `- Candidate commit: ${receipt.commit}`, `- Candidate dirty fingerprint: ${receipt.dirtyFingerprint}`, `- Candidate dirty entries: ${receipt.dirtyEntries}`,
+      `- Plan sha256: ${receipt.planSha256}`, '- Candidate artifacts:', `  - .WORK/secret.txt | ${receipt.artifactSha256}`,
+      '- Runtime identity: artifact:.WORK/secret.txt', '- Observed: dashboard renders.', '- Artifacts: local-only.', '- Result: passed', '- Claim limit: dashboard only.',
+    ].join('\n'));
+    const before = snapshotTree(tmpDir);
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.ok(output.browser_proof_status.blockers.some((blocker) => blocker.code === 'invalid_candidate_identity'));
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('generated helper returns the same candidate receipt blocker as direct verification', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-generated-candidate');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), [
+      '---',
+      'browser_proof_required: true',
+      'browser_proof_rationale: Rendered UI work changes the visible dashboard.',
+      '---',
+      '## Browser Proof Plan',
+      'Routes/states: /dashboard.',
+      'Viewports: desktop.',
+      'Runtime path: agent-browser.',
+      'Evidence kind: runtime',
+      'Evidence command: npm run test:e2e',
+      'Observations: dashboard renders.',
+      'Artifacts: local-only.',
+      'Claim limit: dashboard only.',
+    ].join('\n'));
+    fs.writeFileSync(path.join(phaseDir, '01-SUMMARY.md'), '# summary\n');
+
+    const direct = await runCliAsMain(tmpDir, ['verify', '1']);
+    const helper = spawnSync(process.execPath, [path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'), 'verify', '1'], {
+      cwd: tmpDir,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(direct.exitCode, 1, direct.output);
+    assert.strictEqual(helper.status, 1, helper.stderr || helper.stdout);
+    const directCodes = JSON.parse(direct.output).browser_proof_status.blockers.map((blocker) => blocker.code).sort();
+    const helperCodes = JSON.parse(helper.stdout).browser_proof_status.blockers.map((blocker) => blocker.code).sort();
+    assert.deepStrictEqual(helperCodes, directCodes);
+  });
+
+  test('candidate receipt mismatches fail closed without exposing unrelated dirty paths', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    initCandidateProofGitRepository(tmpDir);
+    const { phaseDir, receipt } = writeCandidateProofFixture(tmpDir, '01-browser-proof-candidate-mismatch');
+    const summaryPath = path.join(phaseDir, '01-SUMMARY.md');
+    fs.writeFileSync(summaryPath, fs.readFileSync(summaryPath, 'utf-8').replace(receipt.commit, '0'.repeat(40)));
+    const before = snapshotTree(tmpDir);
+    const wrongCommit = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(wrongCommit.exitCode, 1, wrongCommit.output);
+    assert.ok(JSON.parse(wrongCommit.output).browser_proof_status.blockers.some((blocker) => blocker.code === 'candidate_commit_mismatch'));
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'verification must not mutate a wrong-commit refusal');
+
+    fs.writeFileSync(summaryPath, fs.readFileSync(summaryPath, 'utf-8').replace('0'.repeat(40), receipt.commit));
+    fs.writeFileSync(path.join(tmpDir, 'unrelated-dirty.txt'), 'do not disclose\n');
+    const dirty = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(dirty.exitCode, 1, dirty.output);
+    assert.ok(JSON.parse(dirty.output).browser_proof_status.blockers.some((blocker) => blocker.code === 'candidate_dirty_mismatch'));
+    assert.doesNotMatch(dirty.output, /unrelated-dirty\.txt/);
+    const helper = spawnSync(process.execPath, [path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'), 'verify', '1'], { cwd: tmpDir, encoding: 'utf-8' });
+    assert.strictEqual(helper.status, 1, helper.stderr || helper.stdout);
+    assert.deepStrictEqual(
+      JSON.parse(helper.stdout).browser_proof_status.blockers.map((blocker) => blocker.code).sort(),
+      JSON.parse(dirty.output).browser_proof_status.blockers.map((blocker) => blocker.code).sort()
+    );
+  });
+
+  test('tracked .work receipts exclude themselves but still detect product dirty state', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    initCandidateProofGitRepository(tmpDir);
+    const { phaseDir } = writeCandidateProofFixture(tmpDir, '01-browser-proof-tracked-state');
+    const summaryPath = path.join(phaseDir, '01-SUMMARY.md');
+    fs.writeFileSync(path.join(tmpDir, '.gitignore'), '');
+    git(['add', '.gitignore', '.work'], tmpDir);
+    git(['commit', '-m', 'track work state'], tmpDir);
+    const receipt = captureCandidateReceipt(tmpDir, '01-browser-proof-tracked-state/01-PLAN.md', 'src/candidate.js');
+    let summary = fs.readFileSync(summaryPath, 'utf-8');
+    summary = summary.replace(/Candidate commit: .+/, `Candidate commit: ${receipt.commit}`)
+      .replace(/Candidate dirty fingerprint: .+/, `Candidate dirty fingerprint: ${receipt.dirtyFingerprint}`)
+      .replace(/Candidate dirty entries: .+/, `Candidate dirty entries: ${receipt.dirtyEntries}`)
+      .replace(/Plan sha256: .+/, `Plan sha256: ${receipt.planSha256}`)
+      .replace(/src\/candidate\.js \| sha256:[a-f0-9]+/, `src/candidate.js | ${receipt.artifactSha256}`);
+    fs.writeFileSync(summaryPath, summary);
+
+    const passing = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(passing.exitCode, 0, passing.output);
+    fs.appendFileSync(path.join(tmpDir, 'src', 'candidate.js'), '// changed after receipt\n');
+    const dirty = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(dirty.exitCode, 1, dirty.output);
+    assert.ok(JSON.parse(dirty.output).browser_proof_status.blockers.some((blocker) => blocker.code === 'candidate_dirty_mismatch'));
+  });
+
+  test('candidate receipt matrix is exact, fail-closed, and read-only', async (t) => {
+    const cases = [
+      ['test-only receipt passes', 'test', null, 0, null],
+      ['runtime cannot use not_applicable', 'runtime', ({ phaseDir }) => {
+        const summary = path.join(phaseDir, '01-SUMMARY.md');
+        fs.writeFileSync(summary, fs.readFileSync(summary, 'utf-8').replace(/Runtime identity: artifact:.+/, 'Runtime identity: not_applicable: invalid for runtime'));
+      }, 1, 'invalid_candidate_runtime_identity'],
+      ['case-wrong Plan cannot close', 'runtime', ({ phaseDir }) => {
+        const summary = path.join(phaseDir, '01-SUMMARY.md');
+        fs.writeFileSync(summary, fs.readFileSync(summary, 'utf-8').replace('01-PLAN.md', '01-plan.md'));
+      }, 1, 'unmatched_browser_proof_observation'],
+      ['changed PLAN blocks', 'runtime', ({ phaseDir }) => fs.appendFileSync(path.join(phaseDir, '01-PLAN.md'), '\nchanged\n'), 1, 'candidate_plan_mismatch'],
+      ['changed artifact blocks', 'runtime', (_fixture, root) => fs.appendFileSync(path.join(root, 'src', 'candidate.js'), '// changed\n'), 1, 'candidate_artifact_mismatch'],
+      ['candidate directory blocks', 'runtime', ({ phaseDir }) => {
+        const plan = path.join(phaseDir, '01-PLAN.md');
+        const summary = path.join(phaseDir, '01-SUMMARY.md');
+        fs.writeFileSync(plan, fs.readFileSync(plan, 'utf-8').replace('src/candidate.js', 'src'));
+        fs.writeFileSync(summary, fs.readFileSync(summary, 'utf-8').replaceAll('src/candidate.js', 'src'));
+      }, 1, 'invalid_candidate_artifact_path'],
+      ['absolute candidate blocks', 'runtime', ({ phaseDir }) => fs.writeFileSync(path.join(phaseDir, '01-PLAN.md'), fs.readFileSync(path.join(phaseDir, '01-PLAN.md'), 'utf-8').replace('src/candidate.js', 'C:/outside.js')), 1, 'invalid_candidate_identity'],
+      ['duplicate receipt field blocks', 'runtime', ({ phaseDir }) => fs.appendFileSync(path.join(phaseDir, '01-SUMMARY.md'), '\n- Candidate commit: 0000000000000000000000000000000000000000\n'), 1, 'missing_candidate_receipt'],
+    ];
+    for (const [name, evidenceKind, mutate, exitCode, blockerCode] of cases) {
+      const root = createGsddTempProject();
+      try {
+        await runCliAsMain(root, ['init', '--auto', '--tools', 'agents']);
+        initCandidateProofGitRepository(root);
+        const fixture = writeCandidateProofFixture(root, '01-candidate-matrix', { evidenceKind });
+        if (mutate) {
+          mutate(fixture, root);
+        }
+        const before = snapshotTree(root);
+        const result = await runCliAsMain(root, ['verify', '1']);
+        assert.strictEqual(result.exitCode, exitCode, `${name}: ${result.output}`);
+        assert.deepStrictEqual(snapshotTree(root), before, `${name}: verifier wrote fixture bytes`);
+        if (blockerCode) assert.ok(JSON.parse(result.output).browser_proof_status.blockers.some((blocker) => blocker.code === blockerCode), name);
+      } finally {
+        cleanup(root);
+      }
+    }
+    for (const dangling of [false, true]) {
+      const root = createGsddTempProject();
+      try {
+        await runCliAsMain(root, ['init', '--auto', '--tools', 'agents']);
+        initCandidateProofGitRepository(root);
+        const { phaseDir } = writeCandidateProofFixture(root, `01-candidate-${dangling ? 'dangling' : 'link'}`);
+        const link = path.join(root, 'src', 'candidate-link.js');
+        try { fs.symlinkSync(dangling ? path.join(root, 'missing.js') : path.join(root, 'src', 'candidate.js'), link, 'file'); } catch (error) {
+          if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) { t.skip(`symlink unavailable: ${error.code}`); continue; }
+          throw error;
+        }
+        for (const file of ['01-PLAN.md', '01-SUMMARY.md']) {
+          const target = path.join(phaseDir, file);
+          fs.writeFileSync(target, fs.readFileSync(target, 'utf-8').replaceAll('src/candidate.js', 'src/candidate-link.js'));
+        }
+        const before = snapshotTree(root);
+        const result = await runCliAsMain(root, ['verify', '1']);
+        assert.strictEqual(result.exitCode, 1, result.output);
+        assert.ok(JSON.parse(result.output).browser_proof_status.blockers.some((blocker) => blocker.code === 'invalid_candidate_artifact_path' || blocker.code === 'missing_candidate_artifact'));
+        assert.deepStrictEqual(snapshotTree(root), before);
+      } finally { cleanup(root); }
+    }
+  });
+
+  test('one comma-separated Plan reference cannot close two candidate-bound plans', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-one-plan');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    const plan = [
+      '---', 'browser_proof_required: true', 'browser_proof_rationale: rendered proof.', '---', '## Browser Proof Plan',
+      'Routes/states: /dashboard.', 'Viewports: desktop.', 'Runtime path: agent-browser.', 'Evidence kind: runtime',
+      'Evidence command: npm run test:e2e', 'Candidate identity:', '  - src/candidate.js', 'Observations: dashboard renders.', 'Artifacts: local-only.', 'Claim limit: dashboard only.',
+    ].join('\n');
+    fs.writeFileSync(path.join(phaseDir, '01-1-PLAN.md'), plan);
+    fs.writeFileSync(path.join(phaseDir, '01-2-PLAN.md'), plan);
+    fs.writeFileSync(path.join(phaseDir, '01-1-SUMMARY.md'), [
+      '## Browser Proof Observation', '- Plan: 01-browser-proof-one-plan/01-1-PLAN.md, 01-browser-proof-one-plan/01-2-PLAN.md',
+      '- Flow: /dashboard.', '- Viewports: desktop.', '- Runtime path: agent-browser.', '- Evidence kind: runtime', '- Evidence command: npm run test:e2e',
+      '- Observed: dashboard renders.', '- Artifacts: local-only.', '- Result: passed', '- Claim limit: dashboard only.',
+    ].join('\n'));
+    fs.writeFileSync(path.join(phaseDir, '01-2-SUMMARY.md'), '# summary\n');
+    const result = await runCliAsMain(tmpDir, ['verify', '1']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const blockers = JSON.parse(result.output).browser_proof_status.blockers;
+    assert.strictEqual(blockers.filter((blocker) => blocker.code === 'unmatched_browser_proof_observation').length, 2);
   });
 
   test('phase verify blocks failed browser proof observations', async () => {
@@ -3156,6 +3486,7 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
 
   test('phase verify passes multi-plan browser proof when observations reference each required plan', async () => {
     await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    initCandidateProofGitRepository(tmpDir);
     const phaseDir = path.join(tmpDir, '.work', 'phases', '01-browser-proof-multi-observed');
     fs.mkdirSync(phaseDir, { recursive: true });
     const planContent = [
@@ -3171,12 +3502,16 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
       'Runtime path: agent-browser.',
       'Evidence kind: runtime',
       'Evidence command: npm run test:e2e -- --grep dashboard',
+      'Candidate identity:',
+      '  - src/candidate.js',
       'Observations: dashboard widgets render without console errors.',
       'Artifacts: .work/phases/01-browser-proof-multi-observed/artifacts/dashboard.png, local_only.',
       'Claim limit: dashboard render proof only.',
     ].join('\n');
     fs.writeFileSync(path.join(phaseDir, '01-1-PLAN.md'), planContent);
     fs.writeFileSync(path.join(phaseDir, '01-2-PLAN.md'), planContent);
+    const receiptA = captureCandidateReceipt(tmpDir, '01-browser-proof-multi-observed/01-1-PLAN.md', 'src/candidate.js');
+    const receiptB = captureCandidateReceipt(tmpDir, '01-browser-proof-multi-observed/01-2-PLAN.md', 'src/candidate.js');
     fs.writeFileSync(
       path.join(phaseDir, '01-1-SUMMARY.md'),
       [
@@ -3190,6 +3525,13 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Runtime path: agent-browser.',
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard-a',
+        `- Candidate commit: ${receiptA.commit}`,
+        `- Candidate dirty fingerprint: ${receiptA.dirtyFingerprint}`,
+        `- Candidate dirty entries: ${receiptA.dirtyEntries}`,
+        `- Plan sha256: ${receiptA.planSha256}`,
+        '- Candidate artifacts:',
+        `  - src/candidate.js | ${receiptA.artifactSha256}`,
+        `- Runtime identity: ${receiptA.runtimeIdentity}`,
         '- Observed: dashboard widgets rendered without console errors.',
         '- Artifacts: .work/phases/01-browser-proof-multi-observed/artifacts/dashboard-a.png - local-only',
         '- Result: passed',
@@ -3209,6 +3551,13 @@ describe('Phase 58 dogfood and Phase 59 UI proof product comparison', () => {
         '- Runtime path: agent-browser.',
         '- Evidence kind: runtime',
         '- Evidence command: npm run test:e2e -- --grep dashboard-b',
+        `- Candidate commit: ${receiptB.commit}`,
+        `- Candidate dirty fingerprint: ${receiptB.dirtyFingerprint}`,
+        `- Candidate dirty entries: ${receiptB.dirtyEntries}`,
+        `- Plan sha256: ${receiptB.planSha256}`,
+        '- Candidate artifacts:',
+        `  - src/candidate.js | ${receiptB.artifactSha256}`,
+        `- Runtime identity: ${receiptB.runtimeIdentity}`,
         '- Observed: dashboard widgets rendered without console errors.',
         '- Artifacts: .work/phases/01-browser-proof-multi-observed/artifacts/dashboard-b.png - local-only',
         '- Result: passed',

@@ -137,6 +137,14 @@ describe('gsdd init and update', () => {
     cleanup(tmpDir);
   });
 
+  test('generated helper includes the candidate provenance dependency required by phase verification', async () => {
+    const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const helperPath = path.join(tmpDir, '.work', 'bin', 'lib', 'candidate-provenance.mjs');
+    assert.ok(fs.existsSync(helperPath));
+    assert.match(fs.readFileSync(helperPath, 'utf-8'), /captureGitCandidate/);
+  });
+
   test('init creates planning structure, default config, templates, and open-standard skills', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {

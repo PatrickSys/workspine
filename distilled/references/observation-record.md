@@ -11,6 +11,13 @@ verified, record one parser-compatible markdown section per checked flow.
 - Viewports: 1280x720 desktop, 390x844 mobile
 - Runtime path: agent-browser
 - Evidence kind: runtime
+- Candidate commit: <40-hex Git HEAD>
+- Candidate dirty fingerprint: sha256:<64-hex>
+- Candidate dirty entries: <count>
+- Plan sha256: sha256:<64-hex>
+- Candidate artifacts:
+  - src/example-ui.js | sha256:<64-hex>
+- Runtime identity: artifact:src/example-ui.js
 - No-command rationale: agent-browser/manual refs were required for this local runtime; claim is limited to the observed session.
 - Observed: Changed control rendered, interaction completed, no relevant console/network failures
 - Artifacts:
@@ -30,3 +37,7 @@ It does not inspect screenshot pixels, network logs, or visual quality. Failed
 or partial proof should use the failure-cause names in proof-rules.md
 (`distilled/references/proof-rules.md`) and leave the browser-proof claim
 blocked or narrowed.
+
+The paired plan declares the same `Candidate identity` paths. Direct verification
+recomputes this receipt without raw dirty paths; test-only proof may use a
+meaningful `not_applicable:<reason>` runtime identity.

@@ -51,6 +51,8 @@ Routes/states: /example route, role, data state, and UI state to inspect
 Viewports: Desktop 1280px and mobile 390px, or a narrowed viewport claim
 Runtime path: agent-browser preferred; explain fallback constraints if unavailable
 Evidence kind: runtime
+Candidate identity:
+  - src/example-ui.js
 No-command rationale: agent-browser/manual refs were required for this local runtime; claim is limited to the observed session.
 Observations: Changed control is visible, interaction completes, no relevant console/network failures
 Artifacts: .work/.../artifacts/example-1280.png (local-only unless sanitized)
@@ -76,6 +78,13 @@ Write one record per checked flow:
 - Viewports: 1280x720 desktop, 390x844 mobile
 - Runtime path: agent-browser
 - Evidence kind: runtime
+- Candidate commit: <40-hex Git HEAD>
+- Candidate dirty fingerprint: sha256:<64-hex>
+- Candidate dirty entries: <count>
+- Plan sha256: sha256:<64-hex>
+- Candidate artifacts:
+  - src/example-ui.js | sha256:<64-hex>
+- Runtime identity: artifact:src/example-ui.js
 - No-command rationale: agent-browser/manual refs were required for this local runtime; claim is limited to the observed session.
 - Observed: Changed control rendered, interaction completed, no relevant console/network failures
 - Artifacts:
@@ -98,3 +107,9 @@ observations, artifacts, and evidence kinds it records. It does not imply broad
 visual quality, cross-browser coverage, full accessibility conformance,
 production delivery, release readiness, or public proof unless those dimensions
 are explicitly planned, evidenced, and safe to publish.
+
+Required proof also binds current Git/dirty/PLAN/artifact bytes; it does not
+attest that a live server loaded those bytes.
+The dirty fingerprint excludes canonical `.work`, the retained legacy `.planning`
+root, and this receipt file so
+tracked proof state cannot invalidate itself; all other repository paths remain covered.

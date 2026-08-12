@@ -3674,6 +3674,14 @@ describe('G55 - Browser Proof Contract', () => {
     }
   });
 
+  test('browser-proof contract keeps candidate receipts fail-closed and bounded', () => {
+    const combined = [template, planContent, executeContent, quickContent, verifyContent, plannerRole, executorRole, verifierRole, planChecker].join('\n');
+    for (const phrase of [/Candidate identity/i, /dirty fingerprint/i, /PLAN SHA-256/i, /live-byte authenticity|live process loading/i]) {
+      assert.match(combined, phrase, `candidate-bound browser proof must retain ${phrase}.`);
+    }
+    assert.doesNotMatch(combined, /provider registry|process inspector|proof database/i);
+  });
+
   test('guardrails reject agent-only proof, artifact theater, and unsafe public claims', () => {
     const combined = [template, planContent, executeContent, quickContent, verifyContent, plannerRole, executorRole, verifierRole, planChecker].join('\n');
     for (const phrase of [

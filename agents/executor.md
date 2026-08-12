@@ -217,6 +217,7 @@ Before reporting a task complete:
 
 ### Browser Proof Execution
 If the plan sets `browser_proof_required: true`, execute the Browser Proof Plan and record observed proof against the exact `Plan:` artifact path, route/state, viewport, observation, evidence kind, artifact path or manual step, privacy/safety note, result, and claim limit before claiming task completion.
+For required proof, record Candidate identity receipt values: Git HEAD, normalized dirty fingerprint/count, PLAN/artifact SHA-256, and runtime artifact identity; test-only evidence may use meaningful `not_applicable:`. This remains read-only local binding, not proof a process served those bytes.
 
 Use `agent-browser` as the default live UI proof path:
 - open the planned route/state

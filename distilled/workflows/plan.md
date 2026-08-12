@@ -143,6 +143,7 @@ The Browser Proof Plan is plain markdown, not a JSON slot schema. It must name:
 - `Observations:` rendered DOM/behavior, interaction steps, and console/network observations when relevant
 - `Artifacts:` screenshot/report/log paths if produced, with local-only vs publishable privacy/safety note
 - `Claim limit:` the exact claim the observation can support
+- `Candidate identity:` indented explicit repo-relative source/build/runtime paths, never canonical `.work`, the retained legacy `.planning` root, links, directories, or globs
 
 Evidence must later match route/state, viewport, observation, artifact path, evidence kind, privacy/safety note, result, and claim limit. Human approval does not replace required `code`, `test`, `runtime`, or `delivery` evidence. Existing Playwright/package-script browser tests remain canonical repeatable regression evidence when present. Do not plan new browser infrastructure by default; use Playwright scripting only for checks `agent-browser` cannot cover cleanly, such as JS-disabled, structured console, or multi-context verification.
 </browser_proof_planning>

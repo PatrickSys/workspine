@@ -62,6 +62,7 @@ Rules:
 - record `release_claim_posture`, unsupported claims, waivers, deferrals, and contradiction checks in audit frontmatter; completion inherits these fields
 - missing required evidence cannot be waived while preserving a stronger release claim. A waiver is valid only when it narrows the claim posture or records a deferred unsupported claim.
 - deferrals must name the unsupported claim, missing evidence kind(s), and later workflow or milestone candidate when known
+- Candidate-bound browser-proof receipts close source/local identity only; retain live runtime authenticity as separate Phase 05 evidence.
 - contradiction checks must cover evidence, public-surface, runtime, delivery, planning-drift, and generated-surface contradictions; stop or downgrade when the claim outruns the evidence
 - `delivery_posture` and `release_claim_posture` must remain compatible: `repo_closeout` and `runtime_validated_closeout` pair with `repo_only`; `delivery_supported_closeout` pairs with `delivery_sensitive`
 - local-only `.work/` proof may support `repo_closeout`, but public-facing release/support claims need tracked public or repo-visible evidence when intended for external readers

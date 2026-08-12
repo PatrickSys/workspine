@@ -3,7 +3,7 @@
 // IMPORTANT: No module-scope process.cwd() — ESM caching means sub-modules
 // evaluate once, so CWD must be computed inside function bodies.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, realpathSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, lstatSync, realpathSync } from 'fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
 import {
@@ -18,6 +18,7 @@ import {
 import { getWorkPaths, resolveActiveMilestoneDir } from './work-context.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { assertStateAuthority } from './state-dir.mjs';
+import { captureGitCandidate, hashCandidateArtifact, hashExactFile, resolveCandidateArtifact } from './candidate-provenance.mjs';
 
 const PHASE_STATUS_MARKERS = {
   not_started: '[ ]',
@@ -267,6 +268,40 @@ function sectionFieldValue(section, label) {
   return normalizeScalarValue(nestedValues.join(' '));
 }
 
+function nestedBulletField(section, label) {
+  const lines = String(section || '').replace(/\r\n/g, '\n').split('\n');
+  const escapedLabel = String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matcher = new RegExp(`^\\s*(?:[-*]\\s*)?${escapedLabel}:\\s*(.*)$`, 'i');
+  const indexes = lines.flatMap((line, index) => matcher.test(line) ? [index] : []);
+  if (indexes.length === 0) return { status: 'missing', values: [] };
+  if (indexes.length !== 1 || normalizeScalarValue(lines[indexes[0]].replace(matcher, '$1'))) {
+    return { status: 'invalid', values: [] };
+  }
+  const values = [];
+  for (const line of lines.slice(indexes[0] + 1)) {
+    if (!line.trim()) continue;
+    const bullet = line.match(/^\s{2,}[-*]\s+(.+?)\s*$/);
+    if (bullet) {
+      values.push(bullet[1]);
+      continue;
+    }
+    break;
+  }
+  return values.length > 0 ? { status: 'ok', values } : { status: 'invalid', values: [] };
+}
+
+function isCandidatePathSyntax(value) {
+  const path = String(value || '').trim();
+  return !!path
+    && !/^[a-z][a-z0-9+.-]*:/i.test(path)
+    && !isAbsolute(path)
+    && !path.includes('\\')
+    && !/[?*\[\]{}]/.test(path)
+    && !path.includes(',')
+    && path.split('/').every((part) => part && part !== '.' && part !== '..')
+    && !['.work', '.planning'].includes(path.split('/')[0].toLowerCase());
+}
+
 function isMeaningfulFieldValue(value) {
   const normalized = normalizeScalarValue(value);
   if (!normalized) return false;
@@ -372,6 +407,9 @@ function browserProofFixHint(code) {
   if (code === 'unmatched_browser_proof_observation') {
     return 'Add a Plan field to each Browser Proof Observation that names the exact required PLAN.md artifact.';
   }
+  if (code.includes('candidate')) {
+    return 'Record one exact, current Candidate identity and receipt; candidate artifacts must be safe repo-local regular files.';
+  }
   return 'Complete the Browser Proof Plan fields or narrow the proof claim.';
 }
 
@@ -389,6 +427,7 @@ function evaluateBrowserProofContract(planContent, planPath) {
     .filter((key) => hasTopLevelKey(frontmatter, key));
   const blockers = [];
   const warnings = [];
+  let candidatePaths = [];
 
   if (declarationPresent && retiredKeys.length > 0) {
     blockers.push({
@@ -551,6 +590,27 @@ function evaluateBrowserProofContract(planContent, planPath) {
       if (!isBoundedBrowserProofClaim(section)) {
         missingFields.push('bounded Claim limit');
       }
+      const candidateIdentity = nestedBulletField(section, 'Candidate identity');
+      candidatePaths = candidateIdentity.values;
+      if (candidateIdentity.status === 'missing') {
+        blockers.push({
+          code: 'missing_candidate_identity',
+          severity: 'blocker',
+          path: planPath,
+          message: 'Browser Proof Plan must declare Candidate identity as one or more indented repo-relative artifact paths.',
+          fix_hint: browserProofFixHint('missing_candidate_identity'),
+        });
+      } else if (candidateIdentity.status !== 'ok'
+        || candidateIdentity.values.some((value) => !isCandidatePathSyntax(value))
+        || new Set(candidateIdentity.values).size !== candidateIdentity.values.length) {
+        blockers.push({
+          code: 'invalid_candidate_identity',
+          severity: 'blocker',
+          path: planPath,
+          message: 'Candidate identity must contain distinct explicit repo-relative artifact paths.',
+          fix_hint: browserProofFixHint('invalid_candidate_identity'),
+        });
+      }
       if (missingFields.length > 0) {
         blockers.push({
           code: 'incomplete_browser_proof_plan',
@@ -569,6 +629,7 @@ function evaluateBrowserProofContract(planContent, planPath) {
     required,
     rationale,
     legacy_compatible: legacyNoUiCompatible,
+    candidate_paths: candidatePaths,
     satisfied: blockers.length === 0,
     warnings,
     blockers,
@@ -631,6 +692,16 @@ function readLinkedObservationRecords(summaryContent, summaryFullPath, workspace
       continue;
     }
     try {
+      if (lstatSync(existingPath).isSymbolicLink()) {
+        blockers.push({
+          code: 'invalid_browser_proof_observation_link',
+          severity: 'blocker',
+          path: linkedPath,
+          message: 'Browser Proof Observation link must not be a symlink.',
+          fix_hint: browserProofFixHint('invalid_browser_proof_observation_link'),
+        });
+        continue;
+      }
       const realWorkspaceRoot = realpathSync(workspaceRoot);
       const realExistingPath = realpathSync(existingPath);
       if (!isInsidePath(realWorkspaceRoot, realExistingPath)) {
@@ -654,7 +725,7 @@ function readLinkedObservationRecords(summaryContent, summaryFullPath, workspace
         });
         continue;
       }
-      records.push(readFileSync(existingPath, 'utf-8'));
+      records.push({ content: readFileSync(existingPath, 'utf-8'), sourcePath: existingPath });
     } catch (error) {
       blockers.push({
         code: 'invalid_browser_proof_observation_link',
@@ -672,9 +743,10 @@ function findBrowserProofObservationSections(summaryContent, summaryFullPath, wo
   const linked = readLinkedObservationRecords(summaryContent, summaryFullPath, workspaceRoot);
   return {
     sections: [
-      ...extractMarkdownSections(summaryContent, 'Browser Proof Observation'),
+      ...extractMarkdownSections(summaryContent, 'Browser Proof Observation').map((section) => ({ section, sourcePath: summaryFullPath })),
       ...linked.records
-        .flatMap((record) => extractMarkdownSections(record, 'Browser Proof Observation')),
+        .flatMap((record) => extractMarkdownSections(record.content, 'Browser Proof Observation')
+          .map((section) => ({ section, sourcePath: record.sourcePath })),),
     ].filter(Boolean),
     blockers: linked.blockers,
   };
@@ -731,20 +803,94 @@ function isCompleteBrowserProofObservation(section) {
 }
 
 function normalizeArtifactReference(value) {
-  return String(value || '').replace(/\\/g, '/').toLowerCase();
+  return String(value || '').replace(/\\/g, '/');
 }
 
 function observationReferencesPlan(section, planPath) {
-  const planReference = sectionFieldValue(section, 'Plan')
-    || sectionFieldValue(section, 'Plan artifact')
-    || sectionFieldValue(section, 'PLAN');
-  if (!isMeaningfulFieldValue(planReference)) return false;
-  const normalizedReferences = normalizeArtifactReference(planReference)
-    .split(/[\n,;]+/)
-    .map((reference) => reference.trim().replace(/^\.\//, ''))
-    .filter(Boolean);
+  const references = String(section || '').match(/^\s*(?:[-*]\s*)?Plan:\s*(.+)$/gim) || [];
+  if (references.length !== 1) return false;
+  const planReference = normalizeScalarValue(references[0].replace(/^\s*(?:[-*]\s*)?Plan:\s*/i, ''));
+  if (!isMeaningfulFieldValue(planReference) || /[,;\n]/.test(planReference)) return false;
   const normalizedPlanPath = normalizeArtifactReference(planPath);
-  return normalizedReferences.some((reference) => reference === normalizedPlanPath);
+  return normalizeArtifactReference(planReference).replace(/^\.\//, '') === normalizedPlanPath;
+}
+
+function exactReceiptField(section, label, matcher) {
+  const value = sectionFieldValue(section, label);
+  const occurrences = String(section || '').match(new RegExp(
+    `^\\s*(?:[-*]\\s*)?${String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`,
+    'gim'
+  )) || [];
+  return occurrences.length === 1 && matcher.test(value) ? value : null;
+}
+
+function candidateReceiptIssues(plan, section, phasesDir, workspaceRoot, observationPath) {
+  if (!plan.candidate_paths?.length) return [];
+  const issues = [];
+  const commit = exactReceiptField(section, 'Candidate commit', /^[a-f0-9]{40}$/i);
+  const dirtyFingerprint = exactReceiptField(section, 'Candidate dirty fingerprint', /^sha256:[a-f0-9]{64}$/i);
+  const dirtyEntries = exactReceiptField(section, 'Candidate dirty entries', /^\d+$/);
+  const planSha = exactReceiptField(section, 'Plan sha256', /^sha256:[a-f0-9]{64}$/i);
+  if (!commit || !dirtyFingerprint || dirtyEntries === null || !planSha) {
+    issues.push({ code: 'missing_candidate_receipt', message: 'Browser Proof Observation must contain one complete candidate receipt.' });
+    return issues;
+  }
+
+  const artifacts = nestedBulletField(section, 'Candidate artifacts');
+  if (artifacts.status !== 'ok') {
+    issues.push({ code: 'missing_candidate_receipt', message: 'Browser Proof Observation must list Candidate artifacts as indented receipt bullets.' });
+    return issues;
+  }
+  const artifactPairs = artifacts.values.map((value) => value.match(/^(.+?)\s+\|\s+(sha256:[a-f0-9]{64})$/i));
+  if (artifactPairs.some((pair) => !pair)) {
+    issues.push({ code: 'invalid_candidate_receipt', message: 'Candidate artifacts must use path | sha256:<64-hex> format.' });
+    return issues;
+  }
+  const artifactHashes = new Map(artifactPairs.map((pair) => [pair[1], pair[2].toLowerCase()]));
+  if (artifactHashes.size !== artifactPairs.length
+    || artifactHashes.size !== plan.candidate_paths.length
+    || plan.candidate_paths.some((path) => !artifactHashes.has(path))) {
+    issues.push({ code: 'invalid_candidate_receipt', message: 'Candidate artifacts must match planned Candidate identity paths exactly once.' });
+    return issues;
+  }
+
+  try {
+    const observationRelativePath = relative(workspaceRoot, observationPath).replace(/\\/g, '/');
+    const current = captureGitCandidate(workspaceRoot, [observationRelativePath]);
+    if (commit.toLowerCase() !== current.commit) issues.push({ code: 'candidate_commit_mismatch', message: 'Candidate commit does not match current Git HEAD.' });
+    if (dirtyFingerprint.toLowerCase() !== current.dirtyFingerprint || Number(dirtyEntries) !== current.dirtyEntries) {
+      issues.push({ code: 'candidate_dirty_mismatch', message: 'Candidate dirty fingerprint or entry count does not match current Git state.' });
+    }
+    if (planSha.toLowerCase() !== hashExactFile(join(phasesDir, plan.path))) {
+      issues.push({ code: 'candidate_plan_mismatch', message: 'Plan sha256 does not match the exact referenced PLAN bytes.' });
+    }
+    const canonicalArtifacts = new Set();
+    for (const artifactPath of plan.candidate_paths) {
+      const resolvedArtifactPath = resolveCandidateArtifact(workspaceRoot, artifactPath);
+      const canonicalPath = process.platform === 'win32' ? resolvedArtifactPath.toLowerCase() : resolvedArtifactPath;
+      if (canonicalArtifacts.has(canonicalPath)) {
+        issues.push({ code: 'invalid_candidate_identity', message: 'Candidate identity paths must not resolve to the same file.' });
+        continue;
+      }
+      canonicalArtifacts.add(canonicalPath);
+      if (artifactHashes.get(artifactPath) !== hashCandidateArtifact(workspaceRoot, artifactPath)) {
+        issues.push({ code: 'candidate_artifact_mismatch', message: 'Candidate artifact sha256 does not match current bytes.' });
+      }
+    }
+  } catch (error) {
+    issues.push({
+      code: error?.code || 'invalid_candidate_receipt',
+      message: error?.message || 'Candidate receipt could not be recomputed safely.',
+    });
+  }
+
+  const runtimeIdentity = exactReceiptField(section, 'Runtime identity', /^(?:artifact:.+|not_applicable:.+)$/i);
+  const kinds = evidenceKindValues(section);
+  if (!runtimeIdentity || (kinds.includes('runtime') && !plan.candidate_paths.includes(runtimeIdentity.slice('artifact:'.length)))
+    || (!kinds.includes('runtime') && (!kinds.includes('test') || !/^not_applicable:\s*\S.+/i.test(runtimeIdentity)))) {
+    issues.push({ code: 'invalid_candidate_runtime_identity', message: 'Runtime identity must name a receipt artifact for runtime evidence, or a meaningful test-only not_applicable reason.' });
+  }
+  return issues;
 }
 
 function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, phasesDir, workspaceRoot) {
@@ -766,7 +912,7 @@ function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, p
       summaryFullPath,
       workspaceRoot
     );
-    return found.sections.map((section) => ({ section, summaryPath }));
+    return found.sections.map(({ section, sourcePath }) => ({ section, summaryPath, sourcePath }));
   });
   const linkBlockers = matchingSummaries.flatMap((summaryPath) => {
     const summaryFullPath = join(phasesDir, summaryPath);
@@ -815,6 +961,15 @@ function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, p
   const unmatchedPlans = requiredPlans.filter((plan) => (
     !completeSections.some(({ section }) => observationReferencesPlan(section, plan.path))
   ));
+  const candidateBlockers = requiredPlans.flatMap((plan) => completeSections
+    .filter(({ section }) => observationReferencesPlan(section, plan.path))
+    .flatMap(({ section, summaryPath, sourcePath }) => candidateReceiptIssues(plan, section, phasesDir, workspaceRoot, sourcePath).map((issue) => ({
+      code: issue.code,
+      severity: 'blocker',
+      path: summaryPath,
+      message: issue.message,
+      fix_hint: browserProofFixHint(issue.code),
+    }))));
   const unmatchedBlockers = unmatchedPlans.map((plan) => ({
     code: 'unmatched_browser_proof_observation',
     severity: 'blocker',
@@ -822,7 +977,7 @@ function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, p
     message: `No complete Browser Proof Observation references required plan ${plan.path}.`,
     fix_hint: browserProofFixHint('unmatched_browser_proof_observation'),
   }));
-  const blockers = [...linkBlockers, ...issueBlockers, ...unmatchedBlockers];
+  const blockers = [...linkBlockers, ...issueBlockers, ...unmatchedBlockers, ...candidateBlockers];
   if (blockers.length === 0) {
     return {
       satisfied: true,
