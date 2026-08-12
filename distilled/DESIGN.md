@@ -831,16 +831,16 @@ dispatch in a single file.
 Implementation lives under `bin/lib/`:
 - `cli-utils.mjs` owns flag parsing and JSON output helpers
 - `file-ops.mjs` owns workspace-confined deterministic file copy, delete, and regex-sub mechanics
-- `models.mjs` owns config/model schema and `cmdModels`
+- `config.mjs` owns config/model schema, `cmdModels`, and `cmdRigor`
 - `phase.mjs` owns phase discovery, verify, scaffold, and the status-aware ROADMAP phase helper
 - `templates.mjs` owns template/role install and refresh flows
-- `init.mjs` owns `createCmdInit(ctx)`, `createCmdUpdate(ctx)`, help text, and bootstrap/update helper logic
+- `init-flow.mjs` owns `createCmdInit(ctx)`, `createCmdUpdate(ctx)`, and bootstrap/update flow; `init-runtime.mjs` owns help/runtime wiring
 
 **Boundary rules:**
 - keep `bin/gsdd.mjs` as composition root, not a second implementation module
 - route deterministic copy/delete/text-mutation mechanics through CLI helpers instead of leaving manual file edits in workflow prose
 - keep ROADMAP phase checkbox transitions in a status-aware helper; broader roadmap rewrites stay outside this helper boundary
-- keep config-schema ownership in `models.mjs`; do not duplicate or relocate `buildDefaultConfig` into `init.mjs`
+- keep config-schema ownership in `config.mjs`; do not duplicate or relocate `buildDefaultConfig` into the init flow
   just to satisfy an old task list
 - let `init` use the same template-sync module that `update --templates` uses, instead of maintaining separate
   copy logic
@@ -855,8 +855,8 @@ Implementation lives under `bin/lib/`:
 
 **Evidence:**
 - GSD source: `get-shit-done/install.js` (monolithic install/conversion surface)
-- GSDD implementation: `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/models.mjs`, `bin/lib/file-ops.mjs`, `bin/lib/phase.mjs`
-- GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`,
+- GSDD implementation: `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/config.mjs`, `bin/lib/file-ops.mjs`, `bin/lib/phase.mjs`
+- GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.init-prompts.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`,
   `tests/gsdd.guards.test.cjs`, `tests/phase.test.cjs`, `tests/gsdd.invariants.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - External: Seemann "Dependency Injection in .NET" (Manning 2011) — coined "Composition Root" as the named pattern for the single location where the entire application is assembled; Martin "Clean Architecture" (2017) — the main component as the outermost, dirtiest layer that owns all wiring; standard practice in oclif, Commander.js, yargs, and Cobra CLI frameworks
 
@@ -908,8 +908,8 @@ Implementation lives under `bin/lib/`:
 - Agent Skills standard: [developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)
 - GitHub issues: [#14719](https://github.com/openai/codex/issues/14719), [#14841](https://github.com/openai/codex/issues/14841)
 - GSDD adapter patterns: `bin/adapters/claude.mjs`, `bin/adapters/opencode.mjs`
-- GSDD implementation: `bin/adapters/codex.mjs`, `bin/adapters/index.mjs`, `bin/lib/init.mjs`, `bin/lib/models.mjs`
-- GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`
+- GSDD implementation: `bin/adapters/codex.mjs`, `bin/adapters/index.mjs`, `bin/lib/init.mjs`, `bin/lib/config.mjs`
+- GSDD tests: `tests/gsdd.init.test.cjs`, `tests/gsdd.init-prompts.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`
 
 ---
 
@@ -974,7 +974,7 @@ Implementation lives under `bin/lib/`:
 | W9 | WARN | `.internal-research/gaps.md` references missing repo-local paths |
 | W10 | WARN | ROADMAP lifecycle status drift, including requirement checkbox and overview/detail phase status mismatches |
 | W11 | WARN | Renderer-backed generated runtime/helper surfaces drift from current render output |
-| W12 | WARN | Planning state drifted since last recorded session (fingerprint mismatch) |
+| W12 | RETIRED | Retired session-fingerprint warning; current continuity is explicit and file-backed rather than inferred from a hidden session fingerprint |
 | I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
 | I2 | INFO | Phase completion count from ROADMAP |
 | I3 | INFO | Which runtime/governance surfaces are installed |
@@ -996,9 +996,9 @@ Implementation lives under `bin/lib/`:
 
 3. **Pre-init guard.** If `.planning/config.json` doesn't exist, output a one-line message and exit 1. No partial checks — the workspace is simply not initialized.
 
-4. **Split structural vs truth checks.** `bin/lib/health.mjs` keeps the structural workspace checks. `bin/lib/health-truth.mjs` holds the always-on cross-file truth checks (W7-W12) so the health surface can grow without turning the main command into one monolith.
+4. **Split structural vs truth checks.** `bin/lib/health.mjs` keeps the structural workspace checks. `bin/lib/health-truth.mjs` holds the live cross-file truth checks (W7-W11; W12 is retained above as retired history) so the health surface can grow without turning the main command into one monolith.
 
-5. **Reuses existing modules.** `readManifest()` and `detectModifications()` from `manifest.mjs` handle W1-W3. `isProjectInitialized()` pattern from `models.mjs` handles the pre-init guard. Truth checks stay read-only and operate on repo-local artifacts only when those framework files exist.
+5. **Reuses existing modules.** `readManifest()` and `detectModifications()` from `manifest.mjs` handle W1-W3. `isProjectInitialized()` from `config.mjs` handles the pre-init guard. Truth checks stay read-only and operate on repo-local artifacts only when those framework files exist.
 
 6. **Framework-source mode skips installed-project template checks only for the actual source repo.** Inside the GSDD framework repo itself, `distilled/templates/` is the source of truth and `.planning/templates/` can be intentionally absent. `npx -y gsdd-cli health` therefore skips installed-project template/manifest checks (E3-E9, W1-W3) only when source-repo identity signals also match (`package.json` name plus CLI source), avoiding false suppression in copied or unusual initialized repos that happen to contain `distilled/templates` and `distilled/workflows`.
 
@@ -1006,7 +1006,7 @@ Implementation lives under `bin/lib/`:
 
 **What was removed vs GSD:**
 - `--repair` flag and associated repair actions
-- Error codes E001-E005/W001-W007 (replaced with simpler E1-E9/W1-W12/I1-I3)
+- Error codes E001-E005/W001-W007 (replaced with simpler E1-E9/W1-W11/I1-I3; retired W12 remains documented above as history)
 - STATE.md checks (GSDD has no STATE.md per D7)
 - PROJECT.md checks (GSDD uses SPEC.md, not checked by health — it's workflow-authored)
 - Phase directory naming format checks (GSDD uses flat numbered files, not NN-name directories)
@@ -1668,7 +1668,7 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 
 **GSD comparison:** GSD's install surface is more operator-heavy and framework-specific. GSDD keeps the deterministic bootstrap principle but shifts the user-facing choice surface into a lightweight guided CLI instead of requiring users to know adapter values in advance.
 
-**GSDD implementation:** `bin/lib/init.mjs`, `bin/lib/init-flow.mjs`, `bin/lib/init-prompts.mjs`, `bin/lib/models.mjs`, `bin/gsdd.mjs`, `README.md`, `distilled/README.md`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`, `tests/gsdd.init.test.cjs`, `tests/gsdd.consumer-ceremony.test.cjs`, `tests/gsdd.guards.test.cjs`
+**GSDD implementation:** `bin/lib/init.mjs`, `bin/lib/init-flow.mjs`, `bin/lib/init-prompts.mjs`, `bin/lib/config.mjs`, `bin/gsdd.mjs`, `README.md`, `distilled/README.md`, `SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `.internal-research/lessons-learned.md`, `tests/gsdd.init.test.cjs`, `tests/gsdd.consumer-ceremony.test.cjs`, `tests/gsdd.guards.test.cjs`
 
 ---
 
@@ -1908,7 +1908,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `.internal-research/consumer-audits/worktree-provenance-and-checkpoint-drift-2026-04-12.md`
 - `distilled/workflows/pause.md` (draft-first checkpointing, 3-question cap, evidence-only language)
 - `distilled/workflows/resume.md` (`<provenance_reconciliation>`, explicit mismatch acknowledgement)
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`
 - External: GitHub Docs on checking branch divergence and working tree state; OpenAI/Anthropic guidance on grounding agent actions in current tool-observed state rather than conversational assumptions
 
@@ -1919,7 +1919,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 **GSD comparison:** GSD's flow relies more heavily on the operator and commit discipline to keep resume context aligned with branch truth. GSDD keeps the lighter-weight continuity surface, but compensates by making the truth split explicit inside the resume workflow.
 
-**GSDD implementation:** `distilled/workflows/pause.md`, `distilled/workflows/resume.md`, `bin/lib/provenance.mjs`, `.planning/SPEC.md`, `.planning/ROADMAP.md`, `.internal-research/TODO.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`
+**GSDD implementation:** `distilled/workflows/pause.md`, `distilled/workflows/resume.md`, `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`, `.planning/SPEC.md`, `.planning/ROADMAP.md`, `.internal-research/TODO.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`
 
 ---
 
@@ -1955,7 +1955,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `.planning/ROADMAP.md` Phase 20 and Phase 22 scope notes
 - `distilled/workflows/plan.md`, `execute.md`, `quick.md`, `new-milestone.md`, `complete-milestone.md`
 - `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - External: NIST detective vs preventive control framing; GitHub guidance on protected branches and review signals as advisory integration metadata rather than direct truth
 
@@ -1966,7 +1966,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 **GSD comparison:** GSD relies more on explicit commit and CLI discipline for transition safety. GSDD continues to strip that rigidity from the portable core, but adds explicit warning reuse and narrow fail-closed gates where launch trust depends on artifact presence.
 
-**GSDD implementation:** `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/quick.md`, `distilled/workflows/new-milestone.md`, `distilled/workflows/complete-milestone.md`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `bin/lib/provenance.mjs`, `.planning/SPEC.md`, `.planning/ROADMAP.md`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+**GSDD implementation:** `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/quick.md`, `distilled/workflows/new-milestone.md`, `distilled/workflows/complete-milestone.md`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`, `.planning/SPEC.md`, `.planning/ROADMAP.md`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
 
@@ -2170,7 +2170,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
   - it does not mutate ROADMAP or milestone state itself
 - Keep `gsdd phase-status` as the only explicit ROADMAP mutator for phase-state transitions.
 - Require transition-sensitive workflow contracts, including plan creation, to call the shared preflight seam instead of narrating their own lifecycle inference.
-- Treat planning-state drift as warning-only for read-only surfaces and blocking for owned-write surfaces, with file-level drift details from the session fingerprint helper.
+- **Current disposition (2026-08-12):** the session-fingerprint mechanism was retired. Read-only surfaces report explicit lifecycle/checkpoint/Git mismatches without mutating state; owned-write surfaces fail closed through current lifecycle and workspace preflight checks.
 - Preserve `progress` as read-only and make it explicitly defer any recommended transition back to the downstream workflow's own preflight gate.
 
 **Why this fits the codebase:**
@@ -2183,7 +2183,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `.planning/ROADMAP.md` (Phase 30 success criteria)
 - `bin/lib/lifecycle-preflight.mjs`
 - `bin/lib/lifecycle-state.mjs`
-- `bin/lib/session-fingerprint.mjs`
+- `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `bin/gsdd.mjs`
 - `distilled/workflows/plan.md`
 - `distilled/workflows/execute.md`
@@ -2194,7 +2194,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `distilled/workflows/resume.md`
 - `distilled/workflows/progress.md`
 - `tests/phase.test.cjs`
-- `tests/session-fingerprint.test.cjs`
+- `tests/phase.test.cjs`, `tests/gsdd.next-blockers.test.cjs`, `tests/gsdd.git-identity.test.cjs`
 - `tests/gsdd.guards.test.cjs`
 - `tests/gsdd.scenarios.test.cjs`
 - GSD comparison source: `get-shit-done/workflows/progress.md` still keeps lifecycle routing inside the workflow surface rather than through a shared helper seam, so this is an intentional GSDD tightening.
@@ -2204,7 +2204,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `progress` can continue reporting lifecycle posture without inheriting write authority or becoming a hidden transition surface.
 - Phase 31 can build evidence-gated closure on top of a stable deterministic preflight contract instead of competing lifecycle entry logic.
 
-**GSDD implementation:** `bin/lib/lifecycle-preflight.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/session-fingerprint.mjs`, `bin/gsdd.mjs`, `bin/lib/init.mjs`, `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `distilled/workflows/new-milestone.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `tests/phase.test.cjs`, `tests/session-fingerprint.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+**GSDD implementation:** `bin/lib/lifecycle-preflight.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`, `bin/gsdd.mjs`, `bin/lib/init.mjs`, `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `distilled/workflows/new-milestone.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `tests/phase.test.cjs`, `tests/gsdd.next-blockers.test.cjs`, `tests/gsdd.git-identity.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
 
@@ -2222,7 +2222,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
   - delivery-sensitive closure could pass on code inspection, tests, or human commentary alone even when the claim required runtime and delivery proof
 
 **Decision:**
-- Add `bin/lib/evidence-contract.mjs` as the shared internal closure-evidence seam.
+- **Current disposition (2026-08-12):** the former dedicated evidence-contract helper is retired; `bin/lib/lifecycle-preflight.mjs` and `bin/lib/phase.mjs` provide the extant executable closure seam.
 - Fix the stable evidence kinds to `code`, `test`, `runtime`, `delivery`, and `human`.
 - Key the matrix by both:
   - closure surface (`verify`, `audit-milestone`, `complete-milestone`)
@@ -2240,7 +2240,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Evidence:**
 - `.planning/SPEC.md` (`ENGINE-04`, `VERIFY-01`)
 - `.planning/ROADMAP.md` (Phase 31 success criteria)
-- `bin/lib/evidence-contract.mjs`
+- `bin/lib/lifecycle-preflight.mjs`, `bin/lib/phase.mjs`
 - `bin/lib/lifecycle-preflight.mjs`
 - `distilled/workflows/verify.md`
 - `distilled/workflows/audit-milestone.md`
@@ -2256,7 +2256,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Delivery-sensitive closure now has an explicit fail-closed bar: missing `runtime` or `delivery` evidence cannot be papered over by prose, code-only review, or human confirmation alone.
 - Milestone completion inherits the same evidence posture proven by audit, which reduces false-positive closure on technically incomplete release claims.
 
-**GSDD implementation:** `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `.planning/SPEC.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+**GSDD implementation:** `bin/lib/lifecycle-preflight.mjs`, `bin/lib/phase.mjs`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `.planning/SPEC.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
 
@@ -2314,7 +2314,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Phase 33 was scoped narrowly to repair that control-plane seam without inventing a new checkpoint artifact, a broader checkpoint-consumption protocol, or a heavier brownfield/middle-lane redesign.
 
 **Decision:**
-- Add one shared checkpoint-routing classification seam in `bin/lib/provenance.mjs`:
+- **Current disposition (2026-08-12):** the former shared provenance helper is retired. Checkpoint routing is now distributed across the extant workspace, state, lifecycle, continuity, and Git-identity seams:
   - `phase` and `quick` checkpoints are routing blockers
   - `generic` checkpoints are informational for read-only `progress` routing
   - checkpoint cleanup remains resume-owned when the user explicitly resumes from the checkpoint
@@ -2333,7 +2333,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Evidence:**
 - `.planning/SPEC.md` (`ENGINE-01`, `ENGINE-03`)
 - `.internal-research/gaps.md` (`I45`)
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `distilled/workflows/resume.md`
 - `distilled/workflows/progress.md`
 - `.agents/skills/gsdd-resume/SKILL.md`
@@ -2346,9 +2346,9 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Consequences:**
 - A surviving generic checkpoint can coexist with milestone-close or next-phase guidance without forcing the user back into `/gsdd-resume`.
 - `resume` still owns the destructive checkpoint-cleanup step, which keeps cleanup tied to an explicit user choice rather than to a read-only reporter.
-- Future checkpoint lifecycle edits must update the shared provenance helper, the authored workflow contracts, the regenerated skill surfaces, and the regression suites together or the repo truth will drift immediately.
+- Future checkpoint lifecycle edits must update the current split seams, the authored workflow contracts, the regenerated skill surfaces, and the regression suites together or the repo truth will drift immediately.
 
-**GSDD implementation:** `bin/lib/provenance.mjs`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `.agents/skills/gsdd-resume/SKILL.md`, `.agents/skills/gsdd-progress/SKILL.md`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+**GSDD implementation:** `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `.agents/skills/gsdd-resume/SKILL.md`, `.agents/skills/gsdd-progress/SKILL.md`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
 
@@ -2480,7 +2480,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
   - context behind the next action
 - Add one helper-backed continuity seam:
   - `bin/lib/lifecycle-state.mjs` reconstructs the active brownfield state from repo artifacts
-  - `bin/lib/provenance.mjs` classifies material mismatch between the artifact and live git/worktree truth
+  - the current workspace, state, lifecycle, continuity, and Git-identity seams classify material mismatch between the artifact and live git/worktree truth
 - Keep the mismatch split asymmetric:
   - `progress` warns but remains read-only
   - `resume` requires acknowledgement before continuing from materially misleading brownfield continuity state
@@ -2497,7 +2497,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `.planning/templates/brownfield-change/CHANGE.md`
 - `.planning/templates/brownfield-change/HANDOFF.md`
 - `bin/lib/lifecycle-state.mjs`
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `distilled/workflows/progress.md`
 - `distilled/workflows/resume.md`
 - `tests/phase.test.cjs`
@@ -2521,7 +2521,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Phase 42 was intentionally scoped to validity of next-step routing only. It did not reopen growth policy, add a new command, or weaken the one-active-stream contract.
 
 **Decision:**
-- Add one shared routing seam in `bin/lib/provenance.mjs`:
+- **Current disposition (2026-08-12):** the former shared provenance helper is retired. Routing is now distributed across the extant workspace, state, lifecycle, continuity, and Git-identity seams:
   - `generic` checkpoints never outrank an active brownfield change
   - `phase` and `quick` checkpoints outrank `CHANGE.md` only when branch alignment, scope alignment, and still-active execution state all hold at once
   - otherwise the checkpoint stays visible context, but the brownfield operational anchor remains primary
@@ -2546,7 +2546,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Evidence:**
 - `.planning/SPEC.md` (`BROWNFIELD-03`, Current State, key decision row)
 - `.planning/phases/42-executable-brownfield-routing/42-PLAN.md`
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `distilled/workflows/progress.md`
 - `distilled/workflows/resume.md`
 - `distilled/workflows/quick.md`
@@ -2673,13 +2673,13 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ## D59 - Continuity Authority And Planning-State Drift
 
-**Decision (2026-04-27):** Workspine continuity authority is split by surface. Git/worktree truth owns integration visibility and overwrite risk, `.planning/` owns local workflow contracts, phase artifacts own phase-local scope and proof, generated runtime surfaces own consumed helper/adapter freshness, and compressed judgment remains advisory context. Planning-state drift must stay warning-only for read-only/reporting surfaces, but mutating lifecycle surfaces must not silently proceed through material drift.
+**Decision (2026-04-27; current disposition 2026-08-12):** The authority split remains useful, but its hidden session-fingerprint/W12 mechanism was retired. Canonical `.work/` now owns local workflow contracts, explicit checkpoint/continuity artifacts remain non-authoritative context, and live Git/worktree/lifecycle checks own mutation safety. The table below preserves the historical rationale; retained legacy `.planning/` is compatibility/evidence, not current authority.
 
 **Context:**
 - `.planning/` remains local-only by default in this framework repo. That preserves privacy and avoids noisy framework-internal planning commits, but it also means planning state can drift across sessions without git history protecting it.
 - Gap `I46` showed the concrete failure: one session wrote milestone state under ignored `.planning/`, another session read stale planning state and nearly routed execution as if the milestone did not exist.
 - Gap `S6` showed the related judgment failure: fresh sessions can recover artifact structure while losing the active constraints, unresolved uncertainty, decision posture, and anti-regression rules that explain how to continue safely.
-- Existing helper seams already detect part of the risk: `session-fingerprint.mjs` fingerprints `.planning/ROADMAP.md`, `.planning/SPEC.md`, and `.planning/config.json`; `lifecycle-preflight.mjs` exposes drift as `planning_state_drift`; `health` reports the same condition as `W12`.
+- Current seams make the surviving checks explicit: `lifecycle-state.mjs` and `lifecycle-preflight.mjs` evaluate artifact authority, `work-context.mjs` and `next.mjs` project file-backed continuity, `git-identity.mjs` binds commit identity, and health W11 reports renderer-backed runtime drift. No hidden session fingerprint or live W12 warning remains.
 
 **Authority matrix:**
 
@@ -2689,8 +2689,8 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 | Staged changes | Pending commit contents and delivery visibility risk | Final repo truth until committed; planning authority | `git diff --name-only --cached` | Staged paths outside declared write set | Staged work overlaps unrelated scope or would be accidentally included | Staged path list reviewed against plan write set |
 | Unstaged changes | Local uncommitted edits and overwrite/conflict risk | Approved implementation state; phase closure | `git diff --name-only` | Dirty tracked files outside declared write set | Mutating workflow would overwrite or reinterpret unrelated edits | Dirty path list reviewed; user decision if conflict or overlap exists |
 | Untracked files | Local-only artifacts and possible proof gaps | Durable repo truth; public/delivery evidence | `git status --porcelain=v1` | Untracked required artifacts, generated dirs, or scope-expanding files | Required proof/output exists only untracked when closure claims tracked truth | Required artifacts are tracked intentionally or explicitly classified local-only |
-| `.planning/SPEC.md` | Local product/workflow requirements and active milestone requirement truth | Git-tracked public truth in the framework repo; branch delivery state | Read active requirements/current state; compare to roadmap and trackers | `W12`; mismatch with ROADMAP/TODO/gaps; stale active milestone | Mutating lifecycle action depends on stale or contradictory requirements | Fresh read plus drift acknowledgement/blocking behavior before mutation |
-| `.planning/ROADMAP.md` | Active milestone/phase ordering, status, success criteria, stop/replan contract | Artifact existence proof; implementation completion by itself | Read active phase section; lifecycle evaluator/preflight | `W12`; overview/detail mismatch; phase artifact mismatch | Execute/verify/audit/complete would act on stale or contradictory roadmap state | Preflight passes or blocks; phase status agrees with artifacts |
+| `.planning/SPEC.md` | Historical local product/workflow requirements in the retained legacy design | Current `.work` authority; Git-tracked public truth; branch delivery state | Current implementation resolves canonical `.work` and treats retained legacy state only through explicit compatibility/migration rules | Mismatch with current SPEC/ROADMAP/artifacts or unsupported legacy state | A mutating command would reinterpret legacy or contradictory requirements as current authority | State-root classification and lifecycle preflight pass before mutation |
+| `.planning/ROADMAP.md` | Historical active phase ordering in the retained legacy design | Current `.work/ROADMAP.md` authority; artifact existence proof | Current implementation resolves canonical `.work` and evaluates exact lifecycle identities | Overview/detail or exact-chain mismatch; unsupported legacy state | Execute/verify/audit/complete would act on legacy or contradictory roadmap state | State-root classification and exact lifecycle preflight pass before mutation |
 | Phase PLAN/SUMMARY/VERIFICATION | Phase-local scope, execution result, verification result, compressed judgment handoff | Milestone-wide truth alone; git integration truth; generated runtime freshness | Check phase directory and required artifact sequence | PLAN without SUMMARY; SUMMARY missing for verify; VERIFICATION missing for completed phase | Execute without valid pending plan; verify without summary; close phase without verification | Required artifact exists, is substantive, and matches roadmap status |
 | Checkpoint files | Session-local resume context and mid-session compressed judgment | Durable status; routing authority over fresh roadmap/git truth | `.planning/.continue-here.md` and `.planning/.continue-here.bak` presence/classification | Checkpoint narrative conflicts with branch/worktree/planning truth; stale generic checkpoint | Resume would route from materially misleading checkpoint without acknowledgement | Resume surfaces checkpoint/planning/git split; material mismatch requires acknowledgement |
 | Brownfield CHANGE/HANDOFF/VERIFICATION | Medium-scope brownfield operational anchor, judgment handoff, closeout proof | Milestone phase state; roadmap-owned lifecycle; generic scratchpad | `.planning/brownfield-change/*` presence and lifecycle-state classification | Artifact branch/write-scope mismatch; missing sibling file; stale next action | Resume/progress would treat stale brownfield artifact as current without warning/acknowledgement | CHANGE primary, HANDOFF judgment-only, VERIFICATION proof; mismatch handled by progress/resume split |
@@ -2698,10 +2698,10 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 | Generated runtime surfaces | Consumed local runtime/helper surfaces generated from authored source | Authored workflow truth; planning status; branch truth | `gsdd health --json` runtime freshness and manifest comparison | `W11` drift from current render output | Phase behavior depends on generated-surface parity, or closure claims runtime freshness | Run the normal update path only when needed; health/checks prove freshness |
 
 **Decision rules:**
-- Read-only/reporting surfaces may warn on planning-state drift and continue. They must not refresh or mutate the planning fingerprint as a side effect.
+- Read-only/reporting surfaces may report explicit state-root, lifecycle, checkpoint, or Git mismatch and continue when the command contract permits it. They must not mutate authority state as a side effect.
 - Read-only current-status projections such as `journey` derive active phase status from the shared lifecycle evaluator over root `ROADMAP.md`. Nested milestone packets may add historical phases, but cannot override a matching current phase number.
-- Owned-write lifecycle surfaces must treat material planning-state drift as a stop or explicit acknowledgement boundary before writing summary, verification, milestone, roadmap, or checkpoint-cleanup artifacts.
-- No-baseline fingerprint state is not itself proof of drift. It should be classified explicitly, but it must not strand first-session users unless another contradiction exists.
+- Owned-write lifecycle surfaces must treat material authority/lifecycle mismatch as a stop or explicit acknowledgement boundary before writing summary, verification, milestone, roadmap, or checkpoint-cleanup artifacts.
+- The former no-baseline fingerprint rule is retired. Fresh-state behavior is determined by explicit state-root classification and current artifact presence; absence alone is not contradiction proof.
 - Compressed judgment remains the four-section `<judgment>` shape (`active_constraints`, `unresolved_uncertainty`, `decision_posture`, `anti_regression`) and remains subordinate to operational state.
 - A tracked coordination artifact is not justified by Phase 44 evidence alone. It becomes necessary only if deterministic local checks cannot prevent stale-read/overwrite behavior or if a future release claim requires fresh-clone/public evidence.
 
@@ -2711,7 +2711,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `.planning/SPEC.md` (`REL-01`)
 - `.planning/ROADMAP.md` (Phase 44)
 - `.internal-research/gaps.md` (`I46`, `S6`)
-- `bin/lib/session-fingerprint.mjs`
+- `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `bin/lib/lifecycle-preflight.mjs`
 - `bin/lib/runtime-freshness.mjs`
 - `distilled/workflows/progress.md`
@@ -2724,7 +2724,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `distilled/templates/brownfield-change/CHANGE.md`
 - `distilled/templates/brownfield-change/HANDOFF.md`
 - `distilled/templates/brownfield-change/VERIFICATION.md`
-- `tests/session-fingerprint.test.cjs`
+- `tests/phase.test.cjs`, `tests/gsdd.next-blockers.test.cjs`, `tests/gsdd.git-identity.test.cjs`
 - `tests/phase.test.cjs`
 
 **Consequences:**
@@ -2746,7 +2746,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - GitHub Releases remain explicitly deferred under `LSC-05`, so release closeout cannot depend on public release objects unless a later milestone approves them.
 
 **Decision:**
-- Add release claim posture semantics to `bin/lib/evidence-contract.mjs` without adding evidence kinds or replacing delivery postures.
+- Add release claim posture semantics to `bin/lib/lifecycle-preflight.mjs`, `bin/lib/phase.mjs` without adding evidence kinds or replacing delivery postures.
 - Define the three postures as claim boundaries:
   - `repo_closeout`: default; permits repo-local closeout only and must not imply public support, runtime validation, delivery, publication, or generated-surface freshness.
   - `runtime_validated_closeout`: permits claims about a named runtime behavior or runtime surface only when `runtime` evidence exists for that exact runtime or surface.
@@ -2777,7 +2777,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - `.planning/research/45-RESEARCH.md`
 - `.planning/SPEC.md` (`REL-02`, deferred `LSC-05`)
 - `.planning/ROADMAP.md` (Phase 45)
-- `bin/lib/evidence-contract.mjs`
+- `bin/lib/lifecycle-preflight.mjs`, `bin/lib/phase.mjs`
 - `bin/lib/lifecycle-preflight.mjs`
 - `distilled/workflows/audit-milestone.md`
 - `distilled/workflows/complete-milestone.md`
@@ -2889,7 +2889,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 ## D63 - Computed-First Control Map
 
-**Decision (2026-05-08; revised 2026-05-09):** Long-running multi-agent and multi-worktree control uses a computed-first `gsdd control-map` helper rather than a new lifecycle workflow or a vendor session parser. The helper computes repo/worktree/planning truth live and overlays optional local annotations only for intent that git cannot know.
+**Decision (2026-05-08; revised 2026-05-09; current disposition 2026-08-12):** The original broad control-map proposal is retained below as historical rationale, but its main-CLI, annotation, and closeout-report implementation was retired. The current product has one public package CLI (`bin/gsdd.mjs`) and one generated internal workflow helper. Only the generated `.work/bin/gsdd.mjs` helper exposes read-only `control-map [--json] [--with-ignored]`; it is not a second public package CLI.
 
 **Context:**
 - Gap I52 showed that ordinary `git status` can be clean while sibling worktrees, detached runtime worktrees, ignored/generated surfaces, snapshots, dirty local WIP, and cleanup obligations remain unexplained.
@@ -2897,26 +2897,22 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - Current runtime research shows the only portable cross-vendor coordination layer is repo artifacts plus generated workflow entrypoints. Claude, OpenCode, Codex, Cursor, Copilot, and Gemini do not expose one uniform authoritative session/worktree store.
 - Current harness guidance favors structured handoff artifacts, worktree isolation, evaluator loops, approval gates around side effects, and browser/runtime evidence. Those ideas fit Workspine only if repo truth remains primary and vendor adapters stay thin.
 
-**Decision:**
-- Add `gsdd control-map [--json] [--with-ignored] [--annotations <path>]` to the main CLI and generated `.planning/bin/gsdd.mjs` helper runtime.
-- Add `gsdd control-map annotate set|clear` as the minimal mutation surface for local annotation intent. `set` creates or updates workspace-local annotation files with live branch/head snapshots, normalized write sets, cleanup state, owner/scope/next-step metadata, and stale-update refusal unless `--refresh` is explicit. `clear` removes an annotation by id or path, including stale or missing-worktree entries, without deleting branches, pruning worktrees, or cleaning files.
-- Add `gsdd closeout-report [--json] [--phase <N>]` as a read-only replay helper over the same local-state authority. It defaults to the latest completed phase and reports blockers, warnings, next safe action, control-map status, health/preflight status, direct phase verification, and UI-proof status without mutating ROADMAP status, fingerprints, annotations, branches, worktrees, generated surfaces, release state, or report files.
-- Compute authority from live git/worktree state first: canonical checkout, branch, HEAD, upstream divergence when comparable, tracked/untracked dirty buckets, optional ignored-path scans through `--with-ignored`, sibling git worktrees, detached/bare state, invalid git access, planning drift, checkpoint existence, lifecycle state, and repo-local runtime worktree directories.
-- Read optional annotations from `.planning/.local/control-map.annotations.json`. Annotations may record `runtime_owner`, intended scope, write set, cleanup state, next step, branch, last known head, and update timestamp.
-- Treat annotations as stale-checkable intent only. They never outrank repo truth, planning artifacts, or checkpoint reconciliation.
-- Emit explicit transition-risk semantics from computed truth: concrete annotation write-set overlap, live dirty-path/write-set overlap, upstream divergence, detached candidate worktrees, stale annotation mismatches, and tracked dirty canonical work behind upstream. Only concrete block-level risks should stop owned-write lifecycle transitions; ordinary dirty or detached local state remains warning-level guidance.
-- Keep transcript/session stores out of the helper. Vendor session evidence may support postmortems, but it is not live product truth.
-- Wire the control map into portable workflow behavior by having `progress`, `resume`, `pause`, `quick`, `plan`, and `execute` consult it when available. This is guidance plus deterministic helper output, not a new workflow lane.
+**Current implementation:**
+- `bin/lib/rendering.mjs` deterministically renders the generated helper and its read-only control-map command. Fresh `gsdd init` output, not an ambient ignored helper, is the generated-runtime evidence.
+- The generated helper computes repository/worktree state and supports `--with-ignored` only as an explicit read-only scan. It has no annotation mutation, closeout report, session store, dashboard, registry, or lifecycle-control-plane role.
+- Main package help and registration remain the public command authority. Verification, audit, and `next` keep their separate existing commands and workflows.
+
+**Historical implementation note (retired):**
+- The former proposal included a main control-map command, mutable local annotations, and a closeout report. Those additions were not shipped and must not be restored merely to satisfy this record.
 
 **Leverage:**
-- Lost: a pure zero-file model cannot preserve non-computable intent such as owner/runtime, intended scope, and cleanup obligation.
-- Kept: Workspine remains a lightweight repo-native spine; no new lifecycle workflow, no dashboard/control plane, no vendor session authority, and no change to the five evidence kinds.
-- Gained: agents can explain "clean" precisely across tracked, untracked, sibling, detached, stale, and annotated state by default, and across ignored/generated local surfaces when the caller requests the explicit `--with-ignored` scan before planning, execution, resume, cleanup, or milestone continuation. Owned-write preflight can also consume the same computed risk output, operators can update stale-aware local intent without hand-editing JSON, and closeout replay can join existing verification signals into one typed report without inventing a branch lease, control plane, or cleanup workflow.
+- Kept: the lightweight repo-native seam and an explicit read-only ignored-path scan for workflow-internal checks.
+- Deferred: non-computable ownership/cleanup intent, annotation mutation, and aggregate closeout reporting require a separately approved design if they are ever reconsidered.
 
 **Evidence:**
-- `bin/lib/control-map.mjs`, `bin/lib/closeout-report.mjs`, `bin/lib/health.mjs`, `bin/lib/phase.mjs`, `bin/lib/init-runtime.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/gsdd.mjs`, `bin/lib/rendering.mjs`
-- `distilled/workflows/progress.md`, `resume.md`, `pause.md`, `quick.md`, `plan.md`, `execute.md`
-- `tests/gsdd.control-map.test.cjs`, `tests/gsdd.closeout-report.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`
+- `bin/lib/rendering.mjs`, `bin/lib/control-map.mjs`, `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`
+- `bin/lib/init.mjs`, `bin/lib/init-flow.mjs`, and `bin/lib/phase.mjs`
+- `tests/gsdd.init.test.cjs`, `tests/gsdd.next-blockers.test.cjs`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, and `tests/gsdd.surface.test.cjs`
 - `.internal-research/gaps.md` Gap I52 and Gap I54
 - `.internal-research/lessons-learned.md` entries on multi-worktree registry, clean-vs-editor-visible noise, checkpoint/worktree truth split, and subagent stop conditions
 - GSD comparison: upstream GSD preserves lifecycle rigor but does not define a vendor-agnostic computed worktree/control-map helper.
@@ -2924,11 +2920,9 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 - Harness sources: `https://www.anthropic.com/engineering/harness-design-long-running-apps`, `https://code.claude.com/docs/en/worktrees`, `https://developers.openai.com/codex/cloud`, `https://developers.openai.com/api/docs/guides/agents/orchestration`, `https://developers.openai.com/api/docs/guides/agents/guardrails-approvals`, `https://developers.openai.com/api/docs/guides/agent-evals`, `https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent`, `https://agent-browser.dev/sessions`, and `https://developer.chrome.com/docs/devtools/agents`.
 
 **Consequences:**
-- Future cleanup, resume, and parallel-worktree work should start from `gsdd control-map --json` rather than repeated ad hoc repo audits; use `--with-ignored` before making a clean-workspace claim that includes ignored or generated surfaces.
-- Annotation mutation is intentionally confined to `control-map annotate`; ordinary `control-map` reads remain computed-first and safe to call from status surfaces.
-- Lifecycle preflight may consume block-level control-map risks for owned-write transitions, but read-only status surfaces must not turn warning-level local state into blockers.
-- `closeout-report` is a compact replay/report helper, not `progress`, `verify`, milestone audit, release automation, cleanup, or a dashboard. The source CLI path includes full health diagnostics; the generated helper reports health availability as a typed warning if the full health builder is not present in that helper runtime.
-- Future health hardening can consume the same helper output for stricter reporting, but must avoid turning local annotations into product truth.
+- Public documentation must not promote generated-helper control-map to package CLI truth.
+- An ambient ignored `.work/bin/gsdd.mjs` is never authority; compare the versioned renderer with fresh deterministic init output.
+- This current source/document agreement does not establish blind-agent, native-runtime, packed-artifact, or relaunch proof.
 
 ## D64 - Work-Native Continuity Authority
 

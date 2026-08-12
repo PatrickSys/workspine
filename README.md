@@ -64,7 +64,7 @@ This creates:
 
 1. `.work/` — durable workspace with templates, role contracts, and config
 2. `.agents/skills/gsdd-*` — compact open-standard workflow entrypoints for agents
-3. `.work/bin/gsdd.mjs` — repo-local helper runtime for deterministic workflow commands inside generated skills (run helper commands from the repo root)
+3. `.work/bin/gsdd.mjs` — generated internal workflow plumbing for deterministic commands inside generated skills, not a second public package CLI (run helper commands from the repo root)
 4. Optional tool-specific adapters you choose in the install wizard (Claude skills/commands/agents, OpenCode commands/agents, Codex CLI agents, optional governance)
 
 Then pick the first workflow lane that matches your situation:
@@ -79,7 +79,7 @@ In a terminal, `npx -y gsdd-cli init` opens a guided install wizard. If you inst
 - Step 2: decide separately whether repo-wide `AGENTS.md` governance is worth installing
 - Step 3: configure planning defaults in the same guided flow
 
-Portable `.agents/skills/gsdd-*` skills and the repo-local `.work/bin/gsdd.mjs` helper runtime are always generated. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands assume the repo root as the current working directory.
+Portable `.agents/skills/gsdd-*` skills and the repo-local `.work/bin/gsdd.mjs` helper runtime are always generated. The helper is generated internal workflow plumbing, not a second public package CLI. The wizard controls extra native adapters and optional governance, not the portable baseline. Workflow helper commands assume the repo root as the current working directory.
 When those generated surfaces exist locally, `npx -y gsdd-cli health` checks them against current render output instead of asking you to trust manual review. If installed globally, `gsdd health` is equivalent.
 
 ### Launch Proof Status

@@ -127,8 +127,8 @@
 
 ## D17 — CLI Composition Root Boundary
 - `get-shit-done/install.js` (GSD monolithic install/conversion surface)
-- `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/models.mjs`
-- `tests/gsdd.init.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`
+- `bin/gsdd.mjs`, `bin/lib/init.mjs`, `bin/lib/templates.mjs`, `bin/lib/config.mjs`
+- `tests/gsdd.init.test.cjs`, `tests/gsdd.init-prompts.test.cjs`, `tests/gsdd.models.test.cjs`, `tests/gsdd.manifest.test.cjs`
 - Seemann "Dependency Injection in .NET" (Manning 2011) — named "Composition Root" pattern
 - Martin "Clean Architecture" (2017) — main component as the outermost wiring layer
 - Standard pattern in oclif, Commander.js, yargs, Cobra CLIs
@@ -312,7 +312,7 @@
 - `.internal-research/TODO.md` (stale checkpoint/worktree drift notes)
 - `.internal-research/consumer-audits/worktree-provenance-and-checkpoint-drift-2026-04-12.md`
 - `distilled/workflows/pause.md`, `distilled/workflows/resume.md`
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`
 
 ## D44 — Warning-First Transition Safety And Fail-Closed Terminal Writes
@@ -320,7 +320,7 @@
 - `.planning/ROADMAP.md` (Phase 20 and Phase 22 scope notes)
 - `distilled/workflows/plan.md`, `execute.md`, `quick.md`, `new-milestone.md`, `complete-milestone.md`
 - `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ## D45 — Fork-Honest Launch Posture Before Identity Migration
@@ -358,18 +358,18 @@
 ## D49 — Deterministic Lifecycle Preflight Gates
 - `.planning/SPEC.md` (`ENGINE-01`, `ENGINE-02`, `ENGINE-03`)
 - `.planning/ROADMAP.md` (Phase 30)
-- `bin/lib/lifecycle-preflight.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/session-fingerprint.mjs`
+- `bin/lib/lifecycle-preflight.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `bin/gsdd.mjs`, `bin/lib/init.mjs`
 - `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/verify.md`
 - `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`
 - `distilled/workflows/new-milestone.md`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`
-- `tests/phase.test.cjs`, `tests/session-fingerprint.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+- `tests/phase.test.cjs`, `tests/gsdd.next-blockers.test.cjs`, `tests/gsdd.git-identity.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `get-shit-done/workflows/progress.md`
 
 ## D50 — Evidence-Gated Closure Matrix
 - `.planning/SPEC.md` (`ENGINE-04`, `VERIFY-01`)
 - `.planning/ROADMAP.md` (Phase 31)
-- `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `bin/lib/lifecycle-preflight.mjs`, `bin/lib/phase.mjs`
 - `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `agents/_archive/gsd-verifier.md`, `agents/_archive/gsd-integration-checker.md`
@@ -388,7 +388,7 @@
 ## D52 — Generic Checkpoint Routing Ownership
 - `.planning/SPEC.md` (`ENGINE-01`, `ENGINE-03`)
 - `.internal-research/gaps.md` (`I45`)
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `distilled/workflows/resume.md`, `distilled/workflows/progress.md`
 - `.agents/skills/gsdd-resume/SKILL.md`, `.agents/skills/gsdd-progress/SKILL.md`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
@@ -422,7 +422,7 @@
 - `.planning/templates/brownfield-change/CHANGE.md`
 - `.planning/templates/brownfield-change/HANDOFF.md`
 - `bin/lib/lifecycle-state.mjs`
-- `bin/lib/provenance.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `distilled/workflows/progress.md`, `distilled/workflows/resume.md`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `get-shit-done/workflows/resume.md`, `get-shit-done/workflows/progress.md`
@@ -430,7 +430,7 @@
 ## D56 — Executable Brownfield Routing And Widen-Only Escalation
 - `.planning/SPEC.md` (`BROWNFIELD-03`, Current State, key decision row)
 - `.planning/phases/42-executable-brownfield-routing/42-PLAN.md`
-- `bin/lib/provenance.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/next.mjs`, `bin/lib/work-context.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `distilled/workflows/progress.md`, `distilled/workflows/resume.md`, `distilled/workflows/quick.md`, `distilled/workflows/map-codebase.md`, `distilled/workflows/new-project.md`
 - `distilled/workflows/plan.md`
 - `.internal-research/TODO.md`, `.internal-research/gaps.md`
@@ -462,10 +462,10 @@
 - `.planning/SPEC.md` (`REL-01`)
 - `.planning/ROADMAP.md` (Phase 44)
 - `.internal-research/gaps.md` (`I46`, `S6`)
-- `bin/lib/session-fingerprint.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/runtime-freshness.mjs`
+- `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`, `bin/lib/runtime-freshness.mjs`
 - `distilled/workflows/progress.md`, `distilled/workflows/resume.md`, `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/verify.md`, `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`, `distilled/workflows/new-milestone.md`
 - `distilled/templates/brownfield-change/CHANGE.md`, `distilled/templates/brownfield-change/HANDOFF.md`, `distilled/templates/brownfield-change/VERIFICATION.md`
-- `tests/session-fingerprint.test.cjs`, `tests/phase.test.cjs`
+- `tests/phase.test.cjs`, `tests/gsdd.next-blockers.test.cjs`, `tests/gsdd.git-identity.test.cjs`
 
 ## D60 — Release Closeout Contract
 - `.planning/phases/45-release-closeout-contract/45-APPROACH.md`
@@ -474,7 +474,7 @@
 - `.planning/research/45-RESEARCH.md`
 - `.planning/SPEC.md` (`REL-02`, deferred `LSC-05`)
 - `.planning/ROADMAP.md` (Phase 45)
-- `bin/lib/evidence-contract.mjs`, `bin/lib/lifecycle-preflight.mjs`
+- `bin/lib/lifecycle-preflight.mjs`, `bin/lib/phase.mjs`
 - `distilled/workflows/audit-milestone.md`, `distilled/workflows/complete-milestone.md`
 - `distilled/DESIGN.md` D50 and D59
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
@@ -487,10 +487,12 @@
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.invariants.test.cjs`
 
 ## D62 — Repo-Native Browser Proof Contract
+- **Current disposition (2026-08-12):** Candidate identity/provenance is produced by the extant `bin/lib/candidate-provenance.mjs` seam and phase verification; it is not a browser-proof claim by itself.
 - `distilled/templates/ui-proof.md`
 - `distilled/workflows/plan.md`, `distilled/workflows/execute.md`, `distilled/workflows/quick.md`, `distilled/workflows/verify.md`
 - `agents/planner.md`, `agents/executor.md`, `agents/verifier.md`, `distilled/templates/delegates/plan-checker.md`
 - `bin/lib/templates.mjs`, `bin/lib/health.mjs`, `bin/lib/phase.mjs`, `bin/lib/rendering.mjs`
+- `bin/lib/candidate-provenance.mjs`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.init.test.cjs`
 - OneShot QC/browser policy: https://github.com/oneshot-repo/OneShot/tree/main/skills
 - Vercel agent-browser docs: https://github.com/vercel-labs/agent-browser/blob/main/skill-data/core/SKILL.md, https://agent-browser.dev/snapshots
@@ -507,9 +509,10 @@
 - Supporting spec/runtime docs: https://openspec.dev/, https://www.lean-spec.dev/docs/guide/first-principles, https://help.openai.com/en/articles/11369540-codex-in-chatgpt, https://docs.claude.com/en/docs/agents-and-tools/agent-skills, https://docs.github.com/en/copilot/concepts/prompting/response-customization
 
 ## D63 — Computed-First Control Map
-- `bin/lib/control-map.mjs`, `bin/gsdd.mjs`, `bin/lib/rendering.mjs`
-- `distilled/workflows/progress.md`, `resume.md`, `pause.md`, `quick.md`, `plan.md`, `execute.md`
-- `tests/gsdd.control-map.test.cjs`
+- **Current disposition (2026-08-12):** the historical main-command, annotation, and closeout-report proposal is retired. The only extant control-map surface is generated-helper plumbing with a read-only control-map, not a public package command.
+- `bin/lib/rendering.mjs`, `bin/lib/control-map.mjs`, `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`
+- `bin/lib/init.mjs`, `bin/lib/init-flow.mjs`, `bin/lib/phase.mjs`
+- `tests/gsdd.init.test.cjs`, `tests/gsdd.next-blockers.test.cjs`, `tests/phase.test.cjs`, `tests/gsdd.surface.test.cjs`
 - `.internal-research/gaps.md` Gap I52 and Gap I54
 - `.internal-research/lessons-learned.md` multi-worktree registry, clean-vs-editor-visible noise, checkpoint/worktree truth split, and subagent stop-condition lessons
 - GSD comparison: upstream GSD lifecycle rigor does not include a vendor-agnostic computed worktree/control-map helper

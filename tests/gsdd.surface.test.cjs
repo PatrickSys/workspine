@@ -2,7 +2,9 @@ const { spawnSync } = require('node:child_process');
 const { describe, test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
 const BANNED_TERMS = [
@@ -29,6 +31,30 @@ const RETIRED_PUBLIC_DOC_COMMANDS = [
   'session-fingerprint',
   'control-map',
   'closeout-report',
+];
+const RETIRED_CURRENT_EVIDENCE_PATHS = [
+  'bin/lib/models.mjs',
+  'bin/lib/provenance.mjs',
+  'bin/lib/session-fingerprint.mjs',
+  'bin/lib/evidence-contract.mjs',
+  'bin/lib/closeout-report.mjs',
+  'tests/session-fingerprint.test.cjs',
+  'tests/gsdd.control-map.test.cjs',
+  'tests/gsdd.closeout-report.test.cjs',
+];
+const RETIRED_CURRENT_COMMAND_PATTERNS = [
+  /`gsdd control-map(?:\s|`)/i,
+  /`gsdd closeout-report(?:\s|`)/i,
+];
+const REQUIRED_CURRENT_EVIDENCE_PATHS = [
+  'bin/lib/config.mjs',
+  'bin/lib/rendering.mjs',
+  'bin/lib/control-map.mjs',
+  'bin/lib/candidate-provenance.mjs',
+  'tests/gsdd.models.test.cjs',
+  'tests/gsdd.init.test.cjs',
+  'tests/gsdd.surface.test.cjs',
+  'tests/phase.test.cjs',
 ];
 const RETIRED_SOURCE_HELPER_PATTERNS = [
   /node \.planning\/bin\/gsdd\.mjs/i,
@@ -84,6 +110,32 @@ function generatedSourceFiles() {
     ...markdownFiles(path.join(ROOT, 'distilled', 'templates')),
     path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs'),
   ];
+}
+
+async function loadRenderer() {
+  const rendererPath = path.join(ROOT, 'bin', 'lib', 'rendering.mjs');
+  return import(`${pathToFileURL(rendererPath).href}?surface=${Date.now()}`);
+}
+
+function initializeFreshFixture() {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gsdd-surface-'));
+  try {
+    const result = spawnSync(process.execPath, [
+      path.join(ROOT, 'bin', 'gsdd.mjs'),
+      'init',
+      '--auto',
+      '--tools',
+      'agents',
+    ], {
+      cwd: fixtureRoot,
+      encoding: 'utf-8',
+    });
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    return fixtureRoot;
+  } catch (error) {
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 describe('public surface language gate', () => {
@@ -151,6 +203,54 @@ describe('public surface language gate', () => {
           `${relativePath}:${index + 1} mentions .planning without framing it as legacy support`
         );
       });
+    }
+  });
+
+  test('documents the main and generated helper command boundary from fresh render output', async () => {
+    const mainSource = fs.readFileSync(path.join(ROOT, 'bin', 'gsdd.mjs'), 'utf-8');
+    const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
+    const design = fs.readFileSync(path.join(ROOT, 'distilled', 'DESIGN.md'), 'utf-8');
+    const evidence = fs.readFileSync(path.join(ROOT, 'distilled', 'EVIDENCE-INDEX.md'), 'utf-8');
+    const { renderPlanningCliLauncher } = await loadRenderer();
+    const fixtureRoot = initializeFreshFixture();
+
+    try {
+      const helper = fs.readFileSync(path.join(fixtureRoot, '.work', 'bin', 'gsdd.mjs'), 'utf-8');
+      assert.strictEqual(helper, renderPlanningCliLauncher(), 'fresh init must use the versioned renderer output');
+      assert.doesNotMatch(mainSource, /['"]control-map['"]\s*:/, 'main package CLI must not register control-map');
+      assert.match(helper, /['"]control-map['"]\s*:/, 'generated helper must retain read-only control-map');
+      assert.doesNotMatch(helper, /\bannotate\b|\bcloseout-report\b/i, 'generated helper must not expose retired mutation or report commands');
+      assert.match(readme, /generated internal workflow plumbing, not a second public package CLI/i);
+      assert.match(design, /Current disposition.*generated.*helper.*read-only control-map/is);
+      assert.match(evidence, /Current disposition.*generated.*helper.*read-only control-map/is);
+    } finally {
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('design and evidence indexes do not present finite retired paths as current evidence', () => {
+    for (const relativePath of ['distilled/DESIGN.md', 'distilled/EVIDENCE-INDEX.md']) {
+      const content = fs.readFileSync(path.join(ROOT, relativePath), 'utf-8');
+      for (const retiredPath of RETIRED_CURRENT_EVIDENCE_PATHS) {
+        assert.doesNotMatch(
+          content,
+          new RegExp(escapeRegExp(retiredPath), 'i'),
+          `${relativePath} must not present retired path ${retiredPath} as current evidence`
+        );
+      }
+      for (const retiredPattern of RETIRED_CURRENT_COMMAND_PATTERNS) {
+        const matchingLines = content.split(/\r?\n/).filter((line) => retiredPattern.test(line));
+        for (const line of matchingLines) {
+          assert.match(
+            line,
+            /historical|retired|not (?:a |the )?public|not shipped|must not|does not expose/i,
+            `${relativePath} must label retired command token ${retiredPattern} as non-current`
+          );
+        }
+      }
+    }
+    for (const currentPath of REQUIRED_CURRENT_EVIDENCE_PATHS) {
+      assert.ok(fs.existsSync(path.join(ROOT, currentPath)), `current evidence path must exist: ${currentPath}`);
     }
   });
 });
