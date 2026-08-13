@@ -1,5 +1,6 @@
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const { spawnSync } = require('node:child_process');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -27,6 +28,32 @@ function classificationContract(result, root) {
     name: result.name,
     legacyDir: result.legacyDir,
   };
+}
+
+function snapshotTree(root) {
+  const entries = [];
+  const visit = (relativePath = '') => {
+    const directory = path.join(root, relativePath);
+    for (const name of fs.readdirSync(directory).sort()) {
+      const childRelativePath = path.join(relativePath, name);
+      const childPath = path.join(root, childRelativePath);
+      const stat = fs.lstatSync(childPath);
+      if (stat.isDirectory()) {
+        entries.push(`${childRelativePath}/`);
+        visit(childRelativePath);
+      } else {
+        entries.push(`${childRelativePath}:${fs.readFileSync(childPath).toString('hex')}`);
+      }
+    }
+  };
+  visit();
+  return entries;
+}
+
+function runGit(cwd, args) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8', windowsHide: true });
+  assert.ifError(result.error);
+  assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
 }
 
 describe('canonical Workspine state classification', () => {
@@ -173,13 +200,18 @@ describe('workspace-root discovery', () => {
   beforeEach(() => { tmp = createTempProject(); });
   afterEach(() => { cleanup(tmp); });
 
-  for (const markerKind of ['directory', 'file']) {
+  for (const markerKind of ['directory', 'absolute-file', 'relative-file']) {
     test(`nested fresh workspace anchors at a real .git ${markerKind}`, async () => {
       const { findWorkspaceRoot, resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
       const nested = path.join(tmp, 'packages', 'feature', 'deep');
       fs.mkdirSync(nested, { recursive: true });
       if (markerKind === 'directory') fs.mkdirSync(path.join(tmp, '.git'));
-      else fs.writeFileSync(path.join(tmp, '.git'), 'gitdir: C:/example/worktrees/test\n');
+      else {
+        const target = path.join(tmp, 'git-metadata');
+        fs.mkdirSync(target);
+        const pointer = markerKind === 'absolute-file' ? target : 'git-metadata';
+        fs.writeFileSync(path.join(tmp, '.git'), `gitdir: ${pointer}\n`);
+      }
       assert.strictEqual(findWorkspaceRoot(nested), tmp);
       const context = resolveWorkspaceContext([], { cwd: nested, env: {} });
       assert.strictEqual(context.workspaceRoot, tmp);
@@ -187,6 +219,133 @@ describe('workspace-root discovery', () => {
       assert.strictEqual(context.state.status, 'fresh');
     });
   }
+
+  test('stale gitfile refuses public next and init without changing the workspace bytes', async () => {
+    const nested = path.join(tmp, 'packages', 'feature', 'deep');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(tmp, '.git'), 'gitdir: missing-worktree-metadata\n');
+    const before = snapshotTree(tmp);
+
+    const next = await runCliAsMain(nested, ['next', '--json']);
+    assert.notStrictEqual(next.exitCode, 0, next.output);
+    assert.match(next.output, /Workspace markers could not be inspected/);
+    assert.match(next.output, /Invalid \.git marker/);
+    assert.deepStrictEqual(snapshotTree(tmp), before);
+
+    const init = await runCliAsMain(nested, ['init', '--auto', '--tools', 'agents']);
+    assert.notStrictEqual(init.exitCode, 0, init.output);
+    assert.match(init.output, /Workspace markers could not be inspected/);
+    assert.match(init.output, /Invalid \.git marker/);
+    assert.deepStrictEqual(snapshotTree(tmp), before);
+  });
+
+  test('stale gitfile invalidates explicit resolver and public init before any write', async () => {
+    const { resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
+    const foreign = createTempProject();
+    try {
+      fs.writeFileSync(path.join(tmp, '.git'), 'gitdir: missing-worktree-metadata\n');
+      const before = snapshotTree(tmp);
+      const context = resolveWorkspaceContext(['--workspace-root', tmp], { cwd: foreign, env: {} });
+      assert.strictEqual(context.invalid, true);
+      assert.match(context.error, /Workspace markers could not be inspected/);
+      assert.match(context.error, /Invalid \.git marker/);
+      assert.deepStrictEqual(snapshotTree(tmp), before);
+
+      const init = await runCliAsMain(foreign, ['init', '--workspace-root', tmp, '--auto', '--tools', 'agents']);
+      assert.notStrictEqual(init.exitCode, 0, init.output);
+      assert.match(init.output, /Workspace markers could not be inspected/);
+      assert.match(init.output, /Invalid \.git marker/);
+      assert.deepStrictEqual(snapshotTree(tmp), before);
+    } finally {
+      cleanup(foreign);
+    }
+  });
+
+  test('unsafe gitfiles fail closed without selecting an ancestor or nested write root', async () => {
+    const { resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
+    const cases = [
+      ['malformed', (root) => fs.writeFileSync(path.join(root, '.git'), 'not a gitdir declaration\n')],
+      ['oversized', (root) => fs.writeFileSync(path.join(root, '.git'), 'x'.repeat(4097))],
+      ['target-file', (root) => {
+        fs.writeFileSync(path.join(root, 'git-metadata'), 'not a directory');
+        fs.writeFileSync(path.join(root, '.git'), 'gitdir: git-metadata\n');
+      }],
+      ['linked-marker', (root) => {
+        const target = path.join(root, 'marker-target');
+        fs.mkdirSync(target);
+        fs.symlinkSync(target, path.join(root, '.git'), 'junction');
+      }],
+      ['linked-target', (root) => {
+        const target = path.join(root, 'git-metadata');
+        const linkedTarget = path.join(root, 'linked-git-metadata');
+        fs.mkdirSync(target);
+        fs.symlinkSync(target, linkedTarget, 'junction');
+        fs.writeFileSync(path.join(root, '.git'), 'gitdir: linked-git-metadata\n');
+      }],
+    ];
+
+    for (const [name, setup] of cases) {
+      const root = path.join(tmp, name);
+      const nested = path.join(root, 'packages', 'feature');
+      fs.mkdirSync(nested, { recursive: true });
+      setup(root);
+      const context = resolveWorkspaceContext([], { cwd: nested, env: {} });
+      assert.strictEqual(context.invalid, true, name);
+      assert.match(context.error, /Workspace markers could not be inspected/, name);
+      assert.strictEqual(fs.existsSync(path.join(root, '.work')), false, name);
+      assert.strictEqual(fs.existsSync(path.join(nested, '.work')), false, name);
+    }
+  });
+
+  test('gitfile target inspection and reads fail closed when their filesystem seam errors', async () => {
+    const { resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
+    const nested = path.join(tmp, 'packages', 'feature');
+    const target = path.join(tmp, 'git-metadata');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.mkdirSync(target);
+    fs.writeFileSync(path.join(tmp, '.git'), 'gitdir: git-metadata\n');
+
+    const deniedTarget = resolveWorkspaceContext([], {
+      cwd: nested,
+      env: {},
+      lstat: (candidate) => {
+        if (path.resolve(candidate) === path.resolve(target)) throw new Error('injected target inspection denial');
+        return fs.lstatSync(candidate);
+      },
+    });
+    assert.strictEqual(deniedTarget.invalid, true);
+    assert.match(deniedTarget.error, /injected target inspection denial/);
+
+    const deniedRead = resolveWorkspaceContext([], {
+      cwd: nested,
+      env: {},
+      readFile: () => { throw new Error('injected gitfile read denial'); },
+    });
+    assert.strictEqual(deniedRead.invalid, true);
+    assert.match(deniedRead.error, /injected gitfile read denial/);
+    assert.strictEqual(fs.existsSync(path.join(tmp, '.work')), false);
+    assert.strictEqual(fs.existsSync(path.join(nested, '.work')), false);
+  });
+
+  test('an actual Git linked worktree remains a valid workspace root', async () => {
+    const { findWorkspaceRoot, resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
+    const seed = path.join(tmp, 'seed');
+    const linked = path.join(tmp, 'linked');
+    fs.mkdirSync(seed);
+    runGit(seed, ['init', '--quiet']);
+    runGit(seed, ['config', 'user.name', 'GSDD Test']);
+    runGit(seed, ['config', 'user.email', 'gsdd-test@example.invalid']);
+    fs.writeFileSync(path.join(seed, 'README.md'), 'seed\n');
+    runGit(seed, ['add', 'README.md']);
+    runGit(seed, ['commit', '--quiet', '-m', 'seed']);
+    runGit(seed, ['worktree', 'add', '--quiet', linked]);
+
+    const nested = path.join(linked, 'packages', 'feature');
+    fs.mkdirSync(nested, { recursive: true });
+    assert.strictEqual(fs.lstatSync(path.join(linked, '.git')).isFile(), true);
+    assert.strictEqual(findWorkspaceRoot(nested), linked);
+    assert.strictEqual(resolveWorkspaceContext([], { cwd: nested, env: {} }).workspaceRoot, linked);
+  });
 
   test('explicit workspace override is authoritative even before initialization', async () => {
     const { resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
