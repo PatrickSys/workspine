@@ -18,6 +18,7 @@ const HELPER_LIB_FILES = Object.freeze([
   'next.mjs',
   'phase.mjs',
   'state-dir.mjs',
+  'update-awareness.mjs',
   'work-context.mjs',
   'workspace-root.mjs',
 ]);
@@ -57,9 +58,11 @@ agent: ${workflow.agent}
 ${workflowContent}`;
 }
 
-function renderPlanningCliLauncher({ stateDirName = DEFAULT_STATE_DIR_NAME } = {}) {
+function renderPlanningCliLauncher({ stateDirName = DEFAULT_STATE_DIR_NAME, packageName = 'gsdd-cli', packageVersion = '0.0.0' } = {}) {
   const helperPath = `${normalizeStateDirName(stateDirName)}/bin/gsdd.mjs`;
   const checkpointBackupPath = `${normalizeStateDirName(stateDirName)}/.continue-here.bak`;
+  const embeddedPackageName = JSON.stringify(packageName);
+  const embeddedPackageVersion = JSON.stringify(packageVersion);
   return `#!/usr/bin/env node
 
 import { cmdFileOp } from './lib/file-ops.mjs';
@@ -69,6 +72,7 @@ import { cmdPhaseStatus, cmdVerify } from './lib/phase.mjs';
 import { buildControlMap } from './lib/control-map.mjs';
 import { cmdDecisionsQuery, cmdRememberCandidate } from './lib/decision-cli.mjs';
 import { createCmdNext } from './lib/next.mjs';
+import { maybeShowUpdateNotice } from './lib/update-awareness.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
 import { assertStateAuthority } from './lib/state-dir.mjs';
 
@@ -77,6 +81,8 @@ const HELPER_CONTEXT = {
   workflows: [],
   frameworkVersion: 'generated-helper',
 };
+const PACKAGE_NAME = ${embeddedPackageName};
+const PACKAGE_VERSION = ${embeddedPackageVersion};
 const cmdNext = createCmdNext(HELPER_CONTEXT);
 const cmdGitIdentity = createCmdGitIdentity(HELPER_CONTEXT);
 
@@ -153,6 +159,9 @@ function printHelp() {
     '                               Example: node ${helperPath} lifecycle-preflight verify 1 --expects-mutation phase-status',
     '  next [--json] [--init]',
     '                               Route to the next safe Workspine action from ${normalizeStateDirName(stateDirName)}, brownfield, planning, and repo truth',
+    '  supported package runtime floor: Node >=22',
+    '  next/verify update notice: sequential/best-effort network-bounded checks; no lock or cross-process concurrency guarantee; use --no-update-notice or GSDD_UPDATE_AWARENESS=0 to opt out',
+    '                               health and update remain network-free; run \`npx -y gsdd-cli update\` for explicit repair',
     '',
     'Advanced option:',
     '  --workspace-root <path>     Override workspace root discovery before or after the subcommand',
@@ -212,7 +221,16 @@ async function main() {
     return;
   }
 
-  await handler(...withWorkspaceAuthority(command, args));
+  const update = await maybeShowUpdateNotice({
+    cwd: HELPER_CONTEXT.cwd,
+    command,
+    args,
+    packageName: PACKAGE_NAME,
+    packageVersion: PACKAGE_VERSION,
+    source: 'generated-helper',
+    output: (line) => console.error(line),
+  });
+  await handler(...withWorkspaceAuthority(command, update.args));
 }
 
 await main();

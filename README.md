@@ -17,6 +17,10 @@ npx -y gsdd-cli init
 
 Use `npx -y gsdd-cli init` for repo-local setup. For reusable cross-repo surfaces, run `npx -y gsdd-cli install --global` to choose targets interactively, or pass `--tools <targets>` in a fresh/headless home. Use `--auto` to refresh detected existing agent homes.
 
+The public CLI and generated helper show a default-on update notice using sequential/best-effort checks when their contained `.work/.local` cache is writable. There is no lock or cross-process concurrency guarantee. The check is anonymous, uses a two-second timeout and 64 KiB/normalized-version limits, sends no credentials or repository data, and failures never block commands. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` are network-free; run `npx -y gsdd-cli update` for explicit repair. This notice is limited to the supported public CLI/generated helper: it does not imply a native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps.
+
+The supported package runtime floor is Node >=22.
+
 </div>
 
 Tracked consumer proof pack: [docs/proof/consumer-node-cli/README.md](docs/proof/consumer-node-cli/README.md)

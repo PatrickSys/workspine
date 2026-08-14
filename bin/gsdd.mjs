@@ -24,6 +24,7 @@ import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
 import { resolveStateDir } from './lib/state-dir.mjs';
 import { createCmdGitIdentity } from './lib/git-identity.mjs';
+import { maybeShowUpdateNotice } from './lib/update-awareness.mjs';
 import { FRAMEWORK_VERSION, WORKFLOWS } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -119,7 +120,16 @@ async function runCli(cliCommand = command, ...cliArgs) {
     return;
   }
 
-  await COMMANDS[cliCommand](...normalizedArgs);
+  const update = await maybeShowUpdateNotice({
+    cwd: INIT_CONTEXT.cwd,
+    command: cliCommand,
+    args: normalizedArgs,
+    packageName: INIT_CONTEXT.packageName,
+    packageVersion: INIT_CONTEXT.packageVersion,
+    source: 'public-cli',
+    output: (line) => console.error(line),
+  });
+  await COMMANDS[cliCommand](...update.args);
 }
 
 if (IS_MAIN) {

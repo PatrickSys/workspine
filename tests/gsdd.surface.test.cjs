@@ -7,6 +7,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
+const PACKAGE = require(path.join(ROOT, 'package.json'));
 const BANNED_TERMS = [
   'delivery spine',
   'workflow spine',
@@ -250,7 +251,7 @@ describe('public surface language gate', () => {
 
     try {
       const helper = fs.readFileSync(path.join(fixtureRoot, '.work', 'bin', 'gsdd.mjs'), 'utf-8');
-      assert.strictEqual(helper, renderPlanningCliLauncher(), 'fresh init must use the versioned renderer output');
+      assert.strictEqual(helper, renderPlanningCliLauncher({ packageName: PACKAGE.name, packageVersion: PACKAGE.version }), 'fresh init must use the versioned renderer output');
       assert.doesNotMatch(mainSource, /['"]control-map['"]\s*:/, 'main package CLI must not register control-map');
       assert.match(helper, /['"]control-map['"]\s*:/, 'generated helper must retain read-only control-map');
       assert.doesNotMatch(helper, /\bannotate\b|\bcloseout-report\b/i, 'generated helper must not expose retired mutation or report commands');
@@ -260,6 +261,57 @@ describe('public surface language gate', () => {
     } finally {
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
+  });
+
+  test('renderer callers bind generated helpers to package metadata and helper policy strips only its flag', async () => {
+    const runtimeFreshness = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'runtime-freshness.mjs'), 'utf8');
+    const initFlow = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init-flow.mjs'), 'utf8');
+    assert.match(runtimeFreshness, /packageName:\s*PACKAGE_JSON\.name/);
+    assert.match(runtimeFreshness, /packageVersion:\s*PACKAGE_JSON\.version/);
+    assert.match(initFlow, /packageName,\s*packageVersion/);
+    const updateAwareness = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'lib', 'update-awareness.mjs')).href}?surface-policy=${Date.now()}`);
+    assert.deepStrictEqual(updateAwareness.stripUpdateNoticeFlag(['--json', '--no-update-notice', '1', '--no-update-notice']), ['--json', '1']);
+    const launcher = (await loadRenderer()).renderPlanningCliLauncher({ packageName: PACKAGE.name, packageVersion: PACKAGE.version });
+    assert.match(launcher, /const PACKAGE_VERSION = "0\.32\.0";/);
+    assert.doesNotMatch(launcher, /const PACKAGE_VERSION = '0\.32\.0';/);
+    for (const command of ['control-map', 'decisions', 'file-op', 'git-identity', 'lifecycle-preflight', 'phase-status', 'remember', 'verify', 'next']) {
+      assert.match(launcher, new RegExp(command.replace('-', '\\-')));
+    }
+  });
+
+  test('public help and owned docs state the bounded update-awareness contract', () => {
+    const help = runHelp();
+    assert.match(help, /Node >=22/);
+    assert.match(help, /--no-update-notice/);
+    assert.match(help, /GSDD_UPDATE_AWARENESS=0/);
+    assert.match(help, /health and update remain network-free/);
+    assert.match(help, /sequential|best-effort/i);
+    assert.match(help, /no lock|no concurrency guarantee/i);
+    assert.doesNotMatch(help, /at most once per 24 hours/i);
+    for (const relative of ['README.md', 'docs/USER-GUIDE.md', 'docs/RUNTIME-SUPPORT.md']) {
+      const content = fs.readFileSync(path.join(ROOT, relative), 'utf8');
+      assert.match(content, /GSDD_UPDATE_AWARENESS=0/);
+      assert.match(content, /npx -y gsdd-cli update/);
+      assert.match(content, /Node >=22|Node `>=22`/);
+      assert.match(content, /network-free/);
+      assert.doesNotMatch(content, /Runtime floor: Node 20\+|Node 20\+/);
+    }
+    assert.strictEqual(PACKAGE.engines.node, '>=22');
+    assert.strictEqual(require(path.join(ROOT, 'package-lock.json')).packages[''].engines.node, '>=22');
+  });
+
+  test('opt-out wording is explicit on the public and generated surfaces', async () => {
+    const help = runHelp();
+    assert.match(help, /--no-update-notice/);
+    assert.match(help, /GSDD_UPDATE_AWARENESS=0/);
+    const { renderPlanningCliLauncher } = await loadRenderer();
+    const launcher = renderPlanningCliLauncher({ packageName: PACKAGE.name, packageVersion: PACKAGE.version });
+    assert.match(launcher, /Node >=22/);
+    assert.match(launcher, /--no-update-notice/);
+    assert.match(launcher, /GSDD_UPDATE_AWARENESS=0/);
+    assert.match(launcher, /sequential|best-effort/i);
+    assert.match(launcher, /no lock|no concurrency guarantee/i);
+    assert.doesNotMatch(launcher, /at most once per 24 hours/i);
   });
 
   test('design and evidence indexes do not present finite retired paths as current evidence', () => {

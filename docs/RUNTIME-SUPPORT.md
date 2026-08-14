@@ -4,6 +4,8 @@ Workspine is a Spec Driven Development framework with portable multi-runtime wor
 
 This matrix is the release-floor truth surface.
 
+The package runtime floor is Node >=22. Update awareness is limited to the supported public CLI/generated helper: sequential/best-effort anonymous metadata checks, with no lock or cross-process concurrency guarantee, a two-second timeout, 64 KiB/normalized-version limits, no credentials or repository data, and a contained `.work/.local` cache with nonblocking failures. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` are network-free; run `npx -y gsdd-cli update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
+
 Human repo setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine. For fresh cross-repo setup, run `npx -y gsdd-cli install --global` interactively or pass `--tools <targets>`; use `--auto` to refresh detected existing agent homes.
 
 The install contract is deliberately skills-first: `npx -y gsdd-cli init` always creates `.agents/skills/gsdd-*` and `.work/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
