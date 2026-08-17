@@ -196,7 +196,20 @@ npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
 
 For a fresh install, choose targets interactively or pass `--tools <targets>`. Use `--auto` for a non-interactive refresh of detected existing agent homes. If none are detected, it writes nothing and prints one exact command per supported target.
 
-Global install writes Workspine-managed files under selected agent homes and records per-runtime manifests. It does not bootstrap project planning state.
+Global install writes Workspine-managed files under selected agent homes and records per-runtime manifests. It does not bootstrap project planning state. Each target writes to these directories:
+
+| Target | Global surfaces |
+|--------|-----------------|
+| Claude Code | `~/.claude/skills`, `~/.claude/commands`, `~/.claude/agents` |
+| OpenCode | `~/.agents/skills`, `~/.config/opencode/commands`, `~/.config/opencode/agents` |
+| Codex CLI | `~/.agents/skills`, `~/.codex/agents` |
+| GitHub Copilot CLI | `~/.agents/skills`, `~/.copilot/agents` |
+
+Details worth knowing before you script it:
+
+- Bare `npx -y gsdd-cli install --global` with no flags selects no targets in a non-interactive shell and exits with an error. Pass `--tools <targets>` or `--auto` in CI.
+- Pruning runs per install root against that root's own manifest. Dropping a target from `--tools` therefore prunes nothing for it, and every target that shares `~/.agents` shares one manifest.
+- OpenCode honors `OPENCODE_CONFIG_DIR` for its commands and agents. Portable skills are installed once in the shared agent-compatible global root.
 
 ### Workflows (run via generated skills or adapters)
 
@@ -271,6 +284,28 @@ Other CLI commands that remain available outside the first-run path:
 | `gsdd find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `gsdd verify <N>` | Run phase artifact and browser-proof closure checks for phase N; exits nonzero when verification is blocked |
 | `gsdd scaffold phase <N> [name]` | Create a new phase plan file |
+
+### Continuity Commands
+
+`gsdd-pause` writes a checkpoint to `.work/.continue-here.md`. `gsdd next` reads that checkpoint together with `.work/` and repo truth, and returns a structured read-only packet. The checkpoint is context beneath PLAN/SPEC/lifecycle/Git truth, so artifact state wins when the two disagree.
+
+```bash
+gsdd next --json           # structured packet (the default captured output)
+gsdd next --format human   # compact supervisor card
+gsdd next --init           # bootstrap .work continuity state explicitly
+```
+
+JSON packets carry typed `next_action` values for CLI commands, workflow skills, manual review, and user-question gates. Blocking questions, decisions, graph rebuilds, and dogfood findings use explicit subcommands. A duplicate question, decision, or dogfood ID replays as unchanged when the content matches, and fails unless `--replace` is passed when the content differs. The continuity graph records answer and supersession edges, so a later agent can reconstruct decision history without rereading raw transcripts.
+
+### Decision Promotion
+
+Promotion is a cooperative, auditable owner assertion rather than human authentication:
+
+```bash
+gsdd decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>
+```
+
+The assertion is stored on the same decision record and binds the exact decision id, body hash, authority label, non-sensitive reference, and timestamp. Candidate provenance remains `agent-proposed`. Older active records without a complete assertion stay readable but require review until they are explicitly re-attested. The generated `.work/bin/gsdd.mjs` helper is candidate/query-only.
 
 ### Platform flags for `--tools`
 
@@ -459,6 +494,8 @@ If you've modified any templates, the generation manifest detects this and warns
 In a repo-local `.work/` workspace, start with `npx -y gsdd-cli health`. If it reports drift or missing installed generated surfaces, run `npx -y gsdd-cli update` for the whole workspace or `npx -y gsdd-cli update --tools <runtime>` for a specific runtime. For global personal installs, rerun `npx -y gsdd-cli install --global --auto` or scope it explicitly with `npx -y gsdd-cli install --global --tools <targets>`.
 
 That repair path is deterministic for generated files. It does not imply that every runtime has equal native ergonomics or equal validation depth.
+
+A global install repair restores managed files you deleted and rewrites stale ones you have not touched, and it never overwrites your edits. If a managed file was hand-edited, or an untracked file sits where a managed one belongs, preflight stops and names that file, and nothing is written for any selected target until you resolve it. Restore the file from the manifest hash or delete it, then rerun the install.
 
 ### Model Costs Too High
 

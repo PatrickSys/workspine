@@ -2602,12 +2602,20 @@ describe('G11b - Launch Claim Hardening', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     assert.doesNotMatch(readme, /\*\*Works with Claude Code, OpenCode, Codex CLI, Cursor, Copilot, and Gemini CLI\.\*\*/i,
       'README.md must not use the old broad all-runtime top-line claim. FIX: Replace it with proof-split wording.');
-    assert.match(readme, /Proof status: one real consumer lifecycle with Codex checker support/i,
-      'README.md must keep the recorded proof status visible near the top.');
-    assert.match(readme, /Repo proof currently covers Claude Code, OpenCode, and Codex CLI paths/i,
-      'README.md must name recorded proof paths without broad parity copy.');
-    assert.match(readme, /Qualified support:.*Cursor.*Copilot.*Gemini/i,
-      'README.md must distinguish qualified support runtimes. FIX: Add the qualified-support line near the top.');
+    // Any "works with <unproven runtime>" line is a parity claim regardless of how it is worded.
+    // The disclaimer elsewhere in the file does not make it true.
+    assert.doesNotMatch(readme, /\bworks? with\b[^\n]*\b(Cursor|Copilot|Gemini)\b/i,
+      'README.md must not claim it works with Cursor, Copilot or Gemini. FIX: They can read the skill files, but no run of theirs is recorded. Say that instead.');
+    for (const runtime of ['Claude Code', 'OpenCode', 'Codex CLI']) {
+      assert.ok(readme.includes(runtime),
+        `README.md must name ${runtime} as a runtime with a recorded run. FIX: Name the three runtimes that actually have one.`);
+    }
+    for (const runtime of ['Cursor', 'Copilot', 'Gemini']) {
+      assert.ok(readme.includes(runtime),
+        `README.md must name ${runtime} as a runtime without a recorded run. FIX: Name it, and say no run of theirs is recorded.`);
+    }
+    assert.match(readme, /no run of theirs is recorded|no recorded run|not recorded/i,
+      'README.md must say plainly that Cursor, Copilot and Gemini have no recorded run. FIX: Keep proven and unproven runtimes distinguishable in plain English.');
   });
 
   test('README adapter tables avoid internal runtime taxonomy jargon', () => {
@@ -3257,24 +3265,22 @@ describe('G36 - Git Branch Safety', () => {
 });
 
 describe('G37 - Launch Surface Consistency', () => {
-  test('README and distilled README use repo-resident SDD framing', () => {
+  test('README and distilled README say the work stays in the repo', () => {
     const rootReadme = fs.readFileSync(README_MD, 'utf-8');
     const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
-    assert.match(rootReadme, /Spec Driven Development framework.*planning, checking, execution, verification, and handoff live in the repo/i,
-      'README.md must describe Workspine as repo-resident SDD workflow without delivery-spine jargon.');
-    assert.match(distilledReadme, /keeps planning, execution, verification, handoff, and progress state in the repo/i,
-      'distilled/README.md must describe Workspine as repo-resident planning and proof state.');
+    for (const [label, content] of [['README.md', rootReadme], ['distilled/README.md', distilledReadme]]) {
+      assert.match(content, /in (?:the|your) repo\b/i,
+        `${label} must say the work lives in the repo. FIX: State that plans and proof are files in the user's repo, not a hosted service.`);
+      assert.doesNotMatch(content, /delivery spine|workflow spine/i,
+        `${label} must stay jargon-free. FIX: Describe the tool in plain words instead of spine metaphors.`);
+    }
   });
 
   test('lead launch copy is product-first instead of origin-first', () => {
     const rootIntro = introBeforeWhatThisIs(fs.readFileSync(README_MD, 'utf-8'));
     const distilledIntro = introBeforeWhatThisIs(fs.readFileSync(DISTILLED_README_MD, 'utf-8'));
-    assert.match(rootIntro, /planning, checking, execution, verification, and handoff/i,
-      'README.md must lead with what the product does. FIX: Make the first explanatory paragraph describe the planning/checking/execution/verification/handoff contract.');
     assert.doesNotMatch(rootIntro, /Distilled from|Get Shit Done/i,
       'README.md lead copy must not foreground origin-story wording. FIX: Move GSD attribution out of the lead intro.');
-    assert.match(distilledIntro, /planning, checking, execution, verification, and handoff/i,
-      'distilled/README.md must lead with what the product does. FIX: Make the first explanatory paragraph describe the repo-native contract before any origin context.');
     assert.doesNotMatch(distilledIntro, /Distilled from|from GSD/i,
       'distilled/README.md lead copy must not foreground GSD origin wording. FIX: Move origin context out of the lead intro.');
   });
@@ -3348,10 +3354,16 @@ describe('G37 - Launch Surface Consistency', () => {
         `${label} must not keep Northline as the active public brand after Phase 24. FIX: Remove stale Northline wording from the tracked public surface.`);
     }
 
-    assert.match(rootReadme, /retained technical contracts/i,
-      'README.md must explain that gsdd-cli/gsdd/gsdd-* /.planning remain deliberate retained contracts. FIX: Add the retained-contract explanation near the top-level intro.');
-    assert.match(userGuide, /retained technical contracts/i,
-      'docs/USER-GUIDE.md must explain the retained naming stack explicitly. FIX: Tell users that gsdd-cli/gsdd/gsdd-* /.planning are intentional retained contracts.');
+    // The product is Workspine but the command is gsdd. Both names must appear, and the
+    // doc must say why the gsdd names stayed. The exact wording is free.
+    for (const [label, content] of [['README.md', rootReadme], ['docs/USER-GUIDE.md', userGuide]]) {
+      for (const name of ['gsdd-cli', '`gsdd`', '.work/']) {
+        assert.ok(content.includes(name),
+          `${label} must name ${name} alongside Workspine. FIX: Say which command, package, and workspace names Workspine kept.`);
+      }
+      assert.match(content, /keep working|retained/i,
+        `${label} must say why the gsdd names stayed. FIX: Explain that the old names are kept so existing installs keep working.`);
+    }
     assert.match(rootReadme, /began as a fork of.*Get Shit Done/i,
       'README.md must keep one brief appreciative lineage note. FIX: Add a concise lineage note that acknowledges GSD/GSDD without making it the active product identity.');
     assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
@@ -3362,17 +3374,17 @@ describe('G37 - Launch Surface Consistency', () => {
       'package.json description must be Workspine-led after Phase 24. FIX: Align package metadata with the public product name.');
   });
 
-  test('tracked public launch surfaces preserve the qualified support proof split', () => {
-    const rootReadme = fs.readFileSync(README_MD, 'utf-8');
+  test('distilled README keeps proven and unproven runtimes apart', () => {
+    // README.md's copy of this check lives in G11b; this one covers the distilled surface.
     const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
-    assert.doesNotMatch(rootReadme, /governance_only/i,
-      'README.md must not expose governance_only after Phase 21. FIX: Keep internal runtime taxonomy out of the public launch surface.');
-    assert.match(rootReadme, /Qualified support:.*Cursor.*Copilot.*Gemini/i,
-      'README.md must keep the qualified-support proof split explicit. FIX: Retain the qualified support launch wording near the top of the README.');
     assert.doesNotMatch(distilledReadme, /governance_only/i,
-      'distilled/README.md must not expose governance_only after Phase 21. FIX: Keep internal runtime taxonomy out of the distilled launch surface.');
-    assert.match(distilledReadme, /Qualified support only:.*Cursor.*Copilot.*Gemini/i,
-      'distilled/README.md must keep the qualified-support proof split explicit. FIX: Retain the launch proof posture in the distilled README.');
+      'distilled/README.md must not expose governance_only. FIX: Keep internal runtime taxonomy out of the distilled launch surface.');
+    for (const runtime of ['Cursor', 'Copilot', 'Gemini']) {
+      assert.ok(distilledReadme.includes(runtime),
+        `distilled/README.md must name ${runtime} as a runtime without a recorded run. FIX: Name it, and say no run of theirs is recorded.`);
+    }
+    assert.match(distilledReadme, /no run of theirs is recorded|no recorded run|not recorded/i,
+      'distilled/README.md must say plainly that Cursor, Copilot and Gemini have no recorded run. FIX: Keep proven and unproven runtimes distinguishable in plain English.');
   });
 
   test('README install command and package metadata stay aligned', () => {
@@ -3771,8 +3783,10 @@ describe('G43 - Release Packaging Audit', () => {
   test('package metadata stays on the verified release floor and trims internal tarball drift', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
 
-    assert.match(pkg.description, /^Workspine\b.*plan, execute, and verify/i,
-      'package.json description must stay Workspine-led and use the plain proof-first framing. FIX: Keep the description on the proof-first package boundary.');
+    assert.match(pkg.description, /^Workspine\b/,
+      'package.json description must lead with the product name. FIX: Start the npm description with Workspine.');
+    assert.match(pkg.description, /plan.*execute.*verify/i,
+      'package.json description must name the loop it runs. FIX: Say plan, execute, verify in the npm description.');
     assert.doesNotMatch(pkg.description, /delivery spine|directly validated|Claude Code|Codex CLI|OpenCode/i,
       'package.json description must not carry banned jargon or launch-proof overclaims. FIX: Keep runtime proof posture out of package metadata.');
     for (const keyword of ['cursor', 'copilot', 'gemini', 'gemini-cli']) {

@@ -1,7 +1,7 @@
 {
   "name": "gsdd-cli",
   "version": "0.32.0",
-  "description": "Workspine — plan, execute, and verify AI-assisted work from files in your repo, with proof before done. Published as gsdd-cli.",
+  "description": "Workspine is a harness for AI coding agents: it runs a spec-driven plan, execute, verify loop and keeps plans, decisions, and proof as files in your repo. Published as gsdd-cli.",
   "type": "module",
   "bin": {
     "gsdd": "bin/gsdd.mjs"

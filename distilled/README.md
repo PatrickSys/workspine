@@ -1,20 +1,21 @@
 # Workspine
 
-Plan, execute, and verify AI-assisted work from files in your repo — for the part of AI coding that still needs human judgment: planning, checking, execution, verification, and handoff.
+Workspine is a harness for AI coding agents. It runs a spec-driven loop around your agent (plan, execute, verify) and every step lands as a file in the repo, so the next session or a different tool can pick the work back up.
 
-Workspine keeps planning, execution, verification, handoff, and progress state in the repo. For a session boundary, explicitly write a checkpoint with `gsdd-pause`, then read it back with `gsdd next --json`; no background compaction or automatic context transfer is implied. The retained package and CLI contracts remain `gsdd-cli` / `gsdd`.
+Plans, execution records, verification, handoff notes, and progress state all live in the repo. For a session boundary, explicitly write a checkpoint with `gsdd-pause`, then read it back with `gsdd next --json`; no background compaction or automatic context transfer is implied.
 
 ## Why It Matters
 
 AI coding agents make code cheaper to produce. They do not make architecture, scope control, review, security, or release confidence disappear. In practice, they move more of the work into deciding what should happen, checking whether it happened, and preserving enough context for the next session or runtime to continue safely.
 
-Workspine is built for that pressure. It gives serious AI-assisted work one repo-native path:
+Workspine is built for that pressure. There are two ways in, and both land in the same loop:
 
 ```
-new-project -> plan -> execute -> verify
+quick        -> plan -> execute -> verify
+new-project  -> plan -> execute -> verify
 ```
 
-The plan is a reviewed contract before implementation starts. Execution is a separate step. Verification records what passed, what failed, and what still needs human judgment.
+`gsdd-quick` takes a bounded change with no spec or roadmap. `gsdd-new-project` writes a spec and phases when the work is fuzzy or milestone-shaped. Either way, the plan is a reviewed contract before implementation starts. Execution is a separate step. Verification records what passed, what failed, and what still needs human judgment.
 
 ## When To Use It
 
@@ -32,13 +33,13 @@ Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:
 
 It gives serious AI-assisted work one durable, repo-native workflow for planning, checking, execution, verification, and handoff — plain files, no hosted service.
 
-Workspine is the product name. The package, CLI commands, workflow prefixes, and workspace directory remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.work/`; legacy `.planning/` workspaces are still read.
+The command is `gsdd`, the npm package is `gsdd-cli`, the workflows are `gsdd-*`, and the workspace is `.work/`. Workspine kept those names so existing installs keep working; legacy `.planning/` workspaces are still read.
 
 Workspine began as a fork of Get Shit Done, whose long-horizon workflow proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native tool with fewer public workflows, generated runtime surfaces from a portable core, proof required before closing work, and decisions that keep their why.
 
-Launch proof posture:
-- Recorded launch proof in repo truth currently covers Claude Code, Codex CLI, and OpenCode paths
-- Qualified support only: Cursor, Copilot, Gemini CLI can use the shared `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it; proof and ergonomics differ from the recorded paths above
+Proof:
+- One recorded end-to-end run backs the Claude Code, Codex CLI, and OpenCode paths
+- Cursor, Copilot or Gemini CLI can read the same `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it, but no run of theirs is recorded here; proof and ergonomics differ from the recorded paths above
 - Codex CLI validation does not automatically cover Codex VS Code or the Codex app; use native discovery there when available, otherwise open or paste `.agents/skills/gsdd-*/SKILL.md`
 - Repo-local generated runtime surfaces are renderer-checked through `npx -y gsdd-cli health`, with deterministic repair through `npx -y gsdd-cli update` (bare `gsdd ...` is equivalent only when globally installed)
 - Public proof entrypoints: `docs/BROWNFIELD-PROOF.md`, `docs/proof/consumer-node-cli/README.md`, `docs/RUNTIME-SUPPORT.md`, `docs/VERIFICATION-DISCIPLINE.md`

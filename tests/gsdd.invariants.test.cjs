@@ -1827,9 +1827,8 @@ describe('G12 — Documentation Accuracy Guards', () => {
     );
   });
 
-  test('package.json description uses the plain proof-first framing', () => {
-    assert.match(pkg.description, /plan, execute, and verify/i,
-      'package.json description must use the plain proof-first framing. FIX: Update the package description.');
+  test('package.json description stays jargon-free', () => {
+    // What the description must say is checked once, in gsdd.guards.test.cjs (G43).
     assert.doesNotMatch(pkg.description, /delivery spine|directly validated/i,
       'package.json description must avoid banned jargon and launch-proof overclaims. FIX: Keep package metadata plain and proof-first.');
   });
@@ -2076,10 +2075,8 @@ describe('G34e - Phase 24 Public Naming Invariants', () => {
       'package.json name must remain gsdd-cli. FIX: Phase 24 reconciles naming copy, not the published package contract.');
     assert.strictEqual(pkg.bin.gsdd, 'bin/gsdd.mjs',
       'package.json bin.gsdd must remain bin/gsdd.mjs. FIX: Keep the retained command contract stable.');
-    assert.match(readme, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.work\/`/i,
-      'README.md must keep the retained naming stack explicit. FIX: Spell out the retained technical contracts.');
-    assert.match(userGuide, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.work\/`/i,
-      'docs/USER-GUIDE.md must keep the retained naming stack explicit. FIX: Explain the retained technical contracts in the guide intro.');
+    // That README.md and the user guide name gsdd-cli / gsdd / .work/ and explain why is
+    // checked once, in gsdd.guards.test.cjs (G37).
     assert.match(readme, /began as a fork of.*Get Shit Done/i,
       'README.md must preserve the brief appreciative lineage note. FIX: Keep the lineage explicit but secondary.');
     assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
