@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="Terminal showing npx gsdd-cli init writing a .work workspace, portable skills, and Claude Code surfaces, then naming the next command to run.">
+  <defs>
+    <style>
+      .terminal-bg { fill: #1a1b26; }
+      .terminal-border { fill: #24283b; }
+      .title-bar { fill: #1f2335; }
+      .btn-red { fill: #f7768e; }
+      .btn-yellow { fill: #e0af68; }
+      .btn-green { fill: #9ece6a; }
+      .text { font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace; }
+      .prompt { fill: #7aa2f7; }
+      .command { fill: #c0caf5; }
+      .cyan { fill: #7dcfff; }
+      .green { fill: #9ece6a; }
+      .dim { fill: #565f89; }
+      .white { fill: #c0caf5; }
+      .path { fill: #bb9af7; }
+    </style>
+  </defs>
+
+  <!-- Window -->
+  <rect class="terminal-border" width="960" height="540" rx="12"/>
+  <rect class="terminal-bg" x="1" y="1" width="958" height="538" rx="11"/>
+
+  <!-- Title bar -->
+  <rect class="title-bar" x="1" y="1" width="958" height="36" rx="11"/>
+  <rect class="terminal-bg" x="1" y="26" width="958" height="12"/>
+  <circle class="btn-red" cx="24" cy="19" r="7"/>
+  <circle class="btn-yellow" cx="48" cy="19" r="7"/>
+  <circle class="btn-green" cx="72" cy="19" r="7"/>
+  <text x="480" y="24" text-anchor="middle" class="text dim" font-size="13">my-repo — workspine</text>
+
+  <g transform="translate(32, 76)">
+    <!-- command -->
+    <text class="text prompt" font-size="15" y="0">~/my-repo</text>
+    <text class="text dim"    font-size="15" x="98" y="0">$</text>
+    <text class="text command" font-size="15" x="118" y="0">npx -y gsdd-cli init --tools claude</text>
+
+    <!-- header line -->
+    <text class="text dim" font-size="15" y="40">gsdd init - setting up GSDD workflow</text>
+
+    <!-- what it wrote -->
+    <text class="text" font-size="15" y="76"><tspan class="dim">  - created </tspan><tspan class="path">.work/</tspan><tspan class="dim"> directory structure</tspan></text>
+    <text class="text" font-size="15" y="100"><tspan class="dim">  - copied templates to </tspan><tspan class="path">.work/templates/</tspan></text>
+    <text class="text" font-size="15" y="124"><tspan class="dim">  - generated open-standard skills (</tspan><tspan class="path">.agents/skills/gsdd-*</tspan><tspan class="dim">)</tspan></text>
+    <text class="text" font-size="15" y="148"><tspan class="dim">  - generated local workflow helpers (</tspan><tspan class="path">.work/bin/gsdd*</tspan><tspan class="dim">)</tspan></text>
+    <text class="text" font-size="15" y="172"><tspan class="dim">  - generated Claude Code skills, commands and agents</tspan></text>
+    <text class="text" font-size="15" y="196"><tspan class="dim">  - wrote generation manifest</tspan></text>
+
+    <!-- success -->
+    <text class="text" font-size="15" y="236"><tspan class="green">✓ GSDD initialized.</tspan></text>
+
+    <!-- next -->
+    <text class="text white" font-size="15" y="276">Next: choose the starting lane that fits your repo and current scope:</text>
+    <text class="text dim" font-size="15" y="312" x="16">Claude Code:</text>
+    <text class="text" font-size="15" y="312" x="140"><tspan class="cyan">/gsdd-new-project</tspan><tspan class="dim">  |  </tspan><tspan class="cyan">/gsdd-quick</tspan><tspan class="dim">  |  </tspan><tspan class="cyan">/gsdd-map-codebase</tspan></text>
+    <text class="text dim" font-size="15" y="336" x="16">Any tool:</text>
+    <text class="text" font-size="15" y="336" x="140"><tspan class="dim">open </tspan><tspan class="path">.agents/skills/gsdd-new-project/SKILL.md</tspan></text>
+
+    <!-- new prompt -->
+    <text class="text prompt" font-size="15" y="392">~/my-repo</text>
+    <text class="text dim"    font-size="15" x="98" y="392">$</text>
+    <text class="text white"  font-size="15" x="118" y="392">▌</text>
+  </g>
+</svg>

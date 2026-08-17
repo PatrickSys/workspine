@@ -14,6 +14,8 @@ hooks/dist/
 # Animation assets
 animation/
 *.gif
+# README visuals are published surface, not animation scratch
+!assets/*.gif
 
 # Internal planning documents
 reports/
