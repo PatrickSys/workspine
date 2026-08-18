@@ -256,55 +256,55 @@ Global install targets:
 ${renderGlobalInstallTargetHelp()}
 
 Notes:
-  - use \`npx -y gsdd-cli init\` for repo-local setup; for a fresh global install choose targets interactively or pass \`--tools <targets>\`
+  - use \`npx -y workspine init\` for repo-local setup; for a fresh global install choose targets interactively or pass \`--tools <targets>\`
   - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
   - init also generates a local .work/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - install --global never creates .work/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
-  - use \`npx -y gsdd-cli install --global --auto\` to refresh detected existing agent homes; in a fresh/headless home use \`--tools <targets>\`
-  - repair or refresh a global install by rerunning \`npx -y gsdd-cli install --global --auto\` or \`npx -y gsdd-cli install --global --tools <targets>\`; runtime probes stay in test harnesses
-  - Workspine is the public product name; the retained package, command, workflow, and workspace contracts stay gsdd-cli, gsdd, gsdd-*, and .work/; legacy planning workspaces are still read only for explicit migration
-  - running \`npx -y gsdd-cli init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
+  - use \`npx -y workspine install --global --auto\` to refresh detected existing agent homes; in a fresh/headless home use \`--tools <targets>\`
+  - repair or refresh a global install by rerunning \`npx -y workspine install --global --auto\` or \`npx -y workspine install --global --tools <targets>\`; runtime probes stay in test harnesses
+  - Workspine is the public product name and the npm package; the retained command, workflow, and workspace contracts stay gsdd, gsdd-*, and .work/; legacy planning workspaces are still read only for explicit migration
+  - running \`npx -y workspine init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - repo-local \`init --auto\` sets the legacy-named \`autoAdvance\` key only for brief-driven \`gsdd-new-project\` SPEC/ROADMAP bootstrap; it never chains plan, execute, verify, release, or delivery
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
-  - \`npx -y gsdd-cli health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y gsdd-cli update\` when they drift
+  - \`npx -y workspine health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y workspine update\` when they drift
   - supported package runtime floor: Node >=22
   - update awareness is on by default for supported CLI/helper commands: a sequential/best-effort anonymous npm metadata check with a two-second timeout and a 64 KiB/normalized-version limit; there is no lock or cross-process concurrency guarantee
   - the notice uses only a contained .work/.local cache, sends no credentials or repository data, and cache/check failures never block commands
   - use \`--no-update-notice\` or \`GSDD_UPDATE_AWARENESS=0\` to opt out; only the supported public CLI/generated helper can show it
-  - \`health\` and \`update\` remain network-free; run \`npx -y gsdd-cli update\` for explicit repair
-  - \`npx -y gsdd-cli next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed packet, including any explicit pause checkpoint; it never runs a background compaction or context-transfer hook
+  - \`health\` and \`update\` remain network-free; run \`npx -y workspine update\` for explicit repair
+  - \`npx -y workspine next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed packet, including any explicit pause checkpoint; it never runs a background compaction or context-transfer hook
   - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
   - recorded launch proof in this repo currently covers the Codex CLI path; Claude Code and OpenCode get generated native surfaces with local freshness checks and no recorded run
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
-  - normal repo path: npx -y gsdd-cli init -> run /gsdd-* or $gsdd-* -> npx -y gsdd-cli health -> npx -y gsdd-cli update when local repair or refresh is needed
+  - normal repo path: npx -y workspine init -> run /gsdd-* or $gsdd-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed
   - post-init, choose your starting lane honestly: new-project for greenfield or fuzzy/milestone work, quick for a concrete bounded change, map-codebase first when the repo needs deeper orientation
 
 Examples:
-  npx -y gsdd-cli init
-  npx -y gsdd-cli init --tools claude
-  npx -y gsdd-cli init --tools cursor
-  npx -y gsdd-cli init --auto --tools claude --brief project-idea.md
-  npx -y gsdd-cli init --auto --tools all
-  npx -y gsdd-cli models show
-  npx -y gsdd-cli models profile quality
-  npx -y gsdd-cli models agent-profile --agent plan-checker --profile quality
-  npx -y gsdd-cli models set --runtime opencode --agent plan-checker --model anthropic/claude-opus-4-6
-  npx -y gsdd-cli models clear --runtime opencode --agent plan-checker
-  npx -y gsdd-cli init --tools agents
-  npx -y gsdd-cli init --tools all
-  npx -y gsdd-cli install --global
-  npx -y gsdd-cli install --global --auto
-  npx -y gsdd-cli install --global --tools ${GLOBAL_AGENT_OPTIONS.map(({ id }) => id).join(',')}
-  npx -y gsdd-cli update
-  npx -y gsdd-cli next --json
-  npx -y gsdd-cli next --format human
-  npx -y gsdd-cli next --init
-  npx -y gsdd-cli find-phase
-  npx -y gsdd-cli verify 1
-  npx -y gsdd-cli scaffold phase 4 Payments
+  npx -y workspine init
+  npx -y workspine init --tools claude
+  npx -y workspine init --tools cursor
+  npx -y workspine init --auto --tools claude --brief project-idea.md
+  npx -y workspine init --auto --tools all
+  npx -y workspine models show
+  npx -y workspine models profile quality
+  npx -y workspine models agent-profile --agent plan-checker --profile quality
+  npx -y workspine models set --runtime opencode --agent plan-checker --model anthropic/claude-opus-4-6
+  npx -y workspine models clear --runtime opencode --agent plan-checker
+  npx -y workspine init --tools agents
+  npx -y workspine init --tools all
+  npx -y workspine install --global
+  npx -y workspine install --global --auto
+  npx -y workspine install --global --tools ${GLOBAL_AGENT_OPTIONS.map(({ id }) => id).join(',')}
+  npx -y workspine update
+  npx -y workspine next --json
+  npx -y workspine next --format human
+  npx -y workspine next --init
+  npx -y workspine find-phase
+  npx -y workspine verify 1
+  npx -y workspine scaffold phase 4 Payments
 
 Workflows (run via skills/adapters generated by init, not direct CLI):
   gsdd-new-project          Full initializer: questioning, brownfield audit, research, spec, roadmap

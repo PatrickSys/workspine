@@ -6,16 +6,16 @@ Workspine is a harness for AI coding agents. It runs a spec-driven loop around y
 
 One end-to-end run is recorded, on Codex CLI: plan, execute, a verification catch, a fix, then a passing re-check. Claude Code, OpenCode, Cursor, Copilot or Gemini read the same skill files, with no run of theirs recorded here.
 
-[![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
+[![npm version](https://img.shields.io/npm/v/workspine?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/workspine)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
 <img src="assets/workspine-loop.svg" alt="Start either way: gsdd-quick for a change you can describe, or gsdd-new-project for SPEC.md plus ROADMAP.md. Both feed the same loop of plan, execute, verify. Every step writes its own file. gsdd-pause writes a checkpoint that gsdd next reads to resume." width="880">
 
 ```bash
-npx -y gsdd-cli init
+npx -y workspine init
 ```
 
-Needs Node >=22. The command is `gsdd`, the npm package is `gsdd-cli`, the workflows are `gsdd-*`, and the workspace is `.work/`; Workspine kept those names so existing installs keep working.
+Needs Node >=22. The npm package is `workspine`, and it installs two equivalent commands, `workspine` and `gsdd`. The workflows are `gsdd-*` and the workspace is `.work/`; Workspine kept the `gsdd` command and those names so existing installs keep working. Releases up to 0.32.0 were published as `gsdd-cli`.
 
 </div>
 

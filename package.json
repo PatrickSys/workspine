@@ -1,13 +1,14 @@
 {
-  "name": "gsdd-cli",
+  "name": "workspine",
   "version": "0.32.0",
-  "description": "Workspine is a harness for AI coding agents: it runs a spec-driven plan, execute, verify loop and keeps plans, decisions, and proof as files in your repo. Published as gsdd-cli.",
+  "description": "Workspine is a harness for AI coding agents: it runs a spec-driven plan, execute, verify loop and keeps plans, decisions, and proof as files in your repo. Published as workspine.",
   "type": "module",
   "bin": {
+    "workspine": "bin/gsdd.mjs",
     "gsdd": "bin/gsdd.mjs"
   },
   "scripts": {
-    "prepublishOnly": "node -e \"const ok=process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REF_NAME==='main'&&process.env.GITHUB_WORKFLOW==='Release'; if(!ok){console.error('Refusing to publish gsdd-cli outside the GitHub Actions Release workflow on main.'); process.exit(1)}\""
+    "prepublishOnly": "node -e \"const ok=process.env.GITHUB_ACTIONS==='true'&&process.env.GITHUB_REF_NAME==='main'&&process.env.GITHUB_WORKFLOW==='Release'; if(!ok){console.error('Refusing to publish workspine outside the GitHub Actions Release workflow on main.'); process.exit(1)}\""
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",

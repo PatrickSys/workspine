@@ -2071,8 +2071,10 @@ describe('G34e - Phase 24 Public Naming Invariants', () => {
         `${label} must not retain Northline after Phase 24. FIX: Remove stale Northline naming from the public layer.`);
     }
 
-    assert.strictEqual(pkg.name, 'gsdd-cli',
-      'package.json name must remain gsdd-cli. FIX: Phase 24 reconciles naming copy, not the published package contract.');
+    assert.strictEqual(pkg.name, 'workspine',
+      'package.json name must be workspine. FIX: Publish the package under the public product name.');
+    assert.strictEqual(pkg.bin.workspine, 'bin/gsdd.mjs',
+      'package.json bin.workspine must be bin/gsdd.mjs. FIX: Keep the workspine command contract stable.');
     assert.strictEqual(pkg.bin.gsdd, 'bin/gsdd.mjs',
       'package.json bin.gsdd must remain bin/gsdd.mjs. FIX: Keep the retained command contract stable.');
     // That README.md and the user guide name gsdd-cli / gsdd / .work/ and explain why is
