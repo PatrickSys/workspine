@@ -4136,8 +4136,8 @@ describe('G45 - Runtime Surface Freshness Contract', () => {
       'health-truth.mjs must register W11. FIX: Add the generated-surface freshness warning ID.');
     assert.match(truthSource, /getRuntimeFreshnessRepairGuidance/,
       'health-truth.mjs must route W11 repair text through the shared runtime-freshness helper. FIX: Use getRuntimeFreshnessRepairGuidance for the W11 fix field.');
-    assert.match(runtimeFreshnessSource, /npx -y gsdd-cli update/i,
-      'runtime-freshness.mjs must keep npx -y gsdd-cli update as the deterministic human repair path. FIX: Preserve the npx-first update guidance in getRuntimeFreshnessRepairGuidance.');
+    assert.match(runtimeFreshnessSource, /npx -y workspine update/i,
+      'runtime-freshness.mjs must keep npx -y workspine update as the deterministic human repair path. FIX: Preserve the npx-first update guidance in getRuntimeFreshnessRepairGuidance.');
   });
 
   test('runtime-facing docs and help describe rendered freshness checks briefly and consistently', () => {

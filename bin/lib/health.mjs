@@ -51,10 +51,10 @@ export function buildHealthReport(ctx, healthArgs = []) {
     if (!existsSync(join(planningDir, 'config.json'))) {
       return {
         status: 'broken',
-        errors: [{ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} missing`, fix: 'Run `npx -y gsdd-cli init`' }],
+        errors: [{ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} missing`, fix: 'Run `npx -y workspine init`' }],
         warnings: [],
         info: [],
-        humanMessage: 'Not initialized. Run `npx -y gsdd-cli init`. If `gsdd` is installed globally, `gsdd init` is also fine.',
+        humanMessage: 'Not initialized. Run `npx -y workspine init`. If `gsdd` is installed globally, `gsdd init` is also fine.',
       };
     }
 
@@ -74,10 +74,10 @@ export function buildHealthReport(ctx, healthArgs = []) {
       const requiredFields = ['researchDepth', 'modelProfile', 'initVersion'];
       const missing = requiredFields.filter((f) => !(f in config));
       if (missing.length > 0) {
-        errors.push({ id: 'E2', severity: 'ERROR', message: `config.json missing required fields: ${missing.join(', ')}`, fix: 'Run `npx -y gsdd-cli init` to regenerate' });
+        errors.push({ id: 'E2', severity: 'ERROR', message: `config.json missing required fields: ${missing.join(', ')}`, fix: 'Run `npx -y workspine init` to regenerate' });
       }
     } catch {
-      errors.push({ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} is unparseable`, fix: 'Run `npx -y gsdd-cli init`' });
+      errors.push({ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} is unparseable`, fix: 'Run `npx -y workspine init`' });
     }
 
     // E3: templates/ missing
@@ -92,47 +92,47 @@ export function buildHealthReport(ctx, healthArgs = []) {
     const skipInstalledTemplateChecks = !hasTemplatesDir && frameworkSourceMode;
 
     if (!hasTemplatesDir && !skipInstalledTemplateChecks) {
-      errors.push({ id: 'E3', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+      errors.push({ id: 'E3', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
     } else if (hasTemplatesDir) {
       // E4: roles/ missing or empty
       if (!hasRolesDir) {
-        errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
       } else {
         const roleFiles = readdirSync(rolesDir).filter((f) => f.endsWith('.md'));
         if (roleFiles.length === 0) {
-          errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} has 0 role files`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} has 0 role files`, fix: 'Run `npx -y workspine update --templates`' });
         }
       }
 
       // E5: delegates/ missing or empty
       if (!hasDelegatesDir) {
-        errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
       } else {
         const delegateFiles = readdirSync(delegatesDir).filter((f) => f.endsWith('.md'));
         if (delegateFiles.length === 0) {
-          errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} has 0 delegate files`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} has 0 delegate files`, fix: 'Run `npx -y workspine update --templates`' });
         }
       }
 
       // E6: research/ missing or empty
       const researchDir = join(templatesDir, 'research');
       if (!existsSync(researchDir)) {
-        errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
       } else {
         const researchFiles = readdirSync(researchDir).filter((f) => f.endsWith('.md'));
         if (researchFiles.length === 0) {
-          errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} has 0 template files`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} has 0 template files`, fix: 'Run `npx -y workspine update --templates`' });
         }
       }
 
       // E7: codebase/ missing or empty
       const codebaseDir = join(templatesDir, 'codebase');
       if (!existsSync(codebaseDir)) {
-        errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
       } else {
         const codebaseFiles = readdirSync(codebaseDir).filter((f) => f.endsWith('.md'));
         if (codebaseFiles.length === 0) {
-          errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} has 0 template files`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} has 0 template files`, fix: 'Run `npx -y workspine update --templates`' });
         }
       }
 
@@ -140,16 +140,16 @@ export function buildHealthReport(ctx, healthArgs = []) {
       const requiredRootFiles = ['spec.md', 'roadmap.md', 'auth-matrix.md', 'ui-proof.md'];
       const missingRoot = requiredRootFiles.filter((f) => !existsSync(join(templatesDir, f)));
       if (missingRoot.length > 0) {
-        errors.push({ id: 'E8', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E8', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `npx -y workspine update --templates`' });
       }
 
       const brownfieldChangeDir = join(templatesDir, 'brownfield-change');
       if (!existsSync(brownfieldChangeDir)) {
-        errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+        errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
       } else {
         const missingBrownfield = ['CHANGE.md', 'HANDOFF.md', 'VERIFICATION.md'].filter((file) => !existsSync(join(brownfieldChangeDir, file)));
         if (missingBrownfield.length > 0) {
-          errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+          errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y workspine update --templates`' });
         }
       }
     }
@@ -159,19 +159,19 @@ export function buildHealthReport(ctx, healthArgs = []) {
     // W1: generation-manifest.json missing
     const manifest = skipInstalledTemplateChecks ? null : readManifest(planningDir);
     if (!manifest && !skipInstalledTemplateChecks) {
-      warnings.push({ id: 'W1', severity: 'WARN', message: 'generation-manifest.json missing', fix: 'Run `npx -y gsdd-cli update` to create' });
+      warnings.push({ id: 'W1', severity: 'WARN', message: 'generation-manifest.json missing', fix: 'Run `npx -y workspine update` to create' });
     }
 
     // W2 + W3: template/role hash mismatches and missing files
     if (manifest && hasTemplatesDir) {
       const allCategories = [
-        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null, fixCommand: 'npx -y gsdd-cli update --templates' },
-        { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research, fixCommand: 'npx -y gsdd-cli update --templates' },
-        { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase, fixCommand: 'npx -y gsdd-cli update --templates' },
-        { name: 'brownfield-change', dir: join(templatesDir, 'brownfield-change'), hashes: manifest.templates?.brownfieldChange, fixCommand: 'npx -y gsdd-cli update --templates' },
-        { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root, fixCommand: 'npx -y gsdd-cli update --templates' },
-        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null, fixCommand: 'npx -y gsdd-cli update --templates' },
-        { name: 'runtime helpers', dir: planningDir, hashes: hasRuntimeHelpersDir ? manifest.runtimeHelpers : null, fixCommand: 'npx -y gsdd-cli update' },
+        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null, fixCommand: 'npx -y workspine update --templates' },
+        { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research, fixCommand: 'npx -y workspine update --templates' },
+        { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase, fixCommand: 'npx -y workspine update --templates' },
+        { name: 'brownfield-change', dir: join(templatesDir, 'brownfield-change'), hashes: manifest.templates?.brownfieldChange, fixCommand: 'npx -y workspine update --templates' },
+        { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root, fixCommand: 'npx -y workspine update --templates' },
+        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null, fixCommand: 'npx -y workspine update --templates' },
+        { name: 'runtime helpers', dir: planningDir, hashes: hasRuntimeHelpersDir ? manifest.runtimeHelpers : null, fixCommand: 'npx -y workspine update' },
       ];
 
       for (const cat of allCategories) {
@@ -218,7 +218,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
 
     // W6: No generated workflow adapter surfaces detected
     if (!hasAnyGeneratedWorkflowSurface(cwd)) {
-      warnings.push({ id: 'W6', severity: 'WARN', message: 'No generated workflow adapter surfaces detected', fix: 'Run `npx -y gsdd-cli init --tools <platform>`' });
+      warnings.push({ id: 'W6', severity: 'WARN', message: 'No generated workflow adapter surfaces detected', fix: 'Run `npx -y workspine init --tools <platform>`' });
     }
 
     const runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
@@ -241,7 +241,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
 
     // I1: generation manifest was produced by a different framework version
     if (manifest && manifest.frameworkVersion && manifest.frameworkVersion !== ctx.frameworkVersion) {
-      info.push({ id: 'I1', severity: 'INFO', message: `Generation manifest frameworkVersion (${manifest.frameworkVersion}) differs from current framework version (${ctx.frameworkVersion})`, fix: 'Run `npx -y gsdd-cli update --templates`' });
+      info.push({ id: 'I1', severity: 'INFO', message: `Generation manifest frameworkVersion (${manifest.frameworkVersion}) differs from current framework version (${ctx.frameworkVersion})`, fix: 'Run `npx -y workspine update --templates`' });
     }
 
     // I2: Phase completion count
@@ -378,7 +378,7 @@ function isFrameworkSourceRepo(cwd) {
   if (!existsSync(join(cwd, 'bin', 'gsdd.mjs')) || !existsSync(join(cwd, 'package.json'))) return false;
   try {
     const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8'));
-    return pkg.name === 'gsdd-cli';
+    return pkg.name === 'workspine';
   } catch {
     return false;
   }

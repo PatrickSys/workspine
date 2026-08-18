@@ -169,14 +169,14 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
       runtime: 'workspace-helper',
       label: 'workspace workflow helper',
       root: `${stateDirName}/bin`,
-      repairCommand: 'npx -y gsdd-cli update',
+      repairCommand: 'npx -y workspine update',
       entries: buildWorkspaceHelperEntries(stateDirName),
     },
     {
       runtime: 'portable',
       label: 'portable skills',
       root: '.agents/skills',
-      repairCommand: 'npx -y gsdd-cli update',
+      repairCommand: 'npx -y workspine update',
       entries: buildPortableSkillEntries(workflows, { stateDirName }).map((entry) => ({
         relativePath: entry.relativePath,
         expectedContent: entry.content,
@@ -186,21 +186,21 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
       runtime: 'claude',
       label: 'Claude Code native surfaces',
       root: '.claude',
-      repairCommand: 'npx -y gsdd-cli update --tools claude',
+      repairCommand: 'npx -y workspine update --tools claude',
       entries: buildClaudeEntries({ cwd, workflows, stateDirName }),
     },
     {
       runtime: 'opencode',
       label: 'OpenCode native surfaces',
       root: '.opencode',
-      repairCommand: 'npx -y gsdd-cli update --tools opencode',
+      repairCommand: 'npx -y workspine update --tools opencode',
       entries: buildOpenCodeEntries({ cwd, workflows, stateDirName }),
     },
     {
       runtime: 'codex',
       label: 'Codex CLI native agents',
       root: '.codex',
-      repairCommand: 'npx -y gsdd-cli update --tools codex',
+      repairCommand: 'npx -y workspine update --tools codex',
       entries: buildCodexEntries({ cwd }),
     },
   ];
@@ -258,10 +258,10 @@ export function summarizeRuntimeFreshnessIssues(report, limit = 4) {
 }
 
 export function getRuntimeFreshnessRepairGuidance(report) {
-  if (!report || report.issueCount === 0) return 'Run `npx -y gsdd-cli update` to regenerate installed runtime surfaces.';
+  if (!report || report.issueCount === 0) return 'Run `npx -y workspine update` to regenerate installed runtime surfaces.';
   const commands = [...new Set(report.issues.map((entry) => entry.repairCommand))];
   if (commands.length === 1) {
     return `Run \`${commands[0]}\` to regenerate the installed runtime surfaces.`;
   }
-  return `Run \`npx -y gsdd-cli update\` to regenerate all installed runtime surfaces, or target the affected adapters individually: ${commands.map((command) => `\`${command}\``).join(', ')}.`;
+  return `Run \`npx -y workspine update\` to regenerate all installed runtime surfaces, or target the affected adapters individually: ${commands.map((command) => `\`${command}\``).join(', ')}.`;
 }

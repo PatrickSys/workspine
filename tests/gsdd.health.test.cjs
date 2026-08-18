@@ -750,7 +750,7 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.ok(warning, 'should warn when installed generated runtime surfaces drift');
     assert.match(warning.message, /Renderer-backed generated runtime and workflow-helper surfaces/);
     assert.match(warning.message, /\.work\/bin\/gsdd\.mjs/);
-    assert.match(warning.fix, /npx -y gsdd-cli update/);
+    assert.match(warning.fix, /npx -y workspine update/);
   });
 
   test('missing generated helper runtime under .work/bin → W11 repair guidance', async () => {
@@ -763,7 +763,7 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     const warning = json.warnings.find((w) => w.id === 'W11');
     assert.ok(warning, 'missing .work/bin helper should be repairable generated-surface drift');
     assert.match(warning.message, /\.work\/bin\/gsdd\.mjs/);
-    assert.match(warning.fix, /npx -y gsdd-cli update/);
+    assert.match(warning.fix, /npx -y workspine update/);
   });
 
   test('aligned framework truth files → no W7-W10', async () => {
