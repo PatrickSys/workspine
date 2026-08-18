@@ -1,17 +1,8 @@
 #!/usr/bin/env node
-import { realpathSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { createAdapterRegistry } from './adapters/index.mjs';
-import {
-  renderAgentsBoundedBlock,
-  renderAgentsFileContent,
-  renderOpenCodeCommandContent,
-  renderSkillContent,
-  upsertBoundedBlock,
-  getDelegateContent,
-} from './lib/rendering.mjs';
-import { loadProjectModelConfig, getRuntimeModelOverride, resolveRuntimeAgentModel, cmdModels, cmdRigor } from './lib/config.mjs';
+import { createCliContext } from './lib/cli-context.mjs';
+import { cmdModels, cmdRigor } from './lib/config.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
 import { createCmdInstall } from './lib/global-install.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
@@ -22,50 +13,13 @@ import { cmdDecisions, cmdRemember } from './lib/decision-cli.mjs';
 import { createCmdJourney } from './lib/journey.mjs';
 import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
-import { resolveStateDir } from './lib/state-dir.mjs';
 import { createCmdGitIdentity } from './lib/git-identity.mjs';
 import { maybeShowUpdateNotice } from './lib/update-awareness.mjs';
-import { FRAMEWORK_VERSION, WORKFLOWS } from './lib/workflows.mjs';
+import { FRAMEWORK_VERSION } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const DISTILLED_DIR = join(__dirname, '..', 'distilled');
-const AGENTS_DIR = join(__dirname, '..', 'agents');
-const PACKAGE_JSON = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
 const IS_MAIN = process.argv[1] ? realpathSync(process.argv[1]) === realpathSync(__filename) : false;
 
 const [,, command, ...args] = process.argv;
-
-function createCliContext(cwd = process.cwd()) {
-  const state = resolveStateDir(cwd);
-  return {
-    cwd,
-    planningDir: state.dir,
-    stateDirName: state.name,
-    distilledDir: DISTILLED_DIR,
-    agentsDir: AGENTS_DIR,
-    packageName: PACKAGE_JSON.name,
-    packageVersion: PACKAGE_JSON.version,
-    workflows: WORKFLOWS,
-    frameworkVersion: FRAMEWORK_VERSION,
-    loadProjectModelConfig,
-    getRuntimeModelOverride,
-    resolveRuntimeAgentModel,
-    adapters: createAdapterRegistry({
-      cwd,
-      workflows: WORKFLOWS,
-      stateDirName: state.name,
-      renderAgentsBoundedBlock,
-      renderAgentsFileContent,
-      renderOpenCodeCommandContent,
-      renderSkillContent,
-      upsertBoundedBlock,
-      getDelegateContent,
-      loadProjectModelConfig,
-      getRuntimeModelOverride,
-      resolveRuntimeAgentModel,
-    }),
-  };
-}
 
 const INIT_CONTEXT = createCliContext(process.cwd());
 const cmdInit = createCmdInit(INIT_CONTEXT);
