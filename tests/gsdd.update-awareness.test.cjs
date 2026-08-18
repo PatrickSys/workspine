@@ -159,7 +159,7 @@ describe('bounded update awareness', () => {
     const lines = [];
     return {
       cwd: tmpDir,
-      command: 'next',
+      command: 'remember',
       args: [],
       packageVersion: '0.32.0',
       source: 'public-cli',
@@ -363,36 +363,43 @@ describe('bounded update awareness', () => {
     const previousCwd = process.cwd();
     const previousFetch = globalThis.fetch;
     const previousError = console.error;
+    const previousExitCode = process.exitCode;
     const lines = [];
     try {
       process.chdir(tmpDir);
       globalThis.fetch = async (url) => { assert.equal(url, ENDPOINT); return fakeResponse(JSON.stringify({ version: '0.33.0' })); };
       console.error = (line) => lines.push(line);
       const cli = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'gsdd.mjs')).href}?dispatch=${Date.now()}-${Math.random()}`);
-      await cli.runCli('next', '--json');
+      await cli.runCli('remember');
       assert.equal(lines.filter((line) => String(line).includes('Update available')).length, 1);
     } finally {
       process.chdir(previousCwd);
       globalThis.fetch = previousFetch;
       console.error = previousError;
+      process.exitCode = previousExitCode;
     }
   });
 
-  test('public and generated-helper policy tables keep only next/verify eligible', async () => {
+  test('only workspace-mutating commands are eligible; every read-only command is silent', async () => {
     const { PUBLIC_COMMAND_POLICY, GENERATED_HELPER_COMMAND_POLICY } = await loadUpdateAwareness();
     for (const [command, policy] of Object.entries(PUBLIC_COMMAND_POLICY)) {
-      if (['next', 'verify', 'phase-status', 'scaffold', 'find-phase', 'journey', 'remember', 'decisions', 'git-identity'].includes(command)) assert.equal(policy, 'eligible', command);
-      else assert.equal(policy, 'silent', command);
+      assert.equal(policy, ['phase-status', 'scaffold', 'remember'].includes(command) ? 'eligible' : 'silent', command);
     }
     for (const [command, policy] of Object.entries(GENERATED_HELPER_COMMAND_POLICY)) {
-      assert.equal(policy, ['next', 'verify'].includes(command) ? 'eligible' : 'silent', command);
+      assert.equal(policy, ['phase-status', 'remember'].includes(command) ? 'eligible' : 'silent', command);
+    }
+    for (const command of ['next', 'verify', 'find-phase', 'journey', 'decisions', 'git-identity']) {
+      assert.equal(PUBLIC_COMMAND_POLICY[command], 'silent', `${command} is documented read-only and must never write the cache`);
+    }
+    for (const command of ['next', 'verify', 'decisions', 'git-identity']) {
+      assert.equal(GENERATED_HELPER_COMMAND_POLICY[command], 'silent', `generated ${command} is read-only and must never write the cache`);
     }
   });
 
   test('every public row strips only the policy flag and preserves the frozen 18-row table', async () => {
     const { PUBLIC_COMMAND_POLICY, stripUpdateNoticeFlag } = await loadUpdateAwareness();
-    const eligible = ['next', 'verify', 'phase-status', 'scaffold', 'find-phase', 'journey', 'remember', 'decisions', 'git-identity'];
-    const silent = ['init', 'install', 'health', 'update', 'help', 'models', 'rigor', 'file-op', 'lifecycle-preflight'];
+    const eligible = ['phase-status', 'scaffold', 'remember'];
+    const silent = ['init', 'install', 'health', 'update', 'help', 'models', 'rigor', 'file-op', 'lifecycle-preflight', 'next', 'verify', 'find-phase', 'journey', 'decisions', 'git-identity'];
     assert.deepEqual(Object.keys(PUBLIC_COMMAND_POLICY).sort(), [...eligible, ...silent].sort());
     assert.deepEqual(eligible.filter((command) => PUBLIC_COMMAND_POLICY[command] !== 'eligible'), []);
     assert.deepEqual(silent.filter((command) => PUBLIC_COMMAND_POLICY[command] !== 'silent'), []);
@@ -477,7 +484,7 @@ describe('bounded update awareness', () => {
     assert.equal(readJson(manifestPath).runtimeHelpers['bin/lib/update-awareness.mjs'], sha256(sourceBytes));
   });
 
-  test('generated helper next and verify use the copied module without changing silent commands', async () => {
+  test('generated helper uses the copied module for eligible and silent commands alike', async () => {
     const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
     assert.equal(initialized.exitCode, 0, initialized.output);
     const help = runGeneratedHelper(tmpDir, ['help']);
@@ -485,8 +492,10 @@ describe('bounded update awareness', () => {
     assert.match(help.output, /--no-update-notice/);
     const silent = runGeneratedHelper(tmpDir, ['control-map', '--json']);
     assert.notEqual(silent.exitCode, 1, silent.output);
-    const eligible = runGeneratedHelper(tmpDir, ['next', '--json', '--no-update-notice']);
-    assert.equal(eligible.exitCode, 0, eligible.output);
+    const readOnly = runGeneratedHelper(tmpDir, ['next', '--json', '--no-update-notice']);
+    assert.equal(readOnly.exitCode, 0, readOnly.output);
+    const eligible = runGeneratedHelper(tmpDir, ['remember', '--no-update-notice']);
+    assert.notEqual(eligible.exitCode, null, eligible.output);
   });
 
   test('one absolute deadline bounds a stalled read and stalled cancellation', async () => {
@@ -655,7 +664,7 @@ describe('bounded update awareness', () => {
               cacheExists,
               cacheRelative,
             };
-            const eligible = ['next', 'verify', 'phase-status', 'scaffold', 'find-phase', 'journey', 'remember', 'decisions', 'git-identity'].includes(command);
+            const eligible = ['phase-status', 'scaffold', 'remember'].includes(command);
             if (mode === 'baseline') {
               assert.equal(fetchCalls, eligible ? 1 : 0, `${command} baseline fetch eligibility`);
               assert.equal(cacheExists, eligible, `${command} baseline cache eligibility`);
@@ -753,7 +762,7 @@ describe('bounded update awareness', () => {
               assert.ok(workspaceRootIndex >= 0, `${command} helper handler argv workspace-root flag`);
               assert.equal(handlerArgs[workspaceRootIndex + 1], fixture, `${command} helper handler argv workspace-root value`);
             }
-            const eligible = ['next', 'verify'].includes(command);
+            const eligible = ['phase-status', 'remember'].includes(command);
             if (mode === 'baseline') {
               assert.equal(fetchCalls, eligible ? 1 : 0, `${command} helper baseline fetch eligibility`);
               assert.equal(cacheExists, eligible, `${command} helper baseline cache eligibility`);

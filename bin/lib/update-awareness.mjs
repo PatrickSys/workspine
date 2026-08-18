@@ -11,18 +11,22 @@ export const RESPONSE_MAX_BYTES = 64 * 1024;
 export const REQUEST_TIMEOUT_MS = 2000;
 export const NOTICE_TEXT = 'Update available: gsdd-cli {latestVersion} (current {packageVersion}). Run `npx -y gsdd-cli update` to repair/refresh generated surfaces.';
 
+// The check caches its result in `.work/.local`, so it is a workspace write.
+// Only commands that already mutate the workspace may carry it. Every command
+// the CLI documents as read-only stays byte-neutral: no fetch, no cache file,
+// and no `.local` directory created as a side effect of reading.
 export const PUBLIC_COMMAND_POLICY = Object.freeze({
   init: 'silent', install: 'silent', health: 'silent', update: 'silent', help: 'silent',
   models: 'silent', rigor: 'silent', 'file-op': 'silent', 'lifecycle-preflight': 'silent',
-  next: 'eligible', verify: 'eligible', 'phase-status': 'eligible', scaffold: 'eligible',
-  'find-phase': 'eligible', journey: 'eligible', remember: 'eligible', decisions: 'eligible',
-  'git-identity': 'eligible',
+  next: 'silent', verify: 'silent', 'find-phase': 'silent', journey: 'silent',
+  decisions: 'silent', 'git-identity': 'silent',
+  'phase-status': 'eligible', scaffold: 'eligible', remember: 'eligible',
 });
 
 export const GENERATED_HELPER_COMMAND_POLICY = Object.freeze({
   'control-map': 'silent', decisions: 'silent', 'file-op': 'silent', 'git-identity': 'silent',
-  'lifecycle-preflight': 'silent', 'phase-status': 'silent', remember: 'silent',
-  next: 'eligible', verify: 'eligible',
+  'lifecycle-preflight': 'silent', next: 'silent', verify: 'silent',
+  'phase-status': 'eligible', remember: 'eligible',
 });
 
 const CACHE_KEYS = new Set(['schema', 'checkedAt', 'status', 'latestVersion', 'error']);

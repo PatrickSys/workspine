@@ -193,7 +193,7 @@ npx -y gsdd-cli decisions invalidate <id> --reason "Superseded by the current po
 
 Decision promotion is a cooperative, auditable owner assertion rather than human authentication. The [User Guide](docs/USER-GUIDE.md) has the record format.
 
-Some commands check npm for a newer version and print one line. The check is anonymous, times out after two seconds, and sends no credentials or repository data. A failed check stays silent. Its cache under `.work/.local` is best-effort, with no lock and no cross-process concurrency guarantee. Opt out with `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0`. `health` and `update` are network-free; run `npx -y gsdd-cli update` for an explicit repair.
+Commands that already write to `.work/` check npm for a newer version and print one line. Read-only commands, `next` and `verify` among them, never reach the network and never write the cache. The check is anonymous, times out after two seconds, and sends no credentials or repository data. A failed check stays silent. Its cache under `.work/.local` is best-effort, with no lock and no cross-process concurrency guarantee. Opt out with `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0`. `health` and `update` are network-free; run `npx -y gsdd-cli update` for an explicit repair.
 
 Full reference: [User Guide](docs/USER-GUIDE.md) · [Runtime Support](docs/RUNTIME-SUPPORT.md) · [Verification Discipline](docs/VERIFICATION-DISCIPLINE.md)
 
