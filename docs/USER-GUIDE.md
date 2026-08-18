@@ -28,7 +28,7 @@ For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky
 - [Command Reference](#command-reference)
 - [Configuration Reference](#configuration-reference)
 - [Usage Examples](#usage-examples)
-- [Troubleshooting](#troubleshooting)
+- [Common Problems](#common-problems)
 - [Recovery Quick Reference](#recovery-quick-reference)
 
 ---
@@ -75,7 +75,7 @@ Optional closure and milestone-continuation workflows in the shipped surface:
 - `gsdd-complete-milestone` archives a shipped milestone, evolves `SPEC.md`, and collapses `ROADMAP.md`.
 - `gsdd-new-milestone` starts the next milestone after closure.
 
-### Planning Agent Coordination
+### How Plan Agents Coordinate
 
 ```
   gsdd-plan (phase N)
@@ -108,7 +108,7 @@ Optional closure and milestone-continuation workflows in the shipped surface:
          └── Done
 ```
 
-The plan checker runs in a **separate context window** from the planner. This prevents the checker from inheriting the planner's blind spots — the same reasoning error that produced the plan cannot suppress the review of that plan. This is the [ICLR-validated](https://arxiv.org/abs/2310.01798) pattern for LLM self-refinement.
+The plan checker runs in a **separate context window** from the planner. This prevents the checker from inheriting the planner's blind spots. The same reasoning error that produced the plan cannot suppress the review of that plan. This is the [ICLR-validated](https://arxiv.org/abs/2310.01798) pattern for LLM self-refinement.
 
 The 7 check dimensions: requirement coverage, task completeness, dependency correctness, key-link completeness, scope sanity, must-have quality, context compliance.
 
@@ -364,7 +364,7 @@ Each adds quality but costs tokens and time:
 | `workflow.planCheck` | `true` | Fresh-context adversarial plan checking (max-3 cycle loop) |
 | `workflow.verifier` | `true` | 3-level verification gate after execution |
 
-Disable these to speed up phases in familiar domains or when conserving tokens. Disabling `planCheck` engages reduced-assurance mode — the planner self-checks but without the independent reviewer.
+Disable these to speed up phases in familiar domains or when conserving tokens. Disabling `planCheck` engages reduced-assurance mode: the planner self-checks without the independent reviewer.
 
 ### Model Control
 
@@ -378,13 +378,13 @@ Optional keys for fine-grained model selection:
 Supported runtimes: `claude`, `opencode`, `codex`.
 
 Runtime behavior:
-- **Claude** translates semantic tiers to native aliases (`opus`/`sonnet`/`haiku`) for the checker agent
-- **OpenCode** inherits its runtime model by default; Workspine only injects a model when you set an explicit runtime override
-- **Codex** inherits its session model by default; Workspine only injects a model in the TOML when you set an explicit runtime override
+- `Claude` translates semantic tiers to native aliases (`opus`/`sonnet`/`haiku`) for the checker agent
+- `OpenCode` inherits its runtime model by default; Workspine only injects a model when you set an explicit runtime override
+- `Codex` inherits its session model by default; Workspine only injects a model in the TOML when you set an explicit runtime override
 
 ### Git Protocol
 
-Advisory defaults — repository and team conventions take precedence:
+Advisory defaults. Repository and team conventions take precedence:
 
 | Setting | Default |
 |---------|---------|
@@ -405,7 +405,7 @@ Workspine does not impose commit formats, branch naming, or one-commit-per-task 
 Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces when their slash/skill discovery sees that directory. The difference is runtime proof and ergonomics, not workflow shape. If discovery is unavailable, open or paste the relevant `.agents/skills/gsdd-*/SKILL.md` file.
 
 - `Claude/OpenCode`: `/gsdd-new-project -> /gsdd-plan -> /gsdd-execute -> /gsdd-verify -> /gsdd-audit-milestone`
-- `Codex`: `$gsdd-new-project -> $gsdd-plan -> $gsdd-execute -> $gsdd-verify -> $gsdd-audit-milestone` (`$gsdd-plan` ends at plan creation; `$gsdd-execute` is a separate explicit unlock)
+- `Codex`: `$gsdd-new-project -> $gsdd-plan -> $gsdd-execute -> $gsdd-verify -> $gsdd-audit-milestone` (`$gsdd-plan` ends at plan creation; `$gsdd-execute` is a separate explicit step)
 - `Codex VS Code / app`: use built-in discovery if available; otherwise open or paste `.agents/skills/gsdd-new-project/SKILL.md` and continue with the matching skill files
 - `Cursor / Copilot / Gemini`: use the same sequence from the slash command menu when skill discovery is available; otherwise open or paste the matching `.agents/skills/gsdd-*/SKILL.md` files
 
@@ -415,7 +415,7 @@ Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces whe
 - `Codex`: `$gsdd-plan` amend/extend mode when audit findings need closure work, or `$gsdd-complete-milestone -> $gsdd-new-milestone` when the milestone is ready to ship
 - `Cursor / Copilot / Gemini`: use the matching slash commands when skill discovery is available, with the same routing as above
 
-### Existing Codebase
+### Repos That Already Have Code
 
 `npx -y gsdd-cli init`
 
@@ -430,13 +430,13 @@ Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces whe
 - `Codex`: `$gsdd-quick`
 - `Cursor / Copilot / Gemini`: `/gsdd-quick` from the slash command menu when skill discovery is available
 
-### Resuming After a Break
+### Resume After a Break
 
 - `Claude/OpenCode`: `/gsdd-progress` or `/gsdd-resume`
 - `Codex`: `$gsdd-progress` or `$gsdd-resume`
 - `Cursor / Copilot / Gemini`: use the matching skill from the slash command menu when discovery is available
 
-### Pausing Mid-Work
+### Pause Mid-Work
 
 - `Claude/OpenCode`: `/gsdd-pause`
 - `Codex`: `$gsdd-pause`
@@ -459,15 +459,15 @@ npx -y gsdd-cli init --auto --tools claude --brief path/to/PRD.md  # Seed from e
 
 ---
 
-## Troubleshooting
+## Common Problems
 
 ### Context Degradation During Long Sessions
 
-Clear your context window between major workflows. Workspine is designed around fresh contexts — every delegate gets a clean context window. If quality drops in the main session, clear and use `gsdd-resume` or `gsdd-progress` to restore state.
+Clear your context window between major workflows. Workspine is designed around fresh contexts, and every delegate gets a clean context window. If quality drops in the main session, clear and use `gsdd-resume` or `gsdd-progress` to restore state.
 
 ### Plans Seem Wrong or Misaligned
 
-Check that research ran before planning (`workflow.research: true`). Most plan quality issues come from the planner making assumptions that domain research would have prevented. If plan-checking is enabled, the checker should catch alignment issues — but it cannot fix missing domain context.
+Check that research ran before planning (`workflow.research: true`). Most plan quality issues come from the planner making assumptions that domain research would have prevented. If plan-checking is enabled, the checker should catch alignment issues, though it cannot fix missing domain context.
 
 ### Execution Produces Stubs
 
