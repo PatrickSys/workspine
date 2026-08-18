@@ -10,7 +10,4 @@
 │  Waiting on you:  no                                         │
 │                                                              │
 │  Stuck?  Run: gsdd next --format human                       │
-│                                                              │
-│  Safety checks — this computer: not set up yet ·             │
-│                 server: not set up yet                       │
 └──────────────────────────────────────────────────────────────┘

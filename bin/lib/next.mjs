@@ -917,9 +917,6 @@ export function renderNextCard(packetValue) {
   rows.push(cardFrame(`  Waiting on you:  ${waiting}`));
   rows.push(cardFrame(''));
   rows.push(cardFrame('  Stuck?  Run: gsdd next --format human'));
-  rows.push(cardFrame(''));
-  rows.push(cardFrame('  Safety checks — this computer: not set up yet ·'));
-  rows.push(cardFrame('                 server: not set up yet'));
   if (hasDecisionsDigestSignal(packetValue.decisionsDigest || emptyDecisionsDigest())) {
     const digest = packetValue.decisionsDigest;
     const notices = decisionNotices(digest);
