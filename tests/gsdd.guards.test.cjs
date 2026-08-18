@@ -902,8 +902,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
   test('init help text carries the same proof-split public support wording', () => {
     const content = fs.readFileSync(INIT_HELP, 'utf-8');
-    assert.match(content, /recorded launch proof.*Claude Code.*OpenCode.*Codex CLI/i,
+    assert.match(content, /recorded launch proof.*Codex CLI path/i,
       'init help must state which runtime paths have recorded repo proof. FIX: Add a recorded-proof note in the help text.');
+    assert.doesNotMatch(content, /recorded launch proof[^\n]*(Claude Code|OpenCode)[^\n]*path[s]?\b(?![^\n]*no recorded run)/i,
+      'init help must not claim recorded proof for a runtime that has none. FIX: Name only Codex CLI as recorded; describe the others as generated with no recorded run.');
     assert.match(content, /Cursor, Copilot, and Gemini are qualified support/i,
       'init help must describe Cursor/Copilot/Gemini as qualified support. FIX: Add the qualified-support note in the help text.');
   });
@@ -3409,8 +3411,10 @@ describe('G37 - Launch Surface Consistency', () => {
   test('init runtime help text preserves the proof split', async () => {
     const mod = await import(`file://${INIT_RUNTIME_MODULE.replace(/\\/g, '/')}`);
     const helpText = mod.getHelpText();
-    assert.match(helpText, /recorded launch proof.*Claude Code.*OpenCode.*Codex CLI/i,
+    assert.match(helpText, /recorded launch proof.*Codex CLI path/i,
       'init-runtime help text must name only runtime paths with recorded repo proof. FIX: Keep the help text aligned with launch proof.');
+    assert.doesNotMatch(helpText, /recorded launch proof[^\n]*(Claude Code|OpenCode)[^\n]*path[s]?\b(?![^\n]*no recorded run)/i,
+      'init-runtime help text must not claim recorded proof for a runtime that has none. FIX: Name only Codex CLI as recorded; describe the others as generated with no recorded run.');
     assert.match(helpText, /qualified support.*shared \.agents\/skills\/ surface plus optional governance/i,
       'init-runtime help text must distinguish qualified support from directly validated native runtimes. FIX: Keep the proof split explicit in the notes.');
     assert.match(helpText, /\$gsdd-plan is plan-only until explicit \$gsdd-execute/i,

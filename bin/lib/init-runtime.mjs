@@ -274,7 +274,7 @@ Notes:
   - \`health\` and \`update\` remain network-free; run \`npx -y gsdd-cli update\` for explicit repair
   - \`npx -y gsdd-cli next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed packet, including any explicit pause checkpoint; it never runs a background compaction or context-transfer hook
   - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
-  - recorded launch proof in this repo currently covers Claude Code, OpenCode, and Codex CLI paths
+  - recorded launch proof in this repo currently covers the Codex CLI path; Claude Code and OpenCode get generated native surfaces with local freshness checks and no recorded run
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)
