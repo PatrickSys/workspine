@@ -4,12 +4,12 @@
 
 Workspine is a harness for AI coding agents. It runs a spec-driven loop around your agent (plan, execute, verify) and every step lands as a file in the repo. Your agent writes down what it decided and why, so the next session or a different tool can pick the work back up.
 
-One recorded end-to-end run backs Claude Code, OpenCode, and Codex CLI. Cursor, Copilot or Gemini can read the same skill files, but no run of theirs is recorded here.
+One end-to-end run is recorded, on Codex CLI: plan, execute, a verification catch, a fix, then a passing re-check. Claude Code, OpenCode, Cursor, Copilot or Gemini read the same skill files, with no run of theirs recorded here.
 
 [![npm version](https://img.shields.io/npm/v/gsdd-cli?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/gsdd-cli)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
-<img src="assets/workspine-hero.gif" alt="A rough request turns into a spec, a checked plan, executed work, and verified proof, with every step written to the repo." width="820">
+<img src="assets/workspine-loop.svg" alt="Start either way: gsdd-quick for a change you can describe, or gsdd-new-project for SPEC.md plus ROADMAP.md. Both feed the same loop of plan, execute, verify. Every step writes its own file. gsdd-pause writes a checkpoint that gsdd next reads to resume." width="880">
 
 ```bash
 npx -y gsdd-cli init
@@ -31,7 +31,7 @@ Workspine began as a fork of Get Shit Done and keeps the verification-first work
 
 ## How it works
 
-<img src="assets/workspine-loop.svg" alt="Start either way: gsdd-quick for a change you can describe, or gsdd-new-project for SPEC.md plus ROADMAP.md. Both feed the same loop of plan, execute, verify. Every step writes its own file. gsdd-pause writes a checkpoint that gsdd next reads to resume." width="880">
+<img src="assets/workspine-hero.gif" alt="A rough request turns into a spec, a checked plan, executed work, and verified proof, with every step written to the repo." width="820">
 
 `init` puts workflow skills in `.agents/skills/` and native adapters for the runtimes you choose. You run those workflows through your agent, and each one writes a file.
 
@@ -91,7 +91,7 @@ npx -y gsdd-cli init --auto --tools codex --brief path/to/brief.md
 
 ### Proof
 
-The proof pack records a full plan -> execute -> verify lifecycle on a real consumer project, with Codex checker support. Recorded paths: Claude Code, OpenCode, Codex CLI. Cursor, Copilot or Gemini CLI can read the same `.agents/skills/` surface when their discovery sees it; no run of theirs is recorded here.
+The proof pack records a full plan -> execute -> verify lifecycle on a real consumer project, with Codex checker support. Recorded path: Codex CLI. Claude Code, OpenCode, Cursor, Copilot or Gemini CLI can read the same `.agents/skills/` surface when their discovery sees it; no run of theirs is recorded here.
 
 - [Brownfield proof](docs/BROWNFIELD-PROOF.md)
 - [Tracked consumer proof pack](docs/proof/consumer-node-cli/README.md)

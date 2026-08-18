@@ -2,13 +2,13 @@ const RUNTIME_OPTIONS = [
   {
     id: 'claude',
     label: 'Claude Code',
-    description: 'Recorded proof for native skills, commands, and agents with local freshness checks',
+    description: 'Generated native skills, commands, and agents with local freshness checks',
     kind: 'native',
   },
   {
     id: 'opencode',
     label: 'OpenCode',
-    description: 'Recorded proof for native slash commands and agents with local freshness checks',
+    description: 'Generated native slash commands and agents with local freshness checks',
     kind: 'native',
   },
   {

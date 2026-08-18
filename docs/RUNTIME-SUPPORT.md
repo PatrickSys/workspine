@@ -16,21 +16,26 @@ Global install is separate from repo bootstrap. It does not create `.work/`; it 
 
 ### Recorded proof
 
-The workflow contract has recorded repo proof for these runtimes:
+One end-to-end lifecycle run is recorded, on Codex CLI:
 
-- **Claude Code**
-- **Codex CLI**
-- **OpenCode**
+- Codex CLI
 
-These are the strongest public runtime claims, but they are not broad parity claims across every related app or extension surface.
+That run is the strongest public runtime claim here, and it covers the terminal Codex CLI runtime only.
+
+### Generated-surface proof
+
+These runtimes receive the same generated skill and adapter files, freshness-checked locally against current render output. No end-to-end run of theirs is recorded here:
+
+- Claude Code
+- OpenCode
 
 ### Qualified support
 
-These runtimes use the same portable workflow surfaces, but they do not carry equal runtime proof or equal ergonomics today:
+These runtimes read the same portable workflow surfaces; none is claimed as parity-validated, and ergonomics vary:
 
-- **Cursor**
-- **GitHub Copilot**
-- **Gemini CLI**
+- Cursor
+- GitHub Copilot
+- Gemini CLI
 
 Codex CLI support means the terminal Codex CLI runtime. It does not automatically prove equal behavior in the Codex VS Code extension or Codex app; for those surfaces, use native discovery when available or open/paste the generated skill file manually.
 
@@ -43,17 +48,17 @@ Any tool that can read the generated markdown workflows can still use the framew
 Two surfaces matter for users:
 
 - `.agents/skills/gsdd-*` is the shared workflow entry surface. Depending on the runtime, users invoke those workflows as `/gsdd-*`, `$gsdd-*`, or by opening the skill markdown directly.
-- `.work/bin/gsdd*` is an internal local helper surface used by workflow-embedded lifecycle mechanics after init. It is not the primary user entry surface.
+- `.work/bin/gsdd*` is an internal local helper surface used by workflow-embedded lifecycle mechanics after init; the primary user entry surface remains `.agents/skills/gsdd-*` above.
 
 | Runtime | Current claim | Entry surface | Notes |
 | --- | --- | --- | --- |
-| Claude Code | Recorded proof | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | Native surface has recorded lifecycle evidence; installed generated files are freshness-checked locally |
-| OpenCode | Recorded proof | `.opencode/commands/`, `.opencode/agents/` | Native command and checker path; installed generated files are freshness-checked locally |
+| Claude Code | Generated-surface proof | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | Native adapter surface is generated and freshness-checked locally; no recorded end-to-end run |
+| OpenCode | Generated-surface proof | `.opencode/commands/`, `.opencode/agents/` | Native command and checker path, generated and freshness-checked locally; no recorded end-to-end run |
 | Codex CLI | Recorded proof | `.agents/skills/gsdd-*` plus `.codex/agents/gsdd-plan-checker.toml` | Portable skill entry, native checker adapter, recorded lifecycle evidence, and generated-surface freshness checks |
 | Codex VS Code / app | Fallback only | `.agents/skills/gsdd-*` opened or pasted manually unless discovery is available | Separate product surface from Codex CLI; no equal runtime-proof claim |
-| Cursor | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally, but the runtime is not claimed as parity-validated |
-| GitHub Copilot | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally, but the runtime is not claimed as parity-validated |
-| Gemini CLI | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; governance is optional, generated skill files are freshness-checked locally, and parity is not claimed |
+| Cursor | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally |
+| GitHub Copilot | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally |
+| Gemini CLI | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; governance is optional and generated skill files are freshness-checked locally |
 
 ## Global install surfaces
 
@@ -84,7 +89,7 @@ The authored source contract stays in `distilled/workflows/*`. Generated runtime
 ## Entry and helper surfaces
 
 - `.agents/skills/gsdd-*/SKILL.md` is the compact open-standard workflow entry surface. Agents read these files to know what workflow to run.
-- `.work/bin/gsdd.mjs` is the internal repo-local helper runtime. Generated workflows use `node .work/bin/gsdd.mjs ...` for deterministic file, lifecycle, and status helpers instead of depending on an ambient global binary.
+- `.work/bin/gsdd.mjs` is the internal repo-local helper runtime. Generated workflows use `node .work/bin/gsdd.mjs ...` for deterministic file/lifecycle/status helpers instead of depending on an ambient global binary.
 - Native adapter and governance surfaces are optional ergonomics. They can improve discovery or routing in a specific runtime, but they are not required for the portable workflow contract.
 
 ## What stays portable

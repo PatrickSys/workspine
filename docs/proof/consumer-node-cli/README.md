@@ -4,12 +4,12 @@ This tracked proof pack is the public export of the Phase 22 release-floor brown
 
 ## What is in this pack
 
-- `brief.md` — the original project brief
-- `SPEC.md` — the consumer spec created from that brief
-- `ROADMAP.md` — the single-phase roadmap used for the proof run
-- `phases/01-foundation/01-01-PLAN.md` — the execution plan
-- `phases/01-foundation/01-01-SUMMARY.md` — the execution summary
-- `phases/01-foundation/01-VERIFICATION.md` — the verification record that captured the miss and the fix
+- `brief.md`: the original project brief
+- `SPEC.md`: the consumer spec created from that brief
+- `ROADMAP.md`: the single-phase roadmap used for the proof run
+- `phases/01-foundation/01-01-PLAN.md`: the execution plan
+- `phases/01-foundation/01-01-SUMMARY.md`: the execution summary
+- `phases/01-foundation/01-VERIFICATION.md`: the verification record that captured the miss and the fix
 
 ## Release-floor story
 
@@ -29,6 +29,7 @@ The proof pack shows one full release-floor loop:
 ## Provenance and scope
 
 - Exported from the Phase 22 launch-proof consumer run.
+- Runtime for the whole run: Codex CLI (recorded in the `runtime:` field of each phase artifact).
 - This is the tracked reader-facing release-floor proof surface.
 - The legacy `.planning/live-proof/consumer-node-cli` tree (still read as old folder source material; new projects use `.work/`) remains evidence-only source material and is intentionally not the public entry surface.
 

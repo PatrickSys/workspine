@@ -1,8 +1,8 @@
 # Brownfield Proof
 
-This is the strongest tracked public proof for Workspine's release-floor claim: a real brownfield-style consumer repo that used the shipped workflow contract, hit a real failure, and recovered through the same `plan -> execute -> verify` loop.
+This is the strongest tracked public proof for Workspine's release-floor claim: a real brownfield-style consumer repo that ran the shipped workflow contract under Codex CLI, hit a real failure, and recovered through the same `plan -> execute -> verify` loop.
 
-## What this proves
+## What the proof pack produced
 
 In a fresh consumer repo, Workspine produced:
 
@@ -88,6 +88,7 @@ That is the release-floor claim in practice.
 
 This proof does not claim:
 
+- an end-to-end run on any runtime other than Codex CLI
 - equal runtime ergonomics across every supported runtime
 - parity validation on Cursor, Copilot, or Gemini CLI
 - enterprise-hardening or orchestration-platform behavior

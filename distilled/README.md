@@ -38,8 +38,9 @@ The command is `gsdd`, the npm package is `gsdd-cli`, the workflows are `gsdd-*`
 Workspine began as a fork of Get Shit Done, whose long-horizon workflow proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native tool with fewer public workflows, generated runtime surfaces from a portable core, proof required before closing work, and decisions that keep their why.
 
 Proof:
-- One recorded end-to-end run backs the Claude Code, Codex CLI, and OpenCode paths
-- Cursor, Copilot or Gemini CLI can read the same `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it, but no run of theirs is recorded here; proof and ergonomics differ from the recorded paths above
+- One recorded end-to-end run backs the Codex CLI path
+- Claude Code and OpenCode get native surfaces generated from the same portable core and freshness-checked locally, with no end-to-end run of theirs recorded here
+- Cursor, Copilot or Gemini CLI can read the same `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it, but no run of theirs is recorded here; proof and ergonomics differ from the recorded path above
 - Codex CLI validation does not automatically cover Codex VS Code or the Codex app; use native discovery there when available, otherwise open or paste `.agents/skills/gsdd-*/SKILL.md`
 - Repo-local generated runtime surfaces are renderer-checked through `npx -y gsdd-cli health`, with deterministic repair through `npx -y gsdd-cli update` (bare `gsdd ...` is equivalent only when globally installed)
 - Public proof entrypoints: `docs/BROWNFIELD-PROOF.md`, `docs/proof/consumer-node-cli/README.md`, `docs/RUNTIME-SUPPORT.md`, `docs/VERIFICATION-DISCIPLINE.md`
