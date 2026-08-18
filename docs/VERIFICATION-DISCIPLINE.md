@@ -30,9 +30,9 @@ On runtimes with stronger native support, that can be a fresh-context checker pa
 
 `gsdd-verify` uses a three-level gate:
 
-- **Exists** — the expected artifacts are present
-- **Substantive** — the output is real, not empty or stubbed
-- **Wired** — the behavior is connected and actually works
+- Exists: the expected artifacts are present
+- Substantive: the output is real, not empty or stubbed
+- Wired: the behavior is connected and actually works
 
 This is paired with anti-pattern checks so "files exist" does not get mistaken for "the work is done."
 
