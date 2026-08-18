@@ -53,3 +53,12 @@ tmp/
 distilled.zip
 test-gsdd/
 .worktrees
+
+# Hash-pinned proof fixtures. All ten Phase 05 proof runners read these four
+# by exact name and size, so deleting them breaks the proofs, and committing
+# them would publish private planning in a public repo. Named individually on
+# purpose: a blanket *.zip would hide a stray archive from `git status`.
+/.work.zip
+/workspine.zip
+/deep-research-report-decision-driven.md
+/deep-research-report-decision-driven-second.md
