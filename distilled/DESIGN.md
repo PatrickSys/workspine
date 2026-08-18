@@ -5,7 +5,7 @@
 > Updated as decisions are revised or new ones land.
 >
 > **Evidence index:** `distilled/EVIDENCE-INDEX.md` — one-line-per-source mapping for all decisions.
-> **Open gaps:** `.internal-research/gaps.md` — live blockers, contradictions, and deferred decisions.
+> **Open gaps:** `gaps.md` is the maintainer's private research file, not part of this package; gap ids cited below refer to it.
 
 ---
 
@@ -1719,7 +1719,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 1. **Artifact mandates already exist.** D28 added `<persistence>` sections with MANDATORY language to `execute.md` and `verify.md`. D30 propagated them to `quick.md`, `map-codebase.md`, `audit-milestone.md`, and `pause.md`. The specification-level enforcement is in place across all artifact-producing workflows.
 
-2. **Kernel simplicity.** Adding a preventive gate (e.g., `gsdd verify` checking artifact existence before allowing ROADMAP updates) would require every workflow to call a CLI guard before its state update. This creates a new coupling between the CLI layer and the workflow layer — complexity the kernel explicitly avoids. See `.internal-research/strategy.md` section on policy depth vs kernel purity.
+2. **Kernel simplicity.** Adding a preventive gate (e.g., `gsdd verify` checking artifact existence before allowing ROADMAP updates) would require every workflow to call a CLI guard before its state update. This creates a new coupling between the CLI layer and the workflow layer — complexity the kernel explicitly avoids (elaborated in the maintainer's private `strategy.md` notes on policy depth vs kernel purity).
 
 3. **Retroactive audit is sufficient.** The milestone audit (`audit-milestone.md`, `agents/integration-checker.md`) checks artifact completeness across all phases as its first step. Violations surface as structured gaps, not silent passes. The audit cost is bounded and predictable.
 
