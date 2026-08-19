@@ -58,7 +58,7 @@ agent: ${workflow.agent}
 ${workflowContent}`;
 }
 
-function renderPlanningCliLauncher({ stateDirName = DEFAULT_STATE_DIR_NAME, packageName = 'gsdd-cli', packageVersion = '0.0.0' } = {}) {
+function renderPlanningCliLauncher({ stateDirName = DEFAULT_STATE_DIR_NAME, packageName = 'workspine', packageVersion = '0.0.0' } = {}) {
   const helperPath = `${normalizeStateDirName(stateDirName)}/bin/gsdd.mjs`;
   const checkpointBackupPath = `${normalizeStateDirName(stateDirName)}/.continue-here.bak`;
   const embeddedPackageName = JSON.stringify(packageName);
@@ -161,7 +161,7 @@ function printHelp() {
     '                               Route to the next safe Workspine action from ${normalizeStateDirName(stateDirName)}, brownfield, planning, and repo truth',
     '  supported package runtime floor: Node >=22',
     '  next/verify update notice: sequential/best-effort network-bounded checks; no lock or cross-process concurrency guarantee; use --no-update-notice or GSDD_UPDATE_AWARENESS=0 to opt out',
-    '                               health and update remain network-free; run \`npx -y gsdd-cli update\` for explicit repair',
+    '                               health and update remain network-free; run \`npx -y workspine update\` for explicit repair',
     '',
     'Advanced option:',
     '  --workspace-root <path>     Override workspace root discovery before or after the subcommand',

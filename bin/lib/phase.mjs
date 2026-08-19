@@ -1196,7 +1196,7 @@ export function cmdFindPhase(...args) {
   const stateName = basename(planningDir);
 
   if (!existsSync(planningDir)) {
-    output({ error: `No ${stateName}/ directory found. Run \`npx -y gsdd-cli init\` then the new-project workflow first.` });
+    output({ error: `No ${stateName}/ directory found. Run \`npx -y workspine init\` then the new-project workflow first.` });
     return;
   }
 

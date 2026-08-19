@@ -452,7 +452,7 @@ describe('global install pressure loop', () => {
       assert.strictEqual(result.exitCode, 1);
       assert.match(result.output, /No supported agent homes were detected for --auto/);
       for (const { id: target } of GLOBAL_AGENT_OPTIONS) {
-        assert.match(result.output, new RegExp(`npx -y gsdd-cli install --global --tools ${target}`));
+        assert.match(result.output, new RegExp(`npx -y workspine install --global --tools ${target}`));
       }
       assert.deepStrictEqual(snapshotTree(homeDir), before,
         'fresh --auto must remain a marker-free zero-write refusal');

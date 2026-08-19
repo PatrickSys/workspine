@@ -2094,7 +2094,7 @@ describe('gsdd init and update', () => {
         await gsdd.cmdInit('--auto');
         assert.strictEqual(process.exitCode, 1);
         assert.match(errorOutput, /--tools/);
-        assert.match(errorOutput, /npx -y gsdd-cli init --auto --tools claude/);
+        assert.match(errorOutput, /npx -y workspine init --auto --tools claude/);
       } finally {
         restoreStdin();
         console.error = previousError;
@@ -2478,7 +2478,7 @@ describe('gsdd init and update', () => {
           assert.match(result.output, /No supported agent homes were detected for --auto/);
           const { GLOBAL_AGENT_OPTIONS } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-auto-targets`);
           for (const { id } of GLOBAL_AGENT_OPTIONS) {
-            assert.match(result.output, new RegExp(`npx -y gsdd-cli install --global --tools ${id}`));
+            assert.match(result.output, new RegExp(`npx -y workspine install --global --tools ${id}`));
           }
           assert.doesNotMatch(result.output, /Create an agent config home first/);
         });

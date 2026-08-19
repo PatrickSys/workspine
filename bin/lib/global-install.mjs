@@ -44,7 +44,7 @@ function supportedGlobalTargets() {
 }
 
 function explicitGlobalInstallCommands() {
-  return GLOBAL_AGENT_IDS.map((target) => `npx -y gsdd-cli install --global --tools ${target}`);
+  return GLOBAL_AGENT_IDS.map((target) => `npx -y workspine install --global --tools ${target}`);
 }
 
 function getHomeDir() {
@@ -546,25 +546,25 @@ export function createCmdInstall(ctx) {
     const toolsFlag = parseFlagValue(installArgs, '--tools');
 
     if (toolsFlag.invalid) {
-      console.error('ERROR: --tools requires a value. Example: npx -y gsdd-cli install --global --tools claude,opencode');
+      console.error('ERROR: --tools requires a value. Example: npx -y workspine install --global --tools claude,opencode');
       process.exitCode = 1;
       return;
     }
 
     if (localFlag) {
-      console.error('ERROR: local project installation is `npx -y gsdd-cli init`. Global installation is `npx -y gsdd-cli install --global`.');
+      console.error('ERROR: local project installation is `npx -y workspine init`. Global installation is `npx -y workspine install --global`.');
       process.exitCode = 1;
       return;
     }
 
     if (!globalFlag) {
-      console.error('ERROR: install currently requires --global. For repo-local setup, run `npx -y gsdd-cli init`.');
+      console.error('ERROR: install currently requires --global. For repo-local setup, run `npx -y workspine init`.');
       process.exitCode = 1;
       return;
     }
 
     if (verifyRuntime || liveRuntime) {
-      console.error('ERROR: runtime probing is not part of the public install command. Use `npx -y gsdd-cli health` for repo-local setup checks; runtime pressure probes live in tests.');
+      console.error('ERROR: runtime probing is not part of the public install command. Use `npx -y workspine health` for repo-local setup checks; runtime pressure probes live in tests.');
       process.exitCode = 1;
       return;
     }

@@ -100,13 +100,13 @@ export function createCmdInit(ctx) {
     let briefSource = null;
 
     if (toolsFlag.invalid) {
-      console.error('ERROR: --tools requires a value. Example: npx -y gsdd-cli init --tools claude');
+      console.error('ERROR: --tools requires a value. Example: npx -y workspine init --tools claude');
       process.exitCode = 1;
       return;
     }
 
     if (briefFlag.invalid) {
-      console.error('ERROR: --brief requires a file path. Example: npx -y gsdd-cli init --brief project-idea.md');
+      console.error('ERROR: --brief requires a file path. Example: npx -y workspine init --brief project-idea.md');
       process.exitCode = 1;
       return;
     }
@@ -122,7 +122,7 @@ export function createCmdInit(ctx) {
 
     const parsedTools = parseToolsFlag(normalizedArgs);
     if (isAuto && parsedTools.length === 0) {
-      console.error('ERROR: --auto requires --tools <platform>. Example: npx -y gsdd-cli init --auto --tools claude');
+      console.error('ERROR: --auto requires --tools <platform>. Example: npx -y workspine init --auto --tools claude');
       process.exitCode = 1;
       return;
     }
@@ -322,7 +322,7 @@ export function createCmdUpdate(ctx) {
     }
 
     if (!updated) {
-      console.log('  - no adapters found to update (run `npx -y gsdd-cli init` first; bare `gsdd init` is equivalent only when globally installed)');
+      console.log('  - no adapters found to update (run `npx -y workspine init` first; bare `gsdd init` is equivalent only when globally installed)');
     } else if (isDry) {
       console.log('\nDry run complete. No files were written.\n');
     } else {
