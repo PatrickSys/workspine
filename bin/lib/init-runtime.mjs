@@ -1,3 +1,5 @@
+import { WORKFLOWS, workflowId } from './workflows.mjs';
+
 const RUNTIME_OPTIONS = [
   {
     id: 'claude',
@@ -179,15 +181,76 @@ export function resolveWizardAdapterTargets(selectedRuntimes, installGovernance)
   return adapterTargets;
 }
 
+// The help screen and the post-init routing lines both restate shipped workflow
+// ids. They read them out of the manifest in bin/lib/workflows.mjs so a workflow
+// added, removed or renamed there cannot leave a stale hand-written copy behind.
+const STARTING_LANE_SLUGS = Object.freeze(['new-project', 'quick', 'map-codebase']);
+
+const HELP_WORKFLOW_SUMMARIES = Object.freeze({
+  'new-project': 'Full initializer: questioning, brownfield audit, research, spec, roadmap',
+  'map-codebase': 'Map or refresh brownfield codebase context before choosing or refreshing a work lane',
+  plan: 'Research, plan, and fresh-context plan check for a phase',
+  execute: 'Execute a phase plan and write phase summaries',
+  verify: 'Verify a completed phase with 3-level checks',
+  'verify-work': 'Conversational UAT validation for user-facing behavior',
+  'audit-milestone': 'Cross-phase integration, requirements coverage, and E2E audit',
+  'complete-milestone': 'Archive a shipped milestone and collapse roadmap state',
+  'new-milestone': 'Start the next milestone with goals, requirements, and phases',
+  quick: 'Bounded brownfield lane for sub-hour work',
+  pause: 'Save session context to checkpoint',
+  resume: 'Restore context and route to the next action',
+  progress: 'Read-only status and routing surface',
+});
+
+const STARTING_LANE_SUMMARIES = Object.freeze({
+  'new-project': 'Greenfield, fuzzy brownfield scope, or milestone-shaped work',
+  quick: 'Concrete bounded brownfield change',
+  'map-codebase': 'Deeper brownfield orientation before choosing the lane above',
+});
+
+const WORKFLOW_HELP_WIDTH = Math.max(...WORKFLOWS.map(({ name }) => name.length));
+
+function workflowSlug({ workflow }) {
+  return workflow.replace(/\.md$/, '');
+}
+
+function renderWorkflowHelpRow(id, summary) {
+  return `  ${id.padEnd(WORKFLOW_HELP_WIDTH)}   ${summary}`;
+}
+
+function renderWorkflowHelp() {
+  return WORKFLOWS.map((workflow) => {
+    const summary = HELP_WORKFLOW_SUMMARIES[workflowSlug(workflow)];
+    if (!summary) {
+      throw new Error(`init help text is missing a summary for workflow '${workflow.name}'`);
+    }
+    return renderWorkflowHelpRow(workflow.name, summary);
+  }).join('\n');
+}
+
+function renderStartingLaneHelp() {
+  return STARTING_LANE_SLUGS
+    .map((slug) => renderWorkflowHelpRow(workflowId(slug), STARTING_LANE_SUMMARIES[slug]))
+    .join('\n');
+}
+
+function renderStartingLaneCommands(prefix) {
+  return STARTING_LANE_SLUGS.map((slug) => `${prefix}${workflowId(slug)}`).join('  |  ');
+}
+
 export function getPostInitRoutingLines(selectedRuntimes) {
   const lines = [];
-  if (selectedRuntimes.includes('claude')) lines.push('  Claude Code:  /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
-  if (selectedRuntimes.includes('opencode')) lines.push('  OpenCode:     /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
-  if (selectedRuntimes.includes('codex')) lines.push('  Codex CLI:    $gsdd-new-project  |  $gsdd-quick  |  $gsdd-map-codebase');
-  if (selectedRuntimes.includes('cursor')) lines.push('  Cursor:       /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
-  if (selectedRuntimes.includes('copilot')) lines.push('  Copilot:      /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
-  if (selectedRuntimes.includes('gemini')) lines.push('  Gemini CLI:   /gsdd-new-project  |  /gsdd-quick  |  /gsdd-map-codebase');
-  lines.push('  Any tool:     open .agents/skills/gsdd-new-project/SKILL.md, gsdd-quick/SKILL.md, or gsdd-map-codebase/SKILL.md');
+  const slashLanes = renderStartingLaneCommands('/');
+  if (selectedRuntimes.includes('claude')) lines.push(`  Claude Code:  ${slashLanes}`);
+  if (selectedRuntimes.includes('opencode')) lines.push(`  OpenCode:     ${slashLanes}`);
+  if (selectedRuntimes.includes('codex')) lines.push(`  Codex CLI:    ${renderStartingLaneCommands('$')}`);
+  if (selectedRuntimes.includes('cursor')) lines.push(`  Cursor:       ${slashLanes}`);
+  if (selectedRuntimes.includes('copilot')) lines.push(`  Copilot:      ${slashLanes}`);
+  if (selectedRuntimes.includes('gemini')) lines.push(`  Gemini CLI:   ${slashLanes}`);
+  const lanePaths = STARTING_LANE_SLUGS.map((slug, index) => (
+    index === 0 ? `.agents/skills/${workflowId(slug)}/SKILL.md` : `${workflowId(slug)}/SKILL.md`
+  ));
+  lines.push(`  Any tool:     open ${lanePaths.slice(0, -1).join(', ')}, or ${lanePaths[lanePaths.length - 1]}`);
   return lines;
 }
 
@@ -264,7 +327,7 @@ Notes:
   - repair or refresh a global install by rerunning \`npx -y workspine install --global --auto\` or \`npx -y workspine install --global --tools <targets>\`; runtime probes stay in test harnesses
   - Workspine is the public product name and the npm package; the retained command, workflow, and workspace contracts stay gsdd, gsdd-*, and .work/; legacy planning workspaces are still read only for explicit migration
   - running \`npx -y workspine init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
-  - repo-local \`init --auto\` sets the legacy-named \`autoAdvance\` key only for brief-driven \`gsdd-new-project\` SPEC/ROADMAP bootstrap; it never chains plan, execute, verify, release, or delivery
+  - repo-local \`init --auto\` sets the legacy-named \`autoAdvance\` key only for brief-driven \`${workflowId('new-project')}\` SPEC/ROADMAP bootstrap; it never chains plan, execute, verify, release, or delivery
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
   - \`npx -y workspine health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y workspine update\` when they drift
   - supported package runtime floor: Node >=22
@@ -307,24 +370,10 @@ Examples:
   npx -y workspine scaffold phase 4 Payments
 
 Workflows (run via skills/adapters generated by init, not direct CLI):
-  gsdd-new-project          Full initializer: questioning, brownfield audit, research, spec, roadmap
-  gsdd-map-codebase         Map or refresh brownfield codebase context before choosing or refreshing a work lane
-  gsdd-plan                 Research, plan, and fresh-context plan check for a phase
-  gsdd-execute              Execute a phase plan and write phase summaries
-  gsdd-verify               Verify a completed phase with 3-level checks
-  gsdd-verify-work          Conversational UAT validation for user-facing behavior
-  gsdd-audit-milestone      Cross-phase integration, requirements coverage, and E2E audit
-  gsdd-complete-milestone   Archive a shipped milestone and collapse roadmap state
-  gsdd-new-milestone        Start the next milestone with goals, requirements, and phases
-  gsdd-quick                Bounded brownfield lane for sub-hour work
-  gsdd-pause                Save session context to checkpoint
-  gsdd-resume               Restore context and route to the next action
-  gsdd-progress             Read-only status and routing surface
+${renderWorkflowHelp()}
 
 Starting lanes after init:
-  gsdd-new-project          Greenfield, fuzzy brownfield scope, or milestone-shaped work
-  gsdd-quick                Concrete bounded brownfield change
-  gsdd-map-codebase         Deeper brownfield orientation before choosing the lane above
+${renderStartingLaneHelp()}
 
 Advanced/internal helpers (kept available, but not the primary first-run user story):
   lifecycle-preflight       Inspect deterministic lifecycle gate results for a workflow surface
