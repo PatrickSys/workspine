@@ -38,7 +38,7 @@ jobs:
           cd "$INSTALL_DIR"
           npm init -y >/dev/null
           npm install --ignore-scripts --no-save "$TARBALL" >/dev/null
-          PACKAGE_DIR="$INSTALL_DIR/node_modules/gsdd-cli"
+          PACKAGE_DIR="$INSTALL_DIR/node_modules/workspine"
           test -f "$PACKAGE_DIR/distilled/references/proof-rules.md"
           test -f "$PACKAGE_DIR/distilled/references/observation-record.md"
           test ! -e "$PACKAGE_DIR/tests"
