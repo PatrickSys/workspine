@@ -476,7 +476,7 @@ describe('Health — WARN: adapter and truth drift detection', () => {
       fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
     }
     fs.mkdirSync(path.join(tmpDir, '.codex', 'agents'), { recursive: true });
-    fs.writeFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'name = "gsdd-plan-checker"\n');
+    fs.writeFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'name = "work-plan-checker"\n');
 
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
@@ -491,9 +491,9 @@ describe('Health — WARN: adapter and truth drift detection', () => {
       fs.rmSync(path.join(tmpDir, rel), { recursive: true, force: true });
     }
     fs.mkdirSync(path.join(tmpDir, '.claude', 'agents'), { recursive: true });
-    fs.writeFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), '# checker\n');
+    fs.writeFileSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'), '# checker\n');
     fs.mkdirSync(path.join(tmpDir, '.opencode', 'agents'), { recursive: true });
-    fs.writeFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), '# checker\n');
+    fs.writeFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), '# checker\n');
 
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
@@ -679,7 +679,7 @@ describe('Health — WARN: adapter and truth drift detection', () => {
 
   test('gaps.md command and branch references do not trigger W9', async () => {
     await initWorkspace();
-    writeFile('.internal-research/gaps.md', 'Use `/gsdd-verify` on `feat/example-branch` after reviewing `.work/config.json`.\n');
+    writeFile('.internal-research/gaps.md', 'Use `/work-verify` on `feat/example-branch` after reviewing `.work/config.json`.\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
     assert.ok(!json.warnings.some((w) => w.id === 'W9'));

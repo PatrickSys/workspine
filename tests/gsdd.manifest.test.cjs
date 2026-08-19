@@ -372,7 +372,7 @@ describe('generation manifest', () => {
     const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /no adapters found to update/);
-    assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan')),
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-plan')),
       'unrelated .agents/skills must not trigger GSDD skill generation');
     assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')),
       'update must not bootstrap planning state for an unrelated .agents/skills directory');
@@ -386,12 +386,12 @@ describe('generation manifest', () => {
     fs.rmSync(skillsDir, { recursive: true, force: true });
 
     assert.ok(fs.existsSync(launcherPath), 'launcher must remain present for the partial-runtime repair case');
-    assert.ok(!fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')));
+    assert.ok(!fs.existsSync(path.join(skillsDir, 'work-plan', 'SKILL.md')));
 
     const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0);
     assert.match(result.output, /updated open-standard skills/);
-    assert.ok(fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(skillsDir, 'work-plan', 'SKILL.md')));
     assert.ok(fs.existsSync(launcherPath));
   });
 
@@ -420,7 +420,7 @@ describe('generation manifest', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
 
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md')));
     assert.ok(!fs.existsSync(path.join(nestedDir, '.planning')), 'update must not initialize nested cwd as a separate workspace');
   });
 
@@ -446,7 +446,7 @@ describe('generation manifest', () => {
 
       assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')),
         'update must repair the cwd-discovered workspace, not the stale env workspace');
-      assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')),
+      assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md')),
         'update must repair skills in the cwd-discovered workspace');
     } finally {
       cleanup(otherDir);
@@ -472,7 +472,7 @@ describe('generation manifest', () => {
     assert.match(result.output, /Dry run/);
 
     assert.ok(!fs.existsSync(path.join(helperDir, 'gsdd.mjs')), 'dry update must not repair .work/bin');
-    assert.ok(!fs.existsSync(path.join(skillsDir, 'gsdd-plan', 'SKILL.md')), 'dry update must not repair .agents/skills');
+    assert.ok(!fs.existsSync(path.join(skillsDir, 'work-plan', 'SKILL.md')), 'dry update must not repair .agents/skills');
     assert.strictEqual(fs.readFileSync(manifestPath, 'utf-8'), manifestBefore, 'dry update must not rewrite the manifest');
     assert.ok(!fs.existsSync(path.join(nestedDir, '.planning')), 'dry update must not initialize nested cwd as a separate workspace');
   });

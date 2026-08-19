@@ -432,8 +432,8 @@ Report the verification result to the user, then present the next step:
 
 ---
 **Completed:** Phase verification — created `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md`.
-If status is `passed`: **Next step:** `/gsdd-progress` — route to the next phase or milestone audit.
-If status is `gaps_found`: **Next step:** `/gsdd-plan` — re-plan to close the identified gaps.
-If status is `human_needed`: **Next step:** `/gsdd-verify-work`, then rerun `/gsdd-verify` with UAT results.
+If status is `passed`: **Next step:** `/work-progress` — route to the next phase or milestone audit.
+If status is `gaps_found`: **Next step:** `/work-plan` — re-plan to close the identified gaps.
+If status is `human_needed`: **Next step:** `/work-verify-work`, then rerun `/work-verify` with UAT results.
 Consider clearing context before starting the next workflow for best results.
 </completion>

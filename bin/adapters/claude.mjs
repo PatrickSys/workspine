@@ -38,14 +38,14 @@ ${delegateContent.trim()}
 `;
 }
 
-function renderClaudePlanSkill({ portableContractPath = '.agents/skills/gsdd-plan/SKILL.md', stateDirName = '.work' } = {}) {
+function renderClaudePlanSkill({ portableContractPath = '.agents/skills/work-plan/SKILL.md', stateDirName = '.work' } = {}) {
   const contractSection = portableContractPath
     ? `Portable contract:
 - Read \`${portableContractPath}\` first. That file remains the canonical vendor-agnostic plan contract.
 - Keep the portable contract honest: it defines the workflow, but it does not by itself prove fresh-context checker orchestration across runtimes.
 - If the portable skill says plan is still a stub, treat that as a portability-status warning for the generic surface, not as a stop signal for this Claude-native adapter path.`
     : `Workflow contract:
-- This globally installed skill is the canonical Claude-native \`gsdd-plan\` workflow contract.
+- This globally installed skill is the canonical Claude-native \`work-plan\` workflow contract.
 - Keep the workflow portable: use repo-local \`.work/\` artifacts for project state and do not require repo-local \`.agents/skills/\` files to exist.
 - Do not claim that other runtimes have the same behavior unless their own adapters explicitly implement and prove it.`;
   const planningContract = portableContractPath
@@ -53,17 +53,17 @@ function renderClaudePlanSkill({ portableContractPath = '.agents/skills/gsdd-pla
     : 'this skill';
 
   const content = `---
-name: gsdd-plan
+name: work-plan
 description: Claude-native Phase planning with fresh-context plan checking for GSDD
 argument-hint: [phase-number]
 ---
 
-You are the Claude-native \`/gsdd-plan\` skill for GSDD phase planning.
+You are the Claude-native \`/work-plan\` skill for GSDD phase planning.
 
 ${contractSection}
 
 Native Claude adapter rule:
-- This skill is the canonical Claude-native entry surface for \`/gsdd-plan\`.
+- This skill is the canonical Claude-native entry surface for \`/work-plan\`.
 - Stay in the primary Claude context for orchestration. Do NOT fork this skill into a subagent, because the checker must run as its own fresh-context subagent.
 - Use the native \`${SUBAGENT_IDS.planChecker}\` subagent to regain the fresh-context checker pass that portable markdown alone cannot guarantee.
 - Do NOT claim that other runtimes have the same behavior unless their own adapters explicitly implement and prove it.
@@ -122,14 +122,14 @@ Never return raw checker JSON without summarizing it.
   return localizeStateDirReferences(content, { stateDirName });
 }
 
-function renderClaudePlanCommand({ skillPath = '.claude/skills/gsdd-plan/SKILL.md' } = {}) {
+function renderClaudePlanCommand({ skillPath = '.claude/skills/work-plan/SKILL.md' } = {}) {
   return `---
-description: Compatibility alias for the Claude-native \`/gsdd-plan\` skill
+description: Compatibility alias for the Claude-native \`/work-plan\` skill
 argument-hint: [phase-number]
 allowed-tools: Read
 ---
 
-Read \`${skillPath}\` and execute that skill as the canonical Claude-native \`/gsdd-plan\` entry.
+Read \`${skillPath}\` and execute that skill as the canonical Claude-native \`/work-plan\` entry.
 
 Rules:
 - Do NOT duplicate orchestration logic here.
@@ -173,14 +173,14 @@ function createClaudeAdapter({ cwd, workflows, stateDirName = '.work', renderSki
       for (const workflow of workflows) {
         const dir = join(skillsDir, workflow.name);
         mkdirSync(dir, { recursive: true });
-        const content = workflow.name === 'gsdd-plan'
+        const content = workflow.name === 'work-plan'
           ? renderClaudePlanSkill({ stateDirName })
           : renderSkillContent(workflow, { stateDirName });
         writeFileSync(join(dir, 'SKILL.md'), content);
       }
 
       mkdirSync(commandsDir, { recursive: true });
-      writeFileSync(join(commandsDir, 'gsdd-plan.md'), renderClaudePlanCommand());
+      writeFileSync(join(commandsDir, 'work-plan.md'), renderClaudePlanCommand());
 
       mkdirSync(agentsDir, { recursive: true });
       writeFileSync(

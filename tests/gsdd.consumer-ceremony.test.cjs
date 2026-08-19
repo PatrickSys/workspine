@@ -125,10 +125,10 @@ describe('consumer ceremony reduction', () => {
     const lines = agents.split('\n').length;
 
     assert.ok(lines >= 15 && lines <= 27, `expected 15-27 lines, got ${lines}`);
-    for (const token of ['gsdd-new-project', 'gsdd-plan', 'gsdd-execute', 'gsdd-verify', 'gsdd-progress', '/gsdd-plan', '$gsdd-plan', 'npx -y workspine init', 'npx -y workspine health', 'npx -y workspine update']) {
+    for (const token of ['work-new-project', 'work-plan', 'work-execute', 'work-verify', 'work-progress', '/work-plan', '$work-plan', 'npx -y workspine init', 'npx -y workspine health', 'npx -y workspine update']) {
       assert.match(agents, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
-    assert.match(agents, /plan-only|execution begins only after an explicit .*gsdd-execute/i);
+    assert.match(agents, /plan-only|execution begins only after an explicit .*work-execute/i);
   });
 
   test('update preserves content below END GSDD marker', async () => {

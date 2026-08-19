@@ -5,7 +5,7 @@
 │  Why: A goal exists but there is no plan yet.                │
 │                                                              │
 │  Do this next:                                               │
-│    gsdd-plan                                                 │
+│    work-plan                                                 │
 │                                                              │
 │  Waiting on you:  no                                         │
 │                                                              │

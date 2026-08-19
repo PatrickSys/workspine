@@ -11,7 +11,7 @@ type: medium_scope_brownfield
 > Do not add phase numbering, roadmap checkboxes, or milestone state here.
 > Instantiate the live operational artifact at `.work/brownfield-change/CHANGE.md`.
 > `progress` and `resume` read this file first for status, scope, integration surface, and the authoritative next action.
-> If this lane no longer fits one active stream, widen explicitly through `/gsdd-new-project` (first milestone) or `/gsdd-new-milestone` (subsequent milestone) using this folder as the preserved input surface. Do not invent a separate promotion artifact.
+> If this lane no longer fits one active stream, widen explicitly through `/work-new-project` (first milestone) or `/work-new-milestone` (subsequent milestone) using this folder as the preserved input surface. Do not invent a separate promotion artifact.
 
 ## Goal
 
@@ -43,8 +43,8 @@ Widen into milestone planning only when one or more of these become true:
 
 Choose the widening surface case-by-case:
 
-- Use `/gsdd-new-project` when the repo has no shipped milestone history yet.
-- Use `/gsdd-new-milestone` when the repo already has shipped milestone history and this change now needs the next milestone cycle.
+- Use `/work-new-project` when the repo has no shipped milestone history yet.
+- Use `/work-new-milestone` when the repo already has shipped milestone history and this change now needs the next milestone cycle.
 
 ## Done When
 
@@ -96,4 +96,4 @@ Promotion should preserve this context. Do not create a second durable handoff f
 1. Update `HANDOFF.md` so the latest decision context is recoverable from disk.
 2. Record closeout evidence in `VERIFICATION.md`.
 3. Close this folder only after the verification surface says the goal is satisfied.
-4. If the work widens instead of closing, keep this folder as the promotion input and move into `/gsdd-new-project` or `/gsdd-new-milestone` explicitly.
+4. If the work widens instead of closing, keep this folder as the promotion input and move into `/work-new-project` or `/work-new-milestone` explicitly.

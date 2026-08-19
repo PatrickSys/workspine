@@ -72,7 +72,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.match(checker, /^model: opus$/m);
     });
 
@@ -85,7 +85,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.match(checker, /^model: sonnet$/m);
     });
 
@@ -100,7 +100,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.match(checker, /^model: haiku$/m);
     });
 
@@ -116,7 +116,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.doesNotMatch(checker, /^model:/m);
     });
 
@@ -135,7 +135,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.match(checker, /^model: anthropic\/claude-opus-4-6$/m);
     });
 
@@ -154,7 +154,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.doesNotMatch(checker, /^model:/m);
     });
 
@@ -171,7 +171,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      let checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      let checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.doesNotMatch(checker, /^model:/m);
 
       writeProjectConfig(tmpDir, {
@@ -180,7 +180,7 @@ describe('gsdd models and model propagation', () => {
       });
       await gsdd.cmdUpdate('--tools', 'opencode');
 
-      checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.match(checker, /^model: openai\/gpt-5\.2$/m);
 
       const config = readJson(path.join(tmpDir, '.work', 'config.json'));
@@ -188,7 +188,7 @@ describe('gsdd models and model propagation', () => {
       fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), JSON.stringify(config, null, 2));
       await gsdd.cmdUpdate('--tools', 'opencode');
 
-      checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.doesNotMatch(checker, /^model:/m);
     });
 
@@ -206,7 +206,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.match(checker, /^model: opus$/m);
     });
 
@@ -221,7 +221,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8');
       assert.doesNotMatch(checker, /^model = /m);
     });
 
@@ -239,7 +239,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8');
       assert.match(checker, /^model = "gpt-5-codex"$/m);
     });
 
@@ -255,7 +255,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      let checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'utf-8');
+      let checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8');
       assert.doesNotMatch(checker, /^model = /m);
 
       writeProjectConfig(tmpDir, {
@@ -264,7 +264,7 @@ describe('gsdd models and model propagation', () => {
       });
       await gsdd.cmdUpdate('--tools', 'codex');
 
-      checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'utf-8');
+      checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8');
       assert.match(checker, /^model = "gpt-5-codex"$/m);
 
       const config = readJson(path.join(tmpDir, '.work', 'config.json'));
@@ -272,7 +272,7 @@ describe('gsdd models and model propagation', () => {
       fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), JSON.stringify(config, null, 2));
       await gsdd.cmdUpdate('--tools', 'codex');
 
-      checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'utf-8');
+      checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8');
       assert.doesNotMatch(checker, /^model = /m);
     });
 
@@ -290,7 +290,7 @@ describe('gsdd models and model propagation', () => {
         restoreStdin();
       }
 
-      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
+      const checker = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.match(checker, /^model: haiku$/m);
     });
   });

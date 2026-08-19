@@ -308,7 +308,7 @@ Commands:
 Platforms (for --tools):
   claude    Generate Claude Code skills (.claude/skills/gsdd-*), commands (.claude/commands/gsdd-*.md), and native agents (.claude/agents/gsdd-*.md)
   opencode  Generate OpenCode local slash commands (.opencode/commands/gsdd-*.md) + native agents (.opencode/agents/gsdd-*.md)
-  codex     Generate Codex CLI native plan-checker agent (.codex/agents/gsdd-plan-checker.toml)
+  codex     Generate Codex CLI native plan-checker agent (.codex/agents/work-plan-checker.toml)
   agents    Generate/Update root AGENTS.md (bounded GSDD block)
   cursor    Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
   copilot   Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
@@ -340,7 +340,7 @@ Notes:
   - recorded launch proof in this repo currently covers the Codex CLI path; Claude Code and OpenCode get generated native surfaces with local freshness checks and no recorded run
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
-  - --tools codex generates .codex/agents/gsdd-plan-checker.toml (portable skill is the entry surface; $gsdd-plan is plan-only until explicit $gsdd-execute)
+  - --tools codex generates .codex/agents/work-plan-checker.toml (portable skill is the entry surface; $work-plan is plan-only until explicit $work-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
   - normal repo path: npx -y workspine init -> run /gsdd-* or $gsdd-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed
   - post-init, choose your starting lane honestly: new-project for greenfield or fuzzy/milestone work, quick for a concrete bounded change, map-codebase first when the repo needs deeper orientation

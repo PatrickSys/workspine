@@ -59,7 +59,7 @@ Determine the situation:
 - **Greenfield**: No existing code. Empty or minimal project. Skip codebase audit, go to questioning.
 - **Brownfield**: Existing codebase. You MUST audit before questioning.
 - **Resuming**: `.work/SPEC.md` already exists. Read it, confirm current state with developer, continue from where things left off.
-- **Concrete brownfield continuity already exists**: if `.work/brownfield-change/CHANGE.md` exists, treat `/gsdd-new-project` as an explicit widen path into full milestone setup, not as the default resume route for that bounded change. Preserve the current bounded context unless the user clearly wants to widen scope.
+- **Concrete brownfield continuity already exists**: if `.work/brownfield-change/CHANGE.md` exists, treat `/work-new-project` as an explicit widen path into full milestone setup, not as the default resume route for that bounded change. Preserve the current bounded context unless the user clearly wants to widen scope.
 </detect_mode>
 
 <brownfield_widening_context>
@@ -70,7 +70,7 @@ If `.work/brownfield-change/CHANGE.md` exists, treat it as an explicit widening 
 3. Read `VERIFICATION.md` for existing proof, open gaps, and any partial validation that the first milestone should inherit honestly.
 
 Do not create a new promotion artifact. Reuse the existing brownfield folder directly when widening into milestone setup.
-If `.work/MILESTONES.md` already contains shipped milestone history, stop and route this widen request to `/gsdd-new-milestone` instead of reopening first-milestone initialization here.
+If `.work/MILESTONES.md` already contains shipped milestone history, stop and route this widen request to `/work-new-milestone` instead of reopening first-milestone initialization here.
 </brownfield_widening_context>
 
 <milestone_context>
@@ -96,11 +96,11 @@ Check whether `.work/codebase/STACK.md`, `.work/codebase/ARCHITECTURE.md`, `.wor
 
 Inform the user: "No codebase maps found. Running codebase mapping before continuing."
 
-This is an internal prerequisite of `new-project`, not a user-facing routing requirement. If the user started with `/gsdd-new-project` on a brownfield repo, do not bounce them out and tell them to restart with `/gsdd-map-codebase`. Run the mapping dependency, then continue this workflow.
+This is an internal prerequisite of `new-project`, not a user-facing routing requirement. If the user started with `/work-new-project` on a brownfield repo, do not bounce them out and tell them to restart with `/work-map-codebase`. Run the mapping dependency, then continue this workflow.
 
 If `.work/brownfield-change/CHANGE.md` exists, keep it as the current bounded continuity anchor while you do this work. Do not treat its presence as evidence that the user should have used another command instead. The only question is whether they intentionally want to widen that bounded brownfield change into full milestone planning.
 
-Read and follow the `gsdd-map-codebase` skill now. Prefer the repo-local `.agents/skills/gsdd-map-codebase/SKILL.md` when it exists; otherwise use the globally installed `gsdd-map-codebase` skill available in the current runtime. Execute its full flow (check existing, spawn mappers, validate, secrets scan). When map-codebase completes, return here and continue from Brownfield Validated Requirements Inference below.
+Read and follow the `work-map-codebase` skill now. Prefer the repo-local `.agents/skills/work-map-codebase/SKILL.md` when it exists; otherwise use the globally installed `work-map-codebase` skill available in the current runtime. Execute its full flow (check existing, spawn mappers, validate, secrets scan). When map-codebase completes, return here and continue from Brownfield Validated Requirements Inference below.
 
 ### Brownfield Validated Requirements Inference
 
@@ -428,11 +428,11 @@ Report to the user what was accomplished, then present the next step:
 - `.work/SPEC.md` — living specification (requirements, constraints, decisions)
 - `.work/ROADMAP.md` — phased execution plan with success criteria
 
-**Next step:** `/gsdd-plan` — create a detailed plan for Phase 1
+**Next step:** `/work-plan` — create a detailed plan for Phase 1
 
 Also available:
-- `/gsdd-progress` — check overall project status
-- `/gsdd-map-codebase` — deeper brownfield baseline or refresh (optional; `new-project` already runs it when needed)
+- `/work-progress` — check overall project status
+- `/work-map-codebase` — deeper brownfield baseline or refresh (optional; `new-project` already runs it when needed)
 
 Consider clearing context before starting the next workflow for best results.
 ---

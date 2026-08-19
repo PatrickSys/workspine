@@ -22,8 +22,8 @@ describe('next card snapshot', () => {
     const packet = {
       state: 'plan',
       reason: 'A goal exists but there is no plan yet.',
-      next_action: { type: 'workflow_skill', skill_id: 'gsdd-plan' },
-      next_command: 'gsdd-plan',
+      next_action: { type: 'workflow_skill', skill_id: 'work-plan' },
+      next_command: 'work-plan',
       requires_user: false,
     };
     assert.strictEqual(renderNextCard(packet), readGolden());

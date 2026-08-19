@@ -87,7 +87,7 @@ Plans executed: {count}
 Waves: {W} total
 Key deliverables: [bullet list of what was built, one line per plan]
 Lifecycle status: implementation complete, verification still required
-Next step: /gsdd-verify {N} — verify the phase goal before closure
+Next step: /work-verify {N} — verify the phase goal before closure
 ```
 
 If only a single plan was provided (the common case), skip this section entirely and go straight to the `<execution_loop>`.
@@ -107,7 +107,7 @@ For each task in the plan, follow this loop:
 ```
 
 ### Frontmatter And Task Semantics
-The executor consumes the plan schema defined by `/gsdd-plan`:
+The executor consumes the plan schema defined by `/work-plan`:
 - frontmatter keys: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`, `tdd`
 - task types:
   - `type="auto"` - proceed without pausing
@@ -450,10 +450,10 @@ Report what was accomplished, then present the next step:
 ---
 **Completed:** Plan execution — created `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`.
 **Next step:** Check `.work/config.json` → `workflow.verifier`:
-- If `true`: run `/gsdd-verify` — verify that the phase goal was achieved
-- If `false` (or key missing): run `/gsdd-progress` — check status and route to the next phase
+- If `true`: run `/work-verify` — verify that the phase goal was achieved
+- If `false` (or key missing): run `/work-progress` — check status and route to the next phase
 
-Also available: `/gsdd-plan` for the next wave, `/gsdd-quick` for sub-hour work, or `/gsdd-pause` to save context.
+Also available: `/work-plan` for the next wave, `/work-quick` for sub-hour work, or `/work-pause` to save context.
 Consider clearing context before starting the next workflow for best results.
 ---
 </completion>

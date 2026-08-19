@@ -134,11 +134,11 @@ function buildClaudeGlobalEntries(ctx, rootDir) {
 
   const entries = ctx.workflows.map((workflow) => ({
     relativePath: `skills/${workflow.name}/SKILL.md`,
-    content: workflow.name === 'gsdd-plan' ? renderClaudePlanSkill({ portableContractPath: null }) : renderSkillContent(workflow),
+    content: workflow.name === 'work-plan' ? renderClaudePlanSkill({ portableContractPath: null }) : renderSkillContent(workflow),
   }));
 
   entries.push(
-    { relativePath: 'commands/gsdd-plan.md', content: renderClaudePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'gsdd-plan', 'SKILL.md')) }) },
+    { relativePath: 'commands/work-plan.md', content: renderClaudePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'work-plan', 'SKILL.md')) }) },
     { relativePath: `agents/${SUBAGENT_IDS.planChecker}.md`, content: renderClaudePlanChecker(getDelegateContent('plan-checker.md'), checkerModelAlias) },
     { relativePath: `agents/${SUBAGENT_IDS.approachExplorer}.md`, content: renderClaudeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelAlias) }
   );
@@ -149,8 +149,8 @@ function buildClaudeGlobalEntries(ctx, rootDir) {
 function buildOpenCodeGlobalCommandEntries(ctx, rootDir) {
   return ctx.workflows.map((workflow) => ({
     relativePath: `commands/${workflow.name}.md`,
-    content: workflow.name === 'gsdd-plan'
-      ? renderOpenCodePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'gsdd-plan', 'SKILL.md')) })
+    content: workflow.name === 'work-plan'
+      ? renderOpenCodePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'work-plan', 'SKILL.md')) })
       : renderOpenCodeCommandContent(workflow),
   }));
 }
@@ -451,16 +451,16 @@ function checkOpenCodeRuntime({ roots, cwd, probeRunner }) {
   if (result.status !== 0) {
     return { target: 'opencode', check: 'runtime_discovery', status: 'failed', message: `opencode debug skill exited ${result.status}: ${output.trim()}` };
   }
-  if (!/\bgsdd-plan\b/.test(output)) {
-    return { target: 'opencode', check: 'runtime_discovery', status: 'failed', message: 'opencode debug skill did not list gsdd-plan' };
+  if (!/\bwork-plan\b/.test(output)) {
+    return { target: 'opencode', check: 'runtime_discovery', status: 'failed', message: 'opencode debug skill did not list work-plan' };
   }
-  return { target: 'opencode', check: 'runtime_discovery', status: 'passed', message: 'opencode debug skill listed gsdd-plan' };
+  return { target: 'opencode', check: 'runtime_discovery', status: 'passed', message: 'opencode debug skill listed work-plan' };
 }
 
 function liveProbeCommand(target, roots) {
-  const prompt = 'Do not edit files or run tools. If a Workspine skill named gsdd-plan is available in this session, answer exactly GSDD_SKILL_OK. Otherwise answer GSDD_SKILL_MISSING.';
+  const prompt = 'Do not edit files or run tools. If a Workspine skill named work-plan is available in this session, answer exactly GSDD_SKILL_OK. Otherwise answer GSDD_SKILL_MISSING.';
   if (target === 'claude') {
-    const claudePrompt = '/gsdd-plan Verification mode only. Do not edit files, do not invoke subagents, and do not run shell commands. If this Workspine gsdd-plan command resolved successfully, answer exactly GSDD_SKILL_OK. Otherwise answer exactly GSDD_SKILL_MISSING.';
+    const claudePrompt = '/work-plan Verification mode only. Do not edit files, do not invoke subagents, and do not run shell commands. If this Workspine work-plan command resolved successfully, answer exactly GSDD_SKILL_OK. Otherwise answer exactly GSDD_SKILL_MISSING.';
     return {
       command: 'claude',
       args: ['-p', claudePrompt, '--no-session-persistence', '--max-budget-usd', '0.25', '--output-format', 'text', '--tools', 'Read'],
@@ -504,9 +504,9 @@ function checkLiveRuntime({ target, roots, cwd, probeRunner }) {
     return { target, check: 'runtime_discovery', status: 'failed', message: `${target} live probe exited ${result.status}: ${output.trim()}` };
   }
   if (!/GSDD_SKILL_OK/.test(output)) {
-    return { target, check: 'runtime_discovery', status: 'failed', message: `${target} live probe did not confirm gsdd-plan: ${output.trim()}` };
+    return { target, check: 'runtime_discovery', status: 'failed', message: `${target} live probe did not confirm work-plan: ${output.trim()}` };
   }
-  return { target, check: 'runtime_discovery', status: 'passed', message: `${target} live probe confirmed gsdd-plan` };
+  return { target, check: 'runtime_discovery', status: 'passed', message: `${target} live probe confirmed work-plan` };
 }
 
 export function verifyGlobalRuntimeInstall({ targets, roots, ctx, liveRuntime = false, probeRunner } = {}) {

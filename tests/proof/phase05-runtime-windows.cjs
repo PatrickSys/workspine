@@ -279,7 +279,7 @@ function development() {
       };
       invoke(['init', '--auto', '--tools', 'claude,opencode,codex'], fixture);
       requireFiles(fixture, ['.work/bin/gsdd.mjs', '.claude/skills', '.claude/commands', '.claude/agents', '.opencode/commands', '.opencode/agents', '.codex/agents'], 'repo-local');
-      must(snapshot(path.join(fixture, '.agents', 'skills')).some((e) => e.path.startsWith('gsdd-')), 'product_mismatch', 'repo workflow skills missing');
+      must(snapshot(path.join(fixture, '.agents', 'skills')).some((e) => e.path.startsWith('work-')), 'product_mismatch', 'repo workflow skills missing');
       invoke(['health'], fixture);
       invoke(['update'], fixture);
       for (const target of ['claude', 'opencode', 'codex']) invoke(['install', '--global', '--tools', target], globalCwd);

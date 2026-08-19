@@ -147,13 +147,13 @@ ${delegateContent.trim()}
 `;
 }
 
-function renderOpenCodePlanCommand({ skillPath = '.agents/skills/gsdd-plan/SKILL.md', stateDirName = '.work' } = {}) {
+function renderOpenCodePlanCommand({ skillPath = '.agents/skills/work-plan/SKILL.md', stateDirName = '.work' } = {}) {
   const content = `---
 description: OpenCode-native phase planning with fresh-context plan checking for GSDD
 subtask: false
 ---
 
-You are the OpenCode-native \`/gsdd-plan\` command for GSDD phase planning.
+You are the OpenCode-native \`/work-plan\` command for GSDD phase planning.
 
 Portable contract:
 - Read \`${skillPath}\` first. That file remains the canonical vendor-agnostic plan contract.
@@ -161,7 +161,7 @@ Portable contract:
 - If the portable skill says plan is still a stub, treat that as a portability-status warning for the generic surface, not as a stop signal for this OpenCode-native adapter path.
 
 Native OpenCode adapter rule:
-- This command is the canonical OpenCode-native entry surface for \`/gsdd-plan\`.
+- This command is the canonical OpenCode-native entry surface for \`/work-plan\`.
 - Stay in the primary conversation context for orchestration so the checker can run as its own fresh-context subagent.
 - Use the native \`${SUBAGENT_IDS.planChecker}\` subagent for review-only checking.
 - Do NOT claim that other runtimes have the same behavior unless their own adapters explicitly implement and prove it.
@@ -252,7 +252,7 @@ function createOpenCodeAdapter({
       const explorerModelId = getRuntimeModelOverride(config, 'opencode', 'approach-explorer');
       mkdirSync(commandsDir, { recursive: true });
       for (const workflow of workflows) {
-        const content = workflow.name === 'gsdd-plan'
+        const content = workflow.name === 'work-plan'
           ? renderOpenCodePlanCommand({ stateDirName })
           : renderOpenCodeCommandContent(workflow, { stateDirName });
         writeFileSync(

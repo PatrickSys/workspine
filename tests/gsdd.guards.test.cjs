@@ -154,17 +154,17 @@ describe('G10 - CLI Module Boundary', () => {
 describe('G11 - Codex Doc Contract', () => {
   test('README describes Codex as portable-skill entry plus native checker agent', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.doesNotMatch(readme, /overrides gsdd-plan skill/i,
-      'README.md must not claim that Codex overrides the shared gsdd-plan skill.');
-    assert.match(readme, /portable .*gsdd-plan.*\.codex\/agents/i,
-      'README.md must describe Codex as the portable gsdd-plan entry plus the native checker agent.');
+    assert.doesNotMatch(readme, /overrides work-plan skill/i,
+      'README.md must not claim that Codex overrides the shared work-plan skill.');
+    assert.match(readme, /portable .*work-plan.*\.codex\/agents/i,
+      'README.md must describe Codex as the portable work-plan entry plus the native checker agent.');
   });
 
   test('distilled README no longer describes Codex as deprecated', () => {
     const readme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
     assert.doesNotMatch(readme, /deprecated compatibility only/i,
       'distilled/README.md must not describe --tools codex as deprecated once the native checker adapter exists.');
-    assert.match(readme, /\.codex\/agents\/gsdd-plan-checker\.toml/,
+    assert.match(readme, /\.codex\/agents\/work-plan-checker\.toml/,
       'distilled/README.md must document the generated Codex checker agent.');
   });
 });
@@ -624,7 +624,7 @@ describe('G18 - Consumer Governance Completeness', () => {
 
   // Read the WORKFLOWS array from bin/gsdd.mjs to get canonical workflow names
   const gsddSource = fs.readFileSync(GSDD_PATH, 'utf-8');
-  const workflowNames = [...gsddSource.matchAll(/name:\s*'(gsdd-[a-z-]+)'/g)].map(m => m[1]);
+  const workflowNames = [...gsddSource.matchAll(/name:\s*'(work-[a-z-]+)'/g)].map(m => m[1]);
 
   // G18.1: agents.block.md points to the portable workflow directory instead of
   // front-loading every workflow path into the AGENTS surface.
@@ -636,7 +636,7 @@ describe('G18 - Consumer Governance Completeness', () => {
 
   test('agents.block.md keeps only a compact set of anchor workflow names', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    for (const anchor of ['gsdd-new-project', 'gsdd-plan', 'gsdd-execute', 'gsdd-verify', 'gsdd-progress']) {
+    for (const anchor of ['work-new-project', 'work-plan', 'work-execute', 'work-verify', 'work-progress']) {
       assert.match(content, new RegExp(anchor),
         `agents.block.md must keep ${anchor} as an anchor workflow. FIX: Add ${anchor} to the compact workflow list.`);
     }
@@ -661,7 +661,7 @@ describe('G18 - Consumer Governance Completeness', () => {
   test('CHANGELOG lists all workflows', () => {
     const changelog = fs.readFileSync(CHANGELOG, 'utf-8');
     for (const wf of workflowNames) {
-      const shortName = wf.replace(/^gsdd-/, '');
+      const shortName = wf.replace(/^work-/, '');
       assert.ok(
         changelog.includes(shortName),
         `CHANGELOG missing workflow "${shortName}". FIX: Add ${shortName} to CHANGELOG workflow list.`
@@ -781,7 +781,7 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     assert.match(agentsBlock, /npx -y workspine update/i,
       'Generated AGENTS block must tell agents how to repair generated-surface drift. FIX: Add update guidance.');
     assert.match(agentsBlock, /Codex CLI/i,
-      'Generated AGENTS block must distinguish Codex CLI from Codex VS Code/app. FIX: Use Codex CLI in the $gsdd-plan invocation guidance.');
+      'Generated AGENTS block must distinguish Codex CLI from Codex VS Code/app. FIX: Use Codex CLI in the $work-plan invocation guidance.');
     assert.doesNotMatch(newProject, /`gsdd init --auto --brief <path>`/,
       'Generated new-project workflow must not suggest bare gsdd init for auto brief setup. FIX: Use npx -y workspine init --auto --tools <runtime> --brief <path>.');
   });
@@ -832,13 +832,13 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
   test('agents.block.md invocation line mentions slash commands for supported runtimes', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /\/gsdd-plan.*Claude.*OpenCode.*Cursor\/Copilot\/Gemini when skill discovery is available/i,
+    assert.match(content, /\/work-plan.*Claude.*OpenCode.*Cursor\/Copilot\/Gemini when skill discovery is available/i,
       'agents.block.md invocation must qualify slash-command guidance for less-proven runtimes. FIX: Include discovery-available wording in the compact Invoke line.');
   });
 
   test('agents.block.md invocation section mentions Codex skill references', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /Codex.*skill reference|\$gsdd-/,
+    assert.match(content, /Codex.*skill reference|\$work-/,
       'agents.block.md invocation must mention Codex skill references. FIX: Add skill reference guidance for Codex.');
   });
 
@@ -914,12 +914,12 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const mod = await import(`file://${INIT_RUNTIME_MODULE.replace(/\\/g, '/')}`);
     const lines = mod.getPostInitRoutingLines(['cursor', 'copilot', 'gemini']);
     const content = lines.join('\n');
-    assert.match(content, /Cursor:\s+\/gsdd-new-project/,
-      'post-init routing must show Cursor slash-command guidance. FIX: Add Cursor /gsdd-new-project to init output.');
-    assert.match(content, /Copilot:\s+\/gsdd-new-project/,
-      'post-init routing must show Copilot slash-command guidance. FIX: Add Copilot /gsdd-new-project to init output.');
-    assert.match(content, /Gemini CLI:\s+\/gsdd-new-project/,
-      'post-init routing must show Gemini slash-command guidance. FIX: Add Gemini /gsdd-new-project to init output.');
+    assert.match(content, /Cursor:\s+\/work-new-project/,
+      'post-init routing must show Cursor slash-command guidance. FIX: Add Cursor /work-new-project to init output.');
+    assert.match(content, /Copilot:\s+\/work-new-project/,
+      'post-init routing must show Copilot slash-command guidance. FIX: Add Copilot /work-new-project to init output.');
+    assert.match(content, /Gemini CLI:\s+\/work-new-project/,
+      'post-init routing must show Gemini slash-command guidance. FIX: Add Gemini /work-new-project to init output.');
   });
 
   test('DESIGN.md ToC lists every documented decision', () => {
@@ -1018,9 +1018,9 @@ describe('G20 - Session Continuity Contracts', () => {
     const section = content.slice(content.indexOf('<determine_action>'), content.indexOf('</determine_action>'));
     assert.match(section, /checkpoint|\.continue-here/i, 'determine_action must have checkpoint routing. FIX: Add checkpoint branch.');
     assert.match(section, /PLAN.*without.*SUMMARY|Incomplete.*execution/i, 'determine_action must have incomplete execution routing. FIX: Add PLAN-without-SUMMARY branch.');
-    assert.match(section, /\/gsdd-plan|needs planning/i, 'determine_action must route to plan. FIX: Add planning branch.');
-    assert.match(section, /\/gsdd-verify|needs verification/i, 'determine_action must route to verify. FIX: Add verification branch.');
-    assert.match(section, /\/gsdd-audit-milestone|All phases complete/i, 'determine_action must route to audit-milestone. FIX: Add all-phases-complete branch.');
+    assert.match(section, /\/work-plan|needs planning/i, 'determine_action must route to plan. FIX: Add planning branch.');
+    assert.match(section, /\/work-verify|needs verification/i, 'determine_action must route to verify. FIX: Add verification branch.');
+    assert.match(section, /\/work-audit-milestone|All phases complete/i, 'determine_action must route to audit-milestone. FIX: Add all-phases-complete branch.');
   });
 
   test('resume.md <cleanup_checkpoint> references deletion before routing', () => {
@@ -1045,7 +1045,7 @@ describe('G20 - Session Continuity Contracts', () => {
     assert.match(section, /No `.work\/`|No.*\.work/, 'check_existence must check for missing .work/. FIX: Add .work/ existence check.');
     assert.match(section, /No.*ROADMAP.*AND.*no.*SPEC|no artifacts/i, 'check_existence must check for no artifacts. FIX: Add no-artifacts detection.');
     assert.match(section, /codebase|quick/i,
-      'check_existence must distinguish non-phase brownfield artifacts from truly empty state. FIX: Add codebase/quick detection before routing to /gsdd-new-project.');
+      'check_existence must distinguish non-phase brownfield artifacts from truly empty state. FIX: Add codebase/quick detection before routing to /work-new-project.');
     assert.match(section, /between.milestones|SPEC.*exists.*ROADMAP.*not/i, 'check_existence must detect between-milestones state. FIX: Add between-milestones detection.');
     assert.match(section, /Both exist|proceed/i, 'check_existence must have proceed path. FIX: Add proceed condition.');
   });
@@ -1074,8 +1074,8 @@ describe('G20 - Session Continuity Contracts', () => {
       'route_action must name the archived-with-ROADMAP state explicitly. FIX: Add retained-ROADMAP wording.');
     assert.match(route, /Branch E[\s\S]*not yet archived/i,
       'Branch E must stay limited to audit-ready, not-yet-archived milestones. FIX: Narrow Branch E condition.');
-    assert.match(route, /Branch F[\s\S]*\/gsdd-new-milestone/i,
-      'Branch F must route archived milestones to /gsdd-new-milestone. FIX: Add archived milestone routing.');
+    assert.match(route, /Branch F[\s\S]*\/work-new-milestone/i,
+      'Branch F must route archived milestones to /work-new-milestone. FIX: Add archived milestone routing.');
   });
 
   test('progress.md Branch F covers codebase-only and quick-lane brownfield states', () => {
@@ -1087,12 +1087,12 @@ describe('G20 - Session Continuity Contracts', () => {
       'derive_status must classify codebase-only brownfield state. FIX: Add codebase-only non-phase classification.');
     assert.match(derive, /quick_lane|quick lane/i,
       'derive_status must classify quick-lane-only brownfield state. FIX: Add quick-lane non-phase classification.');
-    assert.match(route, /codebase-only brownfield state[\s\S]*\/gsdd-quick/i,
-      'Branch F must route codebase-only brownfield state toward /gsdd-quick. FIX: Add codebase-only quick routing.');
-    assert.match(route, /quick-lane brownfield state with incomplete quick work[\s\S]*\/gsdd-quick/i,
-      'Branch F must route incomplete quick-lane state back to /gsdd-quick. FIX: Add quick-lane continuation routing.');
-    assert.match(route, /Also available: \/gsdd-new-project[\s\S]*\/gsdd-map-codebase/i,
-      'Branch F must preserve both /gsdd-new-project and /gsdd-map-codebase as brownfield alternatives. FIX: Add both alternatives to the non-phase brownfield route.');
+    assert.match(route, /codebase-only brownfield state[\s\S]*\/work-quick/i,
+      'Branch F must route codebase-only brownfield state toward /work-quick. FIX: Add codebase-only quick routing.');
+    assert.match(route, /quick-lane brownfield state with incomplete quick work[\s\S]*\/work-quick/i,
+      'Branch F must route incomplete quick-lane state back to /work-quick. FIX: Add quick-lane continuation routing.');
+    assert.match(route, /Also available: \/work-new-project[\s\S]*\/work-map-codebase/i,
+      'Branch F must preserve both /work-new-project and /work-map-codebase as brownfield alternatives. FIX: Add both alternatives to the non-phase brownfield route.');
   });
 
   test('progress.md <edge_cases> section exists and documents compound states', () => {
@@ -1188,11 +1188,11 @@ describe('G20 - Session Continuity Contracts', () => {
   test('resume <determine_action> routes to workflows that exist in the valid workflow set', () => {
     const content = fs.readFileSync(RESUME_PATH, 'utf-8');
     const section = content.slice(content.indexOf('<determine_action>'), content.indexOf('</determine_action>'));
-    const workflows = section.match(/\/gsdd-[\w-]+/g) || [];
+    const workflows = section.match(/\/work-[\w-]+/g) || [];
     const validWorkflows = [
-      '/gsdd-new-project', '/gsdd-plan', '/gsdd-execute', '/gsdd-verify',
-      '/gsdd-audit-milestone', '/gsdd-new-milestone', '/gsdd-quick', '/gsdd-pause', '/gsdd-resume',
-      '/gsdd-progress', '/gsdd-map-codebase'
+      '/work-new-project', '/work-plan', '/work-execute', '/work-verify',
+      '/work-audit-milestone', '/work-new-milestone', '/work-quick', '/work-pause', '/work-resume',
+      '/work-progress', '/work-map-codebase'
     ];
     for (const wf of workflows) {
       assert.ok(validWorkflows.includes(wf),
@@ -1205,12 +1205,12 @@ describe('G20 - Session Continuity Contracts', () => {
   test('progress <route_action> routes to workflows that exist in the 13-workflow set', () => {
     const content = fs.readFileSync(PROGRESS_PATH, 'utf-8');
     const section = content.slice(content.indexOf('<route_action>'), content.indexOf('</route_action>'));
-    const workflows = section.match(/\/gsdd-\w[\w-]*/g) || [];
+    const workflows = section.match(/\/work-\w[\w-]*/g) || [];
     const validWorkflows = [
-      '/gsdd-new-project', '/gsdd-plan', '/gsdd-execute', '/gsdd-verify',
-      '/gsdd-audit-milestone', '/gsdd-complete-milestone', '/gsdd-new-milestone',
-      '/gsdd-quick', '/gsdd-pause', '/gsdd-resume',
-      '/gsdd-progress', '/gsdd-map-codebase'
+      '/work-new-project', '/work-plan', '/work-execute', '/work-verify',
+      '/work-audit-milestone', '/work-complete-milestone', '/work-new-milestone',
+      '/work-quick', '/work-pause', '/work-resume',
+      '/work-progress', '/work-map-codebase'
     ];
     for (const wf of workflows) {
       assert.ok(validWorkflows.includes(wf),
@@ -1366,46 +1366,46 @@ describe('G22 - Workflow Completion Routing', () => {
       const compEnd = content.indexOf('</completion>');
       if (compStart === -1 || compEnd === -1) return; // caught by previous test
       const section = content.slice(compStart, compEnd);
-      assert.match(section, /\/gsdd-/,
-        `${wf} completion must reference at least one /gsdd- command. FIX: Add next-step routing to <completion>.`);
+      assert.match(section, /\/work-/,
+        `${wf} completion must reference at least one /work- command. FIX: Add next-step routing to <completion>.`);
     });
   }
 
   // Specific routing correctness: each lifecycle workflow routes to the right next step
-  test('new-project.md completion routes to /gsdd-plan', () => {
+  test('new-project.md completion routes to /work-plan', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-project.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd-plan/,
-      'new-project completion must route to /gsdd-plan. FIX: Add /gsdd-plan as next step in completion.');
+    assert.match(section, /\/work-plan/,
+      'new-project completion must route to /work-plan. FIX: Add /work-plan as next step in completion.');
   });
 
   test('plan.md completion keeps execution as a separate explicit next workflow', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'plan.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd-execute/,
-      'plan completion must route to /gsdd-execute. FIX: Add /gsdd-execute as next step in completion.');
+    assert.match(section, /\/work-execute/,
+      'plan completion must route to /work-execute. FIX: Add /work-execute as next step in completion.');
     assert.match(section, /Planning stops here|plan-only|separate run/i,
       'plan completion must state that planning ends before execution starts. FIX: Add explicit plan-only boundary wording.');
     assert.doesNotMatch(section, /execute the plan/i,
       'plan completion must not use imperative same-run execution wording. FIX: Replace "execute the plan" with explicit separate-run routing.');
   });
 
-  test('execute.md completion routes to /gsdd-verify or /gsdd-progress', () => {
+  test('execute.md completion routes to /work-verify or /work-progress', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'execute.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    const hasVerify = /\/gsdd-verify/.test(section);
-    const hasProgress = /\/gsdd-progress/.test(section);
+    const hasVerify = /\/work-verify/.test(section);
+    const hasProgress = /\/work-progress/.test(section);
     assert.ok(hasVerify || hasProgress,
-      'execute completion must route to /gsdd-verify or /gsdd-progress. FIX: Add next-step routing to execute completion.');
+      'execute completion must route to /work-verify or /work-progress. FIX: Add next-step routing to execute completion.');
   });
 
-  test('verify.md completion routes to /gsdd-progress or /gsdd-plan', () => {
+  test('verify.md completion routes to /work-progress or /work-plan', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'verify.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    const hasProgress = /\/gsdd-progress/.test(section);
-    const hasPlan = /\/gsdd-plan/.test(section);
+    const hasProgress = /\/work-progress/.test(section);
+    const hasPlan = /\/work-plan/.test(section);
     assert.ok(hasProgress || hasPlan,
-      'verify completion must route to /gsdd-progress or /gsdd-plan. FIX: Add next-step routing to verify completion.');
+      'verify completion must route to /work-progress or /work-plan. FIX: Add next-step routing to verify completion.');
   });
 
   // Persistence enforcement gates
@@ -1771,14 +1771,14 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md must clean up the provisional quick-task directory before returning to Step 1 from the plan preview. FIX: Add cleanup to the "edit description" branch.');
   });
 
-  test('quick.md preview /gsdd-plan branch cleans up provisional task directory', () => {
+  test('quick.md preview /work-plan branch cleans up provisional task directory', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     const previewStart = content.indexOf('## Step 3.7');
     assert.ok(previewStart > -1,
       'quick.md must have ## Step 3.7 plan preview section. FIX: Add Step 3.7 plan preview.');
     const previewSection = content.slice(previewStart, previewStart + 3200);
-    assert.match(previewSection, /switch to \/gsdd-plan.*clean up the task directory/i,
-      'quick.md must clean up the provisional quick-task directory before switching to /gsdd-plan from the plan preview. FIX: Add cleanup to the "switch to /gsdd-plan" branch.');
+    assert.match(previewSection, /switch to \/work-plan.*clean up the task directory/i,
+      'quick.md must clean up the provisional quick-task directory before switching to /work-plan from the plan preview. FIX: Add cleanup to the "switch to /work-plan" branch.');
   });
 
   test('quick.md has scope signal evaluation', () => {
@@ -1789,15 +1789,15 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md scope signal must check file count or architecture keywords. FIX: Add scope heuristics (file count >8, architecture keywords).');
   });
 
-  test('quick.md scope signal recommends /gsdd-plan for escalation', () => {
+  test('quick.md scope signal recommends /work-plan for escalation', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     // Find the actual ## Step 3.6 heading (not anti_patterns mention of Step 3.6)
     const scopeStart = content.indexOf('## Step 3.6');
     assert.ok(scopeStart > -1,
       'quick.md must have ## Step 3.6 scope signal section. FIX: Add Step 3.6 scope signal evaluation.');
     const afterScope = content.slice(scopeStart, scopeStart + 1500);
-    assert.match(afterScope, /gsdd-plan/,
-      'quick.md scope signal must recommend /gsdd-plan for escalation (D32). FIX: Add /gsdd-plan recommendation in scope signal.');
+    assert.match(afterScope, /work-plan/,
+      'quick.md scope signal must recommend /work-plan for escalation (D32). FIX: Add /work-plan recommendation in scope signal.');
   });
 
   test('quick.md has conditional plan-checker referencing plan-checker.md', () => {
@@ -1916,7 +1916,7 @@ describe('G24 - Hardening Propagation', () => {
       'quick.md inline baseline must mark its uncertainty explicitly. FIX: Label the baseline as provisional and note unknowns.');
   });
 
-  test('quick.md scope signal can escalate to /gsdd-map-codebase when orientation is too weak', () => {
+  test('quick.md scope signal can escalate to /work-map-codebase when orientation is too weak', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'quick.md'), 'utf-8');
     const scopeStart = content.indexOf('## Step 3.6:');
     const previewStart = content.indexOf('## Step 3.7:');
@@ -1925,12 +1925,12 @@ describe('G24 - Hardening Propagation', () => {
     const previewSection = content.slice(previewStart, content.indexOf('## Step 4:'));
     assert.match(scopeSection, /Orientation gap/i,
       'quick.md scope signal must include an orientation-gap heuristic. FIX: Add orientation-gap escalation to Step 3.6.');
-    assert.match(scopeSection, /\/gsdd-map-codebase/i,
-      'quick.md orientation-gap heuristic must recommend /gsdd-map-codebase. FIX: Add map-codebase recommendation to Step 3.6.');
-    assert.match(previewSection, /contains.*\/gsdd-map-codebase.*switch to \/gsdd-map-codebase/s,
-      'quick.md plan preview must offer a /gsdd-map-codebase switch when the scope warning calls for deeper orientation. FIX: Add preview routing for /gsdd-map-codebase.');
-    assert.match(previewSection, /switch to \/gsdd-map-codebase.*clean up the task directory/i,
-      'quick.md must clean up the provisional quick-task directory before switching to /gsdd-map-codebase. FIX: Add cleanup to the map-codebase branch.');
+    assert.match(scopeSection, /\/work-map-codebase/i,
+      'quick.md orientation-gap heuristic must recommend /work-map-codebase. FIX: Add map-codebase recommendation to Step 3.6.');
+    assert.match(previewSection, /contains.*\/work-map-codebase.*switch to \/work-map-codebase/s,
+      'quick.md plan preview must offer a /work-map-codebase switch when the scope warning calls for deeper orientation. FIX: Add preview routing for /work-map-codebase.');
+    assert.match(previewSection, /switch to \/work-map-codebase.*clean up the task directory/i,
+      'quick.md must clean up the provisional quick-task directory before switching to /work-map-codebase. FIX: Add cleanup to the map-codebase branch.');
   });
 
   test('quick.md approach clarification limits to max 2 questions', () => {
@@ -1977,19 +1977,19 @@ describe('G24 - Hardening Propagation', () => {
       'map-codebase.md must have MANDATORY persistence gate between validation and secrets_scan. FIX: Add MANDATORY gate requiring all 4 codebase documents exist on disk.');
   });
 
-  test('map-codebase.md completion offers /gsdd-quick as a brownfield next step', () => {
+  test('map-codebase.md completion offers /work-quick as a brownfield next step', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'map-codebase.md'), 'utf-8');
     const completionStart = content.indexOf('<completion>');
     const completionEnd = content.indexOf('</completion>');
     assert.ok(completionStart > -1 && completionEnd > -1,
       'map-codebase.md must have <completion> section. FIX: Add completion section.');
     const section = content.slice(completionStart, completionEnd);
-    assert.match(section, /\/gsdd-quick/,
-      'map-codebase completion must offer /gsdd-quick as a brownfield next step. FIX: Add quick-routing to completion.');
+    assert.match(section, /\/work-quick/,
+      'map-codebase completion must offer /work-quick as a brownfield next step. FIX: Add quick-routing to completion.');
     assert.match(section, /brownfield/i,
-      'map-codebase completion must describe the quick path as brownfield feature work. FIX: Label /gsdd-quick as brownfield feature work.');
+      'map-codebase completion must describe the quick path as brownfield feature work. FIX: Label /work-quick as brownfield feature work.');
     assert.match(section, /full lifecycle setup|project initialization/i,
-      'map-codebase completion must preserve /gsdd-new-project as the full initializer. FIX: Keep the stronger brownfield route explicit.');
+      'map-codebase completion must preserve /work-new-project as the full initializer. FIX: Keep the stronger brownfield route explicit.');
     assert.match(section, /Safest next change lane/i,
       'map-codebase completion must synthesize a safest-next-change lane from the 4 docs. FIX: Add routing summary guidance.');
     assert.match(section, /Highest-risk zones/i,
@@ -1997,7 +1997,7 @@ describe('G24 - Hardening Propagation', () => {
     assert.match(section, /Do NOT create a fifth persistent artifact/i,
       'map-codebase completion must keep the routing summary ephemeral. FIX: Explicitly forbid creating a fifth map artifact.');
     assert.match(section, /intentionally want to widen|only when the user intentionally wants to widen/i,
-      'map-codebase completion must keep /gsdd-new-project as an explicit widen path, not a default fallback. FIX: Add widen-only wording to the completion guidance.');
+      'map-codebase completion must keep /work-new-project as an explicit widen path, not a default fallback. FIX: Add widen-only wording to the completion guidance.');
   });
 
   // --- new-project.md (H5, H9) ---
@@ -2042,7 +2042,7 @@ describe('G24 - Hardening Propagation', () => {
     assert.match(content, /Concrete brownfield continuity already exists/i,
       'new-project.md must recognize existing brownfield continuity. FIX: Add the explicit brownfield continuity detect_mode note.');
     assert.match(content, /explicit widen path|intentionally want to widen/i,
-      'new-project.md must keep /gsdd-new-project as an explicit widen path when CHANGE.md exists. FIX: Add widen-only wording for concrete brownfield continuity.');
+      'new-project.md must keep /work-new-project as an explicit widen path when CHANGE.md exists. FIX: Add widen-only wording for concrete brownfield continuity.');
   });
 
   // --- audit-milestone.md (H7) ---
@@ -2173,12 +2173,12 @@ describe('G26 - Context Engineering: Quick Workflow', () => {
 
   test('quick.md uses split escalation for undefined scope vs too many grey areas', () => {
     const content = fs.readFileSync(QUICK_PATH, 'utf-8');
-    assert.match(content, /bounded change is still undefined.*\/gsdd-new-project/s,
-      'quick.md must route undefined bounded changes to /gsdd-new-project. FIX: Keep the undefined-scope escalation explicit.');
-    assert.match(content, /3\+ grey areas.*\/gsdd-plan/s,
-      'quick.md must route defined-but-too-ambiguous tasks to /gsdd-plan. FIX: Keep the complexity escalation explicit.');
+    assert.match(content, /bounded change is still undefined.*\/work-new-project/s,
+      'quick.md must route undefined bounded changes to /work-new-project. FIX: Keep the undefined-scope escalation explicit.');
+    assert.match(content, /3\+ grey areas.*\/work-plan/s,
+      'quick.md must route defined-but-too-ambiguous tasks to /work-plan. FIX: Keep the complexity escalation explicit.');
     assert.match(content, /intentional widen path|not the default fallback/i,
-      'quick.md must treat /gsdd-new-project as a widen-only move when CHANGE.md already defines a bounded lane. FIX: Add the widen-only brownfield note.');
+      'quick.md must treat /work-new-project as a widen-only move when CHANGE.md already defines a bounded lane. FIX: Add the widen-only brownfield note.');
   });
 
   test('quick.md plan preview offers the correct switch route for undefined bounded changes', () => {
@@ -2186,10 +2186,10 @@ describe('G26 - Context Engineering: Quick Workflow', () => {
     const previewStart = content.indexOf('## Step 3.7');
     assert.ok(previewStart > -1, 'quick.md must have ## Step 3.7 plan preview section.');
     const previewSection = content.slice(previewStart, previewStart + 2600);
-    assert.match(previewSection, /contains.*\/gsdd-new-project.*switch to \/gsdd-new-project/s,
-      'quick.md plan preview must surface a /gsdd-new-project switch option when the scope warning says the bounded change is undefined. FIX: Split preview routing by warning type.');
-    assert.match(previewSection, /switch to \/gsdd-new-project.*clean up the task directory/i,
-      'quick.md must clean up the provisional quick-task directory before switching to /gsdd-new-project from the plan preview. FIX: Add cleanup to the new-project branch.');
+    assert.match(previewSection, /contains.*\/work-new-project.*switch to \/work-new-project/s,
+      'quick.md plan preview must surface a /work-new-project switch option when the scope warning says the bounded change is undefined. FIX: Split preview routing by warning type.');
+    assert.match(previewSection, /switch to \/work-new-project.*clean up the task directory/i,
+      'quick.md must clean up the provisional quick-task directory before switching to /work-new-project from the plan preview. FIX: Add cleanup to the new-project branch.');
   });
 });
 
@@ -2198,15 +2198,15 @@ describe('G27 - Workflow Mutability Classification', () => {
     const mod = await import(`file://${GSDD_PATH.replace(/\\/g, '/')}`);
     const workflows = mod.createCliContext(ROOT).workflows;
     const mutating = new Map([
-      ['gsdd-new-project', 'writes SPEC.md and ROADMAP.md'],
-      ['gsdd-map-codebase', 'writes codebase map documents'],
-      ['gsdd-plan', 'writes PLAN.md and planning artifacts'],
-      ['gsdd-execute', 'writes SUMMARY.md'],
-      ['gsdd-verify', 'writes VERIFICATION.md'],
-      ['gsdd-audit-milestone', 'writes MILESTONE-AUDIT.md'],
-      ['gsdd-quick', 'writes quick-task artifacts'],
-      ['gsdd-pause', 'writes .continue-here.md'],
-      ['gsdd-resume', 'deletes .continue-here.md before dispatch'],
+      ['work-new-project', 'writes SPEC.md and ROADMAP.md'],
+      ['work-map-codebase', 'writes codebase map documents'],
+      ['work-plan', 'writes PLAN.md and planning artifacts'],
+      ['work-execute', 'writes SUMMARY.md'],
+      ['work-verify', 'writes VERIFICATION.md'],
+      ['work-audit-milestone', 'writes MILESTONE-AUDIT.md'],
+      ['work-quick', 'writes quick-task artifacts'],
+      ['work-pause', 'writes .continue-here.md'],
+      ['work-resume', 'deletes .continue-here.md before dispatch'],
     ]);
 
     for (const [name, reason] of mutating) {
@@ -2226,12 +2226,12 @@ describe('G27 - Workflow Mutability Classification', () => {
     const workflows = mod.createCliContext(ROOT).workflows;
     const readOnly = workflows.filter((workflow) => workflow.mutatesArtifacts === false);
 
-    assert.deepStrictEqual(readOnly.map((workflow) => workflow.name), ['gsdd-progress'],
-      'Only gsdd-progress should remain read-only. FIX: Do not classify artifact-writing workflows as read-only.');
+    assert.deepStrictEqual(readOnly.map((workflow) => workflow.name), ['work-progress'],
+      'Only work-progress should remain read-only. FIX: Do not classify artifact-writing workflows as read-only.');
     assert.strictEqual(readOnly[0].agent, 'Plan',
-      'gsdd-progress must remain agent: Plan. FIX: Keep read-only status reporting in the Plan lane.');
+      'work-progress must remain agent: Plan. FIX: Keep read-only status reporting in the Plan lane.');
     assert.strictEqual(readOnly[0].opencodeType, 'plan',
-      'gsdd-progress must remain opencodeType: plan. FIX: Keep read-only status reporting in the plan lane.');
+      'work-progress must remain opencodeType: plan. FIX: Keep read-only status reporting in the plan lane.');
   });
 });
 
@@ -2376,7 +2376,7 @@ describe('G46 - Brownfield Artifact Contract', () => {
       '.planning/SPEC.md must describe the dedicated brownfield-change family. FIX: Add the explicit 3-file lane contract.');
     assert.match(roadmap, /parallelism/i,
       '.planning/ROADMAP.md Phase 40 must preserve parallelism boundaries, not only size/escalation. FIX: Add parallelism to the phase contract.');
-    assert.match(todo, /Phase 41|\/gsdd-plan 41|\/gsdd-verify 41/i,
+    assert.match(todo, /Phase 41|\/work-plan 41|\/work-verify 41/i,
       '.internal-research/TODO.md must keep the active brownfield continuity next step current. FIX: Update the active next step after Phase 40 and Phase 41 progress.');
     assert.match(gaps, /I43[\s\S]*brownfield-change/i,
       '.internal-research/gaps.md must narrow I43 around the new brownfield-change contract. FIX: Update I43 after Phase 40.');
@@ -2420,8 +2420,8 @@ describe('G47 - Brownfield Continuity Contract', () => {
       'progress.md must keep HANDOFF.md as judgment-only context. FIX: Add the handoff-only wording.');
     assert.match(progress, /Brownfield continuity warning/i,
       'progress.md must surface brownfield artifact/worktree drift as a warning. FIX: Add the continuity warning block.');
-    assert.match(progress, /Run \/gsdd-resume to restore the active brownfield change context/i,
-      'progress.md must route the active brownfield change toward /gsdd-resume. FIX: Add the active brownfield Branch F recommendation.');
+    assert.match(progress, /Run \/work-resume to restore the active brownfield change context/i,
+      'progress.md must route the active brownfield change toward /work-resume. FIX: Add the active brownfield Branch F recommendation.');
     assert.match(progress, /progress` stays read-only\.|progress stays read-only\./i,
       'progress.md must remain read-only while reporting the brownfield state. FIX: Preserve the read-only boundary.');
     assert.match(progress, /strict-match rule/i,
@@ -2470,14 +2470,14 @@ describe('G48 - Brownfield Growth And Milestone Handoff', () => {
       'CHANGE.md must define explicit structural promotion triggers. FIX: Add a Structural Promotion Triggers section.');
     assert.match(change, /one active stream|one active medium-scope change/i,
       'CHANGE.md must keep the one-active-stream boundary visible during widening. FIX: Re-state the one-active-stream rule near the promotion guidance.');
-    assert.match(change, /\/gsdd-new-project[\s\S]*first milestone/i,
-      'CHANGE.md must route first-milestone widening through /gsdd-new-project. FIX: Add the first-milestone widen path.');
-    assert.match(change, /\/gsdd-new-milestone[\s\S]*shipped milestone history|next milestone cycle/i,
-      'CHANGE.md must route subsequent widening through /gsdd-new-milestone. FIX: Add the subsequent-milestone widen path.');
+    assert.match(change, /\/work-new-project[\s\S]*first milestone/i,
+      'CHANGE.md must route first-milestone widening through /work-new-project. FIX: Add the first-milestone widen path.');
+    assert.match(change, /\/work-new-milestone[\s\S]*shipped milestone history|next milestone cycle/i,
+      'CHANGE.md must route subsequent widening through /work-new-milestone. FIX: Add the subsequent-milestone widen path.');
     assert.match(change, /Do not invent a separate promotion artifact|Do not create a second durable handoff file/i,
       'CHANGE.md must forbid a second promotion artifact. FIX: Add the no-new-promotion-artifact rule.');
 
-    assert.match(handoff, /preserved judgment input to `?\/gsdd-new-project`? or `?\/gsdd-new-milestone`?/i,
+    assert.match(handoff, /preserved judgment input to `?\/work-new-project`? or `?\/work-new-milestone`?/i,
       'HANDOFF.md must describe how widening reuses the judgment surface. FIX: Add the widening handoff note.');
     assert.match(verification, /existing proof surface even when the bounded change widens|Milestone-init workflows should read it/i,
       'VERIFICATION.md must preserve proof reuse during widening. FIX: Add widening reuse guidance to the verification template.');
@@ -2494,8 +2494,8 @@ describe('G48 - Brownfield Growth And Milestone Handoff', () => {
       'new-project.md must forbid a new promotion artifact during widening. FIX: Add the no-new-artifact rule.');
     assert.match(content, /do not make the user rediscover context already preserved on disk/i,
       'new-project.md questioning must reuse preserved brownfield context. FIX: Add the no-rediscovery rule.');
-    assert.match(content, /route this widen request to `?\/gsdd-new-milestone`?/i,
-      'new-project.md must defer to /gsdd-new-milestone when shipped milestone history already exists. FIX: Add the subsequent-milestone redirect.');
+    assert.match(content, /route this widen request to `?\/work-new-milestone`?/i,
+      'new-project.md must defer to /work-new-milestone when shipped milestone history already exists. FIX: Add the subsequent-milestone redirect.');
   });
 
   test('new-milestone.md consumes brownfield widening inputs and preserves context into phase design', () => {
@@ -2519,12 +2519,12 @@ describe('G48 - Brownfield Growth And Milestone Handoff', () => {
 
     assert.match(progress, /Growth boundary: stay in the bounded lane/i,
       'progress.md must keep bounded growth explicit. FIX: Add the growth-boundary status line.');
-    assert.match(progress, /\/gsdd-new-milestone[\s\S]*intentionally want to widen/i,
-      'progress.md must offer /gsdd-new-milestone only as an intentional widen path. FIX: Add the explicit subsequent-milestone widen option.');
+    assert.match(progress, /\/work-new-milestone[\s\S]*intentionally want to widen/i,
+      'progress.md must offer /work-new-milestone only as an intentional widen path. FIX: Add the explicit subsequent-milestone widen option.');
 
     assert.match(resume, /multiple active streams, milestone-owned lifecycle state, or broader requirement tracking/i,
       'resume.md must describe the structural triggers for widening. FIX: Add the bounded-growth trigger wording.');
-    assert.match(resume, /use `?\/gsdd-new-project`? for first-milestone setup and `?\/gsdd-new-milestone`?/i,
+    assert.match(resume, /use `?\/work-new-project`? for first-milestone setup and `?\/work-new-milestone`?/i,
       'resume.md must distinguish first-milestone and subsequent-milestone widening. FIX: Add the split widen-path wording.');
   });
 });
@@ -3117,18 +3117,18 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
   }
 
   // Routing correctness: each workflow routes to the right next step
-  test('new-milestone.md completion routes to /gsdd-plan', () => {
+  test('new-milestone.md completion routes to /work-plan', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'new-milestone.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd-plan/,
-      'new-milestone completion must route to /gsdd-plan. FIX: Add /gsdd-plan as next step in completion.');
+    assert.match(section, /\/work-plan/,
+      'new-milestone completion must route to /work-plan. FIX: Add /work-plan as next step in completion.');
   });
 
-  test('complete-milestone.md completion routes to /gsdd-new-milestone', () => {
+  test('complete-milestone.md completion routes to /work-new-milestone', () => {
     const content = fs.readFileSync(path.join(WORKFLOWS_DIR, 'complete-milestone.md'), 'utf-8');
     const section = content.slice(content.indexOf('<completion>'), content.indexOf('</completion>'));
-    assert.match(section, /\/gsdd-new-milestone/,
-      'complete-milestone completion must route to /gsdd-new-milestone. FIX: Add /gsdd-new-milestone as next step in completion.');
+    assert.match(section, /\/work-new-milestone/,
+      'complete-milestone completion must route to /work-new-milestone. FIX: Add /work-new-milestone as next step in completion.');
   });
 
   test('plan.md amend mode owns former gap-closure guardrails', () => {
@@ -3142,7 +3142,7 @@ describe('G35 - Milestone Lifecycle Workflows', () => {
       'plan amend mode must preflight before mutating ROADMAP. FIX: Add lifecycle-preflight plan amend.');
     assert.match(section, /node \.work\/bin\/gsdd\.mjs next --json/,
       'plan amend mode must confirm next-action routing after intentional ROADMAP writes. FIX: Run next --json after creating phases.');
-    assert.match(section, /\/gsdd-audit-milestone/,
+    assert.match(section, /\/work-audit-milestone/,
       'plan amend mode must preserve re-audit after gap closure. FIX: Add re-audit routing guidance.');
   });
 
@@ -3319,7 +3319,7 @@ describe('G37 - Launch Surface Consistency', () => {
 
     const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
     const roadmap = fs.readFileSync(PLANNING_ROADMAP_MD, 'utf-8');
-    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/gsdd-new-milestone|v1\.3\.0 Engine Contract Hardening|\/gsdd-verify 29|v1\.5\.0 Brownfield Change Continuity|\/gsdd-plan 39|v1\.6 Release Spine Hardening|\/gsdd-execute 44|v1\.8 UI Proof|\/gsdd-plan 58|v1\.9 Tight SDD Closure|\/gsdd-verify 61/i,
+    assert.match(planningSpec, /v1\.2\.0 Fork-Honest Launch Hardening — SHIPPED|\/work-new-milestone|v1\.3\.0 Engine Contract Hardening|\/work-verify 29|v1\.5\.0 Brownfield Change Continuity|\/work-plan 39|v1\.6 Release Spine Hardening|\/work-execute 44|v1\.8 UI Proof|\/work-plan 58|v1\.9 Tight SDD Closure|\/work-verify 61/i,
       '.planning/SPEC.md must reflect honest milestone state after the v1.2.0 archive handoff, whether still between milestones or already in the next milestone. FIX: Keep Current State aligned to repo truth.');
     assert.match(roadmap, /Phase 24: Naming Contract Reconciliation/i,
       '.planning/ROADMAP.md must preserve the archived naming-surface reconciliation path. FIX: Keep the v1.2.0 phase chain visible after collapse.');
@@ -3436,7 +3436,7 @@ describe('G37 - Launch Surface Consistency', () => {
       'init-runtime help text must not claim recorded proof for a runtime that has none. FIX: Name only Codex CLI as recorded; describe the others as generated with no recorded run.');
     assert.match(helpText, /qualified support.*shared \.agents\/skills\/ surface plus optional governance/i,
       'init-runtime help text must distinguish qualified support from directly validated native runtimes. FIX: Keep the proof split explicit in the notes.');
-    assert.match(helpText, /\$gsdd-plan is plan-only until explicit \$gsdd-execute/i,
+    assert.match(helpText, /\$work-plan is plan-only until explicit \$work-execute/i,
       'init-runtime help text must keep the explicit plan-to-execute boundary visible for Codex. FIX: Add the plan-only / execute-unlock note to the codex help text.');
   });
 
@@ -3466,7 +3466,7 @@ describe('G37 - Launch Surface Consistency', () => {
     }
 
     for (const line of initRuntime.getPostInitRoutingLines(['claude', 'codex'])) {
-      for (const id of line.match(/gsdd-[a-z-]+/g) || []) {
+      for (const id of line.match(/work-[a-z-]+/g) || []) {
         assert.ok(WORKFLOWS.some(({ name }) => name === id),
           `post-init routing line must only name manifest workflow ids; found ${id}. FIX: Derive the routing ids from WORKFLOWS via workflowId().`);
       }
@@ -4263,7 +4263,7 @@ describe('G40 - Provenance And Write-Gate Contracts', () => {
     assert.match(progress, /`?generic`? checkpoints? (?:are|stay) informational-only/i,
       'progress.md must treat generic checkpoints as informational-only. FIX: Keep the explicit informational rule.');
     assert.match(progress, /do \*\*not\*\* route back through Branch A|keep evaluating Branch B-F/i,
-      'progress.md must route past informational generic checkpoints instead of bouncing back to /gsdd-resume. FIX: Keep the non-looping routing note.');
+      'progress.md must route past informational generic checkpoints instead of bouncing back to /work-resume. FIX: Keep the non-looping routing note.');
     assert.match(progress, /`?phase`? and `?quick`?.*blocking resume-owned surfaces/i,
       'progress.md must preserve stronger routing for phase and quick checkpoints. FIX: Keep the blocking checkpoint wording.');
   });

@@ -1799,9 +1799,9 @@ describe('G12 — Documentation Accuracy Guards', () => {
     // Extract /gsdd-* references from the diagram (canonical hyphen form)
     const diagramCommands = [...diagram.matchAll(/\/gsdd-([a-z-]+)/g)].map(m => m[1]);
 
-    // Get valid workflow names (strip 'gsdd-' prefix to get the command part)
-    const workflowNames = (workflowsContent.match(/name:\s*'gsdd-([a-z-]+)'/g) || [])
-      .map(m => m.match(/name:\s*'gsdd-([a-z-]+)'/)[1]);
+    // Get valid workflow names (strip 'work-' prefix to get the command part)
+    const workflowNames = (workflowsContent.match(/name:\s*'work-([a-z-]+)'/g) || [])
+      .map(m => m.match(/name:\s*'work-([a-z-]+)'/)[1]);
 
     for (const cmd of diagramCommands) {
       assert.ok(

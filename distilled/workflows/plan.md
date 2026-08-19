@@ -17,7 +17,7 @@ Before starting, read these files:
 10. `.work/*-MILESTONE-AUDIT.md`, `.work/milestone/AUDIT.md`, `.work/evidence/manifest.json`, and recent `*-VERIFICATION.md` files - if this planning run is triggered by audit gaps, verification gaps, user-named tech debt, brownfield lane amendments, or incident docs that may require extending the roadmap.
 
 Classify the target before preflight:
-- If `.work/brownfield-change/CHANGE.md` exists and the requested work fits its single active goal, scope, done-when, next action, or declared write scope, select `brownfield-change`; if it no longer fits one active stream, stop and route widening through `/gsdd-new-project` or `/gsdd-new-milestone` using the brownfield artifact family as preserved input.
+- If `.work/brownfield-change/CHANGE.md` exists and the requested work fits its single active goal, scope, done-when, next action, or declared write scope, select `brownfield-change`; if it no longer fits one active stream, stop and route widening through `/work-new-project` or `/work-new-milestone` using the brownfield artifact family as preserved input.
 - If audit gaps, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` require adding new roadmap work, select `amend` as the planning target before normal phase selection.
 - Otherwise identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>
@@ -30,8 +30,8 @@ Before writing or rewriting planning artifacts, run the preflight for the select
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift. Do not run phase preflight before target classification; an unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
 <amend_extend_mode>
-Use this entry mode of `/gsdd-plan` when audit findings, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` need follow-up planning without a suitable existing phase. Reconcile latest `MILESTONE-AUDIT.md`, `.work/milestone/AUDIT.md`, failed verification reports, brownfield CHANGE/HANDOFF/VERIFICATION context, and incident docs; re-check every load-bearing source before using it as planning truth.
-If an existing open phase fits, route to normal phase planning. If a new phase is needed, run `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`, append the smallest closure phase to `.work/ROADMAP.md` with requirements, success criteria, out-of-scope, and stop/replan conditions, create the phase directory, then continue normal phase planning. After appending roadmap work, run `node .work/bin/gsdd.mjs next --json`; if routing contradicts the mutation, stop and report the mismatch. Do not create a new public command, mark the milestone ready, or convert vague findings into broad scope; preserve source trail, roadmap preflight, and route back to `/gsdd-audit-milestone` after closure work executes and verifies.
+Use this entry mode of `/work-plan` when audit findings, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` need follow-up planning without a suitable existing phase. Reconcile latest `MILESTONE-AUDIT.md`, `.work/milestone/AUDIT.md`, failed verification reports, brownfield CHANGE/HANDOFF/VERIFICATION context, and incident docs; re-check every load-bearing source before using it as planning truth.
+If an existing open phase fits, route to normal phase planning. If a new phase is needed, run `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`, append the smallest closure phase to `.work/ROADMAP.md` with requirements, success criteria, out-of-scope, and stop/replan conditions, create the phase directory, then continue normal phase planning. After appending roadmap work, run `node .work/bin/gsdd.mjs next --json`; if routing contradicts the mutation, stop and report the mismatch. Do not create a new public command, mark the milestone ready, or convert vague findings into broad scope; preserve source trail, roadmap preflight, and route back to `/work-audit-milestone` after closure work executes and verifies.
 </amend_extend_mode>
 <integration_surface_check>
 Before planning roadmap work, inspect the live integration surface separately from checkpoint or planning artifacts:
@@ -462,7 +462,7 @@ The conversation with the user runs inline in the main context. For each technic
 
 **Native agent optimization:**
 
-If your runtime provides an interactive `gsdd-approach-explorer` agent:
+If your runtime provides an interactive `work-approach-explorer` agent:
 - Invoke it with: target phase goal, requirement IDs, project config from `.work/config.json` (especially `workflow.discuss`), locked decisions, phase research (if exists), relevant codebase files
 - The native agent runs the full exploration in its own context window
 - This is an optimization — the output (APPROACH.md) is identical to the primary path
@@ -507,7 +507,7 @@ After the planner produces a draft plan, an independent checker reviews it in fr
 The smaller dimension set still preserves the old failure coverage: scope boundaries are checked under `scope_sanity`, anti-regression and escalation under `context_compliance`, closure honesty and browser-proof specificity under `goal_achievement`, and second-pass review under the final shared-surface review before closure.
 ### Invoking the Checker
 1. If `.work/config.json` has `workflow.planCheck: false`, skip the independent checker. Perform the planner self-check below and report `reduced_assurance`. This does not skip the earlier alignment-proof gate when `workflow.discuss: true`.
-2. If plan checking is enabled, check if your runtime provides a `gsdd-plan-checker` agent.
+2. If plan checking is enabled, check if your runtime provides a `work-plan-checker` agent.
 3. If a native checker agent is available, invoke it in a fresh context with only these explicit inputs:
    - target phase goal and requirement IDs
    - relevant locked decisions / deferred items from `.work/SPEC.md`
@@ -626,10 +626,10 @@ Planning is done when all of these are true:
 Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** Phase planning — created `.work/phases/{phase_dir}/{plan_id}-PLAN.md`.
-**Planning stops here:** `gsdd-plan` ends after the plan artifact is written. Do not start implementation in this same run, and do not treat imperative handoff text as execution authorization.
+**Planning stops here:** `work-plan` ends after the plan artifact is written. Do not start implementation in this same run, and do not treat imperative handoff text as execution authorization.
 Installed generated runtime surfaces are trusted through rendering, not reviewer memory: `npx -y workspine health` compares any local generated skill/adapter surfaces against current render output, and `npx -y workspine update` regenerates them when they drift. Bare `gsdd health` / `gsdd update` are equivalent only when globally installed.
-**Next workflow:** `/gsdd-execute` — start execution in a separate run when the user explicitly wants implementation to begin
-Also available: `/gsdd-plan` for another wave, or `/gsdd-progress` for overall status.
+**Next workflow:** `/work-execute` — start execution in a separate run when the user explicitly wants implementation to begin
+Also available: `/work-plan` for another wave, or `/work-progress` for overall status.
 Consider clearing context before starting the next workflow for best results.
 ---
 </completion>

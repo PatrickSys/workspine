@@ -86,14 +86,14 @@ function buildClaudeEntries({ cwd, workflows, stateDirName = '.work' }) {
 
   const entries = workflows.map((workflow) => ({
     relativePath: `.claude/skills/${workflow.name}/SKILL.md`,
-    expectedContent: workflow.name === 'gsdd-plan'
+    expectedContent: workflow.name === 'work-plan'
       ? renderClaudePlanSkill({ stateDirName })
       : renderSkillContent(workflow, { stateDirName }),
   }));
 
   entries.push(
     {
-      relativePath: '.claude/commands/gsdd-plan.md',
+      relativePath: '.claude/commands/work-plan.md',
       expectedContent: renderClaudePlanCommand(),
     },
     {
@@ -116,7 +116,7 @@ function buildOpenCodeEntries({ cwd, workflows, stateDirName = '.work' }) {
 
   const entries = workflows.map((workflow) => ({
     relativePath: `.opencode/commands/${workflow.name}.md`,
-    expectedContent: workflow.name === 'gsdd-plan'
+    expectedContent: workflow.name === 'work-plan'
       ? renderOpenCodePlanCommand({ stateDirName })
       : renderOpenCodeCommandContent(workflow, { stateDirName }),
   }));

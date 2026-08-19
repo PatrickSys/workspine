@@ -9,7 +9,7 @@ Use this file for rolling judgment and cross-session continuity on the active ch
 Do not duplicate milestone roadmap state here.
 Operational state still lives in `CHANGE.md`.
 This file explains constraints, uncertainty, posture, and anti-regression context; it must not become a second status or routing authority.
-If this change widens into milestone planning, this file remains the preserved judgment input to `/gsdd-new-project` or `/gsdd-new-milestone`; do not copy it into a second promotion artifact.
+If this change widens into milestone planning, this file remains the preserved judgment input to `/work-new-project` or `/work-new-milestone`; do not copy it into a second promotion artifact.
 
 ## Active Constraints
 

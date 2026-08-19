@@ -35,19 +35,19 @@ describe('specialized plan adapter surfaces', () => {
     }
 
     const claudePlanSkill = fs.readFileSync(
-      path.join(tmpDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'),
+      path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'),
       'utf-8'
     );
     const claudeNewProjectSkill = fs.readFileSync(
-      path.join(tmpDir, '.claude', 'skills', 'gsdd-new-project', 'SKILL.md'),
+      path.join(tmpDir, '.claude', 'skills', 'work-new-project', 'SKILL.md'),
       'utf-8'
     );
     const claudePlanCommand = fs.readFileSync(
-      path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'),
+      path.join(tmpDir, '.claude', 'commands', 'work-plan.md'),
       'utf-8'
     );
 
-    assert.match(claudePlanSkill, /^name: gsdd-plan/m);
+    assert.match(claudePlanSkill, /^name: work-plan/m);
     assert.match(claudePlanSkill, /canonical Claude-native entry surface/);
     assert.match(claudePlanSkill, /Do NOT fork this skill into a subagent/);
     assert.match(claudePlanSkill, /not as a stop signal for this Claude-native adapter path/);
@@ -60,7 +60,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /all canonical proof fields[\s\S]{0,260}alignment_status[\s\S]{0,80}alignment_method[\s\S]{0,80}user_confirmed_at[\s\S]{0,80}explicit_skip_approved[\s\S]{0,80}skip_scope[\s\S]{0,80}skip_rationale[\s\S]{0,80}confirmed_decisions/);
     assert.match(claudePlanSkill, /No questions needed.*not valid proof|not valid proof.*No questions needed/);
     assert.match(claudePlanSkill, /Use existing[\s\S]{0,220}validate the alignment proof/i);
-    assert.match(claudePlanSkill, /gsdd-approach-explorer[\s\S]{0,240}\.work\/config\.json[\s\S]{0,100}workflow\.discuss/i);
+    assert.match(claudePlanSkill, /work-approach-explorer[\s\S]{0,240}\.work\/config\.json[\s\S]{0,100}workflow\.discuss/i);
     assert.match(claudePlanSkill, /workflow\.planCheck: false[\s\S]{0,260}does not skip[\s\S]{0,160}alignment-proof gate/i);
     assert.match(claudePlanSkill, /\.work\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
     assert.doesNotMatch(claudePlanSkill, /^context: fork$/m);
@@ -70,7 +70,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudeNewProjectSkill, /^agent: Code$/m);
 
     assert.match(claudePlanCommand, /Compatibility alias/);
-    assert.match(claudePlanCommand, /\.claude\/skills\/gsdd-plan\/SKILL\.md/);
+    assert.match(claudePlanCommand, /\.claude\/skills\/work-plan\/SKILL\.md/);
     assert.doesNotMatch(claudePlanCommand, /Maximum 3 checker cycles total/);
   });
 
@@ -84,21 +84,21 @@ describe('specialized plan adapter surfaces', () => {
     }
 
     const opencodePlanCommand = fs.readFileSync(
-      path.join(tmpDir, '.opencode', 'commands', 'gsdd-plan.md'),
+      path.join(tmpDir, '.opencode', 'commands', 'work-plan.md'),
       'utf-8'
     );
     const opencodeExecuteCommand = fs.readFileSync(
-      path.join(tmpDir, '.opencode', 'commands', 'gsdd-execute.md'),
+      path.join(tmpDir, '.opencode', 'commands', 'work-execute.md'),
       'utf-8'
     );
     const opencodePlanChecker = fs.readFileSync(
-      path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
+      path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'),
       'utf-8'
     );
 
     assert.match(opencodePlanCommand, /^subtask: false$/m);
     assert.match(opencodePlanCommand, /canonical OpenCode-native entry surface/);
-    assert.match(opencodePlanCommand, /hidden `gsdd-plan-checker` subagent/);
+    assert.match(opencodePlanCommand, /hidden `work-plan-checker` subagent/);
     assert.match(opencodePlanCommand, /not as a stop signal for this OpenCode-native adapter path/);
     assert.match(opencodePlanCommand, /Maximum 3 checker cycles total/);
     assert.match(opencodePlanCommand, /blockers or warnings remain after cycle 3/);
@@ -113,7 +113,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(opencodePlanCommand, /skip_rationale/);
     assert.match(opencodePlanCommand, /No questions needed.*not valid proof|not valid proof.*No questions needed/);
     assert.match(opencodePlanCommand, /Use existing[\s\S]{0,220}validate the alignment proof/i);
-    assert.match(opencodePlanCommand, /gsdd-approach-explorer[\s\S]{0,220}\.work\/config\.json[\s\S]{0,80}workflow\.discuss/i);
+    assert.match(opencodePlanCommand, /work-approach-explorer[\s\S]{0,220}\.work\/config\.json[\s\S]{0,80}workflow\.discuss/i);
     assert.match(opencodePlanCommand, /workflow\.planCheck: false[\s\S]{0,260}does not skip[\s\S]{0,160}alignment-proof gate/i);
     assert.match(opencodePlanCommand, /\.work\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
 
@@ -136,19 +136,19 @@ describe('specialized plan adapter surfaces', () => {
     }
 
     // Checker agent must exist
-    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
 
     // No planner TOML — portable skill is the entry surface
     assert.ok(!fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-planner.toml')));
 
     // Portable skill must be self-sufficient for Codex
     const portableSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md'),
       'utf-8'
     );
     assert.match(portableSkill, /How Plan Checking Works/);
     assert.match(portableSkill, /Invoking the Checker/);
-    assert.match(portableSkill, /gsdd-plan-checker/);
+    assert.match(portableSkill, /work-plan-checker/);
     assert.match(portableSkill, /Maximum 3 checker cycles total/);
     assert.match(portableSkill, /blockers or warnings remain after cycle 3/);
     assert.match(portableSkill, /"status": "issues_found"/);
@@ -156,7 +156,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(portableSkill, /reduced_assurance/);
     assert.match(portableSkill, /Orchestration Summary/);
     assert.match(portableSkill, /Planning stops here|plan-only/i);
-    assert.match(portableSkill, /separate run.*gsdd-execute|explicitly wants implementation to begin/i);
+    assert.match(portableSkill, /separate run.*work-execute|explicitly wants implementation to begin/i);
     assert.doesNotMatch(portableSkill, /execute the plan/i);
 
     // Must NOT contain vendor-specific content
@@ -177,12 +177,12 @@ describe('specialized plan adapter surfaces', () => {
     }
 
     const portableSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md'),
       'utf-8'
     );
 
     assert.match(portableSkill, /Planning stops here|plan-only/i);
-    assert.match(portableSkill, /\/gsdd-execute/);
+    assert.match(portableSkill, /\/work-execute/);
     assert.doesNotMatch(portableSkill, /\.codex\/AGENTS\.md/i);
     assert.doesNotMatch(portableSkill, /gsdd-planner\.toml/i);
   });
@@ -197,11 +197,11 @@ describe('specialized plan adapter surfaces', () => {
     }
 
     const codexPlanChecker = fs.readFileSync(
-      path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+      path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'),
       'utf-8'
     );
 
-    assert.match(codexPlanChecker, /^name = "gsdd-plan-checker"/m);
+    assert.match(codexPlanChecker, /^name = "work-plan-checker"/m);
     assert.match(codexPlanChecker, /^sandbox_mode = "read-only"/m);
     assert.match(codexPlanChecker, /^model_reasoning_effort = "high"/m);
     assert.match(codexPlanChecker, /developer_instructions/);
@@ -224,7 +224,7 @@ describe('specialized plan adapter surfaces', () => {
     }
 
     const claudePlanChecker = fs.readFileSync(
-      path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
+      path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'),
       'utf-8'
     );
     const opencodeTmpDir = createTempProject();
@@ -236,7 +236,7 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin2();
     }
     const opencodePlanChecker = fs.readFileSync(
-      path.join(opencodeTmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
+      path.join(opencodeTmpDir, '.opencode', 'agents', 'work-plan-checker.md'),
       'utf-8'
     );
     cleanup(opencodeTmpDir);
@@ -267,7 +267,7 @@ describe('specialized plan adapter surfaces', () => {
     }
 
     const codexPlanChecker = fs.readFileSync(
-      path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+      path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'),
       'utf-8'
     );
 
@@ -288,11 +288,11 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin();
     }
 
-    const explorerPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-approach-explorer.md');
+    const explorerPath = path.join(tmpDir, '.claude', 'agents', 'work-approach-explorer.md');
     assert.ok(fs.existsSync(explorerPath), 'Claude approach-explorer agent must exist');
 
     const content = fs.readFileSync(explorerPath, 'utf-8');
-    assert.match(content, /^name: gsdd-approach-explorer/m, 'must have name: gsdd-approach-explorer');
+    assert.match(content, /^name: work-approach-explorer/m, 'must have name: work-approach-explorer');
     assert.match(content, /AskUserQuestion/, 'must include AskUserQuestion in tools');
     assert.ok(content.length > 100, 'content must be non-trivial (> 100 chars)');
   });
@@ -306,7 +306,7 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin();
     }
 
-    const explorerPath = path.join(tmpDir, '.opencode', 'agents', 'gsdd-approach-explorer.md');
+    const explorerPath = path.join(tmpDir, '.opencode', 'agents', 'work-approach-explorer.md');
     assert.ok(fs.existsSync(explorerPath), 'OpenCode approach-explorer agent must exist');
 
     const content = fs.readFileSync(explorerPath, 'utf-8');
@@ -322,11 +322,11 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin();
     }
 
-    const explorerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-approach-explorer.toml');
+    const explorerPath = path.join(tmpDir, '.codex', 'agents', 'work-approach-explorer.toml');
     assert.ok(fs.existsSync(explorerPath), 'Codex approach-explorer TOML agent must exist');
 
     const content = fs.readFileSync(explorerPath, 'utf-8');
-    assert.match(content, /^name = "gsdd-approach-explorer"/m, 'must have correct name');
+    assert.match(content, /^name = "work-approach-explorer"/m, 'must have correct name');
     assert.match(content, /^model_reasoning_effort = "high"/m, 'must have high reasoning effort');
     assert.doesNotMatch(content, /^sandbox_mode = "read-only"/m, 'approach-explorer must NOT be read-only (needs write access unlike checker)');
   });
@@ -361,7 +361,7 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin1();
     }
     const claudeSkill = fs.readFileSync(
-      path.join(claudeTmpDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'),
+      path.join(claudeTmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'),
       'utf-8'
     );
     cleanup(claudeTmpDir);
@@ -376,7 +376,7 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin2();
     }
     const opencodeCommand = fs.readFileSync(
-      path.join(opencodeTmpDir, '.opencode', 'commands', 'gsdd-plan.md'),
+      path.join(opencodeTmpDir, '.opencode', 'commands', 'work-plan.md'),
       'utf-8'
     );
     cleanup(opencodeTmpDir);
@@ -391,7 +391,7 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin3();
     }
     const portableSkill = fs.readFileSync(
-      path.join(portableTmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      path.join(portableTmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md'),
       'utf-8'
     );
     cleanup(portableTmpDir);
@@ -430,7 +430,7 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin1();
     }
     const claudeChecker = fs.readFileSync(
-      path.join(claudeTmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
+      path.join(claudeTmpDir, '.claude', 'agents', 'work-plan-checker.md'),
       'utf-8'
     );
     cleanup(claudeTmpDir);
@@ -445,7 +445,7 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin2();
     }
     const opencodeChecker = fs.readFileSync(
-      path.join(opencodeTmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
+      path.join(opencodeTmpDir, '.opencode', 'agents', 'work-plan-checker.md'),
       'utf-8'
     );
     cleanup(opencodeTmpDir);
@@ -460,7 +460,7 @@ describe('specialized plan adapter surfaces', () => {
       restoreStdin3();
     }
     const codexChecker = fs.readFileSync(
-      path.join(codexTmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+      path.join(codexTmpDir, '.codex', 'agents', 'work-plan-checker.toml'),
       'utf-8'
     );
     cleanup(codexTmpDir);
@@ -488,12 +488,12 @@ describe('specialized plan adapter surfaces', () => {
       });
       assert.strictEqual(report.issueCount, 0, 'freshly generated surfaces must match current render output');
 
-      fs.appendFileSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'), '\n<!-- drift -->\n');
+      fs.appendFileSync(path.join(tmpDir, '.claude', 'commands', 'work-plan.md'), '\n<!-- drift -->\n');
       report = freshness.evaluateRuntimeFreshness({
         cwd: tmpDir,
         workflows: gsdd.createCliContext(tmpDir).workflows,
       });
-      assert.ok(report.issues.some((entry) => entry.relativePath === '.claude/commands/gsdd-plan.md' && entry.status === 'stale'),
+      assert.ok(report.issues.some((entry) => entry.relativePath === '.claude/commands/work-plan.md' && entry.status === 'stale'),
         'helper must detect direct rendered/generated drift on native plan surfaces');
     } finally {
       restoreStdin();

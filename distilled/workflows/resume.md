@@ -45,7 +45,7 @@ Check for project artifacts in order:
 1. **No `.work/` directory** — route user to run `npx -y workspine init`. Stop.
 2. **If `.work/brownfield-change/CHANGE.md` exists and `Current posture` is not `closed`** — this repo has an active medium-scope brownfield change. Proceed to load brownfield continuity state even if there is no active roadmap.
    - If `Current posture` is `closed`, treat the file as historical context only; it does not replace a checkpoint or active roadmap.
-3. **No `.work/SPEC.md` or no `.work/ROADMAP.md`** — `.work/` exists but the project is not fully initialized (partial init). Route user to run the `/gsdd-new-project` workflow. Stop.
+3. **No `.work/SPEC.md` or no `.work/ROADMAP.md`** — `.work/` exists but the project is not fully initialized (partial init). Route user to run the `/work-new-project` workflow. Stop.
 4. **Both exist** — proceed to load state.
 </detect_state>
 
@@ -274,8 +274,8 @@ Evaluate in priority order and present the primary recommendation:
 
 **Checkpoint exists (`.continue-here.md`):**
 Route based on the `workflow` frontmatter:
-- `phase` — route to `/gsdd-execute` (or `/gsdd-plan`/`/gsdd-verify` based on checkpoint context)
-- `quick` — route to `/gsdd-quick` to complete the task
+- `phase` — route to `/work-execute` (or `/work-plan`/`/work-verify` based on checkpoint context)
+- `quick` — route to `/work-quick` to complete the task
 - `generic` — present the checkpoint `next_action` and let the user decide. This workflow still owns checkpoint cleanup only if the user explicitly resumes from that checkpoint, but downstream read-only `progress` routing must treat the surviving generic checkpoint as informational context rather than an automatic blocker.
 
 If `<validate_checkpoint>` marked the checkpoint as stale, keep the same routing logic. The user may still choose to resume from the checkpoint after reviewing the warning. If the user chooses a different path, leave the checkpoint in place and continue without it.
@@ -289,21 +289,21 @@ If there is no checkpoint, or if the surviving checkpoint does not satisfy the s
 - keep `HANDOFF.md` as supporting judgment context only
 - if artifact/worktree mismatch is material, require explicit acknowledgement before continuing
 - if the user does not want to continue immediately, let them review `CHANGE.md` or `HANDOFF.md` without deleting any checkpoint file
-- do not force this state back through `/gsdd-new-project` or milestone routing just because there is no active roadmap
-- keep `/gsdd-new-project` and `/gsdd-new-milestone` as explicit widen-only choices when the bounded change no longer fits one active stream or now needs milestone-owned lifecycle state
-- use `/gsdd-new-project` for first-milestone setup and `/gsdd-new-milestone` when the repo already has shipped milestone history
+- do not force this state back through `/work-new-project` or milestone routing just because there is no active roadmap
+- keep `/work-new-project` and `/work-new-milestone` as explicit widen-only choices when the bounded change no longer fits one active stream or now needs milestone-owned lifecycle state
+- use `/work-new-project` for first-milestone setup and `/work-new-milestone` when the repo already has shipped milestone history
 
 **Incomplete plan execution (PLAN without SUMMARY):**
-Route to `/gsdd-execute` for that phase.
+Route to `/work-execute` for that phase.
 
 **Phase needs planning (next `[ ]` phase, no PLAN file exists):**
-Route to `/gsdd-plan` for that phase.
+Route to `/work-plan` for that phase.
 
 **Phase needs verification (SUMMARY exists but no VERIFICATION):**
-Route to `/gsdd-verify` for that phase (only if `workflow.verifier` is enabled in config.json; if config.json cannot be read, assume verifier is disabled).
+Route to `/work-verify` for that phase (only if `workflow.verifier` is enabled in config.json; if config.json cannot be read, assume verifier is disabled).
 
 **All phases complete (all `[x]`):**
-Route to `/gsdd-audit-milestone`.
+Route to `/work-audit-milestone`.
 </determine_action>
 
 <present_options>
@@ -360,5 +360,5 @@ Present to the user before dispatching:
 Consider clearing context before starting the next workflow for best results.
 ---
 
-Then dispatch to the selected `/gsdd-*` workflow.
+Then dispatch to the selected `/work-*` workflow.
 </completion>

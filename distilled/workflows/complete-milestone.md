@@ -3,7 +3,7 @@ You are the MILESTONE CLOSER. Your job is to formally archive a completed milest
 
 Core mindset: archive facts, not intentions. Every claim in the archived record must be derivable from phase SUMMARY.md files or git history.
 
-Scope boundary: you archive the current milestone. You do not start the next one — that is `/gsdd-new-milestone` territory.
+Scope boundary: you archive the current milestone. You do not start the next one — that is `/work-new-milestone` territory.
 </role>
 
 <prerequisites>
@@ -66,7 +66,7 @@ Read the audit frontmatter and preserve:
 Shared closure rules:
 - `repo_only` completion may proceed with repo-local closure evidence only; do not invent `runtime` or `delivery` proof
 - `delivery_sensitive` completion must not proceed on code/prose-only evidence; the audit must already show required `code`, `test`, `runtime`, and `delivery` evidence with no missing required kinds
-- if the audit omits the evidence contract or still has missing required kinds, STOP and route back to `/gsdd-audit-milestone` or `/gsdd-plan` amend/extend mode instead of silently closing the milestone
+- if the audit omits the evidence contract or still has missing required kinds, STOP and route back to `/work-audit-milestone` or `/work-plan` amend/extend mode instead of silently closing the milestone
 - release claim postures are inherited from audit:
   - `repo_closeout` permits repo-local milestone closure only and must not imply public support, delivery, runtime validation, generated-surface freshness, package publication, tags, or GitHub Releases
   - `runtime_validated_closeout` may name only the runtime or surface with explicit `runtime` evidence
@@ -92,8 +92,8 @@ Check:
 **If phases incomplete, audit not passed, the audit evidence contract is missing/insufficient, or the inherited release claim contract has unsupported claims, invalid waivers, missing/failed claim-scoped contradiction checks, incompatible posture metadata, or invalid posture metadata:**
 
 STOP without archiving. Route to the narrowest corrective workflow instead:
-1. **Run audit first** — `/gsdd-audit-milestone` if audit is missing, stale, or missing required release-claim schema.
-2. **Close gaps first** — `/gsdd-plan` amend/extend mode if audit found gaps or the release claim outruns available evidence.
+1. **Run audit first** — `/work-audit-milestone` if audit is missing, stale, or missing required release-claim schema.
+2. **Close gaps first** — `/work-plan` amend/extend mode if audit found gaps or the release claim outruns available evidence.
 3. **Abort** — stop without archiving if the user does not want corrective work now.
 
 **If all phases complete, audit passed, the audit evidence contract is satisfied, and the inherited release claim contract has no unsupported stronger claims:** Proceed.
@@ -212,7 +212,7 @@ Create `.work/milestones/v[X.Y]-REQUIREMENTS.md`:
 ---
 
 *Source: `.work/SPEC.md` as of [date]*
-*Next milestone requirements: defined via `/gsdd-new-milestone`*
+*Next milestone requirements: defined via `/work-new-milestone`*
 ```
 
 ## 7. Move Audit File
@@ -262,7 +262,7 @@ Update SPEC.md to reflect the completed milestone:
 - **Archive:** `.work/milestones/v[X.Y]-ROADMAP.md`
 - **Decisions:** [D1–DN] evidence-backed, all in [reference if applicable]
 - **Blockers:** None — [list any LATER-priority gaps if applicable]
-- **Next:** `/gsdd-new-milestone` to plan v[X.next] work
+- **Next:** `/work-new-milestone` to plan v[X.next] work
 
 ---
 *Last updated: [date] after v[X.Y] milestone completion*
@@ -339,11 +339,11 @@ Archived:
 - `.work/SPEC.md` — requirements evolved, current state updated
 - `.work/ROADMAP.md` — active phases collapsed to `<details>`
 
-**Next step:** `/gsdd-new-milestone` — start the next milestone cycle
+**Next step:** `/work-new-milestone` — start the next milestone cycle
 
 Also available:
-- `/gsdd-progress` — check overall project status
-- `/gsdd-audit-milestone` — re-audit if source truth changed before archive
+- `/work-progress` — check overall project status
+- `/work-audit-milestone` — re-audit if source truth changed before archive
 
 Consider clearing context before starting the next workflow for best results.
 ---

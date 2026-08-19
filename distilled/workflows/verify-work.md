@@ -1,6 +1,6 @@
 <purpose>
 Validate built features through conversational testing with persistent state.
-Creates UAT.md that tracks test progress, survives context resets, and feeds gaps into `/gsdd-plan`.
+Creates UAT.md that tracks test progress, survives context resets, and feeds gaps into `/work-plan`.
 
 User tests, Claude records. One test at a time. Plain text responses.
 </purpose>
@@ -21,7 +21,7 @@ Read these before any other action:
 2. `.work/SPEC.md` — requirements and acceptance criteria
 3. `.work/ROADMAP.md` — phase goal and must-haves
 
-**$ARGUMENTS:** optional phase number, e.g., `/gsdd-verify-work 4`
+**$ARGUMENTS:** optional phase number, e.g., `/work-verify-work 4`
 </load_context>
 
 <session_detection>
@@ -206,7 +206,7 @@ Write final UAT.md to disk.
 ```
 UAT complete — all {N} tests passed.
 
-Next step: /gsdd-progress — route to next phase or milestone audit
+Next step: /work-progress — route to next phase or milestone audit
 ```
 
 **If issues found:**
@@ -244,16 +244,16 @@ Report to the user what was tested, then present the next step:
 **Completed:** UAT — created `.work/phases/{phase_dir}/{phase_num}-UAT.md`.
 
 If no issues:
-**Next step:** `/gsdd-progress` — route to next phase or milestone audit
+**Next step:** `/work-progress` — route to next phase or milestone audit
 
 If issues found:
-**Next step:** `/gsdd-plan` — plan gap closure using the diagnosed root causes in UAT.md
+**Next step:** `/work-plan` — plan gap closure using the diagnosed root causes in UAT.md
 - Open `.work/phases/{phase_dir}/{phase_num}-UAT.md` for the plan context
 - Use `--gaps` mode if your runtime supports it
 
 Also available:
-- `/gsdd-verify` — re-run formal phase verification after fixes are implemented
-- `/gsdd-pause` — save context for later if stopping work
+- `/work-verify` — re-run formal phase verification after fixes are implemented
+- `/work-pause` — save context for later if stopping work
 
 Consider clearing context before starting the next workflow for best results.
 ---

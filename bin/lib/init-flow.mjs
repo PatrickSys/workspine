@@ -352,7 +352,7 @@ function hasGeneratedOpenStandardSkills(cwd) {
   try {
     return readdirSync(skillsDir, { withFileTypes: true }).some((entry) =>
       entry.isDirectory() &&
-      entry.name.startsWith('gsdd-') &&
+      entry.name.startsWith('work-') &&
       existsSync(join(skillsDir, entry.name, 'SKILL.md'))
     );
   } catch {

@@ -295,7 +295,7 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.cmd')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'spec.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-new-project', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'delegates', 'plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'auth-matrix.md')),
@@ -343,10 +343,10 @@ describe('gsdd init and update', () => {
     assert.match(helperLib, /resolveWorkspaceContext/);
 
     const newProjectSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-new-project', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-new-project', 'SKILL.md'),
       'utf-8'
     );
-    assert.match(newProjectSkill, /\.agents\/skills\/gsdd-map-codebase\/SKILL\.md/);
+    assert.match(newProjectSkill, /\.agents\/skills\/work-map-codebase\/SKILL\.md/);
     assert.doesNotMatch(newProjectSkill, /active platform skill\/adapter/);
 
     const mapperTechTemplate = fs.readFileSync(
@@ -582,7 +582,7 @@ describe('gsdd init and update', () => {
     assert.ok(verifierRole.includes(supersededPlanContract));
 
     const planSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md'),
       'utf-8'
     );
     for (const required of [
@@ -640,7 +640,7 @@ describe('gsdd init and update', () => {
     assert.match(planCheckerTemplate, /Use `"status": "issues_found"`/);
 
     const executeSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-execute', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-execute', 'SKILL.md'),
       'utf-8'
     );
     for (const required of [
@@ -668,7 +668,7 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(executeSkill, /Ã¢|Ã°Å¸|Ã¢Å“|Ã¢â€ /);
 
     const verifySkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-verify', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-verify', 'SKILL.md'),
       'utf-8'
     );
     for (const required of [
@@ -707,11 +707,11 @@ describe('gsdd init and update', () => {
     }
 
     const verifySkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-verify', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-verify', 'SKILL.md'),
       'utf-8'
     );
     const progressSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-progress', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-progress', 'SKILL.md'),
       'utf-8'
     );
 
@@ -1436,19 +1436,19 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'gsdd-new-project', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'work-new-project', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'commands', 'work-plan.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
     assert.ok(!fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-planner.toml')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'commands', 'gsdd-new-project.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'commands', 'work-new-project.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
     assert.doesNotMatch(output, /--tools codex` is deprecated/i);
 
     // Portable skill must NOT be polluted with vendor-specific content after --tools all
     const portableSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md'),
       'utf-8'
     );
     assert.doesNotMatch(portableSkill, /Codex-Native/);
@@ -1456,28 +1456,28 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(portableSkill, /\.codex\/agents\//);
     // But it MUST have checker invocation (the Codex entry surface)
     assert.match(portableSkill, /Invoking the Checker/);
-    assert.match(portableSkill, /gsdd-plan-checker/);
+    assert.match(portableSkill, /work-plan-checker/);
 
     const claudePlanChecker = fs.readFileSync(
-      path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
+      path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'),
       'utf-8'
     );
-    assert.match(claudePlanChecker, /^name: gsdd-plan-checker/m);
+    assert.match(claudePlanChecker, /^name: work-plan-checker/m);
     assert.match(claudePlanChecker, /^tools: Read, Grep, Glob/m);
     assert.doesNotMatch(claudePlanChecker, /DRAFT PAYLOAD ONLY/);
     assert.match(claudePlanChecker, /Return JSON only/);
 
     const claudePlanCommand = fs.readFileSync(
-      path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'),
+      path.join(tmpDir, '.claude', 'commands', 'work-plan.md'),
       'utf-8'
     );
     assert.match(claudePlanCommand, /^argument-hint: \[phase-number\]/m);
     assert.match(claudePlanCommand, /Compatibility alias/);
-    assert.match(claudePlanCommand, /\.claude\/skills\/gsdd-plan\/SKILL\.md/);
+    assert.match(claudePlanCommand, /\.claude\/skills\/work-plan\/SKILL\.md/);
     assert.doesNotMatch(claudePlanCommand, /Maximum 3 checker cycles total/);
 
     const opencodePlanChecker = fs.readFileSync(
-      path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
+      path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'),
       'utf-8'
     );
     assert.match(opencodePlanChecker, /^mode: subagent/m);
@@ -1488,17 +1488,17 @@ describe('gsdd init and update', () => {
     assert.doesNotMatch(opencodePlanChecker, /DRAFT PAYLOAD ONLY/);
 
     const opencodeApproachExplorer = fs.readFileSync(
-      path.join(tmpDir, '.opencode', 'agents', 'gsdd-approach-explorer.md'),
+      path.join(tmpDir, '.opencode', 'agents', 'work-approach-explorer.md'),
       'utf-8'
     );
     assert.match(opencodeApproachExplorer, /^mode: subagent/m);
     assert.doesNotMatch(opencodeApproachExplorer, /^mode: agent/m);
 
     const codexPlanChecker = fs.readFileSync(
-      path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+      path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'),
       'utf-8'
     );
-    assert.match(codexPlanChecker, /^name = "gsdd-plan-checker"/m);
+    assert.match(codexPlanChecker, /^name = "work-plan-checker"/m);
     assert.match(codexPlanChecker, /^sandbox_mode = "read-only"/m);
     assert.match(codexPlanChecker, /^model_reasoning_effort = "high"/m);
     assert.match(codexPlanChecker, /Return JSON only/);
@@ -1515,14 +1515,14 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
     assert.ok(!fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-planner.toml')));
     assert.strictEqual(fs.existsSync(path.join(tmpDir, '.claude', 'skills')), false);
 
     // Portable skill must stay vendor-neutral but include checker invocation
     const portableSkill = fs.readFileSync(
-      path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'),
+      path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md'),
       'utf-8'
     );
     assert.doesNotMatch(portableSkill, /Codex-Native/);
@@ -1697,11 +1697,11 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
     assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')),
       'Wizard runtime selection must not write AGENTS.md unless governance was explicitly enabled.');
-    assert.match(output, /Cursor:\s+\/gsdd-new-project/);
-    assert.match(output, /Codex CLI:\s+\$gsdd-new-project/);
+    assert.match(output, /Cursor:\s+\/work-new-project/);
+    assert.match(output, /Codex CLI:\s+\$work-new-project/);
   });
 
   test('interactive wizard governance opt-in writes AGENTS.md separately from runtime choice', async () => {
@@ -1784,7 +1784,7 @@ describe('gsdd init and update', () => {
     assert.strictEqual(config.modelProfile, 'balanced');
     assert.strictEqual(config.initVersion, 'v1.1');
     assert.ok(!('selectedRuntimes' in config), 'config must not contain the wizard wrapper shape');
-    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+    assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
   });
 
   test('init is idempotent and upserts the bounded AGENTS block without duplicating it', async () => {
@@ -1939,8 +1939,8 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    const claudeAgentPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
-    const claudeCommandPath = path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md');
+    const claudeAgentPath = path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md');
+    const claudeCommandPath = path.join(tmpDir, '.claude', 'commands', 'work-plan.md');
     const agentsPath = path.join(tmpDir, 'AGENTS.md');
     const launcherPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
     const shellShimPath = path.join(tmpDir, '.work', 'bin', 'gsdd');
@@ -1956,7 +1956,7 @@ describe('gsdd init and update', () => {
 
     const updatedClaudeAgent = fs.readFileSync(claudeAgentPath, 'utf-8');
     assert.doesNotMatch(updatedClaudeAgent, /^stale checker$/m);
-    assert.match(updatedClaudeAgent, /^name: gsdd-plan-checker/m);
+    assert.match(updatedClaudeAgent, /^name: work-plan-checker/m);
 
     const updatedClaudeCommand = fs.readFileSync(claudeCommandPath, 'utf-8');
     assert.doesNotMatch(updatedClaudeCommand, /^stale command$/m);
@@ -1992,14 +1992,14 @@ describe('gsdd init and update', () => {
       restoreStdin();
     }
 
-    const checkerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml');
+    const checkerPath = path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml');
     fs.writeFileSync(checkerPath, 'stale checker\n');
 
     await gsdd.cmdUpdate('--tools', 'codex');
 
     const updatedChecker = fs.readFileSync(checkerPath, 'utf-8');
     assert.doesNotMatch(updatedChecker, /^stale checker$/m);
-    assert.match(updatedChecker, /^name = "gsdd-plan-checker"/m);
+    assert.match(updatedChecker, /^name = "work-plan-checker"/m);
     assert.match(updatedChecker, /^sandbox_mode = "read-only"/m);
   });
 
@@ -2074,11 +2074,11 @@ describe('gsdd init and update', () => {
         restoreStdin();
       }
 
-      assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md')));
       assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
-      assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')));
-      assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')));
-      assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
       assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')));
     });
 
@@ -2327,18 +2327,18 @@ describe('gsdd init and update', () => {
           'global install must not create repo-local portable skills');
 
         const expectedFiles = [
-          '.claude/skills/gsdd-plan/SKILL.md',
-          '.claude/commands/gsdd-plan.md',
-          '.claude/agents/gsdd-plan-checker.md',
-          '.claude/agents/gsdd-approach-explorer.md',
-          '.config/opencode/commands/gsdd-plan.md',
-          '.config/opencode/agents/gsdd-plan-checker.md',
-          '.config/opencode/agents/gsdd-approach-explorer.md',
-          '.agents/skills/gsdd-plan/SKILL.md',
-          '.codex/agents/gsdd-plan-checker.toml',
-          '.codex/agents/gsdd-approach-explorer.toml',
-          '.copilot/agents/gsdd-plan-checker.agent.md',
-          '.copilot/agents/gsdd-approach-explorer.agent.md',
+          '.claude/skills/work-plan/SKILL.md',
+          '.claude/commands/work-plan.md',
+          '.claude/agents/work-plan-checker.md',
+          '.claude/agents/work-approach-explorer.md',
+          '.config/opencode/commands/work-plan.md',
+          '.config/opencode/agents/work-plan-checker.md',
+          '.config/opencode/agents/work-approach-explorer.md',
+          '.agents/skills/work-plan/SKILL.md',
+          '.codex/agents/work-plan-checker.toml',
+          '.codex/agents/work-approach-explorer.toml',
+          '.copilot/agents/work-plan-checker.agent.md',
+          '.copilot/agents/work-approach-explorer.agent.md',
         ];
 
         for (const rel of expectedFiles) {
@@ -2356,15 +2356,15 @@ describe('gsdd init and update', () => {
           assert.strictEqual(manifest.product, 'Workspine');
           if (manifestPath === '.agents/workspine-file-manifest.json') {
             assert.strictEqual(manifest.runtime, 'agent-skills');
-            assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track shared gsdd-plan skill`);
+            assert.ok(manifest.files['skills/work-plan/SKILL.md'], `${manifestPath} must track shared work-plan skill`);
           } else if (manifestPath === '.codex/workspine-file-manifest.json') {
-            assert.ok(manifest.files['agents/gsdd-plan-checker.toml'], `${manifestPath} must track native Codex agents`);
+            assert.ok(manifest.files['agents/work-plan-checker.toml'], `${manifestPath} must track native Codex agents`);
           } else if (manifestPath === '.copilot/workspine-file-manifest.json') {
-            assert.ok(manifest.files['agents/gsdd-plan-checker.agent.md'], `${manifestPath} must track native Copilot agents`);
+            assert.ok(manifest.files['agents/work-plan-checker.agent.md'], `${manifestPath} must track native Copilot agents`);
           } else if (manifestPath === '.config/opencode/workspine-file-manifest.json') {
-            assert.ok(manifest.files['commands/gsdd-plan.md'], `${manifestPath} must track native OpenCode commands`);
+            assert.ok(manifest.files['commands/work-plan.md'], `${manifestPath} must track native OpenCode commands`);
           } else {
-            assert.ok(manifest.files['skills/gsdd-plan/SKILL.md'], `${manifestPath} must track gsdd-plan skill`);
+            assert.ok(manifest.files['skills/work-plan/SKILL.md'], `${manifestPath} must track work-plan skill`);
           }
         }
       } finally {
@@ -2374,7 +2374,7 @@ describe('gsdd init and update', () => {
 
     test('install --global refuses to overwrite unmanaged user files', async () => {
       const homeDir = createTempProject();
-      const customSkill = path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md');
+      const customSkill = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
       fs.mkdirSync(path.dirname(customSkill), { recursive: true });
       fs.writeFileSync(customSkill, 'user-owned skill\n');
 
@@ -2386,9 +2386,9 @@ describe('gsdd init and update', () => {
         });
         assert.strictEqual(process.exitCode, 1);
         assert.strictEqual(fs.readFileSync(customSkill, 'utf-8'), 'user-owned skill\n');
-        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'commands', 'gsdd-plan.md')),
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'commands', 'work-plan.md')),
           'blocked global install must not partially write sibling surfaces');
-        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'agents', 'gsdd-plan-checker.md')),
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'agents', 'work-plan-checker.md')),
           'blocked global install must not partially write native agents');
         assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'workspine-file-manifest.json')),
           'manifest must not claim ownership when unmanaged files block install');
@@ -2429,8 +2429,8 @@ describe('gsdd init and update', () => {
           assert.match(result.output, /Global install complete/);
         });
 
-        assert.ok(fs.existsSync(path.join(homeDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md')));
-        assert.ok(fs.existsSync(path.join(homeDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
+        assert.ok(fs.existsSync(path.join(homeDir, '.agents', 'skills', 'work-plan', 'SKILL.md')));
+        assert.ok(fs.existsSync(path.join(homeDir, '.codex', 'agents', 'work-plan-checker.toml')));
         assert.ok(!fs.existsSync(path.join(homeDir, '.claude')));
         assert.ok(!fs.existsSync(path.join(homeDir, '.copilot')));
         assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')),
@@ -2458,8 +2458,8 @@ describe('gsdd init and update', () => {
           assert.doesNotMatch(result.output, /claude:/);
         });
 
-        assert.ok(fs.existsSync(path.join(homeDir, '.codex', 'agents', 'gsdd-plan-checker.toml')));
-        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md')));
+        assert.ok(fs.existsSync(path.join(homeDir, '.codex', 'agents', 'work-plan-checker.toml')));
+        assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md')));
       } finally {
         restoreStdin();
         process.exitCode = previousExitCode;
@@ -2563,7 +2563,7 @@ describe('gsdd init and update', () => {
         assert.ok(promptedOptions);
         assert.ok(promptedOptions.every((option) => option.selected === false),
           'global install must not default to writing every supported agent home');
-        assert.ok(fs.existsSync(path.join(homeDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md')));
+        assert.ok(fs.existsSync(path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md')));
         assert.ok(!fs.existsSync(path.join(homeDir, '.copilot')));
       } finally {
         if (stdinDescriptor) {

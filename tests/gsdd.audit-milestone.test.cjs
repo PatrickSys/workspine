@@ -33,7 +33,7 @@ describe('gsdd audit-milestone', () => {
       restoreStdin();
     }
 
-    const skillPath = path.join(tmpDir, '.agents', 'skills', 'gsdd-audit-milestone', 'SKILL.md');
+    const skillPath = path.join(tmpDir, '.agents', 'skills', 'work-audit-milestone', 'SKILL.md');
     assert.ok(fs.existsSync(skillPath), 'audit-milestone skill must exist');
 
     const content = fs.readFileSync(skillPath, 'utf-8');
@@ -83,7 +83,7 @@ describe('gsdd audit-milestone', () => {
       restoreStdin();
     }
 
-    const skillPath = path.join(tmpDir, '.agents', 'skills', 'gsdd-audit-milestone', 'SKILL.md');
+    const skillPath = path.join(tmpDir, '.agents', 'skills', 'work-audit-milestone', 'SKILL.md');
     const content = fs.readFileSync(skillPath, 'utf-8');
 
     assert.match(content, /unsatisfied/, 'must include unsatisfied requirement language');
@@ -104,7 +104,7 @@ describe('gsdd audit-milestone', () => {
       restoreStdin();
     }
 
-    const verifySkillPath = path.join(tmpDir, '.agents', 'skills', 'gsdd-verify', 'SKILL.md');
+    const verifySkillPath = path.join(tmpDir, '.agents', 'skills', 'work-verify', 'SKILL.md');
     const content = fs.readFileSync(verifySkillPath, 'utf-8');
 
     assert.match(content, /does not claim milestone-wide integration completeness/i, 'verifier must still disclaim milestone scope');
@@ -121,7 +121,7 @@ describe('gsdd audit-milestone', () => {
       restoreStdin();
     }
 
-    const skillPath = path.join(tmpDir, '.agents', 'skills', 'gsdd-audit-milestone', 'SKILL.md');
+    const skillPath = path.join(tmpDir, '.agents', 'skills', 'work-audit-milestone', 'SKILL.md');
     const content = fs.readFileSync(skillPath, 'utf-8');
     assert.match(content, /AUTH_MATRIX\.md/,
       'audit-milestone skill must reference AUTH_MATRIX.md for matrix-driven auth verification');

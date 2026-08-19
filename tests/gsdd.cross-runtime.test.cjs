@@ -285,7 +285,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
     ];
 
     test('Claude plan-checker has all 10 dimensions', () => {
-      const checkerPath = path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md');
+      const checkerPath = path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md');
       assert.ok(fs.existsSync(checkerPath), 'Claude checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
       for (const dim of PLAN_CHECK_DIMENSIONS) {
@@ -297,7 +297,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
     });
 
     test('OpenCode plan-checker has all 10 dimensions', () => {
-      const checkerPath = path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md');
+      const checkerPath = path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md');
       assert.ok(fs.existsSync(checkerPath), 'OpenCode checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
       for (const dim of PLAN_CHECK_DIMENSIONS) {
@@ -309,7 +309,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
     });
 
     test('Codex plan-checker has all 10 dimensions', () => {
-      const checkerPath = path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml');
+      const checkerPath = path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml');
       assert.ok(fs.existsSync(checkerPath), 'Codex checker must exist');
       const content = fs.readFileSync(checkerPath, 'utf-8');
       for (const dim of PLAN_CHECK_DIMENSIONS) {
@@ -321,9 +321,9 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
     });
 
     test('all 3 checkers have dimension parity (same count)', () => {
-      const claude = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
-      const opencode = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8');
-      const codex = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'utf-8');
+      const claude = fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'), 'utf-8');
+      const opencode = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
+      const codex = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8');
 
       for (const dim of PLAN_CHECK_DIMENSIONS) {
         const claudeHas = claude.includes(dim);
@@ -336,9 +336,9 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
 
     test('all checker JSON enums list decision_compliance', () => {
       const sources = [
-        fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'), 'utf-8'),
-        fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'), 'utf-8'),
-        fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'), 'utf-8'),
+        fs.readFileSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'), 'utf-8'),
+        fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8'),
+        fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8'),
       ];
       for (const source of sources) assert.match(source, /decision_compliance/);
     });
@@ -349,21 +349,21 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
   describe('Approach-explorer parity across runtimes', () => {
     test('Claude approach-explorer exists', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-approach-explorer.md')),
+        fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'work-approach-explorer.md')),
         'Claude approach-explorer must exist'
       );
     });
 
     test('OpenCode approach-explorer exists', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'gsdd-approach-explorer.md')),
+        fs.existsSync(path.join(tmpDir, '.opencode', 'agents', 'work-approach-explorer.md')),
         'OpenCode approach-explorer must exist'
       );
     });
 
     test('Codex approach-explorer exists', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-approach-explorer.toml')),
+        fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-approach-explorer.toml')),
         'Codex approach-explorer must exist'
       );
     });
@@ -376,7 +376,7 @@ describe('S7 — Adapter Chain Validation (cross-runtime adapter generation comp
       const skillsDir = path.join(tmpDir, '.agents', 'skills');
       assert.ok(fs.existsSync(skillsDir), '.agents/skills/ must exist');
 
-      const coreSkills = ['gsdd-plan', 'gsdd-execute', 'gsdd-verify'];
+      const coreSkills = ['work-plan', 'work-execute', 'work-verify'];
       for (const skill of coreSkills) {
         assert.ok(
           fs.existsSync(path.join(skillsDir, skill, 'SKILL.md')),

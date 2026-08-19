@@ -8,7 +8,7 @@ They reuse the same planner, executor, and verifier roles but skip research and 
 <anti_patterns>
 - Do not execute before the user sees the plan preview (Step 3.7 must complete before Step 4)
 - Do not proceed past file verification gates if the expected file does not exist on disk — a plan that exists only in conversation context will be lost on compaction
-- Do not ask more than 2 approach clarification questions — if the bounded change is still undefined, recommend `/gsdd-new-project`; if the change is defined but 3+ grey areas remain, recommend `/gsdd-plan` instead
+- Do not ask more than 2 approach clarification questions — if the bounded change is still undefined, recommend `/work-new-project`; if the change is defined but 3+ grey areas remain, recommend `/work-plan` instead
 - Do not create APPROACH.md for quick tasks — use inline $APPROACH_CONTEXT only
 - Do not update ROADMAP.md or SPEC.md from quick tasks — these are phase-level artifacts
 - Do not skip config.json reads — workflow toggles (discuss, planCheck, verifier) control flow
@@ -41,9 +41,9 @@ Store the response as `$DESCRIPTION`. If empty, re-prompt.
 2. Scan `.work/quick/` for existing task directories. Calculate `$NEXT_NUM` as the next 3-digit number (001, 002, ...).
 3. Generate `$SLUG` from `$DESCRIPTION` (lowercase, hyphens, max 40 chars).
 4. Create `.work/quick/$NEXT_NUM-$SLUG/`.
-5. If `.work/brownfield-change/CHANGE.md` exists, read it first as the current bounded brownfield continuity anchor. Capture the active goal, current posture, next action, and declared write scope as `$BROWNFIELD_CONTEXT`. If `.work/brownfield-change/HANDOFF.md` exists, read it as supporting judgment context only. Do not let `/gsdd-new-project` become the default fallback when this active change already defines a concrete bounded lane.
+5. If `.work/brownfield-change/CHANGE.md` exists, read it first as the current bounded brownfield continuity anchor. Capture the active goal, current posture, next action, and declared write scope as `$BROWNFIELD_CONTEXT`. If `.work/brownfield-change/HANDOFF.md` exists, read it as supporting judgment context only. Do not let `/work-new-project` become the default fallback when this active change already defines a concrete bounded lane.
 6. If `.work/codebase/` exists, read whichever of `.work/codebase/ARCHITECTURE.md`, `.work/codebase/STACK.md`, `.work/codebase/CONVENTIONS.md`, and `.work/codebase/CONCERNS.md` are present. Summarize key findings from available docs in <=500 words as `$CODEBASE_CONTEXT`, emphasizing: safest surfaces to touch, risky zones to avoid, must-know conventions/traps, and what must be re-verified after change. Note any missing docs in the summary.
-7. If `.work/codebase/` does not exist, build a just-enough inline brownfield baseline instead of stopping. Read the repo root guidance that is cheap and stable (`README.md`, root manifest such as `package.json` / `pyproject.toml` / `Cargo.toml` when present, top-level app entrypoints, and any obviously relevant config or module files surfaced by `$DESCRIPTION`). Summarize the findings in <=500 words as `$CODEBASE_CONTEXT`, explicitly labeling it as a provisional baseline and calling out unknowns. Emphasize: likely implementation surface, likely dependency boundaries, conventions already visible, risky areas to avoid touching blindly, and what must be re-verified after the change. If the repo is still too unclear after this pass, keep that uncertainty explicit so Step 3.6 can recommend `/gsdd-map-codebase`.
+7. If `.work/codebase/` does not exist, build a just-enough inline brownfield baseline instead of stopping. Read the repo root guidance that is cheap and stable (`README.md`, root manifest such as `package.json` / `pyproject.toml` / `Cargo.toml` when present, top-level app entrypoints, and any obviously relevant config or module files surfaced by `$DESCRIPTION`). Summarize the findings in <=500 words as `$CODEBASE_CONTEXT`, explicitly labeling it as a provisional baseline and calling out unknowns. Emphasize: likely implementation surface, likely dependency boundaries, conventions already visible, risky areas to avoid touching blindly, and what must be re-verified after the change. If the repo is still too unclear after this pass, keep that uncertainty explicit so Step 3.6 can recommend `/work-map-codebase`.
 8. **Session-boundary fallback:** If `.work/.continue-here.bak` exists, read its `<judgment>` section. Use `<active_constraints>` and `<anti_regression>` rules as task-scoping context (do not violate active constraints; do not regress on listed invariants). After reading, run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` (auto-clean).
 9. Inspect the live branch/worktree surface separately from checkpoint or planning artifacts. Run `node .work/bin/gsdd.mjs control-map --json` when available and use its computed repo/worktree/planning truth to identify stale/spent branches, dirty tracked/untracked/ignored buckets, sibling or detached worktrees, local annotations, and cleanup obligations. This is advisory for quick tasks unless the mismatch makes the task description materially misleading; local annotations are intent hints, not product truth.
 
@@ -85,7 +85,7 @@ For each grey area, present 2-3 concrete options with a recommended default:
 
 - If user says "go ahead" / "your call" / presses Enter → use the recommendation.
 - If user specifies a preference → record it.
-- Maximum 2 questions. If the bounded change is still undefined after clarification, recommend `/gsdd-new-project`. If the change is defined but the task still has 3+ grey areas, it's not a quick task — recommend `/gsdd-plan`.
+- Maximum 2 questions. If the bounded change is still undefined after clarification, recommend `/work-new-project`. If the change is defined but the task still has 3+ grey areas, it's not a quick task — recommend `/work-plan`.
 
 ### Output
 
@@ -187,11 +187,11 @@ Evaluate the plan against quick-scope boundaries. Read the plan file and check:
 
 | Signal | Threshold | `$SCOPE_WARNING` text |
 |--------|-----------|----------------------|
-| Files modified | >8 distinct files in plan | "This task touches {N} files — consider `/gsdd-plan` for full ceremony." |
-| Architecture keywords in `$DESCRIPTION` | contains: `refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database` | "This looks like architectural work — consider `/gsdd-plan` for approach exploration." |
-| New public APIs | Plan tasks create new route files, API endpoints, or exported interfaces | "New public surface area detected — consider `/gsdd-plan` for approach exploration." |
-| Orientation gap | No `.work/codebase/` exists AND the inline brownfield baseline still cannot name a clear implementation surface, dependency boundary, or safe-to-touch module | "This repo still needs deeper orientation — consider `/gsdd-map-codebase` before changing code." |
-| Undefined bounded change | `$DESCRIPTION` still does not identify a concrete bug, feature, target surface, or observable outcome after clarification | "This does not yet describe a bounded change — use `/gsdd-new-project` to define the work first. If `.work/brownfield-change/CHANGE.md` already defines a concrete bounded lane, treat `/gsdd-new-project` as an intentional widen path rather than the default fallback." |
+| Files modified | >8 distinct files in plan | "This task touches {N} files — consider `/work-plan` for full ceremony." |
+| Architecture keywords in `$DESCRIPTION` | contains: `refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database` | "This looks like architectural work — consider `/work-plan` for approach exploration." |
+| New public APIs | Plan tasks create new route files, API endpoints, or exported interfaces | "New public surface area detected — consider `/work-plan` for approach exploration." |
+| Orientation gap | No `.work/codebase/` exists AND the inline brownfield baseline still cannot name a clear implementation surface, dependency boundary, or safe-to-touch module | "This repo still needs deeper orientation — consider `/work-map-codebase` before changing code." |
+| Undefined bounded change | `$DESCRIPTION` still does not identify a concrete bug, feature, target surface, or observable outcome after clarification | "This does not yet describe a bounded change — use `/work-new-project` to define the work first. If `.work/brownfield-change/CHANGE.md` already defines a concrete bounded lane, treat `/work-new-project` as an intentional widen path rather than the default fallback." |
 
 If any signals fire, concatenate the matching advisory text in the listed order as `$SCOPE_WARNING`. If the undefined bounded change signal fires, keep that advisory first so the routing recommendation stays explicit.
 If no signals fire, `$SCOPE_WARNING` is empty.
@@ -231,9 +231,9 @@ Plan check issues: {$CHECKER_ISSUES}
 Present options:
 - If `$CHECKER_ISSUES` is non-empty: `[type "proceed despite issues" to execute / edit description / abort]`
 - Otherwise if `$SCOPE_WARNING` is empty: `[Enter to proceed / edit description / abort]`
-- Otherwise if `$SCOPE_WARNING` contains `/gsdd-new-project`: `[Enter to proceed / switch to /gsdd-new-project / edit description / abort]`
-- Otherwise if `$SCOPE_WARNING` contains `/gsdd-map-codebase`: `[Enter to proceed / switch to /gsdd-map-codebase / edit description / abort]`
-- Otherwise if `$SCOPE_WARNING` is non-empty: `[Enter to proceed / switch to /gsdd-plan / edit description / abort]`
+- Otherwise if `$SCOPE_WARNING` contains `/work-new-project`: `[Enter to proceed / switch to /work-new-project / edit description / abort]`
+- Otherwise if `$SCOPE_WARNING` contains `/work-map-codebase`: `[Enter to proceed / switch to /work-map-codebase / edit description / abort]`
+- Otherwise if `$SCOPE_WARNING` is non-empty: `[Enter to proceed / switch to /work-plan / edit description / abort]`
 
 Default-yes applies only when `$CHECKER_ISSUES` is empty. When unresolved checker blockers remain, pressing Enter must not execute; repeat the issues and ask for `proceed despite issues`, `edit description`, or `abort`.
 
@@ -241,9 +241,9 @@ Handle response:
 - **Enter (or "yes") when `$CHECKER_ISSUES` is empty:** proceed to Step 4.
 - **"proceed despite issues" when `$CHECKER_ISSUES` is non-empty:** proceed to Step 4 and record the explicit risk acceptance in the quick summary.
 - **"edit description":** clean up the task directory, then return to Step 1 with `$DESCRIPTION` pre-filled as the starting point.
-- **"switch to /gsdd-new-project":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd-new-project` to define or intentionally widen the work into full lifecycle planning. Task description: {$DESCRIPTION}"
-- **"switch to /gsdd-map-codebase":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd-map-codebase` for a deeper brownfield baseline before quick work. Task description: {$DESCRIPTION}"
-- **"switch to /gsdd-plan":** clean up the task directory, then stop quick workflow and report: "Use `/gsdd-plan` for full ceremony with approach exploration. Task description: {$DESCRIPTION}"
+- **"switch to /work-new-project":** clean up the task directory, then stop quick workflow and report: "Use `/work-new-project` to define or intentionally widen the work into full lifecycle planning. Task description: {$DESCRIPTION}"
+- **"switch to /work-map-codebase":** clean up the task directory, then stop quick workflow and report: "Use `/work-map-codebase` for a deeper brownfield baseline before quick work. Task description: {$DESCRIPTION}"
+- **"switch to /work-plan":** clean up the task directory, then stop quick workflow and report: "Use `/work-plan` for full ceremony with approach exploration. Task description: {$DESCRIPTION}"
 - **"abort":** clean up the task directory, report cancellation, stop.
 
 ---
@@ -363,12 +363,12 @@ Created:
 - `.work/quick/{next_num}-{slug}/{next_num}-VERIFICATION.md` (if verifier enabled)
 - Updated `.work/quick/LOG.md`
 
-**Next step:** `/gsdd-progress` — check project status and continue phase work
+**Next step:** `/work-progress` — check project status and continue phase work
 
 Also available:
-- `/gsdd-quick` — run another quick task
-- `/gsdd-plan` — plan the next phase
-- `/gsdd-pause` — save context for later if stopping work
+- `/work-quick` — run another quick task
+- `/work-plan` — plan the next phase
+- `/work-pause` — save context for later if stopping work
 
 Consider clearing context before starting the next workflow for best results.
 ---

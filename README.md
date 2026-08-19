@@ -9,7 +9,7 @@ One end-to-end run is recorded, on Codex CLI: plan, execute, a verification catc
 [![npm version](https://img.shields.io/npm/v/workspine?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/workspine)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
-<img src="assets/workspine-loop.svg" alt="Start either way: gsdd-quick for a change you can describe, or gsdd-new-project for SPEC.md plus ROADMAP.md. Both feed the same loop of plan, execute, verify. Every step writes its own file. gsdd-pause writes a checkpoint that gsdd next reads to resume." width="880">
+<img src="assets/workspine-loop.svg" alt="Start either way: work-quick for a change you can describe, or work-new-project for SPEC.md plus ROADMAP.md. Both feed the same loop of plan, execute, verify. Every step writes its own file. work-pause writes a checkpoint that gsdd next reads to resume." width="880">
 
 ```bash
 npx -y workspine init
@@ -35,20 +35,20 @@ Workspine began as a fork of Get Shit Done and keeps the verification-first work
 
 `init` puts workflow skills in `.agents/skills/` and native adapters for the runtimes you choose. You run those workflows through your agent, and each one writes a file.
 
-There are two ways in. `gsdd-quick` takes a bounded change you can already describe and needs no spec or roadmap. `gsdd-new-project` sets up a spec and phases when the work is fuzzy or milestone-shaped. Both end up in the same loop: plan, execute, verify.
+There are two ways in. `work-quick` takes a bounded change you can already describe and needs no spec or roadmap. `work-new-project` sets up a spec and phases when the work is fuzzy or milestone-shaped. Both end up in the same loop: plan, execute, verify.
 
 | Workflow | Writes | What for |
 |----------|--------|----------|
-| `gsdd-quick` | `.work/quick/NNN-slug/` | A bounded change, planned and executed in one pass |
-| `gsdd-map-codebase` | `.work/codebase/` | A baseline of an unfamiliar repo before you pick a lane |
-| `gsdd-new-project` | `.work/SPEC.md`, `ROADMAP.md` | Define the project and its phases |
-| `gsdd-plan` | `.work/phases/N/PLAN.md` | Research and review before any code gets written |
-| `gsdd-execute` | `.work/phases/N/SUMMARY.md` | Implement the approved plan, nothing more |
-| `gsdd-verify` | `.work/phases/N/VERIFICATION.md` | Confirm the plan's claims are actually true |
+| `work-quick` | `.work/quick/NNN-slug/` | A bounded change, planned and executed in one pass |
+| `work-map-codebase` | `.work/codebase/` | A baseline of an unfamiliar repo before you pick a lane |
+| `work-new-project` | `.work/SPEC.md`, `ROADMAP.md` | Define the project and its phases |
+| `work-plan` | `.work/phases/N/PLAN.md` | Research and review before any code gets written |
+| `work-execute` | `.work/phases/N/SUMMARY.md` | Implement the approved plan, nothing more |
+| `work-verify` | `.work/phases/N/VERIFICATION.md` | Confirm the plan's claims are actually true |
 
 Plan first, execute only what was approved, verify before closing. Each summary carries what was decided into the next session, so nobody restarts from scratch.
 
-Stopping mid-phase? Run `gsdd-pause` to write a checkpoint at `.work/.continue-here.md`. `gsdd next` reads it along with `.work/` and repo state, then returns a read-only packet naming the next action. Plain `gsdd next` never creates a background compaction or automatic context-transfer hook.
+Stopping mid-phase? Run `work-pause` to write a checkpoint at `.work/.continue-here.md`. `gsdd next` reads it along with `.work/` and repo state, then returns a read-only packet naming the next action. Plain `gsdd next` never creates a background compaction or automatic context-transfer hook.
 
 Workspine ships 13 workflows; the [User Guide](docs/USER-GUIDE.md) lists them all.
 
@@ -70,14 +70,14 @@ The wizard only controls the native adapters and the governance block. After tha
 
 Then pick a first workflow:
 
-- `gsdd-new-project` for greenfield, fuzzy, or milestone-shaped work
-- `gsdd-quick` for a bounded change you can already describe
-- `gsdd-map-codebase` when the repo is unfamiliar and you want a baseline first
+- `work-new-project` for greenfield, fuzzy, or milestone-shaped work
+- `work-quick` for a bounded change you can already describe
+- `work-map-codebase` when the repo is unfamiliar and you want a baseline first
 
 ### Quickstart (after init)
 
-- Claude Code / OpenCode: slash commands such as `/gsdd-plan`.
-- Codex CLI: portable `gsdd-plan` skill reference (`$gsdd-plan`), with `.codex/agents/gsdd-plan-checker.toml` for native checker isolation.
+- Claude Code / OpenCode: slash commands such as `/work-plan`.
+- Codex CLI: portable `work-plan` skill reference (`$work-plan`), with `.codex/agents/work-plan-checker.toml` for native checker isolation.
 - Cursor / Copilot / Gemini: Use slash commands if your tool discovers `.agents/skills`; if it does not, open `.agents/skills/gsdd-<workflow>/SKILL.md`.
 
 For CI or scripted setup:
@@ -87,7 +87,7 @@ npx -y workspine init --auto --tools all
 npx -y workspine init --auto --tools codex --brief path/to/brief.md
 ```
 
-`init --auto` skips the wizard and takes defaults. With `--brief`, `gsdd-new-project` bootstraps `SPEC.md` and `ROADMAP.md` from that document, then stops. The `--auto` on `install --global` means something else, described below.
+`init --auto` skips the wizard and takes defaults. With `--brief`, `work-new-project` bootstraps `SPEC.md` and `ROADMAP.md` from that document, then stops. The `--auto` on `install --global` means something else, described below.
 
 ### Proof
 

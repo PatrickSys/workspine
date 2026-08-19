@@ -1132,7 +1132,7 @@ describe('next command routing', () => {
     assert.strictEqual(result.state, 'plan');
     assert.strictEqual(result.authority, 'brownfield_change');
     assert.strictEqual(result.route_kind, 'brownfield_change');
-    assert.strictEqual(result.next_command, 'gsdd-plan');
+    assert.strictEqual(result.next_command, 'work-plan');
     assert.match(result.reason, /bounded brownfield change/i);
     assert.ok(result.artifacts_to_read.includes('.work/brownfield-change/CHANGE.md'));
     assert.ok(result.artifacts_to_write.includes('.work/brownfield-change/HANDOFF.md'));
@@ -1311,7 +1311,7 @@ describe('next command routing', () => {
     assert.ok(result.inputs_considered.includes('.work/milestone/AUDIT.md'));
     assert.ok(result.inputs_considered.includes('.work/milestone/phases/*'));
     assert.ok(result.artifacts_to_read.includes('.work/milestone/AUDIT.md'));
-    assert.strictEqual(result.next_command, 'gsdd-complete-milestone');
+    assert.strictEqual(result.next_command, 'work-complete-milestone');
     assert.strictEqual(result.next_action.type, 'manual_review');
     assert.ok(result.next_action.targets.includes('.work/milestone/AUDIT.md'));
     assert.doesNotMatch(result.reason, /canonical `.planning` lifecycle truth is incomplete/);

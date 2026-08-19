@@ -144,11 +144,11 @@ These 4 documents are consumed by downstream GSDD workflows:
 
 | Workflow | Documents Used |
 |----------|---------------|
-| `/gsdd-new-project` | All 4 -- infers Validated requirements from existing capabilities |
+| `/work-new-project` | All 4 -- infers Validated requirements from existing capabilities |
 | `plan` (future) | ARCHITECTURE + CONVENTIONS for implementation planning |
 | `execute` (future) | CONVENTIONS for code style, ARCHITECTURE for file placement |
 | `verify` (future) | CONCERNS for regression awareness |
-| `/gsdd-quick` | All 4 -- bounded brownfield context for safe feature work |
+| `/work-quick` | All 4 -- bounded brownfield context for safe feature work |
 
 **What this means for mapper output quality:**
 
@@ -237,16 +237,16 @@ Report to the user what was accomplished, then present the next step:
 - Safest next change lane — which module or surface looks cheapest and safest to modify first
 - Highest-risk zones — areas to avoid or isolate unless the task explicitly needs them
 - Must-know traps — convention, dependency, or architecture constraints likely to cause mistakes
-- Recommended next workflow — choose `/gsdd-quick` for bounded brownfield work or `/gsdd-new-project` only when the user intentionally wants to widen into full lifecycle setup, and say why
+- Recommended next workflow — choose `/work-quick` for bounded brownfield work or `/work-new-project` only when the user intentionally wants to widen into full lifecycle setup, and say why
 
 Use only the 4 generated documents for this synthesis. Do NOT create a fifth persistent artifact or write an additional routing-summary file.
 
 **Next step:** Choose based on what you need:
-- `/gsdd-new-project` — full project initialization (spec, roadmap, phased delivery), especially when you intentionally want to widen beyond the current bounded brownfield lane
-- `/gsdd-quick` — bounded brownfield feature work without full ceremony (bug fixes, small features, one-off tasks)
+- `/work-new-project` — full project initialization (spec, roadmap, phased delivery), especially when you intentionally want to widen beyond the current bounded brownfield lane
+- `/work-quick` — bounded brownfield feature work without full ceremony (bug fixes, small features, one-off tasks)
 
 Also available:
-- `/gsdd-map-codebase` — re-map if results need refinement
+- `/work-map-codebase` — re-map if results need refinement
 - Review specific file: read `.work/codebase/STACK.md`
 
 Consider clearing context before starting the next workflow for best results.

@@ -588,7 +588,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(output, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
     assert.doesNotMatch(output, /\.agents\/bin\/gsdd\.mjs/);
 
-    const generatedSkill = fs.readFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-execute', 'SKILL.md'), 'utf-8');
+    const generatedSkill = fs.readFileSync(path.join(tmpDir, '.agents', 'skills', 'work-execute', 'SKILL.md'), 'utf-8');
     assert.match(generatedSkill, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
 
     const executorRole = fs.readFileSync(path.join(tmpDir, '.work', 'templates', 'roles', 'executor.md'), 'utf-8');
@@ -597,10 +597,10 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     const rootAgents = fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf-8');
     assert.match(rootAgents, /helpers in `\.work\/bin\/`/);
 
-    const claudeSkill = fs.readFileSync(path.join(tmpDir, '.claude', 'skills', 'gsdd-execute', 'SKILL.md'), 'utf-8');
+    const claudeSkill = fs.readFileSync(path.join(tmpDir, '.claude', 'skills', 'work-execute', 'SKILL.md'), 'utf-8');
     assert.match(claudeSkill, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
 
-    const openCodeCommand = fs.readFileSync(path.join(tmpDir, '.opencode', 'commands', 'gsdd-execute.md'), 'utf-8');
+    const openCodeCommand = fs.readFileSync(path.join(tmpDir, '.opencode', 'commands', 'work-execute.md'), 'utf-8');
     assert.match(openCodeCommand, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
   });
 
@@ -1007,7 +1007,7 @@ describe('Phase 29 lifecycle-state helper', () => {
         '## Structural Promotion Triggers',
         '',
         '- Widen when the change no longer fits one active stream.',
-        '- Use `/gsdd-new-milestone` when milestone-owned lifecycle state is required.',
+        '- Use `/work-new-milestone` when milestone-owned lifecycle state is required.',
         '',
         '## Current Status',
         '',
@@ -1059,7 +1059,7 @@ describe('Phase 29 lifecycle-state helper', () => {
         '',
         '## Next Action',
         '',
-        '- If the work widens, carry this judgment into `/gsdd-new-milestone` instead of recreating it.',
+        '- If the work widens, carry this judgment into `/work-new-milestone` instead of recreating it.',
       ].join('\n')
     );
 
@@ -1078,7 +1078,7 @@ describe('Phase 29 lifecycle-state helper', () => {
     ]);
     assert.strictEqual(state.brownfieldChange.handoff.activeConstraints, 'CHANGE.md stays the operational anchor.');
     assert.strictEqual(state.brownfieldChange.handoff.antiRegression, 'Do not turn HANDOFF.md into a second status authority.');
-    assert.match(state.brownfieldChange.handoff.nextActionContext, /\/gsdd-new-milestone/);
+    assert.match(state.brownfieldChange.handoff.nextActionContext, /\/work-new-milestone/);
   });
 
   test('prefers Current Status posture over stale CHANGE.md frontmatter status', async () => {
@@ -3629,7 +3629,7 @@ describe('Phase 32 runtime-freshness helper', () => {
     const initResult = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
     assert.strictEqual(initResult.exitCode, 0, initResult.output);
 
-    fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-plan', 'SKILL.md'), '\n<!-- local drift -->\n');
+    fs.appendFileSync(path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md'), '\n<!-- local drift -->\n');
     fs.unlinkSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'));
 
     const gsdd = await loadGsdd(tmpDir);
@@ -3641,7 +3641,7 @@ describe('Phase 32 runtime-freshness helper', () => {
 
     assert.strictEqual(report.staleCount, 1);
     assert.strictEqual(report.missingCount, 1);
-    assert.ok(report.issues.some((entry) => entry.relativePath === '.agents/skills/gsdd-plan/SKILL.md' && entry.status === 'stale'));
+    assert.ok(report.issues.some((entry) => entry.relativePath === '.agents/skills/work-plan/SKILL.md' && entry.status === 'stale'));
     assert.ok(report.issues.some((entry) => entry.relativePath === '.work/bin/gsdd.mjs' && entry.status === 'missing'));
   });
 });

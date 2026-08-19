@@ -84,7 +84,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   // --- init → new-project chain ---
 
   test('new-project load_context references templates installed by init', () => {
-    const content = readSkill(tmpDir, 'gsdd-new-project');
+    const content = readSkill(tmpDir, 'work-new-project');
     const loadCtx = extractXmlSection(content, 'load_context');
 
     assert.ok(loadCtx.length > 0, 'new-project must have <load_context>');
@@ -100,7 +100,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   });
 
   test('new-project researcher delegates reference installed delegate files', () => {
-    const content = readSkill(tmpDir, 'gsdd-new-project');
+    const content = readSkill(tmpDir, 'work-new-project');
     const researcherDelegates = ['researcher-stack.md', 'researcher-architecture.md', 'researcher-features.md', 'researcher-pitfalls.md'];
 
     for (const delegate of researcherDelegates) {
@@ -116,7 +116,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   });
 
   test('new-project synthesizer delegate references installed delegate file', () => {
-    const content = readSkill(tmpDir, 'gsdd-new-project');
+    const content = readSkill(tmpDir, 'work-new-project');
     assert.ok(content.includes('researcher-synthesizer.md'), 'must reference synthesizer delegate');
     assert.ok(
       fs.existsSync(path.join(tmpDir, '.work', 'templates', 'delegates', 'researcher-synthesizer.md')),
@@ -127,7 +127,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   // --- new-project → plan chain ---
 
   test('plan load_context references new-project outputs (SPEC.md, ROADMAP.md, research, plans)', () => {
-    const content = readSkill(tmpDir, 'gsdd-plan');
+    const content = readSkill(tmpDir, 'work-plan');
     const loadCtx = extractXmlSection(content, 'load_context');
 
     assert.ok(loadCtx.length > 0, 'plan must have <load_context>');
@@ -140,7 +140,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   // --- plan → execute chain ---
 
   test('execute load_context references plan outputs with tiered read scope (PLAN.md, SPEC.md, ROADMAP.md)', () => {
-    const content = readSkill(tmpDir, 'gsdd-execute');
+    const content = readSkill(tmpDir, 'work-execute');
     const loadCtx = extractXmlSection(content, 'load_context');
 
     assert.ok(loadCtx.length > 0, 'execute must have <load_context>');
@@ -158,7 +158,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   // --- execute → verify chain ---
 
   test('verify load_context references execute outputs (SUMMARY.md, PLAN.md, VERIFICATION.md)', () => {
-    const content = readSkill(tmpDir, 'gsdd-verify');
+    const content = readSkill(tmpDir, 'work-verify');
     const loadCtx = extractXmlSection(content, 'load_context');
 
     assert.ok(loadCtx.length > 0, 'verify must have <load_context>');
@@ -169,36 +169,36 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   });
 
   test('verify skill preserves git delivery metadata contract', () => {
-    const content = readSkill(tmpDir, 'gsdd-verify');
+    const content = readSkill(tmpDir, 'work-verify');
     assert.ok(content.includes('<git_delivery_collection>'), 'verify skill must preserve the git delivery collection step');
     assert.ok(content.includes('<git_delivery_check>'), 'verify skill must preserve the git delivery frontmatter block');
     assert.ok(content.includes('commits_ahead_of_main'), 'verify skill must preserve commits_ahead_of_main in the frontmatter contract');
   });
 
   test('progress skill preserves unmerged commit visibility contract', () => {
-    const content = readSkill(tmpDir, 'gsdd-progress');
+    const content = readSkill(tmpDir, 'work-progress');
     assert.ok(content.includes('<unmerged_commits_check>'), 'progress skill must preserve the unmerged commit check');
     assert.ok(content.includes('Unmerged commits: [N] commit(s) on this branch not yet merged to main'), 'progress skill must preserve the conditional warning text');
   });
 
   test('progress skill preserves archived-with-ROADMAP routing split', () => {
-    const content = readSkill(tmpDir, 'gsdd-progress');
+    const content = readSkill(tmpDir, 'work-progress');
     assert.match(content, /archived-with-`?ROADMAP\.md`?|retained `?ROADMAP\.md`?/i,
       'progress skill must preserve the archived-with-ROADMAP routing language.');
     assert.match(content, /MILESTONES\.md/,
       'progress skill must preserve the shipped-ledger check.');
     assert.match(content, /MILESTONE-AUDIT\.md|archived milestone audit artifact/i,
       'progress skill must preserve the matching archived-audit check.');
-    assert.match(content, /\/gsdd-new-milestone/,
-      'progress skill must preserve the archived-state route to /gsdd-new-milestone.');
-    assert.match(content, /\/gsdd-audit-milestone/,
-      'progress skill must preserve the audit-ready route to /gsdd-audit-milestone.');
+    assert.match(content, /\/work-new-milestone/,
+      'progress skill must preserve the archived-state route to /work-new-milestone.');
+    assert.match(content, /\/work-audit-milestone/,
+      'progress skill must preserve the audit-ready route to /work-audit-milestone.');
   });
 
   // --- verify → audit-milestone chain ---
 
   test('audit-milestone load_context references verify outputs (VERIFICATION.md, SUMMARY.md)', () => {
-    const content = readSkill(tmpDir, 'gsdd-audit-milestone');
+    const content = readSkill(tmpDir, 'work-audit-milestone');
     const loadCtx = extractXmlSection(content, 'load_context');
 
     assert.ok(loadCtx.length > 0, 'audit-milestone must have <load_context>');
@@ -209,7 +209,7 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   });
 
   test('audit-milestone integration-checker delegate references installed role contract', () => {
-    const content = readSkill(tmpDir, 'gsdd-audit-milestone');
+    const content = readSkill(tmpDir, 'work-audit-milestone');
     assert.ok(content.includes('integration-checker'), 'audit must reference integration-checker');
     assert.ok(
       fs.existsSync(path.join(tmpDir, '.work', 'templates', 'roles', 'integration-checker.md')),
@@ -219,9 +219,9 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
 
   test('closure workflows preserve the shared evidence-gated closure language after generation', () => {
     const expectations = new Map([
-      ['gsdd-verify', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_evidence', 'missing_evidence']],
-      ['gsdd-audit-milestone', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_kinds', 'missing_kinds', 'repo_closeout', 'runtime_validated_closeout', 'delivery_supported_closeout', 'unsupported_claims', 'deferrals', 'contradiction_checks']],
-      ['gsdd-complete-milestone', ['repo_only', 'delivery_sensitive', 'missing_kinds', 'required_kinds', 'release_claim_posture', 'release_claim_contract', 'invalid waivers', 'failed contradiction checks']],
+      ['work-verify', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_evidence', 'missing_evidence']],
+      ['work-audit-milestone', ['code', 'test', 'runtime', 'delivery', 'human', 'repo_only', 'delivery_sensitive', 'required_kinds', 'missing_kinds', 'repo_closeout', 'runtime_validated_closeout', 'delivery_supported_closeout', 'unsupported_claims', 'deferrals', 'contradiction_checks']],
+      ['work-complete-milestone', ['repo_only', 'delivery_sensitive', 'missing_kinds', 'required_kinds', 'release_claim_posture', 'release_claim_contract', 'invalid waivers', 'failed contradiction checks']],
     ]);
 
     for (const [skillName, snippets] of expectations.entries()) {
@@ -233,16 +233,16 @@ describe('S1 — Greenfield Golden Path (init → new-project → plan → execu
   });
 
   test('generated plan skill amend mode confirms next route after gap-phase generation', () => {
-    const content = readSkill(tmpDir, 'gsdd-plan');
+    const content = readSkill(tmpDir, 'work-plan');
     assert.match(content, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight plan amend/,
       'generated plan skill must preflight amend mode before mutating ROADMAP.');
     assert.match(content, /node \.work\/bin\/gsdd\.mjs next --json/,
       'generated plan skill must confirm next-action routing after intentional ROADMAP writes.');
     assert.doesNotMatch(content, /\bgsdd next --json\b/,
       'generated plan skill must use the local helper path, not bare gsdd.');
-    assert.match(content, /\/gsdd-plan/,
-      'generated plan skill must still route through /gsdd-plan for amend/extend work.');
-    assert.match(content, /\/gsdd-audit-milestone/,
+    assert.match(content, /\/work-plan/,
+      'generated plan skill must still route through /work-plan for amend/extend work.');
+    assert.match(content, /\/work-audit-milestone/,
       'generated plan skill must preserve re-audit guidance after closure work.');
   });
 });
@@ -262,14 +262,14 @@ describe('S2 — Brownfield Path (init → map-codebase → new-project brownfie
   afterEach(() => { cleanup(tmpDir); });
 
   test('new-project has brownfield detection in detect_mode', () => {
-    const content = readSkill(tmpDir, 'gsdd-new-project');
+    const content = readSkill(tmpDir, 'work-new-project');
     const detectMode = extractXmlSection(content, 'detect_mode');
     assert.ok(detectMode.length > 0, 'must have <detect_mode>');
     assert.ok(/brownfield/i.test(detectMode), 'detect_mode must mention brownfield');
   });
 
   test('new-project codebase_context references the 4 codebase map files', () => {
-    const content = readSkill(tmpDir, 'gsdd-new-project');
+    const content = readSkill(tmpDir, 'work-new-project');
     const codebaseCtx = extractXmlSection(content, 'codebase_context');
     assert.ok(codebaseCtx.length > 0, 'must have <codebase_context>');
 
@@ -281,13 +281,13 @@ describe('S2 — Brownfield Path (init → map-codebase → new-project brownfie
 
   test('map-codebase skill was generated', () => {
     assert.ok(
-      fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'gsdd-map-codebase', 'SKILL.md')),
+      fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-map-codebase', 'SKILL.md')),
       'map-codebase skill must exist'
     );
   });
 
   test('map-codebase references the 4 mapper delegates', () => {
-    const content = readSkill(tmpDir, 'gsdd-map-codebase');
+    const content = readSkill(tmpDir, 'work-map-codebase');
     const mapperDelegates = ['mapper-tech.md', 'mapper-arch.md', 'mapper-quality.md', 'mapper-concerns.md'];
 
     for (const delegate of mapperDelegates) {
@@ -296,13 +296,13 @@ describe('S2 — Brownfield Path (init → map-codebase → new-project brownfie
   });
 
   test('map-codebase completion offers quick as the brownfield lane', () => {
-    const content = readSkill(tmpDir, 'gsdd-map-codebase');
-    assert.ok(content.includes('/gsdd-quick'), 'map-codebase must offer /gsdd-quick as a next step');
+    const content = readSkill(tmpDir, 'work-map-codebase');
+    assert.ok(content.includes('/work-quick'), 'map-codebase must offer /work-quick as a next step');
     assert.ok(/brownfield/i.test(content), 'map-codebase must describe the quick path as brownfield feature work');
     assert.ok(/full lifecycle setup|project initialization/i.test(content),
-      'map-codebase must preserve /gsdd-new-project as the full initializer');
+      'map-codebase must preserve /work-new-project as the full initializer');
     assert.ok(/intentionally want to widen|only when the user intentionally wants to widen/i.test(content),
-      'map-codebase must keep /gsdd-new-project as an explicit widen path.');
+      'map-codebase must keep /work-new-project as an explicit widen path.');
     assert.ok(/Safest next change lane/i.test(content), 'map-codebase must synthesize a safest-next-change routing signal');
     assert.ok(/Highest-risk zones/i.test(content), 'map-codebase must synthesize highest-risk zones from the 4 docs');
     assert.ok(/Do NOT create a fifth persistent artifact/i.test(content),
@@ -356,7 +356,7 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
   afterEach(() => { cleanup(tmpDir); });
 
   test('quick prerequisites requires .work/ but NOT ROADMAP.md or SPEC.md', () => {
-    const content = readSkill(tmpDir, 'gsdd-quick');
+    const content = readSkill(tmpDir, 'work-quick');
     const prereqs = extractXmlSection(content, 'prerequisites');
 
     assert.ok(prereqs.length > 0, 'must have <prerequisites>');
@@ -374,7 +374,7 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
   });
 
   test('quick delegates reference planner, executor, and verifier roles', () => {
-    const content = readSkill(tmpDir, 'gsdd-quick');
+    const content = readSkill(tmpDir, 'work-quick');
     assert.ok(content.includes('planner.md'), 'quick must reference planner role');
     assert.ok(content.includes('executor.md'), 'quick must reference executor role');
     assert.ok(content.includes('verifier.md'), 'quick must reference verifier role');
@@ -391,7 +391,7 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
   });
 
   test('quick workflow does NOT reference researcher delegates', () => {
-    const content = readSkill(tmpDir, 'gsdd-quick');
+    const content = readSkill(tmpDir, 'work-quick');
     const researcherDelegates = ['researcher-stack.md', 'researcher-architecture.md', 'researcher-features.md', 'researcher-pitfalls.md'];
     for (const delegate of researcherDelegates) {
       assert.ok(!content.includes(delegate), `quick must NOT reference ${delegate}`);
@@ -399,7 +399,7 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
   });
 
   test('quick workflow does NOT reference ROADMAP.md requirement extraction', () => {
-    const content = readSkill(tmpDir, 'gsdd-quick');
+    const content = readSkill(tmpDir, 'work-quick');
     // Quick tasks explicitly say "No research phase, no ROADMAP requirements"
     assert.ok(
       content.includes('no ROADMAP requirements') || content.includes('No research phase'),
@@ -408,7 +408,7 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
   });
 
   test('quick can consume codebase-map context when available', () => {
-    const content = readSkill(tmpDir, 'gsdd-quick');
+    const content = readSkill(tmpDir, 'work-quick');
     assert.ok(content.includes('ARCHITECTURE.md'), 'quick must reference ARCHITECTURE.md for codebase context');
     assert.ok(content.includes('STACK.md'), 'quick must reference STACK.md for codebase context');
     assert.ok(content.includes('CONVENTIONS.md'), 'quick must reference CONVENTIONS.md for codebase context');
@@ -422,7 +422,7 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
   });
 
   test('quick can build an inline brownfield baseline without codebase maps', () => {
-    const content = readSkill(tmpDir, 'gsdd-quick');
+    const content = readSkill(tmpDir, 'work-quick');
     assert.match(content, /inline brownfield baseline/i,
       'generated quick skill must build a just-enough inline brownfield baseline when maps are missing.');
     assert.match(content, /README\.md|package\.json|pyproject\.toml|Cargo\.toml/i,
@@ -432,35 +432,35 @@ describe('S3 — Quick-Task Path (init → quick workflow isolation)', () => {
   });
 
   test('quick preserves split escalation for undefined scope vs too many grey areas', () => {
-    const content = readSkill(tmpDir, 'gsdd-quick');
-    assert.match(content, /bounded change is still undefined.*\/gsdd-new-project/s,
-      'generated quick skill must route undefined bounded changes to /gsdd-new-project.');
-    assert.match(content, /3\+ grey areas.*\/gsdd-plan/s,
-      'generated quick skill must route defined-but-too-ambiguous tasks to /gsdd-plan.');
+    const content = readSkill(tmpDir, 'work-quick');
+    assert.match(content, /bounded change is still undefined.*\/work-new-project/s,
+      'generated quick skill must route undefined bounded changes to /work-new-project.');
+    assert.match(content, /3\+ grey areas.*\/work-plan/s,
+      'generated quick skill must route defined-but-too-ambiguous tasks to /work-plan.');
     assert.match(content, /intentional widen path|not the default fallback/i,
-      'generated quick skill must keep /gsdd-new-project as a widen-only move when concrete brownfield continuity already exists.');
-    assert.match(content, /contains.*\/gsdd-new-project.*switch to \/gsdd-new-project/s,
-      'generated quick skill must offer a /gsdd-new-project switch option from the preview when the bounded change is still undefined.');
+      'generated quick skill must keep /work-new-project as a widen-only move when concrete brownfield continuity already exists.');
+    assert.match(content, /contains.*\/work-new-project.*switch to \/work-new-project/s,
+      'generated quick skill must offer a /work-new-project switch option from the preview when the bounded change is still undefined.');
   });
 
   test('quick can escalate to map-codebase when the inline brownfield baseline is too weak', () => {
-    const content = readSkill(tmpDir, 'gsdd-quick');
-    assert.match(content, /Orientation gap[\s\S]*\/gsdd-map-codebase/s,
-      'generated quick skill must recommend /gsdd-map-codebase when orientation is still too weak after the inline baseline.');
-    assert.match(content, /contains.*\/gsdd-map-codebase.*switch to \/gsdd-map-codebase/s,
-      'generated quick skill must offer a /gsdd-map-codebase switch from the preview when orientation remains too weak.');
+    const content = readSkill(tmpDir, 'work-quick');
+    assert.match(content, /Orientation gap[\s\S]*\/work-map-codebase/s,
+      'generated quick skill must recommend /work-map-codebase when orientation is still too weak after the inline baseline.');
+    assert.match(content, /contains.*\/work-map-codebase.*switch to \/work-map-codebase/s,
+      'generated quick skill must offer a /work-map-codebase switch from the preview when orientation remains too weak.');
   });
 
   test('progress treats codebase-only and quick-lane brownfield states as non-phase state instead of empty init state', () => {
-    const content = readSkill(tmpDir, 'gsdd-progress');
+    const content = readSkill(tmpDir, 'work-progress');
     assert.match(content, /codebase_only|codebase-only/i,
       'generated progress skill must classify codebase-only brownfield state.');
     assert.match(content, /quick_lane|quick lane/i,
       'generated progress skill must classify quick-lane brownfield state.');
-    assert.match(content, /codebase-only brownfield state[\s\S]*\/gsdd-quick/i,
-      'generated progress skill must route codebase-only brownfield state toward /gsdd-quick.');
-    assert.match(content, /quick-lane brownfield state with incomplete quick work[\s\S]*\/gsdd-quick/i,
-      'generated progress skill must route incomplete quick-lane state toward /gsdd-quick.');
+    assert.match(content, /codebase-only brownfield state[\s\S]*\/work-quick/i,
+      'generated progress skill must route codebase-only brownfield state toward /work-quick.');
+    assert.match(content, /quick-lane brownfield state with incomplete quick work[\s\S]*\/work-quick/i,
+      'generated progress skill must route incomplete quick-lane state toward /work-quick.');
   });
 });
 
@@ -479,45 +479,45 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       await initProject(tmpDir, '--auto', '--tools', 'claude');
     });
 
-    test('Claude skill gsdd-plan exists at .claude/skills/', () => {
+    test('Claude skill work-plan exists at .claude/skills/', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md')),
-        'Claude gsdd-plan skill must exist'
+        fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md')),
+        'Claude work-plan skill must exist'
       );
     });
 
-    test('Claude gsdd-plan references the portable skill', () => {
+    test('Claude work-plan references the portable skill', () => {
       const content = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'),
+        path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'),
         'utf-8'
       );
       assert.ok(
-        content.includes('.agents/skills/gsdd-plan/SKILL.md'),
+        content.includes('.agents/skills/work-plan/SKILL.md'),
         'Claude plan skill must reference portable skill'
       );
     });
 
-    test('Claude gsdd-plan references gsdd-plan-checker subagent', () => {
+    test('Claude work-plan references work-plan-checker subagent', () => {
       const content = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'skills', 'gsdd-plan', 'SKILL.md'),
+        path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'),
         'utf-8'
       );
       assert.ok(
-        content.includes('gsdd-plan-checker'),
+        content.includes('work-plan-checker'),
         'Claude plan skill must reference checker subagent'
       );
     });
 
-    test('native checker exists at .claude/agents/gsdd-plan-checker.md', () => {
+    test('native checker exists at .claude/agents/work-plan-checker.md', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')),
+        fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md')),
         'Claude checker agent must exist'
       );
     });
 
     test('checker content includes all 9 plan-check dimension names', () => {
       const content = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
+        path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'),
         'utf-8'
       );
       const dimensions = [
@@ -546,27 +546,27 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       }
     });
 
-    test('native approach-explorer exists at .claude/agents/gsdd-approach-explorer.md', () => {
+    test('native approach-explorer exists at .claude/agents/work-approach-explorer.md', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'gsdd-approach-explorer.md')),
+        fs.existsSync(path.join(tmpDir, '.claude', 'agents', 'work-approach-explorer.md')),
         'Claude approach-explorer agent must exist'
       );
     });
 
-    test('Claude command exists at .claude/commands/gsdd-plan.md', () => {
+    test('Claude command exists at .claude/commands/work-plan.md', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md')),
+        fs.existsSync(path.join(tmpDir, '.claude', 'commands', 'work-plan.md')),
         'Claude plan command must exist'
       );
     });
 
     test('Claude command references the Claude skill', () => {
       const content = fs.readFileSync(
-        path.join(tmpDir, '.claude', 'commands', 'gsdd-plan.md'),
+        path.join(tmpDir, '.claude', 'commands', 'work-plan.md'),
         'utf-8'
       );
       assert.ok(
-        content.includes('.claude/skills/gsdd-plan/SKILL.md'),
+        content.includes('.claude/skills/work-plan/SKILL.md'),
         'command must reference Claude skill'
       );
     });
@@ -613,11 +613,11 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       }
 
       const explorer = fs.readFileSync(
-        path.join(opencodeTmpDir, '.opencode', 'agents', 'gsdd-approach-explorer.md'),
+        path.join(opencodeTmpDir, '.opencode', 'agents', 'work-approach-explorer.md'),
         'utf-8'
       );
       const checker = fs.readFileSync(
-        path.join(opencodeTmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md'),
+        path.join(opencodeTmpDir, '.opencode', 'agents', 'work-plan-checker.md'),
         'utf-8'
       );
       cleanup(opencodeTmpDir);
@@ -709,16 +709,16 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       await initProject(tmpDir, '--auto', '--tools', 'codex');
     });
 
-    test('Codex checker exists at .codex/agents/gsdd-plan-checker.toml', () => {
+    test('Codex checker exists at .codex/agents/work-plan-checker.toml', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')),
+        fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')),
         'Codex checker TOML must exist'
       );
     });
 
     test('Codex checker contains all 9 dimension names', () => {
       const content = fs.readFileSync(
-        path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+        path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'),
         'utf-8'
       );
       const dimensions = [
@@ -747,16 +747,16 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
       }
     });
 
-    test('native approach-explorer exists at .codex/agents/gsdd-approach-explorer.toml', () => {
+    test('native approach-explorer exists at .codex/agents/work-approach-explorer.toml', () => {
       assert.ok(
-        fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'gsdd-approach-explorer.toml')),
+        fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-approach-explorer.toml')),
         'Codex approach-explorer TOML must exist'
       );
     });
 
     test('Codex checker has sandbox_mode = "read-only"', () => {
       const content = fs.readFileSync(
-        path.join(tmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml'),
+        path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'),
         'utf-8'
       );
       assert.ok(
@@ -789,21 +789,21 @@ describe('S4 — Native Runtime Chain (Claude + Codex adapter completeness)', ()
 
     test('claude (native_capable) generated agent files in .claude/agents/', () => {
       assert.ok(
-        fs.existsSync(path.join(kindTmpDir, '.claude', 'agents', 'gsdd-plan-checker.md')),
+        fs.existsSync(path.join(kindTmpDir, '.claude', 'agents', 'work-plan-checker.md')),
         'claude must generate at least one agent file'
       );
     });
 
     test('opencode (native_capable) generated agent files in .opencode/agents/', () => {
       assert.ok(
-        fs.existsSync(path.join(kindTmpDir, '.opencode', 'agents', 'gsdd-plan-checker.md')),
+        fs.existsSync(path.join(kindTmpDir, '.opencode', 'agents', 'work-plan-checker.md')),
         'opencode must generate at least one agent file'
       );
     });
 
     test('codex (native_capable) generated agent files in .codex/agents/', () => {
       assert.ok(
-        fs.existsSync(path.join(kindTmpDir, '.codex', 'agents', 'gsdd-plan-checker.toml')),
+        fs.existsSync(path.join(kindTmpDir, '.codex', 'agents', 'work-plan-checker.toml')),
         'codex must generate at least one agent file'
       );
     });
@@ -834,12 +834,12 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
 
   test('affected portable skills route checkpoint cleanup through the repo-local helper launcher', () => {
     const expectations = new Map([
-      ['gsdd-pause', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
-      ['gsdd-resume', ['node .work/bin/gsdd.mjs file-op copy .work/.continue-here.md .work/.continue-here.bak', 'node .work/bin/gsdd.mjs file-op delete .work/.continue-here.md']],
-      ['gsdd-plan', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
-      ['gsdd-execute', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
-      ['gsdd-verify', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
-      ['gsdd-quick', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['work-pause', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['work-resume', ['node .work/bin/gsdd.mjs file-op copy .work/.continue-here.md .work/.continue-here.bak', 'node .work/bin/gsdd.mjs file-op delete .work/.continue-here.md']],
+      ['work-plan', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['work-execute', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['work-verify', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
+      ['work-quick', ['node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok']],
     ]);
 
     for (const [skillName, snippets] of expectations.entries()) {
@@ -851,26 +851,26 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
   });
 
   test('resume portable skill no longer carries manual checkpoint copy/delete prose', () => {
-    const content = readSkill(tmpDir, 'gsdd-resume');
+    const content = readSkill(tmpDir, 'work-resume');
     assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Copy `?\.work\/\.continue-here\.md`? to `?\.work\/\.continue-here\.bak`?/i,
-      'gsdd-resume must not keep the old manual checkpoint copy prose.');
+      'work-resume must not keep the old manual checkpoint copy prose.');
     assert.doesNotMatch(content, /(^|\n)\s*\d+\.\s*Delete `?\.work\/\.continue-here\.md`?/i,
-      'gsdd-resume must not keep the old manual checkpoint delete prose.');
+      'work-resume must not keep the old manual checkpoint delete prose.');
   });
 
   test('transition-sensitive portable skills route lifecycle eligibility through the repo-local helper launcher', () => {
     const expectations = new Map([
-      ['gsdd-plan', [
+      ['work-plan', [
         'node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}',
         'node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change',
         'Do not run phase preflight before target classification',
       ]],
-      ['gsdd-execute', ['node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
-      ['gsdd-verify', ['node .work/bin/gsdd.mjs lifecycle-preflight verify {phase_identity} --plan phases/{phase_dir}/{plan_id}-PLAN.md --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
-      ['gsdd-audit-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight audit-milestone']],
-      ['gsdd-complete-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight complete-milestone']],
-      ['gsdd-new-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight new-milestone']],
-      ['gsdd-resume', ['node .work/bin/gsdd.mjs lifecycle-preflight resume']],
+      ['work-execute', ['node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
+      ['work-verify', ['node .work/bin/gsdd.mjs lifecycle-preflight verify {phase_identity} --plan phases/{phase_dir}/{plan_id}-PLAN.md --expects-mutation phase-status', 'node .work/bin/gsdd.mjs phase-status']],
+      ['work-audit-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight audit-milestone']],
+      ['work-complete-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight complete-milestone']],
+      ['work-new-milestone', ['node .work/bin/gsdd.mjs lifecycle-preflight new-milestone']],
+      ['work-resume', ['node .work/bin/gsdd.mjs lifecycle-preflight resume']],
     ]);
 
     for (const [skillName, snippets] of expectations.entries()) {
@@ -883,7 +883,7 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
 
   test('generated portable skills do not contain stale helper paths or bare lifecycle-preflight', () => {
     const skillsDir = path.join(tmpDir, '.agents', 'skills');
-    for (const entry of fs.readdirSync(skillsDir).filter(name => name.startsWith('gsdd-'))) {
+    for (const entry of fs.readdirSync(skillsDir).filter(name => name.startsWith('work-'))) {
       const content = readSkill(tmpDir, entry);
       assert.doesNotMatch(content, /\.agents[\\/]bin/i,
         `${entry} must not reference stale .agents/bin helper paths.`);
@@ -893,82 +893,82 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
   });
 
   test('progress portable skill preserves the read-only lifecycle boundary', () => {
-    const content = readSkill(tmpDir, 'gsdd-progress');
+    const content = readSkill(tmpDir, 'work-progress');
     assert.ok(content.includes('progress` stays read-only.') || content.includes('progress stays read-only.'),
-      'gsdd-progress must preserve the read-only lifecycle boundary.');
+      'work-progress must preserve the read-only lifecycle boundary.');
     assert.ok(content.includes('Do not call `node .work/bin/gsdd.mjs phase-status` here.'),
-      'gsdd-progress must forbid node .work/bin/gsdd.mjs phase-status in the read-only reporter.');
+      'work-progress must forbid node .work/bin/gsdd.mjs phase-status in the read-only reporter.');
     assert.ok(content.includes('downstream mutating workflow must rerun its own `node .work/bin/gsdd.mjs lifecycle-preflight ...` gate before acting.'),
-      'gsdd-progress must route downstream lifecycle transitions back through the repo-local helper launcher.');
+      'work-progress must route downstream lifecycle transitions back through the repo-local helper launcher.');
   });
 
   test('generated resume/progress skills preserve the non-looping generic-checkpoint rule', () => {
-    const resume = readSkill(tmpDir, 'gsdd-resume');
-    const progress = readSkill(tmpDir, 'gsdd-progress');
+    const resume = readSkill(tmpDir, 'work-resume');
+    const progress = readSkill(tmpDir, 'work-progress');
 
     assert.match(resume, /generic.*next_action.*user decide/i,
-      'gsdd-resume must keep generic checkpoints user-routed through next_action.');
+      'work-resume must keep generic checkpoints user-routed through next_action.');
     assert.match(resume, /informational context rather than an automatic blocker/i,
-      'gsdd-resume must explain that generic checkpoints stay informational for downstream progress routing.');
+      'work-resume must explain that generic checkpoints stay informational for downstream progress routing.');
     assert.match(progress, /`?generic`? checkpoints? (?:are|stay) informational-only/i,
-      'gsdd-progress must keep generic checkpoints informational-only.');
+      'work-progress must keep generic checkpoints informational-only.');
     assert.match(progress, /keep evaluating Branch B-F/i,
-      'gsdd-progress must continue routing to the real next action after showing an informational generic checkpoint.');
+      'work-progress must continue routing to the real next action after showing an informational generic checkpoint.');
     assert.match(progress, /`?phase`? and `?quick`?.*blocking resume-owned surfaces/i,
-      'gsdd-progress must preserve blocking routing for phase and quick checkpoints.');
+      'work-progress must preserve blocking routing for phase and quick checkpoints.');
   });
 
   test('generated resume/progress skills preserve the brownfield continuity anchor and mismatch split', () => {
-    const resume = readSkill(tmpDir, 'gsdd-resume');
-    const progress = readSkill(tmpDir, 'gsdd-progress');
+    const resume = readSkill(tmpDir, 'work-resume');
+    const progress = readSkill(tmpDir, 'work-progress');
 
     assert.match(progress, /\.work\/brownfield-change\/CHANGE\.md/,
-      'gsdd-progress must preserve the active brownfield change path.');
+      'work-progress must preserve the active brownfield change path.');
     assert.match(progress, /active_brownfield_change/i,
-      'gsdd-progress must preserve the active_brownfield_change non-phase state.');
-    assert.match(progress, /Run \/gsdd-resume to restore the active brownfield change context/i,
-      'gsdd-progress must route the active brownfield change toward /gsdd-resume.');
+      'work-progress must preserve the active_brownfield_change non-phase state.');
+    assert.match(progress, /Run \/work-resume to restore the active brownfield change context/i,
+      'work-progress must route the active brownfield change toward /work-resume.');
     assert.match(progress, /Brownfield continuity warning/i,
-      'gsdd-progress must preserve brownfield artifact/worktree warnings.');
+      'work-progress must preserve brownfield artifact/worktree warnings.');
     assert.match(progress, /strict-match rule/i,
-      'gsdd-progress must preserve the strict-match checkpoint precedence rule.');
+      'work-progress must preserve the strict-match checkpoint precedence rule.');
     assert.match(progress, /branch alignment[\s\S]*scope alignment[\s\S]*still-active execution state/i,
-      'gsdd-progress must preserve all three strict-match checks.');
+      'work-progress must preserve all three strict-match checks.');
 
     assert.match(resume, /canonical operational continuity anchor/i,
-      'gsdd-resume must preserve CHANGE.md as the operational anchor.');
+      'work-resume must preserve CHANGE.md as the operational anchor.');
     assert.match(resume, /Do not flatten `CHANGE\.md` and `HANDOFF\.md` into co-equal operational sources/i,
-      'gsdd-resume must preserve the one-anchor, one-judgment-surface split.');
+      'work-resume must preserve the one-anchor, one-judgment-surface split.');
     assert.match(resume, /material brownfield artifact\/worktree mismatch|artifact\/worktree mismatch is material/i,
-      'gsdd-resume must preserve brownfield artifact/worktree mismatch handling.');
+      'work-resume must preserve brownfield artifact/worktree mismatch handling.');
     assert.match(resume, /require acknowledgement before continuing the brownfield change/i,
-      'gsdd-resume must preserve the brownfield mismatch acknowledgement gate.');
+      'work-resume must preserve the brownfield mismatch acknowledgement gate.');
     assert.match(resume, /strict-match rule/i,
-      'gsdd-resume must preserve the strict-match checkpoint precedence rule.');
+      'work-resume must preserve the strict-match checkpoint precedence rule.');
     assert.match(resume, /branch alignment[\s\S]*scope alignment[\s\S]*still-active execution state/i,
-      'gsdd-resume must preserve all three strict-match checks.');
+      'work-resume must preserve all three strict-match checks.');
   });
 
   test('generated new-project skill keeps concrete brownfield continuity as a widen-only path', () => {
-    const content = readSkill(tmpDir, 'gsdd-new-project');
+    const content = readSkill(tmpDir, 'work-new-project');
     assert.match(content, /Concrete brownfield continuity already exists/i,
-      'gsdd-new-project must recognize an existing concrete brownfield continuity state.');
+      'work-new-project must recognize an existing concrete brownfield continuity state.');
     assert.match(content, /explicit widen path|intentionally want to widen/i,
-      'gsdd-new-project must keep /gsdd-new-project as a widen-only move when CHANGE.md already exists.');
+      'work-new-project must keep /work-new-project as a widen-only move when CHANGE.md already exists.');
     assert.match(content, /CHANGE\.md[\s\S]*HANDOFF\.md[\s\S]*VERIFICATION\.md/i,
-      'gsdd-new-project must preserve the full brownfield artifact family during widening.');
+      'work-new-project must preserve the full brownfield artifact family during widening.');
   });
 
   test('generated new-milestone skill preserves brownfield widening inputs and context reuse', () => {
-    const content = readSkill(tmpDir, 'gsdd-new-milestone');
+    const content = readSkill(tmpDir, 'work-new-milestone');
     assert.match(content, /brownfield_widening_inputs/i,
-      'gsdd-new-milestone must preserve the explicit brownfield widening section.');
+      'work-new-milestone must preserve the explicit brownfield widening section.');
     assert.match(content, /CHANGE\.md[\s\S]*HANDOFF\.md[\s\S]*VERIFICATION\.md/i,
-      'gsdd-new-milestone must preserve the full brownfield widening input set.');
+      'work-new-milestone must preserve the full brownfield widening input set.');
     assert.match(content, /explicit widen request/i,
-      'gsdd-new-milestone must preserve explicit widen-request wording.');
+      'work-new-milestone must preserve explicit widen-request wording.');
     assert.match(content, /Do not force the user to rediscover this context/i,
-      'gsdd-new-milestone must preserve the no-rediscovery rule during widening.');
+      'work-new-milestone must preserve the no-rediscovery rule during widening.');
   });
 });
 
@@ -990,7 +990,7 @@ describe('S5 — Config-to-Content Propagation', () => {
     const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf-8'));
     assert.strictEqual(config.workflow.research, true, 'default config must have workflow.research = true');
 
-    const content = readSkill(tmpDir, 'gsdd-new-project');
+    const content = readSkill(tmpDir, 'work-new-project');
     const research = extractXmlSection(content, 'research');
     assert.ok(research.length > 0, 'new-project must contain <research> section');
   });
@@ -999,7 +999,7 @@ describe('S5 — Config-to-Content Propagation', () => {
     const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf-8'));
     assert.strictEqual(config.workflow.planCheck, true, 'default config must have workflow.planCheck = true');
 
-    const content = readSkill(tmpDir, 'gsdd-plan');
+    const content = readSkill(tmpDir, 'work-plan');
     // The exact XML section tag used in plan.md — broad OR terms risk matching incidental strings
     assert.ok(
       content.includes('plan_check_orchestration'),
@@ -1014,7 +1014,7 @@ describe('S5 — Config-to-Content Propagation', () => {
     assert.ok(config.gitProtocol.commit, 'gitProtocol must have commit');
     assert.ok(config.gitProtocol.pr, 'gitProtocol must have pr');
 
-    const content = readSkill(tmpDir, 'gsdd-execute');
+    const content = readSkill(tmpDir, 'work-execute');
     // 'gitProtocol' is the exact config key referenced in execute.md — not just any 'git' string
     assert.ok(
       content.includes('gitProtocol'),
@@ -1038,7 +1038,7 @@ describe('S5 — Config-to-Content Propagation', () => {
 
   test('Claude checker agent has model field derived from balanced profile', () => {
     const checker = fs.readFileSync(
-      path.join(tmpDir, '.claude', 'agents', 'gsdd-plan-checker.md'),
+      path.join(tmpDir, '.claude', 'agents', 'work-plan-checker.md'),
       'utf-8'
     );
     // balanced profile maps to sonnet for Claude
@@ -1063,7 +1063,7 @@ describe('S6 — Branch Safety Propagation', () => {
   afterEach(() => { cleanup(tmpDir); });
 
   test('execute skill contains wrong-branch safety check', () => {
-    const content = readSkill(tmpDir, 'gsdd-execute');
+    const content = readSkill(tmpDir, 'work-execute');
     assert.match(content, /main.*master|master.*main/i,
       'generated execute skill must name main and master in the wrong-branch check.');
     assert.match(content, /STOP|hard-warn/i,
@@ -1071,7 +1071,7 @@ describe('S6 — Branch Safety Propagation', () => {
   });
 
   test('execute skill preserves naming-hygiene guidance for the recorded PR incidents', () => {
-    const content = readSkill(tmpDir, 'gsdd-execute');
+    const content = readSkill(tmpDir, 'work-execute');
     assert.match(content, /requirement/i,
       'generated execute skill must preserve requirement-ID naming hygiene.');
     assert.match(content, /milestone/i,
@@ -1096,7 +1096,7 @@ describe('S7 — Provenance Propagation', () => {
   afterEach(() => { cleanup(tmpDir); });
 
   test('pause skill preserves draft-first checkpointing and three-question cap', () => {
-    const content = readSkill(tmpDir, 'gsdd-pause');
+    const content = readSkill(tmpDir, 'work-pause');
     assert.match(content, /Build a draft checkpoint from artifact truth/i,
       'generated pause skill must preserve draft-first checkpointing.');
     assert.match(content, /Ask at most 3 high-signal questions total/i,
@@ -1104,7 +1104,7 @@ describe('S7 — Provenance Propagation', () => {
   });
 
   test('resume skill preserves provenance truth split and mismatch acknowledgement', () => {
-    const content = readSkill(tmpDir, 'gsdd-resume');
+    const content = readSkill(tmpDir, 'work-resume');
     assert.match(content, /checkpoint narrative truth/i,
       'generated resume skill must preserve checkpoint narrative truth.');
     assert.match(content, /planning\/artifact truth/i,
@@ -1116,8 +1116,8 @@ describe('S7 — Provenance Propagation', () => {
   });
 
   test('verify and audit skills preserve fail-closed terminal artifact gates', () => {
-    const verify = readSkill(tmpDir, 'gsdd-verify');
-    const audit = readSkill(tmpDir, 'gsdd-audit-milestone');
+    const verify = readSkill(tmpDir, 'work-verify');
+    const audit = readSkill(tmpDir, 'work-audit-milestone');
     assert.match(verify, /Before any ROADMAP closure.*SUMMARY\.md.*still exists on disk/i,
       'generated verify skill must preserve the SUMMARY.md existence gate.');
     assert.match(audit, /results shown inline anyway/i,
