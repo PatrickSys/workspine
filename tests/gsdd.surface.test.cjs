@@ -284,6 +284,7 @@ describe('public surface language gate', () => {
     assert.match(help, /Node >=22/);
     assert.match(help, /--no-update-notice/);
     assert.match(help, /GSDD_UPDATE_AWARENESS=0/);
+    assert.match(help, /WORKSPINE_UPDATE_AWARENESS=0/);
     assert.match(help, /health and update remain network-free/);
     assert.match(help, /sequential|best-effort/i);
     assert.match(help, /no lock|no concurrency guarantee/i);
@@ -304,11 +305,13 @@ describe('public surface language gate', () => {
     const help = runHelp();
     assert.match(help, /--no-update-notice/);
     assert.match(help, /GSDD_UPDATE_AWARENESS=0/);
+    assert.match(help, /WORKSPINE_UPDATE_AWARENESS=0/);
     const { renderPlanningCliLauncher } = await loadRenderer();
     const launcher = renderPlanningCliLauncher({ packageName: PACKAGE.name, packageVersion: PACKAGE.version });
     assert.match(launcher, /Node >=22/);
     assert.match(launcher, /--no-update-notice/);
     assert.match(launcher, /GSDD_UPDATE_AWARENESS=0/);
+    assert.match(launcher, /WORKSPINE_UPDATE_AWARENESS=0/);
     assert.match(launcher, /sequential|best-effort/i);
     assert.match(launcher, /no lock|no concurrency guarantee/i);
     assert.doesNotMatch(launcher, /at most once per 24 hours/i);

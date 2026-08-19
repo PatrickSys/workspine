@@ -270,7 +270,7 @@ Notes:
   - supported package runtime floor: Node >=22
   - update awareness is on by default for supported CLI/helper commands: a sequential/best-effort anonymous npm metadata check with a two-second timeout and a 64 KiB/normalized-version limit; there is no lock or cross-process concurrency guarantee
   - the notice uses only a contained .work/.local cache, sends no credentials or repository data, and cache/check failures never block commands
-  - use \`--no-update-notice\` or \`GSDD_UPDATE_AWARENESS=0\` to opt out; only the supported public CLI/generated helper can show it
+  - use \`--no-update-notice\`, \`WORKSPINE_UPDATE_AWARENESS=0\`, or the legacy \`GSDD_UPDATE_AWARENESS=0\` to opt out; only the supported public CLI/generated helper can show it
   - \`health\` and \`update\` remain network-free; run \`npx -y workspine update\` for explicit repair
   - \`npx -y workspine next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed packet, including any explicit pause checkpoint; it never runs a background compaction or context-transfer hook
   - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card

@@ -264,7 +264,7 @@ function resolveWriter(atomic) {
 
 export async function maybeShowUpdateNotice({ cwd = process.cwd(), command, args = [], packageVersion, source = 'public-cli', fetchImpl = globalThis.fetch, now = () => new Date(), output = () => {}, env = process.env, atomic = {} } = {}) {
   const forwardedArgs = stripUpdateNoticeFlag(args);
-  if (!isCheckerEligible(command, source) || env.GSDD_UPDATE_AWARENESS === '0' || args.includes('--no-update-notice')) return { args: forwardedArgs, checked: false };
+  if (!isCheckerEligible(command, source) || env.WORKSPINE_UPDATE_AWARENESS === '0' || env.GSDD_UPDATE_AWARENESS === '0' || args.includes('--no-update-notice')) return { args: forwardedArgs, checked: false };
   let context;
   try { context = resolveWorkspaceContext(args, { cwd, env }); } catch { return { args: forwardedArgs, checked: false }; }
   if (context.invalid) return { args: forwardedArgs, checked: false };

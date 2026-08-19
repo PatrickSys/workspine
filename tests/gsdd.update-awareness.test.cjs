@@ -314,6 +314,52 @@ describe('bounded update awareness', () => {
     assert.deepEqual(optedOut.lines, []);
   });
 
+  test('WORKSPINE_UPDATE_AWARENESS=0 suppresses newer notice and checker I/O the same as the legacy variable', async () => {
+    const { maybeShowUpdateNotice } = await loadUpdateAwareness();
+    let requests = 0;
+    const opts = options({
+      args: ['--json', '--sentinel'],
+      env: { ...process.env, WORKSPINE_UPDATE_AWARENESS: '0' },
+      fetchImpl: async () => { requests += 1; return fakeResponse(JSON.stringify({ version: '9.9.9' })); },
+    });
+    const result = await maybeShowUpdateNotice(opts);
+    assert.equal(requests, 0);
+    assert.deepEqual(result.args, ['--json', '--sentinel']);
+    assert.equal(result.checked, false);
+    assert.deepEqual(opts.lines, []);
+    assert.ok(!fs.existsSync(cachePath()));
+  });
+
+  test('either update-awareness opt-out variable disables the checker; the legacy name still works alone', async () => {
+    const { maybeShowUpdateNotice } = await loadUpdateAwareness();
+    const cases = [
+      { WORKSPINE_UPDATE_AWARENESS: '0' },
+      { GSDD_UPDATE_AWARENESS: '0' },
+      { WORKSPINE_UPDATE_AWARENESS: '0', GSDD_UPDATE_AWARENESS: '1' },
+      { WORKSPINE_UPDATE_AWARENESS: '1', GSDD_UPDATE_AWARENESS: '0' },
+    ];
+    for (const envOverrides of cases) {
+      const isolated = createTempProject();
+      fs.mkdirSync(path.join(isolated, '.work'), { recursive: true });
+      try {
+        let requests = 0;
+        const opts = {
+          ...options({
+            env: { ...process.env, ...envOverrides },
+            fetchImpl: async () => { requests += 1; return fakeResponse(JSON.stringify({ version: '9.9.9' })); },
+          }),
+          cwd: isolated,
+        };
+        const result = await maybeShowUpdateNotice(opts);
+        assert.equal(requests, 0, JSON.stringify(envOverrides));
+        assert.equal(result.checked, false, JSON.stringify(envOverrides));
+        assert.deepEqual(opts.lines, [], JSON.stringify(envOverrides));
+      } finally {
+        cleanup(isolated);
+      }
+    }
+  });
+
   test('bounded reader cancels streamed oversize bodies before retaining more than 64 KiB', async () => {
     const { maybeShowUpdateNotice } = await loadUpdateAwareness();
     let cancelled = false;

@@ -160,7 +160,7 @@ function printHelp() {
     '  next [--json] [--init]',
     '                               Route to the next safe Workspine action from ${normalizeStateDirName(stateDirName)}, brownfield, planning, and repo truth',
     '  supported package runtime floor: Node >=22',
-    '  next/verify update notice: sequential/best-effort network-bounded checks; no lock or cross-process concurrency guarantee; use --no-update-notice or GSDD_UPDATE_AWARENESS=0 to opt out',
+    '  next/verify update notice: sequential/best-effort network-bounded checks; no lock or cross-process concurrency guarantee; use --no-update-notice, WORKSPINE_UPDATE_AWARENESS=0, or the legacy GSDD_UPDATE_AWARENESS=0 to opt out',
     '                               health and update remain network-free; run \`npx -y workspine update\` for explicit repair',
     '',
     'Advanced option:',
