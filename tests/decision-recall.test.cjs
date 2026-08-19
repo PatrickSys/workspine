@@ -279,6 +279,52 @@ describe('S1 decision recall loop', () => {
     assert.strictEqual(digest.counts.returned, 1);
   });
 
+  test('ranks a phase-scoped decision above a strictly more recent unscoped one', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const workDir = path.join(root, '.work');
+    const { buildDecisionsDigest } = await loadStore();
+    // The unscoped record is written LAST, so it wins on recency. Before the tiered comparator the
+    // digest score was (phase * 100) + (path * 50) + epoch-milliseconds, which made the scope terms
+    // roughly 1e-11 of the total and unable to reorder anything. This asserts scope now outranks it.
+    await writeOwnerRecord(workDir, record('phase-fourteen-aa11', 'Phase fourteen scoped rule', { for: 'phase:14' }), {
+      now: new Date('2026-07-11T09:00:00.000Z'),
+      repoRoot: root,
+    });
+    await writeOwnerRecord(workDir, record('repo-wide-bb22', 'Repo-wide rule written later'), {
+      now: new Date('2026-07-12T09:00:00.000Z'),
+      repoRoot: root,
+    });
+
+    const scoped = buildDecisionsDigest({ workDir, phase: '14', now: new Date('2026-07-13T09:00:00.000Z') });
+    assert.deepStrictEqual(scoped.records.map((entry) => entry.id), ['phase-fourteen-aa11', 'repo-wide-bb22']);
+
+    const unmatched = buildDecisionsDigest({ workDir, phase: '05', now: new Date('2026-07-13T09:00:00.000Z') });
+    assert.deepStrictEqual(unmatched.records.map((entry) => entry.id), ['repo-wide-bb22', 'phase-fourteen-aa11']);
+  });
+
+  test('CLI --for writes an explicit scope and omitting it keeps repo:current', async () => {
+    const root = createTempProject();
+    dirs.push(root);
+    const { readDecisionRecords } = await loadStore();
+
+    const scopedResult = await runCliAsMain(root, ['remember', 'Scope this to phase fourteen', '--type', 'rule', '--scope', 'repo', '--for', 'phase:14']);
+    assert.strictEqual(scopedResult.exitCode, 0, scopedResult.output);
+    const scopedId = JSON.parse(scopedResult.output).record.id;
+
+    const defaultResult = await runCliAsMain(root, ['remember', 'Leave this repo wide', '--type', 'rule', '--scope', 'repo']);
+    assert.strictEqual(defaultResult.exitCode, 0, defaultResult.output);
+    const defaultId = JSON.parse(defaultResult.output).record.id;
+
+    const records = readDecisionRecords(path.join(root, '.work')).records;
+    assert.strictEqual(records.find((entry) => entry.meta.id === scopedId)?.meta.for, 'phase:14');
+    assert.strictEqual(records.find((entry) => entry.meta.id === defaultId)?.meta.for, 'repo:current');
+
+    const invalid = await runCliAsMain(root, ['remember', 'Missing the value', '--type', 'rule', '--scope', 'repo', '--for']);
+    assert.notStrictEqual(invalid.exitCode, 0);
+    assert.match(invalid.output, /\[--for <ref>\]/);
+  });
+
   test('returns the accountable digest shape and honest exclusion counts', async () => {
     const root = createTempProject();
     dirs.push(root);

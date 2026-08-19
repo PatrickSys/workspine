@@ -280,7 +280,7 @@ Commands:
   next [--json] [--format auto|json|human] [--init]
                               Read explicit file-backed \`.work\` continuity and emit the next coherent agent action
   journey [--json]            Show the milestone and phase delivery journey # (experimental)
-  remember "<text>" --type <t> --scope <s>
+  remember "<text>" --type <t> --scope <s> [--for <ref>]
                               Capture a candidate decision, rule, or lesson for later verification
   decisions query "<terms>" [--path <path>]
                               Recall matching decision records as a compact digest

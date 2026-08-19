@@ -15,7 +15,7 @@ import {
   writeDecisionRecord,
 } from './work-context.mjs';
 
-const REMEMBER_USAGE = 'Usage: gsdd remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--code path:line] [--why "<why>"]';
+const REMEMBER_USAGE = 'Usage: gsdd remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--for <ref>] [--code path:line] [--why "<why>"]';
 const REMEMBER_REMOVED_FLAG = ['--by', 'user'].join('-');
 const REMEMBER_PROMOTION_GRAMMAR = 'gsdd decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>';
 const REMEMBER_REMOVED_MESSAGE = `${REMEMBER_REMOVED_FLAG} was removed; use ${REMEMBER_PROMOTION_GRAMMAR} to activate a candidate.`;
@@ -50,10 +50,12 @@ function executeRememberCandidate(workspace, workDir, text, args) {
   const scope = requireFlag(args, '--scope', REMEMBER_USAGE);
   const why = parseFlagValue(args, '--why').value || 'Captured through gsdd remember; verify before activation.';
   const code = parseFlagValue(args, '--code').value;
+  const forRef = parseFlagValue(args, '--for');
   const status = 'candidate';
   if (!text || text.startsWith('--') || !DECISION_RECORD_TYPES.includes(type) || !DECISION_RECORD_SCOPES.includes(scope)) {
     return fail(REMEMBER_USAGE);
   }
+  if (forRef.invalid) return fail(REMEMBER_USAGE);
   const result = writeDecisionRecord(workDir, {
     type,
     status,
@@ -61,6 +63,7 @@ function executeRememberCandidate(workspace, workDir, text, args) {
     decision: text,
     why,
     source: 'agent-proposed',
+    for: forRef.value,
     links: code ? { code } : null,
     body: `${text}\n\nWhy: ${why}`,
   }, { repoRoot: workspace.workspaceRoot });

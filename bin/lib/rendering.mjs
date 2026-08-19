@@ -143,7 +143,7 @@ function printHelp() {
     'Local workflow helper commands:',
     '  control-map [--json] [--with-ignored]',
     '                               Print computed repo/worktree/workflow state for workflow-internal checks',
-    '  remember "<text>" --type <decision|lesson|rule> --scope <repo|global>',
+    '  remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--for <ref>]',
     '                               Capture an agent-proposed candidate; this is not approval',
     '  decisions query "<terms>" [--path <path>]',
     '                               Query stored decisions read-only; no transition commands',

@@ -857,9 +857,17 @@ export function buildDecisionsDigest({ workDir, phase = null, paths = [], now = 
       const recordRefs = `${record.meta.for || ''} ${record.meta.links || ''}`.toLowerCase();
       const phaseOverlap = phaseRef && recordRefs.includes(phaseRef) ? 1 : 0;
       const pathOverlap = pathRefs.some((pathRef) => recordRefs.includes(pathRef)) ? 1 : 0;
-      return { ...result, digestRelevance: (phaseOverlap * 100) + (pathOverlap * 50) + recencyValue(record.meta.updated_at) };
+      return { ...result, phaseOverlap, pathOverlap, digestRecency: recencyValue(record.meta.updated_at) };
     })
-    .sort((left, right) => right.digestRelevance - left.digestRelevance || compareRecallResults(left, right));
+    // Scope outranks recency, in tiers. A weighted sum cannot work here: recencyValue is an epoch
+    // millisecond count, so any additive scope weight small enough to be a weight is ~1e-11 of the
+    // total and can never reorder anything.
+    .sort((left, right) => (
+      (right.phaseOverlap - left.phaseOverlap)
+      || (right.pathOverlap - left.pathOverlap)
+      || (right.digestRecency - left.digestRecency)
+      || compareRecallResults(left, right)
+    ));
   const authoritativeActive = scoped.filter((result) => (
     result.record.meta.status === 'active' && result.authority.authoritative
   ));
