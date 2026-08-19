@@ -53,9 +53,9 @@
     <!-- next -->
     <text class="text white" font-size="15" y="276">Next: choose the starting lane that fits your repo and current scope:</text>
     <text class="text dim" font-size="15" y="312" x="16">Claude Code:</text>
-    <text class="text" font-size="15" y="312" x="140"><tspan class="cyan">/gsdd-new-project</tspan><tspan class="dim">  |  </tspan><tspan class="cyan">/gsdd-quick</tspan><tspan class="dim">  |  </tspan><tspan class="cyan">/gsdd-map-codebase</tspan></text>
+    <text class="text" font-size="15" y="312" x="140"><tspan class="cyan">/work-new-project</tspan><tspan class="dim">  |  </tspan><tspan class="cyan">/work-quick</tspan><tspan class="dim">  |  </tspan><tspan class="cyan">/work-map-codebase</tspan></text>
     <text class="text dim" font-size="15" y="336" x="16">Any tool:</text>
-    <text class="text" font-size="15" y="336" x="140"><tspan class="dim">open </tspan><tspan class="path">.agents/skills/gsdd-new-project/SKILL.md</tspan></text>
+    <text class="text" font-size="15" y="336" x="140"><tspan class="dim">open </tspan><tspan class="path">.agents/skills/work-new-project/SKILL.md</tspan></text>
 
     <!-- new prompt -->
     <text class="text prompt" font-size="15" y="392">~/my-repo</text>

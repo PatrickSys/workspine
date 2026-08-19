@@ -21,7 +21,7 @@ The statusline shows context usage to the **user**, but the **agent** has no awa
 |-------|-----------|----------------|
 | Normal | > 35% | No warning |
 | WARNING | <= 35% | Wrap up current task, avoid starting new complex work |
-| CRITICAL | <= 25% | Stop immediately, save state (`gsdd-pause`) |
+| CRITICAL | <= 25% | Stop immediately, save state (`work-pause`) |
 
 ## Debounce
 
@@ -58,7 +58,7 @@ The bridge file is a simple JSON object:
 
 ## Integration with GSDD
 
-GSDD's `gsdd-pause` workflow saves execution state to `.work/.continue-here.md`. The WARNING message suggests using it. The CRITICAL message instructs immediate state save.
+GSDD's `work-pause` workflow saves execution state to `.work/.continue-here.md`. The WARNING message suggests using it. The CRITICAL message instructs immediate state save.
 
 ## Setup
 

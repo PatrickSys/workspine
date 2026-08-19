@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 530" width="960" height="530" role="img" aria-label="Two ways in: gsdd-quick for a bounded change, or gsdd-new-project which writes a spec and roadmap first. Both feed a plan, execute, verify loop that repeats and writes a file at every step. gsdd-pause writes a checkpoint that gsdd next reads to resume.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 530" width="960" height="530" role="img" aria-label="Two ways in: work-quick for a bounded change, or work-new-project which writes a spec and roadmap first. Both feed a plan, execute, verify loop that repeats and writes a file at every step. work-pause writes a checkpoint that gsdd next reads to resume.">
   <defs>
     <style>
       .bg    { fill: #EFEDE4; }
@@ -42,11 +42,11 @@
   <text class="mono rlbl" x="56" y="182" fill="#6B6B63">START EITHER WAY</text>
 
   <rect class="boxf" x="56" y="200" width="176" height="56" rx="3"/>
-  <text class="mono label" x="72" y="226">gsdd-quick</text>
+  <text class="mono label" x="72" y="226">work-quick</text>
   <text class="mono sub"   x="72" y="244">a change you can describe</text>
 
   <rect class="boxf" x="56" y="278" width="176" height="56" rx="3"/>
-  <text class="mono label" x="72" y="304">gsdd-new-project</text>
+  <text class="mono label" x="72" y="304">work-new-project</text>
   <text class="mono file"  x="72" y="322">SPEC.md + ROADMAP.md</text>
 
   <path class="flow" d="M232 228 Q262 228 262 252 L262 262" marker-end="url(#a)"/>
@@ -79,7 +79,7 @@
   <text class="mono kicker" x="104" y="423">WHEN THE SESSION ENDS</text>
 
   <rect class="boxf" x="56" y="442" width="186" height="48" rx="3"/>
-  <text class="mono label" x="72" y="472">gsdd-pause</text>
+  <text class="mono label" x="72" y="472">work-pause</text>
 
   <path class="flow" d="M242 466 L296 466" marker-end="url(#a)"/>
 

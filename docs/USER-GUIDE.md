@@ -11,13 +11,13 @@ The supported public CLI/generated helper has default-on update awareness on com
 For a new project or a broad brownfield effort:
 
 1. Run `npx -y workspine init` from the repo root.
-2. Start with `gsdd-new-project` unless the change is already small and concrete.
-3. Review the plan from `gsdd-plan` before starting `gsdd-execute`.
-4. Run `gsdd-verify` before calling the phase done.
+2. Start with `work-new-project` unless the change is already small and concrete.
+3. Review the plan from `work-plan` before starting `work-execute`.
+4. Run `work-verify` before calling the phase done.
 
 Use `npx -y workspine init` for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. Use `--auto` to refresh detected existing homes; global install never creates `.work/` in the current repo.
 
-For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky repo, use `gsdd-map-codebase` before choosing between `gsdd-quick` and `gsdd-new-project`.
+For a bounded existing-code change, use `work-quick`. For an unfamiliar or risky repo, use `work-map-codebase` before choosing between `work-quick` and `work-new-project`.
 
 ---
 
@@ -40,7 +40,7 @@ For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky
 ```
   ┌──────────────────────────────────────────────────┐
   │                   NEW PROJECT                    │
-  │  gsdd-new-project                                │
+  │  work-new-project                                │
   │  Questions -> Research -> Spec -> Roadmap        │
   └─────────────────────────┬────────────────────────┘
                             │
@@ -48,15 +48,15 @@ For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky
              │      FOR EACH PHASE:       │
              │                            │
              │  ┌────────────────────┐    │
-             │  │ gsdd-plan          │    │  <- Research + Plan + Check
+             │  │ work-plan          │    │  <- Research + Plan + Check
              │  └──────────┬─────────┘    │
              │             │              │
              │  ┌──────────▼─────────┐    │
-             │  │ gsdd-execute       │    │  <- Wave-based execution
+             │  │ work-execute       │    │  <- Wave-based execution
              │  └──────────┬─────────┘    │
              │             │              │
              │  ┌──────────▼─────────┐    │
-             │  │ gsdd-verify        │    │  <- 3-level gate
+             │  │ work-verify        │    │  <- 3-level gate
              │  └──────────┬─────────┘    │
              │             │              │
              │     Next Phase?────────────┘
@@ -64,21 +64,21 @@ For a bounded existing-code change, use `gsdd-quick`. For an unfamiliar or risky
              └─────────────┼──────────────┘
                            │
              ┌──────────────▼──────────────┐
-             │  gsdd-audit-milestone       │
+             │  work-audit-milestone       │
              └─────────────────────────────┘
 ```
 
 Optional closure and milestone-continuation workflows in the shipped surface:
 
-- `gsdd-verify-work` adds conversational UAT when user-facing behavior needs explicit validation.
-- `gsdd-plan` also handles amend/extend planning when audit findings need gap-closure phases before a milestone is ready to ship.
-- `gsdd-complete-milestone` archives a shipped milestone, evolves `SPEC.md`, and collapses `ROADMAP.md`.
-- `gsdd-new-milestone` starts the next milestone after closure.
+- `work-verify-work` adds conversational UAT when user-facing behavior needs explicit validation.
+- `work-plan` also handles amend/extend planning when audit findings need gap-closure phases before a milestone is ready to ship.
+- `work-complete-milestone` archives a shipped milestone, evolves `SPEC.md`, and collapses `ROADMAP.md`.
+- `work-new-milestone` starts the next milestone after closure.
 
 ### How Plan Agents Coordinate
 
 ```
-  gsdd-plan (phase N)
+  work-plan (phase N)
          │
          ├── Phase Researcher (x4 parallel)
          │     ├── Stack researcher
@@ -115,7 +115,7 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 ### Execution Wave Coordination
 
 ```
-  gsdd-execute (phase N)
+  work-execute (phase N)
          │
          ├── Analyze plan dependencies
          │
@@ -137,28 +137,28 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
         ├── bounded change already concrete
         │        │
         │        ▼
-        │   gsdd-quick
+        │   work-quick
         │   bounded feature work
         │   with inline baseline
         │
         ├── repo unfamiliar / risky / deeper orientation needed
         │        │
         │        ▼
-        │   gsdd-map-codebase
+        │   work-map-codebase
         │        │
-        │        └── continue with gsdd-quick or gsdd-new-project
+        │        └── continue with work-quick or work-new-project
         │
         └── fuzzy scope / full lifecycle setup
                  │
                  ▼
-           gsdd-new-project
+           work-new-project
            canonical initializer
 ```
 
 ### Verification Gate
 
 ```
-  gsdd-verify (phase N)
+  work-verify (phase N)
          │
          ├── Level 1: EXISTS
          │     └── Do the expected files exist?
@@ -215,19 +215,19 @@ Details worth knowing before you script it:
 
 | Workflow | Purpose | When to Use |
 |----------|---------|-------------|
-| `gsdd-new-project` | Full project init: questioning, brownfield audit when needed, research, spec, roadmap | Greenfield, fuzzy brownfield scope, or full lifecycle setup |
-| `gsdd-map-codebase` | Map existing codebase for reusable brownfield context | When the repo is unfamiliar, risky, or you want a deeper baseline before choosing `quick` vs `new-project` |
-| `gsdd-plan` | Research + plan + adversarial check for current phase; writes planning artifacts only | Before executing a phase |
-| `gsdd-execute` | Execute phase plans in parallel waves | After planning is complete |
-| `gsdd-verify` | 3-level verification gate + anti-pattern scan | After execution completes |
-| `gsdd-verify-work` | Conversational UAT validation with structured gap tracking | When user-facing behavior needs explicit validation beyond repo artifacts |
-| `gsdd-audit-milestone` | Cross-phase integration, requirements coverage, E2E flows | When all phases are done |
-| `gsdd-complete-milestone` | Archive a shipped milestone, evolve `SPEC.md`, collapse `ROADMAP.md` | When the audited milestone is ready to ship |
-| `gsdd-new-milestone` | Start the next milestone with goals, requirements, and roadmap phases | After closing a milestone and starting the next one |
-| `gsdd-quick` | Plan and execute sub-hour work outside the phase cycle | Bug fixes, small features, config changes when the bounded change is already concrete |
-| `gsdd-pause` | Save session context to checkpoint | Stopping mid-phase |
-| `gsdd-resume` | Restore context from checkpoint and route to next action | Starting a new session |
-| `gsdd-progress` | Show project status and route to next action | "Where am I?" |
+| `work-new-project` | Full project init: questioning, brownfield audit when needed, research, spec, roadmap | Greenfield, fuzzy brownfield scope, or full lifecycle setup |
+| `work-map-codebase` | Map existing codebase for reusable brownfield context | When the repo is unfamiliar, risky, or you want a deeper baseline before choosing `quick` vs `new-project` |
+| `work-plan` | Research + plan + adversarial check for current phase; writes planning artifacts only | Before executing a phase |
+| `work-execute` | Execute phase plans in parallel waves | After planning is complete |
+| `work-verify` | 3-level verification gate + anti-pattern scan | After execution completes |
+| `work-verify-work` | Conversational UAT validation with structured gap tracking | When user-facing behavior needs explicit validation beyond repo artifacts |
+| `work-audit-milestone` | Cross-phase integration, requirements coverage, E2E flows | When all phases are done |
+| `work-complete-milestone` | Archive a shipped milestone, evolve `SPEC.md`, collapse `ROADMAP.md` | When the audited milestone is ready to ship |
+| `work-new-milestone` | Start the next milestone with goals, requirements, and roadmap phases | After closing a milestone and starting the next one |
+| `work-quick` | Plan and execute sub-hour work outside the phase cycle | Bug fixes, small features, config changes when the bounded change is already concrete |
+| `work-pause` | Save session context to checkpoint | Stopping mid-phase |
+| `work-resume` | Restore context from checkpoint and route to next action | Starting a new session |
+| `work-progress` | Show project status and route to next action | "Where am I?" |
 
 ### CLI Commands
 
@@ -287,7 +287,7 @@ Other CLI commands that remain available outside the first-run path:
 
 ### Continuity Commands
 
-`gsdd-pause` writes a checkpoint to `.work/.continue-here.md`. `gsdd next` reads that checkpoint together with `.work/` and repo truth, and returns a structured read-only packet. The checkpoint is context beneath PLAN/SPEC/lifecycle/Git truth, so artifact state wins when the two disagree.
+`work-pause` writes a checkpoint to `.work/.continue-here.md`. `gsdd next` reads that checkpoint together with `.work/` and repo truth, and returns a structured read-only packet. The checkpoint is context beneath PLAN/SPEC/lifecycle/Git truth, so artifact state wins when the two disagree.
 
 ```bash
 gsdd next --json           # structured packet (the default captured output)
@@ -313,7 +313,7 @@ The assertion is stored on the same decision record and binds the exact decision
 |------|-----------------|
 | `claude` | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
 | `opencode` | `.opencode/commands/`, `.opencode/agents/` |
-| `codex` | `.codex/agents/gsdd-plan-checker.toml` (`.agents/skills/gsdd-*` and `.work/bin/gsdd.mjs` are always generated; `$gsdd-plan` stays plan-only until explicit `$gsdd-execute`) |
+| `codex` | `.codex/agents/work-plan-checker.toml` (`.agents/skills/gsdd-*` and `.work/bin/gsdd.mjs` are always generated; `$work-plan` stays plan-only until explicit `$work-execute`) |
 | `agents` | Bounded fallback block in root `AGENTS.md` |
 | `all` | All of the above |
 | *(none)* | Auto-detect installed tools |
@@ -404,15 +404,15 @@ Workspine does not impose commit formats, branch naming, or one-commit-per-task 
 
 Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces when their slash/skill discovery sees that directory. The difference is runtime proof and ergonomics, not workflow shape. If discovery is unavailable, open or paste the relevant `.agents/skills/gsdd-*/SKILL.md` file.
 
-- `Claude/OpenCode`: `/gsdd-new-project -> /gsdd-plan -> /gsdd-execute -> /gsdd-verify -> /gsdd-audit-milestone`
-- `Codex`: `$gsdd-new-project -> $gsdd-plan -> $gsdd-execute -> $gsdd-verify -> $gsdd-audit-milestone` (`$gsdd-plan` ends at plan creation; `$gsdd-execute` is a separate explicit step)
-- `Codex VS Code / app`: use built-in discovery if available; otherwise open or paste `.agents/skills/gsdd-new-project/SKILL.md` and continue with the matching skill files
+- `Claude/OpenCode`: `/work-new-project -> /work-plan -> /work-execute -> /work-verify -> /work-audit-milestone`
+- `Codex`: `$work-new-project -> $work-plan -> $work-execute -> $work-verify -> $work-audit-milestone` (`$work-plan` ends at plan creation; `$work-execute` is a separate explicit step)
+- `Codex VS Code / app`: use built-in discovery if available; otherwise open or paste `.agents/skills/work-new-project/SKILL.md` and continue with the matching skill files
 - `Cursor / Copilot / Gemini`: use the same sequence from the slash command menu when skill discovery is available; otherwise open or paste the matching `.agents/skills/gsdd-*/SKILL.md` files
 
 ### Milestone Continuation
 
-- `Claude/OpenCode`: `/gsdd-plan` amend/extend mode when audit findings need closure work, or `/gsdd-complete-milestone -> /gsdd-new-milestone` when the milestone is ready to ship
-- `Codex`: `$gsdd-plan` amend/extend mode when audit findings need closure work, or `$gsdd-complete-milestone -> $gsdd-new-milestone` when the milestone is ready to ship
+- `Claude/OpenCode`: `/work-plan` amend/extend mode when audit findings need closure work, or `/work-complete-milestone -> /work-new-milestone` when the milestone is ready to ship
+- `Codex`: `$work-plan` amend/extend mode when audit findings need closure work, or `$work-complete-milestone -> $work-new-milestone` when the milestone is ready to ship
 - `Cursor / Copilot / Gemini`: use the matching slash commands when skill discovery is available, with the same routing as above
 
 ### Repos That Already Have Code
@@ -420,27 +420,27 @@ Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces whe
 `npx -y workspine init`
 
 - Choose one starting lane after init:
-- `Claude/OpenCode`: `/gsdd-quick` for a concrete bounded change, `/gsdd-new-project` for fuzzy or milestone-shaped work, or `/gsdd-map-codebase` first when the repo needs a deeper brownfield baseline
-- `Codex`: `$gsdd-quick` for a concrete bounded change, `$gsdd-new-project` for fuzzy or milestone-shaped work, or `$gsdd-map-codebase` first when the repo needs a deeper brownfield baseline
-- `Cursor / Copilot / Gemini`: `/gsdd-quick`, `/gsdd-new-project`, or `/gsdd-map-codebase` from the slash command menu when skill discovery is available, using the same routing rules above
+- `Claude/OpenCode`: `/work-quick` for a concrete bounded change, `/work-new-project` for fuzzy or milestone-shaped work, or `/work-map-codebase` first when the repo needs a deeper brownfield baseline
+- `Codex`: `$work-quick` for a concrete bounded change, `$work-new-project` for fuzzy or milestone-shaped work, or `$work-map-codebase` first when the repo needs a deeper brownfield baseline
+- `Cursor / Copilot / Gemini`: `/work-quick`, `/work-new-project`, or `/work-map-codebase` from the slash command menu when skill discovery is available, using the same routing rules above
 
 ### Quick Bug Fix
 
-- `Claude/OpenCode`: `/gsdd-quick`
-- `Codex`: `$gsdd-quick`
-- `Cursor / Copilot / Gemini`: `/gsdd-quick` from the slash command menu when skill discovery is available
+- `Claude/OpenCode`: `/work-quick`
+- `Codex`: `$work-quick`
+- `Cursor / Copilot / Gemini`: `/work-quick` from the slash command menu when skill discovery is available
 
 ### Resume After a Break
 
-- `Claude/OpenCode`: `/gsdd-progress` or `/gsdd-resume`
-- `Codex`: `$gsdd-progress` or `$gsdd-resume`
+- `Claude/OpenCode`: `/work-progress` or `/work-resume`
+- `Codex`: `$work-progress` or `$work-resume`
 - `Cursor / Copilot / Gemini`: use the matching skill from the slash command menu when discovery is available
 
 ### Pause Mid-Work
 
-- `Claude/OpenCode`: `/gsdd-pause`
-- `Codex`: `$gsdd-pause`
-- `Cursor / Copilot / Gemini`: `/gsdd-pause` from the slash command menu when skill discovery is available
+- `Claude/OpenCode`: `/work-pause`
+- `Codex`: `$work-pause`
+- `Cursor / Copilot / Gemini`: `/work-pause` from the slash command menu when skill discovery is available
 
 ### Speed vs Quality Presets
 
@@ -463,7 +463,7 @@ npx -y workspine init --auto --tools claude --brief path/to/PRD.md  # Seed from 
 
 ### Context Degradation During Long Sessions
 
-Clear your context window between major workflows. Workspine is designed around fresh contexts, and every delegate gets a clean context window. If quality drops in the main session, clear and use `gsdd-resume` or `gsdd-progress` to restore state.
+Clear your context window between major workflows. Workspine is designed around fresh contexts, and every delegate gets a clean context window. If quality drops in the main session, clear and use `work-resume` or `work-progress` to restore state.
 
 ### Plans Seem Wrong or Misaligned
 
@@ -475,11 +475,11 @@ Plans should have 2-5 tasks maximum. If tasks are too large, they exceed what a 
 
 ### Lost Track of Where You Are
 
-Run `gsdd-progress`. It reads all artifacts and tells you where you are and what to do next.
+Run `work-progress`. It reads all artifacts and tells you where you are and what to do next.
 
 ### Need to Change Something After Execution
 
-Do not re-run `gsdd-execute`. Use `gsdd-quick` for targeted fixes, or `gsdd-verify` to systematically identify issues.
+Do not re-run `work-execute`. Use `work-quick` for targeted fixes, or `work-verify` to systematically identify issues.
 
 ### Template Refresh After Update
 
@@ -507,9 +507,9 @@ Switch to budget profile: `npx -y workspine models profile budget` (or `gsdd mod
 
 | Problem | Solution |
 |---------|----------|
-| Lost context / new session | `gsdd-resume` or `gsdd-progress` |
+| Lost context / new session | `work-resume` or `work-progress` |
 | Phase went wrong | `git revert` the phase commits, then re-plan |
-| Quick targeted fix | `gsdd-quick` |
+| Quick targeted fix | `work-quick` |
 | Something broke | Use the debugger role for systematic debugging |
 | Costs running high | `npx -y workspine models profile budget`, disable workflow toggles |
 | Templates out of date | `npx -y workspine update --templates` or `gsdd update --templates` if globally installed |

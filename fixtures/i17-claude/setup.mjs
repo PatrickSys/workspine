@@ -8,7 +8,7 @@
  *   node fixtures/i17-claude/setup.mjs [target-dir]
  *
  * If no target-dir is given, creates a temp directory.
- * After scaffolding, open the directory in Claude Code and run /gsdd-plan 1.
+ * After scaffolding, open the directory in Claude Code and run /work-plan 1.
  */
 
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
@@ -144,6 +144,6 @@ Flaws in 01-PLAN.md (should trigger ≥4 checker dimensions):
 
 Next steps:
   1. Open this directory in Claude Code
-  2. Run: /gsdd-plan 1
+  2. Run: /work-plan 1
   3. Observe checker cycles and capture evidence per .internal-research/i17-fixture-guide.md
 `);

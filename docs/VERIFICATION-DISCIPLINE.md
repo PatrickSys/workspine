@@ -14,7 +14,7 @@ Within that loop, the framework preserves two important review seams.
 
 ### 1. Plan checking
 
-`gsdd-plan` does not stop at "write a plan."
+`work-plan` does not stop at "write a plan."
 
 It includes a review loop where the plan is checked against concrete dimensions such as:
 
@@ -28,7 +28,7 @@ On runtimes with stronger native support, that can be a fresh-context checker pa
 
 ### 2. Verification after execution
 
-`gsdd-verify` uses a three-level gate:
+`work-verify` uses a three-level gate:
 
 - Exists: the expected artifacts are present
 - Substantive: the output is real, not empty or stubbed

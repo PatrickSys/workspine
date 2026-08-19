@@ -54,7 +54,7 @@ Two surfaces matter for users:
 | --- | --- | --- | --- |
 | Claude Code | Generated-surface proof | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` | Native adapter surface is generated and freshness-checked locally; no recorded end-to-end run |
 | OpenCode | Generated-surface proof | `.opencode/commands/`, `.opencode/agents/` | Native command and checker path, generated and freshness-checked locally; no recorded end-to-end run |
-| Codex CLI | Recorded proof | `.agents/skills/gsdd-*` plus `.codex/agents/gsdd-plan-checker.toml` | Portable skill entry, native checker adapter, recorded lifecycle evidence, and generated-surface freshness checks |
+| Codex CLI | Recorded proof | `.agents/skills/gsdd-*` plus `.codex/agents/work-plan-checker.toml` | Portable skill entry, native checker adapter, recorded lifecycle evidence, and generated-surface freshness checks |
 | Codex VS Code / app | Fallback only | `.agents/skills/gsdd-*` opened or pasted manually unless discovery is available | Separate product surface from Codex CLI; no equal runtime-proof claim |
 | Cursor | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally |
 | GitHub Copilot | Qualified support | `.agents/skills/gsdd-*` | Skill/slash path when discovery is available; generated skill files are freshness-checked locally |
