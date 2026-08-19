@@ -3357,9 +3357,15 @@ describe('G37 - Launch Surface Consistency', () => {
     }
 
     // The product is Workspine but the command is gsdd. Both names must appear, and the
-    // doc must say why the gsdd names stayed. The exact wording is free.
-    for (const [label, content] of [['README.md', rootReadme], ['docs/USER-GUIDE.md', userGuide]]) {
-      for (const name of ['gsdd-cli', '`gsdd`', '.work/']) {
+    // doc must say why the gsdd names stayed. The exact wording is free. README.md still
+    // carries the retained `gsdd-cli` package-history note (renamed at Phase 14 step 16);
+    // docs/USER-GUIDE.md is fully renamed as of Phase 14 step 9, so it names the current
+    // `workspine` package alongside the retained `gsdd`/.work/ contracts instead.
+    for (const [label, content, names] of [
+      ['README.md', rootReadme, ['gsdd-cli', '`gsdd`', '.work/']],
+      ['docs/USER-GUIDE.md', userGuide, ['`workspine`', '`gsdd`', '.work/']],
+    ]) {
+      for (const name of names) {
         assert.ok(content.includes(name),
           `${label} must name ${name} alongside Workspine. FIX: Say which command, package, and workspace names Workspine kept.`);
       }

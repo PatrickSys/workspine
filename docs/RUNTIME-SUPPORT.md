@@ -4,11 +4,11 @@ Workspine is a Spec Driven Development framework with portable multi-runtime wor
 
 This matrix is the release-floor truth surface.
 
-The package runtime floor is Node >=22. Update awareness is limited to the supported public CLI/generated helper, and within it to commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. It uses sequential/best-effort anonymous metadata checks, with no lock or cross-process concurrency guarantee, a two-second timeout, 64 KiB/normalized-version limits, no credentials or repository data, and a contained `.work/.local` cache with nonblocking failures. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` are network-free; run `npx -y gsdd-cli update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
+The package runtime floor is Node >=22. Update awareness is limited to the supported public CLI/generated helper, and within it to commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. It uses sequential/best-effort anonymous metadata checks, with no lock or cross-process concurrency guarantee, a two-second timeout, 64 KiB/normalized-version limits, no credentials or repository data, and a contained `.work/.local` cache with nonblocking failures. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` are network-free; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
 
-Human repo setup and repair commands in this document use `npx -y gsdd-cli ...` because that works without a global install. If you installed `gsdd-cli` globally, the equivalent bare `gsdd ...` command is fine. For fresh cross-repo setup, run `npx -y gsdd-cli install --global` interactively or pass `--tools <targets>`; use `--auto` to refresh detected existing agent homes.
+Human repo setup and repair commands in this document use `npx -y workspine ...` because that works without a global install. If you installed `workspine` globally, the equivalent bare `gsdd ...` command is fine. For fresh cross-repo setup, run `npx -y workspine install --global` interactively or pass `--tools <targets>`; use `--auto` to refresh detected existing agent homes.
 
-The install contract is deliberately skills-first: `npx -y gsdd-cli init` always creates `.agents/skills/gsdd-*` and `.work/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
+The install contract is deliberately skills-first: `npx -y workspine init` always creates `.agents/skills/gsdd-*` and `.work/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
 
 Global install is separate from repo bootstrap. It does not create `.work/`; it writes selected runtime surfaces under user-level agent homes and records Workspine ownership in per-runtime manifests.
 
@@ -62,7 +62,7 @@ Two surfaces matter for users:
 
 ## Global install surfaces
 
-For a fresh install, choose targets interactively or run `npx -y gsdd-cli install --global --tools <targets>`. Use `npx -y gsdd-cli install --global --auto` to refresh detected existing agent homes; when none are detected it writes nothing and prints exact explicit commands. Supported target IDs are `claude,opencode,codex,copilot`:
+For a fresh install, choose targets interactively or run `npx -y workspine install --global --tools <targets>`. Use `npx -y workspine install --global --auto` to refresh detected existing agent homes; when none are detected it writes nothing and prints exact explicit commands. Supported target IDs are `claude,opencode,codex,copilot`:
 
 | Target | Global surfaces |
 | --- | --- |
@@ -79,12 +79,12 @@ When `OPENCODE_CONFIG_DIR` is set, OpenCode commands and agents are installed un
 
 The authored source contract stays in `distilled/workflows/*`. Generated runtime-facing files are trusted only through deterministic rendering:
 
-- `npx -y gsdd-cli health` compares generated surfaces in the current repo-local `.work/` workspace under `.agents/skills/`, `.work/bin/`, `.claude/`, `.opencode/`, and `.codex/` against current render output.
+- `npx -y workspine health` compares generated surfaces in the current repo-local `.work/` workspace under `.agents/skills/`, `.work/bin/`, `.claude/`, `.opencode/`, and `.codex/` against current render output.
 - Workflow-internal deterministic helper commands run through `node .work/bin/gsdd.mjs ...`.
-- `npx -y gsdd-cli update` regenerates drifted generated surfaces from the authored workflow and delegate sources.
-- Bare `gsdd health` and `gsdd update` are equivalent only when `gsdd-cli` is globally installed.
+- `npx -y workspine update` regenerates drifted generated surfaces from the authored workflow and delegate sources.
+- Bare `gsdd health` and `gsdd update` are equivalent only when `workspine` is globally installed.
 - Missing generated surfaces are not treated as drift unless the corresponding runtime surface is actually installed locally.
-- Detected existing global installs are refreshed by rerunning `npx -y gsdd-cli install --global --auto`; fresh or explicitly scoped installs use `npx -y gsdd-cli install --global --tools <targets>`. Global runtime probes remain an internal pressure-harness concern, not a public install flag.
+- Detected existing global installs are refreshed by rerunning `npx -y workspine install --global --auto`; fresh or explicitly scoped installs use `npx -y workspine install --global --tools <targets>`. Global runtime probes remain an internal pressure-harness concern, not a public install flag.
 
 ## Entry and helper surfaces
 
@@ -119,4 +119,4 @@ Portable contract does not mean equal UX everywhere.
 - `docs/BROWNFIELD-PROOF.md`
 - `docs/proof/consumer-node-cli/README.md`
 - `docs/VERIFICATION-DISCIPLINE.md`
-- `npx -y gsdd-cli health` / `npx -y gsdd-cli update` (or bare `gsdd ...` when globally installed)
+- `npx -y workspine health` / `npx -y workspine update` (or bare `gsdd ...` when globally installed)

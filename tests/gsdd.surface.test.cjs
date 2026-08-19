@@ -289,10 +289,17 @@ describe('public surface language gate', () => {
     assert.match(help, /sequential|best-effort/i);
     assert.match(help, /no lock|no concurrency guarantee/i);
     assert.doesNotMatch(help, /at most once per 24 hours/i);
-    for (const relative of ['README.md', 'docs/USER-GUIDE.md', 'docs/RUNTIME-SUPPORT.md']) {
+    // README.md still names the retained `gsdd-cli` package alongside its npx update
+    // guidance (renamed at Phase 14 step 16); docs/USER-GUIDE.md and docs/RUNTIME-SUPPORT.md
+    // are fully renamed to the current `workspine` package as of Phase 14 step 9.
+    for (const [relative, updatePattern] of [
+      ['README.md', /npx -y gsdd-cli update/],
+      ['docs/USER-GUIDE.md', /npx -y workspine update/],
+      ['docs/RUNTIME-SUPPORT.md', /npx -y workspine update/],
+    ]) {
       const content = fs.readFileSync(path.join(ROOT, relative), 'utf8');
       assert.match(content, /GSDD_UPDATE_AWARENESS=0/);
-      assert.match(content, /npx -y gsdd-cli update/);
+      assert.match(content, updatePattern);
       assert.match(content, /Node >=22|Node `>=22`/);
       assert.match(content, /network-free/);
       assert.doesNotMatch(content, /Runtime floor: Node 20\+|Node 20\+/);
