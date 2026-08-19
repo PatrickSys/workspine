@@ -68,7 +68,7 @@ npx -y workspine init --tools agents
 ```
 
 Behavior:
-- Always: generates open-standard skills at `.agents/skills/gsdd-*/SKILL.md` by embedding `distilled/workflows/*.md`, plus repo-local deterministic helpers at `.work/bin/gsdd.mjs` (or `.planning/bin/gsdd.mjs` in legacy workspaces).
+- Always: generates open-standard skills at `.agents/skills/work-*/SKILL.md` by embedding `distilled/workflows/*.md`, plus repo-local deterministic helpers at `.work/bin/gsdd.mjs` (or `.planning/bin/gsdd.mjs` in legacy workspaces).
 - Optional: generates tool adapters (root `AGENTS.md`, Claude `.claude/skills` + `.claude/commands` alias + `.claude/agents`, OpenCode `.opencode/commands` + `.opencode/agents`, Codex CLI `.codex/agents/work-plan-checker.toml`).
 - Codex CLI: uses the portable skill entry surface and the generated `.codex/agents/` checker/approach-explorer agents; it does not use `.codex/AGENTS.md` as the primary integration path.
 - Root `AGENTS.md` is only written when explicitly requested (so we do not pollute existing user governance).

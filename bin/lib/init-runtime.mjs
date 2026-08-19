@@ -306,9 +306,9 @@ Commands:
   help                        Show this summary
 
 Platforms (for --tools):
-  claude    Generate Claude Code skills (.claude/skills/gsdd-*), commands (.claude/commands/gsdd-*.md), and native agents (.claude/agents/gsdd-*.md)
-  opencode  Generate OpenCode local slash commands (.opencode/commands/gsdd-*.md) + native agents (.opencode/agents/gsdd-*.md)
-  codex     Generate Codex CLI native plan-checker agent (.codex/agents/work-plan-checker.toml)
+  claude    Generate Claude Code skills (.claude/skills/work-*), the plan command (.claude/commands/work-plan.md), and native agents (.claude/agents/work-*.md)
+  opencode  Generate OpenCode local slash commands (.opencode/commands/work-*.md) + native agents (.opencode/agents/work-*.md)
+  codex     Generate Codex CLI native agents (.codex/agents/work-plan-checker.toml and .codex/agents/work-approach-explorer.toml)
   agents    Generate/Update root AGENTS.md (bounded GSDD block)
   cursor    Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
   copilot   Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
@@ -320,12 +320,12 @@ ${renderGlobalInstallTargetHelp()}
 
 Notes:
   - use \`npx -y workspine init\` for repo-local setup; for a fresh global install choose targets interactively or pass \`--tools <targets>\`
-  - init always generates open-standard skills at .agents/skills/gsdd-*; this is the shared workflow entry surface
+  - init always generates open-standard skills at .agents/skills/work-*; this is the shared workflow entry surface
   - init also generates a local .work/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - install --global never creates .work/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
   - use \`npx -y workspine install --global --auto\` to refresh detected existing agent homes; in a fresh/headless home use \`--tools <targets>\`
   - repair or refresh a global install by rerunning \`npx -y workspine install --global --auto\` or \`npx -y workspine install --global --tools <targets>\`; runtime probes stay in test harnesses
-  - Workspine is the public product name and the npm package; the retained command, workflow, and workspace contracts stay gsdd, gsdd-*, and .work/; legacy planning workspaces are still read only for explicit migration
+  - Workspine is the public product name and the npm package; the retained command and workspace contracts stay gsdd and .work/, and the workflows are work-*; legacy planning workspaces are still read only for explicit migration
   - running \`npx -y workspine init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
   - repo-local \`init --auto\` sets the legacy-named \`autoAdvance\` key only for brief-driven \`${workflowId('new-project')}\` SPEC/ROADMAP bootstrap; it never chains plan, execute, verify, release, or delivery
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
@@ -340,9 +340,9 @@ Notes:
   - recorded launch proof in this repo currently covers the Codex CLI path; Claude Code and OpenCode get generated native surfaces with local freshness checks and no recorded run
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
   - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
-  - --tools codex generates .codex/agents/work-plan-checker.toml (portable skill is the entry surface; $work-plan is plan-only until explicit $work-execute)
+  - --tools codex generates .codex/agents/work-plan-checker.toml and .codex/agents/work-approach-explorer.toml (portable skill is the entry surface; $work-plan is plan-only until explicit $work-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
-  - normal repo path: npx -y workspine init -> run /gsdd-* or $gsdd-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed
+  - normal repo path: npx -y workspine init -> run /work-* or $work-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed
   - post-init, choose your starting lane honestly: new-project for greenfield or fuzzy/milestone work, quick for a concrete bounded change, map-codebase first when the repo needs deeper orientation
 
 Examples:

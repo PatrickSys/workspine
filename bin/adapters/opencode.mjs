@@ -272,7 +272,7 @@ function createOpenCodeAdapter({
       );
     },
     summary(action) {
-      return `${action} OpenCode slash commands (.opencode/commands/gsdd-*.md) and native agents (.opencode/agents/gsdd-*.md)`;
+      return `${action} OpenCode slash commands (.opencode/commands/work-*.md) and native agents (.opencode/agents/work-*.md)`;
     },
   };
 }

@@ -15,7 +15,7 @@ One end-to-end run is recorded, on Codex CLI: plan, execute, a verification catc
 npx -y workspine init
 ```
 
-Needs Node >=22. The npm package is `workspine`, and it installs two equivalent commands, `workspine` and `gsdd`. The workflows are `gsdd-*` and the workspace is `.work/`; Workspine kept the `gsdd` command and those names so existing installs keep working. Releases up to 0.32.0 shipped under a different, now-retired npm package name; see CHANGELOG.md for that history. The `gsdd` binary alias is removed at the next minor release, so new scripts should call `workspine` directly.
+Needs Node >=22. The npm package is `workspine`, and it installs two equivalent commands, `workspine` and `gsdd`. The workflows are `work-*` and the workspace is `.work/`; Workspine kept the `gsdd` command and the `.work/` workspace so existing installs keep working. Releases up to 0.32.0 shipped under a different, now-retired npm package name; see CHANGELOG.md for that history. The `gsdd` binary alias is removed at the next minor release, so new scripts should call `workspine` directly.
 
 </div>
 
@@ -61,7 +61,7 @@ Workspine ships 13 workflows; the [User Guide](docs/USER-GUIDE.md) lists them al
 Whatever you pick, `init` always writes:
 
 - `.work/` is the durable workspace holding templates, role contracts, and config.
-- `.agents/skills/gsdd-*` are the portable workflow entry points your agent reads.
+- `.agents/skills/work-*` are the portable workflow entry points your agent reads.
 - `.work/bin/gsdd.mjs` is generated internal workflow plumbing, not a second public package CLI. Generated skills call it from the repo root.
 
 <img src="assets/workspine-terminal.svg" alt="Terminal running npx -y workspine init --tools claude, which writes .work, portable skills, local helpers, and Claude Code surfaces, then names the command to run next." width="880">
@@ -78,7 +78,7 @@ Then pick a first workflow:
 
 - Claude Code / OpenCode: slash commands such as `/work-plan`.
 - Codex CLI: portable `work-plan` skill reference (`$work-plan`), with `.codex/agents/work-plan-checker.toml` for native checker isolation.
-- Cursor / Copilot / Gemini: Use slash commands if your tool discovers `.agents/skills`; if it does not, open `.agents/skills/gsdd-<workflow>/SKILL.md`.
+- Cursor / Copilot / Gemini: Use slash commands if your tool discovers `.agents/skills`; if it does not, open `.agents/skills/work-<workflow>/SKILL.md`.
 
 For CI or scripted setup:
 

@@ -1,6 +1,6 @@
 # Workspine User Guide
 
-A detailed reference for Workspine workflows, troubleshooting, and configuration. Workspine is the public product name; the npm package is `workspine`, and the CLI, workflow names, and workspace remain `gsdd`, `gsdd-*`, and `.work/` as retained technical contracts. Runtime floor: Node >=22. For quick-start setup and the public proof pack, start with the [README](../README.md). Human install/update commands use `npx -y workspine ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
+A detailed reference for Workspine workflows, troubleshooting, and configuration. Workspine is the public product name; the npm package is `workspine`, the CLI and workspace remain `gsdd` and `.work/` as retained technical contracts, and the workflows are `work-*`. Runtime floor: Node >=22. For quick-start setup and the public proof pack, start with the [README](../README.md). Human install/update commands use `npx -y workspine ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
 
 The supported public CLI/generated helper has default-on update awareness on commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. Eligible commands make sequential/best-effort anonymous npm metadata checks when the contained `.work/.local` cache is writable, with no lock or cross-process concurrency guarantee. It uses a two-second timeout and 64 KiB/normalized-version limits, sends no credentials or repository data, and cache/check failures are nonblocking. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` remain network-free; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
 
@@ -259,14 +259,14 @@ close through direct verification.
 Normal user flow:
 
 1. Run `npx -y workspine init`.
-2. Enter workflows through your runtime surface: `/gsdd-*` or `$gsdd-*`.
+2. Enter workflows through your runtime surface: `/work-*` or `$work-*`.
 3. Use `npx -y workspine health` to check repo-local generated surfaces.
 4. Use `npx -y workspine update` when repo-local generated surfaces drift or you want the latest shipped output.
 5. For personal global installs, rerun `npx -y workspine install --global --auto` to repair or refresh detected existing agent homes, or use `npx -y workspine install --global --tools <targets>` for a fresh or explicitly scoped target set.
 
 Surface split:
 
-- `.agents/skills/gsdd-*` is the workflow entry surface.
+- `.agents/skills/work-*` is the workflow entry surface.
 - `.work/bin/gsdd*` is an internal local helper surface used by workflow-embedded lifecycle mechanics. It is kept available, but it is not the normal first-run user entrypoint.
 
 Advanced/internal helper commands remain available:
@@ -313,7 +313,7 @@ The assertion is stored on the same decision record and binds the exact decision
 |------|-----------------|
 | `claude` | `.claude/skills/`, `.claude/commands/`, `.claude/agents/` |
 | `opencode` | `.opencode/commands/`, `.opencode/agents/` |
-| `codex` | `.codex/agents/work-plan-checker.toml` (`.agents/skills/gsdd-*` and `.work/bin/gsdd.mjs` are always generated; `$work-plan` stays plan-only until explicit `$work-execute`) |
+| `codex` | `.codex/agents/work-plan-checker.toml` and `.codex/agents/work-approach-explorer.toml` (`.agents/skills/work-*` and `.work/bin/gsdd.mjs` are always generated; `$work-plan` stays plan-only until explicit `$work-execute`) |
 | `agents` | Bounded fallback block in root `AGENTS.md` |
 | `all` | All of the above |
 | *(none)* | Auto-detect installed tools |
@@ -402,12 +402,12 @@ Workspine does not impose commit formats, branch naming, or one-commit-per-task 
 
 `npx -y workspine init`
 
-Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces when their slash/skill discovery sees that directory. The difference is runtime proof and ergonomics, not workflow shape. If discovery is unavailable, open or paste the relevant `.agents/skills/gsdd-*/SKILL.md` file.
+Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces when their slash/skill discovery sees that directory. The difference is runtime proof and ergonomics, not workflow shape. If discovery is unavailable, open or paste the relevant `.agents/skills/work-*/SKILL.md` file.
 
 - `Claude/OpenCode`: `/work-new-project -> /work-plan -> /work-execute -> /work-verify -> /work-audit-milestone`
 - `Codex`: `$work-new-project -> $work-plan -> $work-execute -> $work-verify -> $work-audit-milestone` (`$work-plan` ends at plan creation; `$work-execute` is a separate explicit step)
 - `Codex VS Code / app`: use built-in discovery if available; otherwise open or paste `.agents/skills/work-new-project/SKILL.md` and continue with the matching skill files
-- `Cursor / Copilot / Gemini`: use the same sequence from the slash command menu when skill discovery is available; otherwise open or paste the matching `.agents/skills/gsdd-*/SKILL.md` files
+- `Cursor / Copilot / Gemini`: use the same sequence from the slash command menu when skill discovery is available; otherwise open or paste the matching `.agents/skills/work-*/SKILL.md` files
 
 ### Milestone Continuation
 
@@ -549,7 +549,7 @@ Switch to budget profile: `npx -y workspine models profile budget` (or `gsdd mod
   LOG.md                    # Quick task log
 
 agents/                     # 10 canonical role contracts
-.agents/skills/gsdd-*/      # Portable workflow entrypoints (open standard)
+.agents/skills/work-*/      # Portable workflow entrypoints (open standard)
 .work/bin/gsdd.mjs          # Internal repo-local helper runtime for deterministic workflow commands (run from repo root)
 ```
 

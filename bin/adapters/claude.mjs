@@ -193,7 +193,7 @@ function createClaudeAdapter({ cwd, workflows, stateDirName = '.work', renderSki
       );
     },
     summary(action) {
-      return `${action} Claude Code skills (.claude/skills/gsdd-*), native commands (.claude/commands/gsdd-*.md), and native agents (.claude/agents/gsdd-*.md)`;
+      return `${action} Claude Code skills (.claude/skills/work-*), the native plan command (.claude/commands/work-plan.md), and native agents (.claude/agents/work-*.md)`;
     },
   };
 }

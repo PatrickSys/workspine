@@ -222,7 +222,7 @@ export function createCmdInit(ctx) {
     }
 
     generateOpenStandardSkills(initCtx.cwd, initCtx.workflows, { stateDirName });
-    console.log('  - generated open-standard skills (.agents/skills/gsdd-*)');
+    console.log('  - generated open-standard skills (.agents/skills/work-*)');
 
     const runtimeGeneration = generatePlanningCliHelpers(initCtx);
     console.log(`  - generated local workflow helpers (${stateDirName}/bin/gsdd*)`);
@@ -292,10 +292,10 @@ export function createCmdUpdate(ctx) {
 
     if (platforms.length > 0 || existsSync(planningDir) || hasGeneratedOpenStandardSkills(ctx.cwd)) {
       if (isDry) {
-        console.log('  - would update open-standard skills (.agents/skills/gsdd-*)');
+        console.log('  - would update open-standard skills (.agents/skills/work-*)');
       } else {
         generateOpenStandardSkills(ctx.cwd, ctx.workflows, { stateDirName });
-        console.log('  - updated open-standard skills (.agents/skills/gsdd-*)');
+        console.log('  - updated open-standard skills (.agents/skills/work-*)');
       }
       updated = true;
     }

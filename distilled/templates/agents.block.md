@@ -5,7 +5,7 @@ Managed by `gsdd`; edit the framework template, not this block.
 Lifecycle: `new-project -> plan -> execute -> verify -> audit-milestone`.
 
 Core skills: `work-new-project`, `work-plan`, `work-execute`, `work-verify`, `work-progress`.
-Planning state: `.work/` (legacy `.planning/` workspaces are still read). Portable workflows: `.agents/skills/gsdd-*/SKILL.md`.
+Planning state: `.work/` (legacy `.planning/` workspaces are still read). Portable workflows: `.agents/skills/work-*/SKILL.md`.
 Install/repair: `npx -y workspine init` creates repo-local skills and planning state; `npx -y workspine health` verifies repo-local generated surfaces; `npx -y workspine update` repairs repo-local drift. Global personal skills use `npx -y workspine install --global` and are repaired by rerunning that install for the selected targets.
 
 Invoke: `/work-plan` (Claude, OpenCode; Cursor/Copilot/Gemini when skill discovery is available) · `$work-plan` (Codex CLI, plan-only until `$work-execute`) · open SKILL.md directly elsewhere.

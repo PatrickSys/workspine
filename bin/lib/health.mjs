@@ -212,7 +212,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
           id: 'W5',
           severity: 'WARN',
           message: `${plan.displayPath} exists but no matching SUMMARY found (stale in-progress?)`,
-          fix: `Run \`gsdd execute ${plan.phaseToken}\` to write ${expectedSummary}.`,
+          fix: `Run the ${WORKFLOW_ID_PREFIX}execute workflow for ${plan.phaseToken} to write ${expectedSummary}.`,
         });
       }
     }

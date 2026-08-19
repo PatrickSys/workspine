@@ -415,15 +415,15 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 | Tool                  | Generated surface                                                                                                                           | Trigger                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Any (portable)        | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Always generated on `npx -y workspine init`                               |
-| Claude Code           | `.claude/skills/gsdd-*/SKILL.md` + `.claude/commands/work-plan.md` (compatibility alias for `plan`) + `.claude/agents/work-plan-checker.md` | `--tools claude`                                                         |
-| Codex CLI             | `.agents/skills/gsdd-*/SKILL.md` + optional `.codex/agents/work-plan-checker.toml`                                                          | Skills are always generated; checker agent via `--tools codex`           |
-| Codex VS Code/app     | `.agents/skills/gsdd-*/SKILL.md` opened or pasted manually unless discovery exists                                                          | Fallback surface only; not covered by Codex CLI proof                    |
-| OpenCode              | `.opencode/commands/gsdd-*.md` + `.opencode/agents/work-plan-checker.md`                                                                    | `--tools opencode`                                                       |
-| Cursor/Copilot        | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Slash-invoked skills once the runtime is configured with that skills location |
-| Gemini CLI            | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Skills-native path when discovered; `AGENTS.md` governance is optional        |
+| Any (portable)        | `.agents/skills/work-*/SKILL.md`                                                                                                            | Always generated on `npx -y workspine init`                               |
+| Claude Code           | `.claude/skills/work-*/SKILL.md` + `.claude/commands/work-plan.md` (compatibility alias for `plan`) + `.claude/agents/work-plan-checker.md` | `--tools claude`                                                         |
+| Codex CLI             | `.agents/skills/work-*/SKILL.md` + optional `.codex/agents/work-plan-checker.toml`                                                          | Skills are always generated; checker agent via `--tools codex`           |
+| Codex VS Code/app     | `.agents/skills/work-*/SKILL.md` opened or pasted manually unless discovery exists                                                          | Fallback surface only; not covered by Codex CLI proof                    |
+| OpenCode              | `.opencode/commands/work-*.md` + `.opencode/agents/work-plan-checker.md`                                                                    | `--tools opencode`                                                       |
+| Cursor/Copilot        | `.agents/skills/work-*/SKILL.md`                                                                                                            | Slash-invoked skills once the runtime is configured with that skills location |
+| Gemini CLI            | `.agents/skills/work-*/SKILL.md`                                                                                                            | Skills-native path when discovered; `AGENTS.md` governance is optional        |
 
-Codex CLI is skills-first because the terminal CLI supports repository skills directly. GSDD should not generate a `.codex/AGENTS.md` file just to simulate a native path that the runtime does not need. Codex VS Code and the Codex app are separate product surfaces; unless they expose compatible skill discovery, the honest fallback is opening or pasting `.agents/skills/gsdd-*/SKILL.md`. Runtime validation status belongs in the runtime support docs and evidence docs, not in broad parity claims.
+Codex CLI is skills-first because the terminal CLI supports repository skills directly. GSDD should not generate a `.codex/AGENTS.md` file just to simulate a native path that the runtime does not need. Codex VS Code and the Codex app are separate product surfaces; unless they expose compatible skill discovery, the honest fallback is opening or pasting `.agents/skills/work-*/SKILL.md`. Runtime validation status belongs in the runtime support docs and evidence docs, not in broad parity claims.
 
 **Why generation over conversion:** Converting from a vendor-specific source is lossy and brittle -- every new agent needs a new converter. Generating tool-specific files from vendor-agnostic markdown is lossless and scales linearly. Pattern validated by OpenSpec (24 AI tools, 48 contributors).
 
@@ -866,7 +866,7 @@ Implementation lives under `bin/lib/`:
 
 **GSD:** No dedicated Codex CLI adapter. GSD was Claude-first.
 
-**GSDD (before this decision):** Codex CLI was a skills-first runtime at ~40% parity. It consumed the portable `.agents/skills/gsdd-*/SKILL.md` surface but had no native plan-checker, no orchestration loop, no model control, and no dedicated adapter module. `--tools codex` was deprecated and silently stripped. Every Codex plan ran in silent `reduced_assurance` mode.
+**GSDD (before this decision):** Codex CLI was a skills-first runtime at ~40% parity. It consumed the portable `.agents/skills/work-*/SKILL.md` surface but had no native plan-checker, no orchestration loop, no model control, and no dedicated adapter module. `--tools codex` was deprecated and silently stripped. Every Codex plan ran in silent `reduced_assurance` mode.
 
 **GSDD (after this decision):** Codex CLI is promoted to `native_capable` — same tier as Claude Code and OpenCode. A dedicated `bin/adapters/codex.mjs` generates `.codex/agents/work-plan-checker.toml` (read-only TOML agent with the plan-checker delegate). Codex's entry surface is the portable skill at `.agents/skills/work-plan/SKILL.md` — Codex auto-discovers it via its `.agents/skills/` skill scanning ([developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)). The portable skill now contains vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation) plus an explicit plan-only completion lock, so when Codex follows it, it spawns the native `work-plan-checker` agent for fresh-context review and still requires a separate `$work-execute` transition before implementation. `--tools codex` is reinstated as an active adapter flag.
 
@@ -893,7 +893,7 @@ Implementation lives under `bin/lib/`:
 - Execution authorization must stay explicit — Codex and other runtimes must not infer implementation permission from generic imperative handoff text after `work-plan`
 - No Codex CLI in CI — future regressions still require disposable-fixture validation even though local live validation now exists
 - Entry surface is shared — Codex uses the portable `.agents/skills/work-plan/SKILL.md` as its entry surface (no vendor-specific skill path exists in Codex). The portable skill's checker invocation is vendor-neutral, but routing depends on Codex's implicit skill selection matching the task description
-- Codex VS Code/app are not implied by Codex CLI validation — when those products do not expose compatible repository skill discovery, the supported posture is manual open/paste of `.agents/skills/gsdd-*/SKILL.md`, not a native-capable claim
+- Codex VS Code/app are not implied by Codex CLI validation — when those products do not expose compatible repository skill discovery, the supported posture is manual open/paste of `.agents/skills/work-*/SKILL.md`, not a native-capable claim
 
 **Live validation (2026-03-17):**
 - Local runtime: `codex-cli 0.113.0` with `features.multi_agent = true`
@@ -1188,13 +1188,13 @@ This is acceptable because:
 
 **Problem:** Consumer governance surfaces were oscillating between two failure modes. The earlier block was too thin and hid core lifecycle entry points. The later block over-corrected into a long wall that tried to enumerate every delivered workflow, which made first-run `AGENTS.md` too heavy for a stranger to scan quickly.
 
-**GSDD decision:** Consumer-generated `AGENTS.md` must be complete for the primary lifecycle, not exhaustive for the whole framework. The generated governance surface is a routing map for the core path (`new-project -> plan -> execute -> verify -> progress`) plus the durable location of the portable skills. Secondary workflows remain discoverable through `.agents/skills/gsdd-*/SKILL.md`, but they do not all need to be listed inline in the short generated file.
+**GSDD decision:** Consumer-generated `AGENTS.md` must be complete for the primary lifecycle, not exhaustive for the whole framework. The generated governance surface is a routing map for the core path (`new-project -> plan -> execute -> verify -> progress`) plus the durable location of the portable skills. Secondary workflows remain discoverable through `.agents/skills/work-*/SKILL.md`, but they do not all need to be listed inline in the short generated file.
 
 **What changed:**
 
 - `agents.block.md` now names the five core lifecycle skills explicitly instead of trying to inline all workflow inventory
 - The lifecycle line still anchors the full flow through `audit-milestone`, but the generated block stays routing-first and compact
-- The block tells agents where the full portable workflow set lives: `.agents/skills/gsdd-*/SKILL.md`
+- The block tells agents where the full portable workflow set lives: `.agents/skills/work-*/SKILL.md`
 - Guard coverage now enforces the compact contract instead of exhaustive inventory in the generated file
 
 **Why this is high-leverage:** Consumer `AGENTS.md` is read at the exact moment a stranger is deciding whether the framework is legible. The file has to preserve load-bearing routing while staying short enough to scan. Exhaustive workflow inventory belongs in the durable skills directory and public docs, not in the first-run governance block.
@@ -1300,10 +1300,10 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** [what finished]
 
-**Next step:** `/gsdd-[command]` — [description]
+**Next step:** `/work-[command]` — [description]
 
 Also available:
-- `/gsdd-[alt]` — [description]
+- `/work-[alt]` — [description]
 
 Consider clearing context before starting the next workflow for best results.
 ---
@@ -1614,7 +1614,7 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 
 **Decision:** Separate runtime capability from generated adapter artifact kind.
 
-- Cursor, Copilot, and Gemini are documented as **qualified-support runtimes**: they can use `.agents/skills/gsdd-*` when skill or slash discovery is available, with `SKILL.md` fallback when it is not.
+- Cursor, Copilot, and Gemini are documented as **qualified-support runtimes**: they can use `.agents/skills/work-*` when skill or slash discovery is available, with `SKILL.md` fallback when it is not.
 - `--tools cursor`, `--tools copilot`, `--tools gemini`, and `--tools agents` still generate the same root `AGENTS.md` bounded block, but that artifact is **governance only**.
 - The root `AGENTS.md` block remains valuable behavioral discipline, but it must not be described as the workflow-discovery mechanism for a skills-native runtime.
 - No new runtime-specific adapter files are introduced just to make the docs read cleaner. The generated artifact model stays simple unless a stronger runtime-specific UX is actually needed.
@@ -1641,7 +1641,7 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 - Step 1: choose runtimes/vendors with a simple checkbox-style selector (space toggles, enter confirms).
 - Step 2: ask separately whether to install repo-wide `AGENTS.md` governance, with explicit explanation of why it helps and why it may feel invasive.
 - Step 3: collect the planning defaults through two orthogonal bundled choices (`Rigor` and `Cost`) plus the separate `.planning` tracking choice, instead of a long per-setting questionnaire.
-- Portable `.agents/skills/gsdd-*` skills remain the always-generated baseline.
+- Portable `.agents/skills/work-*` skills remain the always-generated baseline.
 - Legacy values such as `--tools cursor`, `--tools copilot`, and `--tools gemini` remain valid for backward compatibility.
 
 **Key architectural rule:** runtime selection and adapter generation are separate concerns.
@@ -1973,6 +1973,8 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 ## D45 - Fork-Honest Launch Posture Before Identity Migration
 
 **Decision (2026-04-15):** GSDD keeps a fork-honest launch posture until package, workspace, help, proof, and release surfaces are migrated together. `Workspine` is the active public-name target in planning truth, but do not present an independent product identity as already complete while the operative contracts remain `workspine`, `gsdd`, `gsdd-*`, and `.planning/`.
+
+**Current disposition (2026-08-19):** Phase 14 carried out the identity migration this decision deferred. The npm package is `workspine`, the shipped workflow and command prefix is `work-`, and `.work/` is the canonical workspace. The retained pre-migration contracts are the `gsdd` binary alias in `package.json` bin, the `bin/gsdd.mjs` path, the `.work/bin/gsdd*` helper shims, the `tests/gsdd.*.test.cjs` filenames, the `GSDD_UPDATE_AWARENESS` environment variable, and legacy `.planning/` read support. The preserved decision text below says `workspine` where the 2026-04-15 original named the pre-rename package; that token is a later blanket-substitution artifact, so read the contract list below as the record of what was deliberately held back, not as current contract truth.
 
 **Context:**
 - The v1.1 launch jury split repo truth into two layers: the core delivery kernel is real, but the public release surface still over-relied on internal and gitignored proof.

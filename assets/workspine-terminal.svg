@@ -42,7 +42,7 @@
     <!-- what it wrote -->
     <text class="text" font-size="15" y="76"><tspan class="dim">  - created </tspan><tspan class="path">.work/</tspan><tspan class="dim"> directory structure</tspan></text>
     <text class="text" font-size="15" y="100"><tspan class="dim">  - copied templates to </tspan><tspan class="path">.work/templates/</tspan></text>
-    <text class="text" font-size="15" y="124"><tspan class="dim">  - generated open-standard skills (</tspan><tspan class="path">.agents/skills/gsdd-*</tspan><tspan class="dim">)</tspan></text>
+    <text class="text" font-size="15" y="124"><tspan class="dim">  - generated open-standard skills (</tspan><tspan class="path">.agents/skills/work-*</tspan><tspan class="dim">)</tspan></text>
     <text class="text" font-size="15" y="148"><tspan class="dim">  - generated local workflow helpers (</tspan><tspan class="path">.work/bin/gsdd*</tspan><tspan class="dim">)</tspan></text>
     <text class="text" font-size="15" y="172"><tspan class="dim">  - generated Claude Code skills, commands and agents</tspan></text>
     <text class="text" font-size="15" y="196"><tspan class="dim">  - wrote generation manifest</tspan></text>
