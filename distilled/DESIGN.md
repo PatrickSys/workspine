@@ -228,7 +228,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 | `researcher-synthesizer.md`  | synthesizer | `.planning/research/SUMMARY.md`      | new-project            |
 | `plan-checker.md`            | planner     | JSON checker report                  | plan (native adapters) |
 
-**Distribution model:** `npx -y gsdd-cli init` copies role contracts from `agents/` to `.planning/templates/roles/` in consumer projects. Delegates in `.planning/templates/delegates/` reference the local role copy (`Read .planning/templates/roles/<role>.md`). Consumer projects are self-contained at runtime -- no dependency on the framework repo.
+**Distribution model:** `npx -y workspine init` copies role contracts from `agents/` to `.planning/templates/roles/` in consumer projects. Delegates in `.planning/templates/delegates/` reference the local role copy (`Read .planning/templates/roles/<role>.md`). Consumer projects are self-contained at runtime -- no dependency on the framework repo.
 
 **Evidence:**
 
@@ -415,7 +415,7 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 | Tool                  | Generated surface                                                                                                                           | Trigger                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Any (portable)        | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Always generated on `npx -y gsdd-cli init`                               |
+| Any (portable)        | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Always generated on `npx -y workspine init`                               |
 | Claude Code           | `.claude/skills/gsdd-*/SKILL.md` + `.claude/commands/gsdd-plan.md` (compatibility alias for `plan`) + `.claude/agents/gsdd-plan-checker.md` | `--tools claude`                                                         |
 | Codex CLI             | `.agents/skills/gsdd-*/SKILL.md` + optional `.codex/agents/gsdd-plan-checker.toml`                                                          | Skills are always generated; checker agent via `--tools codex`           |
 | Codex VS Code/app     | `.agents/skills/gsdd-*/SKILL.md` opened or pasted manually unless discovery exists                                                          | Fallback surface only; not covered by Codex CLI proof                    |
@@ -620,7 +620,7 @@ Design principle unchanged: derive state from primary artifacts (ROADMAP.md, SPE
 auto-approves requirements and roadmap, auto-advances to plan phase. Implemented across 5 workflow files
 with `AskUserQuestion` API gates.
 
-**GSDD:** `npx -y gsdd-cli init --auto --tools <platform>` — non-interactive repo-local bootstrap. It sets the legacy-named
+**GSDD:** `npx -y workspine init --auto --tools <platform>` — non-interactive repo-local bootstrap. It sets the legacy-named
 `autoAdvance: true` key in `.work/config.json`; the `<auto_mode>` section in `new-project.md` reads it only for brief-driven
 `SPEC.md` + `ROADMAP.md` creation.
 
@@ -714,15 +714,15 @@ NOT injected into:
 4. runtime default / omitted `model:`
 
 **CLI surface:**
-- `npx -y gsdd-cli models show`
-- `npx -y gsdd-cli models profile <quality|balanced|budget>`
-- `npx -y gsdd-cli models agent-profile --agent plan-checker --profile <quality|balanced|budget>`
-- `npx -y gsdd-cli models clear-agent-profile --agent plan-checker`
-- `npx -y gsdd-cli models set --runtime <claude|opencode|codex> --agent plan-checker --model <id>`
-- `npx -y gsdd-cli models clear --runtime <claude|opencode|codex> --agent plan-checker`
+- `npx -y workspine models show`
+- `npx -y workspine models profile <quality|balanced|budget>`
+- `npx -y workspine models agent-profile --agent plan-checker --profile <quality|balanced|budget>`
+- `npx -y workspine models clear-agent-profile --agent plan-checker`
+- `npx -y workspine models set --runtime <claude|opencode|codex> --agent plan-checker --model <id>`
+- `npx -y workspine models clear --runtime <claude|opencode|codex> --agent plan-checker`
 
 **Trade-off: static files become stale after a profile change.** If the user changes `modelProfile`
-or runtime override config directly, generated checker files are not updated until `npx -y gsdd-cli update` (or global `gsdd update`)
+or runtime override config directly, generated checker files are not updated until `npx -y workspine update` (or global `gsdd update`)
 is run. This is consistent with D9 (adapter generation over conversion): adapter files are generated
 on demand.
 
@@ -766,13 +766,13 @@ architecturally not viable without reverting to vendor-specific APIs. This close
 (lines 1227-1327). On update, GSD backs up user-modified files before overwriting, enabling rollback.
 
 **GSDD:** Generation manifest in `.planning/generation-manifest.json`, opt-in `--templates` flag on
-`npx -y gsdd-cli update`, warn-but-overwrite semantics (no backup directory), `--dry` preview mode.
+`npx -y workspine update`, warn-but-overwrite semantics (no backup directory), `--dry` preview mode.
 
 **Key differences from GSD:**
 - **No backup directory.** Git handles recovery — users can `git checkout` to restore any overwritten
   template. Adding a `gsd-local-patches/` equivalent would introduce stale-state complexity that Git
   already solves.
-- **Opt-in flag.** `npx -y gsdd-cli update` without `--templates` preserves current behavior (adapter/skill refresh
+- **Opt-in flag.** `npx -y workspine update` without `--templates` preserves current behavior (adapter/skill refresh
   only). Template refresh is explicitly requested, so users are not surprised by file overwrites.
 - **Project-scoped manifest.** `generation-manifest.json` lives in `.planning/` alongside other project
   artifacts, making it portable and inspectable. The manifest records SHA-256 hashes of all installed
@@ -947,7 +947,7 @@ Implementation lives under `bin/lib/`:
 
 **GSD:** `health.md` (157 lines) — calls `gsd-tools.cjs validate health [--repair]`, parses JSON with error codes E001-E005/W001-W007, supports `--repair` flag for createConfig/resetConfig/regenerateState repair actions.
 
-**GSDD:** `npx -y gsdd-cli health` CLI command (`bin/lib/health.mjs` + `bin/lib/health-truth.mjs`; global `gsdd health` is equivalent). Factory function `createCmdHealth(ctx)` returning an async command. No `--repair` flag — fixes are documented as actionable instructions, not automated mutations. GSDD already has `npx -y gsdd-cli init` and `npx -y gsdd-cli update --templates` as the repair paths; a separate repair mode would duplicate those commands.
+**GSDD:** `npx -y workspine health` CLI command (`bin/lib/health.mjs` + `bin/lib/health-truth.mjs`; global `gsdd health` is equivalent). Factory function `createCmdHealth(ctx)` returning an async command. No `--repair` flag — fixes are documented as actionable instructions, not automated mutations. GSDD already has `npx -y workspine init` and `npx -y workspine update --templates` as the repair paths; a separate repair mode would duplicate those commands.
 
 **Check categories:**
 
@@ -990,9 +990,9 @@ Implementation lives under `bin/lib/`:
 
 **Key design choices:**
 
-1. **No `--repair` flag.** GSD's health workflow supported `--repair` with three actions (createConfig, resetConfig, regenerateState). GSDD does not need this because `npx -y gsdd-cli init` and `npx -y gsdd-cli update --templates` already serve as repair paths. Documenting the fix command in each diagnostic is sufficient — agents can read and execute the instruction directly.
+1. **No `--repair` flag.** GSD's health workflow supported `--repair` with three actions (createConfig, resetConfig, regenerateState). GSDD does not need this because `npx -y workspine init` and `npx -y workspine update --templates` already serve as repair paths. Documenting the fix command in each diagnostic is sufficient — agents can read and execute the instruction directly.
 
-2. **`brew doctor` pattern.** Diagnose, report, suggest — never auto-fix. This matches the D13 principle: error messages ARE the enforcement mechanism. When an agent reads `"E3: .planning/templates/ missing. Fix: Run npx -y gsdd-cli update --templates"`, it can act on the instruction.
+2. **`brew doctor` pattern.** Diagnose, report, suggest — never auto-fix. This matches the D13 principle: error messages ARE the enforcement mechanism. When an agent reads `"E3: .planning/templates/ missing. Fix: Run npx -y workspine update --templates"`, it can act on the instruction.
 
 3. **Pre-init guard.** If `.planning/config.json` doesn't exist, output a one-line message and exit 1. No partial checks — the workspace is simply not initialized.
 
@@ -1000,7 +1000,7 @@ Implementation lives under `bin/lib/`:
 
 5. **Reuses existing modules.** `readManifest()` and `detectModifications()` from `manifest.mjs` handle W1-W3. `isProjectInitialized()` from `config.mjs` handles the pre-init guard. Truth checks stay read-only and operate on repo-local artifacts only when those framework files exist.
 
-6. **Framework-source mode skips installed-project template checks only for the actual source repo.** Inside the GSDD framework repo itself, `distilled/templates/` is the source of truth and `.planning/templates/` can be intentionally absent. `npx -y gsdd-cli health` therefore skips installed-project template/manifest checks (E3-E9, W1-W3) only when source-repo identity signals also match (`package.json` name plus CLI source), avoiding false suppression in copied or unusual initialized repos that happen to contain `distilled/templates` and `distilled/workflows`.
+6. **Framework-source mode skips installed-project template checks only for the actual source repo.** Inside the GSDD framework repo itself, `distilled/templates/` is the source of truth and `.planning/templates/` can be intentionally absent. `npx -y workspine health` therefore skips installed-project template/manifest checks (E3-E9, W1-W3) only when source-repo identity signals also match (`package.json` name plus CLI source), avoiding false suppression in copied or unusual initialized repos that happen to contain `distilled/templates` and `distilled/workflows`.
 
 7. **Generated adapters and governance are reported separately.** W6 checks generated workflow entry surfaces (`.agents/skills`, Claude skills/commands, OpenCode commands) and does not treat root `AGENTS.md`, native checker agents, or Codex native checker TOML as workflow adapters. Codex CLI uses `.agents/skills` as its workflow entry path. I3 may still report native agents and root `AGENTS.md` as installed runtime/governance surfaces so users understand what exists without confusing those files with executable workflow discovery.
 
@@ -1100,7 +1100,7 @@ Benefits:
 1. **Reusable:** The same delegate can be invoked from multiple orchestrator workflows (new-project, plan, milestone audit)
 2. **Testable:** Delegate contracts are explicit and can be verified independently
 3. **Portable:** Delegates are plain markdown; any agent can read them
-4. **Versioned:** The generation manifest tracks delegate content; `npx -y gsdd-cli update --templates` refreshes them
+4. **Versioned:** The generation manifest tracks delegate content; `npx -y workspine update --templates` refreshes them
 
 **Tradeoffs and close condition:**
 
@@ -1608,7 +1608,7 @@ Output is inline `$APPROACH_CONTEXT` (e.g., "User confirmed: use in-memory LRU c
 
 **Problem:** Repo surfaces had started conflating two different questions:
 1. Does the runtime expose `.agents/skills/` through skill or slash discovery?
-2. What extra generated adapter artifact does `npx -y gsdd-cli init --tools <runtime>` add?
+2. What extra generated adapter artifact does `npx -y workspine init --tools <runtime>` add?
 
 That conflation was survivable while Cursor and Copilot were incorrectly treated as governance-first tools, but it became actively misleading once skill discovery was validated outside the root `AGENTS.md` governance path. The old grouped README / AGENTS wording wrongly implied the root `AGENTS.md` block was required for workflow discovery on those runtimes.
 
@@ -1634,9 +1634,9 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 
 ## 36. Interactive Init Wizard
 
-**Problem:** `gsdd init` (now usually invoked by humans as `npx -y gsdd-cli init`) had two mismatched onboarding models at once. The public story was moving toward skills-native runtimes and optional governance, but the actual CLI still made users memorize `--tools ...` values as the primary install experience. The only interactive part was the config questionnaire, which started after filesystem writes and did not help the user decide which runtime surfaces or governance overlays to install.
+**Problem:** `gsdd init` (now usually invoked by humans as `npx -y workspine init`) had two mismatched onboarding models at once. The public story was moving toward skills-native runtimes and optional governance, but the actual CLI still made users memorize `--tools ...` values as the primary install experience. The only interactive part was the config questionnaire, which started after filesystem writes and did not help the user decide which runtime surfaces or governance overlays to install.
 
-**Decision:** Make `npx -y gsdd-cli init` a guided install wizard in TTY environments, while preserving `--tools` and `--auto` as the manual/headless contract. The guided path must stay intentionally compact: runtime choice, governance opt-in, and a small set of bundled planning defaults rather than a long per-setting questionnaire.
+**Decision:** Make `npx -y workspine init` a guided install wizard in TTY environments, while preserving `--tools` and `--auto` as the manual/headless contract. The guided path must stay intentionally compact: runtime choice, governance opt-in, and a small set of bundled planning defaults rather than a long per-setting questionnaire.
 
 - Step 1: choose runtimes/vendors with a simple checkbox-style selector (space toggles, enter confirms).
 - Step 2: ask separately whether to install repo-wide `AGENTS.md` governance, with explicit explanation of why it helps and why it may feel invasive.
@@ -1661,7 +1661,7 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 
 **Evidence:**
 
-1. Existing repo truth: `npx -y gsdd-cli init` always generates `.agents/skills/` and already has a central adapter-selection seam in `bin/lib/init.mjs`.
+1. Existing repo truth: `npx -y workspine init` always generates `.agents/skills/` and already has a central adapter-selection seam in `bin/lib/init.mjs`.
 2. Local research on the adjacent `prompty` repo: portable skills are the primary install surface, while native command surfaces are optional additions.
 3. External: npm init (Node.js), Vite `create-vite`, Next.js `create-next-app`, Angular CLI `ng new`, and Astro `create astro` all implement the same pattern — TTY-interactive wizard by default, `--yes`/`--defaults` for headless; this is the de facto standard for modern project scaffolding tools.
 4. Repo lesson LL-INSTALL-DX-BEFORE-ALIAS-CLEANUP already recorded that install ergonomics should be fixed before alias-policy cleanup.
@@ -1972,17 +1972,17 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ## D45 - Fork-Honest Launch Posture Before Identity Migration
 
-**Decision (2026-04-15):** GSDD keeps a fork-honest launch posture until package, workspace, help, proof, and release surfaces are migrated together. `Workspine` is the active public-name target in planning truth, but do not present an independent product identity as already complete while the operative contracts remain `gsdd-cli`, `gsdd`, `gsdd-*`, and `.planning/`.
+**Decision (2026-04-15):** GSDD keeps a fork-honest launch posture until package, workspace, help, proof, and release surfaces are migrated together. `Workspine` is the active public-name target in planning truth, but do not present an independent product identity as already complete while the operative contracts remain `workspine`, `gsdd`, `gsdd-*`, and `.planning/`.
 
 **Context:**
 - The v1.1 launch jury split repo truth into two layers: the core delivery kernel is real, but the public release surface still over-relied on internal and gitignored proof.
 - The next-milestone challenge pass found that `.planning/` is not a cheap cosmetic constant. It is a deep runtime, workflow, template, and test contract across the framework repo.
-- The same pass also found that a split public-name story layered on top of `gsdd-cli` / `gsdd` / `.planning` made the product look more independent than the install, workspace, and proof surfaces could honestly support.
+- The same pass also found that a split public-name story layered on top of `workspine` / `gsdd` / `.planning` made the product look more independent than the install, workspace, and proof surfaces could honestly support.
 
 **Decision:**
 - v1.2.0 is scoped as **fork-honest launch hardening**, not as an independent rename milestone.
 - `Workspine` is the primary public product name in planning truth for v1.2.0, but it is not yet a full package/workspace/help contract migration.
-- Keep `.planning`, `gsdd-cli`, `gsdd`, and `gsdd-*` intentionally in the active launch contract.
+- Keep `.planning`, `workspine`, `gsdd`, and `gsdd-*` intentionally in the active launch contract.
 - Remove or demote independent-brand assumptions from planning and public-surface truth until a dedicated migration milestone proves the full blast radius is handled.
 - Treat identity migration as real engineering work across code, docs, help text, generated surfaces, tests, and release packaging — not as copy cleanup.
 - Keep the release-floor packaging story repo-tracked and inspectable: package metadata, tarball audit, `SECURITY.md`, and repo-owned release automation must align without relying on unpublished release artifacts or broader runtime-parity claims.
@@ -2261,7 +2261,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 ---
 
 ## D51 - Deterministic Runtime Surface Freshness
-**Decision (2026-04-17, revised 2026-04-22, revised 2026-04-24):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When `.agents/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `npx -y gsdd-cli health` must compare those generated files against current render output and route any drift back through `npx -y gsdd-cli update`. Bare `gsdd health/update` remains valid only for global installs.
+**Decision (2026-04-17, revised 2026-04-22, revised 2026-04-24):** Installed generated runtime-facing surfaces are trustworthy only through deterministic rendering from the authored workflow and delegate sources. When `.agents/`, `.claude/`, `.opencode/`, or `.codex/` exist locally, `npx -y workspine health` must compare those generated files against current render output and route any drift back through `npx -y workspine update`. Bare `gsdd health/update` remains valid only for global installs.
 
 **Current disposition (2026-08-12):** `.work/bin/gsdd.mjs` is the sole active lifecycle and helper root. A retained `.planning/` directory is an explicit migration or diagnostic input only: normal lifecycle commands neither select it nor write to it, and a dual-root workspace blocks mutation instead of falling back to legacy state.
 
@@ -2274,8 +2274,8 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Decision:**
 - Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic.
 - Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally.
-- Route drift through deterministic repair (`npx -y gsdd-cli update` or targeted `npx -y gsdd-cli update --tools <runtime>`) instead of treating the fix as a manual review exercise.
-- Treat the portable runtime surface as more than skill markdown: keep workflow discovery under `.agents/skills/`, generate the repo-local helper runtime at `.work/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .work/bin/gsdd.mjs ...` instead of bare `gsdd ...`, and keep human install/update/health guidance on `npx -y gsdd-cli ...` unless a global install is explicitly present.
+- Route drift through deterministic repair (`npx -y workspine update` or targeted `npx -y workspine update --tools <runtime>`) instead of treating the fix as a manual review exercise.
+- Treat the portable runtime surface as more than skill markdown: keep workflow discovery under `.agents/skills/`, generate the repo-local helper runtime at `.work/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .work/bin/gsdd.mjs ...` instead of bare `gsdd ...`, and keep human install/update/health guidance on `npx -y workspine ...` unless a global install is explicitly present.
 - Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist.
 **Why this fits the codebase:**
 - It extends the existing render/update/health pattern instead of inventing a new state file or hidden synchronization layer.
@@ -2297,8 +2297,8 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - docs/USER-GUIDE.md
 - tests/phase.test.cjs, tests/gsdd.health.test.cjs, tests/gsdd.init.test.cjs, tests/gsdd.plan.adapters.test.cjs, tests/gsdd.guards.test.cjs, tests/gsdd.scenarios.test.cjs
 **Consequences:**
-- `npx -y gsdd-cli health` can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline.
-- `npx -y gsdd-cli update` becomes the explicit repair path for authored/generated runtime-surface drift.
+- `npx -y workspine health` can now surface installed generated-surface drift as deterministic workspace truth instead of relying on review discipline.
+- `npx -y workspine update` becomes the explicit repair path for authored/generated runtime-surface drift.
 - Fresh consumer repos now carry their own deterministic helper-command seam under `.work/bin`, so lifecycle/file-op/status calls no longer depend on whichever `gsdd` binary happens to be present on PATH.
 - Public support wording can stay compact without implying that generated files are trustworthy merely because they were generated once.
 - Claude Code and Codex CLI remain the mandatory live/native validation floor for the hardened runtime boundary, while other runtimes stay honest about their proof level.
@@ -2628,11 +2628,11 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Current disposition (2026-08-12):** `.work/bin/gsdd.mjs` is the sole active lifecycle and helper root. It is generated with its support modules under `.work/bin/lib/`; retained legacy `.planning/` state may be inspected only by explicit migration or diagnostic logic and is never a normal helper-write target.
 
 **Context:**
-- Public onboarding already leads with `npx gsdd-cli init`, which works even when the package is not globally installed.
+- Public onboarding already leads with `npx workspine init`, which works even when the package is not globally installed.
 - The authored workflow surfaces had drifted into a different assumption: embedded helper commands such as `lifecycle-preflight`, `file-op`, and `phase-status` were written as bare `gsdd ...` invocations.
 - That split contract caused consumer friction in the exact place the deterministic helper seam was supposed to help: a workflow could initialize successfully, then fail later because the repo did not have a global `gsdd` on PATH.
 - The helper surface must stay out of `.agents/` ownership so it does not pollute unrelated `.agents` folders or leak into generated governance.
-- The historical first helper repair still left the wrong runtime dependency in place: its generated file was a trampoline back through `npm exec --package=gsdd-cli@... -- gsdd ...`, so helper execution still depended on npm/package resolution and shell quirks at the exact moment deterministic local mechanics were supposed to be the reliable fallback.
+- The historical first helper repair still left the wrong runtime dependency in place: its generated file was a trampoline back through `npm exec --package=workspine@... -- gsdd ...`, so helper execution still depended on npm/package resolution and shell quirks at the exact moment deterministic local mechanics were supposed to be the reliable fallback.
 
 **Decision:**
 - Generate `.work/bin/gsdd.mjs` as a self-contained local helper runtime plus repo-local shell shims (`.work/bin/gsdd`, `.work/bin/gsdd.cmd`, `.work/bin/gsdd.ps1`) on `gsdd init` for every initialized workspace.
