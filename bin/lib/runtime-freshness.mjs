@@ -24,6 +24,7 @@ import {
   renderCodexApproachExplorer,
   renderCodexPlanChecker,
 } from '../adapters/codex.mjs';
+import { SUBAGENT_IDS } from './workflows.mjs';
 import {
   getRuntimeModelOverride,
   loadProjectModelConfig,
@@ -96,11 +97,11 @@ function buildClaudeEntries({ cwd, workflows, stateDirName = '.work' }) {
       expectedContent: renderClaudePlanCommand(),
     },
     {
-      relativePath: '.claude/agents/gsdd-plan-checker.md',
+      relativePath: `.claude/agents/${SUBAGENT_IDS.planChecker}.md`,
       expectedContent: renderClaudePlanChecker(getDelegateContent('plan-checker.md'), checkerModelAlias),
     },
     {
-      relativePath: '.claude/agents/gsdd-approach-explorer.md',
+      relativePath: `.claude/agents/${SUBAGENT_IDS.approachExplorer}.md`,
       expectedContent: renderClaudeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelAlias),
     }
   );
@@ -122,11 +123,11 @@ function buildOpenCodeEntries({ cwd, workflows, stateDirName = '.work' }) {
 
   entries.push(
     {
-      relativePath: '.opencode/agents/gsdd-plan-checker.md',
+      relativePath: `.opencode/agents/${SUBAGENT_IDS.planChecker}.md`,
       expectedContent: renderOpenCodePlanChecker(getDelegateContent('plan-checker.md'), checkerModelId),
     },
     {
-      relativePath: '.opencode/agents/gsdd-approach-explorer.md',
+      relativePath: `.opencode/agents/${SUBAGENT_IDS.approachExplorer}.md`,
       expectedContent: renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId),
     }
   );
@@ -141,11 +142,11 @@ function buildCodexEntries({ cwd }) {
 
   return [
     {
-      relativePath: '.codex/agents/gsdd-plan-checker.toml',
+      relativePath: `.codex/agents/${SUBAGENT_IDS.planChecker}.toml`,
       expectedContent: renderCodexPlanChecker(getDelegateContent('plan-checker.md'), checkerModelId),
     },
     {
-      relativePath: '.codex/agents/gsdd-approach-explorer.toml',
+      relativePath: `.codex/agents/${SUBAGENT_IDS.approachExplorer}.toml`,
       expectedContent: renderCodexApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId),
     },
   ];

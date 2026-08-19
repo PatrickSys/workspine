@@ -32,6 +32,16 @@ if (!WORKFLOWS.every((entry) => entry.name.startsWith(WORKFLOW_ID_PREFIX))) {
   throw new Error(`Workflow manifest ids must all start with '${WORKFLOW_ID_PREFIX}'`);
 }
 
+// The two native subagents are not shipped slash commands, so they are absent from
+// the manifest above - but they carry the same prefix and every adapter, the global
+// installer and the freshness manifest must spell them identically. Naming them once
+// here keeps the generated agent files, their frontmatter and the expected-content
+// checks from drifting apart.
+export const SUBAGENT_IDS = Object.freeze({
+  planChecker: `${WORKFLOW_ID_PREFIX}plan-checker`,
+  approachExplorer: `${WORKFLOW_ID_PREFIX}approach-explorer`,
+});
+
 const WORKFLOW_ID_BY_SLUG = Object.freeze(Object.fromEntries(
   WORKFLOWS.map((entry) => [entry.workflow.replace(/\.md$/, ''), entry.name]),
 ));

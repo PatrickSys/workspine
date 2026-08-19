@@ -7,6 +7,7 @@ import {
   CHECKER_STATUSES,
 } from '../lib/plan-constants.mjs';
 import { localizeStateDirReferences } from '../lib/rendering.mjs';
+import { SUBAGENT_IDS } from '../lib/workflows.mjs';
 
 function expandHome(filePath) {
   if (!filePath) return filePath;
@@ -162,7 +163,7 @@ Portable contract:
 Native OpenCode adapter rule:
 - This command is the canonical OpenCode-native entry surface for \`/gsdd-plan\`.
 - Stay in the primary conversation context for orchestration so the checker can run as its own fresh-context subagent.
-- Use the native \`gsdd-plan-checker\` subagent for review-only checking.
+- Use the native \`${SUBAGENT_IDS.planChecker}\` subagent for review-only checking.
 - Do NOT claim that other runtimes have the same behavior unless their own adapters explicitly implement and prove it.
 
 Execution flow:
@@ -171,13 +172,13 @@ Execution flow:
 3. **Approach exploration** (before planning):
    a. Check \`.work/config.json\` for \`workflow.discuss\`. If \`false\` or missing, skip to step 4 and report \`reduced_alignment\` in the summary.
    b. Check if \`{phase_dir}/{padded_phase}-APPROACH.md\` exists. If it does, offer the user: "Use existing" / "Update it" / "View it". If "Use existing", load decisions, then validate the alignment proof before step 4; proofless or invalid existing APPROACH.md must be updated, not silently trusted.
-   c. If no APPROACH.md exists (or user chose "Update"): invoke the \`gsdd-approach-explorer\` subagent with the phase goal, requirement IDs, project config from \`.work/config.json\` (especially \`workflow.discuss\`), SPEC locked decisions, phase research, and relevant codebase files.
+   c. If no APPROACH.md exists (or user chose "Update"): invoke the \`${SUBAGENT_IDS.approachExplorer}\` subagent with the phase goal, requirement IDs, project config from \`.work/config.json\` (especially \`workflow.discuss\`), SPEC locked decisions, phase research, and relevant codebase files.
    d. The explorer runs a GSD-style interactive conversation with the user (gray areas, research, deep-dive questions, assumptions) and writes APPROACH.md.
    e. Before planning, confirm APPROACH.md records all canonical proof fields: \`alignment_status\`, \`alignment_method\`, \`user_confirmed_at\`, \`explicit_skip_approved\`, \`skip_scope\`, \`skip_rationale\`, and \`confirmed_decisions\`. For \`alignment_status: user_confirmed\`, \`confirmed_decisions\` must name the locked decisions and skip fields may be \`false\`/\`N/A\`; for \`alignment_status: approved_skip\`, \`explicit_skip_approved: true\`, \`skip_scope\`, and \`skip_rationale\` must be substantive. Agent-only "No questions needed" is not valid proof under \`workflow.discuss: true\`.
    f. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
 4. Produce the initial phase plan according to \`${skillPath}\`. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
 5. If \`.work/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the step 3 alignment-proof gate when \`workflow.discuss: true\`.
-6. If \`workflow.planCheck: true\`, invoke the hidden \`gsdd-plan-checker\` subagent with fresh context.
+6. If \`workflow.planCheck: true\`, invoke the hidden \`${SUBAGENT_IDS.planChecker}\` subagent with fresh context.
 7. Pass only explicit inputs to the checker:
    - target phase goal and requirement IDs
    - relevant locked decisions / deferred items from \`.work/SPEC.md\`
@@ -236,8 +237,8 @@ function createOpenCodeAdapter({
     name: 'opencode',
     kind: 'native_capable',
     subagentFiles: [
-      '.opencode/agents/gsdd-plan-checker.md',
-      '.opencode/agents/gsdd-approach-explorer.md',
+      `.opencode/agents/${SUBAGENT_IDS.planChecker}.md`,
+      `.opencode/agents/${SUBAGENT_IDS.approachExplorer}.md`,
     ],
     detect() {
       return existsSync(join(cwd, '.opencode'));
@@ -262,11 +263,11 @@ function createOpenCodeAdapter({
 
       mkdirSync(agentsDir, { recursive: true });
       writeFileSync(
-        join(agentsDir, 'gsdd-plan-checker.md'),
+        join(agentsDir, `${SUBAGENT_IDS.planChecker}.md`),
         renderOpenCodePlanChecker(getDelegateContent('plan-checker.md'), checkerModelId)
       );
       writeFileSync(
-        join(agentsDir, 'gsdd-approach-explorer.md'),
+        join(agentsDir, `${SUBAGENT_IDS.approachExplorer}.md`),
         renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelId)
       );
     },

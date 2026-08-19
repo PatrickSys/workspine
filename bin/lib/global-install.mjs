@@ -34,6 +34,7 @@ import {
 } from './global-manifest.mjs';
 import { parseFlagValue } from './cli-utils.mjs';
 import { GLOBAL_AGENT_OPTIONS } from './init-runtime.mjs';
+import { SUBAGENT_IDS } from './workflows.mjs';
 
 export { GLOBAL_AGENT_OPTIONS } from './init-runtime.mjs';
 
@@ -138,8 +139,8 @@ function buildClaudeGlobalEntries(ctx, rootDir) {
 
   entries.push(
     { relativePath: 'commands/gsdd-plan.md', content: renderClaudePlanCommand({ skillPath: displayPath(join(rootDir, 'skills', 'gsdd-plan', 'SKILL.md')) }) },
-    { relativePath: 'agents/gsdd-plan-checker.md', content: renderClaudePlanChecker(getDelegateContent('plan-checker.md'), checkerModelAlias) },
-    { relativePath: 'agents/gsdd-approach-explorer.md', content: renderClaudeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelAlias) }
+    { relativePath: `agents/${SUBAGENT_IDS.planChecker}.md`, content: renderClaudePlanChecker(getDelegateContent('plan-checker.md'), checkerModelAlias) },
+    { relativePath: `agents/${SUBAGENT_IDS.approachExplorer}.md`, content: renderClaudeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelAlias) }
   );
 
   return entries;
@@ -156,8 +157,8 @@ function buildOpenCodeGlobalCommandEntries(ctx, rootDir) {
 
 function buildOpenCodeGlobalAgentEntries() {
   return [
-    { relativePath: 'agents/gsdd-plan-checker.md', content: renderOpenCodePlanChecker(getDelegateContent('plan-checker.md')) },
-    { relativePath: 'agents/gsdd-approach-explorer.md', content: renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md')) },
+    { relativePath: `agents/${SUBAGENT_IDS.planChecker}.md`, content: renderOpenCodePlanChecker(getDelegateContent('plan-checker.md')) },
+    { relativePath: `agents/${SUBAGENT_IDS.approachExplorer}.md`, content: renderOpenCodeApproachExplorer(getDelegateContent('approach-explorer.md')) },
   ];
 }
 
@@ -177,8 +178,8 @@ function buildAgentCompatibleGlobalSkillEntries(ctx) {
 
 function buildCodexGlobalAgentEntries() {
   return [
-    { relativePath: 'agents/gsdd-plan-checker.toml', content: renderCodexPlanChecker(getDelegateContent('plan-checker.md')) },
-    { relativePath: 'agents/gsdd-approach-explorer.toml', content: renderCodexApproachExplorer(getDelegateContent('approach-explorer.md')) },
+    { relativePath: `agents/${SUBAGENT_IDS.planChecker}.toml`, content: renderCodexPlanChecker(getDelegateContent('plan-checker.md')) },
+    { relativePath: `agents/${SUBAGENT_IDS.approachExplorer}.toml`, content: renderCodexApproachExplorer(getDelegateContent('approach-explorer.md')) },
   ];
 }
 
@@ -199,18 +200,18 @@ ${body.trim()}
 function buildCopilotGlobalAgentEntries() {
   return [
     {
-      relativePath: 'agents/gsdd-plan-checker.agent.md',
+      relativePath: `agents/${SUBAGENT_IDS.planChecker}.agent.md`,
       content: renderCopilotAgent({
-        name: 'gsdd-plan-checker',
+        name: SUBAGENT_IDS.planChecker,
         description: 'Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly.',
         tools: ['read', 'search'],
         body: getDelegateContent('plan-checker.md'),
       }),
     },
     {
-      relativePath: 'agents/gsdd-approach-explorer.agent.md',
+      relativePath: `agents/${SUBAGENT_IDS.approachExplorer}.agent.md`,
       content: renderCopilotAgent({
-        name: 'gsdd-approach-explorer',
+        name: SUBAGENT_IDS.approachExplorer,
         description: 'Explores implementation approaches for a phase and aligns with the user before planning begins.',
         tools: ['read', 'search', 'edit', 'web', 'agent'],
         body: getDelegateContent('approach-explorer.md'),

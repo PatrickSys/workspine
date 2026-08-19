@@ -6,6 +6,7 @@ import {
   CHECKER_STATUSES,
 } from '../lib/plan-constants.mjs';
 import { localizeStateDirReferences } from '../lib/rendering.mjs';
+import { SUBAGENT_IDS } from '../lib/workflows.mjs';
 
 const CLAUDE_MODEL_PROFILES = {
   quality: 'opus',
@@ -15,7 +16,7 @@ const CLAUDE_MODEL_PROFILES = {
 
 function renderClaudeApproachExplorer(delegateContent, modelAlias = 'opus') {
   return `---
-name: gsdd-approach-explorer
+name: ${SUBAGENT_IDS.approachExplorer}
 description: Explores implementation approaches for a phase and aligns with the user through structured questioning before planning begins.
 model: ${modelAlias}
 tools: Read, Grep, Glob, WebSearch, WebFetch, Write, AskUserQuestion
@@ -27,7 +28,7 @@ ${delegateContent.trim()}
 
 function renderClaudePlanChecker(delegateContent, modelAlias = 'sonnet') {
   return `---
-name: gsdd-plan-checker
+name: ${SUBAGENT_IDS.planChecker}
 description: Fresh-context plan checker for GSDD plan drafts. Review-only; never edits plans directly.
 model: ${modelAlias}
 tools: Read, Grep, Glob
@@ -64,7 +65,7 @@ ${contractSection}
 Native Claude adapter rule:
 - This skill is the canonical Claude-native entry surface for \`/gsdd-plan\`.
 - Stay in the primary Claude context for orchestration. Do NOT fork this skill into a subagent, because the checker must run as its own fresh-context subagent.
-- Use the native \`gsdd-plan-checker\` subagent to regain the fresh-context checker pass that portable markdown alone cannot guarantee.
+- Use the native \`${SUBAGENT_IDS.planChecker}\` subagent to regain the fresh-context checker pass that portable markdown alone cannot guarantee.
 - Do NOT claim that other runtimes have the same behavior unless their own adapters explicitly implement and prove it.
 
 Execution flow:
@@ -73,13 +74,13 @@ Execution flow:
 3. **Approach exploration** (before planning):
    a. Check \`.work/config.json\` for \`workflow.discuss\`. If \`false\` or missing, skip to step 4 and report \`reduced_alignment\` in the summary.
    b. Check if \`{phase_dir}/{padded_phase}-APPROACH.md\` exists. If it does, offer the user: "Use existing" / "Update it" / "View it". If "Use existing", load decisions, then validate the alignment proof before step 4; proofless or invalid existing APPROACH.md must be updated, not silently trusted.
-   c. If no APPROACH.md exists (or user chose "Update"): invoke the native \`gsdd-approach-explorer\` subagent with the phase goal, requirement IDs, project config from \`.work/config.json\` (especially \`workflow.discuss\`), SPEC locked decisions, phase research, and relevant codebase files.
+   c. If no APPROACH.md exists (or user chose "Update"): invoke the native \`${SUBAGENT_IDS.approachExplorer}\` subagent with the phase goal, requirement IDs, project config from \`.work/config.json\` (especially \`workflow.discuss\`), SPEC locked decisions, phase research, and relevant codebase files.
    d. The explorer runs a GSD-style interactive conversation with the user (gray areas, research, deep-dive questions, assumptions) and writes APPROACH.md.
    e. Before planning, confirm APPROACH.md records all canonical proof fields: \`alignment_status\`, \`alignment_method\`, \`user_confirmed_at\`, \`explicit_skip_approved\`, \`skip_scope\`, \`skip_rationale\`, and \`confirmed_decisions\`. For \`alignment_status: user_confirmed\`, \`confirmed_decisions\` must name the locked decisions and skip fields may be \`false\`/\`N/A\`; for \`alignment_status: approved_skip\`, \`explicit_skip_approved: true\`, \`skip_scope\`, and \`skip_rationale\` must be substantive. Agent-only "No questions needed" is not valid proof under \`workflow.discuss: true\`.
    f. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
 4. Produce the initial phase plan according to ${planningContract}. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
 5. If \`.work/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the step 3 alignment-proof gate when \`workflow.discuss: true\`.
-6. If \`workflow.planCheck: true\`, invoke the native \`gsdd-plan-checker\` subagent with fresh context.
+6. If \`workflow.planCheck: true\`, invoke the native \`${SUBAGENT_IDS.planChecker}\` subagent with fresh context.
 7. Pass only explicit inputs to the checker:
    - target phase goal and requirement IDs
    - relevant locked decisions / deferred items from \`.work/SPEC.md\`
@@ -147,8 +148,8 @@ function createClaudeAdapter({ cwd, workflows, stateDirName = '.work', renderSki
     name: 'claude',
     kind: 'native_capable',
     subagentFiles: [
-      '.claude/agents/gsdd-plan-checker.md',
-      '.claude/agents/gsdd-approach-explorer.md',
+      `.claude/agents/${SUBAGENT_IDS.planChecker}.md`,
+      `.claude/agents/${SUBAGENT_IDS.approachExplorer}.md`,
     ],
     detect() {
       return existsSync(join(cwd, 'CLAUDE.md')) || existsSync(join(cwd, '.claude'));
@@ -183,11 +184,11 @@ function createClaudeAdapter({ cwd, workflows, stateDirName = '.work', renderSki
 
       mkdirSync(agentsDir, { recursive: true });
       writeFileSync(
-        join(agentsDir, 'gsdd-plan-checker.md'),
+        join(agentsDir, `${SUBAGENT_IDS.planChecker}.md`),
         renderClaudePlanChecker(getDelegateContent('plan-checker.md'), checkerModelAlias)
       );
       writeFileSync(
-        join(agentsDir, 'gsdd-approach-explorer.md'),
+        join(agentsDir, `${SUBAGENT_IDS.approachExplorer}.md`),
         renderClaudeApproachExplorer(getDelegateContent('approach-explorer.md'), explorerModelAlias)
       );
     },
