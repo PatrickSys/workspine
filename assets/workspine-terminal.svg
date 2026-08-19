@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="Terminal showing npx gsdd-cli init writing a .work workspace, portable skills, and Claude Code surfaces, then naming the next command to run.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="Terminal showing npx workspine init writing a .work workspace, portable skills, and Claude Code surfaces, then naming the next command to run.">
   <defs>
     <style>
       .terminal-bg { fill: #1a1b26; }
@@ -34,7 +34,7 @@
     <!-- command -->
     <text class="text prompt" font-size="15" y="0">~/my-repo</text>
     <text class="text dim"    font-size="15" x="98" y="0">$</text>
-    <text class="text command" font-size="15" x="118" y="0">npx -y gsdd-cli init --tools claude</text>
+    <text class="text command" font-size="15" x="118" y="0">npx -y workspine init --tools claude</text>
 
     <!-- header line -->
     <text class="text dim" font-size="15" y="40">gsdd init - setting up GSDD workflow</text>

@@ -29,7 +29,7 @@ Include:
 
 ## Scope
 
-Security issues in the Workspine / `gsdd-cli` codebase that could:
+Security issues in the Workspine codebase that could:
 - Execute arbitrary code on user machines
 - Expose sensitive data (API keys, credentials)
 - Compromise the integrity of generated plans/code
