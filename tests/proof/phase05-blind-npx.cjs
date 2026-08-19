@@ -720,14 +720,14 @@ function bindInstalledCandidate(cacheRoot) {
 
 function verifyConsumerResult(consumer, init, next) {
   requireCondition(/GSDD initialized|setting up GSDD workflow/i.test(rawOutput(init, 'stdout')), 'product_behavior_failure', 'bare npx init output was not recognizable');
-  for (const lane of ['gsdd-new-project', 'gsdd-quick', 'gsdd-map-codebase']) {
+  for (const lane of ['work-new-project', 'work-quick', 'work-map-codebase']) {
     requireCondition(rawOutput(init, 'stdout').includes(lane), 'product_behavior_failure', `bare npx init output omitted documented starting lane ${lane}`);
   }
   const work = path.join(consumer.root, '.work');
   requireCondition(fs.existsSync(work) && fs.lstatSync(work).isDirectory(), 'product_behavior_failure', 'bare npx init did not create .work');
   requireAbsentPath(path.join(consumer.root, '.planning'), 'product_behavior_failure', 'bare npx init legacy .planning path');
   requireCondition(fs.readdirSync(consumer.root).filter((name) => name === '.work').length === 1, 'product_behavior_failure', 'consumer did not contain exactly one .work root');
-  for (const lane of ['gsdd-new-project', 'gsdd-quick', 'gsdd-map-codebase']) {
+  for (const lane of ['work-new-project', 'work-quick', 'work-map-codebase']) {
     requireNonemptyRegularFile(path.join(consumer.root, '.agents', 'skills', lane, 'SKILL.md'), 'product_behavior_failure', `portable starting lane ${lane} SKILL.md`);
   }
   requireNonemptyRegularFile(path.join(work, 'bin', 'gsdd.mjs'), 'product_behavior_failure', 'repo-local portable helper');

@@ -469,9 +469,9 @@ function historicalFixture(producers, proofRoot, environment) {
   const raw = snapshotTree(root).filter((entry) => !entry.path.startsWith('.git/'));
   const planningRaw = snapshotTree(planning);
   requireCondition(!sameJson(before.filter((entry) => !entry.path.startsWith('.git/')), raw) && planningRaw.length > 0, 'producer_failure', 'historical producer emitted no classified raw output');
-  const staleSkill = path.join(root, '.agents', 'skills', 'gsdd-plan', 'SKILL.md');
+  const staleSkill = path.join(root, '.agents', 'skills', 'work-plan', 'SKILL.md');
   requireCondition(fs.existsSync(staleSkill), 'producer_failure', 'historical producer did not emit expected local skill');
-  return { root, invoke: commandReceipt(invoke), rawManifest: raw, rawDigest: treeDigest(raw), planningRawManifest: planningRaw, planningRawDigest: treeDigest(planningRaw), staleSkill: { bytes: fs.readFileSync(staleSkill), sha256: sha256(fs.readFileSync(staleSkill)), path: '.agents/skills/gsdd-plan/SKILL.md' } };
+  return { root, invoke: commandReceipt(invoke), rawManifest: raw, rawDigest: treeDigest(raw), planningRawManifest: planningRaw, planningRawDigest: treeDigest(planningRaw), staleSkill: { bytes: fs.readFileSync(staleSkill), sha256: sha256(fs.readFileSync(staleSkill)), path: '.agents/skills/work-plan/SKILL.md' } };
 }
 function copyHistoricalPlanning(history, targetRoot) { fs.cpSync(path.join(history.root, '.planning'), path.join(targetRoot, '.planning'), { recursive: true, dereference: false, errorOnExist: true }); }
 function addConsumerS2Entries(root) {
