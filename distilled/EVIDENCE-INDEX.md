@@ -285,7 +285,7 @@
 - User brownfield audit finding (2026-03-20): map-codebase was useful but not presented as the start of a lightweight feature-work lane
 - Existing quick-workflow hardening decisions D32-D34: quick already had alignment and scope controls, so the open gap was routing/context, not quick quality
 - `distilled/workflows/quick.md` (Step 2 codebase-context read, planner delegate context)
-- `distilled/workflows/map-codebase.md` (completion offers `/gsdd-quick` as the brownfield lane)
+- `distilled/workflows/map-codebase.md` (completion offers `/work-quick` as the brownfield lane)
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ## D40 — Three-Layer Continuity Boundary
@@ -390,7 +390,7 @@
 - `.internal-research/gaps.md` (`I45`)
 - `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `distilled/workflows/resume.md`, `distilled/workflows/progress.md`
-- `.agents/skills/gsdd-resume/SKILL.md`, `.agents/skills/gsdd-progress/SKILL.md`
+- `.agents/skills/work-resume/SKILL.md`, `.agents/skills/work-progress/SKILL.md`
 - `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `get-shit-done/workflows/progress.md`
 
@@ -399,7 +399,7 @@
 - `.planning/ROADMAP.md` (v1.5.0 Phases 39-43 with requirement assignments, success criteria, out-of-scope, and stop/replan conditions)
 - `.internal-research/TODO.md` (active milestone reconciliation and next-step truth)
 - `.internal-research/lessons-learned.md` (`LL-PLANS-MUST-CARRY-THE-ANTI-DRIFT-CONTRACT`, `LL-ACTIVE-MILESTONE-TRUTH-MUST-STAY-SYNCHRONIZED`, `LL-AMBIGUITY-ABOUT-INTENT-MUST-STOP-EXECUTION`)
-- `.agents/skills/gsdd-new-milestone/SKILL.md`, `.agents/skills/gsdd-plan/SKILL.md`, `.agents/skills/gsdd-execute/SKILL.md`, `.agents/skills/gsdd-verify/SKILL.md`
+- `.agents/skills/work-new-milestone/SKILL.md`, `.agents/skills/work-plan/SKILL.md`, `.agents/skills/work-execute/SKILL.md`, `.agents/skills/work-verify/SKILL.md`
 - `get-shit-done/workflows/new-milestone.md`, `get-shit-done/workflows/plan.md`
 - OpenSpec concepts/workflows, LeanSpec guide/limits, OpenAI practical guide to building agents, Anthropic effective/trustworthy agents, GitHub Copilot task best practices
 

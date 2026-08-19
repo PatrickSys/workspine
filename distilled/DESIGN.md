@@ -311,9 +311,9 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 
 **GSDD:** Preserved exactly. Two integration points:
 
-1. **On first brownfield init:** `new-project.md` detects source files, offers codebase mapping. If accepted, invokes `map-codebase` via the portable skill surface (`.agents/skills/gsdd-map-codebase/SKILL.md`).
+1. **On first brownfield init:** `new-project.md` detects source files, offers codebase mapping. If accepted, invokes `map-codebase` via the portable skill surface (`.agents/skills/work-map-codebase/SKILL.md`).
 
-2. **On subsequent runs:** If `.planning/codebase/` already exists, mappers are skipped during init. User runs `/gsdd-map-codebase` directly to trigger the Refresh/Update/Skip flow.
+2. **On subsequent runs:** If `.planning/codebase/` already exists, mappers are skipped during init. User runs `/work-map-codebase` directly to trigger the Refresh/Update/Skip flow.
 
 **Why standalone:** Codebase maps become stale after major refactors. Users need to refresh maps independently of project initialization. Embedding mapping inside init would force a full re-init to refresh maps.
 
@@ -416,10 +416,10 @@ This hardening pass also clarified a reusable architectural rule: strict portabl
 | Tool                  | Generated surface                                                                                                                           | Trigger                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Any (portable)        | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Always generated on `npx -y workspine init`                               |
-| Claude Code           | `.claude/skills/gsdd-*/SKILL.md` + `.claude/commands/gsdd-plan.md` (compatibility alias for `plan`) + `.claude/agents/gsdd-plan-checker.md` | `--tools claude`                                                         |
-| Codex CLI             | `.agents/skills/gsdd-*/SKILL.md` + optional `.codex/agents/gsdd-plan-checker.toml`                                                          | Skills are always generated; checker agent via `--tools codex`           |
+| Claude Code           | `.claude/skills/gsdd-*/SKILL.md` + `.claude/commands/work-plan.md` (compatibility alias for `plan`) + `.claude/agents/work-plan-checker.md` | `--tools claude`                                                         |
+| Codex CLI             | `.agents/skills/gsdd-*/SKILL.md` + optional `.codex/agents/work-plan-checker.toml`                                                          | Skills are always generated; checker agent via `--tools codex`           |
 | Codex VS Code/app     | `.agents/skills/gsdd-*/SKILL.md` opened or pasted manually unless discovery exists                                                          | Fallback surface only; not covered by Codex CLI proof                    |
-| OpenCode              | `.opencode/commands/gsdd-*.md` + `.opencode/agents/gsdd-plan-checker.md`                                                                    | `--tools opencode`                                                       |
+| OpenCode              | `.opencode/commands/gsdd-*.md` + `.opencode/agents/work-plan-checker.md`                                                                    | `--tools opencode`                                                       |
 | Cursor/Copilot        | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Slash-invoked skills once the runtime is configured with that skills location |
 | Gemini CLI            | `.agents/skills/gsdd-*/SKILL.md`                                                                                                            | Skills-native path when discovered; `AGENTS.md` governance is optional        |
 
@@ -545,7 +545,7 @@ Codex CLI is skills-first because the terminal CLI supports repository skills di
 - Quick-task awareness (LOG.md incomplete entries detected by both pause and resume)
 - Workflow-type frontmatter in checkpoint (`workflow`, `phase`, `timestamp`) for resume routing
 - Checkpoint cleanup after successful resume routing
-- Explicit routing to GSDD workflow names (`gsdd-execute`, `gsdd-plan`, etc.)
+- Explicit routing to GSDD workflow names (`work-execute`, `work-plan`, etc.)
 
 **Design principle:** Derive state from primary artifacts (ROADMAP.md checkboxes, phase directories, checkpoint file), not from secondary summary files that can drift. This extends D7's elimination of STATE.md.
 
@@ -684,8 +684,8 @@ Current GSDD keeps the portable semantic layer and makes exact runtime ids expli
 configuration instead of framework inference.
 
 **Scope: agent files only.** The current supported agent id is `plan-checker`. The `model:` field is injected into:
-- `.claude/agents/gsdd-plan-checker.md` using Claude Code aliases (`opus`, `sonnet`, `haiku`)
-- `.opencode/agents/gsdd-plan-checker.md` using an exact runtime-native string only when the user
+- `.claude/agents/work-plan-checker.md` using Claude Code aliases (`opus`, `sonnet`, `haiku`)
+- `.opencode/agents/work-plan-checker.md` using an exact runtime-native string only when the user
   explicitly configured `runtimeModelOverrides.opencode.plan-checker`
 
 Current repo truth:
@@ -868,7 +868,7 @@ Implementation lives under `bin/lib/`:
 
 **GSDD (before this decision):** Codex CLI was a skills-first runtime at ~40% parity. It consumed the portable `.agents/skills/gsdd-*/SKILL.md` surface but had no native plan-checker, no orchestration loop, no model control, and no dedicated adapter module. `--tools codex` was deprecated and silently stripped. Every Codex plan ran in silent `reduced_assurance` mode.
 
-**GSDD (after this decision):** Codex CLI is promoted to `native_capable` — same tier as Claude Code and OpenCode. A dedicated `bin/adapters/codex.mjs` generates `.codex/agents/gsdd-plan-checker.toml` (read-only TOML agent with the plan-checker delegate). Codex's entry surface is the portable skill at `.agents/skills/gsdd-plan/SKILL.md` — Codex auto-discovers it via its `.agents/skills/` skill scanning ([developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)). The portable skill now contains vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation) plus an explicit plan-only completion lock, so when Codex follows it, it spawns the native `gsdd-plan-checker` agent for fresh-context review and still requires a separate `$gsdd-execute` transition before implementation. `--tools codex` is reinstated as an active adapter flag.
+**GSDD (after this decision):** Codex CLI is promoted to `native_capable` — same tier as Claude Code and OpenCode. A dedicated `bin/adapters/codex.mjs` generates `.codex/agents/work-plan-checker.toml` (read-only TOML agent with the plan-checker delegate). Codex's entry surface is the portable skill at `.agents/skills/work-plan/SKILL.md` — Codex auto-discovers it via its `.agents/skills/` skill scanning ([developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)). The portable skill now contains vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation) plus an explicit plan-only completion lock, so when Codex follows it, it spawns the native `work-plan-checker` agent for fresh-context review and still requires a separate `$work-execute` transition before implementation. `--tools codex` is reinstated as an active adapter flag.
 
 **Why:** Codex CLI v0.115.0 (2026-03-16) stabilized its multi-agent system with `.codex/agents/*.toml` definitions, `spawn_agent` fresh-context invocation, per-agent `model` and `model_reasoning_effort` fields, and `sandbox_mode` access control. This provides structural parity with Claude's `.claude/agents/` and OpenCode's `.opencode/agents/`.
 
@@ -880,7 +880,7 @@ Implementation lives under `bin/lib/`:
 **Key design choices:**
 
 1. **TOML agent format** — Codex uses `.codex/agents/<name>.toml` (not markdown). The plan-checker delegate content goes inside `developer_instructions = """..."""`. A TOML escape guard replaces `"""` with `"" "` in delegate content to prevent string termination. Model IDs are validated at the CLI setter (`MODEL_ID_PATTERN`) and escaped in the TOML renderer as defense-in-depth.
-2. **Portable skill as entry surface** — Unlike Claude (which has a vendor-specific `.claude/skills/gsdd-plan/SKILL.md`) and OpenCode (which has `.opencode/commands/gsdd-plan.md`), Codex reads skills from `.agents/skills/` — the shared portable path. The portable skill is enhanced with vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation, orchestration summary), making it self-sufficient as the Codex entry surface. When Codex auto-selects the `gsdd-plan` skill, the instructions tell it to invoke the `gsdd-plan-checker` agent if available. No separate planner TOML is needed — the portable skill handles orchestration directly.
+2. **Portable skill as entry surface** — Unlike Claude (which has a vendor-specific `.claude/skills/work-plan/SKILL.md`) and OpenCode (which has `.opencode/commands/work-plan.md`), Codex reads skills from `.agents/skills/` — the shared portable path. The portable skill is enhanced with vendor-neutral checker invocation instructions (JSON schema, max-3 cycle loop, escalation, orchestration summary), making it self-sufficient as the Codex entry surface. When Codex auto-selects the `work-plan` skill, the instructions tell it to invoke the `work-plan-checker` agent if available. No separate planner TOML is needed — the portable skill handles orchestration directly.
 3. **Inherit-by-default model** — Following OpenCode's pattern, no `model` field is set by default (inherits from parent session). An explicit `model = "<id>"` is only written when the user sets `runtimeModelOverrides.codex.plan-checker`.
 4. **Always-high reasoning effort** — `model_reasoning_effort = "high"` is always set for the plan-checker (analysis agent should think carefully).
 5. **Read-only sandbox** — `sandbox_mode = "read-only"` prevents the checker from editing plans, functionally equivalent to OpenCode's `write: false, edit: false, bash: false`.
@@ -890,16 +890,16 @@ Implementation lives under `bin/lib/`:
 - No deterministic spawn API — spawning is model-interpreted via natural language, not a programmatic `Task()` call
 - GitHub issues #14719 (re-spawn failure) and #14841 (spawn loops with weaker models) are documented risks; GSDD's simple spawn-wait-pattern minimizes exposure, and the max-3 loop has escalation
 - JSON schema duplication — the checker JSON schema is embedded in Claude, OpenCode orchestration prompts and the portable skill; tests guard drift across all surfaces
-- Execution authorization must stay explicit — Codex and other runtimes must not infer implementation permission from generic imperative handoff text after `gsdd-plan`
+- Execution authorization must stay explicit — Codex and other runtimes must not infer implementation permission from generic imperative handoff text after `work-plan`
 - No Codex CLI in CI — future regressions still require disposable-fixture validation even though local live validation now exists
-- Entry surface is shared — Codex uses the portable `.agents/skills/gsdd-plan/SKILL.md` as its entry surface (no vendor-specific skill path exists in Codex). The portable skill's checker invocation is vendor-neutral, but routing depends on Codex's implicit skill selection matching the task description
+- Entry surface is shared — Codex uses the portable `.agents/skills/work-plan/SKILL.md` as its entry surface (no vendor-specific skill path exists in Codex). The portable skill's checker invocation is vendor-neutral, but routing depends on Codex's implicit skill selection matching the task description
 - Codex VS Code/app are not implied by Codex CLI validation — when those products do not expose compatible repository skill discovery, the supported posture is manual open/paste of `.agents/skills/gsdd-*/SKILL.md`, not a native-capable claim
 
 **Live validation (2026-03-17):**
 - Local runtime: `codex-cli 0.113.0` with `features.multi_agent = true`
-- Happy path fixture: `%TEMP%\\gsdd-codex-pr29-happy-20260317-214241` wrote `.planning/phases/01-foundation/01-PLAN.md` through the portable `gsdd-plan` entry surface while the native checker double returned `CHECKER_HAPPY`
-- Forced revision fixture: `%TEMP%\\gsdd-codex-pr29-revision-20260317-214942` required the checker-driven sentinel `SENTINEL-REVISION-OK` in the plan `Notes` section; the plan was revised and the second checker pass passed
-- Max-3 escalation fixture: `%TEMP%\\gsdd-codex-pr29-max3-noresearch-20260317-220608` set `workflow.research = false` to isolate the checker seam; Codex spawned 3 fresh-context checker agents, each returned `CHECKER_STILL_BLOCKED`, and the final result was `escalated`
+- Happy path fixture: `%TEMP%\\work-codex-pr29-happy-20260317-214241` wrote `.planning/phases/01-foundation/01-PLAN.md` through the portable `work-plan` entry surface while the native checker double returned `CHECKER_HAPPY`
+- Forced revision fixture: `%TEMP%\\work-codex-pr29-revision-20260317-214942` required the checker-driven sentinel `SENTINEL-REVISION-OK` in the plan `Notes` section; the plan was revised and the second checker pass passed
+- Max-3 escalation fixture: `%TEMP%\\work-codex-pr29-max3-noresearch-20260317-220608` set `workflow.research = false` to isolate the checker seam; Codex spawned 3 fresh-context checker agents, each returned `CHECKER_STILL_BLOCKED`, and the final result was `escalated`
 
 **Evidence:**
 - OpenAI Codex CLI docs: [developers.openai.com/codex/subagents](https://developers.openai.com/codex/subagents)
@@ -1280,7 +1280,7 @@ D12 established the session persistence design. D26 mechanically enforces the ro
 
 **Problem:** Consumer testing (2026-03-21) revealed that AI agents completing a GSDD workflow go silent — the user must manually figure out which `/gsdd-*` command to run next. The lifecycle contract (`new-project → plan → execute → verify → [next phase]`) was correct in design but invisible in practice at each step boundary. GSD original solved this with explicit "Next Up" sections at the end of every workflow; GSDD lost this pattern during distillation.
 
-**Decision:** Add `<completion>` sections after `<success_criteria>` in all 9 terminal workflows. Add positional discipline gates (STOP instructions at exact deviation points) and mandatory persistence enforcement for critical artifacts. Preserve lifecycle order, but for `plan` make the boundary explicit: completion may name `/gsdd-execute` as the next workflow, while the current `gsdd-plan` run remains plan-only and does not authorize implementation.
+**Decision:** Add `<completion>` sections after `<success_criteria>` in all 9 terminal workflows. Add positional discipline gates (STOP instructions at exact deviation points) and mandatory persistence enforcement for critical artifacts. Preserve lifecycle order, but for `plan` make the boundary explicit: completion may name `/work-execute` as the next workflow, while the current `work-plan` run remains plan-only and does not authorize implementation.
 
 **Changes:**
 
@@ -1311,15 +1311,15 @@ Consider clearing context before starting the next workflow for best results.
 ```
 
 **Routing map (acyclic, complete):**
-- `new-project` → `/gsdd-plan`
-- `plan` → separate `/gsdd-execute` run (routing only; no same-run execution authorization)
-- `execute` → `/gsdd-verify` (if verifier enabled) or `/gsdd-progress`
-- `verify` → `/gsdd-progress` (passed), `/gsdd-plan` (gaps), `/gsdd-verify` (human_needed)
-- `audit-milestone` → `/gsdd-complete-milestone` (passed), `/gsdd-plan` (gaps/debt)
-- `quick` → `/gsdd-progress`
-- `pause` → `/gsdd-resume` (next session)
+- `new-project` → `/work-plan`
+- `plan` → separate `/work-execute` run (routing only; no same-run execution authorization)
+- `execute` → `/work-verify` (if verifier enabled) or `/work-progress`
+- `verify` → `/work-progress` (passed), `/work-plan` (gaps), `/work-verify` (human_needed)
+- `audit-milestone` → `/work-complete-milestone` (passed), `/work-plan` (gaps/debt)
+- `quick` → `/work-progress`
+- `pause` → `/work-resume` (next session)
 - `resume` → dispatches to selected workflow
-- `map-codebase` → `/gsdd-new-project`
+- `map-codebase` → `/work-new-project`
 
 **GSD comparison:**
 
@@ -1488,7 +1488,7 @@ GSD's approach was a `--full` flag that added plan-checking + verification to qu
 
 1. **Plan Preview Gate (mandatory, default-yes):** After the planner returns and the STOP gate verifies the plan exists, present a structured summary (task count, files to touch, 1-sentence approach) and wait for the user. Default-yes: pressing Enter proceeds. Options include edit, abort, and (when scope signal fires) switch to full ceremony. This is the core fix — the user sees agent intent before code changes happen.
 
-2. **Scope Signal with Escalation (advisory, always-on):** Inline orchestrator evaluation checks the plan against quick-scope boundaries: >8 files modified, architecture keywords in description (`refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database`), new public APIs. If any signal fires, the advisory appears in the plan preview with a recommendation to use `/gsdd-plan` for approach exploration. Advisory only — the user decides. Keyword heuristics have false positives; blocking would train users to ignore the signal.
+2. **Scope Signal with Escalation (advisory, always-on):** Inline orchestrator evaluation checks the plan against quick-scope boundaries: >8 files modified, architecture keywords in description (`refactor`, `migration`, `security`, `auth`, `API design`, `schema`, `database`), new public APIs. If any signal fires, the advisory appears in the plan preview with a recommendation to use `/work-plan` for approach exploration. Advisory only — the user decides. Keyword heuristics have false positives; blocking would train users to ignore the signal.
 
 3. **Config-Gated Independent Plan Check (optional):** When `workflow.planCheck: true` in config.json, the existing plan-checker delegate runs against the quick task plan with 5 of 9 dimensions: `requirement_coverage`, `task_completeness`, `dependency_correctness`, `scope_sanity`, `must_have_quality`. Maximum 1 revision cycle (not 3 — diminishing returns for 1-3 task plans). If blockers remain, they surface in the plan preview for user decision. No new delegate or config key — reuses existing infrastructure.
 
@@ -1533,7 +1533,7 @@ The step has a **dual gate** — even with `workflow.discuss: true`, it evaluate
 | Vague scope | Contains: `improve`, `fix`, `update`, `refactor`, `clean up`, `optimize` without specifying target | "improve error handling" |
 | Trade-off present | Implies competing goals | "make it faster" (algorithmic? caching? denormalization?) |
 
-If no signals fire, the step skips silently — no questions asked, even with toggle on. When signals fire, the orchestrator identifies 1-2 grey areas and asks targeted questions in **recommendation-first format**: "I'd approach this with X because Y. Want me to proceed, or do you prefer Z?" Maximum 2 questions — if a task has 3+ grey areas, the scope signal (D32) should already be recommending `/gsdd-plan`.
+If no signals fire, the step skips silently — no questions asked, even with toggle on. When signals fire, the orchestrator identifies 1-2 grey areas and asks targeted questions in **recommendation-first format**: "I'd approach this with X because Y. Want me to proceed, or do you prefer Z?" Maximum 2 questions — if a task has 3+ grey areas, the scope signal (D32) should already be recommending `/work-plan`.
 
 Output is inline `$APPROACH_CONTEXT` (e.g., "User confirmed: use in-memory LRU cache, not Redis") passed to the planner as locked constraints. No APPROACH.md file — file artifacts add overhead with no return for sub-hour work.
 
@@ -1751,7 +1751,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 **Decision:** Wire the existing secondary brownfield lane instead of adding a new workflow.
 
-- `map-codebase` completion now offers two explicit next steps: `/gsdd-new-project` for full lifecycle setup and `/gsdd-quick` for bounded brownfield feature work.
+- `map-codebase` completion now offers two explicit next steps: `/work-new-project` for full lifecycle setup and `/work-quick` for bounded brownfield feature work.
 - `map-codebase` completion now synthesizes an explicit brownfield routing summary from the existing 4 docs: safest next change lane, highest-risk zones, must-know traps, and the recommended workflow with rationale.
 - `quick` now reads `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STACK.md`, `.planning/codebase/CONVENTIONS.md`, and `.planning/codebase/CONCERNS.md` when they exist and passes a summarized `$CODEBASE_CONTEXT` into the planner delegate.
 - `quick` stays structurally pure: it gains safer brownfield routing/context, not spec, roadmap, or research-lite behavior.
@@ -1769,7 +1769,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - User brownfield audit finding (2026-03-20): mapping was useful, but the lighter-weight feature-work lane was not explicit
 - D32-D34 quick-workflow hardening: alignment and scope controls already existed, so the remaining gap was routing plus codebase-context reuse
 - `distilled/workflows/quick.md` (Step 2 codebase-context read, planner delegate context)
-- `distilled/workflows/map-codebase.md` (completion offers `/gsdd-quick` as the brownfield lane)
+- `distilled/workflows/map-codebase.md` (completion offers `/work-quick` as the brownfield lane)
 - `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
@@ -2016,7 +2016,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ## D46 - Archived Milestone Routing With Retained ROADMAP
 
-**Decision (2026-04-15):** `gsdd-progress` must treat a retained `ROADMAP.md` as historical archive state when the current roadmap milestone/version has both a shipped ledger entry in `.planning/MILESTONES.md` and the matching archived milestone audit artifact. In that state, the workflow routes to `/gsdd-new-milestone` rather than back to `/gsdd-audit-milestone`.
+**Decision (2026-04-15):** `work-progress` must treat a retained `ROADMAP.md` as historical archive state when the current roadmap milestone/version has both a shipped ledger entry in `.planning/MILESTONES.md` and the matching archived milestone audit artifact. In that state, the workflow routes to `/work-new-milestone` rather than back to `/work-audit-milestone`.
 
 **Context:**
 - GSDD now retains `ROADMAP.md` after milestone completion as a historical shipped-summary surface instead of deleting it at archive time.
@@ -2028,7 +2028,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - Detect the archived-with-`ROADMAP.md` state from the current roadmap milestone/version plus:
   - a shipped ledger entry for that same milestone in `.planning/MILESTONES.md`
   - the matching archived milestone audit artifact for that same milestone/version
-- Only when both pieces of archive evidence exist does `progress.md` route to `/gsdd-new-milestone`.
+- Only when both pieces of archive evidence exist does `progress.md` route to `/work-new-milestone`.
 - Earlier archived milestones in the ledger must not satisfy the route for the current roadmap milestone/version.
 
 **Why this fits the codebase:**
@@ -2067,10 +2067,10 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - The user explicitly chose a quick win over a heavier product redesign: repair the existing lane now, and record the larger enterprise middle-lane question as follow-on work.
 
 **Decision:**
-- `gsdd-new-project` remains the full initializer for greenfield work, fuzzy brownfield scope, or milestone-shaped work. It owns brownfield codebase mapping internally when the deeper baseline is needed.
-- `gsdd-quick` is now the documented bounded brownfield lane. It reuses `.planning/codebase/*` when present and otherwise builds a just-enough inline brownfield baseline from stable repo-root surfaces before planning.
-- `gsdd-map-codebase` remains the deeper orientation pass for unfamiliar or higher-risk brownfield repos. It is optional before `quick`, not a mandatory first step for every existing repo.
-- `gsdd-progress` keeps the same six route branches, but Branch F is broadened into a general non-phase state branch that covers:
+- `work-new-project` remains the full initializer for greenfield work, fuzzy brownfield scope, or milestone-shaped work. It owns brownfield codebase mapping internally when the deeper baseline is needed.
+- `work-quick` is now the documented bounded brownfield lane. It reuses `.planning/codebase/*` when present and otherwise builds a just-enough inline brownfield baseline from stable repo-root surfaces before planning.
+- `work-map-codebase` remains the deeper orientation pass for unfamiliar or higher-risk brownfield repos. It is optional before `quick`, not a mandatory first step for every existing repo.
+- `work-progress` keeps the same six route branches, but Branch F is broadened into a general non-phase state branch that covers:
   - between milestones
   - codebase-only brownfield state
   - quick-lane-only brownfield state
@@ -2314,7 +2314,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 **Context:**
 - Phase 19 intentionally allowed `resume` to preserve a generic checkpoint when the user chose a different path, because generic checkpoints can carry real context without pretending to be an active phase or quick-task execution surface.
-- That same flexibility exposed a later contradiction: `progress` still treated any `.continue-here.md` as a Branch A reroute back to `/gsdd-resume`, so a generic checkpoint could create a `resume -> progress -> resume` loop even after `resume` had already surfaced the checkpoint and routed the user onward.
+- That same flexibility exposed a later contradiction: `progress` still treated any `.continue-here.md` as a Branch A reroute back to `/work-resume`, so a generic checkpoint could create a `resume -> progress -> resume` loop even after `resume` had already surfaced the checkpoint and routed the user onward.
 - Phase 33 was scoped narrowly to repair that control-plane seam without inventing a new checkpoint artifact, a broader checkpoint-consumption protocol, or a heavier brownfield/middle-lane redesign.
 
 **Decision:**
@@ -2340,19 +2340,19 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`
 - `distilled/workflows/resume.md`
 - `distilled/workflows/progress.md`
-- `.agents/skills/gsdd-resume/SKILL.md`
-- `.agents/skills/gsdd-progress/SKILL.md`
+- `.agents/skills/work-resume/SKILL.md`
+- `.agents/skills/work-progress/SKILL.md`
 - `tests/phase.test.cjs`
 - `tests/gsdd.guards.test.cjs`
 - `tests/gsdd.scenarios.test.cjs`
 - GSD comparison source: GSD session-routing surfaces assume the checkpoint itself is the dominant continuity signal. GSDD now keeps that behavior only for real execution checkpoints (`phase`, `quick`) and treats generic checkpoints as context once the user has already been routed onward.
 
 **Consequences:**
-- A surviving generic checkpoint can coexist with milestone-close or next-phase guidance without forcing the user back into `/gsdd-resume`.
+- A surviving generic checkpoint can coexist with milestone-close or next-phase guidance without forcing the user back into `/work-resume`.
 - `resume` still owns the destructive checkpoint-cleanup step, which keeps cleanup tied to an explicit user choice rather than to a read-only reporter.
 - Future checkpoint lifecycle edits must update the current split seams, the authored workflow contracts, the regenerated skill surfaces, and the regression suites together or the repo truth will drift immediately.
 
-**GSDD implementation:** `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `.agents/skills/gsdd-resume/SKILL.md`, `.agents/skills/gsdd-progress/SKILL.md`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
+**GSDD implementation:** `bin/lib/workspace-root.mjs`, `bin/lib/state-dir.mjs`, `bin/lib/lifecycle-state.mjs`, `bin/lib/lifecycle-preflight.mjs`, `bin/lib/work-context.mjs`, `bin/lib/next.mjs`, `bin/lib/git-identity.mjs`, `distilled/workflows/resume.md`, `distilled/workflows/progress.md`, `.agents/skills/work-resume/SKILL.md`, `.agents/skills/work-progress/SKILL.md`, `.planning/SPEC.md`, `.internal-research/TODO.md`, `.internal-research/gaps.md`, `tests/phase.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 
 ---
 
@@ -2398,16 +2398,16 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `.planning/ROADMAP.md` (v1.5.0 Phases 39-43)
 - `.internal-research/TODO.md` (active v1.5.0 objective and next-step reconciliation)
 - `.internal-research/lessons-learned.md` (`LL-PLANS-MUST-CARRY-THE-ANTI-DRIFT-CONTRACT`, `LL-ACTIVE-MILESTONE-TRUTH-MUST-STAY-SYNCHRONIZED`, `LL-AMBIGUITY-ABOUT-INTENT-MUST-STOP-EXECUTION`)
-- `.agents/skills/gsdd-new-milestone/SKILL.md`
-- `.agents/skills/gsdd-plan/SKILL.md`
-- `.agents/skills/gsdd-execute/SKILL.md`
-- `.agents/skills/gsdd-verify/SKILL.md`
+- `.agents/skills/work-new-milestone/SKILL.md`
+- `.agents/skills/work-plan/SKILL.md`
+- `.agents/skills/work-execute/SKILL.md`
+- `.agents/skills/work-verify/SKILL.md`
 - GSD comparison source: `get-shit-done/workflows/new-milestone.md` and `get-shit-done/workflows/plan.md` preserve stronger planning discipline than the weakened one-line GSDD roadmap shape had drifted into.
 - External comparison sources: OpenSpec concepts/workflows, LeanSpec guide/limits, OpenAI practical guide to building agents, Anthropic effective/trustworthy agents, GitHub Copilot task best practices.
 
 **Consequences:**
 - Active milestone phases are no longer loose roadmap themes; they are the minimum durable contract needed for safe planning.
-- `gsdd-plan` now fails closed when the roadmap phase contract is too weak or self-contradictory.
+- `work-plan` now fails closed when the roadmap phase contract is too weak or self-contradictory.
 - Execution and verification inherit explicit anti-drift boundaries instead of reconstructing them from memory or postmortems.
 - The active milestone truth now needs to stay synchronized across the planning surfaces that drive work, or the contradiction itself becomes a blocker.
 
@@ -2517,7 +2517,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 ## D56 - Executable Brownfield Routing And Widen-Only Escalation
 
-**Decision (2026-04-21; revised 2026-06-30):** Brownfield routing should treat `CHANGE.md` as the default operational anchor and allow a surviving `phase` or `quick` checkpoint to outrank it only when one strict-match rule proves the checkpoint is still the active execution surface. From concrete brownfield state, `/gsdd-new-project` remains available only as an intentional widen path into full milestone setup, not as an accidental fallback recommendation. Active bounded brownfield planning uses the existing `gsdd-plan` workflow with explicit `brownfield-change` authority instead of being forced through unrelated ROADMAP phase membership.
+**Decision (2026-04-21; revised 2026-06-30):** Brownfield routing should treat `CHANGE.md` as the default operational anchor and allow a surviving `phase` or `quick` checkpoint to outrank it only when one strict-match rule proves the checkpoint is still the active execution surface. From concrete brownfield state, `/work-new-project` remains available only as an intentional widen path into full milestone setup, not as an accidental fallback recommendation. Active bounded brownfield planning uses the existing `work-plan` workflow with explicit `brownfield-change` authority instead of being forced through unrelated ROADMAP phase membership.
 
 **Context:**
 - D54 defined the bounded `brownfield-change/` contract and D55 established its continuity floor, but the routing matrix above those artifacts was still inconsistent: `progress` could still route back through stale checkpoint residue, `resume` could still make a non-matching checkpoint primary, and `quick` / `map-codebase` / `new-project` still risked implying that full lifecycle initialization was the normal fallback from already-concrete bounded work.
@@ -2530,13 +2530,13 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
   - `phase` and `quick` checkpoints outrank `CHANGE.md` only when branch alignment, scope alignment, and still-active execution state all hold at once
   - otherwise the checkpoint stays visible context, but the brownfield operational anchor remains primary
 - Apply that same rule across the authored `progress` and `resume` contracts instead of letting each workflow invent its own checkpoint-versus-change exception.
-- Keep `/gsdd-new-project` available from brownfield surfaces only as an explicit widen path:
+- Keep `/work-new-project` available from brownfield surfaces only as an explicit widen path:
   - `quick` uses it when the bounded change is still undefined or when the user intentionally widens scope
   - `map-codebase` frames it as full lifecycle setup only when the user wants to widen beyond bounded brownfield work
   - `new-project` itself recognizes existing `CHANGE.md` continuity and treats invocation from that state as deliberate promotion, not mistaken routing
-- Keep `gsdd-plan` as the bounded brownfield planning entrypoint when an active `.planning/brownfield-change/CHANGE.md` exists:
-  - `gsdd next --json` reports `authority: brownfield_change` and routes to `gsdd-plan`
-  - `gsdd-plan` classifies the target before phase preflight
+- Keep `work-plan` as the bounded brownfield planning entrypoint when an active `.planning/brownfield-change/CHANGE.md` exists:
+  - `gsdd next --json` reports `authority: brownfield_change` and routes to `work-plan`
+  - `work-plan` classifies the target before phase preflight
   - `lifecycle-preflight plan brownfield-change` authorizes the change-folder lane without requiring the active ROADMAP phase to match a PBI or consumer ticket
 - Lock the contract with helper, guard, and generated-surface scenario coverage.
 
@@ -2566,12 +2566,12 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Consequences:**
 - Brownfield next-step routing now has one deterministic precedence rule instead of five workflow-local interpretations, and active bounded brownfield planning has one explicit preflight authority.
 - A stale or unrelated `phase` / `quick` checkpoint can remain reviewable without automatically hijacking the current brownfield lane.
-- `/gsdd-new-project` remains part of the system, but as deliberate promotion from concrete brownfield work rather than as a generic fallback.
+- `/work-new-project` remains part of the system, but as deliberate promotion from concrete brownfield work rather than as a generic fallback.
 - Phase 43 can now focus on bounded growth and milestone handoff instead of first repairing invalid routing recommendations.
 
 ## D57 - Bounded Brownfield Growth And Context-Preserving Milestone Handoff
 
-**Decision (2026-04-22):** When bounded brownfield work widens into milestone planning, keep the lane explicit and case-by-case. Reuse `CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` directly as the promotion input surface through `/gsdd-new-project` (first milestone) or `/gsdd-new-milestone` (subsequent milestone) instead of inventing another artifact family or silently widening the lane.
+**Decision (2026-04-22):** When bounded brownfield work widens into milestone planning, keep the lane explicit and case-by-case. Reuse `CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` directly as the promotion input surface through `/work-new-project` (first milestone) or `/work-new-milestone` (subsequent milestone) instead of inventing another artifact family or silently widening the lane.
 
 **Context:**
 - D54 established the bounded brownfield artifact family, D55 gave it a continuity floor, and D56 repaired routing precedence. That still left the final growth seam open: how the bounded lane should widen without becoming milestone-lite or forcing rediscovery.
@@ -2587,8 +2587,8 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
   - `HANDOFF.md` remains the preserved judgment surface
   - `VERIFICATION.md` remains the carried-forward proof and gap surface, including partial validation
 - Split the milestone-init paths honestly:
-  - `/gsdd-new-project` is the widen path when no shipped milestone history exists yet
-  - `/gsdd-new-milestone` is the widen path when the repo already has shipped milestone history
+  - `/work-new-project` is the widen path when no shipped milestone history exists yet
+  - `/work-new-milestone` is the widen path when the repo already has shipped milestone history
 - Keep `progress` and `resume` explicit about this boundary so widening remains a deliberate user choice rather than a default fallback.
 
 **Why this fits the codebase:**
@@ -2764,7 +2764,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 
 **Why this fits the codebase:**
 - It preserves the compact D50 evidence matrix and avoids a new `release` evidence kind.
-- It avoids a new workflow lane or `gsdd-release` command by using the existing closeout surfaces.
+- It avoids a new workflow lane or `work-release` command by using the existing closeout surfaces.
 - It lets repo-local milestones close without fabricated delivery proof while preventing stronger public/runtime/delivery language from outrunning evidence.
 - It respects D59: local-only planning artifacts can support internal closeout, but public release/support claims need tracked public or repo-visible evidence.
 
@@ -2945,12 +2945,12 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 
 **Decision:**
 - Treat `.work` as the source of truth for `gsdd next` continuity routing, focus packets, work-native milestone state, decisions, questions, evidence pointers, dogfood findings, and bounded auto-gate state.
-- Keep `.planning` readable only as an explicit legacy migration or diagnostic input. Existing `gsdd-plan`, `gsdd-execute`, `gsdd-verify`, audit, complete-milestone, phase-status, and helper write paths use `.work`; a dual-root workspace is a blocker, not a compatibility fallback.
+- Keep `.planning` readable only as an explicit legacy migration or diagnostic input. Existing `work-plan`, `work-execute`, `work-verify`, audit, complete-milestone, phase-status, and helper write paths use `.work`; a dual-root workspace is a blocker, not a compatibility fallback.
 - Require routing and preflight output to report authority explicitly, using current `.work` scope or `blocked/conflict`; `.work` authority must not silently mask repo truth, PR truth, or a retained legacy-root blocker.
 - Keep decision authority cooperative and record-local: `gsdd decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>` is the only supported promotion grammar. Persist `approval_authority`, `approval_ref`, `approval_body_hash`, `approved_at`, and one recomputable `authority_fingerprint` beside the existing typed record while preserving proposal `source`.
 - Classify typed records separately from lifecycle status: candidates are non-authoritative, complete assertions are `owner_asserted`, active records without an assertion are `unreceipted_active`, and partial or mismatched assertion metadata is `malformed_assertion`. Only `owner_asserted` active records enter the digest; legacy ambiguity remains readable and becomes bounded review debt.
 - Treat the owner assertion as an auditable cooperative protocol, not authentication, a signature, a credential, or a filesystem sandbox. Do not add a receipt store, identity provider, approval database, or generated-helper transition surface; `.work/bin/gsdd.mjs` remains capture/query-only.
-- Include `brownfield_change` as an explicit scoped authority for existing bounded-change artifacts under `.work`. This is a compatibility bridge, not a new lifecycle root: it reuses the current `gsdd-plan` workflow and the brownfield-change folder contract.
+- Include `brownfield_change` as an explicit scoped authority for existing bounded-change artifacts under `.work`. This is a compatibility bridge, not a new lifecycle root: it reuses the current `work-plan` workflow and the brownfield-change folder contract.
 - Preserve repo/control-map truth as the highest authority for branch, PR, worktree, dirty-state, and delivery claims. `.work` can carry intent and continuity; it cannot convert local prose into integrated repo truth.
 - Define execute-until-gate as task-bounded automation, not session-bounded autonomy. Auto mode may run typed, reviewed, `type=auto` tasks and bounded verification/repair cycles only until a human gate, verification gap, repeated blocker, authority conflict, trust boundary, or scope expansion stops it.
 - Keep milestone completion user-owned. `gsdd next` may route to completion approval, but it must not mark a milestone complete autonomously.
