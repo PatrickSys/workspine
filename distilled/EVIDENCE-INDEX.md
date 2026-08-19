@@ -381,7 +381,7 @@
 - `bin/lib/runtime-freshness.mjs`, `bin/lib/health.mjs`, `bin/lib/health-truth.mjs`, `bin/lib/rendering.mjs`
 - `bin/adapters/claude.mjs`, `bin/adapters/opencode.mjs`, `bin/adapters/codex.mjs`
 - `README.md`, `docs/USER-GUIDE.md`, `docs/RUNTIME-SUPPORT.md`, `distilled/README.md`, `distilled/DESIGN.md`
-- Workflow docs use `node .planning/bin/gsdd.mjs ...` for internal helper commands and human docs prefer `npx -y gsdd-cli init/update/health`
+- Workflow docs use `node .planning/bin/gsdd.mjs ...` for internal helper commands and human docs prefer `npx -y workspine init/update/health`
 - `tests/phase.test.cjs`, `tests/gsdd.health.test.cjs`, `tests/gsdd.plan.adapters.test.cjs`, `tests/gsdd.guards.test.cjs`, `tests/gsdd.scenarios.test.cjs`
 - `get-shit-done/workflows/progress.md`
 

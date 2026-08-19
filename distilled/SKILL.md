@@ -1,5 +1,5 @@
 ---
-name: Workspine (published as gsdd-cli)
+name: Workspine
 description: Disciplined repo-native workflow for AI-assisted development. Spec first, then build, then verify.
 ---
 
@@ -58,13 +58,13 @@ Workspine uses `.work/` as the durable workspace. Legacy `.planning/` workspaces
 </project_structure>
 
 <adapters>
-Recommended: generate adapters with `gsdd-cli`:
+Recommended: generate adapters with `workspine`:
 
 ```bash
-npx -y gsdd-cli init
-npx -y gsdd-cli init --tools claude
-npx -y gsdd-cli init --tools codex
-npx -y gsdd-cli init --tools agents
+npx -y workspine init
+npx -y workspine init --tools claude
+npx -y workspine init --tools codex
+npx -y workspine init --tools agents
 ```
 
 Behavior:

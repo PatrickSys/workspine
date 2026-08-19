@@ -33,7 +33,7 @@ Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:
 
 It gives serious AI-assisted work one durable, repo-native workflow for planning, checking, execution, verification, and handoff — plain files, no hosted service.
 
-The command is `gsdd`, the npm package is `gsdd-cli`, the workflows are `gsdd-*`, and the workspace is `.work/`. Workspine kept those names so existing installs keep working; legacy `.planning/` workspaces are still read.
+The command is `gsdd`, the npm package is `workspine`, the workflows are `gsdd-*`, and the workspace is `.work/`. Workspine kept the `gsdd`, `gsdd-*`, and `.work/` names so existing installs keep working; legacy `.planning/` workspaces are still read.
 
 Workspine began as a fork of Get Shit Done, whose long-horizon workflow proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native tool with fewer public workflows, generated runtime surfaces from a portable core, proof required before closing work, and decisions that keep their why.
 
@@ -42,39 +42,39 @@ Proof:
 - Claude Code and OpenCode get native surfaces generated from the same portable core and freshness-checked locally, with no end-to-end run of theirs recorded here
 - Cursor, Copilot or Gemini CLI can read the same `.agents/skills/` surface plus optional governance when their skill or slash discovery sees it, but no run of theirs is recorded here; proof and ergonomics differ from the recorded path above
 - Codex CLI validation does not automatically cover Codex VS Code or the Codex app; use native discovery there when available, otherwise open or paste `.agents/skills/gsdd-*/SKILL.md`
-- Repo-local generated runtime surfaces are renderer-checked through `npx -y gsdd-cli health`, with deterministic repair through `npx -y gsdd-cli update` (bare `gsdd ...` is equivalent only when globally installed)
+- Repo-local generated runtime surfaces are renderer-checked through `npx -y workspine health`, with deterministic repair through `npx -y workspine update` (bare `gsdd ...` is equivalent only when globally installed)
 - Public proof entrypoints: `docs/BROWNFIELD-PROOF.md`, `docs/proof/consumer-node-cli/README.md`, `docs/RUNTIME-SUPPORT.md`, `docs/VERIFICATION-DISCIPLINE.md`
 
 ## Quick Start
 
 Run in your project root:
 ```bash
-npx -y gsdd-cli init
+npx -y workspine init
 ```
 
-In a TTY, `npx -y gsdd-cli init` opens a guided install wizard: choose runtimes first, then decide separately whether repo-wide `AGENTS.md` governance is worth installing. If `gsdd-cli` is globally installed, `gsdd init` is the equivalent shorthand.
+In a TTY, `npx -y workspine init` opens a guided install wizard: choose runtimes first, then decide separately whether repo-wide `AGENTS.md` governance is worth installing. If `workspine` is globally installed, `gsdd init` is the equivalent shorthand.
 
 For personal cross-repo availability, run:
 
 ```bash
-npx -y gsdd-cli install --global
-npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
+npx -y workspine install --global
+npx -y workspine install --global --tools claude,opencode,codex,copilot
 ```
 
 Global install writes selected Workspine skills and native agent surfaces into user-level agent homes. It does not create `.work/` in the current repo.
 
 Optional adapters:
 ```bash
-npx -y gsdd-cli init --tools claude
-npx -y gsdd-cli init --tools opencode
-npx -y gsdd-cli init --tools codex
-npx -y gsdd-cli init --tools agents
-npx -y gsdd-cli init --tools cursor
-npx -y gsdd-cli init --tools all
+npx -y workspine init --tools claude
+npx -y workspine init --tools opencode
+npx -y workspine init --tools codex
+npx -y workspine init --tools agents
+npx -y workspine init --tools cursor
+npx -y workspine init --tools all
 ```
 
 Notes:
-- `npx -y gsdd-cli init` always generates open-standard skills at `.agents/skills/gsdd-*` plus the repo-local helper runtime at `.work/bin/gsdd.mjs`. Workflow helper commands assume the repo root as the current working directory.
+- `npx -y workspine init` always generates open-standard skills at `.agents/skills/gsdd-*` plus the repo-local helper runtime at `.work/bin/gsdd.mjs`. Workflow helper commands assume the repo root as the current working directory.
 - `--tools ...` remains the manual/headless path; legacy runtime aliases such as `cursor`, `copilot`, and `gemini` are still supported for backward compatibility.
 - `--tools claude` also generates native agents at `.claude/agents/gsdd-*.md` and a compatibility plan command alias at `.claude/commands/gsdd-plan.md`.
 - `--tools opencode` also generates native agents at `.opencode/agents/gsdd-*.md`.
@@ -84,7 +84,7 @@ Notes:
 ## The Workflow
 
 ```
-npx -y gsdd-cli init       -> bootstrap (create .work/, copy templates, generate skills/adapters)
+npx -y workspine init      -> bootstrap (create .work/, copy templates, generate skills/adapters)
 /gsdd-new-project          -> .work/SPEC.md + .work/ROADMAP.md  (questioning + codebase audit + research)
 /gsdd-plan N               -> phases/N/PLAN.md      (task breakdown + research)
 /gsdd-execute N            -> code changes           (plan execution with quality gates)
@@ -134,7 +134,7 @@ Architecture notes:
 - Codex CLI uses the always-generated `.agents/skills/gsdd-*` surface as its entry path, relies on `.work/bin/gsdd.mjs` for deterministic helper calls, and can add a native `.codex/agents/gsdd-plan-checker.toml` checker agent.
 - Repo/worktree status helpers compute from git and local workflow state first; local annotations are intent hints only and cannot create ownership, cleanup, or lifecycle authority.
 - Codex VS Code/app are separate surfaces from Codex CLI; do not claim the CLI proof for them unless they expose compatible skill discovery. Fallback is opening or pasting the generated `SKILL.md`.
-- `npx -y gsdd-cli health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `npx -y gsdd-cli update`.
+- `npx -y workspine health` now compares any installed generated runtime surfaces against current render output and routes repairs back through `npx -y workspine update`.
 - Portable lifecycle contracts now align to the roadmap template status grammar: `[ ]`, `[-]`, `[x]`.
 - Phase verification and milestone integration audit are treated as separate concerns.
 - Canonical role contracts use bounded sections, typed output examples, and checklist-driven completion where those structures materially improve downstream reliability.
