@@ -246,7 +246,7 @@ Details worth knowing before you script it:
 | `npx -y workspine models clear --runtime <rt> --agent <id>` | Remove runtime override |
 | `npx -y workspine help` | Show all commands |
 
-If `workspine` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .work/bin/gsdd.mjs ...` from the repo root.
+If `workspine` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .work/bin/gsdd.mjs ...` from the repo root. The `gsdd` binary alias is removed at the next minor release, so new scripts and CI should call `workspine ...` directly.
 
 Browser-proof contract migration: `update` refreshes templates, skills,
 adapters, and helper code, but it does not rewrite historical phase artifacts.

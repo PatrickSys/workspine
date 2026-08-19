@@ -15,7 +15,7 @@ One end-to-end run is recorded, on Codex CLI: plan, execute, a verification catc
 npx -y workspine init
 ```
 
-Needs Node >=22. The npm package is `workspine`, and it installs two equivalent commands, `workspine` and `gsdd`. The workflows are `gsdd-*` and the workspace is `.work/`; Workspine kept the `gsdd` command and those names so existing installs keep working. Releases up to 0.32.0 were published as `gsdd-cli`.
+Needs Node >=22. The npm package is `workspine`, and it installs two equivalent commands, `workspine` and `gsdd`. The workflows are `gsdd-*` and the workspace is `.work/`; Workspine kept the `gsdd` command and those names so existing installs keep working. Releases up to 0.32.0 shipped under a different, now-retired npm package name; see CHANGELOG.md for that history. The `gsdd` binary alias is removed at the next minor release, so new scripts should call `workspine` directly.
 
 </div>
 
@@ -56,7 +56,7 @@ Workspine ships 13 workflows; the [User Guide](docs/USER-GUIDE.md) lists them al
 
 ## Getting Started
 
-`npx -y gsdd-cli init` in a terminal opens a guided install wizard: pick your runtimes, choose whether to add a repo-wide `AGENTS.md` governance block, then set planning defaults. `gsdd init` is the shorthand once the package is installed globally.
+`npx -y workspine init` in a terminal opens a guided install wizard: pick your runtimes, choose whether to add a repo-wide `AGENTS.md` governance block, then set planning defaults. `gsdd init` is the shorthand once the package is installed globally.
 
 Whatever you pick, `init` always writes:
 
@@ -64,9 +64,9 @@ Whatever you pick, `init` always writes:
 - `.agents/skills/gsdd-*` are the portable workflow entry points your agent reads.
 - `.work/bin/gsdd.mjs` is generated internal workflow plumbing, not a second public package CLI. Generated skills call it from the repo root.
 
-<img src="assets/workspine-terminal.svg" alt="Terminal running npx -y gsdd-cli init --tools claude, which writes .work, portable skills, local helpers, and Claude Code surfaces, then names the command to run next." width="880">
+<img src="assets/workspine-terminal.svg" alt="Terminal running npx -y workspine init --tools claude, which writes .work, portable skills, local helpers, and Claude Code surfaces, then names the command to run next." width="880">
 
-The wizard only controls the native adapters and the governance block. After that, `npx -y gsdd-cli health` checks the generated files against current render output instead of asking you to trust manual review.
+The wizard only controls the native adapters and the governance block. After that, `npx -y workspine health` checks the generated files against current render output instead of asking you to trust manual review.
 
 Then pick a first workflow:
 
@@ -83,8 +83,8 @@ Then pick a first workflow:
 For CI or scripted setup:
 
 ```bash
-npx -y gsdd-cli init --auto --tools all
-npx -y gsdd-cli init --auto --tools codex --brief path/to/brief.md
+npx -y workspine init --auto --tools all
+npx -y workspine init --auto --tools codex --brief path/to/brief.md
 ```
 
 `init --auto` skips the wizard and takes defaults. With `--brief`, `gsdd-new-project` bootstraps `SPEC.md` and `ROADMAP.md` from that document, then stops. The `--auto` on `install --global` means something else, described below.
@@ -101,9 +101,9 @@ The proof pack records a full plan -> execute -> verify lifecycle on a real cons
 To make Workspine available across repos from your personal agent home:
 
 ```bash
-npx -y gsdd-cli install --global
-npx -y gsdd-cli install --global --auto
-npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot
+npx -y workspine install --global
+npx -y workspine install --global --auto
+npx -y workspine install --global --tools claude,opencode,codex,copilot
 ```
 
 For a fresh install, pick targets in the interactive picker or pass `--tools <targets>`. Use `--auto` to refresh detected existing agent homes; when it detects none it writes nothing and prints one exact command per target. It does not create `.work/` in the current repo.
@@ -127,20 +127,20 @@ Leave `.work/.local/` untracked, along with mutable runtime files such as `state
 Model profiles choose model cost and quality. Rigor is a separate configuration axis for workflow alignment and quality gates:
 
 ```bash
-npx -y gsdd-cli models profile quality   # maximize model quality
-npx -y gsdd-cli models profile balanced  # default cost/quality balance
-npx -y gsdd-cli models profile budget    # minimize model cost
-npx -y gsdd-cli rigor                    # inspect configuration and effective rigor gates
-npx -y gsdd-cli rigor high               # update configuration to the high rigor gates
+npx -y workspine models profile quality   # maximize model quality
+npx -y workspine models profile balanced  # default cost/quality balance
+npx -y workspine models profile budget    # minimize model cost
+npx -y workspine rigor                    # inspect configuration and effective rigor gates
+npx -y workspine rigor high               # update configuration to the high rigor gates
 ```
 
 `gsdd rigor` inspects or updates configuration.
 
 ## Troubleshooting
 
-Inside a repo-local `.work/` workspace, start with `npx -y gsdd-cli health`. It compares generated runtime surfaces against current render output and prints the exact repair command, usually `npx -y gsdd-cli update --tools <adapter>`.
+Inside a repo-local `.work/` workspace, start with `npx -y workspine health`. It compares generated runtime surfaces against current render output and prints the exact repair command, usually `npx -y workspine update --tools <adapter>`.
 
-To repair or refresh a global install, run `npx -y gsdd-cli install --global --tools <targets>`, or `--auto` for a detected existing install. It restores managed files you deleted and rewrites stale ones you have not touched, and it never overwrites your edits. If a managed file was hand-edited, or an untracked file sits where a managed one belongs, preflight stops and names it, and nothing is written for any selected target until you fix it.
+To repair or refresh a global install, run `npx -y workspine install --global --tools <targets>`, or `--auto` for a detected existing install. It restores managed files you deleted and rewrites stale ones you have not touched, and it never overwrites your edits. If a managed file was hand-edited, or an untracked file sits where a managed one belongs, preflight stops and names it, and nothing is written for any selected target until you fix it.
 
 More cases: [User Guide](docs/USER-GUIDE.md).
 
@@ -167,33 +167,33 @@ Use Workspine when a feature takes more than one session, or when a task has to 
 ## CLI
 
 ```bash
-npx -y gsdd-cli health                  # workspace integrity check
-npx -y gsdd-cli update                  # regenerate stale runtime surfaces
-npx -y gsdd-cli update --templates      # also refresh template payloads
-npx -y gsdd-cli next --json             # what to do next, read from .work
-npx -y gsdd-cli next --format human     # compact supervisor card
-npx -y gsdd-cli next --init             # bootstrap .work continuity state
-npx -y gsdd-cli git-identity check      # read-only identity check before a commit
-npx -y gsdd-cli rigor                   # inspect or update rigor configuration
-npx -y gsdd-cli models profile quality  # prefer model quality
-npx -y gsdd-cli models profile budget   # minimize cost
-npx -y gsdd-cli find-phase              # locate a roadmap phase
-npx -y gsdd-cli phase-status            # inspect or update phase status
-npx -y gsdd-cli verify                  # run verification checks
-npx -y gsdd-cli scaffold                # scaffold planning surfaces
-npx -y gsdd-cli file-op                 # repo-local copy/delete helper
-npx -y gsdd-cli help                    # print command help
-npx -y gsdd-cli journey                 # milestone and phase delivery record # (experimental)
-npx -y gsdd-cli remember "Use direct commits" --type rule --scope repo # (experimental)
-npx -y gsdd-cli decisions query "current git flow" --path bin/gsdd.mjs # (experimental)
-npx -y gsdd-cli decisions promote <id> --authority owner --approval-ref <non-sensitive-ref> # (experimental)
-npx -y gsdd-cli decisions reject <id> --reason "No longer applicable" # (experimental)
-npx -y gsdd-cli decisions invalidate <id> --reason "Superseded by the current policy" # (experimental)
+npx -y workspine health                  # workspace integrity check
+npx -y workspine update                  # regenerate stale runtime surfaces
+npx -y workspine update --templates      # also refresh template payloads
+npx -y workspine next --json             # what to do next, read from .work
+npx -y workspine next --format human     # compact supervisor card
+npx -y workspine next --init             # bootstrap .work continuity state
+npx -y workspine git-identity check      # read-only identity check before a commit
+npx -y workspine rigor                   # inspect or update rigor configuration
+npx -y workspine models profile quality  # prefer model quality
+npx -y workspine models profile budget   # minimize cost
+npx -y workspine find-phase              # locate a roadmap phase
+npx -y workspine phase-status            # inspect or update phase status
+npx -y workspine verify                  # run verification checks
+npx -y workspine scaffold                # scaffold planning surfaces
+npx -y workspine file-op                 # repo-local copy/delete helper
+npx -y workspine help                    # print command help
+npx -y workspine journey                 # milestone and phase delivery record # (experimental)
+npx -y workspine remember "Use direct commits" --type rule --scope repo # (experimental)
+npx -y workspine decisions query "current git flow" --path bin/gsdd.mjs # (experimental)
+npx -y workspine decisions promote <id> --authority owner --approval-ref <non-sensitive-ref> # (experimental)
+npx -y workspine decisions reject <id> --reason "No longer applicable" # (experimental)
+npx -y workspine decisions invalidate <id> --reason "Superseded by the current policy" # (experimental)
 ```
 
 Decision promotion is a cooperative, auditable owner assertion rather than human authentication. The [User Guide](docs/USER-GUIDE.md) has the record format.
 
-Commands that already write to `.work/` check npm for a newer version and print one line. Read-only commands, `next` and `verify` among them, never reach the network and never write the cache. The check is anonymous, times out after two seconds, and sends no credentials or repository data. A failed check stays silent. Its cache under `.work/.local` is best-effort, with no lock and no cross-process concurrency guarantee. Opt out with `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0`. `health` and `update` are network-free; run `npx -y gsdd-cli update` for an explicit repair.
+Commands that already write to `.work/` check npm for a newer version and print one line. Read-only commands, `next` and `verify` among them, never reach the network and never write the cache. The check is anonymous, times out after two seconds, and sends no credentials or repository data. A failed check stays silent. Its cache under `.work/.local` is best-effort, with no lock and no cross-process concurrency guarantee. Opt out with `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0`. `health` and `update` are network-free; run `npx -y workspine update` for an explicit repair.
 
 Full reference: [User Guide](docs/USER-GUIDE.md) · [Runtime Support](docs/RUNTIME-SUPPORT.md) · [Verification Discipline](docs/VERIFICATION-DISCIPLINE.md)
 

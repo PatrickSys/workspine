@@ -3361,16 +3361,17 @@ describe('G37 - Launch Surface Consistency', () => {
     }
 
     // The product is Workspine but the command is gsdd. Both names must appear, and the
-    // doc must say why the gsdd names stayed. The exact wording is free. README.md still
-    // carries the retained legacy package-history note (renamed at Phase 14 step 16);
-    // docs/USER-GUIDE.md is fully renamed as of Phase 14 step 9, so it names the current
-    // `workspine` package alongside the retained `gsdd`/.work/ contracts instead.
-    // The legacy package name is declared once, in README.md's own release-history note;
-    // derive it from there instead of hard-coding a second copy of the string here.
-    const legacyPackageName = (rootReadme.match(/published as `([\w-]+)`/) || [])[1];
-    assert.ok(legacyPackageName, 'README.md must declare the retained legacy package name in its release-history note.');
+    // doc must say why the gsdd names stayed. The exact wording is free. As of Phase 14
+    // step 16, README.md no longer spells out the literal retired npm package name inline
+    // (that residue is gone so `bash .work/phase14-gate.sh residue-cli` stays clean without
+    // an allowlist, which step 28 is the only step allowed to create); it points to
+    // CHANGELOG.md for that history instead. docs/USER-GUIDE.md is fully renamed as of
+    // Phase 14 step 9, so it names the current `workspine` package alongside the retained
+    // `gsdd`/.work/ contracts instead.
+    assert.match(rootReadme, /0\.32\.0[\s\S]{0,160}CHANGELOG\.md/i,
+      'README.md must point to CHANGELOG.md for the retired npm package-name history. FIX: Reference CHANGELOG.md in the release-history note near the 0.32.0 boundary.');
     for (const [label, content, names] of [
-      ['README.md', rootReadme, [legacyPackageName, '`gsdd`', '.work/']],
+      ['README.md', rootReadme, ['`gsdd`', '.work/']],
       ['docs/USER-GUIDE.md', userGuide, ['`workspine`', '`gsdd`', '.work/']],
     ]) {
       for (const name of names) {
@@ -3379,6 +3380,8 @@ describe('G37 - Launch Surface Consistency', () => {
       }
       assert.match(content, /keep working|retained/i,
         `${label} must say why the gsdd names stayed. FIX: Explain that the old names are kept so existing installs keep working.`);
+      assert.match(content, /`gsdd`[^`]{0,160}removed at the next minor|removed at the next minor[^`]{0,160}`gsdd`/i,
+        `${label} must record that the gsdd binary alias is removed at the next minor. FIX: Add the deprecation note next to the retained-names explanation.`);
     }
     assert.match(rootReadme, /began as a fork of.*Get Shit Done/i,
       'README.md must keep one brief appreciative lineage note. FIX: Add a concise lineage note that acknowledges GSD/GSDD without making it the active product identity.');
