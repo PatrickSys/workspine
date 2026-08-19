@@ -45,7 +45,15 @@ MILESTONES.md
 .codebase-context/
 _bmad/
 .cursor/
-# Local Workspine dogfood continuity. If .work/ exists here, start at .work/README.md; keep .work/ untracked and out of generated consumer surfaces.
+# .work/ is the Workspine planning layer for this repo: the plans, decisions, phase
+# records and session state that the dogfooded workflow reads and writes. If .work/
+# exists in your checkout, start at .work/README.md, which indexes the rest of it.
+# It is gitignored on purpose. Planning is private working material and this is a
+# public repo, so .work/ is never committed here and is never emitted into a
+# generated consumer surface. The consequence is real: a fresh clone of workspine has
+# no .work/ and no git history to recover one from. The durable copy lives in the
+# private ideaspine repo, mirrored under .private/. If you need the planning layer,
+# get it from there. Do not un-ignore this directory to back it up.
 .work/
 
 # Local temp files (slides, previews, scratch)

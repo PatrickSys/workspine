@@ -1,0 +1,7 @@
+#!/bin/sh
+# Owner standing order 2026-08-19: no Claude Code session links in any commit, ever.
+# Strips the trailer regardless of which agent or session wrote it.
+sed -i -E '/^Claude-Session:[[:space:]]*https?:\/\/claude\.ai\//d; /^Co-Authored-By: Claude/d; /^[[:space:]]*(🤖 )?Generated with \[Claude Code\]/d' "$1"
+# collapse any trailing blank lines the removal left behind
+perl -0777 -i -pe 's/\n{3,}\z/\n/' "$1" 2>/dev/null || true
+exit 0
