@@ -630,8 +630,8 @@ describe('G18 - Consumer Governance Completeness', () => {
   // front-loading every workflow path into the AGENTS surface.
   test('agents.block.md points to the portable workflow directory', () => {
     const content = fs.readFileSync(AGENTS_BLOCK, 'utf-8');
-    assert.match(content, /\.agents\/skills\/gsdd-\*\/SKILL\.md/,
-      'agents.block.md must point to the portable workflow directory. FIX: Add a .agents/skills/gsdd-*/SKILL.md pointer.');
+    assert.match(content, /\.agents\/skills\/work-\*\/SKILL\.md/,
+      'agents.block.md must point to the portable workflow directory. FIX: Add a .agents/skills/work-*/SKILL.md pointer.');
   });
 
   test('agents.block.md keeps only a compact set of anchor workflow names', () => {
@@ -641,7 +641,7 @@ describe('G18 - Consumer Governance Completeness', () => {
         `agents.block.md must keep ${anchor} as an anchor workflow. FIX: Add ${anchor} to the compact workflow list.`);
     }
 
-    const explicitSkillPaths = [...content.matchAll(/\.agents\/skills\/gsdd-[a-z-]+\/SKILL\.md/g)];
+    const explicitSkillPaths = [...content.matchAll(/\.agents\/skills\/work-[a-z-]+\/SKILL\.md/g)];
     assert.ok(explicitSkillPaths.length === 0,
       `agents.block.md should not enumerate every workflow path. Found ${explicitSkillPaths.length} explicit paths. FIX: Keep only the wildcard directory pointer.`);
   });
@@ -703,7 +703,7 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
   test('README qualifies Cursor/Copilot/Gemini slash guidance', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers `.agents\/skills`; if it does not, open `.agents\/skills\/gsdd-<workflow>\/SKILL\.md`/i,
+    assert.match(readme, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers `.agents\/skills`; if it does not, open `.agents\/skills\/work-<workflow>\/SKILL\.md`/i,
       'README must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording plus SKILL.md fallback.');
   });
 
@@ -717,9 +717,9 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     assert.match(readme, /guided install wizard/i,
       'README.md must describe the init command as a guided install wizard. FIX: Update the Platform Adapters or Getting Started section.');
-    assert.match(readme, /npx -y \S+ init/i,
-      'README.md must prefer an npx -y <package> init form for humans. FIX: Replace primary bare gsdd init guidance.');
-    assert.match(readme, /npx -y \S+ install --global/i,
+    assert.match(readme, /npx -y workspine init/i,
+      'README.md must prefer an npx -y workspine init form for humans. FIX: Replace primary bare gsdd init guidance.');
+    assert.match(readme, /npx -y workspine install --global/i,
       'README.md must describe the global agent install path. FIX: Add explicit global/local install contract text.');
     assert.match(readme, /does not create `.work\/`/i,
       'README.md must state that global install does not bootstrap repo-local planning state. FIX: Add global install boundary wording.');
@@ -820,7 +820,7 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const quickstart = sectionByHeading(readme, '### Quickstart (after init)');
     assert.match(quickstart, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers/i,
       'Quickstart must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording.');
-    assert.match(quickstart, /if it does not, open `.agents\/skills\/gsdd-<workflow>\/SKILL\.md`/i,
+    assert.match(quickstart, /if it does not, open `.agents\/skills\/work-<workflow>\/SKILL\.md`/i,
       'Quickstart must include SKILL.md fallback only when discovery is unavailable. FIX: Add fallback wording after slash guidance.');
   });
 
@@ -1251,7 +1251,7 @@ describe('G21 - Consumer Surface Completeness', () => {
     const tsStart = readme.indexOf('## Troubleshooting');
     const tsEnd = readme.indexOf('\n## ', tsStart + 1);
     const section = readme.slice(tsStart, tsEnd > -1 ? tsEnd : tsStart + 1000);
-    assert.match(section, /npx -y \S+ health|gsdd health/,
+    assert.match(section, /npx -y workspine health|gsdd health/,
       'Troubleshooting must mention health as first step. FIX: Add an npx -y <package> health as first troubleshooting step.');
   });
 
@@ -2655,7 +2655,7 @@ describe('G11b - Launch Claim Hardening', () => {
       'Public/generated docs must not leak internal phase tracking labels. FIX: Describe the durable capability instead of the implementation phase.');
     assert.doesNotMatch(publicDocs, /Current State is set/i,
       'Public/generated docs must use ROADMAP/phase-status language, not stale Current State wording. FIX: Reference ROADMAP phase status.');
-    assert.match(publicDocs, /npx -y \S+ init/i,
+    assert.match(publicDocs, /npx -y workspine init/i,
       'Public/generated docs must preserve npx-first human guidance. FIX: Keep an npx -y <package> init in onboarding copy.');
     assert.match(publicDocs, /node \.work\/bin\/gsdd\.mjs/i,
       'Public/generated docs must preserve repo-local workflow helper command guidance. FIX: Keep node .work/bin/gsdd.mjs examples.');
@@ -3387,7 +3387,7 @@ describe('G37 - Launch Surface Consistency', () => {
       'README.md must keep one brief appreciative lineage note. FIX: Add a concise lineage note that acknowledges GSD/GSDD without making it the active product identity.');
     assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
       'distilled/README.md must keep the same brief appreciative lineage note. FIX: Mirror the concise lineage note in the distilled public surface.');
-    assert.match(helpText, /Workspine is the public product name and the npm package; the retained command, workflow, and workspace contracts stay gsdd, gsdd-\*, and \.work\/.*legacy planning workspaces are still read/i,
+    assert.match(helpText, /Workspine is the public product name and the npm package; the retained command and workspace contracts stay gsdd and \.work\/, and the workflows are work-\*; legacy planning workspaces are still read/i,
       'init-runtime help text must explain the retained technical contracts without advertising the legacy folder. FIX: Keep the Workspine-plus-retained-contract note aligned to .work/.');
     assert.match(pkg.description, /^Workspine\b/,
       'package.json description must be Workspine-led after Phase 24. FIX: Align package metadata with the public product name.');
@@ -4198,7 +4198,7 @@ describe('G45 - Runtime Surface Freshness Contract', () => {
 
     assert.match(readme, /gsdd health.*render output|current render output/i,
       'README.md must explain that generated runtime surfaces are checked against current render output. FIX: Add the runtime-surface freshness note.');
-    assert.match(readme, /npx -y \S+ update|gsdd update/i,
+    assert.match(readme, /npx -y workspine update|gsdd update/i,
       'README.md must include deterministic repair guidance through an npx -y <package> update or global gsdd update. FIX: Add the repair path.');
     assert.match(support, /Generated-surface freshness/i,
       'docs/RUNTIME-SUPPORT.md must have a generated-surface freshness section. FIX: Add the explicit runtime-boundary section.');

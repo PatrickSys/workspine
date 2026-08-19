@@ -55,8 +55,8 @@ const TEMPLATE_FILES = Object.freeze([
 ]);
 const TEMPLATE_DIRS = Object.freeze(['.work/templates', '.work/templates/delegates', '.work/templates/research', '.work/templates/codebase', '.work/templates/brownfield-change', '.work/templates/roles']);
 const RUNTIME_SHIMS = Object.freeze(['.work/bin/gsdd.mjs', '.work/bin/gsdd', '.work/bin/gsdd.cmd', '.work/bin/gsdd.ps1']);
-const GENERATED_SKILL_FILES = Object.freeze(WORKFLOWS.map((workflow) => `.agents/skills/gsdd-${workflow}/SKILL.md`));
-const GENERATED_SKILL_DIRS = Object.freeze(WORKFLOWS.map((workflow) => `.agents/skills/gsdd-${workflow}`));
+const GENERATED_SKILL_FILES = Object.freeze(WORKFLOWS.map((workflow) => `.agents/skills/work-${workflow}/SKILL.md`));
+const GENERATED_SKILL_DIRS = Object.freeze(WORKFLOWS.map((workflow) => `.agents/skills/work-${workflow}`));
 const GENERATED_TEMPLATE_FILES = Object.freeze(TEMPLATE_FILES.map((file) => `.work/templates/${file}`));
 const GENERATED_ROLE_FILES = Object.freeze(ROLES.map((file) => `.work/templates/roles/${file}`));
 const GENERATED_HELPER_FILES = Object.freeze(HELPERS.map((file) => `.work/bin/lib/${file}`));

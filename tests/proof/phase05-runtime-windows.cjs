@@ -206,7 +206,7 @@ function catalog() {
     targets: ['claude', 'opencode', 'codex'],
     exclusions: ['auth/model/billable sessions', 'update-awareness', 'browser', 'P05-07', 'release/public registry', 'Node-20 acquisition'],
     outputRoots: {
-      repo: ['.agents/skills/gsdd-*', '.work/bin/gsdd.mjs', '.claude/{skills,commands,agents}', '.opencode/{commands,agents}', '.codex/agents'],
+      repo: ['.agents/skills/work-*', '.work/bin/gsdd.mjs', '.claude/{skills,commands,agents}', '.opencode/{commands,agents}', '.codex/agents'],
       globalManifests: [
         'HOME/.claude/workspine-file-manifest.json', 'HOME/.agents/workspine-file-manifest.json',
         'XDG_CONFIG_HOME/opencode/workspine-file-manifest.json', 'HOME/.codex/workspine-file-manifest.json',

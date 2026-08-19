@@ -1783,7 +1783,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
     for (const cmd of commandNames) {
       if (internalCommands.includes(cmd)) continue;
       assert.ok(
-        new RegExp(`npx -y \\S+ ${cmd}\\b`).test(rootReadme) || rootReadme.includes(`gsdd ${cmd}`),
+        new RegExp(`npx -y workspine ${cmd}\\b`).test(rootReadme) || rootReadme.includes(`gsdd ${cmd}`),
         `Root README CLI commands table missing "${cmd}". FIX: Add an npx-first "npx -y <package> ${cmd}" row to the CLI Commands table.`
       );
     }
@@ -1796,8 +1796,8 @@ describe('G12 — Documentation Accuracy Guards', () => {
     assert.ok(diagramMatch, 'distilled/README must have a workflow diagram code block');
     const diagram = diagramMatch[1];
 
-    // Extract /gsdd-* references from the diagram (canonical hyphen form)
-    const diagramCommands = [...diagram.matchAll(/\/gsdd-([a-z-]+)/g)].map(m => m[1]);
+    // Extract /work-* references from the diagram (canonical hyphen form)
+    const diagramCommands = [...diagram.matchAll(/\/work-([a-z-]+)/g)].map(m => m[1]);
 
     // Get valid workflow names (strip 'work-' prefix to get the command part)
     const workflowNames = (workflowsContent.match(/name:\s*'work-([a-z-]+)'/g) || [])
@@ -1806,7 +1806,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
     for (const cmd of diagramCommands) {
       assert.ok(
         workflowNames.includes(cmd),
-        `distilled/README workflow diagram references "/gsdd-${cmd}" which is not in WORKFLOWS array. FIX: Remove ghost command or add the workflow.`
+        `distilled/README workflow diagram references "/work-${cmd}" which is not in WORKFLOWS array. FIX: Remove ghost command or add the workflow.`
       );
     }
   });
@@ -1913,15 +1913,15 @@ describe('G35b - Role and Delegate Reference Integrity', () => {
 describe('G34 - Command Naming Invariants', () => {
   const workflowFiles = fs.readdirSync(WORKFLOWS_DIR).filter(f => f.endsWith('.md'));
 
-  // G34.1: No colon-separated /gsdd: in workflow files (canonical form is /gsdd-)
+  // G34.1: No colon-separated /work: in workflow files (canonical form is /work-)
   for (const file of workflowFiles) {
-    test(`${file} uses hyphen-separated /gsdd- syntax (not /gsdd:)`, () => {
+    test(`${file} uses hyphen-separated /work- syntax (not /work:)`, () => {
       const content = fs.readFileSync(path.join(WORKFLOWS_DIR, file), 'utf-8');
-      const colonMatches = [...content.matchAll(/\/gsdd:[a-z-]+/g)].map(m => m[0]);
+      const colonMatches = [...content.matchAll(/\/work:[a-z-]+/g)].map(m => m[0]);
       assert.strictEqual(
         colonMatches.length,
         0,
-        `${file} contains colon-separated command refs: ${colonMatches.join(', ')}. FIX: Replace /gsdd: with /gsdd- throughout.`
+        `${file} contains colon-separated command refs: ${colonMatches.join(', ')}. FIX: Replace /work: with /work- throughout.`
       );
     });
   }
