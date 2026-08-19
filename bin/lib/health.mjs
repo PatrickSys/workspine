@@ -12,6 +12,7 @@ import { evaluateLifecycleState } from './lifecycle-state.mjs';
 import { evaluateRuntimeFreshness } from './runtime-freshness.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { stateAuthorityGate } from './state-dir.mjs';
+import { WORKFLOW_ID_PREFIX } from './workflows.mjs';
 
 function statePath(stateDirName, relativePath = '') {
   return relativePath ? `${stateDirName}/${relativePath}` : stateDirName;
@@ -345,7 +346,7 @@ function hasGeneratedSkillDirectory(dir) {
   try {
     return readdirSync(dir, { withFileTypes: true }).some((entry) => {
       return entry.isDirectory()
-        && entry.name.startsWith('gsdd-')
+        && entry.name.startsWith(WORKFLOW_ID_PREFIX)
         && existsSync(join(dir, entry.name, 'SKILL.md'));
     });
   } catch {
@@ -356,7 +357,7 @@ function hasGeneratedSkillDirectory(dir) {
 function hasGeneratedMarkdownFile(dir) {
   try {
     return readdirSync(dir, { withFileTypes: true }).some((entry) => {
-      return entry.isFile() && entry.name.startsWith('gsdd-') && entry.name.endsWith('.md');
+      return entry.isFile() && entry.name.startsWith(WORKFLOW_ID_PREFIX) && entry.name.endsWith('.md');
     });
   } catch {
     return false;
@@ -366,7 +367,7 @@ function hasGeneratedMarkdownFile(dir) {
 function hasGeneratedTomlFile(dir) {
   try {
     return readdirSync(dir, { withFileTypes: true }).some((entry) => {
-      return entry.isFile() && entry.name.startsWith('gsdd-') && entry.name.endsWith('.toml');
+      return entry.isFile() && entry.name.startsWith(WORKFLOW_ID_PREFIX) && entry.name.endsWith('.toml');
     });
   } catch {
     return false;

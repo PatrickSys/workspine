@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { WORKFLOW_ID_PREFIX } from './workflows.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -313,7 +314,7 @@ function renderAgentsBoundedBlock(options = {}) {
   const planningLine = stateDirName === DEFAULT_STATE_DIR_NAME
     ? 'Planning state: `.work/` (the sole active root; supported `.planning/` state requires explicit migration).'
     : 'Planning state: `.planning/` (legacy workspace; new Workspine projects use `.work/`).';
-  return `## GSDD Governance (Generated)\n\n- Framework: GSDD\n- ${planningLine}\n- Workflows: .agents/skills/gsdd-*/SKILL.md`;
+  return `## GSDD Governance (Generated)\n\n- Framework: GSDD\n- ${planningLine}\n- Workflows: .agents/skills/${WORKFLOW_ID_PREFIX}*/SKILL.md`;
 }
 
 function renderAgentsFileContent(options = {}) {

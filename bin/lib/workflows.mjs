@@ -23,6 +23,15 @@ export const WORKFLOWS = [
   defineWorkflow({ name: 'gsdd-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', mutatesArtifacts: false }),
 ];
 
+// Every shipped command id carries the same prefix. Deriving it from the manifest
+// keeps the health scan and the rendering skill glob from drifting off the ids above.
+const [firstWorkflow] = WORKFLOWS;
+export const WORKFLOW_ID_PREFIX = firstWorkflow.name.slice(0, firstWorkflow.name.indexOf('-') + 1);
+
+if (!WORKFLOWS.every((entry) => entry.name.startsWith(WORKFLOW_ID_PREFIX))) {
+  throw new Error(`Workflow manifest ids must all start with '${WORKFLOW_ID_PREFIX}'`);
+}
+
 const WORKFLOW_ID_BY_SLUG = Object.freeze(Object.fromEntries(
   WORKFLOWS.map((entry) => [entry.workflow.replace(/\.md$/, ''), entry.name]),
 ));
