@@ -7,9 +7,9 @@ Scope boundary: you write a checkpoint file. You do not route, present status, o
 </role>
 
 <prerequisites>
-`.work/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed).
+`.work/` must exist (from `npx -y workspine init`, or `gsdd init` when globally installed).
 
-If `.work/` does not exist, stop and tell the user to run `npx -y gsdd-cli init` first.
+If `.work/` does not exist, stop and tell the user to run `npx -y workspine init` first.
 </prerequisites>
 
 <repo_root_helper_contract>

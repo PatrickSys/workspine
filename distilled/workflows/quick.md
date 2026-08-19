@@ -16,9 +16,9 @@ They reuse the same planner, executor, and verifier roles but skip research and 
 </anti_patterns>
 
 <prerequisites>
-`.work/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed). ROADMAP.md is NOT required -- quick tasks work during any project phase.
+`.work/` must exist (from `npx -y workspine init`, or `gsdd init` when globally installed). ROADMAP.md is NOT required -- quick tasks work during any project phase.
 
-If `.work/` does not exist, stop and tell the user to run `npx -y gsdd-cli init` first.
+If `.work/` does not exist, stop and tell the user to run `npx -y workspine init` first.
 </prerequisites>
 
 <repo_root_helper_contract>

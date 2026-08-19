@@ -11,9 +11,9 @@ At the start of status reporting, run `node .work/bin/gsdd.mjs control-map --jso
 </control_map>
 
 <prerequisites>
-`.work/` must exist (from `npx -y gsdd-cli init`, or `gsdd init` when globally installed).
+`.work/` must exist (from `npx -y workspine init`, or `gsdd init` when globally installed).
 
-This is a read-only workflow. No files are created, modified, or deleted. If `.work/` does not exist, tell the user to run `npx -y gsdd-cli init` and stop.
+This is a read-only workflow. No files are created, modified, or deleted. If `.work/` does not exist, tell the user to run `npx -y workspine init` and stop.
 </prerequisites>
 
 <repo_root_helper_contract>
@@ -35,7 +35,7 @@ Run `node .work/bin/gsdd.mjs next --json` first for a deterministic, read-only c
 <check_existence>
 Check for project artifacts in order:
 
-1. **No `.work/` directory** — tell the user to run `npx -y gsdd-cli init`. Stop.
+1. **No `.work/` directory** — tell the user to run `npx -y workspine init`. Stop.
 2. **If `.work/brownfield-change/CHANGE.md` exists and `Current posture` is not `closed`** — treat this as the active medium-scope brownfield continuity state. Go to Branch F.
    - If `Current posture` is `closed`, keep the file as historical context only and continue checking ROADMAP/SPEC state.
 3. **No `.work/ROADMAP.md` AND no `.work/SPEC.md`** — check for non-phase brownfield artifacts:

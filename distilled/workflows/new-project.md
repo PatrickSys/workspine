@@ -10,7 +10,7 @@ Check `.work/config.json` for `autoAdvance: true`. If NOT set, skip this section
 
 When `autoAdvance: true`, this workflow runs non-interactively only for brief-driven `SPEC.md` and `ROADMAP.md` bootstrap. It does not authorize any later lifecycle work.
 
-1. **Input:** Read `.work/PROJECT_BRIEF.md`. If it does not exist, stop with a clear error: "Auto mode requires a project brief. Provide one via `npx -y gsdd-cli init --auto --tools <runtime> --brief <path>` or place it at `.work/PROJECT_BRIEF.md`."
+1. **Input:** Read `.work/PROJECT_BRIEF.md`. If it does not exist, stop with a clear error: "Auto mode requires a project brief. Provide one via `npx -y workspine init --auto --tools <runtime> --brief <path>` or place it at `.work/PROJECT_BRIEF.md`."
 
 2. **Extract context from brief:** Parse the brief document to understand the project goal, target users, constraints, requirements, and out-of-scope items. Apply the same requirement categorization as `<questioning>` (Table Stakes / Differentiators / Out of Scope). Do NOT ask interactive questions.
 

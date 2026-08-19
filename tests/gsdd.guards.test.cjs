@@ -774,16 +774,16 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
     assert.doesNotMatch(agentsBlock, /adapters are generated under `bin\/`/i,
       'Generated AGENTS block must not describe adapters as generated under bin/. FIX: Describe .agents/skills, .work/bin, and native adapter directories.');
-    assert.match(agentsBlock, /npx -y gsdd-cli init/i,
-      'Generated AGENTS block must prefer npx -y gsdd-cli init. FIX: Qualify bare gsdd as global-only.');
-    assert.match(agentsBlock, /npx -y gsdd-cli health/i,
+    assert.match(agentsBlock, /npx -y workspine init/i,
+      'Generated AGENTS block must prefer npx -y workspine init. FIX: Qualify bare gsdd as global-only.');
+    assert.match(agentsBlock, /npx -y workspine health/i,
       'Generated AGENTS block must tell agents how to verify installed skill surfaces. FIX: Add health guidance.');
-    assert.match(agentsBlock, /npx -y gsdd-cli update/i,
+    assert.match(agentsBlock, /npx -y workspine update/i,
       'Generated AGENTS block must tell agents how to repair generated-surface drift. FIX: Add update guidance.');
     assert.match(agentsBlock, /Codex CLI/i,
       'Generated AGENTS block must distinguish Codex CLI from Codex VS Code/app. FIX: Use Codex CLI in the $gsdd-plan invocation guidance.');
     assert.doesNotMatch(newProject, /`gsdd init --auto --brief <path>`/,
-      'Generated new-project workflow must not suggest bare gsdd init for auto brief setup. FIX: Use npx -y gsdd-cli init --auto --tools <runtime> --brief <path>.');
+      'Generated new-project workflow must not suggest bare gsdd init for auto brief setup. FIX: Use npx -y workspine init --auto --tools <runtime> --brief <path>.');
   });
 
   test('public docs distinguish Codex CLI from Codex VS Code and app fallback', () => {

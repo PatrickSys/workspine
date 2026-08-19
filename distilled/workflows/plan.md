@@ -627,7 +627,7 @@ Report to the user what was accomplished, then present the next step:
 ---
 **Completed:** Phase planning — created `.work/phases/{phase_dir}/{plan_id}-PLAN.md`.
 **Planning stops here:** `gsdd-plan` ends after the plan artifact is written. Do not start implementation in this same run, and do not treat imperative handoff text as execution authorization.
-Installed generated runtime surfaces are trusted through rendering, not reviewer memory: `npx -y gsdd-cli health` compares any local generated skill/adapter surfaces against current render output, and `npx -y gsdd-cli update` regenerates them when they drift. Bare `gsdd health` / `gsdd update` are equivalent only when globally installed.
+Installed generated runtime surfaces are trusted through rendering, not reviewer memory: `npx -y workspine health` compares any local generated skill/adapter surfaces against current render output, and `npx -y workspine update` regenerates them when they drift. Bare `gsdd health` / `gsdd update` are equivalent only when globally installed.
 **Next workflow:** `/gsdd-execute` — start execution in a separate run when the user explicitly wants implementation to begin
 Also available: `/gsdd-plan` for another wave, or `/gsdd-progress` for overall status.
 Consider clearing context before starting the next workflow for best results.
