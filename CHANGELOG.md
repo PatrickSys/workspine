@@ -1,3 +1,22 @@
+## Rename receipt: `gsdd-cli` is now `workspine`
+
+Every release listed below, up to and including 0.32.0, was published to npm as
+`gsdd-cli`. From the next release the npm package name is `workspine`. It still
+installs the `gsdd` command as a transitional alias next to the new `workspine`
+command so existing installs keep working; that alias is removed at the next
+minor release. The workspace directory stays `.work/` and the entrypoint stays
+`bin/gsdd.mjs`. The workflow command IDs moved off the `gsdd-` prefix to `work-`
+(`work-plan`, `work-execute`, `work-verify`, and the rest).
+
+The release history below is left verbatim, retired package name and old command
+IDs included, because rewriting shipped release notes would falsify them. That is
+why `CHANGELOG.md` is the single entry in `docs/RENAME-ALLOWLIST.txt`, the pinned
+list of paths allowed to keep pre-rename text.
+
+Upgrading an existing local install leaves the previously generated `gsdd-*`
+files in place alongside the new `work-*` ones; local generation has no pruning
+pass. Delete the stale `gsdd-*` files by hand after upgrading.
+
 # [0.32.0](https://github.com/PatrickSys/workspine/compare/v0.31.2...v0.32.0) (2026-07-12)
 
 
