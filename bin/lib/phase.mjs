@@ -19,6 +19,7 @@ import { getWorkPaths, resolveActiveMilestoneDir } from './work-context.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { assertStateAuthority } from './state-dir.mjs';
 import { captureGitCandidate, hashCandidateArtifact, hashExactFile, resolveCandidateArtifact } from './candidate-provenance.mjs';
+import { workflowId } from './workflows.mjs';
 
 const PHASE_STATUS_MARKERS = {
   not_started: '[ ]',
@@ -1399,7 +1400,7 @@ export function buildPhaseVerificationReport(...args) {
       severity: 'blocker',
       path: `${stateName}/phases/${padPhase(phaseNum)}-*/${padPhase(phaseNum)}-PLAN.md`,
       message: `No PLAN.md artifact was found for phase ${normalizePhaseToken(phaseNum)}.`,
-      fix_hint: `Run /gsdd-plan ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
+      fix_hint: `Run /${workflowId('plan')} ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
     });
   }
   if (matchingPlans.length > 0 && incompletePlans.length > 0) {
@@ -1408,7 +1409,7 @@ export function buildPhaseVerificationReport(...args) {
       severity: 'blocker',
       path: plan.displayPath,
       message: `No matching SUMMARY.md artifact was found for ${plan.displayPath}.`,
-      fix_hint: `Run /gsdd-execute ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
+      fix_hint: `Run /${workflowId('execute')} ${normalizePhaseToken(phaseNum)} before verifying this phase.`,
     })));
   }
   const artifacts = matchingPlans.flatMap((planPath) => {

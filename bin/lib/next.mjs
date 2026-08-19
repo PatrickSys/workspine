@@ -4,6 +4,7 @@ import { output, parseFlagValue } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
 import { resolveStateDir, stateAuthorityGate } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { workflowId } from './workflows.mjs';
 import {
   NEXT_STATES,
   addOpenQuestion,
@@ -545,15 +546,15 @@ function routeNext(ctx) {
       state: 'plan',
       reason: 'Active bounded brownfield change exists; route planning through the brownfield change lane before phase roadmap preflight.',
       confidence: 'high',
-      next_command: 'gsdd-plan',
-      next_action: workflowAction('gsdd-plan', 'Plan the active bounded brownfield change from CHANGE.md and HANDOFF.md without requiring unrelated ROADMAP phase membership.'),
+      next_command: workflowId('plan'),
+      next_action: workflowAction(workflowId('plan'), 'Plan the active bounded brownfield change from CHANGE.md and HANDOFF.md without requiring unrelated ROADMAP phase membership.'),
       authority: 'brownfield_change',
       route_kind: 'brownfield_change',
       requires_user: false,
       constraints: [
         ...constraints,
         `Bounded brownfield changes use \`${statePath(context, 'brownfield-change/')}\`, not \`${statePath(context, 'phases/')}\` or ROADMAP checkboxes.`,
-        'Promote to `gsdd-new-project` or `gsdd-new-milestone` only when the change no longer fits one active stream.',
+        'Promote to `' + workflowId('new-project') + '` or `' + workflowId('new-milestone') + '` only when the change no longer fits one active stream.',
       ],
       evidence_required: ['Plan must preserve the bounded CHANGE.md goal, scope, done-when, next action, and closeout path.'],
       artifacts_to_read: [
@@ -590,8 +591,8 @@ function routeNext(ctx) {
       state: 'plan',
       reason: `\`.work/goal.md\` exists, but canonical ${statePath(context)} lifecycle truth is incomplete; create or refresh the Workspine-native plan from \`.work\`.`,
       confidence: context.planning.exists ? 'medium' : 'high',
-      next_command: 'gsdd-plan',
-      next_action: workflowAction('gsdd-plan', 'Plan the Workspine-native milestone from `.work` truth.'),
+      next_command: workflowId('plan'),
+      next_action: workflowAction(workflowId('plan'), 'Plan the Workspine-native milestone from `.work` truth.'),
       authority: 'work',
       route_kind: 'work_native_plan',
       blocked_by: controlMapBlockers(controlMap),
@@ -620,8 +621,8 @@ function routeNext(ctx) {
     state: 'plan',
     reason: 'Continuity contract and legacy lifecycle artifacts are present; plan the next approved work slice.',
     confidence: 'medium',
-    next_command: 'gsdd-plan',
-    next_action: workflowAction('gsdd-plan', 'Plan the next approved work slice.'),
+    next_command: workflowId('plan'),
+    next_action: workflowAction(workflowId('plan'), 'Plan the next approved work slice.'),
     authority: 'planning',
     route_kind: 'phase_plan',
     blocked_by: controlMapBlockers(controlMap),
@@ -738,7 +739,7 @@ function routeFromWorkMilestone(context, manifest) {
     return {
       state: 'ask_user',
       reason: 'Workspine-native milestone audit passed and dogfood exists, but declaring completion is a human gate.',
-      next_command: 'gsdd-complete-milestone',
+      next_command: workflowId('complete-milestone'),
       next_action: manualReviewAction([milestonePath(context, 'AUDIT.md'), milestonePath(context, 'ROADMAP.md'), '.work/evidence/manifest.json'], 'Review closure evidence with the user before running completion workflow.'),
       questions: [{
         id: 'completion-approval',
@@ -762,10 +763,10 @@ function routeFromWorkMilestone(context, manifest) {
 
 function enrichRoute(route, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs }) {
   const commands = {
-    execute: workflowAction('gsdd-execute', 'Execute the approved Workspine plan.'),
-    verify: workflowAction('gsdd-verify', 'Verify executed artifacts against the plan.'),
-    audit: workflowAction('gsdd-audit-milestone', 'Audit milestone-level integration and closure evidence.'),
-    fix_gaps: workflowAction('gsdd-plan', 'Plan amend/extend work from audit or verification findings.'),
+    execute: workflowAction(workflowId('execute'), 'Execute the approved Workspine plan.'),
+    verify: workflowAction(workflowId('verify'), 'Verify executed artifacts against the plan.'),
+    audit: workflowAction(workflowId('audit-milestone'), 'Audit milestone-level integration and closure evidence.'),
+    fix_gaps: workflowAction(workflowId('plan'), 'Plan amend/extend work from audit or verification findings.'),
     dogfood: cliAction(['next', 'dogfood', 'capture', '--id', '<id>', '--title', '<text>', '--body', '<text>'], 'Capture one bounded local dogfood finding.'),
     pause: manualReviewAction(['.work/handoff/current.md'], 'Update handoff before pausing.'),
     blocked: null,

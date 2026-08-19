@@ -23,4 +23,18 @@ export const WORKFLOWS = [
   defineWorkflow({ name: 'gsdd-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', mutatesArtifacts: false }),
 ];
 
+const WORKFLOW_ID_BY_SLUG = Object.freeze(Object.fromEntries(
+  WORKFLOWS.map((entry) => [entry.workflow.replace(/\.md$/, ''), entry.name]),
+));
+
+// Routing surfaces address workflows by slug ('plan', 'execute') so the manifest
+// above stays the single source of truth for the shipped command ids.
+export function workflowId(slug) {
+  const id = WORKFLOW_ID_BY_SLUG[slug];
+  if (!id) {
+    throw new Error(`Unknown workflow slug: ${slug}`);
+  }
+  return id;
+}
+
 export const FRAMEWORK_VERSION = 'v1.4';

@@ -20,6 +20,7 @@ const HELPER_LIB_FILES = Object.freeze([
   'state-dir.mjs',
   'update-awareness.mjs',
   'work-context.mjs',
+  'workflows.mjs',
   'workspace-root.mjs',
 ]);
 const DEFAULT_STATE_DIR_NAME = '.work';
