@@ -31,7 +31,7 @@ Workspine began as a fork of Get Shit Done and keeps the verification-first work
 
 ## How it works
 
-<img src="assets/workspine-hero.gif" alt="A rough request turns into a spec, a checked plan, executed work, and verified proof, with every step written to the repo." width="820">
+<img src="assets/workspine-hero.webp" alt="A rough request turns into a spec, a checked plan, executed work, and verified proof, with every step written to the repo." width="820">
 
 `init` puts workflow skills in `.agents/skills/` and native adapters for the runtimes you choose. You run those workflows through your agent, and each one writes a file.
 
