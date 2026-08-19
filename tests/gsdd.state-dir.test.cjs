@@ -190,8 +190,8 @@ describe('canonical Workspine state classification', () => {
     writeLegacyConfig(tmp);
     const gate = stateAuthorityGate(resolveStateDir(tmp));
     assert.strictEqual(gate.allowed, false);
-    assert.strictEqual(MIGRATION_COMMAND, 'npx -y gsdd-cli init --migrate');
-    assert.match(gate.message, /Run `npx -y gsdd-cli init --migrate`\./);
+    assert.strictEqual(MIGRATION_COMMAND, 'npx -y workspine init --migrate');
+    assert.match(gate.message, /Run `npx -y workspine init --migrate`\./);
   });
 });
 

@@ -170,7 +170,7 @@ describe('Health — pre-init guard', () => {
     const parsed = JSON.parse(result.output);
     assert.strictEqual(parsed.status, 'broken');
     assert.strictEqual(parsed.errors[0].id, 'E1');
-    assert.match(parsed.errors[0].message, /Run `npx -y gsdd-cli init --migrate`\./);
+    assert.match(parsed.errors[0].message, /Run `npx -y workspine init --migrate`\./);
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.planning', 'config.json')), config);
     assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
   });

@@ -308,7 +308,7 @@ describe('gsdd journey', () => {
     writeFile('.planning/milestones/m1-legacy/MILESTONE.md', '---\nstatus: in_progress\n---\n');
     const before = fs.readFileSync(path.join(tmpDir, '.planning', 'milestones', 'm1-legacy', 'MILESTONE.md'));
 
-    await assert.rejects(() => runCliAsMain(tmpDir, ['journey']), /npx -y gsdd-cli init --migrate/);
+    await assert.rejects(() => runCliAsMain(tmpDir, ['journey']), /npx -y workspine init --migrate/);
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.planning', 'milestones', 'm1-legacy', 'MILESTONE.md')), before);
     assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
   });

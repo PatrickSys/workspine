@@ -399,7 +399,7 @@ describe('next command bootstrap', () => {
     for (const args of [['next', '--json'], ['next', '--init', '--json']]) {
       const result = await runCliAsMain(tmpDir, args);
       assert.strictEqual(result.exitCode, 1);
-      assert.match(JSON.parse(result.output).error, /Run `npx -y gsdd-cli init --migrate`\./);
+      assert.match(JSON.parse(result.output).error, /Run `npx -y workspine init --migrate`\./);
       assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
       assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.planning', 'config.json')), before);
     }
@@ -600,7 +600,7 @@ describe('next command bootstrap', () => {
     const initialized = await runCliAsMain(nestedDir, ['next', '--init', '--json']);
 
     assert.strictEqual(initialized.exitCode, 1, initialized.output);
-    assert.match(JSON.parse(initialized.output).error, /Run `npx -y gsdd-cli init --migrate`\./);
+    assert.match(JSON.parse(initialized.output).error, /Run `npx -y workspine init --migrate`\./);
     assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
     assert.strictEqual(fs.existsSync(path.join(nestedDir, '.work')), false);
     assert.strictEqual(fs.existsSync(path.join(nestedDir, 'goal.md')), false);

@@ -719,7 +719,7 @@ describe('gsdd models and model propagation', () => {
     for (const args of [['models', 'show'], ['rigor', 'show']]) {
       const result = await runCliAsMain(tmpDir, args);
       assert.strictEqual(result.exitCode, 1, result.output);
-      assert.match(result.output, /npx -y gsdd-cli init --migrate/);
+      assert.match(result.output, /npx -y workspine init --migrate/);
       assert.strictEqual(fs.readFileSync(path.join(legacyDir, 'config.json'), 'utf8'), legacyConfig);
       assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
     }
@@ -743,7 +743,7 @@ describe('gsdd models and model propagation', () => {
 
     let result = await runCliAsMain(nested, ['models', 'profile', 'quality']);
     assert.strictEqual(result.exitCode, 1, result.output);
-    assert.match(result.output, /npx -y gsdd-cli init --migrate/);
+    assert.match(result.output, /npx -y workspine init --migrate/);
     assert.deepStrictEqual(snapshotTree(tmpDir), before);
     assert.strictEqual(fs.existsSync(path.join(nested, '.work')), false);
 

@@ -971,7 +971,7 @@ describe('S1 decision recall loop', () => {
   });
 
   test('legacy .planning-only workspaces refuse every decision command without changing any bytes or members', async () => {
-    const refusal = /Legacy \.planning\/ state is not an active Workspine root.+npx -y gsdd-cli init --migrate/i;
+    const refusal = /Legacy \.planning\/ state is not an active Workspine root.+npx -y workspine init --migrate/i;
     const cases = [
       ['remember', 'Do not split decision authority', '--type', 'rule', '--scope', 'repo'],
       ['decisions', 'query', 'legacy poison'],

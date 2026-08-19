@@ -1103,14 +1103,14 @@ describe('gsdd init and update', () => {
     ]) {
       const result = spawnSync(process.execPath, [helperPath, ...args], { cwd: tmpDir, encoding: 'utf-8' });
       assert.notStrictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-      assert.match(`${result.stdout}${result.stderr}`, /npx -y gsdd-cli init --migrate/);
+      assert.match(`${result.stdout}${result.stderr}`, /npx -y workspine init --migrate/);
       assert.deepStrictEqual(snapshotTree(tmpDir), beforeLegacy);
     }
 
     const controlMap = spawnSync(process.execPath, [helperPath, 'control-map'], { cwd: tmpDir, encoding: 'utf-8' });
     assert.strictEqual(controlMap.status, 1, `${controlMap.stdout}\n${controlMap.stderr}`);
     assert.strictEqual(controlMap.stdout, '');
-    assert.strictEqual(controlMap.stderr.trim(), 'ERROR: Legacy .planning/ state is not an active Workspine root. Run `npx -y gsdd-cli init --migrate`.');
+    assert.strictEqual(controlMap.stderr.trim(), 'ERROR: Legacy .planning/ state is not an active Workspine root. Run `npx -y workspine init --migrate`.');
     assert.deepStrictEqual(snapshotTree(tmpDir), beforeLegacy);
 
     fs.mkdirSync(workDir);
@@ -2614,7 +2614,7 @@ describe('gsdd init and update', () => {
 
       const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
       assert.strictEqual(result.exitCode, 1);
-      assert.match(result.output, /Run `npx -y gsdd-cli init --migrate`\./);
+      assert.match(result.output, /Run `npx -y workspine init --migrate`\./);
       assert.deepStrictEqual(snapshotTree(tmpDir), before);
     });
 
@@ -2625,7 +2625,7 @@ describe('gsdd init and update', () => {
       for (const args of [['models', 'show'], ['rigor', 'show']]) {
         const result = await runCliAsMain(tmpDir, args);
         assert.strictEqual(result.exitCode, 1, result.output);
-        assert.match(result.output, /npx -y gsdd-cli init --migrate/);
+        assert.match(result.output, /npx -y workspine init --migrate/);
         assert.deepStrictEqual(snapshotTree(tmpDir), before);
       }
     });

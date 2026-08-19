@@ -282,7 +282,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     ]) {
       const result = await runCliAsMain(tmpDir, args);
       assert.strictEqual(result.exitCode, 1, result.output);
-      assert.match(result.output, /npx -y gsdd-cli init --migrate/);
+      assert.match(result.output, /npx -y workspine init --migrate/);
       assert.deepStrictEqual(fs.readFileSync(path.join(legacyDir, 'ROADMAP.md')), before);
       assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
     }

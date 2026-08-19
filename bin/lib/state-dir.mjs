@@ -4,7 +4,7 @@ import { join, resolve } from 'path';
 export const STATE_DIR_NAME = '.work';
 export const LEGACY_STATE_DIR_NAME = '.planning';
 export const LEGACY_SIGNATURE = 'S2-config-v1';
-export const MIGRATION_COMMAND = 'npx -y gsdd-cli init --migrate';
+export const MIGRATION_COMMAND = 'npx -y workspine init --migrate';
 
 function lstatIfPresent(filePath, lstat = lstatSync) {
   try {
