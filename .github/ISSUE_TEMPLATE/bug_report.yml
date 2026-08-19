@@ -10,8 +10,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: gsdd-cli Version
-      description: "Run: npm list -g gsdd-cli"
+      label: workspine Version
+      description: "Run: npm list -g workspine"
       placeholder: "e.g., 1.18.0"
     validations:
       required: true
@@ -45,7 +45,7 @@ body:
       label: Steps to reproduce
       description: How can we reproduce this?
       placeholder: |
-        1. Run npx -y gsdd-cli init
+        1. Run npx -y workspine init
         2. ...
     validations:
       required: true
