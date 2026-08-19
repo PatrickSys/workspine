@@ -31,14 +31,17 @@ const PROTECTED_INPUTS = Object.freeze([
   ['workspine.zip', 6691999, '83184a0ed5a6f46e6586a454ab06e5e2ac2bad3078fccc58f933ebcbf6d65127'],
 ]);
 const PRODUCERS = Object.freeze({
-  current: Object.freeze({ candidate: FIXED_CANDIDATE, package: `gsdd-cli@${PACKAGE_VERSION}`, tarballSha256: TARBALL_SHA256, packageJsonSha256: PACKAGE_JSON_SHA256, entrySha256: ENTRY_SHA256 }),
-  historical: Object.freeze({ commit: HISTORICAL_COMMIT, tree: HISTORICAL_TREE, package: `gsdd-cli@${HISTORICAL_PACKAGE_VERSION}`, nodeFloor: '>=20' }),
+  current: Object.freeze({ candidate: FIXED_CANDIDATE, package: `candidate@${PACKAGE_VERSION}`, tarballSha256: TARBALL_SHA256, packageJsonSha256: PACKAGE_JSON_SHA256, entrySha256: ENTRY_SHA256 }),
+  historical: Object.freeze({ commit: HISTORICAL_COMMIT, tree: HISTORICAL_TREE, package: `historical-release@${HISTORICAL_PACKAGE_VERSION}`, nodeFloor: '>=20' }),
 });
 const CURRENT_INIT = Object.freeze(['init', '--workspace-root', '<root>', '--auto', '--tools', 'agents']);
 const CURRENT_MIGRATE = Object.freeze(['init', '--workspace-root', '<root>', '--migrate', '--auto', '--tools', 'agents']);
 const CURRENT_UPDATE = Object.freeze(['update', '--workspace-root', '<root>']);
 const CURRENT_UPDATE_TEMPLATES = Object.freeze(['update', '--workspace-root', '<root>', '--templates']);
-const MIGRATION_GUIDANCE = 'npx -y gsdd-cli init --migrate';
+// Guidance text is derived from the pinned candidate's own installed package name (verified
+// byte-exact against PACKAGE_JSON_SHA256 in installProducer) rather than a hardcoded literal,
+// so this stays correct against whatever that frozen commit's package.json actually says.
+const MIGRATION_GUIDANCE = (packageName) => `npx -y ${packageName} init --migrate`;
 const SPLIT_ROOT_GUIDANCE = 'Both `.work/` and `.planning/` exist. Refusing split-root state. Resolve the two roots manually so only one remains; Workspine will not merge or delete either root.';
 const MISSING_OWNERSHIP_GUIDANCE = 'generation manifest ownership is missing or corrupt. Restore a valid manifest or preserve the templates before retrying.';
 const COMMIT_DOCS_GUIDANCE = 'Remove that user-owned ignore entry manually, then retry.';
@@ -321,11 +324,14 @@ function installProducer(producer, destination, label, environment) {
   fs.mkdirSync(destination, { recursive: true });
   writeFile(path.join(destination, 'package.json'), `${JSON.stringify({ private: true, name: `phase05-${label}` })}\n`);
   const install = requireSuccess(observedCommand(process.execPath, [NPM_CLI, 'install', '--ignore-scripts', '--no-audit', '--no-fund', producer.tarball], { cwd: destination, env: environment.env }), 'producer_failure', `local tarball install ${label}`);
-  const entry = path.join(destination, 'node_modules', 'gsdd-cli', PACKAGE_BIN);
+  // The installed node_modules subdirectory name is whatever the packed producer's own
+  // package.json says, not a hardcoded literal - read it from the same source npm packed.
+  const packageName = JSON.parse(fs.readFileSync(path.join(producer.source, 'package.json'), 'utf-8')).name;
+  const entry = path.join(destination, 'node_modules', packageName, PACKAGE_BIN);
   requireCondition(fs.existsSync(entry), 'producer_failure', `installed ${label} entry missing`);
   const realEntry = fs.realpathSync(entry);
   requireCondition(isInside(destination, realEntry), 'containment_failure', `installed ${label} entry escaped install root`);
-  return { install: commandReceipt(install), root: destination, entry: realEntry, entrySha256: sha256(fs.readFileSync(realEntry)), packageJsonSha256: sha256(fs.readFileSync(path.join(destination, 'node_modules', 'gsdd-cli', 'package.json'))) };
+  return { install: commandReceipt(install), root: destination, entry: realEntry, entrySha256: sha256(fs.readFileSync(realEntry)), packageJsonSha256: sha256(fs.readFileSync(path.join(destination, 'node_modules', packageName, 'package.json'))), packageName };
 }
 function buildProducers(proofRoot, environment) {
   const currentSource = path.join(proofRoot, 'current-source');
@@ -340,7 +346,7 @@ function buildProducers(proofRoot, environment) {
   const historicalArchive = archiveCommit(HISTORICAL_COMMIT, historicalSource, environment);
   const historicalPacked = packProducer(historicalSource, 'historical', environment);
   const historical = installProducer(historicalPacked, path.join(proofRoot, 'historical-install'), 'historical', environment);
-  const historicalPackage = readJson(path.join(historical.root, 'node_modules', 'gsdd-cli', 'package.json'), 'producer_failure');
+  const historicalPackage = readJson(path.join(historical.root, 'node_modules', historical.packageName, 'package.json'), 'producer_failure');
   requireCondition(historicalPackage.version === HISTORICAL_PACKAGE_VERSION, 'provenance_failure', 'historical installed package version drifted', { actual: historicalPackage.version });
   return { current: { ...currentPacked, ...current, candidate: FIXED_CANDIDATE, archive: currentArchive }, historical: { ...historicalPacked, ...historical, commit: HISTORICAL_COMMIT, tree: HISTORICAL_TREE, archive: historicalArchive } };
 }
@@ -520,7 +526,7 @@ function makeUnsupportedLegacy(root, reason) {
 function fixtureS2Unsupported(producers, proofRoot, environment, reason) {
   const id = `S2-unsupported-${reason}`; const root = path.join(proofRoot, 'fixtures', id); gitFixture(root, environment); makeUnsupportedLegacy(root, reason);
   const before = snapshotRoot(root); const result = commandAt(producers.current.entry, currentArgs(CURRENT_MIGRATE, root), root, environment);
-  const receipt = assertRefusal(result, before, root, MIGRATION_GUIDANCE, id);
+  const receipt = assertRefusal(result, before, root, MIGRATION_GUIDANCE(producers.current.packageName), id);
   const output = `${result.stdout.text}\n${result.stderr.text}`;
   requireCondition(output.includes(`(${reason})`), 'product_mismatch', `${id} did not expose its exact legacy_unsupported reason`, { reason, output });
   return { fixture: id, reason, ...receipt };

@@ -574,7 +574,7 @@ async function main() {
     const tarball = path.join(packDirectory, packRecord.filename);
     const tarballBytes = fs.readFileSync(tarball);
     const packageJson = JSON.parse(fs.readFileSync(path.join(materialized.source, 'package.json'), 'utf8'));
-    requireCondition(packageJson.name === 'gsdd-cli', 'provenance_failure', 'candidate package name drifted');
+    requireCondition(packageJson.name === 'workspine', 'provenance_failure', 'candidate package name drifted');
     requireCondition(packageJson.bin?.gsdd === 'bin/gsdd.mjs', 'provenance_failure', 'candidate gsdd bin mapping drifted');
     const materializedEntry = path.join(materialized.source, packageJson.bin.gsdd);
     requireCondition(fs.existsSync(materializedEntry), 'provenance_failure', 'materialized gsdd entry is missing');

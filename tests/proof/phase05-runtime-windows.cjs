@@ -12,7 +12,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const REPO = fs.realpathSync(path.resolve(__dirname, '..', '..'));
-const PACKAGE_NAME = 'gsdd-cli';
+const PACKAGE_NAME = 'workspine';
 const ENTRY = 'bin/gsdd.mjs';
 const DEVELOPMENT = '--development';
 const CATALOG = '--catalog';
@@ -22,8 +22,8 @@ const LOOPBACK_REGISTRY = 'http://127.0.0.1:9/closed';
 // already resolves npm this way.
 const NPM_CLI = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
 const REQUIRED_README = [
-  'npx -y gsdd-cli init', 'npx -y gsdd-cli health', 'npx -y gsdd-cli update',
-  'npx -y gsdd-cli install --global', 'Claude Code', 'OpenCode', 'Codex CLI',
+  'npx -y workspine init', 'npx -y workspine health', 'npx -y workspine update',
+  'npx -y workspine install --global', 'Claude Code', 'OpenCode', 'Codex CLI',
   '.work/bin/gsdd.mjs', 'not a second public package CLI',
   'repair or refresh a global install', 'runtime surfaces',
 ];
@@ -249,7 +249,7 @@ function development() {
     const install = command(process.execPath, [NPM_CLI, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--prefix', localPrefix, tarball], { cwd: REPO, env });
     must(install.exitCode === 0, 'setup_failed', 'local packed candidate install failed', install);
     const pkgRoot = path.join(localPrefix, 'node_modules', PACKAGE_NAME);
-    // The package is gsdd-cli but its bin entry is `gsdd`, so npm writes gsdd.cmd.
+    // The package is workspine but its bin entry is `gsdd`, so npm writes gsdd.cmd.
     const shim = path.join(localPrefix, 'node_modules', '.bin', 'gsdd.cmd');
     const installedEntry = path.join(pkgRoot, ENTRY);
     must(fs.existsSync(shim) && fs.existsSync(pkgRoot) && fs.existsSync(installedEntry), 'setup_failed', 'isolated npx shim/package/entry missing', { shim, pkgRoot, installedEntry });

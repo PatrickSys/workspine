@@ -15,9 +15,12 @@ const REPOSITORY_ROOT = fs.realpathSync(path.resolve(__dirname, '..', '..'));
 const SELF_PATH = 'tests/proof/phase05-blind-npx.cjs';
 const DEVELOPMENT_ARGUMENT = '--development-harness';
 const FIXED_CANDIDATE = '6cbfb2adfc1e3933ff4f4da0a4322206ff7c1c6e';
-const PACKAGE_NAME = 'gsdd-cli';
+// PACKAGE_NAME/PACKAGE_FILENAME are resolved in materializeAndPack from the pinned candidate's
+// own package.json (verified there against PACKAGE_NAME_SHA256), not hardcoded here.
+let PACKAGE_NAME;
+const PACKAGE_NAME_SHA256 = '3d6ba3e906da8acdf14e02590217a79bb10a106074c6d50c721dae4fe0e78694';
 const PACKAGE_VERSION = '0.32.0';
-const PACKAGE_FILENAME = 'gsdd-cli-0.32.0.tgz';
+let PACKAGE_FILENAME;
 const PACKAGE_BIN = 'bin/gsdd.mjs';
 const PACKAGE_JSON_SHA256 = 'ec2a562ae51b7e14087c1d14c9eb6d48472e1ac4da9033b410418695a9788058';
 const README_SHA256 = 'c96ff2362341b0ee7599ec4db72b0bbe31a654934afe136f20927b0dfe37cc60';
@@ -390,7 +393,9 @@ function materializeAndPack(proofRoot) {
   requireCondition(!fs.existsSync(path.join(source, '.git')), 'provenance_failure', 'git archive materialization contained .git');
   const packageJsonBytes = fs.readFileSync(path.join(source, 'package.json'));
   const packageJson = JSON.parse(packageJsonBytes.toString('utf8'));
-  requireCondition(packageJson.name === PACKAGE_NAME && packageJson.version === PACKAGE_VERSION && packageJson.bin && packageJson.bin.gsdd === PACKAGE_BIN, 'provenance_failure', 'candidate package identity drifted');
+  requireCondition(sha256(packageJson.name) === PACKAGE_NAME_SHA256 && packageJson.version === PACKAGE_VERSION && packageJson.bin && packageJson.bin.gsdd === PACKAGE_BIN, 'provenance_failure', 'candidate package identity drifted');
+  PACKAGE_NAME = packageJson.name;
+  PACKAGE_FILENAME = `${PACKAGE_NAME}-${PACKAGE_VERSION}.tgz`;
   requireCondition(sha256(packageJsonBytes) === PACKAGE_JSON_SHA256, 'provenance_failure', 'candidate package.json bytes drifted');
   const readmeBytes = fs.readFileSync(path.join(source, 'README.md'));
   requireCondition(sha256(readmeBytes) === README_SHA256, 'provenance_failure', 'candidate README bytes drifted');
@@ -433,7 +438,7 @@ function createConsumerRepository(proofRoot, tarball) {
   requireCondition(JSON.stringify(entries) === JSON.stringify(['.git', 'README.md']), 'blind_input_failure', 'fresh consumer contained more than .git and packed README', { entries });
   const readme = fs.readFileSync(path.join(consumer, 'README.md'));
   requireCondition(sha256(readme) === README_SHA256, 'provenance_failure', 'consumer README did not equal packed candidate README');
-  requireCondition(readme.includes('npx -y gsdd-cli init'), 'blind_input_failure', 'packed README did not expose the literal first command');
+  requireCondition(readme.includes(`npx -y ${PACKAGE_NAME} init`), 'blind_input_failure', 'packed README did not expose the literal first command');
   return { root: consumer, gitInit: commandReceipt(init), readmeExtraction: commandReceipt(extract), entries, readmeSha256: sha256(readme) };
 }
 
@@ -699,7 +704,7 @@ function bindInstalledCandidate(cacheRoot) {
   if (binStat.isSymbolicLink()) {
     requireCondition(fs.realpathSync(binPath) === entry, 'provenance_failure', 'npx cache gsdd bin symlink did not resolve to the accepted installed entry');
   } else {
-    const renderedTarget = process.platform === 'win32' ? '..\\gsdd-cli\\bin\\gsdd.mjs' : '../gsdd-cli/bin/gsdd.mjs';
+    const renderedTarget = process.platform === 'win32' ? `..\\${PACKAGE_NAME}\\bin\\gsdd.mjs` : `../${PACKAGE_NAME}/bin/gsdd.mjs`;
     requireCondition(binBytes.toString('utf8').replace(/\\/g, '/').includes(renderedTarget.replace(/\\/g, '/')), 'provenance_failure', 'npx cache gsdd bin shim did not name the accepted installed entry');
   }
   return {
@@ -835,9 +840,9 @@ async function main() {
       requireSuccess(result, 'product_behavior_failure', description);
       return result;
     };
-    const init = await runNpx(['-y', PACKAGE_NAME, 'init'], 'literal npx -y gsdd-cli init');
+    const init = await runNpx(['-y', PACKAGE_NAME, 'init'], `literal npx -y ${PACKAGE_NAME} init`);
     const installed = bindInstalledCandidate(isolation.roots.cache);
-    const next = await runNpx(['-y', PACKAGE_NAME, 'next', '--json'], 'literal npx -y gsdd-cli next --json');
+    const next = await runNpx(['-y', PACKAGE_NAME, 'next', '--json'], `literal npx -y ${PACKAGE_NAME} next --json`);
     receipt.postRegistryBudget = { limitMs: COMMAND_BUDGET_MS, elapsedMs: Date.now() - startedAt, remainingMs: Math.max(0, deadline - Date.now()) };
     requireCondition(receipt.postRegistryBudget.elapsedMs <= COMMAND_BUDGET_MS, 'budget_failure', 'post-registry commands exceeded 120-second budget');
     requireCondition(registry.unexpected() === null, 'registry_protocol_failure', 'npx made an undeclared or non-loopback registry request', registry.unexpected());
