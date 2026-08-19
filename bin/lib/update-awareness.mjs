@@ -4,12 +4,12 @@ import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { assertStateAuthority } from './state-dir.mjs';
 import { createAtomicFileWriter, writeFileAtomic } from './atomic-write.mjs';
 
-export const UPDATE_ENDPOINT = 'https://registry.npmjs.org/gsdd-cli/latest';
+export const UPDATE_ENDPOINT = 'https://registry.npmjs.org/workspine/latest';
 export const CACHE_SCHEMA = 1;
 export const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const RESPONSE_MAX_BYTES = 64 * 1024;
 export const REQUEST_TIMEOUT_MS = 2000;
-export const NOTICE_TEXT = 'Update available: gsdd-cli {latestVersion} (current {packageVersion}). Run `npx -y gsdd-cli update` to repair/refresh generated surfaces.';
+export const NOTICE_TEXT = 'Update available: workspine {latestVersion} (current {packageVersion}). Run `npx -y workspine update` to repair/refresh generated surfaces.';
 
 // The check caches its result in `.work/.local`, so it is a workspace write.
 // Only commands that already mutate the workspace may carry it. Every command

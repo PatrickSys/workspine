@@ -16,7 +16,7 @@ const {
 } = require('./gsdd.helpers.cjs');
 
 const ROOT = path.join(__dirname, '..');
-const ENDPOINT = 'https://registry.npmjs.org/gsdd-cli/latest';
+const ENDPOINT = 'https://registry.npmjs.org/workspine/latest';
 const CACHE_RELATIVE = path.join('.work', '.local', 'update-awareness.json');
 
 function runGeneratedHelper(cwd, args) {
@@ -193,7 +193,7 @@ describe('bounded update awareness', () => {
       latestVersion: '0.33.0',
       error: null,
     });
-    assert.deepEqual(opts.lines, ['Update available: gsdd-cli 0.33.0 (current 0.32.0). Run `npx -y gsdd-cli update` to repair/refresh generated surfaces.']);
+    assert.deepEqual(opts.lines, ['Update available: workspine 0.33.0 (current 0.32.0). Run `npx -y workspine update` to repair/refresh generated surfaces.']);
   });
 
   test('fresh cache is silent, while corrupt cache is stale and permits one check', async () => {
@@ -238,7 +238,7 @@ describe('bounded update awareness', () => {
     await maybeShowUpdateNotice(opts);
     assert.deepEqual(fs.readFileSync(cachePath()), previous);
     assert.ok(!tempPath || !fs.existsSync(tempPath));
-    assert.deepEqual(opts.lines, ['Update available: gsdd-cli 0.33.0 (current 0.32.0). Run `npx -y gsdd-cli update` to repair/refresh generated surfaces.']);
+    assert.deepEqual(opts.lines, ['Update available: workspine 0.33.0 (current 0.32.0). Run `npx -y workspine update` to repair/refresh generated surfaces.']);
   });
 
   test('health and update are silent and never invoke checker network or cache I/O', async () => {
