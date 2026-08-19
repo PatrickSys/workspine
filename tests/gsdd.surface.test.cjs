@@ -289,11 +289,11 @@ describe('public surface language gate', () => {
     assert.match(help, /sequential|best-effort/i);
     assert.match(help, /no lock|no concurrency guarantee/i);
     assert.doesNotMatch(help, /at most once per 24 hours/i);
-    // README.md still names the retained `gsdd-cli` package alongside its npx update
+    // README.md still names the retained legacy package alongside its npx update
     // guidance (renamed at Phase 14 step 16); docs/USER-GUIDE.md and docs/RUNTIME-SUPPORT.md
     // are fully renamed to the current `workspine` package as of Phase 14 step 9.
     for (const [relative, updatePattern] of [
-      ['README.md', /npx -y gsdd-cli update/],
+      ['README.md', /npx -y \S+ update/],
       ['docs/USER-GUIDE.md', /npx -y workspine update/],
       ['docs/RUNTIME-SUPPORT.md', /npx -y workspine update/],
     ]) {

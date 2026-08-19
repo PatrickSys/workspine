@@ -739,7 +739,7 @@ describe('gsdd init and update', () => {
     assert.match(launcher, /import \{ createCmdNext \} from '\.\/lib\/next\.mjs';/);
     assert.match(launcher, /import \{ bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext \} from '\.\/lib\/workspace-root\.mjs';/);
     assert.match(launcher, /const helperRoot = bootstrapHelperWorkspace\(import\.meta\.url\);/);
-    assert.doesNotMatch(launcher, /from 'gsdd-cli'/);
+    assert.doesNotMatch(launcher, /from 'workspine'/);
     assert.doesNotMatch(launcher, /from 'gsdd'/);
     assert.match(launcher, /Usage: node \.work\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
     assert.match(launcher, /file-op <copy\|delete\|regex-sub>/);

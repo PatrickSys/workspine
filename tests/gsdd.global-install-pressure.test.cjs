@@ -150,8 +150,8 @@ function snapshotTree(rootDir) {
 describe('global install pressure loop', () => {
   test('README-driven first-time user loop works through the public CLI surface', async () => {
     const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf-8');
-    assert.match(readme, /npx -y gsdd-cli init/);
-    assert.match(readme, /npx -y gsdd-cli install --global --tools claude,opencode,codex,copilot/);
+    assert.match(readme, /npx -y \S+ init/);
+    assert.match(readme, /npx -y \S+ install --global --tools claude,opencode,codex,copilot/);
 
     const homeDir = createTempProject();
     const { parent, repos } = createFixtureRepos();

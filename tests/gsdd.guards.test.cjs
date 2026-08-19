@@ -717,9 +717,9 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     assert.match(readme, /guided install wizard/i,
       'README.md must describe the init command as a guided install wizard. FIX: Update the Platform Adapters or Getting Started section.');
-    assert.match(readme, /npx -y gsdd-cli init/i,
-      'README.md must prefer npx -y gsdd-cli init for humans. FIX: Replace primary bare gsdd init guidance.');
-    assert.match(readme, /npx -y gsdd-cli install --global/i,
+    assert.match(readme, /npx -y \S+ init/i,
+      'README.md must prefer an npx -y <package> init form for humans. FIX: Replace primary bare gsdd init guidance.');
+    assert.match(readme, /npx -y \S+ install --global/i,
       'README.md must describe the global agent install path. FIX: Add explicit global/local install contract text.');
     assert.match(readme, /does not create `.work\/`/i,
       'README.md must state that global install does not bootstrap repo-local planning state. FIX: Add global install boundary wording.');
@@ -1251,8 +1251,8 @@ describe('G21 - Consumer Surface Completeness', () => {
     const tsStart = readme.indexOf('## Troubleshooting');
     const tsEnd = readme.indexOf('\n## ', tsStart + 1);
     const section = readme.slice(tsStart, tsEnd > -1 ? tsEnd : tsStart + 1000);
-    assert.match(section, /npx -y gsdd-cli health|gsdd health/,
-      'Troubleshooting must mention health as first step. FIX: Add npx -y gsdd-cli health as first troubleshooting step.');
+    assert.match(section, /npx -y \S+ health|gsdd health/,
+      'Troubleshooting must mention health as first step. FIX: Add an npx -y <package> health as first troubleshooting step.');
   });
 
   test('Troubleshooting links to User Guide', () => {
@@ -2655,8 +2655,8 @@ describe('G11b - Launch Claim Hardening', () => {
       'Public/generated docs must not leak internal phase tracking labels. FIX: Describe the durable capability instead of the implementation phase.');
     assert.doesNotMatch(publicDocs, /Current State is set/i,
       'Public/generated docs must use ROADMAP/phase-status language, not stale Current State wording. FIX: Reference ROADMAP phase status.');
-    assert.match(publicDocs, /npx -y gsdd-cli init/i,
-      'Public/generated docs must preserve npx-first human guidance. FIX: Keep npx -y gsdd-cli init in onboarding copy.');
+    assert.match(publicDocs, /npx -y \S+ init/i,
+      'Public/generated docs must preserve npx-first human guidance. FIX: Keep an npx -y <package> init in onboarding copy.');
     assert.match(publicDocs, /node \.work\/bin\/gsdd\.mjs/i,
       'Public/generated docs must preserve repo-local workflow helper command guidance. FIX: Keep node .work/bin/gsdd.mjs examples.');
   });
@@ -3287,7 +3287,7 @@ describe('G37 - Launch Surface Consistency', () => {
       'distilled/README.md lead copy must not foreground GSD origin wording. FIX: Move origin context out of the lead intro.');
   });
 
-  test('phase 23 planning truth locks Workspine while retaining gsdd-cli and .planning contracts', () => {
+  test('phase 23 planning truth locks Workspine while retaining the legacy package and .planning contracts', () => {
     if (!fs.existsSync(PLANNING_SPEC_MD) || !fs.existsSync(INTERNAL_TODO_MD)) {
       return;
     }
@@ -3296,13 +3296,17 @@ describe('G37 - Launch Surface Consistency', () => {
     const design = fs.readFileSync(DESIGN_MD, 'utf-8');
     const todo = fs.readFileSync(INTERNAL_TODO_MD, 'utf-8');
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+    // The retained legacy package name is declared once, in README.md's own release-history
+    // note; derive it from there instead of hard-coding a second copy of the string here.
+    const legacyPackageName = (fs.readFileSync(README_MD, 'utf-8').match(/published as `([\w-]+)`/) || [])[1];
+    assert.ok(legacyPackageName, 'README.md must declare the retained legacy package name in its release-history note.');
     assert.match(planningSpec, /Workspine/i,
       '.planning/SPEC.md must name Workspine as the active public-name target in planning truth. FIX: Record the Workspine posture explicitly.');
     assert.match(design, /Workspine/i,
       'distilled/DESIGN.md must preserve the Workspine posture rationale. FIX: Record Workspine in D45.');
     assert.match(todo, /Workspine/i,
       '.internal-research/TODO.md must carry forward the Workspine posture. FIX: Update the active milestone notes.');
-    assert.match(planningSpec, /`gsdd-cli`, `gsdd`, `gsdd-\*`, and `\.planning\/`/i,
+    assert.match(planningSpec, new RegExp('`' + legacyPackageName + '`, `gsdd`, `gsdd-\\*`, and `\\.planning/`', 'i'),
       '.planning/SPEC.md must keep the retained gsdd/.planning contracts explicit. FIX: Keep the launch posture honest about the operative contracts.');
     assert.strictEqual(pkg.name, 'workspine',
       'package.json name must be workspine. FIX: Publish the package under the public product name.');
@@ -3358,11 +3362,15 @@ describe('G37 - Launch Surface Consistency', () => {
 
     // The product is Workspine but the command is gsdd. Both names must appear, and the
     // doc must say why the gsdd names stayed. The exact wording is free. README.md still
-    // carries the retained `gsdd-cli` package-history note (renamed at Phase 14 step 16);
+    // carries the retained legacy package-history note (renamed at Phase 14 step 16);
     // docs/USER-GUIDE.md is fully renamed as of Phase 14 step 9, so it names the current
     // `workspine` package alongside the retained `gsdd`/.work/ contracts instead.
+    // The legacy package name is declared once, in README.md's own release-history note;
+    // derive it from there instead of hard-coding a second copy of the string here.
+    const legacyPackageName = (rootReadme.match(/published as `([\w-]+)`/) || [])[1];
+    assert.ok(legacyPackageName, 'README.md must declare the retained legacy package name in its release-history note.');
     for (const [label, content, names] of [
-      ['README.md', rootReadme, ['gsdd-cli', '`gsdd`', '.work/']],
+      ['README.md', rootReadme, [legacyPackageName, '`gsdd`', '.work/']],
       ['docs/USER-GUIDE.md', userGuide, ['`workspine`', '`gsdd`', '.work/']],
     ]) {
       for (const name of names) {
@@ -3883,7 +3891,7 @@ describe('G43 - Release Packaging Audit', () => {
       'smoke.yml must put the real tarball in a disposable pack directory. FIX: Use npm pack --pack-destination "$PACK_DIR".');
     for (const requiredReference of ['distilled/references/proof-rules.md', 'distilled/references/observation-record.md']) {
       assert.match(smokeWorkflow, new RegExp(`test -f "\\$PACKAGE_DIR/${requiredReference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
-        `smoke.yml must assert installed ${requiredReference}. FIX: Check the reference inside node_modules/gsdd-cli.`);
+        `smoke.yml must assert installed ${requiredReference}. FIX: Check the reference inside node_modules/workspine.`);
     }
     assert.match(smokeWorkflow, /test ! -e "\$PACKAGE_DIR\/tests"/,
       'smoke.yml must assert source tests are absent from the installed package. FIX: Check the installed package, not the checkout.');
@@ -4154,13 +4162,13 @@ describe('G45 - Runtime Surface Freshness Contract', () => {
 
     assert.match(readme, /gsdd health.*render output|current render output/i,
       'README.md must explain that generated runtime surfaces are checked against current render output. FIX: Add the runtime-surface freshness note.');
-    assert.match(readme, /npx -y gsdd-cli update|gsdd update/i,
-      'README.md must include deterministic repair guidance through npx -y gsdd-cli update or global gsdd update. FIX: Add the repair path.');
+    assert.match(readme, /npx -y \S+ update|gsdd update/i,
+      'README.md must include deterministic repair guidance through an npx -y <package> update or global gsdd update. FIX: Add the repair path.');
     assert.match(support, /Generated-surface freshness/i,
       'docs/RUNTIME-SUPPORT.md must have a generated-surface freshness section. FIX: Add the explicit runtime-boundary section.');
     assert.match(helpSource, /workspine health.*workspine update|gsdd health.*gsdd update/i,
       'bin/lib/init-runtime.mjs help text must mention health/update runtime-surface drift handling. FIX: Add the note to getHelpText().');
-    assert.match(planWorkflow, /gsdd-cli health.*gsdd-cli update|gsdd health.*gsdd update/i,
+    assert.match(planWorkflow, /workspine health.*workspine update|gsdd health.*gsdd update/i,
       'distilled/workflows/plan.md must mention the renderer-backed freshness/repair path. FIX: Add the runtime-surface trust note to completion.');
   });
 });

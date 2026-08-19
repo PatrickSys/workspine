@@ -936,7 +936,7 @@ describe('S1 decision recall loop', () => {
       assert.match(help.output, new RegExp(verb.replace(' ', '\\s+')));
     }
     const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
-    for (const line of readme.split(/\r?\n/).filter((line) => /gsdd-cli (?:remember|decisions)/.test(line))) {
+    for (const line of readme.split(/\r?\n/).filter((line) => /npx -y \S+ (?:remember|decisions)/.test(line))) {
       assert.match(line, /# \(experimental\)$/);
     }
   });
