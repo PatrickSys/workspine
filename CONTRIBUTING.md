@@ -29,10 +29,10 @@ Do not manually bump `package.json` versions or run `npm publish` from a local c
 Node 22 or newer. `engines.node` in package.json is `>=22`, so an older runtime is not supported.
 
 ```bash
-npm test
+node tests/run-all.cjs
 ```
 
-The full suite is `node tests/run-all.cjs`. There is deliberately no `npm test` script: `tests/` is
+There is deliberately no `npm test` script: `tests/` is
 excluded from the published tarball, so an `npm test` on an installed package would fail. The guard
 is `tests/gsdd.invariants.test.cjs:1870`. The suite ran in 208
 seconds on 2026-08-19 across 25 files. There is no faster subset target; `scripts` holds

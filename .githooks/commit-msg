@@ -1,7 +1,25 @@
 #!/bin/sh
 # Owner standing order 2026-08-19: no Claude Code session links in any commit, ever.
 # Strips the trailer regardless of which agent or session wrote it.
-sed -i -E '/^Claude-Session:[[:space:]]*https?:\/\/claude\.ai\//d; /^Co-Authored-By: Claude/d; /^[[:space:]]*(🤖 )?Generated with \[Claude Code\]/d' "$1"
+#
+# Four forms are stripped, not one. Measured on 2026-08-19 across all refs in this repo:
+#   Claude-Session: <claude.ai url>      49 commits
+#   Co-Authored-By: Claude               418 commits, EITHER casing
+#   Generated with [Claude Code]         53 commits
+#   a bare claude.ai/code/session URL    3 commits, no trailer key at all
+# The Co-authored-by clause must stay case-insensitive: git's own default trailer is lowercase,
+# and 17 commits already carry that form. A case-sensitive pattern misses every one of them.
+#
+# Each pattern is anchored so that a message DOCUMENTING these markers survives. A real trailer
+# never has leading whitespace, and the generated-with line always carries the emoji or the link,
+# so an indented mention inside a prose table is left alone. An earlier version of this hook was
+# too loose and silently deleted a row from the very commit message that introduced it.
+sed -i -E '
+  /^Claude-Session:[[:space:]]*https?:\/\/claude\.ai\//d
+  /^[Cc]o-[Aa]uthored-[Bb]y:[[:space:]]*Claude/d
+  /^[[:space:]]*(🤖[[:space:]]*)?Generated with \[Claude Code\](\(|[[:space:]]*$)/d
+  /^[[:space:]]*https?:\/\/claude\.ai\/code\/session/d
+' "$1"
 # collapse any trailing blank lines the removal left behind
 perl -0777 -i -pe 's/\n{3,}\z/\n/' "$1" 2>/dev/null || true
 exit 0
