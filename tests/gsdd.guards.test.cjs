@@ -3287,31 +3287,6 @@ describe('G37 - Launch Surface Consistency', () => {
       'distilled/README.md lead copy must not foreground GSD origin wording. FIX: Move origin context out of the lead intro.');
   });
 
-  test('phase 23 planning truth locks Workspine while retaining the legacy package and .planning contracts', () => {
-    if (!fs.existsSync(PLANNING_SPEC_MD) || !fs.existsSync(INTERNAL_TODO_MD)) {
-      return;
-    }
-
-    const planningSpec = fs.readFileSync(PLANNING_SPEC_MD, 'utf-8');
-    const design = fs.readFileSync(DESIGN_MD, 'utf-8');
-    const todo = fs.readFileSync(INTERNAL_TODO_MD, 'utf-8');
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
-    // The retained legacy package name is declared once, in README.md's own release-history
-    // note; derive it from there instead of hard-coding a second copy of the string here.
-    const legacyPackageName = (fs.readFileSync(README_MD, 'utf-8').match(/published as `([\w-]+)`/) || [])[1];
-    assert.ok(legacyPackageName, 'README.md must declare the retained legacy package name in its release-history note.');
-    assert.match(planningSpec, /Workspine/i,
-      '.planning/SPEC.md must name Workspine as the active public-name target in planning truth. FIX: Record the Workspine posture explicitly.');
-    assert.match(design, /Workspine/i,
-      'distilled/DESIGN.md must preserve the Workspine posture rationale. FIX: Record Workspine in D45.');
-    assert.match(todo, /Workspine/i,
-      '.internal-research/TODO.md must carry forward the Workspine posture. FIX: Update the active milestone notes.');
-    assert.match(planningSpec, new RegExp('`' + legacyPackageName + '`, `gsdd`, `gsdd-\\*`, and `\\.planning/`', 'i'),
-      '.planning/SPEC.md must keep the retained gsdd/.planning contracts explicit. FIX: Keep the launch posture honest about the operative contracts.');
-    assert.strictEqual(pkg.name, 'workspine',
-      'package.json name must be workspine. FIX: Publish the package under the public product name.');
-  });
-
   test('v1.2.0 archive preserves the posture-lock handoff without reverting naming truth', () => {
     if (!fs.existsSync(PLANNING_SPEC_MD) || !fs.existsSync(PLANNING_ROADMAP_MD)) {
       return;

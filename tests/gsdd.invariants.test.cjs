@@ -2012,41 +2012,6 @@ describe('G34c - Launch Surface Invariants', () => {
   });
 });
 
-describe('G34d - Phase 23 Posture Lock Invariants', () => {
-  test('planning truth agrees on Workspine plus retained gsdd/.planning contracts', () => {
-    const planningSpecPath = path.join(__dirname, '..', '.planning', 'SPEC.md');
-    const roadmapPath = path.join(__dirname, '..', '.planning', 'ROADMAP.md');
-    const todoPath = path.join(__dirname, '..', '.internal-research', 'TODO.md');
-    if (!fs.existsSync(planningSpecPath) || !fs.existsSync(roadmapPath) || !fs.existsSync(todoPath)) {
-      return;
-    }
-
-    const planningSpec = fs.readFileSync(planningSpecPath, 'utf-8');
-    const roadmap = fs.readFileSync(roadmapPath, 'utf-8');
-    const todo = fs.readFileSync(todoPath, 'utf-8');
-    const design = fs.readFileSync(path.join(__dirname, '..', 'distilled', 'DESIGN.md'), 'utf-8');
-    // The retained legacy package name is declared once, in README.md's own release-history
-    // note; derive it from there instead of hard-coding it so this check does not carry a
-    // second copy of the string that step 16's README rename would have to also chase down.
-    const readmeForLegacyName = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf-8');
-    const legacyPackageName = (readmeForLegacyName.match(/published as `([\w-]+)`/) || [])[1];
-    assert.ok(legacyPackageName, 'README.md must declare the retained legacy package name in its release-history note.');
-
-    assert.match(planningSpec, /Workspine/i,
-      '.planning/SPEC.md must keep Workspine as the active public-name target. FIX: Preserve the Phase 23 posture lock.');
-    assert.match(roadmap, /Workspine/i,
-      '.planning/ROADMAP.md must keep Workspine in the Phase 23/24 naming path. FIX: Preserve the naming contract handoff.');
-    assert.match(todo, /Workspine/i,
-      '.internal-research/TODO.md must keep Workspine in the carry-forward notes. FIX: Preserve the post-Phase-23 handoff.');
-    assert.match(design, /Workspine/i,
-      'distilled/DESIGN.md must preserve the Workspine posture rationale. FIX: Keep D45 aligned with active planning truth.');
-    assert.match(planningSpec, new RegExp('`' + legacyPackageName + '`, `gsdd`, `gsdd-\\*`, and `\\.planning/`', 'i'),
-      '.planning/SPEC.md must keep retained gsdd/.planning contracts explicit. FIX: Keep the fork-honest contract wording intact.');
-    assert.doesNotMatch(roadmap, /Northline/,
-      '.planning/ROADMAP.md must not keep Northline-specific naming after the Phase 23 posture lock. FIX: Remove stale Northline wording from the active milestone.');
-  });
-});
-
 describe('G34e - Phase 24 Public Naming Invariants', () => {
   test('public naming layer agrees on Workspine while retained contracts stay stable', async () => {
     const root = path.join(__dirname, '..');
