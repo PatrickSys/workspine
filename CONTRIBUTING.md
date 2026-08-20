@@ -38,6 +38,24 @@ is `tests/gsdd.invariants.test.cjs:1870`. The suite ran in 208
 seconds on 2026-08-19 across 25 files. There is no faster subset target; `scripts` holds
 only `prepublishOnly`.
 
+`tests/run-all.cjs` globs `tests/*.test.cjs` only, so nothing under `tests/proof/` runs in it. That
+is on purpose. Those are one-shot Phase 05 acceptance proofs pinned to specific candidate commits,
+and nine of the ten refuse to run at any other `HEAD` by design, for example
+`tests/proof/phase05-workspace-authority.cjs:122`. Folding them into the suite would make it red
+forever.
+
+Run their staleness lane alongside the suite instead. It is fast, with no packing, installs or
+network:
+
+```bash
+node tests/run-proof.cjs
+```
+
+It reports, per runner, whether that runner can still run at the current `HEAD`, and it fails if a
+tracked runner stops parsing or pins a git object this repository no longer has. The second case is
+the observable signature of a history rewrite. It does not execute the proofs, because executing a
+candidate-bound proof at the wrong `HEAD` proves nothing.
+
 ## Git hooks
 
 A fresh clone must run this once before its first commit:
