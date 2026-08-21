@@ -31,6 +31,34 @@ function sha256Bytes(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
+function ordinalCompare(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function losslessSorted(value) {
+  if (Array.isArray(value)) return value.map(losslessSorted);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort(ordinalCompare).map((key) => [key, losslessSorted(value[key])]));
+  return value;
+}
+
+function packageMemberLedger(packed) {
+  if (!Array.isArray(packed.files) || packed.files.length === 0) throw new Error('npm pack --json package object lacks a non-empty files member set');
+  const seen = new Set();
+  const members = packed.files.map((member, index) => {
+    if (!member || typeof member !== 'object' || Array.isArray(member)) throw new Error(`npm pack --json member ${index} was not an object`);
+    const memberPath = member.path;
+    if (typeof memberPath !== 'string' || !memberPath || memberPath.includes('\\') || memberPath.includes('\0') || memberPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(memberPath)) throw new Error(`npm pack --json member ${index} has an invalid path`);
+    const parts = memberPath.split('/');
+    if (parts.some((part) => !part || part === '.' || part === '..')) throw new Error(`npm pack --json member ${index} has an invalid path: ${memberPath}`);
+    if (!Number.isSafeInteger(member.size) || member.size < 0) throw new Error(`npm pack --json member ${index} has an invalid size`);
+    if (!Number.isSafeInteger(member.mode) || member.mode < 0 || member.mode > 0o777) throw new Error(`npm pack --json member ${index} has an invalid mode`);
+    if (seen.has(memberPath)) throw new Error(`npm pack --json member paths contained a duplicate: ${memberPath}`);
+    seen.add(memberPath);
+    return losslessSorted(member);
+  });
+  return members.sort((left, right) => ordinalCompare(left.path, right.path));
+}
+
 function fileIdentity(filePath) {
   try {
     const stat = fs.lstatSync(filePath);
@@ -196,12 +224,14 @@ function development() {
   try { packJson = JSON.parse(rawPackStdout); } catch (error) { receipt.classification = 'provenance_failure'; receipt.reason = `npm pack --json output was not valid JSON: ${error.message}`; return finish(receipt, proofRoot); }
   if (!Array.isArray(packJson) || packJson.length !== 1 || !packJson[0] || typeof packJson[0] !== 'object' || Array.isArray(packJson[0])) { receipt.classification = 'provenance_failure'; receipt.reason = 'npm pack --json output was not one unambiguous package object'; return finish(receipt, proofRoot); }
   const packed = packJson[0];
+  let memberLedger;
+  try { memberLedger = packageMemberLedger(packed); } catch (error) { receipt.classification = 'provenance_failure'; receipt.reason = error.message; return finish(receipt, proofRoot); }
   if (typeof packed.filename !== 'string' || !packed.filename.trim() || typeof packed.integrity !== 'string' || !packed.integrity.trim()) { receipt.classification = 'provenance_failure'; receipt.reason = 'npm pack --json package object lacks non-empty filename or integrity'; return finish(receipt, proofRoot); }
   const tarballName = packed.filename.trim();
   if (path.basename(tarballName) !== tarballName) { receipt.classification = 'provenance_failure'; receipt.reason = `npm pack --json filename was not a contained tarball name: ${tarballName}`; return finish(receipt, proofRoot); }
   const tarball = path.join(packageRoot, tarballName);
   if (!fs.existsSync(tarball)) { receipt.classification = 'provenance_failure'; receipt.reason = `npm pack --json filename missing from pack destination: ${tarballName}`; return finish(receipt, proofRoot); }
-  receipt.package.pack = { filename: tarballName, integrity: packed.integrity.trim() };
+  receipt.package.pack = { filename: tarballName, integrity: packed.integrity.trim(), memberLedger };
   receipt.package.tarball = { path: tarball, sha256: sha256Bytes(fs.readFileSync(tarball)) };
   const install = run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm.cmd', 'install', '--global', '--ignore-scripts', '--offline', '--prefix', installRoot, tarball], { cwd: installRoot, env, timeout: 120000 });
   receipt.install = install;
