@@ -72,6 +72,68 @@ function fileIdentity(filePath) {
   }
 }
 
+function isContained(root, candidate, strict = false) {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  if (strict && relative === '') return false;
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function resolvedPath(filePath) {
+  try {
+    return fs.realpathSync(filePath);
+  } catch (error) {
+    if (error.code === 'ENOENT') return path.resolve(filePath);
+    throw error;
+  }
+}
+
+function assertContainedPath(proofRoot, filePath, declaredConfigFiles = []) {
+  const absolute = path.resolve(filePath);
+  const resolved = resolvedPath(absolute);
+  if (isContained(proofRoot, resolved)) return;
+  const isDeclaredConfig = declaredConfigFiles.some((declared) => path.resolve(declared) === absolute);
+  if (isDeclaredConfig && isContained(proofRoot, absolute) && !fs.existsSync(absolute)) return;
+  throw new Error(`resolved isolated path escaped proof root: ${absolute} -> ${resolved}`);
+}
+
+function snapshotTree(root, proofRoot, declaredConfigFiles = []) {
+  const entries = [];
+  function visit(directory, prefix = '') {
+    for (const name of fs.readdirSync(directory).sort(ordinalCompare)) {
+      const fullPath = path.join(directory, name);
+      const relativePath = prefix ? `${prefix}/${name}` : name;
+      assertContainedPath(proofRoot, fullPath, declaredConfigFiles);
+      const stat = fs.lstatSync(fullPath);
+      const entry = { path: relativePath, type: stat.isDirectory() ? 'directory' : stat.isSymbolicLink() ? 'symlink' : stat.isFile() ? 'file' : 'other', size: stat.size, mode: stat.mode & 0o777 };
+      if (entry.type === 'file') entry.sha256 = sha256Bytes(fs.readFileSync(fullPath));
+      if (entry.type === 'symlink') entry.target = fs.readlinkSync(fullPath);
+      entries.push(entry);
+      if (entry.type === 'directory') visit(fullPath, relativePath);
+    }
+  }
+  visit(root);
+  return entries;
+}
+
+function snapshotRoot(root, proofRoot, declaredConfigFiles = []) {
+  const absolute = path.resolve(root);
+  assertContainedPath(proofRoot, absolute, declaredConfigFiles);
+  const identity = fileIdentity(absolute);
+  if (!identity) return { path: absolute, type: 'missing', size: null, mode: null, entries: [] };
+  const snapshot = { path: absolute, type: identity.type, size: identity.size, mode: identity.mode, entries: [] };
+  if (identity.type === 'file') snapshot.sha256 = identity.sha256;
+  if (identity.type === 'symlink') {
+    snapshot.target = identity.target;
+    return snapshot;
+  }
+  if (identity.type === 'directory') snapshot.entries = snapshotTree(absolute, proofRoot, declaredConfigFiles);
+  return snapshot;
+}
+
+function snapshotRoots(roots, proofRoot, declaredConfigFiles = []) {
+  return Object.fromEntries(Object.keys(roots).sort(ordinalCompare).map((name) => [name, snapshotRoot(roots[name], proofRoot, declaredConfigFiles)]));
+}
+
 function protectedSnapshot() {
   return Object.fromEntries(PROTECTED_INPUTS.map((relativePath) => [relativePath, fileIdentity(path.join(REPOSITORY_ROOT, relativePath))]));
 }
@@ -236,9 +298,48 @@ function development() {
   const install = run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm.cmd', 'install', '--global', '--ignore-scripts', '--offline', '--prefix', installRoot, tarball], { cwd: installRoot, env, timeout: 120000 });
   receipt.install = install;
   if (install.status !== 0) { receipt.classification = 'setup_failed'; receipt.reason = 'local tarball install failed'; return finish(receipt, proofRoot); }
-  const installedEntry = path.join(installRoot, 'node_modules', packageJson.name, 'bin', 'gsdd.mjs');
-  if (!fs.existsSync(installedEntry)) { receipt.classification = 'provenance_failure'; receipt.reason = `installed entry missing: ${installedEntry}`; return finish(receipt, proofRoot); }
-  receipt.installedEntry = { path: fs.realpathSync(installedEntry), sha256: sha256Bytes(fs.readFileSync(installedEntry)) };
+  const installedPackage = path.join(installRoot, 'node_modules', packageJson.name);
+  const installedEntryCandidate = path.join(installedPackage, 'bin', 'gsdd.mjs');
+  if (!fs.existsSync(installedEntryCandidate)) { receipt.classification = 'provenance_failure'; receipt.reason = `installed entry missing: ${installedEntryCandidate}`; return finish(receipt, proofRoot); }
+  let installedPackageJson;
+  try {
+    installedPackageJson = JSON.parse(fs.readFileSync(path.join(installedPackage, 'package.json'), 'utf8'));
+  } catch (error) {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = `installed package identity could not be read: ${error.message}`;
+    return finish(receipt, proofRoot);
+  }
+  const installedPackageResolved = resolvedPath(installedPackage);
+  const installedEntry = resolvedPath(installedEntryCandidate);
+  const installRootResolved = resolvedPath(installRoot);
+  if (!isContained(installRootResolved, installedPackageResolved, true) || !isContained(installRootResolved, installedEntry, true)) {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = `real installed entry escaped isolated install root: ${installedEntry}`;
+    return finish(receipt, proofRoot);
+  }
+  if (isContained(REPOSITORY_ROOT, installedPackageResolved) || isContained(REPOSITORY_ROOT, installedEntry)) {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = `real installed entry resolved into the source repository: ${installedEntry}`;
+    return finish(receipt, proofRoot);
+  }
+  if (installedPackageJson.name !== packageJson.name || installedPackageJson.version !== packageJson.version || JSON.stringify(losslessSorted(installedPackageJson.bin)) !== JSON.stringify(losslessSorted(packageJson.bin)) || installedPackageJson.bin?.gsdd !== 'bin/gsdd.mjs') {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = 'installed package name, version, or bin identity drifted from the packed candidate';
+    return finish(receipt, proofRoot);
+  }
+  const installedEntrySha256 = sha256Bytes(fs.readFileSync(installedEntry));
+  const sourceEntrySha256 = sha256Bytes(fs.readFileSync(path.join(REPOSITORY_ROOT, 'bin', 'gsdd.mjs')));
+  if (installedEntrySha256 !== sourceEntrySha256) {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = 'real installed entry hash drifted from the candidate source entry';
+    return finish(receipt, proofRoot);
+  }
+  receipt.installedEntry = {
+    path: installedEntry,
+    sha256: installedEntrySha256,
+    packageRoot: installedPackageResolved,
+    package: { name: installedPackageJson.name, version: installedPackageJson.version, declaredBin: installedPackageJson.bin },
+  };
 
   const laneRoot = path.join(proofRoot, 'consumer');
   fs.mkdirSync(laneRoot, { recursive: true });
@@ -251,8 +352,44 @@ function development() {
     version: runtimeVersion,
     repoRoot,
     generatedHelper: { intended: helperPath, resolved: null },
+    isolatedRoots: null,
+    snapshots: { before: null, after: null },
     commands: [],
   };
+  const runtimeRoots = {};
+  for (const spec of COMMAND_ORDER) {
+    const cwd = spec.id.startsWith('repo-') ? repoRoot : path.join(laneRoot, `global-${spec.target}`);
+    runtimeRoots[spec.id] = path.join(cwd, 'isolated-home');
+  }
+  const declaredConfigFiles = [env.NPM_CONFIG_USERCONFIG, env.NPM_CONFIG_GLOBALCONFIG];
+  const isolatedRoots = {
+    appdata: env.APPDATA,
+    claudeConfig: env.CLAUDE_CONFIG_DIR,
+    codexHome: env.CODEX_HOME,
+    gsddTestHome: env.GSDD_TEST_HOME,
+    home: env.HOME,
+    install: installRoot,
+    localappdata: env.LOCALAPPDATA,
+    npmCache: env.NPM_CONFIG_CACHE,
+    npmGlobalConfig: env.NPM_CONFIG_GLOBALCONFIG,
+    npmPrefix: env.NPM_CONFIG_PREFIX,
+    npmUserConfig: env.NPM_CONFIG_USERCONFIG,
+    opencodeConfig: env.OPENCODE_CONFIG_DIR,
+    repo: repoRoot,
+    temp: env.TEMP,
+    xdgConfig: env.XDG_CONFIG_HOME,
+    ...Object.fromEntries(Object.entries(runtimeRoots).map(([id, root]) => [`runtime:${id}`, root])),
+  };
+  try {
+    for (const root of Object.values(isolatedRoots)) assertContainedPath(proofRoot, root, declaredConfigFiles);
+    lane.isolatedRoots = isolatedRoots;
+    lane.snapshots.before = snapshotRoots(isolatedRoots, proofRoot, declaredConfigFiles);
+  } catch (error) {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = `isolated root containment or before-snapshot failed: ${error.message}`;
+    receipt.lanes = [lane];
+    return finish(receipt, proofRoot);
+  }
   let generatedHelper = null;
   for (const spec of COMMAND_ORDER) {
     const cwd = spec.id.startsWith('repo-') ? repoRoot : path.join(laneRoot, `global-${spec.target}`);
@@ -275,9 +412,22 @@ function development() {
     if (spec.id === 'repo-init') {
       if (!fs.existsSync(helperPath)) { receipt.classification = 'product_gap'; receipt.reason = 'generated .work/bin/gsdd.mjs missing after repo init'; break; }
       generatedHelper = fs.realpathSync(helperPath);
+      try {
+        assertContainedPath(proofRoot, generatedHelper);
+      } catch (error) {
+        receipt.classification = 'provenance_failure';
+        receipt.reason = `generated helper escaped the isolated proof root: ${error.message}`;
+        break;
+      }
       lane.generatedHelper.resolved = generatedHelper;
       lane.generatedHelper.sha256 = sha256Bytes(fs.readFileSync(generatedHelper));
     }
+  }
+  try {
+    lane.snapshots.after = snapshotRoots(isolatedRoots, proofRoot, declaredConfigFiles);
+  } catch (error) {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = `isolated root containment or after-snapshot failed: ${error.message}`;
   }
   receipt.lanes = [lane];
   if (receipt.classification === 'running') receipt.classification = 'partial_evidence';
