@@ -9,14 +9,16 @@ const { spawnSync } = require('child_process');
 
 const REPOSITORY_ROOT = fs.realpathSync(path.resolve(__dirname, '..', '..'));
 const RUNNER_RELATIVE = 'tests/proof/phase05-global-install.cjs';
-const NODE_20_VERSION = 'v20.0.0';
+const SUPPORTED_NODE_MAJOR = 22;
 const TARGETS = Object.freeze(['claude', 'opencode', 'codex']);
 const COMMAND_ORDER = Object.freeze([
-  { id: 'repo-init', argv: ['init'] },
-  { id: 'repo-health', argv: ['health'] },
-  { id: 'repo-update', argv: ['update'] },
-  ...TARGETS.map((target) => ({ id: `global-fresh-${target}`, argv: ['install', '--global', '--tools', target], target, phase: 'fresh' })),
-  ...TARGETS.map((target) => ({ id: `global-repair-${target}`, argv: ['install', '--global', '--tools', target], target, phase: 'repair' })),
+  { id: 'repo-init', argv: ['init'], entrypoint: 'public' },
+  { id: 'repo-control-map', argv: ['control-map', '--json'], entrypoint: 'generated-helper' },
+  { id: 'repo-next', argv: ['next', '--json'], entrypoint: 'generated-helper' },
+  { id: 'repo-health', argv: ['health'], entrypoint: 'public' },
+  { id: 'repo-update', argv: ['update'], entrypoint: 'public' },
+  ...TARGETS.map((target) => ({ id: `global-fresh-${target}`, argv: ['install', '--global', '--tools', target], target, phase: 'fresh', entrypoint: 'public' })),
+  ...TARGETS.map((target) => ({ id: `global-repair-${target}`, argv: ['install', '--global', '--tools', target], target, phase: 'repair', entrypoint: 'public' })),
 ]);
 const PROTECTED_INPUTS = Object.freeze([
   '.work.zip',
@@ -60,43 +62,25 @@ function run(command, args, options = {}) {
     timeout: options.timeout || 120000,
     input: options.input,
   });
-  return {
+  const stdout = String(result.stdout || '');
+  const receipt = {
     command,
     argv: args,
     cwd: options.cwd || REPOSITORY_ROOT,
     status: result.status,
     signal: result.signal || null,
     error: result.error ? { code: result.error.code, message: result.error.message } : null,
-    stdout: boundedOutput(result.stdout),
+    stdout: boundedOutput(stdout),
     stderr: boundedOutput(result.stderr),
   };
-}
-
-function locateNode20() {
-  const candidates = [];
-  const add = (candidate) => {
-    if (!candidate) return;
-    const resolved = path.resolve(candidate);
-    if (!candidates.includes(resolved)) candidates.push(resolved);
-  };
-  add(process.env.GSDD_NODE20_PATH);
-  add(path.join(process.env.NVM_HOME || '', 'v20.0.0', 'node.exe'));
-  add(path.join(process.env.APPDATA || '', 'nvm', 'v20.0.0', 'node.exe'));
-  add(path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs', 'node.exe'));
-  const found = [];
-  for (const candidate of candidates) {
-    if (!fs.existsSync(candidate)) continue;
-    const result = run(candidate, ['--version'], { cwd: REPOSITORY_ROOT, timeout: 15000 });
-    found.push({ executable: candidate, result });
-    if (result.status === 0 && result.stdout.trim() === NODE_20_VERSION) return { executable: fs.realpathSync(candidate), probe: result, candidates: found };
-  }
-  return { executable: null, probe: null, candidates: found };
+  if (options.captureRawStdout) receipt.stdoutRaw = stdout;
+  return receipt;
 }
 
 function scrubEnvironment(root) {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (/^(NODE_OPTIONS|NODE_PATH|npm_config_|NPM_CONFIG_|GIT_CONFIG|GIT_.*HELPER|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|all_proxy|no_proxy|CLAUDE_CONFIG_DIR|OPENCODE_CONFIG_DIR|CODEX_HOME|XDG_CONFIG_HOME|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|TEMP|TMP)$/.test(key)) delete env[key];
+    if (/^(NODE_OPTIONS|NODE_PATH|GSDD_WORKSPACE_ROOT|npm_config_|NPM_CONFIG_|GIT_CONFIG|GIT_.*HELPER|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|all_proxy|no_proxy|CLAUDE_CONFIG_DIR|OPENCODE_CONFIG_DIR|CODEX_HOME|XDG_CONFIG_HOME|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|TEMP|TMP)$/.test(key)) delete env[key];
   }
   env.HOME = path.join(root, 'home');
   env.USERPROFILE = env.HOME;
@@ -136,13 +120,31 @@ function safeRemove(root) {
   return !fs.existsSync(resolved);
 }
 
+function sameSnapshot(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function finish(receipt, proofRoot) {
+  receipt.protectedAfter = protectedSnapshot();
+  if (!sameSnapshot(receipt.protectedBefore, receipt.protectedAfter)) {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = 'protected inputs changed during the run';
+  }
+  receipt.cleanup.status = safeRemove(proofRoot) ? 'passed' : 'failed';
+  if (receipt.cleanup.status !== 'passed') {
+    receipt.classification = 'provenance_failure';
+    receipt.reason = 'isolated proof root cleanup failed';
+  }
+  return receipt;
+}
+
 function catalog() {
   return {
     schema: 'gsdd.phase05.global-install.v1',
     acceptance: false,
     classification: 'catalog_only',
     governancePreflight: { command: 'node bin/gsdd.mjs lifecycle-preflight plan 05', argv: ['bin/gsdd.mjs', 'lifecycle-preflight', 'plan', '05'], evidence: 'setup_only' },
-    nodeIdentities: [NODE_20_VERSION, 'current-supported-node'],
+    nodeIdentities: ['invoking-process.execPath', 'supported-major-floor-22'],
     commandOrder: COMMAND_ORDER,
     targets: TARGETS,
     exclusions: ['update-awareness', 'authenticated/model sessions', 'P05-07', 'P05-10', 'network/public registry', 'release/publication', 'Git mutation'],
@@ -150,6 +152,9 @@ function catalog() {
 }
 
 function development() {
+  const runtimeExecutable = fs.realpathSync(process.execPath);
+  const runtimeVersion = process.version;
+  const runtimeMajor = Number(process.versions.node.split('.')[0]);
   const receipt = {
     schema: 'gsdd.phase05.global-install.v1',
     acceptance: false,
@@ -157,15 +162,13 @@ function development() {
     commandOrder: COMMAND_ORDER,
     targets: TARGETS,
     protectedBefore: protectedSnapshot(),
-    node: { current: { executable: fs.realpathSync(process.execPath), version: process.version }, node20: null },
+    node: { executable: runtimeExecutable, version: runtimeVersion, major: runtimeMajor },
     cleanup: { status: 'not_started' },
-    claimLimit: 'One packed candidate, one local isolated runner, repo init-health-update and per-target global install plus repeat repair only; no update-awareness, auth/model, network, release, Git mutation, or Phase-05 closure claim.',
+    claimLimit: 'One packed candidate, one local isolated consumer run under the invoking runtime, public init-health-update and per-target global install plus repeat repair, and generated-helper control-map/next only; no update-awareness, auth/model, network, release, Git mutation, or Phase-05 closure claim.',
   };
-  const node20 = locateNode20();
-  receipt.node.node20 = node20;
-  if (!node20.executable) {
+  if (!Number.isInteger(runtimeMajor) || runtimeMajor < SUPPORTED_NODE_MAJOR) {
     receipt.classification = 'setup_failed';
-    receipt.reason = `exact ${NODE_20_VERSION} executable unavailable; network/download fallback is prohibited`;
+    receipt.reason = `invoking runtime ${runtimeVersion} is below the supported package floor Node ${SUPPORTED_NODE_MAJOR}`;
     receipt.protectedAfter = protectedSnapshot();
     receipt.cleanup.status = 'not_started_no_temp_root';
     return receipt;
@@ -181,44 +184,74 @@ function development() {
   fs.mkdirSync(installRoot, { recursive: true });
   const packageJson = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, 'package.json'), 'utf8'));
   receipt.package = { name: packageJson.name, version: packageJson.version, declaredBin: packageJson.bin };
-  const pack = run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm.cmd', 'pack', '--ignore-scripts', '--audit=false', '--fund=false', '--pack-destination', packageRoot], { cwd: REPOSITORY_ROOT, env, timeout: 120000 });
+  const candidate = run('git', ['rev-parse', 'HEAD'], { cwd: REPOSITORY_ROOT, env, timeout: 15000 });
+  if (candidate.status !== 0 || !/^[0-9a-f]{40}$/i.test(candidate.stdout.trim())) { receipt.classification = 'setup_failed'; receipt.reason = 'candidate HEAD could not be reconciled'; receipt.candidate = candidate; return finish(receipt, proofRoot); }
+  receipt.candidate = { head: candidate.stdout.trim() };
+  const pack = run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm.cmd', 'pack', '--ignore-scripts', '--audit=false', '--fund=false', '--json', '--pack-destination', packageRoot], { cwd: REPOSITORY_ROOT, env, timeout: 120000, captureRawStdout: true });
+  const rawPackStdout = pack.stdoutRaw || '';
+  delete pack.stdoutRaw;
   receipt.pack = pack;
-  if (pack.status !== 0) { receipt.classification = 'setup_failed'; receipt.reason = 'local npm pack failed'; receipt.protectedAfter = protectedSnapshot(); receipt.cleanup.status = safeRemove(proofRoot) ? 'passed' : 'failed'; return receipt; }
-  const tarballName = pack.stdout.trim().split(/\r?\n/).filter(Boolean).pop();
+  if (pack.status !== 0) { receipt.classification = 'setup_failed'; receipt.reason = 'local npm pack failed'; return finish(receipt, proofRoot); }
+  let packJson;
+  try { packJson = JSON.parse(rawPackStdout); } catch (error) { receipt.classification = 'provenance_failure'; receipt.reason = `npm pack --json output was not valid JSON: ${error.message}`; return finish(receipt, proofRoot); }
+  if (!Array.isArray(packJson) || packJson.length !== 1 || !packJson[0] || typeof packJson[0] !== 'object' || Array.isArray(packJson[0])) { receipt.classification = 'provenance_failure'; receipt.reason = 'npm pack --json output was not one unambiguous package object'; return finish(receipt, proofRoot); }
+  const packed = packJson[0];
+  if (typeof packed.filename !== 'string' || !packed.filename.trim() || typeof packed.integrity !== 'string' || !packed.integrity.trim()) { receipt.classification = 'provenance_failure'; receipt.reason = 'npm pack --json package object lacks non-empty filename or integrity'; return finish(receipt, proofRoot); }
+  const tarballName = packed.filename.trim();
+  if (path.basename(tarballName) !== tarballName) { receipt.classification = 'provenance_failure'; receipt.reason = `npm pack --json filename was not a contained tarball name: ${tarballName}`; return finish(receipt, proofRoot); }
   const tarball = path.join(packageRoot, tarballName);
+  if (!fs.existsSync(tarball)) { receipt.classification = 'provenance_failure'; receipt.reason = `npm pack --json filename missing from pack destination: ${tarballName}`; return finish(receipt, proofRoot); }
+  receipt.package.pack = { filename: tarballName, integrity: packed.integrity.trim() };
   receipt.package.tarball = { path: tarball, sha256: sha256Bytes(fs.readFileSync(tarball)) };
   const install = run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'npm.cmd', 'install', '--global', '--ignore-scripts', '--offline', '--prefix', installRoot, tarball], { cwd: installRoot, env, timeout: 120000 });
   receipt.install = install;
-  if (install.status !== 0) { receipt.classification = 'setup_failed'; receipt.reason = 'local tarball install failed'; receipt.protectedAfter = protectedSnapshot(); receipt.cleanup.status = safeRemove(proofRoot) ? 'passed' : 'failed'; return receipt; }
+  if (install.status !== 0) { receipt.classification = 'setup_failed'; receipt.reason = 'local tarball install failed'; return finish(receipt, proofRoot); }
   const installedEntry = path.join(installRoot, 'node_modules', packageJson.name, 'bin', 'gsdd.mjs');
-  if (!fs.existsSync(installedEntry)) { receipt.classification = 'provenance_failure'; receipt.reason = `installed entry missing: ${installedEntry}`; receipt.protectedAfter = protectedSnapshot(); receipt.cleanup.status = safeRemove(proofRoot) ? 'passed' : 'failed'; return receipt; }
+  if (!fs.existsSync(installedEntry)) { receipt.classification = 'provenance_failure'; receipt.reason = `installed entry missing: ${installedEntry}`; return finish(receipt, proofRoot); }
   receipt.installedEntry = { path: fs.realpathSync(installedEntry), sha256: sha256Bytes(fs.readFileSync(installedEntry)) };
 
-  const lanes = [];
-  for (const nodeLane of [{ id: 'node20.0.0', executable: node20.executable }, { id: 'current-supported-node', executable: process.execPath }]) {
-    const laneRoot = path.join(proofRoot, nodeLane.id);
-    fs.mkdirSync(laneRoot, { recursive: true });
-    const repoRoot = path.join(laneRoot, 'repo');
-    fs.mkdirSync(repoRoot, { recursive: true });
-    const lane = { id: nodeLane.id, executable: nodeLane.executable, version: run(nodeLane.executable, ['--version'], { cwd: laneRoot, env, timeout: 15000 }), commands: [] };
-    if (lane.version.status !== 0 || lane.version.stdout.trim() !== (nodeLane.id === 'node20.0.0' ? NODE_20_VERSION : process.version)) { receipt.classification = 'setup_failed'; receipt.reason = `runtime identity mismatch for ${nodeLane.id}`; lanes.push(lane); break; }
-    for (const spec of COMMAND_ORDER) {
-      const cwd = spec.id.startsWith('repo-') ? repoRoot : path.join(laneRoot, `global-${spec.target}`);
-      fs.mkdirSync(cwd, { recursive: true });
-      const before = fileIdentity(cwd);
-      const commandReceipt = run(nodeLane.executable, [installedEntry, ...spec.argv], { cwd, env: { ...env, GSDD_TEST_HOME: path.join(cwd, 'isolated-home') }, timeout: 120000 });
-      const after = fileIdentity(cwd);
-      lane.commands.push({ ...spec, cwd, before, after, result: commandReceipt });
-      if (commandReceipt.status !== 0) { receipt.classification = 'product_gap'; receipt.reason = `${spec.id} failed`; break; }
+  const laneRoot = path.join(proofRoot, 'consumer');
+  fs.mkdirSync(laneRoot, { recursive: true });
+  const repoRoot = path.join(laneRoot, 'repo');
+  fs.mkdirSync(repoRoot, { recursive: true });
+  const helperPath = path.join(repoRoot, '.work', 'bin', 'gsdd.mjs');
+  const lane = {
+    id: 'invoking-runtime',
+    executable: runtimeExecutable,
+    version: runtimeVersion,
+    repoRoot,
+    generatedHelper: { intended: helperPath, resolved: null },
+    commands: [],
+  };
+  let generatedHelper = null;
+  for (const spec of COMMAND_ORDER) {
+    const cwd = spec.id.startsWith('repo-') ? repoRoot : path.join(laneRoot, `global-${spec.target}`);
+    fs.mkdirSync(cwd, { recursive: true });
+    const before = fileIdentity(cwd);
+    const entrypoint = spec.entrypoint === 'generated-helper' ? generatedHelper : installedEntry;
+    const args = ['repo-init', 'repo-health', 'repo-update'].includes(spec.id)
+      ? [...spec.argv, '--workspace-root', repoRoot]
+      : spec.argv;
+    if (!entrypoint) {
+      receipt.classification = 'product_gap';
+      receipt.reason = `${spec.id} requires the generated helper after repo init`;
+      lane.commands.push({ ...spec, argv: args, cwd, before, after: fileIdentity(cwd), result: null });
+      break;
     }
-    lanes.push(lane);
-    if (receipt.classification !== 'running') break;
+    const commandReceipt = run(runtimeExecutable, [entrypoint, ...args], { cwd, env: { ...env, GSDD_TEST_HOME: path.join(cwd, 'isolated-home') }, timeout: 120000 });
+    const after = fileIdentity(cwd);
+    lane.commands.push({ ...spec, argv: args, cwd, entrypoint, result: commandReceipt, before, after });
+    if (commandReceipt.status !== 0) { receipt.classification = 'product_gap'; receipt.reason = `${spec.id} failed`; break; }
+    if (spec.id === 'repo-init') {
+      if (!fs.existsSync(helperPath)) { receipt.classification = 'product_gap'; receipt.reason = 'generated .work/bin/gsdd.mjs missing after repo init'; break; }
+      generatedHelper = fs.realpathSync(helperPath);
+      lane.generatedHelper.resolved = generatedHelper;
+      lane.generatedHelper.sha256 = sha256Bytes(fs.readFileSync(generatedHelper));
+    }
   }
-  receipt.lanes = lanes;
-  receipt.protectedAfter = protectedSnapshot();
-  receipt.cleanup.status = safeRemove(proofRoot) ? 'passed' : 'failed';
+  receipt.lanes = [lane];
   if (receipt.classification === 'running') receipt.classification = 'partial_evidence';
-  return receipt;
+  return finish(receipt, proofRoot);
 }
 
 function main() {
@@ -227,7 +260,7 @@ function main() {
   if (mode === '--catalog') output = catalog();
   else if (mode === '--development') output = development();
   else {
-    console.error('Usage: node tests/proof/phase05-global-install.cjs --catalog|--development');
+    console.error(`Usage: node ${RUNNER_RELATIVE} --catalog|--development`);
     process.exitCode = 2;
     return;
   }
