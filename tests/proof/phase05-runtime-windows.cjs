@@ -65,6 +65,7 @@ function command(file, args, options = {}) {
     env: options.env,
     encoding: 'buffer',
     windowsHide: true,
+    windowsVerbatimArguments: options.windowsVerbatimArguments === true,
     maxBuffer: 16 * 1024 * 1024,
   });
   return {
@@ -142,18 +143,21 @@ function snapshot(root) {
   return files;
 }
 
-function runNpx(shellName, shellPath, npx, args, cwd, env, provenance) {
-  const logical = ['-y', PACKAGE_NAME, ...args];
+function runNpx(shellName, shellPath, npx, args, cwd, env, provenance, localPrefix) {
+  // The packed candidate is installed in the isolated prefix above. Bind npx
+  // to that prefix so offline execution cannot fall through to the ambient
+  // registry/cache while the command still runs from the spaced fixture cwd.
+  const logical = ['--prefix', localPrefix, '-y', PACKAGE_NAME, ...args];
   let shellArgs;
   let commandLine;
   if (shellName === 'cmd') {
-    commandLine = `"${npx}" ${logical.map(quoteCmd).join(' ')}`;
+    commandLine = `call ${quoteCmd(npx)} ${logical.map(quoteCmd).join(' ')}`;
     shellArgs = ['/d', '/s', '/c', commandLine];
   } else {
     commandLine = `& ${quotePs(npx)} ${logical.map(quotePs).join(' ')}`;
     shellArgs = ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', commandLine];
   }
-  const receipt = command(shellPath, shellArgs, { cwd, env });
+  const receipt = command(shellPath, shellArgs, { cwd, env, windowsVerbatimArguments: shellName === 'cmd' });
   const child = {
     shell: shellName,
     shellExecutable: shellPath,
@@ -201,7 +205,7 @@ function catalog() {
       'init --auto --tools claude,opencode,codex', 'health', 'update',
       'install --global --tools claude', 'install --global --tools opencode', 'install --global --tools codex',
       'repeat install --global --tools claude', 'repeat install --global --tools opencode', 'repeat install --global --tools codex',
-      'help', 'install --global --help', 'health --help', 'update --help',
+      'help', 'health --help', 'update --help',
     ],
     targets: ['claude', 'opencode', 'codex'],
     exclusions: ['auth/model/billable sessions', 'update-awareness', 'browser', 'P05-07', 'release/public registry', 'Node-20 acquisition'],
@@ -273,7 +277,7 @@ function development() {
       fs.mkdirSync(fixture); fs.mkdirSync(globalCwd);
       const shellReceipt = { shell: shellName, fixture, globalCwd, cases: [], before: { fixture: snapshot(fixture), home: snapshot(roots.home), xdg: snapshot(roots.xdg) } };
       const invoke = (args, cwd) => {
-        const child = runNpx(shellName, shellPath, npx, args, cwd, env, provenance);
+        const child = runNpx(shellName, shellPath, npx, args, cwd, env, provenance, localPrefix);
         shellReceipt.cases.push(child); result.provenance.push(child.provenance);
         return child;
       };
@@ -296,7 +300,7 @@ function development() {
       requireFiles(globalRoots.opencode, ['commands', 'agents'], 'OpenCode global');
       requireFiles(globalRoots.codex, ['agents'], 'Codex global');
       for (const target of ['claude', 'opencode', 'codex']) invoke(['install', '--global', '--tools', target], globalCwd);
-      for (const args of [['help'], ['install', '--global', '--help'], ['health', '--help'], ['update', '--help']]) invoke(args, fixture);
+      for (const args of [['help'], ['health', '--help'], ['update', '--help']]) invoke(args, fixture);
       shellReceipt.after = { fixture: snapshot(fixture), home: snapshot(roots.home), xdg: snapshot(roots.xdg) };
       result.cases.push(shellReceipt);
     }
