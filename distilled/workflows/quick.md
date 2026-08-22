@@ -5,6 +5,13 @@ Quick tasks are for sub-hour work: bug fixes, small features, config changes, on
 They reuse the same planner, executor, and verifier roles but skip research and synthesizer.
 </role>
 
+<entry_guidance>
+Choose Quick when the change is concrete and bounded. If it needs a durable standalone plan, use
+`/work-plan` -> `/work-execute` -> `/work-verify`; if the scope is broad or milestone-shaped, use
+`/work-new-project`. For an unfamiliar or risky brownfield repo, `/work-map-codebase` is contextual
+orientation before choosing a lane, not a required fourth goal.
+</entry_guidance>
+
 <anti_patterns>
 - Do not execute before the user sees the plan preview (Step 3.7 must complete before Step 4)
 - Do not proceed past file verification gates if the expected file does not exist on disk — a plan that exists only in conversation context will be lost on compaction

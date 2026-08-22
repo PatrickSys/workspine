@@ -914,12 +914,14 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const mod = await import(`file://${INIT_RUNTIME_MODULE.replace(/\\/g, '/')}`);
     const lines = mod.getPostInitRoutingLines(['cursor', 'copilot', 'gemini']);
     const content = lines.join('\n');
-    assert.match(content, /Cursor:\s+\/work-new-project/,
-      'post-init routing must show Cursor slash-command guidance. FIX: Add Cursor /work-new-project to init output.');
-    assert.match(content, /Copilot:\s+\/work-new-project/,
-      'post-init routing must show Copilot slash-command guidance. FIX: Add Copilot /work-new-project to init output.');
-    assert.match(content, /Gemini CLI:\s+\/work-new-project/,
-      'post-init routing must show Gemini slash-command guidance. FIX: Add Gemini /work-new-project to init output.');
+    for (const [runtime, command] of [
+      ['Cursor', '/work-quick'],
+      ['Copilot', '/work-quick'],
+      ['Gemini CLI', '/work-quick'],
+    ]) {
+      assert.match(content, new RegExp(`${runtime}:\\s+${command} .* /work-plan .* /work-new-project`),
+        `post-init routing must show the three goal lanes for ${runtime}. FIX: Keep quick, plan, and new-project in init output.`);
+    }
   });
 
   test('DESIGN.md ToC lists every documented decision', () => {

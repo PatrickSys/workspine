@@ -8,16 +8,17 @@ The supported public CLI/generated helper has default-on update awareness on com
 
 ## Fast Path
 
-For a new project or a broad brownfield effort:
+Run `npx -y workspine init` from the repo root, then choose one goal:
 
-1. Run `npx -y workspine init` from the repo root.
-2. Start with `work-new-project` unless the change is already small and concrete.
-3. Review the plan from `work-plan` before starting `work-execute`.
-4. Run `work-verify` before calling the phase done.
+1. **Quick** — use `work-quick` for a concrete, bounded change.
+2. **Planned change** — use `work-plan`, then `work-execute`, then `work-verify` for a standalone brownfield change that needs a durable plan but not a roadmap phase.
+3. **Start or extend a project** — use `work-new-project` for greenfield, fuzzy, or first-milestone work. After a milestone is shipped, `work-new-milestone` starts the next one.
+
+Use `work-map-codebase` only when a repo is unfamiliar, risky, or its existing map is stale. It creates trusted brownfield context before you choose Quick or a broader project route; it is not a fourth mandatory goal.
 
 Use `npx -y workspine init` for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. Use `--auto` to refresh detected existing homes; global install never creates `.work/` in the current repo.
 
-For a bounded existing-code change, use `work-quick`. For an unfamiliar or risky repo, use `work-map-codebase` before choosing between `work-quick` and `work-new-project`.
+If init detects a supported legacy `.planning/` state, it offers an optional move into `.work/` because that leaves one current authority and a receipt. The move preserves bytes; declining leaves the legacy state unchanged. Fresh workspaces never show this offer, and migration is never silent.
 
 ---
 
@@ -217,7 +218,7 @@ Details worth knowing before you script it:
 |----------|---------|-------------|
 | `work-new-project` | Full project init: questioning, brownfield audit when needed, research, spec, roadmap | Greenfield, fuzzy brownfield scope, or full lifecycle setup |
 | `work-map-codebase` | Map existing codebase for reusable brownfield context | When the repo is unfamiliar, risky, or you want a deeper baseline before choosing `quick` vs `new-project` |
-| `work-plan` | Research + plan + adversarial check for current phase; writes planning artifacts only | Before executing a phase |
+| `work-plan` | Research + plan + adversarial check for a standalone change or current phase | When a concrete change needs durable plan -> execute -> verify, with or without a roadmap phase |
 | `work-execute` | Execute phase plans in parallel waves | After planning is complete |
 | `work-verify` | 3-level verification gate + anti-pattern scan | After execution completes |
 | `work-verify-work` | Conversational UAT validation with structured gap tracking | When user-facing behavior needs explicit validation beyond repo artifacts |
@@ -419,10 +420,11 @@ Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces whe
 
 `npx -y workspine init`
 
-- Choose one starting lane after init:
-- `Claude/OpenCode`: `/work-quick` for a concrete bounded change, `/work-new-project` for fuzzy or milestone-shaped work, or `/work-map-codebase` first when the repo needs a deeper brownfield baseline
-- `Codex`: `$work-quick` for a concrete bounded change, `$work-new-project` for fuzzy or milestone-shaped work, or `$work-map-codebase` first when the repo needs a deeper brownfield baseline
-- `Cursor / Copilot / Gemini`: `/work-quick`, `/work-new-project`, or `/work-map-codebase` from the slash command menu when skill discovery is available, using the same routing rules above
+- Choose one starting goal after init:
+- `Claude/OpenCode`: `/work-quick` for a concrete bounded change, `/work-plan` for a planned standalone change, or `/work-new-project` to start/extend a broader project
+- `Codex`: `$work-quick`, `$work-plan`, or `$work-new-project` for those same goals (`$work-plan` remains plan-only until `$work-execute`)
+- `Cursor / Copilot / Gemini`: use the matching slash command when skill discovery is available, using the same three-goal routing
+- Add `/work-map-codebase` first only when the repo is unfamiliar, risky, or its map is stale. Use `/work-new-milestone` only after shipped milestone history is present.
 
 ### Quick Bug Fix
 

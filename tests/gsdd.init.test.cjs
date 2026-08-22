@@ -749,7 +749,7 @@ describe('gsdd init and update', () => {
     const launcher = fs.readFileSync(launcherPath, 'utf-8');
 
     assert.match(launcher, /import \{ cmdFileOp \} from '\.\/lib\/file-ops\.mjs';/);
-    assert.match(launcher, /import \{ cmdLifecyclePreflight \} from '\.\/lib\/lifecycle-preflight\.mjs';/);
+    assert.match(launcher, /import \{ cmdLifecyclePreflight(?:, cmdLifecycleTransition)? \} from '\.\/lib\/lifecycle-preflight\.mjs';/);
     assert.match(launcher, /import \{ cmdPhaseStatus, cmdVerify \} from '\.\/lib\/phase\.mjs';/);
     assert.match(launcher, /import \{ createCmdNext \} from '\.\/lib\/next\.mjs';/);
     assert.match(launcher, /import \{ bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext \} from '\.\/lib\/workspace-root\.mjs';/);
@@ -1717,8 +1717,8 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
     assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')),
       'Wizard runtime selection must not write AGENTS.md unless governance was explicitly enabled.');
-    assert.match(output, /Cursor:\s+\/work-new-project/);
-    assert.match(output, /Codex CLI:\s+\$work-new-project/);
+    assert.match(output, /Cursor:\s+\/work-quick .*\/work-plan .*\/work-new-project/);
+    assert.match(output, /Codex CLI:\s+\$work-quick .*\$work-plan .*\$work-new-project/);
   });
 
   test('interactive wizard governance opt-in writes AGENTS.md separately from runtime choice', async () => {
@@ -2059,7 +2059,8 @@ describe('gsdd init and update', () => {
     const result = await runCliViaJunction(tmpDir, ['help']);
 
     assert.strictEqual(result.exitCode, 0, result.output);
-    assert.match(result.output, /Usage: gsdd <command> \[args\]/);
+    assert.match(result.output, /Usage: workspine <command> \[args\]/);
+    assert.match(result.output, /Compatibility: gsdd <command> \[args\] remains a supported alias/);
     assert.match(result.output, /Commands:/);
     assert.match(result.output, /claude\s+Generate Claude Code skills .* native agents/);
     assert.match(result.output, /codex\s+Generate Codex CLI native/);

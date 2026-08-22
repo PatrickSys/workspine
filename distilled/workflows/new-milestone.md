@@ -10,6 +10,9 @@ Scope boundary: you produce updated SPEC.md requirements and a new set of phases
 `.work/SPEC.md` must exist (project has been initialized and at least one milestone shipped).
 `.work/MILESTONES.md` must exist (at least one milestone was completed and archived).
 
+This is a history-gated continuation route, not a first-run choice. Present it only when shipped milestone
+history is detected; use `/work-new-project` for the first project milestone.
+
 If SPEC.md is missing, the project has not been initialized — run `/work-new-project` instead.
 If MILESTONES.md is missing, no milestone has been completed — complete the current milestone first with `/work-complete-milestone`.
 </prerequisites>

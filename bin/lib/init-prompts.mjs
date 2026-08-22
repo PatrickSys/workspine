@@ -17,17 +17,17 @@ export function createInitPromptApi({ input = process.stdin, output = process.st
         input,
         output,
         title: 'Legacy Workspine state detected',
-        prompt: `Move .planning/ to .work/ now? (${command})`,
+        prompt: `Move the detected legacy state into .work/ now? (${command})`,
         defaultValue: true,
         details: [
-          'The supported S2-config-v1 tree will be renamed in place and recorded before setup continues.',
-          'Workspine will not copy, merge, or delete consumer state.',
+          'This keeps one supported .work/ authority and records the move before setup continues.',
+          'The move is optional: bytes are preserved and receipted; declining leaves the existing state unchanged.',
         ],
       });
     },
     async runInitWizard({ cwd, adapters }) {
-      output.write(`${ANSI.bold}${ANSI.cyan}GSDD Install Wizard${ANSI.reset}\n`);
-      output.write(`${ANSI.dim}Portable skills are always installed. Select the runtimes you want GSDD to feel native in.${ANSI.reset}\n\n`);
+      output.write(`${ANSI.bold}${ANSI.cyan}Workspine setup${ANSI.reset}\n`);
+      output.write(`${ANSI.dim}Portable workflow skills are always installed. Select the runtimes that should get native Workspine surfaces.${ANSI.reset}\n\n`);
 
       const runtimeChoices = buildRuntimeChoices(adapters);
       const selectedRuntimes = await promptMultiSelect({
