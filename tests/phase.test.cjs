@@ -315,7 +315,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     const result = await runCliAsMain(tmpDir, ['phase-status', '9a', 'in_progress']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
-    const output = JSON.parse(result.output);
+    const output = JSON.parse(result.stdout);
     assert.strictEqual(output.phase, '9a');
     assert.strictEqual(output.changed, true);
     assert.match(fs.readFileSync(roadmapPath, 'utf-8'), /- \[-\] \*\*Phase 9a: Truth Reconciliation\*\*/);
@@ -454,7 +454,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
 
     result = await runCliAsMain(tmpDir, ['phase-status', '7', 'in_progress']);
     assert.strictEqual(result.exitCode, 0, result.output);
-    output = JSON.parse(result.output);
+    output = JSON.parse(result.stdout);
     assert.strictEqual(output.phase, '7');
 
     const updated = fs.readFileSync(roadmapPath, 'utf-8');
@@ -563,7 +563,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     const result = await runCliAsMain(tmpDir, ['phase-status', '18', 'done']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
-    const output = JSON.parse(result.output);
+    const output = JSON.parse(result.stdout);
     assert.strictEqual(output.changed, false);
     assert.strictEqual(fs.readFileSync(roadmapPath, 'utf-8'), original);
   });
@@ -1366,7 +1366,7 @@ describe('Phase 04 exact lifecycle identity and closure', () => {
 
     const bare = await runCliAsMain(tmpDir, ['phase-status', '11', 'done']);
     assert.strictEqual(bare.exitCode, 1, bare.output);
-    assert.strictEqual(JSON.parse(bare.output).error, 'ambiguous_phase_selector');
+    assert.strictEqual(JSON.parse(bare.stdout).error, 'ambiguous_phase_selector');
     assert.deepStrictEqual(fs.readFileSync(standardRoadmap, 'utf8'), beforeStandard);
     assert.deepStrictEqual(fs.readFileSync(nativeRoadmap, 'utf8'), beforeNative);
 
@@ -1383,7 +1383,7 @@ describe('Phase 04 exact lifecycle identity and closure', () => {
     const before = fs.readFileSync(roadmapPath, 'utf8');
     const result = await runCliAsMain(tmpDir, ['phase-status', 'phases/11-first', 'done']);
     assert.strictEqual(result.exitCode, 1, result.output);
-    assert.strictEqual(JSON.parse(result.output).error, 'incomplete_phase_closure');
+    assert.strictEqual(JSON.parse(result.stdout).error, 'incomplete_phase_closure');
     assert.deepStrictEqual(fs.readFileSync(roadmapPath, 'utf8'), before);
   });
 

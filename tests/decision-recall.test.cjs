@@ -310,11 +310,11 @@ describe('S1 decision recall loop', () => {
 
     const scopedResult = await runCliAsMain(root, ['remember', 'Scope this to phase fourteen', '--type', 'rule', '--scope', 'repo', '--for', 'phase:14']);
     assert.strictEqual(scopedResult.exitCode, 0, scopedResult.output);
-    const scopedId = JSON.parse(scopedResult.output).record.id;
+    const scopedId = JSON.parse(scopedResult.stdout).record.id;
 
     const defaultResult = await runCliAsMain(root, ['remember', 'Leave this repo wide', '--type', 'rule', '--scope', 'repo']);
     assert.strictEqual(defaultResult.exitCode, 0, defaultResult.output);
-    const defaultId = JSON.parse(defaultResult.output).record.id;
+    const defaultId = JSON.parse(defaultResult.stdout).record.id;
 
     const records = readDecisionRecords(path.join(root, '.work')).records;
     assert.strictEqual(records.find((entry) => entry.meta.id === scopedId)?.meta.for, 'phase:14');
@@ -584,7 +584,7 @@ describe('S1 decision recall loop', () => {
     dirs.push(root);
     let result = await runCliAsMain(root, ['remember', 'Use direct commits for phase work', '--type', 'rule', '--scope', 'repo', '--code', 'bin/gsdd.mjs:1', '--why', 'PR ceremony was dropped for dogfood.']);
     assert.strictEqual(result.exitCode, 0, result.output);
-    const captured = JSON.parse(result.output);
+    const captured = JSON.parse(result.stdout);
     assert.strictEqual(captured.status, 'candidate');
     assert.match(captured.record.id, /^use-direct-commits-for-phase-work-[a-z0-9]{4}$/);
     const { readDecisionRecords } = await loadStore();
@@ -600,7 +600,7 @@ describe('S1 decision recall loop', () => {
 
     result = await runCliAsMain(root, ['remember', 'Lock direct commits for this repo', '--type', 'rule', '--scope', 'repo']);
     assert.strictEqual(result.exitCode, 0, result.output);
-    const candidateCapture = JSON.parse(result.output);
+    const candidateCapture = JSON.parse(result.stdout);
     assert.strictEqual(candidateCapture.status, 'candidate');
     const promoteCandidate = readDecisionRecords(path.join(root, '.work')).records.find((entry) => entry.meta.id === candidateCapture.record.id);
     assert.strictEqual(promoteCandidate?.meta.status, 'candidate');
@@ -636,7 +636,7 @@ describe('S1 decision recall loop', () => {
     const workDir = path.join(root, '.work');
     fs.mkdirSync(workDir, { recursive: true });
     let result = await runCliAsMain(root, ['remember', 'Promote this candidate', '--type', 'rule', '--scope', 'repo']);
-    const candidateId = JSON.parse(result.output).record.id;
+    const candidateId = JSON.parse(result.stdout).record.id;
     const { readDecisionRecords } = await loadStore();
     const candidatePath = path.join(workDir, 'decisions', `${candidateId}.md`);
     const candidateBefore = readDecisionRecords(workDir).records.find((entry) => entry.meta.id === candidateId);
@@ -666,7 +666,7 @@ describe('S1 decision recall loop', () => {
     assert.deepStrictEqual((await loadStore()).recallDecisions({ workDir, terms: 'Promote this candidate' }).records, []);
 
     result = await runCliAsMain(root, ['remember', 'Reject this candidate', '--type', 'rule', '--scope', 'repo']);
-    const rejectId = JSON.parse(result.output).record.id;
+    const rejectId = JSON.parse(result.stdout).record.id;
     result = await runCliAsMain(root, ['decisions', 'reject', rejectId]);
     assert.strictEqual(result.exitCode, 0, result.output);
     const rejected = readDecisionRecords(workDir).records.find((entry) => entry.meta.id === rejectId);
@@ -726,7 +726,7 @@ describe('S1 decision recall loop', () => {
     let result = await runCliAsMain(root, [
       'remember', 'Explicit owner assertion is required.', '--type', 'rule', '--scope', 'repo',
     ]);
-    const candidateId = JSON.parse(result.output).record.id;
+    const candidateId = JSON.parse(result.stdout).record.id;
     const candidatePath = path.join(workDir, 'decisions', `${candidateId}.md`);
     const candidateBytes = fs.readFileSync(candidatePath);
 
@@ -1058,7 +1058,7 @@ describe('S1 decision recall loop', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     result = await runCliAsMain(root, ['remember', 'Canonical work decision', '--type', 'rule', '--scope', 'repo']);
     assert.strictEqual(result.exitCode, 0, result.output);
-    const id = JSON.parse(result.output).record.id;
+    const id = JSON.parse(result.stdout).record.id;
     result = await runCliAsMain(root, ['decisions', 'query', 'Canonical work decision']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, new RegExp(id));

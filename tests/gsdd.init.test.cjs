@@ -1031,7 +1031,7 @@ describe('gsdd init and update', () => {
       'remember', 'Existing active record proves invalidation refusal.', '--type', 'rule', '--scope', 'repo',
     ]);
     assert.strictEqual(activeCapture.exitCode, 0, activeCapture.output);
-    const activeId = JSON.parse(activeCapture.output).record.id;
+    const activeId = JSON.parse(activeCapture.stdout).record.id;
     const promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId, '--authority', 'owner', '--approval-ref', 'owner-review-generated']);
     assert.strictEqual(promoted.exitCode, 0, promoted.output);
 
@@ -1043,8 +1043,8 @@ describe('gsdd init and update', () => {
       'remember', 'Generated helper reads malformed classification.', '--type', 'rule', '--scope', 'repo',
     ]);
     assert.strictEqual(malformedCapture.exitCode, 0, malformedCapture.output);
-    const malformedId = JSON.parse(malformedCapture.output).record.id;
-    const unreceiptedId = JSON.parse(unreceiptedCapture.output).record.id;
+    const malformedId = JSON.parse(malformedCapture.stdout).record.id;
+    const unreceiptedId = JSON.parse(unreceiptedCapture.stdout).record.id;
     const unreceiptedPath = path.join(tmpDir, '.work', 'decisions', `${unreceiptedId}.md`);
     const malformedPath = path.join(tmpDir, '.work', 'decisions', `${malformedId}.md`);
     fs.writeFileSync(unreceiptedPath, fs.readFileSync(unreceiptedPath, 'utf-8').replace('status: candidate\n', 'status: active\n'));
@@ -1153,14 +1153,14 @@ describe('gsdd init and update', () => {
       'remember', 'The generated helper must read active authority.', '--type', 'rule', '--scope', 'repo', '--no-update-notice',
     ]);
     assert.strictEqual(captured.exitCode, 0, captured.output);
-    const activeId = JSON.parse(captured.output).record.id;
+    const activeId = JSON.parse(captured.stdout).record.id;
     let promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId, '--authority', 'owner', '--approval-ref', 'owner-review-nested', '--no-update-notice']);
     assert.strictEqual(promoted.exitCode, 0, promoted.output);
     captured = await runCliAsMain(tmpDir, [
       'remember', 'Candidate helper body must remain excluded.', '--type', 'rule', '--scope', 'repo', '--no-update-notice',
     ]);
     assert.strictEqual(captured.exitCode, 0, captured.output);
-    const candidateId = JSON.parse(captured.output).record.id;
+    const candidateId = JSON.parse(captured.stdout).record.id;
     const initNext = await runCliAsMain(tmpDir, ['next', '--init', '--json', '--no-update-notice']);
     assert.strictEqual(initNext.exitCode, 0, initNext.output);
     const initialized = JSON.parse(initNext.output);
