@@ -103,6 +103,71 @@ async function readContinuityCheckpoint(cwd = tmpDir) {
   return mod.readContinuityCheckpoint(path.join(cwd, '.work'));
 }
 
+function brownfieldChange({ posture = 'active', nextAction = 'Execute the bounded change.', doneWhen = true } = {}) {
+  return [
+    '---',
+    'change: CHANGE-TEST',
+    'status: active',
+    '---',
+    '',
+    '# Brownfield Change: Test stream',
+    '',
+    '## Goal',
+    'Prove one bounded brownfield stream.',
+    '',
+    '## In Scope',
+    '- The named bounded test surfaces.',
+    '',
+    '## Out of Scope',
+    '- Roadmap membership and independent streams.',
+    '',
+    '## Done When',
+    ...(doneWhen ? ['- The bounded stream has passing evidence.'] : []),
+    '',
+    '## Current Status',
+    `- Current posture: ${posture}`,
+    '- Current branch / integration surface: test/ brownfield',
+    '- Current owner / runtime: test',
+    '',
+    '## Next Action',
+    `- ${nextAction}`,
+    '',
+    '## PR Slice Ownership',
+    '| Slice | Scope | Owned files / modules | Status |',
+    '| --- | --- | --- | --- |',
+    '| A | bounded test | tests/ | active |',
+    '',
+    '## Closeout Path',
+    '1. Record evidence in VERIFICATION.md.',
+    '2. Set CHANGE.md to closed after a passed verification.',
+    '',
+  ].join('\n');
+}
+
+function brownfieldVerification(status = 'passed') {
+  return [
+    '---',
+    'change: CHANGE-TEST',
+    `status: ${status}`,
+    '---',
+    '',
+    '# Brownfield Change Verification',
+    '',
+    '## Goal Verification',
+    '- The bounded stream is verified.',
+    '',
+    '## Evidence',
+    '- `test` proves the Done When outcome.',
+    '',
+    '## Gaps',
+    '- None.',
+    '',
+    '## Closeout Decision',
+    '- `passed`.',
+    '',
+  ].join('\n');
+}
+
 function writeCheckpoint(content) {
   writeFile('.work/.continue-here.md', content);
 }
@@ -1195,6 +1260,87 @@ describe('next command routing', () => {
     assert.strictEqual(result.authority, 'brownfield_change');
     assert.strictEqual(result.route_kind, 'brownfield_change_blocked');
     assert.ok(result.blocked_by.includes('brownfield_change'));
+  });
+
+  test('one brownfield stream transitions creator -> plan -> execute -> verify -> closed and next exits', async () => {
+    await initWork();
+    writeFile('.work/brownfield-change/CHANGE.md', brownfieldChange());
+    writeFile('.work/brownfield-change/HANDOFF.md', '# Context only\n\n## Active Constraints\n- Keep one stream.\n');
+    writeFile('.work/brownfield-change/VERIFICATION.md', brownfieldVerification('complete'));
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    const verificationPath = '.work/brownfield-change/VERIFICATION.md';
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const beforeReplay = fs.readFileSync(path.join(tmpDir, changePath));
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).status, 'replayed');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, changePath)), beforeReplay, 'plan rerun must preserve CHANGE.md bytes');
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'execute', '--plan', changePath, '--approved', 'true', '--approval-ref', 'test-approval', '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    writeFile(changePath, brownfieldChange({ posture: 'ready_for_verification', nextAction: 'Record Done-When evidence.' }));
+    result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'verify');
+    assert.strictEqual(result.route_kind, 'brownfield_change_verification');
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'verify', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    writeFile(verificationPath, brownfieldVerification('passed'));
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'audit', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    writeFile(changePath, brownfieldChange({ posture: 'closed', nextAction: 'Leave the closed lane.' }));
+    result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'complete');
+    assert.strictEqual(result.route_kind, 'brownfield_change_closed');
+    assert.strictEqual(result.next_command, null);
+  });
+
+  test('brownfield lifecycle fails closed for missing Done When, second stream, widening, and authority conflict', async () => {
+    await initWork();
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    writeFile(changePath, brownfieldChange({ doneWhen: false }));
+    let result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).error_code, 'brownfield_contract_invalid');
+
+    writeFile(changePath, brownfieldChange());
+    writeFile('.work/brownfield-change-2/CHANGE.md', brownfieldChange());
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).error_code, 'brownfield_contract_invalid');
+
+    writeFile('.work/brownfield-change-2/CHANGE.md', brownfieldChange({ posture: 'active', nextAction: 'Widen to /work-new-milestone.' }));
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).error_code, 'brownfield_contract_invalid');
+
+    fs.rmSync(path.join(tmpDir, '.work', 'brownfield-change-2'), { recursive: true, force: true });
+    writeFile('.work/milestone/MILESTONE.md', '# Active milestone\n');
+    writeFile(changePath, brownfieldChange());
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'blocked');
+    assert.strictEqual(result.route_kind, 'authority_conflict');
+  });
+
+  test('brownfield lifecycle refuses failed or missing verification evidence without changing state', async () => {
+    await initWork();
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    const verificationPath = '.work/brownfield-change/VERIFICATION.md';
+    writeFile(changePath, brownfieldChange({ posture: 'ready_for_verification' }));
+    writeFile(verificationPath, brownfieldVerification('failed'));
+    let result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const stateBefore = readJson(path.join(tmpDir, '.work', 'state.json'));
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'audit', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).error_code, 'verification_not_passed');
+    assert.deepStrictEqual(readJson(path.join(tmpDir, '.work', 'state.json')), stateBefore);
   });
 
   test('active brownfield change blocks instead of silently choosing over work-milestone authority', async () => {

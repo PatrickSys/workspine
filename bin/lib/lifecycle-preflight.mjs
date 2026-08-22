@@ -188,6 +188,12 @@ export function evaluateLifecyclePreflight({
           [stateLabel('brownfield-change', 'CHANGE.md')]
         )
       );
+    } else if (lifecycle.brownfieldChange.wideningRequested) {
+      blockers.push(blocker(
+        'brownfield_change_widening',
+        'The bounded change requests milestone-sized widening; route through the explicit milestone workflow before continuing.',
+        [stateLabel('brownfield-change', 'CHANGE.md')]
+      ));
     }
   }
 
@@ -925,6 +931,12 @@ function readArtifactMetadata(filePath) {
 
 function lifecycleArtifactKind(filePath) {
   const name = filePath.split(/[\\/]/).pop().toUpperCase();
+  const normalized = normalizeLifecyclePath(filePath).toLowerCase();
+  if (normalized.includes('/brownfield-change/')) {
+    if (name === 'CHANGE.MD') return 'brownfield_plan';
+    if (name === 'HANDOFF.MD') return 'brownfield_context';
+    if (name === 'VERIFICATION.MD') return 'brownfield_verification';
+  }
   if (name === 'PLAN.MD' || /-PLAN\.MD$/.test(name)) return 'plan';
   if (name === 'SUMMARY.MD' || name === 'EXECUTE.MD' || /-(SUMMARY|EXECUTE)\.MD$/.test(name)) return 'execution';
   if (name === 'VERIFICATION.MD' || name === 'VERIFY.MD' || /-(VERIFICATION|VERIFY)\.MD$/.test(name)) return 'verification';
@@ -936,6 +948,8 @@ function sameArtifactChain(planPath, artifactPath) {
   const artifactFile = artifactPath.split(/[\\/]/).pop();
   const planDir = planPath.slice(0, Math.max(0, planPath.length - planFile.length));
   const artifactDir = artifactPath.slice(0, Math.max(0, artifactPath.length - artifactFile.length));
+  if (/[/\\]brownfield-change[/\\]CHANGE\.md$/i.test(planPath)
+    && /[/\\]brownfield-change[/\\]VERIFICATION\.md$/i.test(artifactPath)) return true;
   if (planDir !== artifactDir) return false;
   if (planFile.toUpperCase() === 'PLAN.MD') return ['EXECUTE.MD', 'SUMMARY.MD', 'VERIFY.MD', 'VERIFICATION.MD'].includes(artifactFile.toUpperCase());
   const planName = planFile.replace(/\.md$/i, '').replace(/-PLAN$/i, '');
@@ -945,6 +959,28 @@ function sameArtifactChain(planPath, artifactPath) {
 
 function metadataStatus(metadata) {
   return String(metadata.status || metadata.result || metadata.verification_status || '').toLowerCase().replace(/[-\s]+/g, '_');
+}
+
+function readBrownfieldContractForTransition(planPath) {
+  const content = readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n');
+  const section = (heading) => {
+    const match = new RegExp(`^##\\s+${heading}\\s*$`, 'im').exec(content);
+    if (!match) return '';
+    const remainder = content.slice(match.index + match[0].length).replace(/^\n/, '');
+    const nextHeading = /(?:^|\n)##\s+/.exec(remainder);
+    return (nextHeading ? remainder.slice(0, nextHeading.index) : remainder).trim();
+  };
+  const posture = section('Current Status').match(/^[-*]\s+Current posture\s*:\s*(.+)$/im)?.[1]?.trim().toLowerCase().replace(/[ -]+/g, '_') || null;
+  const doneWhen = section('Done When').split('\n').filter((line) => /^[-*]\s+/.test(line) && !/observable outcomes?|conditions that must be true/i.test(line));
+  const errors = [];
+  for (const [heading, code] of [['Goal', 'missing_goal'], ['In Scope', 'missing_in_scope'], ['Out of Scope', 'missing_out_of_scope'], ['Next Action', 'missing_next_action'], ['Closeout Path', 'missing_closeout_path']]) {
+    if (!section(heading)) errors.push(code);
+  }
+  if (doneWhen.length === 0) errors.push('missing_done_when');
+  if (!['active', 'blocked', 'ready_for_verification', 'closed'].includes(posture)) errors.push('invalid_posture');
+  const wideningRequested = ['widening', 'promote', 'new_project', 'new_milestone'].includes(posture)
+    || /(?:widen|promot|milestone planning|\/work-new-(?:project|milestone))/i.test(section('Next Action'));
+  return { status: posture, errors, wideningRequested };
 }
 
 function validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approved = false }) {
@@ -973,10 +1009,20 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   if (['verify', 'audit', 'next', 'fix_gaps'].includes(target) && !artifactArg) {
     throw transitionErrorForCli('missing_artifact', `${target} lifecycle transition requires --artifact <path>.`, ['--artifact']);
   }
-  if (targetKind && artifact && lifecycleArtifactKind(artifact.path) !== targetKind) {
+  const artifactKind = artifact ? lifecycleArtifactKind(artifact.path) : null;
+  const planKind = plan ? lifecycleArtifactKind(plan.path) : null;
+  const brownfieldChain = planKind === 'brownfield_plan';
+  const artifactKindAllowed = target === 'verify' && brownfieldChain
+    ? ['brownfield_verification', 'brownfield_plan'].includes(artifactKind)
+    : targetKind === 'verification' && brownfieldChain
+      ? artifactKind === 'brownfield_verification'
+      : targetKind === 'plan' && brownfieldChain
+        ? ['brownfield_plan', 'brownfield_context'].includes(artifactKind)
+        : artifactKind === targetKind;
+  if (targetKind && artifact && !artifactKindAllowed) {
     throw transitionErrorForCli('wrong_artifact_kind', `${target} requires a ${targetKind} artifact, not ${normalizeLifecyclePath(artifact.relative)}.`, [artifact.relative]);
   }
-  if (targetKind === 'plan' && lifecycleArtifactKind(plan.path) !== 'plan') {
+  if (targetKind === 'plan' && !['plan', 'brownfield_plan'].includes(planKind)) {
     throw transitionErrorForCli('wrong_plan_kind', `--plan must identify a PLAN artifact: ${plan.relative}.`, [plan.relative]);
   }
   if (targetKind && artifact && plan && !sameArtifactChain(plan.relative, artifact.relative)) {
@@ -986,6 +1032,27 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   const artifactMeta = artifact ? readArtifactMetadata(artifact.path) : null;
   const planStatus = metadataStatus(planMeta?.metadata || {});
   const artifactStatus = metadataStatus(artifactMeta?.metadata || {});
+  if (brownfieldChain && target !== 'blocked' && target !== 'ask_user') {
+    const brownfield = readBrownfieldContractForTransition(plan.path);
+    const lifecycleBrownfield = evaluateLifecycleState({ planningDir }).brownfieldChange;
+    if ((lifecycleBrownfield.contractErrors || []).includes('multiple_active_brownfield_streams')) {
+      brownfield.errors.push('multiple_active_brownfield_streams');
+    }
+    if (brownfield.errors.length > 0) {
+      throw transitionErrorForCli('brownfield_contract_invalid', 'Brownfield CHANGE.md is missing a required bounded-change contract field.', brownfield.errors);
+    }
+    if (brownfield.wideningRequested) {
+      throw transitionErrorForCli('brownfield_change_widening', 'Brownfield change requests milestone-sized widening; use the explicit milestone workflow.', [plan.relative]);
+    }
+    if (target === 'execute' && brownfield.status !== 'active') {
+      throw transitionErrorForCli('brownfield_not_active', `Brownfield execution requires CHANGE.md posture active, not ${brownfield.status || 'unknown'}.`, [plan.relative]);
+    }
+    if (target === 'audit' || target === 'next') {
+      if (brownfield.status !== 'ready_for_verification' && brownfield.status !== 'closed') {
+        throw transitionErrorForCli('brownfield_not_ready', 'Brownfield closeout requires CHANGE.md posture ready_for_verification or closed.', [plan.relative]);
+      }
+    }
+  }
   if ((target === 'execute' || target === 'approve') && !['approved', 'accepted', 'complete'].includes(planStatus) && artifactStatus !== 'approved' && !(approved === true && authority && approvalRef)) {
     throw transitionErrorForCli('not_approved', 'The supplied PLAN is durable but not approved; record approval before execution.', [plan.relative]);
   }

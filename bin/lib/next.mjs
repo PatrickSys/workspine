@@ -195,6 +195,96 @@ function brownfieldPosture(context) {
   return 'active';
 }
 
+function isBoundBrownfieldLifecycle(context) {
+  const workflow = context.state?.value?.workflow;
+  const plan = workflow?.plan?.path || workflow?.plan?.identity || '';
+  return /(?:^|[/\\])\.work[/\\]brownfield-change[/\\]CHANGE\.md$/i.test(String(plan));
+}
+
+function brownfieldLifecycleRoute(context) {
+  if (!context.planning.has_brownfield_change || !isBoundBrownfieldLifecycle(context)) return null;
+  const change = context.planning.brownfield_change;
+  const workflow = context.state?.value?.workflow || {};
+  const evidence = [statePath(context, 'brownfield-change/CHANGE.md'), statePath(context, 'brownfield-change/HANDOFF.md')];
+  if (context.milestone?.exists) {
+    return {
+      state: 'blocked',
+      reason: `Active brownfield-change authority and ${milestonePath(context)} authority both exist; continuing would silently choose between two continuity roots.`,
+      authority: 'blocked',
+      route_kind: 'authority_conflict',
+      blocked_by: ['brownfield_change', 'work_milestone'],
+      next_command: null,
+      next_action: manualReviewAction([...evidence, milestonePath(context, 'MILESTONE.md'), milestonePath(context, 'ROADMAP.md')], 'Resolve the authority conflict before continuing.'),
+      artifacts_to_read: [...evidence, milestonePath(context, 'MILESTONE.md'), milestonePath(context, 'ROADMAP.md')],
+      artifacts_to_write: [],
+      requires_user: false,
+    };
+  }
+  if ((change.contractErrors || []).length > 0) {
+    return {
+      state: 'blocked',
+      reason: 'The active brownfield change contract is incomplete or has competing operational authority.',
+      authority: 'brownfield_change',
+      route_kind: 'brownfield_change_contract_blocked',
+      blocked_by: change.contractErrors,
+      next_command: null,
+      next_action: manualReviewAction(evidence, 'Repair CHANGE.md and keep HANDOFF.md as judgment-only context before continuing.'),
+      artifacts_to_read: [...evidence, statePath(context, 'brownfield-change/VERIFICATION.md')],
+      artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md')],
+      requires_user: false,
+    };
+  }
+  if (change.wideningRequested) {
+    return {
+      state: 'blocked',
+      reason: 'The bounded brownfield change requests milestone-sized widening.',
+      authority: 'brownfield_change',
+      route_kind: 'brownfield_change_widening',
+      blocked_by: ['brownfield_change_widening'],
+      next_command: null,
+      next_action: manualReviewAction([statePath(context, 'brownfield-change/CHANGE.md')], 'Choose the explicit new-project or new-milestone widening workflow.'),
+      artifacts_to_read: evidence,
+      artifacts_to_write: [],
+      requires_user: false,
+    };
+  }
+  if (change.currentStatus === 'blocked') {
+    return {
+      state: 'blocked', reason: 'Active bounded brownfield change is marked blocked; resolve CHANGE.md before continuing.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_blocked', blocked_by: ['brownfield_change'],
+      next_command: null, next_action: manualReviewAction(evidence, 'Resolve the recorded blocker and update CHANGE.md.'),
+      artifacts_to_read: evidence, artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md')], requires_user: false,
+    };
+  }
+  if (change.currentStatus === 'closed' && workflow.verification?.status === 'passed') {
+    return {
+      state: 'complete', reason: 'The bounded brownfield change is verified and explicitly closed; leave the lane.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_closed', blocked_by: [],
+      next_command: null, next_action: null,
+      artifacts_to_read: [...evidence, statePath(context, 'brownfield-change/VERIFICATION.md')], artifacts_to_write: [], requires_user: false,
+    };
+  }
+  if (change.currentStatus === 'ready_for_verification' || workflow.execution?.status === 'complete') {
+    return {
+      state: 'verify', reason: 'The bounded brownfield change is ready for Done-When verification.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_verification', blocked_by: [],
+      next_command: null,
+      next_action: manualReviewAction([...evidence, statePath(context, 'brownfield-change/VERIFICATION.md')], 'Record Done-When evidence in VERIFICATION.md, then close CHANGE.md explicitly.'),
+      artifacts_to_read: [...evidence, statePath(context, 'brownfield-change/VERIFICATION.md')],
+      artifacts_to_write: [statePath(context, 'brownfield-change/VERIFICATION.md'), statePath(context, 'brownfield-change/CHANGE.md')], requires_user: false,
+    };
+  }
+  if (workflow.plan?.approved === true || workflow.execution?.status === 'in_progress') {
+    return {
+      state: 'execute', reason: 'The bounded brownfield plan is approved and execution is not complete.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_execute', blocked_by: [],
+      next_command: workflowId('execute'), next_action: workflowAction(workflowId('execute'), 'Execute only the approved bounded CHANGE.md contract.'),
+      artifacts_to_read: evidence, artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md'), statePath(context, 'brownfield-change/HANDOFF.md')], requires_user: false,
+    };
+  }
+  return null;
+}
+
 function routeFromStateObject(stateValue) {
   const state = stateValue || {};
   const workflow = state.workflow || state.milestone || state;
@@ -462,6 +552,21 @@ function routeNext(ctx) {
     });
   }
 
+  const boundBrownfieldRoute = brownfieldLifecycleRoute(context);
+  if (boundBrownfieldRoute) {
+    return packet({
+      ...boundBrownfieldRoute,
+      confidence: 'high',
+      constraints,
+      evidence_required: ['CHANGE.md remains the operational authority; HANDOFF.md is context only; VERIFICATION.md must record every Done-When criterion.'],
+      repo_warnings: repoWarningsFromControlMap(controlMap),
+      privacy_notes: privacyNotes,
+      inputs_considered: inputsConsidered,
+      inputs_skipped: inputsSkipped,
+      trace_refs: traceRefs,
+    });
+  }
+
   const stateRoute = routeFromStateObject(context.state.value);
   if (stateRoute) {
     return enrichRoute(stateRoute, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
@@ -681,6 +786,16 @@ function inspectWorkflowStateContradiction(context) {
   };
   const planError = checkPointer(workflow.plan?.path || workflow.plan?.identity, 'Plan state');
   if (planError) return { reason: planError, evidence };
+  const brownfieldPlan = workflow.plan?.path || workflow.plan?.identity || '';
+  if (context.planning.has_brownfield_change
+    && context.planning.brownfield_change?.currentStatus !== 'closed'
+    && brownfieldPlan
+    && !/(?:^|[/\\])\.work[/\\]brownfield-change[/\\]CHANGE\.md$/i.test(String(brownfieldPlan))) {
+    return {
+      reason: 'Active brownfield-change authority conflicts with the recorded non-brownfield plan authority.',
+      evidence: [...evidence, '.work/brownfield-change/CHANGE.md'],
+    };
+  }
   const executionError = checkPointer(workflow.execution?.artifact || workflow.execution?.identity, 'Execution state');
   if (executionError) return { reason: executionError, evidence };
   const verificationError = checkPointer(workflow.verification?.artifact || workflow.verification?.identity, 'Verification state');

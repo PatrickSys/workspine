@@ -14,6 +14,10 @@ recommended_evidence:
 Use this file as the existing proof surface even when the bounded change widens before closeout.
 Milestone-init workflows should read it for preserved proof and remaining gaps instead of forcing the user to restate what is already verified.
 
+Verification is the closeout evidence for the one active stream. It must evaluate every `CHANGE.md`
+Done When item explicitly; missing, failed, or unverified items keep the change open and make `next`
+route to verification or gaps. It does not replace `CHANGE.md` as operational authority.
+
 ## Goal Verification
 
 - Restate the change goal in observable terms.
@@ -54,3 +58,7 @@ List the evidence used to support closure. Use the shared evidence vocabulary:
 - `passed` when the bounded change is proven complete.
 - `gaps_found` when implementation or proof is still missing.
 - `human_needed` when machine checks pass but human confirmation remains.
+
+For a bounded close, use `status: passed` only when all required evidence and Done When items pass.
+The owner then changes `CHANGE.md` posture to `closed`; no roadmap membership or second lifecycle
+root is created.

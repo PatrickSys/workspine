@@ -42,6 +42,16 @@ Treat the preflight as an authorization seam over shared repo truth only:
 - owned writes remain the verification artifact plus any explicit `node .work/bin/gsdd.mjs phase-status` transition that occurs later on `passed`
 </lifecycle_preflight>
 
+<brownfield_change_verify>
+For a brownfield plan identity, verify every concrete Done When item from `CHANGE.md` into the
+existing `.work/brownfield-change/VERIFICATION.md`. Missing, failed, or placeholder Done When
+evidence is a bounded gap and must not advance the lane. Treat `HANDOFF.md` as context only; a
+conflicting operational status there is a fail-closed authority error. A passed verification does
+not silently close the lane: explicitly update `CHANGE.md` posture to `closed`, then run read-only
+`next` and require the brownfield route to exit. Rerunning verification must preserve existing
+evidence and append or refine only the requested bounded proof; it must never overwrite user content.
+</brownfield_change_verify>
+
 <runtime_contract>
 Verification uses the same `Runtime` and `Assurance` types as planning and execution; infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
 Assurance is ordered: `unreviewed` -> `self_checked` -> `cross_runtime_checked`; use `cross_runtime_checked` only when the verifier runtime/vendor differs from the runtime that produced the artifact being verified.

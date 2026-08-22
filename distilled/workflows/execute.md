@@ -40,6 +40,17 @@ Treat the preflight as an authorization seam over shared repo truth only:
 - it does not mutate `.work/ROADMAP.md` by itself
 - owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `node .work/bin/gsdd.mjs phase-status`
 </lifecycle_preflight>
+
+<brownfield_change_execute>
+When the selected plan identity is `.work/brownfield-change/CHANGE.md`, execute one bounded stream
+only. Re-read `CHANGE.md` as the operational authority and `HANDOFF.md` as judgment context; do not
+take scope or status from HANDOFF. Refuse execution without a concrete Done When list, when another
+active brownfield stream or milestone authority is present, when the posture is blocked or widening,
+or when the requested work exceeds the declared write scope. Reruns are read-before-write: preserve
+all existing user-authored text and evidence, and update only the approved bounded surfaces. After
+the approved work is complete, record its evidence and set `CHANGE.md` to `ready_for_verification`;
+do not close the lane from execution.
+</brownfield_change_execute>
 <control_map_check>Before code mutation, run `node .work/bin/gsdd.mjs control-map --json` when available. Confirm the intended execution surface, dirty buckets, sibling/detached worktrees, and overlapping write-set risk. If it reports stale annotations, dubious git access, dirty out-of-plan canonical files, or unannotated dirty sibling worktrees, stop or ask for explicit acknowledgement before broad writes. Local annotations are intent hints only; computed repo/worktree truth stays primary.
 </control_map_check>
 <runtime_contract>

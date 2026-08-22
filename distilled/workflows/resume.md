@@ -93,6 +93,12 @@ If `.work/brownfield-change/HANDOFF.md` exists, read it as judgment-only context
 
 Do not flatten `CHANGE.md` and `HANDOFF.md` into co-equal operational sources. `CHANGE.md` stays the live status/next-action anchor; `HANDOFF.md` explains why that posture exists.
 
+Before resuming a bound brownfield stream, validate that the three existing artifacts still belong to
+one stream, `CHANGE.md` still has concrete Done When criteria, and no second active stream or milestone
+authority has appeared. A missing or conflicting contract is a fail-closed resume result requiring
+repair acknowledgement. Rerun from the preserved artifacts without overwriting user-authored
+`CHANGE.md`, `HANDOFF.md`, or `VERIFICATION.md`; `CHANGE.md` remains the sole operational authority.
+
 **Checkpoint file:**
 Check if `.work/.continue-here.md` exists. If yes, read it and extract:
 - `workflow` frontmatter (phase/quick/generic)

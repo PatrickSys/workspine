@@ -134,6 +134,16 @@ If the selected target is `brownfield-change`, do not require ROADMAP phase memb
 - a closeout path through `.work/brownfield-change/VERIFICATION.md`
 
 Also verify that `HANDOFF.md` is judgment-only context and does not contradict the operational status, scope, or next action in `CHANGE.md`. If any brownfield contract field is missing or contradictory, STOP and repair the brownfield contract before planning.
+
+<brownfield_change_plan>
+For an explicitly chosen planned standalone change, use the existing `.work/brownfield-change/`
+family as the single stream. If no compatible active `CHANGE.md` exists, instantiate `CHANGE.md`,
+`HANDOFF.md`, and `VERIFICATION.md` from the shipped templates with create-if-missing semantics;
+never overwrite user content or create another lane folder. A second active stream, a conflicting
+milestone/work authority, a missing Done When section, or a request that is already milestone-sized
+is a fail-closed planning result. Record the plan transition only after all three artifacts are
+durable, using `CHANGE.md` as the plan identity and keeping `HANDOFF.md` context-only.
+</brownfield_change_plan>
 </phase_contract_gate>
 
 <browser_proof_planning>
