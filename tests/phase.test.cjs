@@ -427,6 +427,39 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(roadmap, /\*\*Status\*\*: \[-\]/);
   });
 
+  test('phase-status and lifecycle alignment ignore phase extension prose headings', async () => {
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      [
+        '# Roadmap',
+        '',
+        '- [ ] **Phase 06: Base phase** - goal',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 06: Base phase',
+        '**Status**: [ ]',
+        '',
+        '### Phase 06 extension',
+        '**Status**: [ ]',
+        '',
+      ].join('\n')
+    );
+
+    const result = await runCliAsMain(tmpDir, ['phase-status', '6', 'in_progress']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const roadmap = fs.readFileSync(roadmapPath, 'utf-8');
+    assert.match(roadmap, /- \[-\] \*\*Phase 06: Base phase\*\*/);
+    assert.match(roadmap, /### Phase 06: Base phase\n\*\*Status\*\*: \[-\]/);
+    assert.match(roadmap, /### Phase 06 extension\n\*\*Status\*\*: \[ \]/);
+
+    const lifecycle = await importLifecycleStateModule();
+    const state = lifecycle.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
+    assert.deepStrictEqual(state.phaseStatusAlignment.mismatches, []);
+  });
+
   test('phase-status fails loudly when a matching Phase Details section lacks Status', async () => {
     const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     const original = [
