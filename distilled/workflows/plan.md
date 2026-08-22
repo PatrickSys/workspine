@@ -29,7 +29,6 @@ Before writing or rewriting planning artifacts, run the preflight for the select
 - Phase: `node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`; bounded brownfield: `node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`; amend/extend before roadmap append: `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift. Do not run phase preflight before target classification; an unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
-
 After the approved PLAN artifact is durable, record the plan posture through the shared repo-local helper:
 `node .work/bin/gsdd.mjs lifecycle-transition plan --plan phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`.
 This is the only lifecycle-state writer for the plan step; if it fails, preserve the PLAN and stop with its
@@ -111,28 +110,22 @@ Trigger questions per item:
 </spec_quality_check>
 <phase_contract_gate>
 Before goal_backward_planning, verify that the selected authority has a strong enough contract to support execution planning.
-
 If the selected target is a roadmap phase, verify that the target phase contract in `ROADMAP.md` is strong enough to support execution planning.
-
 The phase entry must provide all of:
 - assigned requirement IDs
 - explicit success criteria
 - explicit out-of-scope or anti-goals
 - explicit stop/replan conditions
-
 Also verify milestone truth is not self-contradictory across the planning surfaces you loaded:
 - the active milestone in `.work/SPEC.md` must match the active roadmap section you are planning from
 - the target phase number/name must match across SPEC current state and ROADMAP next-step guidance when both are present
-
 If any of these are missing or contradictory, STOP. Report the exact missing contract field or contradiction. Do not improvise a stronger phase contract from chat context alone.
-
 If the selected target is `brownfield-change`, do not require ROADMAP phase membership, phase success criteria, phase numbering, or roadmap checkboxes. Instead verify that `.work/brownfield-change/CHANGE.md` provides:
 - one single active goal
 - clear in-scope and out-of-scope boundaries
 - concrete Done When criteria
 - a current next action
 - a closeout path through `.work/brownfield-change/VERIFICATION.md`
-
 Also verify that `HANDOFF.md` is judgment-only context and does not contradict the operational status, scope, or next action in `CHANGE.md`. If any brownfield contract field is missing or contradictory, STOP and repair the brownfield contract before planning.
 
 <brownfield_change_plan>
@@ -170,7 +163,6 @@ For a roadmap phase, list the success criteria from `ROADMAP.md`. These are your
 Also list the phase out-of-scope boundaries and stop/replan conditions. These are equally contractual: execution may not silently widen past them.
 
 For `brownfield-change`, list the Done When criteria, in-scope boundaries, out-of-scope boundaries, current next action, and closeout path from `CHANGE.md`. These replace ROADMAP phase success criteria for this lane.
-
 ### Step 2: Derive artifacts
 For each success criterion, what concrete artifacts must exist?
 - Files (source code, config, tests)
@@ -245,7 +237,6 @@ Schema rules:
 - include `browser_proof_required` and `browser_proof_rationale`
 - if `browser_proof_required: true`, include a `## Browser Proof Plan` section with route/state, viewport, runtime path, evidence kind, evidence command or no-command rationale, observations, artifacts, and claim limit
 </plan_schema>
-
 <task_format>
 Each executable task must use this XML structure:
 
@@ -290,7 +281,6 @@ If any task uses `checkpoint:*`, the plan frontmatter must set `autonomous: fals
 | "Add authentication" | "Install `jose`, create JWT sign/verify helpers in `src/lib/auth.ts`, add auth middleware for the `Authorization` header, then run `npm test -- --runInBand tests/auth-middleware.test.ts`" |
 | "Handle errors" | "Add structured error responses to route handlers, include request validation failures, then run `npm test -- --runInBand tests/error-responses.test.ts`" |
 </task_format>
-
 <task_sizing>
 ### Ideal Task Size
 - 15-60 minutes of implementation work
@@ -309,7 +299,6 @@ Split a task if:
 - the task is logically atomic
 - splitting would create tasks that cannot be verified independently
 </task_sizing>
-
 <plan_structure>
 Create `.work/phases/{phase_dir}/{plan_id}-PLAN.md` with this structure:
 

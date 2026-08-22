@@ -92,7 +92,7 @@ export function createCmdInit(ctx) {
     const normalizedArgs = workspace.args;
     let initCtx = contextAtWorkspaceRoot(ctx, workspace.workspaceRoot);
 
-    console.log('gsdd init - setting up GSDD workflow\n');
+    console.log('workspine init - setting up your workspace\n');
 
     const isAuto = parseAutoFlag(normalizedArgs);
     const wantsMigration = normalizedArgs.includes('--migrate');
@@ -251,7 +251,7 @@ export function createCmdInit(ctx) {
     console.log('  - wrote generation manifest');
     applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration.obsoleteRuntimeHelpers);
 
-    console.log('\n\x1B[1m\x1B[32m✓ GSDD initialized.\x1B[0m');
+    console.log('\n\x1B[1m\x1B[32m✓ Workspine initialized.\x1B[0m');
     printInitSummary(interactiveSession.config ?? buildDefaultConfig({ autoAdvance: isAuto }));
     console.log('Next: choose the starting lane that fits your repo and current scope:\n');
     printPostInitRouting(interactiveSession.selectedRuntimes);

@@ -2636,6 +2636,112 @@ describe('gsdd init and update', () => {
       assert.deepStrictEqual(snapshotTree(tmpDir), before);
     });
 
+    test('fresh and current roots bypass the legacy migration prompt', async () => {
+      const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+      const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
+      const configMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'config.mjs'));
+      const restoreStdin = setInteractiveStdin();
+      const previousExitCode = process.exitCode;
+      try {
+        for (const current of [false, true]) {
+          const root = current ? createTempProject() : tmpDir;
+          if (current) {
+            fs.mkdirSync(path.join(root, '.work'));
+            fs.writeFileSync(path.join(root, '.work', 'sentinel.txt'), 'current');
+          }
+          let prompted = false;
+          const ctx = gsddMod.createCliContext(root);
+          ctx.initPromptApi = {
+            confirmLegacyMigration: async () => {
+              prompted = true;
+              throw new Error('migration prompt is not valid for fresh/current state');
+            },
+            runInitWizard: async () => ({
+              selectedRuntimes: [],
+              adapterTargets: [],
+              config: configMod.buildDefaultConfig(),
+            }),
+          };
+          process.exitCode = undefined;
+          try {
+            await initMod.createCmdInit(ctx)();
+          } finally {
+            if (current) cleanup(root);
+          }
+          assert.strictEqual(process.exitCode, undefined);
+          assert.strictEqual(prompted, false);
+        }
+      } finally {
+        process.exitCode = previousExitCode;
+        restoreStdin();
+      }
+    });
+
+    test('interactive legacy migration decline is explicit and byte-preserving', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'consumer.bin'), Buffer.from([0, 1, 255]));
+      const before = snapshotTree(tmpDir);
+      const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+      const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
+      const restoreStdin = setInteractiveStdin();
+      const previousExitCode = process.exitCode;
+      let prompted = 0;
+      try {
+        const ctx = gsddMod.createCliContext(tmpDir);
+        ctx.initPromptApi = {
+          confirmLegacyMigration: async () => {
+            prompted += 1;
+            return false;
+          },
+        };
+        process.exitCode = undefined;
+        await initMod.createCmdInit(ctx)();
+        assert.strictEqual(process.exitCode, 1);
+        assert.strictEqual(prompted, 1);
+        assert.deepStrictEqual(snapshotTree(tmpDir), before);
+      } finally {
+        process.exitCode = previousExitCode;
+        restoreStdin();
+      }
+    });
+
+    test('interactive legacy migration acceptance moves state before continuing setup', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.planning', 'nested'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'nested', 'consumer.bin'), Buffer.from([0, 1, 255]));
+      const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+      const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
+      const configMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'config.mjs'));
+      const restoreStdin = setInteractiveStdin();
+      const previousExitCode = process.exitCode;
+      let prompted = 0;
+      try {
+        const ctx = gsddMod.createCliContext(tmpDir);
+        ctx.initPromptApi = {
+          confirmLegacyMigration: async () => {
+            prompted += 1;
+            return true;
+          },
+          runInitWizard: async () => ({
+            selectedRuntimes: [],
+            adapterTargets: [],
+            config: configMod.buildDefaultConfig(),
+          }),
+        };
+        process.exitCode = undefined;
+        await initMod.createCmdInit(ctx)();
+        assert.strictEqual(process.exitCode, undefined);
+        assert.strictEqual(prompted, 1);
+        assert.strictEqual(fs.existsSync(path.join(tmpDir, '.planning')), false);
+        assert.strictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'nested', 'consumer.bin'))[2], 255);
+        assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'migration-receipt.json')));
+      } finally {
+        process.exitCode = previousExitCode;
+        restoreStdin();
+      }
+    });
+
     test('models and rigor commands refuse supported legacy state without writes', async () => {
       fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
       fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
@@ -2708,6 +2814,36 @@ describe('gsdd init and update', () => {
       assert.strictEqual(result.exitCode, 1);
       assert.match(result.output, /Both `\.work\/` and `\.planning\/` exist/);
       assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    });
+
+    test('interactive split-root state refuses before asking to migrate', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.work'));
+      fs.writeFileSync(path.join(tmpDir, '.work', 'sentinel.txt'), 'work');
+      fs.mkdirSync(path.join(tmpDir, '.planning'));
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'sentinel.txt'), 'planning');
+      const before = snapshotTree(tmpDir);
+      const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+      const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
+      const restoreStdin = setInteractiveStdin();
+      const previousExitCode = process.exitCode;
+      let prompted = false;
+      try {
+        const ctx = gsddMod.createCliContext(tmpDir);
+        ctx.initPromptApi = {
+          confirmLegacyMigration: async () => {
+            prompted = true;
+            throw new Error('split roots must fail before prompting');
+          },
+        };
+        process.exitCode = undefined;
+        await initMod.createCmdInit(ctx)();
+        assert.strictEqual(process.exitCode, 1);
+        assert.strictEqual(prompted, false);
+        assert.deepStrictEqual(snapshotTree(tmpDir), before);
+      } finally {
+        process.exitCode = previousExitCode;
+        restoreStdin();
+      }
     });
   });
 });

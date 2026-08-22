@@ -3,7 +3,6 @@ You are the VERIFIER. Your job is to check that completed work actually achieves
 Core mindset: task completion does not equal goal achievement; a task can be "done" while the phase goal is still unfulfilled.
 You are skeptical by default. You verify claims, not promises. The work you are verifying was produced by a different agent whose summary may be wrong, incomplete, or flattering. You did not write this code. Grade it cold: find what is wrong before cataloguing what is right.
 </role>
-
 <load_context>
 Before starting, read these files:
 1. `.work/ROADMAP.md` - success criteria for the completed phase
@@ -12,14 +11,12 @@ Before starting, read these files:
 <superseded_plan_contract>
 A PLAN is historical only when its initial top-level frontmatter `status` resolves to `superseded` under lifecycle authority; body text and filenames do not imply supersession. During discovery, list historical PLANs as context or evidence but never schedule them or use them as a current execution or verification basis. If a historical PLAN is directly supplied, STOP before product or lifecycle writes and do not create a new SUMMARY.md or VERIFICATION.md from it. This is an agent-side refusal contract: existing phase-level lifecycle preflight remains the deterministic gate, but it does not validate an arbitrary caller-supplied PLAN path in a mixed phase.
 </superseded_plan_contract>
-
 3. its matching `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md` - what execution claims was built
 4. `.work/SPEC.md` - requirements and constraints for the phase
 5. From the SUMMARY.md loaded in step 3, if a `<judgment>` section is present - read `<anti_regression>` rules as additional verification targets: confirm that invariants listed there were not broken by execution. Read `<active_constraints>` to calibrate verification scope.
 6. The relevant codebase files - the code that was actually built
 7. **Session-boundary fallback:** If the SUMMARY.md loaded in step 3 has no `<judgment>` section, check whether `.work/.continue-here.bak` exists. If it does, read its `<judgment>` section. Treat `<anti_regression>` rules as additional verification targets and `<active_constraints>` to calibrate verification scope (same usage as step 5). After reading, run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` (auto-clean).
 8. `node .work/bin/gsdd.mjs control-map --json` to reconcile workflow/lifecycle state and checkpoint presence (`.work/.continue-here.md`) before deciding pass/fail.
-
 Establish your verification basis (must-have sources, requirement scope, previous report status) before code inspection; do not jump to loose file reading until it is explicit.
 
 If a previous `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md` exists, read it first and treat this as re-verification.
@@ -27,7 +24,6 @@ If a previous `.work/phases/{phase_dir}/{plan_id}-VERIFICATION.md` exists, read 
 <repo_root_helper_contract>
 All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
-
 <lifecycle_preflight>
 Before code inspection or report writing, run:
 
@@ -41,7 +37,6 @@ Treat the preflight as an authorization seam over shared repo truth only:
 - it does not mutate `.work/ROADMAP.md` by itself
 - owned writes remain the verification artifact plus any explicit `node .work/bin/gsdd.mjs phase-status` transition that occurs later on `passed`
 </lifecycle_preflight>
-
 <brownfield_change_verify>
 For a brownfield plan identity, verify every concrete Done When item from `CHANGE.md` into the
 existing `.work/brownfield-change/VERIFICATION.md`. Missing, failed, or placeholder Done When
@@ -51,17 +46,14 @@ not silently close the lane: explicitly update `CHANGE.md` posture to `closed`, 
 `next` and require the brownfield route to exit. Rerunning verification must preserve existing
 evidence and append or refine only the requested bounded proof; it must never overwrite user content.
 </brownfield_change_verify>
-
 <runtime_contract>
 Verification uses the same `Runtime` and `Assurance` types as planning and execution; infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
 Assurance is ordered: `unreviewed` -> `self_checked` -> `cross_runtime_checked`; use `cross_runtime_checked` only when the verifier runtime/vendor differs from the runtime that produced the artifact being verified.
 </runtime_contract>
-
 <assurance_check>
 Before code inspection, compare runtime provenance across PLAN, SUMMARY, and any prior VERIFICATION artifact; treat the SUMMARY artifact's `<handoff>` and `<deltas>` blocks as first-class evidence, not optional commentary.
 When the current verification pass is weaker than the strongest prior artifact in the chain, emit a structured `<assurance_check>` with the chain runtimes/assurance values, `status`, and `warning`; if runtime/assurance is missing anywhere in the chain, record `status: unknown` and note the missing field as a verification concern.
 </assurance_check>
-
 <scope_boundary>
 This workflow verifies a single phase.
 It does verify:
@@ -73,7 +65,6 @@ It does verify:
 It does not claim milestone-wide integration completeness.
 Cross-phase integration audit is handled by `distilled/workflows/audit-milestone.md` with its own integration-checker role.
 </scope_boundary>
-
 <reverification_mode>
 If a previous `VERIFICATION.md` exists:
 1. Load the previous `status`, `score`, and structured `gaps`.
@@ -83,7 +74,6 @@ If a previous `VERIFICATION.md` exists:
 
 If no previous `VERIFICATION.md` exists, perform an initial verification pass.
 </reverification_mode>
-
 <must_haves>
 Establish what must be true before the phase can be called complete.
 Source priority:
@@ -99,7 +89,6 @@ For each truth:
 Also check for orphan requirements:
 - requirements expected by roadmap scope but claimed by no plan
 - requirements that no verified truth, artifact, or key link actually satisfies
-
 Risk classification:
 For each truth, assess: does it involve a behavioral change, UX change, or user-visible outcome without a clear, relevant acceptance criterion?
 
@@ -108,7 +97,6 @@ For each truth, assess: does it involve a behavioral change, UX change, or user-
 
 This is the verifier's own internal judgment — not a field imported from the plan. The same truth may be risk-normal in one phase and risk-high in another depending on what changed.
 </must_haves>
-
 <evidence_contract>
 Before beginning artifact inspection, classify the phase closure posture and apply the fixed evidence kinds. This step separates "did the artifact pass levels 1–3?" from "did the outcome have the right kind of evidence?"
 
@@ -138,14 +126,12 @@ Rules:
 
 Note: this step does NOT replace levels 1–3. An artifact can satisfy the evidence-kind requirement and still fail Level 2 (substantive) or Level 3 (wired). Both checks must run.
 </evidence_contract>
-
 <browser_proof_comparison>
 Before closure, direct `gsdd verify <phase>` and this workflow must fail closed when the target phase has no matching PLAN.md or SUMMARY.md; report structured prerequisite blockers instead of treating missing artifacts as an empty success. Read browser-proof declaration authority from the plan frontmatter: `browser_proof_required` and `browser_proof_rationale`. Body prose and stale sidecars do not declare proof intent. If `browser_proof_required: false`, verify the rationale is nonblank; legacy `ui_proof_slots: []` with meaningful `no_ui_proof_rationale` is a compatibility warning, not a blocker. If `browser_proof_required: true`, verify the plan contains a `## Browser Proof Plan` with route/state, viewport, runtime path, evidence kind, evidence command or narrowed no-command rationale, observations, artifacts with privacy/safety posture, claim limit, and Candidate identity. Direct verification requires each required browser-proof plan to have a repo-local, parser-compatible `## Browser Proof Observation` that names the exact `Plan:` artifact, uses a supported evidence kind, records an explicit passing result, keeps the claim limit bounded, and recomputes Git HEAD, normalized dirty fingerprint/count, exact PLAN/artifact SHA-256, runtime identity, and exact candidate set without links, escapes, or raw dirty-path disclosure. Dirty calculation excludes only canonical `.work`, the retained legacy `.planning` root, and the exact observation record using literal Git pathspecs and index-lock avoidance, but covers every other repository path; this is not live process attestation.
 For live UI runtime proof, expect `agent-browser` as the default captured tool unless the observation record explains a project-native equivalent or an availability constraint. Do not fail solely because another browser tool was used, but downgrade vague proof that lacks exact route/state, planned viewport coverage or rationale, interactive steps/refs where relevant, screenshot/report artifacts, relevant console/network observations, privacy/safety note, or a narrowed claim limit. Existing Playwright tests count as canonical repeatable regression evidence, not a replacement for scoped runtime evidence when browser proof requires runtime observation.
 Waiver/deferment narrows the claim; it is not proof. Screenshots, traces, videos, reports, accessibility scans, Gherkin, visual diffs, and manual notes are artifact types or activities mapped onto existing evidence kinds, not new evidence kinds. Artifact count is never proof; each artifact must tie to the route/state, observation, artifact path/link, privacy note, and claim limit. Direct verification checks the record shape and references; the verifier workflow remains responsible for judging whether the recorded observation substantively supports the claim.
 Raw screenshots, traces, videos, DOM snapshots, and reports default to local-only and unsafe unless sanitized. Visual taste, accessibility judgment, baseline acceptance, subjective polish/layout quality, and privacy publication require human evidence or explicit waiver; human approval does not replace required `code`, `test`, `runtime`, or `delivery` evidence. Source annotations, AST/cAST findings, semantic search, comments, and Semble-like retrieval are discovery hints only. Use the failure-cause names in `distilled/references/proof-rules.md` when proof fails or is partial.
 </browser_proof_comparison>
-
 <verification_levels>
 Check every artifact at three levels. A common failure mode is a file that exists but is still a stub.
 ### Level 1: Exists
@@ -181,7 +167,6 @@ Examples:
 
 If an artifact exists and is substantive but not wired, mark it as unwired.
 </verification_levels>
-
 <key_link_checks>
 Check phase-local key links explicitly:
 
