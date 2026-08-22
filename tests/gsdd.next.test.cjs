@@ -1622,6 +1622,26 @@ describe('next command routing', () => {
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), beforeReplay);
   });
 
+  test('lifecycle-transition blocks missing terminal artifacts before dereference and without writing', async () => {
+    await initWork();
+    writeFile('.work/phases/01-transition/01-PLAN.md', '---\nstatus: approved\n---\n# plan\n');
+    const statePath = path.join(tmpDir, '.work', 'state.json');
+    const before = fs.readFileSync(statePath);
+
+    const result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'audit', '--plan', '.work/phases/01-transition/01-PLAN.md',
+      '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const response = JSON.parse(result.output);
+    assert.strictEqual(response.error_code, 'missing_artifact');
+    assert.match(response.error, /audit lifecycle transition requires --artifact <path>/);
+    assert.deepStrictEqual(response.evidence, ['--artifact']);
+    assert.strictEqual(response.changed, false);
+    assert.deepStrictEqual(fs.readFileSync(statePath), before);
+  });
+
   test('lifecycle-transition rejects wrong or missing artifacts without changing state and next fails closed', async () => {
     await initWork();
     writeFile('.work/phases/01-transition/01-PLAN.md', '---\nstatus: approved\n---\n# plan\n');

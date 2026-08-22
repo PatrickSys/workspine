@@ -970,6 +970,9 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   const targetKind = target === 'plan' || target === 'execute' || target === 'approve' ? 'plan'
     : target === 'verify' ? 'execution'
       : ['audit', 'next', 'fix_gaps'].includes(target) ? 'verification' : null;
+  if (['verify', 'audit', 'next', 'fix_gaps'].includes(target) && !artifactArg) {
+    throw transitionErrorForCli('missing_artifact', `${target} lifecycle transition requires --artifact <path>.`, ['--artifact']);
+  }
   if (targetKind && artifact && lifecycleArtifactKind(artifact.path) !== targetKind) {
     throw transitionErrorForCli('wrong_artifact_kind', `${target} requires a ${targetKind} artifact, not ${normalizeLifecyclePath(artifact.relative)}.`, [artifact.relative]);
   }
