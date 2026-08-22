@@ -26,6 +26,7 @@ import { createAdapterRegistry } from '../adapters/index.mjs';
 import { migrateLegacyState } from './state-migration.mjs';
 import { resolveStateDir, stateAuthorityGate, MIGRATION_COMMAND } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { ensureWorkStructure } from './work-context.mjs';
 
 function contextAtWorkspaceRoot(ctx, workspaceRoot) {
   const state = resolveStateDir(workspaceRoot);
@@ -226,6 +227,13 @@ export function createCmdInit(ctx) {
 
     const runtimeGeneration = generatePlanningCliHelpers(initCtx);
     console.log(`  - generated local workflow helpers (${stateDirName}/bin/gsdd*)`);
+
+    const continuity = ensureWorkStructure(initCtx.cwd, {
+      rebuildIndex: !existed,
+    });
+    if (continuity.created.length > 0) {
+      console.log(`  - ensured ${stateDirName} continuity structure`);
+    }
 
     for (const adapter of resolveAdapters(initCtx.adapters, interactiveSession.adapterTargets)) {
       adapter.generate();

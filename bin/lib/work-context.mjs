@@ -313,7 +313,7 @@ export function getWorkPaths(cwd = process.cwd()) {
   };
 }
 
-export function ensureWorkStructure(cwd = process.cwd(), { now = new Date() } = {}) {
+export function ensureWorkStructure(cwd = process.cwd(), { now = new Date(), rebuildIndex = true } = {}) {
   const paths = getWorkPaths(cwd);
   const created = [];
   for (const dir of ['graph', 'decisions', 'questions', 'evidence', 'focus', 'dogfood', 'handoff', 'research']) {
@@ -347,7 +347,9 @@ export function ensureWorkStructure(cwd = process.cwd(), { now = new Date() } = 
     });
     appendGraphEvent(paths.workDir, event);
   }
-  rebuildGraphIndex(paths.workDir, { now, write: true });
+  if (rebuildIndex || !existsSync(paths.index)) {
+    rebuildGraphIndex(paths.workDir, { now, write: true });
+  }
   return { paths, created };
 }
 
@@ -378,6 +380,13 @@ function defaultState(now) {
     current_state: 'plan',
     updated_at: now.toISOString(),
     loop: ['plan', 'execute', 'verify', 'audit', 'fix_gaps', 'dogfood'],
+    workflow: {
+      plan: { approved: false },
+      execution: { status: 'not_started' },
+      verification: { status: 'not_started' },
+      audit: { status: 'not_started' },
+      dogfood: { status: 'not_started' },
+    },
     privacy: {
       raw_transcript_ingestion: 'disabled',
       mutable_state_default: 'local_only',

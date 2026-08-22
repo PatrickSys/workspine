@@ -307,6 +307,21 @@ describe('gsdd init and update', () => {
         `brownfield-change/${file} template must be distributed during init`);
     }
 
+    const statePath = path.join(tmpDir, '.work', 'state.json');
+    const state = readJson(statePath);
+    assert.deepStrictEqual(state.workflow, {
+      plan: { approved: false },
+      execution: { status: 'not_started' },
+      verification: { status: 'not_started' },
+      audit: { status: 'not_started' },
+      dogfood: { status: 'not_started' },
+    });
+    const stateBytes = fs.readFileSync(statePath);
+    const repeated = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(repeated.exitCode, 0, repeated.output);
+    assert.deepStrictEqual(fs.readFileSync(statePath), stateBytes,
+      'repeat init must preserve existing workflow state bytes');
+
     const config = readJson(path.join(tmpDir, '.work', 'config.json'));
     assert.strictEqual(config.researchDepth, 'balanced');
     assert.strictEqual(config.parallelization, true);
@@ -839,8 +854,8 @@ describe('gsdd init and update', () => {
       }
       const helperPath = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
       assert.ok(fs.existsSync(helperPath));
-      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work', 'state.json')), false);
-      assert.strictEqual(fs.existsSync(path.join(overrideDir, '.work', 'state.json')), false);
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work', 'state.json')), true);
+      assert.strictEqual(fs.existsSync(path.join(overrideDir, '.work', 'state.json')), true);
       const foreignBefore = snapshotTree(foreignDir);
 
       let result = spawnSync(process.execPath, [helperPath, 'next', '--init', '--json'], {
@@ -1135,25 +1150,25 @@ describe('gsdd init and update', () => {
     fs.mkdirSync(nestedDir, { recursive: true });
 
     let captured = await runCliAsMain(tmpDir, [
-      'remember', 'The generated helper must read active authority.', '--type', 'rule', '--scope', 'repo',
+      'remember', 'The generated helper must read active authority.', '--type', 'rule', '--scope', 'repo', '--no-update-notice',
     ]);
     assert.strictEqual(captured.exitCode, 0, captured.output);
     const activeId = JSON.parse(captured.output).record.id;
-    let promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId, '--authority', 'owner', '--approval-ref', 'owner-review-nested']);
+    let promoted = await runCliAsMain(tmpDir, ['decisions', 'promote', activeId, '--authority', 'owner', '--approval-ref', 'owner-review-nested', '--no-update-notice']);
     assert.strictEqual(promoted.exitCode, 0, promoted.output);
     captured = await runCliAsMain(tmpDir, [
-      'remember', 'Candidate helper body must remain excluded.', '--type', 'rule', '--scope', 'repo',
+      'remember', 'Candidate helper body must remain excluded.', '--type', 'rule', '--scope', 'repo', '--no-update-notice',
     ]);
     assert.strictEqual(captured.exitCode, 0, captured.output);
     const candidateId = JSON.parse(captured.output).record.id;
-    const initNext = await runCliAsMain(tmpDir, ['next', '--init', '--json']);
+    const initNext = await runCliAsMain(tmpDir, ['next', '--init', '--json', '--no-update-notice']);
     assert.strictEqual(initNext.exitCode, 0, initNext.output);
     const initialized = JSON.parse(initNext.output);
     assert.deepStrictEqual(initialized.next.decisionsDigest.ids, [activeId]);
     assert.strictEqual(initialized.next.decisionsDigest.counts.excluded.candidate, 1);
     const before = snapshotTree(path.join(tmpDir, '.work'));
 
-    const packageNext = await runCliAsMain(tmpDir, ['next', '--json']);
+    const packageNext = await runCliAsMain(tmpDir, ['next', '--json', '--no-update-notice']);
     assert.strictEqual(packageNext.exitCode, 0, packageNext.output);
     const packagePacket = JSON.parse(packageNext.output);
 
@@ -1161,6 +1176,7 @@ describe('gsdd init and update', () => {
       path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),
       'next',
       '--json',
+      '--no-update-notice',
     ], { cwd: nestedDir, encoding: 'utf-8' });
 
     assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
@@ -1178,6 +1194,7 @@ describe('gsdd init and update', () => {
       path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),
       'next',
       '--format', 'human',
+      '--no-update-notice',
     ], { cwd: nestedDir, encoding: 'utf-8' });
     assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.match(result.stdout, /DECISIONS DIGEST \(1 active\)/);
