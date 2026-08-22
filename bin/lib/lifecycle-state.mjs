@@ -3,7 +3,7 @@ import { basename, dirname, join, relative, resolve } from 'path';
 
 const BROWNFIELD_CHANGE_DIR = 'brownfield-change';
 
-const PHASE_LINE_RE = /^\s*[-*]\s*\[([ x-])\]\s*\*\*Phase\s+(\d+(?:\.\d+)*[a-z]?):\s*(.+?)\*\*(?:\s+—\s+\[([^\]]+)])?/i;
+const PHASE_LINE_RE = /^\s*[-*]\s*\[([ x-])\]\s*\*\*Phase\s+(\d+(?:\.\d+)*[a-z]?)(?:\s+\([^()\r\n]{1,80}\))?:\s*(.+?)\*\*(?:\s+—\s+\[([^\]]+)])?/i;
 const PHASE_DETAIL_HEADING_RE = /^(#{3,})\s+Phase\s+(\d+(?:\.\d+)*[a-z]?)(?::|$)/i;
 const PHASE_DETAIL_STATUS_RE = /^\s*\*\*Status\*\*:\s*\[([ x-])\]/i;
 const ACTIVE_MILESTONE_HEADING_RE = /^#{2,3}\s+(v[^\s]+)\s+(.+)$/im;

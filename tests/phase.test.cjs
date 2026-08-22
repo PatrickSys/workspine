@@ -427,6 +427,55 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(roadmap, /\*\*Status\*\*: \[-\]/);
   });
 
+  test('phase overview qualifiers remain lifecycle and phase-status identities', async () => {
+    const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
+    fs.writeFileSync(
+      roadmapPath,
+      [
+        '# Roadmap',
+        '',
+        '- [ ] **Phase 07 (POST-RELAUNCH): Loop state and entry surface** - goal',
+        '',
+        '## Phase Details',
+        '',
+        '### Phase 07: Loop state and entry surface',
+        '**Status**: [ ]',
+        '',
+      ].join('\n')
+    );
+    writePassedStandardChain(tmpDir, '07');
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '7']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    let output = JSON.parse(result.output);
+    assert.strictEqual(output.allowed, true);
+    assert.strictEqual(output.phase, '7');
+    assert.strictEqual(output.lifecycle.nextPhase, '7');
+
+    result = await runCliAsMain(tmpDir, ['phase-status', '7', 'in_progress']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    output = JSON.parse(result.output);
+    assert.strictEqual(output.phase, '7');
+
+    const updated = fs.readFileSync(roadmapPath, 'utf-8');
+    assert.match(updated, /- \[-\] \*\*Phase 07 \(POST-RELAUNCH\): Loop state and entry surface\*\*/);
+    assert.match(updated, /\*\*Status\*\*: \[-\]/);
+
+    const lifecycle = await importLifecycleStateModule();
+    const state = lifecycle.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
+    assert.deepStrictEqual(state.phases.map((phase) => phase.number), ['7']);
+    assert.deepStrictEqual(state.phaseStatusAlignment.mismatches, []);
+
+    fs.writeFileSync(roadmapPath, '# Roadmap\n\n- [ ] **Phase 07 (POST-RELAUNCH) extra: Invalid shape** - goal\n');
+    result = await runCliAsMain(tmpDir, ['phase-status', '7', 'in_progress']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /Phase 7 was not found|missing_phase/i);
+
+    fs.writeFileSync(roadmapPath, '# Roadmap\n\n- [ ] **Phase 07 extension: Prose heading** - goal\n');
+    const invalidLifecycle = lifecycle.evaluateLifecycleState({ planningDir: path.join(tmpDir, '.work') });
+    assert.deepStrictEqual(invalidLifecycle.phases, []);
+  });
+
   test('phase-status and lifecycle alignment ignore phase extension prose headings', async () => {
     const roadmapPath = path.join(tmpDir, '.work', 'ROADMAP.md');
     fs.writeFileSync(
