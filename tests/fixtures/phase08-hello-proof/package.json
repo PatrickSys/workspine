@@ -1,0 +1,8 @@
+{
+  "name": "hello-proof",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node tests/cli.test.cjs"
+  }
+}
