@@ -3863,8 +3863,10 @@ describe('G43 - Release Packaging Audit', () => {
       'release.yml must grant OIDC id-token write permission for npm trusted publishing. FIX: Preserve id-token: write.');
     assert.match(releaseWorkflow, /node-version: 22\.14\.0/i,
       'release.yml must use Node 22.14.0+ for npm trusted publishing. FIX: Keep setup-node on 22.14.0 or newer.');
-    assert.match(releaseWorkflow, /npm install -g npm@11/i,
-      'release.yml must install npm 11 for trusted publishing. FIX: Keep the npm@11 setup step.');
+    assert.match(releaseWorkflow, /npm install -g npm@\^11\.5\.1/i,
+      'release.yml must install npm 11.5.1+ for trusted publishing. FIX: Keep the npm@^11.5.1 setup step.');
+    assert.match(releaseWorkflow, /npm --version/i,
+      'release.yml must emit the installed npm version before publishing. FIX: Keep npm --version in the trusted-publishing CLI setup step.');
     assert.match(releaseWorkflow, /Verify npm trusted publisher[\s\S]*oidc\/token\/exchange\/package\/workspine[\s\S]*before running semantic-release/i,
       'release.yml must fail fast before semantic-release when npm trusted publishing is not configured. FIX: Keep the trusted-publisher preflight before Release.');
     assert.match(releaseWorkflow, /\[\[ ! "\$\{STATUS\}" =~ \^2 \]\]/,
@@ -3885,8 +3887,16 @@ describe('G43 - Release Packaging Audit', () => {
       '.releaserc.json must not let failed releases create GitHub issues with missing labels. FIX: Disable github fail/success comments and labels.');
     assert.doesNotMatch(releaseConfig, /@semantic-release\/exec|npm version \$\{nextRelease\.version\}|npm publish --provenance/i,
       '.releaserc.json must not use the brittle exec-based npm version/publish path. FIX: Use @semantic-release/npm.');
-    assert.match(releaseConfig, /package-lock\.json/i,
-      '.releaserc.json must commit package-lock.json with release metadata. FIX: Include package-lock.json in @semantic-release/git assets.');
+    assert.doesNotMatch(releaseConfig, /@semantic-release\/(?:changelog|git)(?![a-z])/i,
+      '.releaserc.json must not use release-commit plugins that push metadata to protected main. FIX: Remove @semantic-release/changelog and @semantic-release/git.');
+    assert.equal(packageJson.devDependencies['@semantic-release/changelog'], undefined,
+      'package.json must not retain @semantic-release/changelog. FIX: Remove the release-commit plugin dependency.');
+    assert.equal(packageJson.devDependencies['@semantic-release/git'], undefined,
+      'package.json must not retain @semantic-release/git. FIX: Remove the release-commit plugin dependency.');
+    assert.match(releaseWorkflow, /using release\.yml before running semantic-release/i,
+      'release.yml must give npm the bare workflow filename for trusted publishing. FIX: Name release.yml without the repository path.');
+    assert.doesNotMatch(releaseWorkflow, /using \.github\/workflows\/release\.yml/i,
+      'release.yml must not give npm a repository path for the trusted publisher workflow. FIX: Use the bare release.yml filename.');
     assert.match(packageJson.scripts.prepublishOnly || '', /GITHUB_ACTIONS.*GITHUB_REF_NAME.*main.*GITHUB_WORKFLOW.*Release/,
       'package.json must block manual or feature-branch npm publish. FIX: Keep the prepublishOnly release-workflow guard.');
     assert.match(packageJson.devDependencies['semantic-release'] || '', /\^25\./,

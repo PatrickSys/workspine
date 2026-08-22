@@ -28,7 +28,9 @@ jobs:
           node-version: 22.14.0
 
       - name: Use npm trusted-publishing capable CLI
-        run: npm install -g npm@11
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
 
       - name: Install dev dependencies
         run: npm ci
@@ -52,7 +54,7 @@ jobs:
             -H "Authorization: Bearer ${OIDC_TOKEN}")
           if [[ ! "${STATUS}" =~ ^2 ]]; then
             cat /tmp/npm-oidc.json
-            echo "::error::npm trusted publishing is not configured for workspine. Configure npm package trusted publisher for PatrickSys/workspine using .github/workflows/release.yml before running semantic-release."
+            echo "::error::npm trusted publishing is not configured for workspine. Configure npm package trusted publisher for PatrickSys/workspine using release.yml before running semantic-release."
             exit 1
           fi
 
