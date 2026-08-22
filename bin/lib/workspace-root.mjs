@@ -166,7 +166,8 @@ export function resolveWorkspaceContext(rawArgs = [], { cwd = process.cwd(), env
         invalid: true,
         error: `Workspace root is not a real directory: ${workspaceRootArg}`,
         workspaceRoot: explicitRoot,
-        planningDir: resolveStateDir(explicitRoot).dir,
+        planningDir: join(explicitRoot, '.work'),
+        stateDirName: '.work',
       };
     }
   }
