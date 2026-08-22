@@ -1,4 +1,4 @@
-import { join, relative } from 'path';
+import { join, relative, resolve } from 'path';
 import { existsSync } from 'fs';
 import { output, parseFlagValue } from './cli-utils.mjs';
 import { buildControlMap } from './control-map.mjs';
@@ -364,6 +364,25 @@ function routeNext(ctx) {
     });
   }
 
+  const workflowContradiction = inspectWorkflowStateContradiction(context);
+  if (workflowContradiction) {
+    return packet({
+      state: 'blocked',
+      reason: workflowContradiction.reason,
+      confidence: 'high',
+      next_command: null,
+      next_action: manualReviewAction(workflowContradiction.evidence, 'Reconcile `.work/state.json` with the named durable lifecycle artifact, then rerun `gsdd next --json`.'),
+      requires_user: false,
+      error_code: 'workflow_state_contradiction',
+      evidence_required: ['The recorded lifecycle state and durable artifact identity must agree before routing.'],
+      artifacts_to_read: workflowContradiction.evidence,
+      privacy_notes: privacyNotes,
+      inputs_considered: inputsConsidered,
+      inputs_skipped: inputsSkipped,
+      trace_refs: traceRefs,
+    });
+  }
+
   if (!context.questions.ok) {
     return packet({
       state: 'blocked',
@@ -636,6 +655,40 @@ function routeNext(ctx) {
     inputs_skipped: inputsSkipped,
     trace_refs: traceRefs,
   });
+}
+
+function inspectWorkflowStateContradiction(context) {
+  const workflow = context.state?.value?.workflow;
+  if (!workflow || typeof workflow !== 'object' || Array.isArray(workflow)) return null;
+  const root = context.paths.root;
+  const evidence = [];
+  if (workflow.current_state && context.state.value.current_state && workflow.current_state !== context.state.value.current_state) {
+    return { reason: '`.work/state.json` has conflicting root and workflow lifecycle states.', evidence: ['.work/state.json'] };
+  }
+  const checkPointer = (pointer, label) => {
+    if (!pointer) return null;
+    const absolute = resolve(root, pointer);
+    const relativePath = normalizeSlashes(relative(root, absolute));
+    if (!relativePath || relativePath === '..' || relativePath.startsWith('../') || relativePath.includes(':')) {
+      return `${label} points outside the workspace: ${pointer}`;
+    }
+    if (!existsSync(absolute)) {
+      evidence.push(relativePath);
+      return `${label} points to a missing durable artifact: ${relativePath}.`;
+    }
+    evidence.push(relativePath);
+    return null;
+  };
+  const planError = checkPointer(workflow.plan?.path || workflow.plan?.identity, 'Plan state');
+  if (planError) return { reason: planError, evidence };
+  const executionError = checkPointer(workflow.execution?.artifact || workflow.execution?.identity, 'Execution state');
+  if (executionError) return { reason: executionError, evidence };
+  const verificationError = checkPointer(workflow.verification?.artifact || workflow.verification?.identity, 'Verification state');
+  if (verificationError) return { reason: verificationError, evidence };
+  if (workflow.current_state === 'execute' && workflow.plan?.approved !== true) {
+    return { reason: 'Recorded state requests execution, but the plan is not approved.', evidence: ['.work/state.json'] };
+  }
+  return null;
 }
 
 function continuityProjection(context, route) {

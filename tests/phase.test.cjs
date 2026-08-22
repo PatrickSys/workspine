@@ -668,6 +668,7 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(output, /node \.work\/bin\/gsdd\.mjs phase-status/);
     assert.match(output, /node \.work\/bin\/gsdd\.mjs verify 1/);
     assert.match(output, /node \.work\/bin\/gsdd\.mjs lifecycle-preflight/);
+    assert.match(output, /node \.work\/bin\/gsdd\.mjs lifecycle-transition/);
     assert.doesNotMatch(output, /\.agents\/bin\/gsdd\.mjs/);
 
     const generatedSkill = fs.readFileSync(path.join(tmpDir, '.agents', 'skills', 'work-execute', 'SKILL.md'), 'utf-8');

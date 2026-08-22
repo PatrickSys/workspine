@@ -196,6 +196,163 @@ export function readJsonIfExists(filePath) {
   }
 }
 
+const WORKFLOW_DEFAULTS = Object.freeze({
+  plan: { approved: false },
+  execution: { status: 'not_started' },
+  verification: { status: 'not_started' },
+  audit: { status: 'not_started' },
+  dogfood: { status: 'not_started' },
+});
+
+function workflowStateWithDefaults(workflow = {}) {
+  const input = workflow && typeof workflow === 'object' && !Array.isArray(workflow) ? workflow : {};
+  const merged = { ...input };
+  for (const [key, defaults] of Object.entries(WORKFLOW_DEFAULTS)) {
+    merged[key] = { ...defaults, ...(input[key] && typeof input[key] === 'object' && !Array.isArray(input[key]) ? input[key] : {}) };
+  }
+  return merged;
+}
+
+function transitionError(code, message, evidence = []) {
+  const error = new Error(message);
+  error.code = code;
+  error.evidence = evidence;
+  return error;
+}
+
+/**
+ * Persist one validated lifecycle transition without changing any other state
+ * fields. Callers must validate artifact identity and authority before calling
+ * this seam; the expected values below provide the final stale/replay guard.
+ */
+export function transitionWorkflowState(workDir, {
+  target,
+  planPath = null,
+  planIdentity = null,
+  artifactPath = null,
+  artifactIdentity = null,
+  authority = null,
+  approvalRef = null,
+  reason = null,
+  question = null,
+  approved = null,
+  now = new Date(),
+} = {}) {
+  const statePath = join(workDir, 'state.json');
+  const current = readJsonIfExists(statePath);
+  if (!current.exists) throw transitionError('missing_state', '`.work/state.json` is missing.', ['.work/state.json']);
+  if (!current.ok || !current.value || typeof current.value !== 'object' || Array.isArray(current.value)) {
+    throw transitionError('unparseable_state', '`.work/state.json` is not a JSON object.', ['.work/state.json']);
+  }
+  const state = current.value;
+  const workflow = workflowStateWithDefaults(state.workflow);
+  const normalizedTarget = String(target || '').trim().toLowerCase();
+  const allowed = new Set(['plan', 'execute', 'verify', 'audit', 'next', 'fix_gaps', 'blocked', 'ask_user', 'approve']);
+  if (!allowed.has(normalizedTarget)) throw transitionError('unsupported_transition', `Unsupported lifecycle transition: ${target}.`);
+
+  const expectedPlan = planPath || planIdentity;
+  const recordedPlan = workflow.plan.path || workflow.plan.identity || null;
+  if (recordedPlan && expectedPlan && recordedPlan !== expectedPlan) {
+    throw transitionError('stale_state', 'Recorded plan authority does not match the supplied plan artifact.', [String(recordedPlan), String(expectedPlan)]);
+  }
+  if (artifactPath && artifactIdentity) {
+    const recordedArtifact = normalizedTarget === 'verify'
+      ? workflow.execution.artifact || workflow.execution.identity
+      : workflow.verification.artifact || workflow.verification.identity;
+    if (recordedArtifact && recordedArtifact !== artifactPath && recordedArtifact !== artifactIdentity) {
+      throw transitionError('stale_state', 'Recorded lifecycle artifact does not match the supplied artifact.', [String(recordedArtifact), String(artifactPath)]);
+    }
+  }
+
+  const next = JSON.parse(JSON.stringify(state));
+  next.workflow = workflow;
+  next.workflow.plan = { ...workflow.plan };
+  next.workflow.execution = { ...workflow.execution };
+  next.workflow.verification = { ...workflow.verification };
+  next.workflow.audit = { ...workflow.audit };
+  next.workflow.dogfood = { ...workflow.dogfood };
+  const normalizedPlan = planPath || planIdentity || null;
+  const normalizedArtifact = artifactPath || artifactIdentity || null;
+  if (normalizedPlan) {
+    next.workflow.plan.path = planPath || workflow.plan.path || null;
+    next.workflow.plan.identity = planIdentity || workflow.plan.identity || normalizedPlan;
+  }
+  if (authority) next.workflow.authority = authority;
+  if (approvalRef) next.workflow.approval_ref = approvalRef;
+
+  const effectiveTarget = normalizedTarget === 'approve' ? 'execute' : normalizedTarget === 'next' ? 'audit' : normalizedTarget;
+  const currentState = workflow.current_state || state.current_state || 'plan';
+  const allowedPredecessors = {
+    plan: ['plan', 'fix_gaps', 'blocked', 'ask_user'],
+    execute: ['plan', 'execute'],
+    verify: ['execute', 'verify'],
+    audit: ['verify', 'audit'],
+    fix_gaps: ['verify', 'audit', 'fix_gaps'],
+    blocked: ['plan', 'execute', 'verify', 'audit', 'fix_gaps', 'blocked', 'ask_user'],
+    ask_user: ['plan', 'execute', 'verify', 'audit', 'fix_gaps', 'ask_user'],
+  };
+  if (allowedPredecessors[effectiveTarget] && !allowedPredecessors[effectiveTarget].includes(currentState)) {
+    throw transitionError('out_of_order', `Cannot transition from ${currentState} to ${effectiveTarget}; resolve the recorded lifecycle posture first.`, ['.work/state.json']);
+  }
+  if (effectiveTarget === 'plan') {
+    next.workflow.plan.approved = approved === true;
+    next.workflow.execution.status = 'not_started';
+    next.workflow.current_state = 'plan';
+  } else if (effectiveTarget === 'execute') {
+    if (next.workflow.plan.approved !== true && approved !== true) {
+      throw transitionError('not_approved', 'The plan artifact is not approved; approve the plan before execution.', [normalizedPlan || '.work/state.json']);
+    }
+    next.workflow.plan.approved = true;
+    next.workflow.execution.status = 'in_progress';
+    next.workflow.current_state = 'execute';
+  } else if (effectiveTarget === 'verify') {
+    next.workflow.execution.status = 'complete';
+    if (normalizedArtifact) {
+      next.workflow.execution.artifact = artifactPath || workflow.execution.artifact || null;
+      next.workflow.execution.identity = artifactIdentity || workflow.execution.identity || normalizedArtifact;
+    }
+    next.workflow.current_state = 'verify';
+  } else if (effectiveTarget === 'audit') {
+    next.workflow.verification.status = 'passed';
+    if (normalizedArtifact) {
+      next.workflow.verification.artifact = artifactPath || workflow.verification.artifact || null;
+      next.workflow.verification.identity = artifactIdentity || workflow.verification.identity || normalizedArtifact;
+    }
+    next.workflow.current_state = 'audit';
+  } else if (effectiveTarget === 'fix_gaps') {
+    next.workflow.verification.status = 'gaps_found';
+    if (normalizedArtifact) {
+      next.workflow.verification.artifact = artifactPath || workflow.verification.artifact || null;
+      next.workflow.verification.identity = artifactIdentity || workflow.verification.identity || normalizedArtifact;
+    }
+    next.workflow.current_state = 'fix_gaps';
+  } else if (effectiveTarget === 'blocked') {
+    if (!String(reason || '').trim()) throw transitionError('missing_reason', 'A blocked transition requires --reason.', ['--reason']);
+    next.workflow.status = 'blocked';
+    next.workflow.reason = String(reason).trim();
+    next.workflow.current_state = 'blocked';
+  } else if (effectiveTarget === 'ask_user') {
+    if (!String(reason || question || '').trim()) throw transitionError('missing_gate', 'A human gate requires --reason or --question.', ['--reason', '--question']);
+    next.workflow.status = 'active';
+    next.workflow.human_gate = {
+      approved: false,
+      reason: String(reason || question).trim(),
+      question: question ? String(question).trim() : null,
+    };
+    next.workflow.current_state = 'ask_user';
+  }
+  next.current_state = next.workflow.current_state;
+  next.status = next.workflow.status === 'blocked' ? 'blocked' : (next.status || 'active');
+  const beforeComparable = { ...state, updated_at: null };
+  const nextComparable = { ...next, updated_at: null };
+  if (JSON.stringify(beforeComparable) === JSON.stringify(nextComparable)) {
+    return { status: 'replayed', changed: false, state };
+  }
+  next.updated_at = now.toISOString();
+  writeFileAtomic(statePath, `${JSON.stringify(next, null, 2)}\n`);
+  return { status: 'ok', changed: true, state: next };
+}
+
 export function createGraphEvent({ actor = 'agent', type, privacy = 'repo', source = 'command', payload = {}, now = new Date() } = {}) {
   return {
     id: `evt_${now.toISOString().replace(/[^0-9]/g, '')}_${Math.random().toString(36).slice(2, 8)}`,

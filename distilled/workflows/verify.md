@@ -401,6 +401,11 @@ Before any ROADMAP closure step, confirm the required phase `SUMMARY.md` still e
 
 After writing VERIFICATION.md, if `status: passed`, run `node .work/bin/gsdd.mjs phase-status {phase_identity} done` to close the phase entry in `.work/ROADMAP.md`. Verify is terminal only when every current PLAN in that exact phase identity has its matching SUMMARY and a `status: passed` VERIFICATION artifact. The helper updates both the overview line and matching `## Phase Details` status; if those entries cannot be reconciled, STOP and report the blocker instead of hand-editing.
 
+After the verification artifact is durable, record the verified lifecycle posture through the shared helper:
+`node .work/bin/gsdd.mjs lifecycle-transition audit --plan phases/{phase_dir}/{plan_id}-PLAN.md --artifact phases/{phase_dir}/{plan_id}-VERIFICATION.md --authority workflow --json`.
+For `gaps_found` or `human_needed`, use `lifecycle-transition fix_gaps` with the same artifact and preserve the
+human gate; a missing, stale, or mismatched artifact must fail closed without changing state.
+
 If `status: gaps_found` or `status: human_needed`, do not close ROADMAP.md. If ROADMAP currently marks the phase `[x]`, run `node .work/bin/gsdd.mjs phase-status {phase_identity} in_progress` to reopen/reconcile both status locations before reporting the result.
 </persistence>
 

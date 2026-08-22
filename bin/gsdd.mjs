@@ -8,7 +8,7 @@ import { createCmdInstall } from './lib/global-install.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { createCmdHealth } from './lib/health.mjs';
-import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
+import { cmdLifecyclePreflight, cmdLifecycleTransition } from './lib/lifecycle-preflight.mjs';
 import { cmdDecisions, cmdRemember } from './lib/decision-cli.mjs';
 import { createCmdJourney } from './lib/journey.mjs';
 import { createCmdNext } from './lib/next.mjs';
@@ -48,6 +48,7 @@ const COMMANDS = {
   next: cmdNext,
   'file-op': cmdFileOp,
   'lifecycle-preflight': cmdLifecyclePreflight,
+  'lifecycle-transition': cmdLifecycleTransition,
   remember: cmdRemember,
   decisions: cmdDecisions,
   journey: cmdJourney,
@@ -95,4 +96,4 @@ if (IS_MAIN) {
     if (typeof process.stdin.unref === 'function') process.stdin.unref();
   }
 }
-export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdJourney, cmdGitIdentity, cmdFileOp, cmdLifecyclePreflight, cmdRemember, cmdDecisions, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdJourney, cmdGitIdentity, cmdFileOp, cmdLifecyclePreflight, cmdLifecycleTransition, cmdRemember, cmdDecisions, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

@@ -378,6 +378,11 @@ Do not invent an inline PLAN task-state mutation scheme if the plan does not def
 Summary-driven progress tracking avoids silent drift between the plan contract and what execution actually completed.
 
 **MANDATORY: You MUST write SUMMARY.md to disk at `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`. Output to conversation alone is NOT sufficient. If this file is not written to disk, execution is NOT complete.**
+
+After the SUMMARY artifact is durable and marked complete, record the execution-to-verification transition:
+`node .work/bin/gsdd.mjs lifecycle-transition verify --plan phases/{phase_dir}/{plan_id}-PLAN.md --artifact phases/{phase_dir}/{plan_id}-SUMMARY.md --authority workflow --json`.
+The helper validates the exact artifact chain and updates only existing `.work/state.json`; do not hand-edit
+lifecycle state or call this before the SUMMARY exists.
 </state_updates>
 
 <checkpoint_protocol>

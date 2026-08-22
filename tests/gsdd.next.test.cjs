@@ -168,8 +168,8 @@ describe('next command bootstrap', () => {
 
     assert.strictEqual(packet.continuity.checkpoint.status, 'malformed');
     assert.ok(packet.continuity.checkpoint.errors.some((error) => /missing checkpoint frontmatter field: phase/.test(error)));
-    assert.strictEqual(packet.continuity.posture.approval.value, 'not_recorded');
-    assert.match(packet.continuity.posture.approval.source, /structured_state_or_lifecycle/);
+    assert.strictEqual(packet.continuity.posture.approval.value, 'not_approved');
+    assert.match(packet.continuity.posture.approval.source, /\.work\/state\.json#workflow\.plan\.approved|structured_state_or_lifecycle/);
     assert.deepStrictEqual(snapshotTree(tmpDir), before, 'next must preserve malformed checkpoint bytes for repair');
   });
 
@@ -1585,5 +1585,67 @@ describe('next command routing', () => {
       assert.ok(Array.isArray(result.trace_refs), `${fixture.name} should include trace refs`);
       assert.ok('next_action' in result, `${fixture.name} should include typed action slot`);
     }
+  });
+
+  test('lifecycle-transition records the artifact-backed loop and replays without writing', async () => {
+    await initWork();
+    writeFile('.work/phases/01-transition/01-PLAN.md', '---\nstatus: pending\n---\n# plan\n');
+    let result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'plan', '--plan', '.work/phases/01-transition/01-PLAN.md',
+      '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'plan');
+
+    writeFile('.work/phases/01-transition/01-PLAN.md', '---\nstatus: approved\n---\n# plan\n');
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'execute', '--plan', '.work/phases/01-transition/01-PLAN.md',
+      '--authority', 'owner', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
+
+    writeFile('.work/phases/01-transition/01-SUMMARY.md', '---\nstatus: complete\n---\n# summary\n');
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'verify', '--plan', '.work/phases/01-transition/01-PLAN.md',
+      '--artifact', '.work/phases/01-transition/01-SUMMARY.md', '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const beforeReplay = fs.readFileSync(path.join(tmpDir, '.work', 'state.json'));
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'verify', '--plan', '.work/phases/01-transition/01-PLAN.md',
+      '--artifact', '.work/phases/01-transition/01-SUMMARY.md', '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).status, 'replayed');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), beforeReplay);
+  });
+
+  test('lifecycle-transition rejects wrong or missing artifacts without changing state and next fails closed', async () => {
+    await initWork();
+    writeFile('.work/phases/01-transition/01-PLAN.md', '---\nstatus: approved\n---\n# plan\n');
+    writeFile('.work/phases/02-other/02-SUMMARY.md', '---\nstatus: complete\n---\n# summary\n');
+    const before = fs.readFileSync(path.join(tmpDir, '.work', 'state.json'));
+    let result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'verify', '--plan', '.work/phases/01-transition/01-PLAN.md',
+      '--artifact', '.work/phases/02-other/02-SUMMARY.md', '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 1);
+    assert.match(JSON.parse(result.output).error_code, /wrong_artifact_identity|out_of_order/);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), before);
+
+    writeJson('.work/state.json', {
+      schema_version: 1,
+      status: 'active',
+      current_state: 'verify',
+      workflow: { current_state: 'verify', plan: { approved: true, path: '.work/phases/01-transition/01-PLAN.md' }, execution: { status: 'complete', artifact: '.work/phases/01-transition/missing-SUMMARY.md' } },
+    });
+    result = await runCliAsMain(tmpDir, ['next', '--json', '--no-update-notice']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const next = JSON.parse(result.output);
+    assert.strictEqual(next.state, 'blocked');
+    assert.strictEqual(next.error_code, 'workflow_state_contradiction');
+    assert.match(next.reason, /missing durable artifact/);
   });
 });

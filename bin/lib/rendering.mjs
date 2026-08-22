@@ -69,7 +69,7 @@ function renderPlanningCliLauncher({ stateDirName = DEFAULT_STATE_DIR_NAME, pack
 
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { createCmdGitIdentity } from './lib/git-identity.mjs';
-import { cmdLifecyclePreflight } from './lib/lifecycle-preflight.mjs';
+import { cmdLifecyclePreflight, cmdLifecycleTransition } from './lib/lifecycle-preflight.mjs';
 import { cmdPhaseStatus, cmdVerify } from './lib/phase.mjs';
 import { buildControlMap } from './lib/control-map.mjs';
 import { cmdDecisionsQuery, cmdRememberCandidate } from './lib/decision-cli.mjs';
@@ -116,6 +116,7 @@ const COMMANDS = {
   'file-op': cmdFileOp,
   'git-identity': cmdGitIdentity,
   'lifecycle-preflight': cmdLifecyclePreflight,
+  'lifecycle-transition': cmdLifecycleTransition,
   'phase-status': cmdPhaseStatus,
   remember: cmdRememberCandidate,
   verify: cmdVerify,
@@ -126,6 +127,7 @@ const RESOLVER_BASED_COMMANDS = new Set([
   'decisions',
   'file-op',
   'lifecycle-preflight',
+  'lifecycle-transition',
   'phase-status',
   'remember',
   'verify',
@@ -159,6 +161,8 @@ function printHelp() {
     '  lifecycle-preflight <surface> [phase]',
     '                               Inspect lifecycle gate results for a workflow surface',
     '                               Example: node ${helperPath} lifecycle-preflight verify 1 --expects-mutation phase-status',
+    '  lifecycle-transition <target> --plan <path> [--artifact <path>]',
+    '                               Record one artifact-backed plan/execute/verify lifecycle transition',
     '  next [--json] [--init]',
     '                               Route to the next safe Workspine action from ${normalizeStateDirName(stateDirName)}, brownfield, planning, and repo truth',
     '  supported package runtime floor: Node >=22',

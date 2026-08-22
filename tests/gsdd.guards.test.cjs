@@ -2789,6 +2789,8 @@ describe('Phase 18 deterministic CLI guards', () => {
       'bin/gsdd.mjs must register the phase-status command. FIX: Add phase-status to COMMANDS.');
     assert.match(gsddContent, /'lifecycle-preflight'\s*:/,
       'bin/gsdd.mjs must register the lifecycle-preflight command. FIX: Add lifecycle-preflight to COMMANDS.');
+    assert.match(gsddContent, /'lifecycle-transition'\s*:/,
+      'bin/gsdd.mjs must register the lifecycle-transition command. FIX: Add lifecycle-transition to COMMANDS.');
   });
 
   test('bin/lib/file-ops.mjs exists and exports cmdFileOp', async () => {
