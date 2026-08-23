@@ -15,6 +15,7 @@ import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
 import { createCmdGitIdentity } from './lib/git-identity.mjs';
 import { maybeShowUpdateNotice } from './lib/update-awareness.mjs';
+import { classifyInformationRequest, findInvalidFlag } from './lib/init-runtime.mjs';
 import { FRAMEWORK_VERSION } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const IS_MAIN = process.argv[1] ? realpathSync(process.argv[1]) === realpathSync(__filename) : false;
@@ -69,9 +70,28 @@ async function runCli(cliCommand = command, ...cliArgs) {
 
   process.exitCode = 0;
 
+  // A15-44: answer zero-write information requests before any handler or network check runs.
+  const information = classifyInformationRequest(cliCommand, normalizedArgs, COMMANDS);
+  if (information === 'version') {
+    console.log(`${INIT_CONTEXT.packageName} ${INIT_CONTEXT.packageVersion}`);
+    return;
+  }
+  if (information === 'help') {
+    cmdHelp();
+    return;
+  }
+
   if (!cliCommand || !COMMANDS[cliCommand]) {
     cmdHelp();
     if (cliCommand) process.exitCode = 1;
+    return;
+  }
+
+  const flagError = findInvalidFlag(cliCommand, normalizedArgs);
+  if (flagError) {
+    console.error(flagError);
+    console.error(`Run \`${INIT_CONTEXT.packageName} help\` for supported usage.`);
+    process.exitCode = 1;
     return;
   }
 

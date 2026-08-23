@@ -255,6 +255,77 @@ export function getPostInitRoutingLines(selectedRuntimes) {
   return lines;
 }
 
+// A15-44: accepted flags per mutating command, so an unknown, duplicated, or value-less flag is
+// rejected before any handler can write. `true` means the flag consumes the next token.
+// Commands absent here already validate their own arguments and are deliberately untouched.
+// `install` lists --local/--verify-runtime/--live-runtime because it recognises them only to
+// reject them with a specific message; that message must still be the one a user sees.
+export const COMMAND_FLAGS = {
+  init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--workspace-root': true },
+  update: { '--tools': true, '--templates': false, '--dry': false, '--workspace-root': true },
+  install: { '--global': false, '-g': false, '--auto': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
+  scaffold: { '--workspace-root': true },
+  'file-op': { '--missing': true, '--flags': true, '--workspace-root': true },
+  'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--json': false, '--workspace-root': true },
+};
+
+// Bare words count only in the command position, so a positional argument that happens to read
+// `help` or `version` is never mistaken for a request for information.
+const HELP_TOKENS = new Set(['--help', '-h', 'help']);
+const VERSION_TOKENS = new Set(['--version', '-v', '-V', 'version']);
+const HELP_FLAGS = new Set(['--help', '-h']);
+const VERSION_FLAGS = new Set(['--version', '-v', '-V']);
+
+// These render their own richer usage for --help, so the root help must not override them.
+const COMMANDS_WITH_OWN_HELP = new Set(['next', 'lifecycle-transition']);
+
+// Classifies a dispatch as a zero-write information request so the entrypoint can answer it before
+// any handler writes or the update-awareness check runs. Returns 'help', 'version', or null.
+// Arguments are inspected only for a known command, so an unknown command still fails as one.
+export function classifyInformationRequest(command, commandArgs = [], knownCommands = {}) {
+  if (command && VERSION_TOKENS.has(command)) return 'version';
+  if (command && HELP_TOKENS.has(command)) return 'help';
+  if (!command || !Object.hasOwn(knownCommands, command)) return null;
+  if (commandArgs.some((arg) => VERSION_FLAGS.has(arg))) return 'version';
+  if (!COMMANDS_WITH_OWN_HELP.has(command) && commandArgs.some((arg) => HELP_FLAGS.has(arg))) return 'help';
+  return null;
+}
+
+// Flags every command accepts because something other than the command's own parser consumes them:
+// the dispatcher answers --help/--version before any handler runs, or renders the command's own
+// usage, and the update-awareness layer strips --no-update-notice. Gating any of these would make
+// `--help` unreachable and would break the documented opt-out on every mutating command.
+const UNIVERSAL_FLAGS = new Set(['--help', '-h', '--version', '-v', '-V', '--no-update-notice']);
+
+// Returns an error string for the first unknown or duplicated flag, or null when the flags are
+// acceptable. Positional arguments are ignored: only tokens that look like flags are inspected.
+//
+// A flag present but missing its value is deliberately NOT reported here. `--tools`, `--brief` and
+// `--workspace-root` already answer that case with a specific, more useful message, and duplicating
+// the check would replace those messages with a generic one. Value presence stays each command's
+// own responsibility; this function only answers "is this flag mine, and did I already see it".
+export function findInvalidFlag(command, commandArgs = []) {
+  const accepted = COMMAND_FLAGS[command];
+  if (!accepted) return null;
+  const seen = new Set();
+  for (let index = 0; index < commandArgs.length; index += 1) {
+    const token = commandArgs[index];
+    if (typeof token !== 'string' || !token.startsWith('-') || token === '-') continue;
+    if (UNIVERSAL_FLAGS.has(token)) continue;
+    if (!Object.hasOwn(accepted, token)) return `Unknown flag for \`${command}\`: ${token}`;
+    if (seen.has(token)) return `Duplicate flag for \`${command}\`: ${token}`;
+    seen.add(token);
+    if (!accepted[token]) continue;
+    const value = commandArgs[index + 1];
+    // A value-taking flag whose value is absent or is itself a flag makes everything after it
+    // ambiguous: the next token could be a duplicate flag, or the value the user meant to pass.
+    // Stop rather than guess, and let the command's own specific message answer it.
+    if (value === undefined || value.startsWith('-')) return null;
+    index += 1;
+  }
+  return null;
+}
+
 export function getHelpText() {
   return `
 workspine - Workspine CLI
@@ -262,6 +333,9 @@ Plan, execute, and verify AI-assisted work from files in your repo — with proo
 
 Usage: workspine <command> [args]
 Compatibility: gsdd <command> [args] remains a supported alias for existing installs.
+
+  --help, -h                  Show this help and exit without writing anything
+  --version, -v               Print the installed package version and exit without writing anything
 
 Commands:
   init [--tools <platform>] [--auto] [--brief <file>] [--migrate]

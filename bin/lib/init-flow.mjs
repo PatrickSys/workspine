@@ -15,6 +15,7 @@ import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs'
 import { applyTemplateRefresh, explicitTemplateOwnership, installProjectTemplates, planTemplateRefresh, refreshTemplates, validateTemplateOwnership, validateTemplateSources } from './templates.mjs';
 import {
   detectPlatforms,
+  findInvalidFlag,
   getAdaptersToUpdate,
   getPostInitRoutingLines,
   normalizeRequestedTools,
@@ -83,6 +84,13 @@ function validateKindContract(adapter, cwd) {
 
 export function createCmdInit(ctx) {
   return async function cmdInit(...initArgs) {
+    // A15-44: fail before any write when a flag is unknown, duplicated, or missing its value.
+    const flagError = findInvalidFlag('init', initArgs);
+    if (flagError) {
+      console.error(`ERROR: ${flagError}`);
+      process.exitCode = 1;
+      return;
+    }
     const workspace = resolveWorkspaceContext(initArgs, { cwd: ctx.cwd });
     if (workspace.invalid) {
       console.error(`ERROR: ${workspace.error}`);
@@ -261,6 +269,22 @@ export function createCmdInit(ctx) {
 
 export function createCmdUpdate(ctx) {
   return function cmdUpdate(...updateArgs) {
+    // A15-44: fail before any write when a flag is unknown or duplicated.
+    const flagError = findInvalidFlag('update', updateArgs);
+    if (flagError) {
+      console.error(`ERROR: ${flagError}`);
+      process.exitCode = 1;
+      return;
+    }
+    // `init` and `install` already refuse a `--tools` with no value; `update` never did, so a
+    // malformed `--tools` fell through `parseToolsFlag` as an empty list and silently regenerated
+    // whatever happened to be installed. Refuse it here, before any adapter is written.
+    const updateToolsFlag = parseFlagValue(updateArgs, '--tools');
+    if (updateToolsFlag.invalid) {
+      console.error('ERROR: --tools requires a value. Example: npx -y workspine update --tools claude');
+      process.exitCode = 1;
+      return;
+    }
     const gate = stateAuthorityGate(resolveStateDir(ctx.cwd));
     if (!gate.allowed) {
       console.error(`ERROR: ${gate.message}`);
