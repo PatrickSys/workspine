@@ -70,13 +70,15 @@ export function resolveCost(id)  { return COST_PROFILES[id]  ?? COST_PROFILES.ba
 // Per-step rigor: an explicit rigorOverrides[step] wins, else the project rigorProfile,
 // else medium. A missing override is not "off" — it just means "follow the main knob".
 export function resolveStepRigor(config, step) {
-  const overrideName = config?.rigorOverrides?.[step];
-  const baseName = config?.rigorProfile;
-  return resolveRigor(overrideName ?? baseName ?? 'medium');
+  return resolveRigor(requestedRigorLevel(config, step));
+}
+
+export function requestedRigorLevel(config, step) {
+  return config?.rigorOverrides?.[step] ?? config?.rigorProfile ?? 'medium';
 }
 
 export function effectiveRigorLevel(config, step) {
-  const requested = config?.rigorOverrides?.[step] ?? config?.rigorProfile ?? 'medium';
+  const requested = requestedRigorLevel(config, step);
   const normalized = RIGOR_ALIASES[requested] ?? requested;
   return normalized === 'max' ? 'high' : (RIGOR_PROFILES[normalized] ? normalized : 'medium');
 }
@@ -555,6 +557,15 @@ function cmdRigorShow(cwd) {
     execute: effectiveRigorLevel(config, 'execute'),
     verify: effectiveRigorLevel(config, 'verify'),
   };
+  const steps = Object.fromEntries(RIGOR_STEPS.map((step) => {
+    const requestedLevel = requestedRigorLevel(config, step);
+    const effectiveLevel = effective[step];
+    return [step, {
+      requested_level: requestedLevel,
+      effective_level: effectiveLevel,
+      policy: rigorPolicy(requestedLevel, effectiveLevel),
+    }];
+  }));
   output({
     rigorProfile: base,
     rigorOverrides: config.rigorOverrides ?? {},
@@ -564,6 +575,7 @@ function cmdRigorShow(cwd) {
     effective_level: effective.plan,
     effective_levels: effective,
     effective,
+    steps,
     workflow: activeWorkflow(config, base),
     deprecatedNoOps: deprecatedRigorNoOps(config),
     policy: rigorPolicy(base, effective.plan),

@@ -60,6 +60,28 @@ describe('final rigor dial output contract', () => {
     assert.ok(payload.policy.receipt_fields.includes('verification'));
   });
 
+  test('per-step output applies an override only to that step frontier', async () => {
+    const cwd = createTempProject();
+    projects.push(cwd);
+    const init = await runCliAsMain(cwd, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(init.exitCode, 0, init.output);
+    const set = await runCliAsMain(cwd, ['rigor', 'execute', 'max']);
+    assert.strictEqual(set.exitCode, 0, set.output);
+    const result = await runCliAsMain(cwd, ['rigor', 'show']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const payload = JSON.parse(result.stdout);
+
+    assert.strictEqual(payload.steps.plan.requested_level, 'medium');
+    assert.strictEqual(payload.steps.plan.effective_level, 'medium');
+    assert.strictEqual(payload.steps.plan.policy.path, 'research-plan-check');
+    assert.strictEqual(payload.steps.execute.requested_level, 'max');
+    assert.strictEqual(payload.steps.execute.effective_level, 'high');
+    assert.strictEqual(payload.steps.execute.policy.path, 'frontier-alignment-preview-verification');
+    assert.strictEqual(payload.steps.verify.requested_level, 'medium');
+    assert.strictEqual(payload.steps.verify.effective_level, 'medium');
+    assert.deepStrictEqual(payload.effective_levels, { plan: 'medium', execute: 'high', verify: 'medium' });
+  });
+
   test('Agent discretion remains an explicit exemption in the production contract', async () => {
     const payload = await show('max');
     assert.ok(payload.policy.receipt_fields.includes('agent_discretion_exemptions'));
