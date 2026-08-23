@@ -4332,3 +4332,54 @@ describe('G56 - Cooperative Decision Authority Contract', () => {
     }
   });
 });
+
+describe('G57 - Final Rigor Workflow Contract', () => {
+  const workflowFiles = ['plan.md', 'execute.md', 'verify.md'];
+  const read = (name) => fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', name), 'utf8');
+
+  test('all portable workflows resolve requested/effective levels without widening low paths', () => {
+    for (const name of workflowFiles) {
+      const content = read(name);
+      assert.match(content, /requested[_ ]level/i, `${name} must record requested level.`);
+      assert.match(content, /effective[_ ]level/i, `${name} must record effective level.`);
+      assert.match(content, /config.*override|override.*config/i, `${name} must resolve config and override.`);
+      assert.match(content, /low\/medium\/high|low.*medium.*high/i, `${name} must preserve base levels.`);
+      assert.match(content, /max.*high|high.*max/i, `${name} must define max compatibility.`);
+    }
+  });
+
+  test('max behavior is bounded and fail-closed at the existing workflow seams', () => {
+    const plan = read('plan.md');
+    const execute = read('execute.md');
+    const verify = read('verify.md');
+    assert.match(plan, /bounded.*frontier|frontier.*bounded/i);
+    assert.match(plan, /ungrounded.*required|required.*decisions/i);
+    assert.match(plan, /recommendation.first|recommendation first/i);
+    assert.match(plan, /zero.*specified|specified.*zero/i);
+    assert.match(plan, /Agent's Discretion.*exempt|exempt.*Agent's Discretion/i);
+    assert.match(plan, /alignment.*plan.check|plan.check.*alignment/i);
+    assert.match(execute, /at most two|at most 2|two.*checkpoint|2.*checkpoint/i);
+    assert.match(execute, /headless.*unresolved|unresolved.*headless/i);
+    assert.match(execute, /weaker.*high|high.*weaker/i);
+    assert.match(execute, /never claims.*answered|never.*signoff/i);
+    assert.match(verify, /actual.*signoff|signoff.*actually/i);
+    assert.match(verify, /explicit unknown|unknown.*claim/i);
+  });
+
+  test('receipt contract is explicit and workflow files avoid forbidden overengineering', () => {
+    const combined = workflowFiles.map(read).join('\n');
+    for (const field of ['execution', 'verification', 'claim_limit', 'terminal_result', 'next_action']) {
+      assert.match(combined, new RegExp(field), `receipt must include ${field}.`);
+    }
+    assert.doesNotMatch(combined, /AskUserQuestion\(|Task\(|ui-proof|decision store|event bus/i);
+    assert.doesNotMatch(combined, /ask every task|all tasks.*interactive|interactive.*every task/i);
+  });
+
+  test('final workflow surfaces remain within their established line budgets', () => {
+    const limits = { 'plan.md': 640, 'execute.md': 460, 'verify.md': 440 };
+    for (const [name, limit] of Object.entries(limits)) {
+      const lines = read(name).split('\n').length;
+      assert.ok(lines <= limit, `${name} is ${lines} lines (max ${limit}).`);
+    }
+  });
+});
