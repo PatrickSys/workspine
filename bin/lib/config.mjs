@@ -34,6 +34,27 @@ export const RIGOR_ALIASES = { quick: 'low', balanced: 'medium', thorough: 'high
 export const RIGOR_LEVELS = ['low', 'medium', 'high', 'max'];
 export const RIGOR_STEPS = ['plan', 'execute', 'verify'];
 
+// This is a description of the receipt fields carried by the portable workflow
+// surfaces.  It is emitted by `rigor show` so consumers can validate the
+// contract without inventing a parallel receipt format.
+export const RIGOR_RECEIPT_FIELDS = [
+  'schema_version',
+  'phase',
+  'task',
+  'requested_level',
+  'effective_level',
+  'interactive',
+  'frontier_questions',
+  'agent_discretion_exemptions',
+  'alignment',
+  'plan_check',
+  'execution',
+  'verification',
+  'claim_limit',
+  'terminal_result',
+  'next_action',
+];
+
 export const COST_PROFILES = {
   budget:   { modelProfile: 'budget',   parallelization: false },
   balanced: { modelProfile: 'balanced', parallelization: true  },
@@ -484,6 +505,25 @@ function deprecatedRigorNoOps(config) {
   );
 }
 
+function rigorPolicy(requestedLevel, effectiveLevel) {
+  const path = {
+    low: 'autopilot',
+    medium: 'research-plan-check',
+    high: 'discussion-plan-check-verifier',
+    max: 'frontier-alignment-preview-verification',
+  }[requestedLevel] ?? 'research-plan-check';
+  return {
+    requested_level: requestedLevel,
+    effective_level: effectiveLevel,
+    path,
+    max: requestedLevel === 'max' ? path : null,
+    headless_missing_interaction: 'unresolved',
+    unknown_is_pass: false,
+    preview_limit: 2,
+    receipt_fields: [...RIGOR_RECEIPT_FIELDS],
+  };
+}
+
 function printChangedFlags(before, after) {
   for (const key of Object.keys(after)) {
     if (before[key] !== after[key]) {
@@ -510,16 +550,23 @@ function cmdRigorShow(cwd) {
   const base = config.rigorProfile ?? 'medium';
   const requested = [base, ...Object.values(config.rigorOverrides ?? {})];
   const usesMaxCompatibility = requested.includes('max');
+  const effective = {
+    plan: effectiveRigorLevel(config, 'plan'),
+    execute: effectiveRigorLevel(config, 'execute'),
+    verify: effectiveRigorLevel(config, 'verify'),
+  };
   output({
     rigorProfile: base,
     rigorOverrides: config.rigorOverrides ?? {},
-    effective: {
-      plan: effectiveRigorLevel(config, 'plan'),
-      execute: effectiveRigorLevel(config, 'execute'),
-      verify: effectiveRigorLevel(config, 'verify'),
-    },
+    // Snake-case fields are the portable receipt vocabulary; the existing
+    // fields remain for compatibility with current callers.
+    requested_level: base,
+    effective_level: effective.plan,
+    effective_levels: effective,
+    effective,
     workflow: activeWorkflow(config, base),
     deprecatedNoOps: deprecatedRigorNoOps(config),
+    policy: rigorPolicy(base, effective.plan),
     compatibility: usesMaxCompatibility
       ? { max: 'Accepted for compatibility; it uses the current high rigor gates.' }
       : undefined,
