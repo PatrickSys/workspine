@@ -87,8 +87,25 @@ function gitSnapshot(env) {
   return { head: output(['rev-parse', 'HEAD']).trim(), status: output(['status', '--porcelain=v1', '--untracked-files=all']), show_ref: output(['show-ref', '--head']) };
 }
 function protectedSnapshot() {
-  const file = path.join(REPO, 'tests', 'proof', 'phase05-concurrency.cjs');
-  return { path: 'tests/proof/phase05-concurrency.cjs', bytes: fs.statSync(file).size, sha256: shaFile(file) };
+  const relative = 'tests/proof/phase05-concurrency.cjs';
+  const file = path.join(REPO, ...relative.split('/'));
+  let stat;
+  try {
+    stat = fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === 'ENOENT') return { path: relative, type: 'missing', mode: null, bytes: null, sha256: null };
+    throw error;
+  }
+  const type = stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : 'other';
+  const snapshot = { path: relative, type, mode: stat.mode & 0o777, bytes: null, sha256: null };
+  if (type === 'file') {
+    const bytes = fs.readFileSync(file);
+    snapshot.bytes = bytes.length;
+    snapshot.sha256 = sha(bytes);
+  } else if (type === 'symlink') {
+    snapshot.target = fs.readlinkSync(file);
+  }
+  return snapshot;
 }
 function sourceSnapshot(env) { return { git: gitSnapshot(env), protected: protectedSnapshot() }; }
 function assertConsumerGitAbsent(roots) {
