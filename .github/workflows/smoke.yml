@@ -44,5 +44,10 @@ jobs:
           test ! -e "$PACKAGE_DIR/tests"
           node -e "const pkg=require(process.argv[1]); if (pkg.scripts?.test || pkg.scripts?.['test:gsdd']) process.exit(1)" "$PACKAGE_DIR/package.json"
           ./node_modules/.bin/gsdd help
+      - name: Phase08 packed flow evaluation
+        env:
+          WORKSPINE_UPDATE_AWARENESS: '0'
+          GSDD_UPDATE_AWARENESS: '0'
+        run: node tests/proof/phase08-flow-eval.cjs --ci --seed 0801
       - name: Full test suite (includes the next-card snapshot)
         run: node tests/run-all.cjs --covers=gsdd.next-card.test.cjs
