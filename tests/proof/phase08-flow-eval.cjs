@@ -10,7 +10,6 @@ const cp = require('node:child_process');
 
 const REPO = path.resolve(__dirname, '..', '..');
 const FIXTURE = path.join(REPO, 'tests', 'fixtures', 'phase08-hello-proof');
-const NPM = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
 const SEED = (process.argv.find((value) => value === '--seed') ? process.argv[process.argv.indexOf('--seed') + 1] : null) || '0801';
 const SCENARIOS = ['greenfield', 'quick', 'brownfield', 'new-milestone-gate', 'repeat-greenfield', 'broken-fixture', 'cleanup'];
 const LIMIT = 48 * 1024;
@@ -27,6 +26,52 @@ const slash = (value) => value.split(path.sep).join('/');
 const inside = (root, file) => { const a = path.resolve(root); const b = path.resolve(file); return b === a || b.startsWith(`${a}${path.sep}`); };
 const clip = (value) => { const text = Buffer.from(value || '').toString('utf8'); return text.length > LIMIT ? `${text.slice(0, LIMIT / 2)}\n...[truncated]...\n${text.slice(-LIMIT / 2)}` : text; };
 const json = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+function npmLayout(platform, execPath) {
+  const pathApi = platform === 'win32' ? path.win32 : path.posix;
+  const execDir = pathApi.dirname(execPath);
+  return platform === 'win32'
+    ? pathApi.join(execDir, 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    : pathApi.join(execDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+}
+function resolveNpmCli() {
+  const execPath = fs.realpathSync(process.execPath);
+  const execDir = path.dirname(execPath);
+  const trustedRoot = process.platform === 'win32' ? execDir : path.dirname(execDir);
+  const layoutPath = npmLayout(process.platform, execPath);
+  const rawEnv = process.env.npm_execpath;
+  const rawCandidates = [
+    ...(rawEnv ? [{ source: 'npm_execpath', path: rawEnv }] : []),
+    { source: `${process.platform}-layout`, path: layoutPath },
+  ];
+  const candidates = [];
+  for (const candidate of rawCandidates) {
+    const value = typeof candidate.path === 'string' ? candidate.path.trim() : '';
+    const endsWithNpmCli = /[\\/]npm-cli\.js$/i.test(value);
+    const absolute = value && path.isAbsolute(value);
+    const present = Boolean(value && exists(value));
+    if (candidate.source === 'npm_execpath' && (!endsWithNpmCli || !absolute || !present)) {
+      fail('npm_resolution_failure', 'npm_execpath is not an existing absolute npm-cli.js', {
+        source: candidate.source, path: value || null, ends_with_npm_cli: endsWithNpmCli, absolute: Boolean(absolute), exists: present,
+      });
+    }
+    if (!endsWithNpmCli || !absolute || !present) {
+      candidates.push({ source: candidate.source, path: value || null, exists: present, accepted: false });
+      continue;
+    }
+    const stat = fs.lstatSync(value);
+    need(stat.isFile() && !stat.isSymbolicLink(), 'npm_resolution_failure', 'npm candidate is not a regular non-link file', { source: candidate.source, path: value });
+    const canonical = fs.realpathSync(value);
+    need(inside(trustedRoot, canonical), 'npm_resolution_failure', 'npm candidate is outside the active Node installation', { source: candidate.source, path: canonical, trusted_root: trustedRoot });
+    const row = { source: candidate.source, path: canonical, exists: true, accepted: true };
+    candidates.push(row);
+  }
+  const accepted = candidates.filter((candidate) => candidate.accepted);
+  const unique = [...new Map(accepted.map((candidate) => [process.platform === 'win32' ? candidate.path.toLowerCase() : candidate.path, candidate])).values()];
+  need(unique.length === 1, 'npm_resolution_failure', unique.length === 0 ? 'no trusted npm-cli.js candidate exists' : 'npm-cli.js candidates are ambiguous', { candidates });
+  return { platform: process.platform, node_exec_path: execPath, trusted_root: trustedRoot, layout_path: path.resolve(layoutPath), candidates, selected_path: unique[0].path, selected_source: unique[0].source };
+}
+let npmResolution = null;
+let NPM = null;
 function write(file, value) { fs.mkdirSync(path.dirname(file), { recursive: true }); let content = value; if (file.endsWith('.continue-here.md')) content = ['---', 'workflow: phase', 'phase: 01', 'timestamp: 2026-08-23T00:00:00.000Z', 'runtime: codex-cli', '---', '<current_state>Active.</current_state>', '<completed_work>Seeded.</completed_work>', '<remaining_work>Verify.</remaining_work>', '<decisions>Bounded.</decisions>', '<blockers>None.</blockers>', '<next_action>Verify.</next_action>', ''].join('\n'); fs.writeFileSync(file, content, { flag: 'wx' }); }
 function copyTree(source, target) { fs.cpSync(source, target, { recursive: true, errorOnExist: true, dereference: false }); }
 function tree(root) {
@@ -183,10 +228,11 @@ function removeRoot(root) { const temp = path.resolve(os.tmpdir()); const absolu
 function main() {
   const runId = `phase08-${Date.now()}-${process.pid}`; const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gsdd-phase08-flow-eval-')); let cleanup = null; const records = []; const emit = (record) => { const value = { schema_version: 1, run_id: runId, seed: SEED, ...record }; records.push(value); process.stdout.write(`${JSON.stringify(value)}\n`); };
   try {
+    npmResolution = resolveNpmCli(); NPM = npmResolution.selected_path;
     const identity = sourceIdentity(); const protectedBefore = identity.protected; const gitBefore = identity.git; const roots = {};
     for (const id of ['greenfield', 'quick', 'brownfield', 'new-milestone-gate', 'repeat-greenfield', 'broken-fixture']) { roots[id] = path.join(root, id); fs.mkdirSync(roots[id], { recursive: true }); copyTree(FIXTURE, path.join(roots[id], 'fixture')); roots[id] = roots[id]; }
     const fixtureHashes = Object.fromEntries(Object.entries(roots).map(([id, value]) => [id, fixtureSnapshot(path.join(value, 'fixture'))]));
-    const pack = packCandidate(root, identity); const sourceAfterPack = sourceSnapshot(process.env); need(JSON.stringify(sourceAfterPack) === JSON.stringify({ git: gitBefore, protected: protectedBefore }), 'containment_failure', 'source changed during pack', { before: { git: gitBefore, protected: protectedBefore }, after: sourceAfterPack }); installSourceFixtureReadGuard(); emit({ record_type: 'setup', scenario_id: 'setup', candidate: { package: identity.package, version: identity.version, pack_sha256: pack.pack_sha256 }, fixture: { copied_before_pack: true, hashes: fixtureHashes }, network_guard: { proxies_removed: true, registry: 'http://127.0.0.1:9/', attempted: false, blocked: true }, scriptsDisabled: true, git: { mode: 'unused', before: gitBefore, after_pack: sourceAfterPack.git }, protected: { before: protectedBefore, after_pack: sourceAfterPack.protected }, source_read_admission: { fixture: 'pre-copied-and-hashed-before-pack', post_pack_fixture_reads: 'forbidden' } });
+    const pack = packCandidate(root, identity); const sourceAfterPack = sourceSnapshot(process.env); need(JSON.stringify(sourceAfterPack) === JSON.stringify({ git: gitBefore, protected: protectedBefore }), 'containment_failure', 'source changed during pack', { before: { git: gitBefore, protected: protectedBefore }, after: sourceAfterPack }); installSourceFixtureReadGuard(); emit({ record_type: 'setup', scenario_id: 'setup', npm_cli: npmResolution, candidate: { package: identity.package, version: identity.version, pack_sha256: pack.pack_sha256 }, fixture: { copied_before_pack: true, hashes: fixtureHashes }, network_guard: { proxies_removed: true, registry: 'http://127.0.0.1:9/', attempted: false, blocked: true }, scriptsDisabled: true, git: { mode: 'unused', before: gitBefore, after_pack: sourceAfterPack.git }, protected: { before: protectedBefore, after_pack: sourceAfterPack.protected }, source_read_admission: { fixture: 'pre-copied-and-hashed-before-pack', post_pack_fixture_reads: 'forbidden' } });
     const green = greenfield(roots.greenfield, pack, 'green'); emit({ record_type: 'scenario', ...green });
     const quickResult = quick(roots.quick, pack); emit({ record_type: 'scenario', ...quickResult });
     const brown = brownfield(roots.brownfield, pack); emit({ record_type: 'scenario', ...brown });
