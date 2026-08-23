@@ -198,7 +198,7 @@ describe('global install pressure loop', () => {
 
         const localInstall = await runCliAsMain(repos[1], ['init', '--auto', '--tools', 'codex']);
         assert.strictEqual(localInstall.exitCode, 0);
-        assert.match(localInstall.output, /GSDD initialized/i);
+        assert.match(localInstall.output, /Workspine initialized/i);
       });
 
       assertNoRepoBootstrap(repos[0]);

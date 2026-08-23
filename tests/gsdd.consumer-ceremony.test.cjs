@@ -8,6 +8,7 @@ const {
   createTempProject,
   loadGsdd,
   readJson,
+  runCliAsMain,
   setNonInteractiveStdin,
 } = require('./gsdd.helpers.cjs');
 
@@ -99,6 +100,27 @@ describe('consumer ceremony reduction', () => {
     assert.strictEqual(config.workflow.discuss, true);
     assert.strictEqual(config.modelProfile, 'budget');
     assert.strictEqual(config.parallelization, false);
+  });
+
+  test('rigor show exposes the production requested/effective receipt policy', async () => {
+    await runWizardInit(tmpDir, { rigor: 'max' });
+    const result = await runCliAsMain(tmpDir, ['rigor', 'show']);
+    assert.strictEqual(result.exitCode, 0);
+    const payload = JSON.parse(result.stdout);
+
+    assert.strictEqual(payload.requested_level, 'max');
+    assert.strictEqual(payload.effective_level, 'high');
+    assert.deepStrictEqual(payload.effective_levels, { plan: 'high', execute: 'high', verify: 'high' });
+    assert.strictEqual(payload.policy.path, 'frontier-alignment-preview-verification');
+    assert.strictEqual(payload.policy.headless_missing_interaction, 'unresolved');
+    assert.strictEqual(payload.policy.unknown_is_pass, false);
+    assert.strictEqual(payload.policy.preview_limit, 2);
+    assert.deepStrictEqual(payload.policy.receipt_fields, [
+      'schema_version', 'phase', 'task', 'requested_level', 'effective_level',
+      'interactive', 'frontier_questions', 'agent_discretion_exemptions',
+      'alignment', 'plan_check', 'execution', 'verification', 'claim_limit',
+      'terminal_result', 'next_action',
+    ]);
   });
 
   test('wizard resolves all 9 rigor/cost combinations correctly', async () => {

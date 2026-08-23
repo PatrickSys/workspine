@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="Terminal showing npx workspine init writing a .work workspace, portable skills, and Claude Code surfaces, then naming the next command to run.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" role="img" aria-label="Terminal showing npx workspine init writing a .work workspace, portable skills, and Claude Code surfaces, then offering Quick, Plan, and New Project routes.">
   <defs>
     <style>
       .terminal-bg { fill: #1a1b26; }
@@ -37,7 +37,7 @@
     <text class="text command" font-size="15" x="118" y="0">npx -y workspine init --tools claude</text>
 
     <!-- header line -->
-    <text class="text dim" font-size="15" y="40">gsdd init - setting up GSDD workflow</text>
+    <text class="text dim" font-size="15" y="40">workspine init - setting up your workspace</text>
 
     <!-- what it wrote -->
     <text class="text" font-size="15" y="76"><tspan class="dim">  - created </tspan><tspan class="path">.work/</tspan><tspan class="dim"> directory structure</tspan></text>
@@ -48,12 +48,12 @@
     <text class="text" font-size="15" y="196"><tspan class="dim">  - wrote generation manifest</tspan></text>
 
     <!-- success -->
-    <text class="text" font-size="15" y="236"><tspan class="green">✓ GSDD initialized.</tspan></text>
+    <text class="text" font-size="15" y="236"><tspan class="green">✓ Workspine initialized.</tspan></text>
 
     <!-- next -->
     <text class="text white" font-size="15" y="276">Next: choose the starting lane that fits your repo and current scope:</text>
     <text class="text dim" font-size="15" y="312" x="16">Claude Code:</text>
-    <text class="text" font-size="15" y="312" x="140"><tspan class="cyan">/work-new-project</tspan><tspan class="dim">  |  </tspan><tspan class="cyan">/work-quick</tspan><tspan class="dim">  |  </tspan><tspan class="cyan">/work-map-codebase</tspan></text>
+    <text class="text" font-size="15" y="312" x="140"><tspan class="dim">Quick: </tspan><tspan class="cyan">/work-quick</tspan><tspan class="dim">  |  Plan: </tspan><tspan class="cyan">/work-plan</tspan><tspan class="dim">  |  New Project: </tspan><tspan class="cyan">/work-new-project</tspan></text>
     <text class="text dim" font-size="15" y="336" x="16">Any tool:</text>
     <text class="text" font-size="15" y="336" x="140"><tspan class="dim">open </tspan><tspan class="path">.agents/skills/work-new-project/SKILL.md</tspan></text>
 

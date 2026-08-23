@@ -18,6 +18,7 @@ import {
   readJsonIfExists,
   readContinuityCheckpoint,
   resolveActiveMilestoneDir,
+  transitionWorkflowState,
 } from './work-context.mjs';
 import { parsePlanFrontmatter } from './phase.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
@@ -187,6 +188,12 @@ export function evaluateLifecyclePreflight({
           [stateLabel('brownfield-change', 'CHANGE.md')]
         )
       );
+    } else if (lifecycle.brownfieldChange.wideningRequested) {
+      blockers.push(blocker(
+        'brownfield_change_widening',
+        'The bounded change requests milestone-sized widening; route through the explicit milestone workflow before continuing.',
+        [stateLabel('brownfield-change', 'CHANGE.md')]
+      ));
     }
   }
 
@@ -900,6 +907,241 @@ export function cmdLifecyclePreflight(...args) {
     }
   } catch (error) {
     console.error(error.message);
+    process.exitCode = 1;
+  }
+}
+
+function normalizeLifecyclePath(value) {
+  return String(value || '').replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+function readArtifactMetadata(filePath) {
+  const content = readFileSync(filePath, 'utf8');
+  const metadata = {};
+  const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  const source = frontmatter ? frontmatter[1] : content;
+  for (const line of source.split(/\r?\n/)) {
+    const match = line.match(/^\s*(status|result|approved|approval_status|authority|approved_by|completed|verification_status)\s*:\s*(.*?)\s*$/i);
+    if (!match) continue;
+    const value = match[2].replace(/^['"]|['"]$/g, '').trim();
+    metadata[match[1].toLowerCase()] = value;
+  }
+  return { content, metadata };
+}
+
+function lifecycleArtifactKind(filePath) {
+  const name = filePath.split(/[\\/]/).pop().toUpperCase();
+  const normalized = normalizeLifecyclePath(filePath).toLowerCase();
+  if (normalized.includes('/brownfield-change/')) {
+    if (name === 'CHANGE.MD') return 'brownfield_plan';
+    if (name === 'HANDOFF.MD') return 'brownfield_context';
+    if (name === 'VERIFICATION.MD') return 'brownfield_verification';
+  }
+  if (name === 'PLAN.MD' || /-PLAN\.MD$/.test(name)) return 'plan';
+  if (name === 'SUMMARY.MD' || name === 'EXECUTE.MD' || /-(SUMMARY|EXECUTE)\.MD$/.test(name)) return 'execution';
+  if (name === 'VERIFICATION.MD' || name === 'VERIFY.MD' || /-(VERIFICATION|VERIFY)\.MD$/.test(name)) return 'verification';
+  return null;
+}
+
+function sameArtifactChain(planPath, artifactPath) {
+  const planFile = planPath.split(/[\\/]/).pop();
+  const artifactFile = artifactPath.split(/[\\/]/).pop();
+  const planDir = planPath.slice(0, Math.max(0, planPath.length - planFile.length));
+  const artifactDir = artifactPath.slice(0, Math.max(0, artifactPath.length - artifactFile.length));
+  if (/[/\\]brownfield-change[/\\]CHANGE\.md$/i.test(planPath)
+    && /[/\\]brownfield-change[/\\]VERIFICATION\.md$/i.test(artifactPath)) return true;
+  if (planDir !== artifactDir) return false;
+  if (planFile.toUpperCase() === 'PLAN.MD') return ['EXECUTE.MD', 'SUMMARY.MD', 'VERIFY.MD', 'VERIFICATION.MD'].includes(artifactFile.toUpperCase());
+  const planName = planFile.replace(/\.md$/i, '').replace(/-PLAN$/i, '');
+  const artifactName = artifactFile.replace(/\.md$/i, '').replace(/-(SUMMARY|EXECUTE|VERIFICATION|VERIFY)$/i, '');
+  return planName === artifactName;
+}
+
+function metadataStatus(metadata) {
+  return String(metadata.status || metadata.result || metadata.verification_status || '').toLowerCase().replace(/[-\s]+/g, '_');
+}
+
+function readBrownfieldContractForTransition(planPath) {
+  const content = readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n');
+  const section = (heading) => {
+    const match = new RegExp(`^##\\s+${heading}\\s*$`, 'im').exec(content);
+    if (!match) return '';
+    const remainder = content.slice(match.index + match[0].length).replace(/^\n/, '');
+    const nextHeading = /(?:^|\n)##\s+/.exec(remainder);
+    return (nextHeading ? remainder.slice(0, nextHeading.index) : remainder).trim();
+  };
+  const posture = section('Current Status').match(/^[-*]\s+Current posture\s*:\s*(.+)$/im)?.[1]?.trim().toLowerCase().replace(/[ -]+/g, '_') || null;
+  const doneWhen = section('Done When').split('\n').filter((line) => /^[-*]\s+/.test(line) && !/observable outcomes?|conditions that must be true/i.test(line));
+  const errors = [];
+  for (const [heading, code] of [['Goal', 'missing_goal'], ['In Scope', 'missing_in_scope'], ['Out of Scope', 'missing_out_of_scope'], ['Next Action', 'missing_next_action'], ['Closeout Path', 'missing_closeout_path']]) {
+    if (!section(heading)) errors.push(code);
+  }
+  if (doneWhen.length === 0) errors.push('missing_done_when');
+  if (!['active', 'blocked', 'ready_for_verification', 'closed'].includes(posture)) errors.push('invalid_posture');
+  const wideningRequested = ['widening', 'promote', 'new_project', 'new_milestone'].includes(posture)
+    || /(?:widen|promot|milestone planning|\/work-new-(?:project|milestone))/i.test(section('Next Action'));
+  return { status: posture, errors, wideningRequested };
+}
+
+function validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approved = false }) {
+  const workspaceRoot = resolve(planningDir, '..');
+  const stateLabel = createStateLabeler(planningDir);
+  if (!planArg && !['blocked', 'ask_user'].includes(target)) {
+    throw transitionErrorForCli('missing_plan_artifact', 'Lifecycle transition requires --plan <path>.', ['--plan']);
+  }
+  if (!authority && !['blocked', 'ask_user'].includes(target)) {
+    throw transitionErrorForCli('missing_authority', 'Lifecycle transition requires --authority <owner|workflow|repo>.', ['--authority']);
+  }
+  const resolveInside = (value, label) => {
+    const resolvedPath = resolve(workspaceRoot, value || '');
+    const relativePath = normalizeLifecyclePath(relative(workspaceRoot, resolvedPath));
+    if (!value || !relativePath || relativePath.startsWith('../') || relativePath === '..' || isAbsolute(relativePath)) {
+      throw transitionErrorForCli('invalid_artifact_path', `${label} must be a workspace-relative artifact path.`, [String(value || label)]);
+    }
+    if (!existsSync(resolvedPath)) throw transitionErrorForCli('missing_artifact', `${label} does not exist: ${relativePath}.`, [relativePath]);
+    return { path: resolvedPath, relative: relativePath };
+  };
+  const plan = planArg ? resolveInside(planArg, 'Plan artifact') : null;
+  const artifact = artifactArg ? resolveInside(artifactArg, 'Lifecycle artifact') : null;
+  const targetKind = target === 'plan' || target === 'execute' || target === 'approve' ? 'plan'
+    : target === 'verify' ? 'execution'
+      : ['audit', 'next', 'fix_gaps'].includes(target) ? 'verification' : null;
+  if (['verify', 'audit', 'next', 'fix_gaps'].includes(target) && !artifactArg) {
+    throw transitionErrorForCli('missing_artifact', `${target} lifecycle transition requires --artifact <path>.`, ['--artifact']);
+  }
+  const artifactKind = artifact ? lifecycleArtifactKind(artifact.path) : null;
+  const planKind = plan ? lifecycleArtifactKind(plan.path) : null;
+  const brownfieldChain = planKind === 'brownfield_plan';
+  const artifactKindAllowed = target === 'verify' && brownfieldChain
+    ? ['brownfield_verification', 'brownfield_plan'].includes(artifactKind)
+    : targetKind === 'verification' && brownfieldChain
+      ? artifactKind === 'brownfield_verification'
+      : targetKind === 'plan' && brownfieldChain
+        ? ['brownfield_plan', 'brownfield_context'].includes(artifactKind)
+        : artifactKind === targetKind;
+  if (targetKind && artifact && !artifactKindAllowed) {
+    throw transitionErrorForCli('wrong_artifact_kind', `${target} requires a ${targetKind} artifact, not ${normalizeLifecyclePath(artifact.relative)}.`, [artifact.relative]);
+  }
+  if (targetKind === 'plan' && !['plan', 'brownfield_plan'].includes(planKind)) {
+    throw transitionErrorForCli('wrong_plan_kind', `--plan must identify a PLAN artifact: ${plan.relative}.`, [plan.relative]);
+  }
+  if (targetKind && artifact && plan && !sameArtifactChain(plan.relative, artifact.relative)) {
+    throw transitionErrorForCli('wrong_artifact_identity', 'Plan and lifecycle artifact belong to different lifecycle chains.', [plan.relative, artifact.relative]);
+  }
+  const planMeta = plan ? readArtifactMetadata(plan.path) : null;
+  const artifactMeta = artifact ? readArtifactMetadata(artifact.path) : null;
+  const planStatus = metadataStatus(planMeta?.metadata || {});
+  const artifactStatus = metadataStatus(artifactMeta?.metadata || {});
+  if (brownfieldChain && target !== 'blocked' && target !== 'ask_user') {
+    const brownfield = readBrownfieldContractForTransition(plan.path);
+    const lifecycleBrownfield = evaluateLifecycleState({ planningDir }).brownfieldChange;
+    if ((lifecycleBrownfield.contractErrors || []).includes('multiple_active_brownfield_streams')) {
+      brownfield.errors.push('multiple_active_brownfield_streams');
+    }
+    if (brownfield.errors.length > 0) {
+      throw transitionErrorForCli('brownfield_contract_invalid', 'Brownfield CHANGE.md is missing a required bounded-change contract field.', brownfield.errors);
+    }
+    if (brownfield.wideningRequested) {
+      throw transitionErrorForCli('brownfield_change_widening', 'Brownfield change requests milestone-sized widening; use the explicit milestone workflow.', [plan.relative]);
+    }
+    if (target === 'execute' && brownfield.status !== 'active') {
+      throw transitionErrorForCli('brownfield_not_active', `Brownfield execution requires CHANGE.md posture active, not ${brownfield.status || 'unknown'}.`, [plan.relative]);
+    }
+    if (target === 'audit' || target === 'next') {
+      if (brownfield.status !== 'ready_for_verification' && brownfield.status !== 'closed') {
+        throw transitionErrorForCli('brownfield_not_ready', 'Brownfield closeout requires CHANGE.md posture ready_for_verification or closed.', [plan.relative]);
+      }
+    }
+  }
+  if ((target === 'execute' || target === 'approve') && !['approved', 'accepted', 'complete'].includes(planStatus) && artifactStatus !== 'approved' && !(approved === true && authority && approvalRef)) {
+    throw transitionErrorForCli('not_approved', 'The supplied PLAN is durable but not approved; record approval before execution.', [plan.relative]);
+  }
+  if (target === 'verify' && !['complete', 'completed', 'done', 'passed', 'pass'].includes(artifactStatus)) {
+    throw transitionErrorForCli('execution_incomplete', 'The supplied execution artifact is not marked complete.', [artifact.relative]);
+  }
+  if (['audit', 'next'].includes(target) && !['passed', 'pass', 'complete', 'completed'].includes(artifactStatus)) {
+    throw transitionErrorForCli('verification_not_passed', 'The supplied verification artifact is not marked passed.', [artifact.relative]);
+  }
+  if (target === 'fix_gaps' && !['gaps_found', 'human_needed', 'blocked', 'failed', 'fail'].includes(artifactStatus)) {
+    throw transitionErrorForCli('gaps_not_recorded', 'The supplied verification artifact does not record gaps or a human gate.', [artifact.relative]);
+  }
+  return {
+    workspaceRoot,
+    plan,
+    artifact,
+    planIdentity: plan?.relative || null,
+    artifactIdentity: artifact?.relative || null,
+    authority: authority || planMeta?.metadata?.authority || null,
+    approvalRef: approvalRef || planMeta?.metadata?.approved_by || null,
+    stateLabel,
+  };
+}
+
+function transitionErrorForCli(code, message, evidence = []) {
+  const error = new Error(message);
+  error.code = code;
+  error.evidence = evidence;
+  return error;
+}
+
+export function cmdLifecycleTransition(...args) {
+  const { args: normalizedArgs, planningDir, state, invalid, error } = resolveWorkspaceContext(args);
+  const jsonMode = normalizedArgs.includes('--json');
+  const respond = (value) => {
+    if (jsonMode) output(value);
+    else if (value.status === 'ok' || value.status === 'replayed') console.log(`Lifecycle transition ${value.status}: ${value.state?.current_state || value.target}.`);
+    else console.error(`Lifecycle transition blocked: ${value.error}`);
+  };
+  if (invalid) {
+    respond({ schema_version: 1, operation: 'lifecycle-transition', status: 'error', error });
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    assertStateAuthority(state);
+    if (normalizedArgs.includes('--help') || normalizedArgs[0] === 'help') {
+      console.log('Usage: lifecycle-transition <plan|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--question <text>] [--json]');
+      return;
+    }
+    const target = String(normalizedArgs.find((arg) => !arg.startsWith('--')) || '').toLowerCase();
+    if (!target || target === 'help') throw transitionErrorForCli('usage', 'Usage: lifecycle-transition <plan|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--json]');
+    const flag = (name) => {
+      const index = normalizedArgs.indexOf(name);
+      return index === -1 ? null : normalizedArgs[index + 1] || null;
+    };
+    const planArg = flag('--plan');
+    const artifactArg = flag('--artifact');
+    const authority = flag('--authority');
+    const approvalRef = flag('--approval-ref');
+    const reason = flag('--reason');
+    const question = flag('--question');
+    const approved = String(flag('--approved') || '').toLowerCase() === 'true' || target === 'approve';
+    const validated = validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approved });
+    const result = transitionWorkflowState(getWorkPaths(validated.workspaceRoot).workDir, {
+      target,
+      planPath: validated.plan?.relative || null,
+      planIdentity: validated.planIdentity,
+      artifactPath: validated.artifact?.relative || null,
+      artifactIdentity: validated.artifactIdentity,
+      authority: validated.authority,
+      approvalRef: validated.approvalRef,
+      reason,
+      question,
+      approved: approved || target === 'execute',
+    });
+    respond({ schema_version: 1, operation: 'lifecycle-transition', target, ...result, evidence: [validated.plan?.relative, validated.artifact?.relative].filter(Boolean) });
+    if (result.status === 'error') process.exitCode = 1;
+  } catch (transitionError) {
+    const response = {
+      schema_version: 1,
+      operation: 'lifecycle-transition',
+      status: 'error',
+      error_code: transitionError.code || 'transition_blocked',
+      error: transitionError.message,
+      evidence: transitionError.evidence || [],
+      changed: false,
+    };
+    respond(response);
     process.exitCode = 1;
   }
 }

@@ -819,12 +819,18 @@ describe('bounded update awareness', () => {
             }
             if (observations.baseline && observations['opt-out']) {
               const normalizeStdout = (stdout) => {
-                if (command !== 'control-map') return stdout;
+                if (command === 'control-map') {
+                  const parsed = JSON.parse(stdout.join(''));
+                  assert.equal(Object.prototype.hasOwnProperty.call(parsed, 'generated_at'), true, `${command} helper generated_at field`);
+                  assert.equal(typeof parsed.generated_at, 'string', `${command} helper generated_at type`);
+                  assert.equal(new Date(parsed.generated_at).toISOString(), parsed.generated_at, `${command} helper generated_at ISO timestamp`);
+                  const { generated_at: _generatedAt, ...normalized } = parsed;
+                  return normalized;
+                }
+                if (command !== 'next') return stdout;
                 const parsed = JSON.parse(stdout.join(''));
-                assert.equal(Object.prototype.hasOwnProperty.call(parsed, 'generated_at'), true, `${command} helper generated_at field`);
-                assert.equal(typeof parsed.generated_at, 'string', `${command} helper generated_at type`);
-                assert.equal(new Date(parsed.generated_at).toISOString(), parsed.generated_at, `${command} helper generated_at ISO timestamp`);
-                const { generated_at: _generatedAt, ...normalized } = parsed;
+                assert.equal(Array.isArray(parsed.trace_refs), true, `${command} helper trace_refs array`);
+                const { trace_refs: _traceRefs, ...normalized } = parsed;
                 return normalized;
               };
               assert.deepEqual(

@@ -9,7 +9,7 @@ One end-to-end run is recorded, on Codex CLI: plan, execute, a verification catc
 [![npm version](https://img.shields.io/npm/v/workspine?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/workspine)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
-<img src="assets/workspine-loop.svg" alt="Start either way: work-quick for a change you can describe, or work-new-project for SPEC.md plus ROADMAP.md. Both feed the same loop of plan, execute, verify. Every step writes its own file. work-pause writes a checkpoint that gsdd next reads to resume." width="880">
+<img src="assets/workspine-loop.svg" alt="Start with work-quick for a bounded change, work-plan for a planned standalone change, or work-new-project to start or extend a project. All three feed the same loop of plan, execute, verify. Every step writes its own file. work-pause writes a checkpoint that workspine next reads to resume." width="880">
 
 ```bash
 npx -y workspine init
@@ -35,14 +35,14 @@ Workspine began as a fork of Get Shit Done and keeps the verification-first work
 
 `init` puts workflow skills in `.agents/skills/` and native adapters for the runtimes you choose. You run those workflows through your agent, and each one writes a file.
 
-There are two ways in. `work-quick` takes a bounded change you can already describe and needs no spec or roadmap. `work-new-project` sets up a spec and phases when the work is fuzzy or milestone-shaped. Both end up in the same loop: plan, execute, verify.
+Start with the goal that matches the work. `work-quick` handles a bounded change you can already describe. `work-plan` handles a planned standalone brownfield change through plan, execute, and verify without adding a roadmap phase. `work-new-project` starts or extends a broader project; use `work-new-milestone` only after shipped milestone history exists. All three routes converge on the same plan, execute, verify loop.
 
 | Workflow | Writes | What for |
 |----------|--------|----------|
 | `work-quick` | `.work/quick/NNN-slug/` | A bounded change, planned and executed in one pass |
-| `work-map-codebase` | `.work/codebase/` | A baseline of an unfamiliar repo before you pick a lane |
-| `work-new-project` | `.work/SPEC.md`, `ROADMAP.md` | Define the project and its phases |
-| `work-plan` | `.work/phases/N/PLAN.md` | Research and review before any code gets written |
+| `work-plan` | `.work/phases/N/PLAN.md` or `.work/brownfield-change/` | Plan a standalone change or a roadmap phase before execution |
+| `work-new-project` | `.work/SPEC.md`, `ROADMAP.md` | Start or extend a broader project |
+| `work-map-codebase` | `.work/codebase/` | Contextual baseline when an unfamiliar or risky repo needs orientation |
 | `work-execute` | `.work/phases/N/SUMMARY.md` | Implement the approved plan, nothing more |
 | `work-verify` | `.work/phases/N/VERIFICATION.md` | Confirm the plan's claims are actually true |
 
@@ -68,11 +68,15 @@ Whatever you pick, `init` always writes:
 
 The wizard only controls the native adapters and the governance block. After that, `npx -y workspine health` checks the generated files against current render output instead of asking you to trust manual review.
 
-Then pick a first workflow:
+Then pick the first goal that fits:
 
-- `work-new-project` for greenfield, fuzzy, or milestone-shaped work
-- `work-quick` for a bounded change you can already describe
-- `work-map-codebase` when the repo is unfamiliar and you want a baseline first
+- `work-quick` for a concrete bounded change
+- `work-plan` for a planned standalone change that needs plan -> execute -> verify
+- `work-new-project` to start or extend a broader project
+
+If the repo is unfamiliar, risky, or its map is stale, run `work-map-codebase` first for trusted context. It is a contextual orientation step, not a fourth mandatory goal. `work-new-milestone` is shown after a shipped milestone is recorded; before then, use `work-new-project`.
+
+If `init` detects a supported legacy `.planning/` state, it offers an optional, byte-preserving move into `.work/` because that gives the repo one current authority and a receipt. Declining leaves the existing state untouched; there is no silent migration.
 
 ### Quickstart (after init)
 
@@ -173,6 +177,7 @@ npx -y workspine update --templates      # also refresh template payloads
 npx -y workspine next --json             # what to do next, read from .work
 npx -y workspine next --format human     # compact supervisor card
 npx -y workspine next --init             # bootstrap .work continuity state
+npx -y workspine lifecycle-transition    # record an artifact-backed lifecycle transition
 npx -y workspine git-identity check      # read-only identity check before a commit
 npx -y workspine rigor                   # inspect or update rigor configuration
 npx -y workspine models profile quality  # prefer model quality

@@ -30,12 +30,13 @@ const PHASE_STATUS_MARKERS = {
 
 const PHASE_MARKER_RE = '(\\[[ x]\\]|\\[-\\]|â¬œ|ðŸ"„|âœ…|⬜|🔄|✅)';
 const PHASE_TOKEN_RE = '(\\d+(?:\\.\\d+)*[a-z]?)';
+const PHASE_OVERVIEW_QUALIFIER_RE = '(?:\\s+\\([^()\\r\\n]{1,80}\\))?';
 const PHASE_LINE_RE = new RegExp(
-  `^[-*]\\s*${PHASE_MARKER_RE}\\s*\\*\\*Phase\\s+${PHASE_TOKEN_RE}:\\s*(.+?)\\*\\*`,
+  `^[-*]\\s*${PHASE_MARKER_RE}\\s*\\*\\*Phase\\s+${PHASE_TOKEN_RE}${PHASE_OVERVIEW_QUALIFIER_RE}:\\s*(.+?)\\*\\*`,
   'i'
 );
 const ROADMAP_PHASE_STATUS_RE = new RegExp(
-  `^(\\s*[-*]\\s*)${PHASE_MARKER_RE}(\\s*\\*\\*Phase\\s+${PHASE_TOKEN_RE}:.*)$`,
+  `^(\\s*[-*]\\s*)${PHASE_MARKER_RE}(\\s*\\*\\*Phase\\s+${PHASE_TOKEN_RE}${PHASE_OVERVIEW_QUALIFIER_RE}:.*)$`,
   'i'
 );
 const PHASE_DETAIL_HEADING_RE = new RegExp(`^#{3,}\\s+Phase\\s+${PHASE_TOKEN_RE}(?::|$)`, 'i');

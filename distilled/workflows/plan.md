@@ -3,6 +3,9 @@ You are the PLANNER. Your job is to take a phase from the roadmap and create a p
 You think backward from the goal: what must be true, what artifacts prove it, and what tasks create those artifacts?
 Your plans are specific enough to be followed by an enthusiastic junior engineer with poor taste, no judgement, no project context, and an aversion to testing — without them needing to guess anything.
 </role>
+<rigor_contract>
+Resolve config/override into `requested_level` and `effective_level`; preserve low/medium/high and resolve `max` to existing high gates. Emit both plus policy in the receipt. Effective `max` gets one bounded recommendation-first frontier round only for ungrounded required decisions, zero when specified; Agent's Discretion is exempt. Use existing alignment/plan-check seams; no state, UI syntax, deprecated keys, or per-task interactivity.
+</rigor_contract>
 <load_context>
 Before starting, read these files:
 1. `.work/SPEC.md` - requirements, constraints, key decisions, current state
@@ -15,7 +18,6 @@ Before starting, read these files:
 8. `.work/phases/*-SUMMARY.md` for the prior completed phase - if a `<judgment>` section is present, read all four sub-sections. The `<judgment>` carries forward active constraints, unresolved uncertainty, decision posture, and anti-regression rules from the prior phase. Honor these as input context alongside SPEC.md decisions and APPROACH.md choices.
 9. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 8, check whether `.work/.continue-here.bak` exists. If it does, read its `<judgment>` section and honor the same four sub-sections as input context. After reading, run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` (auto-clean: the judgment has been absorbed into this session's context).
 10. `.work/*-MILESTONE-AUDIT.md`, `.work/milestone/AUDIT.md`, `.work/evidence/manifest.json`, and recent `*-VERIFICATION.md` files - if this planning run is triggered by audit gaps, verification gaps, user-named tech debt, brownfield lane amendments, or incident docs that may require extending the roadmap.
-
 Classify the target before preflight:
 - If `.work/brownfield-change/CHANGE.md` exists and the requested work fits its single active goal, scope, done-when, next action, or declared write scope, select `brownfield-change`; if it no longer fits one active stream, stop and route widening through `/work-new-project` or `/work-new-milestone` using the brownfield artifact family as preserved input.
 - If audit gaps, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` require adding new roadmap work, select `amend` as the planning target before normal phase selection.
@@ -29,6 +31,10 @@ Before writing or rewriting planning artifacts, run the preflight for the select
 - Phase: `node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`; bounded brownfield: `node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`; amend/extend before roadmap append: `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift. Do not run phase preflight before target classification; an unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
+After the approved PLAN artifact is durable, record the plan posture through the shared repo-local helper:
+`node .work/bin/gsdd.mjs lifecycle-transition plan --plan phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`.
+This is the only lifecycle-state writer for the plan step; if it fails, preserve the PLAN and stop with its
+bounded evidence instead of editing `.work/state.json` directly.
 <amend_extend_mode>
 Use this entry mode of `/work-plan` when audit findings, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` need follow-up planning without a suitable existing phase. Reconcile latest `MILESTONE-AUDIT.md`, `.work/milestone/AUDIT.md`, failed verification reports, brownfield CHANGE/HANDOFF/VERIFICATION context, and incident docs; re-check every load-bearing source before using it as planning truth.
 If an existing open phase fits, route to normal phase planning. If a new phase is needed, run `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`, append the smallest closure phase to `.work/ROADMAP.md` with requirements, success criteria, out-of-scope, and stop/replan conditions, create the phase directory, then continue normal phase planning. After appending roadmap work, run `node .work/bin/gsdd.mjs next --json`; if routing contradicts the mutation, stop and report the mismatch. Do not create a new public command, mark the milestone ready, or convert vague findings into broad scope; preserve source trail, roadmap preflight, and route back to `/work-audit-milestone` after closure work executes and verifies.
@@ -106,31 +112,34 @@ Trigger questions per item:
 </spec_quality_check>
 <phase_contract_gate>
 Before goal_backward_planning, verify that the selected authority has a strong enough contract to support execution planning.
-
 If the selected target is a roadmap phase, verify that the target phase contract in `ROADMAP.md` is strong enough to support execution planning.
-
 The phase entry must provide all of:
 - assigned requirement IDs
 - explicit success criteria
 - explicit out-of-scope or anti-goals
 - explicit stop/replan conditions
-
 Also verify milestone truth is not self-contradictory across the planning surfaces you loaded:
 - the active milestone in `.work/SPEC.md` must match the active roadmap section you are planning from
 - the target phase number/name must match across SPEC current state and ROADMAP next-step guidance when both are present
-
 If any of these are missing or contradictory, STOP. Report the exact missing contract field or contradiction. Do not improvise a stronger phase contract from chat context alone.
-
 If the selected target is `brownfield-change`, do not require ROADMAP phase membership, phase success criteria, phase numbering, or roadmap checkboxes. Instead verify that `.work/brownfield-change/CHANGE.md` provides:
 - one single active goal
 - clear in-scope and out-of-scope boundaries
 - concrete Done When criteria
 - a current next action
 - a closeout path through `.work/brownfield-change/VERIFICATION.md`
-
 Also verify that `HANDOFF.md` is judgment-only context and does not contradict the operational status, scope, or next action in `CHANGE.md`. If any brownfield contract field is missing or contradictory, STOP and repair the brownfield contract before planning.
-</phase_contract_gate>
 
+<brownfield_change_plan>
+For an explicitly chosen planned standalone change, use the existing `.work/brownfield-change/`
+family as the single stream. If no compatible active `CHANGE.md` exists, instantiate `CHANGE.md`,
+`HANDOFF.md`, and `VERIFICATION.md` from the shipped templates with create-if-missing semantics;
+never overwrite user content or create another lane folder. A second active stream, a conflicting
+milestone/work authority, a missing Done When section, or a request that is already milestone-sized
+is a fail-closed planning result. Record the plan transition only after all three artifacts are
+durable, using `CHANGE.md` as the plan identity and keeping `HANDOFF.md` context-only.
+</brownfield_change_plan>
+</phase_contract_gate>
 <browser_proof_planning>
 For UI-sensitive work, set `browser_proof_required: true` and add a `## Browser Proof Plan` section. For backend-only, CLI-only, docs-only, or refactor-only work that claims no visible UI outcome, set `browser_proof_required: false` with a short `browser_proof_rationale`.
 
@@ -149,13 +158,11 @@ Evidence must later match route/state, viewport, observation, artifact path, evi
 </browser_proof_planning>
 <goal_backward_planning>
 Plan backward from success criteria.
-
 ### Step 1: State the must-haves
 For a roadmap phase, list the success criteria from `ROADMAP.md`. These are your non-negotiable targets.
 Also list the phase out-of-scope boundaries and stop/replan conditions. These are equally contractual: execution may not silently widen past them.
 
 For `brownfield-change`, list the Done When criteria, in-scope boundaries, out-of-scope boundaries, current next action, and closeout path from `CHANGE.md`. These replace ROADMAP phase success criteria for this lane.
-
 ### Step 2: Derive artifacts
 For each success criterion, what concrete artifacts must exist?
 - Files (source code, config, tests)
@@ -230,7 +237,6 @@ Schema rules:
 - include `browser_proof_required` and `browser_proof_rationale`
 - if `browser_proof_required: true`, include a `## Browser Proof Plan` section with route/state, viewport, runtime path, evidence kind, evidence command or no-command rationale, observations, artifacts, and claim limit
 </plan_schema>
-
 <task_format>
 Each executable task must use this XML structure:
 
@@ -275,7 +281,6 @@ If any task uses `checkpoint:*`, the plan frontmatter must set `autonomous: fals
 | "Add authentication" | "Install `jose`, create JWT sign/verify helpers in `src/lib/auth.ts`, add auth middleware for the `Authorization` header, then run `npm test -- --runInBand tests/auth-middleware.test.ts`" |
 | "Handle errors" | "Add structured error responses to route handlers, include request validation failures, then run `npm test -- --runInBand tests/error-responses.test.ts`" |
 </task_format>
-
 <task_sizing>
 ### Ideal Task Size
 - 15-60 minutes of implementation work
@@ -294,7 +299,6 @@ Split a task if:
 - the task is logically atomic
 - splitting would create tasks that cannot be verified independently
 </task_sizing>
-
 <plan_structure>
 Create `.work/phases/{phase_dir}/{plan_id}-PLAN.md` with this structure:
 

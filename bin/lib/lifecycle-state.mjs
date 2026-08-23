@@ -3,7 +3,7 @@ import { basename, dirname, join, relative, resolve } from 'path';
 
 const BROWNFIELD_CHANGE_DIR = 'brownfield-change';
 
-const PHASE_LINE_RE = /^\s*[-*]\s*\[([ x-])\]\s*\*\*Phase\s+(\d+(?:\.\d+)*[a-z]?):\s*(.+?)\*\*(?:\s+—\s+\[([^\]]+)])?/i;
+const PHASE_LINE_RE = /^\s*[-*]\s*\[([ x-])\]\s*\*\*Phase\s+(\d+(?:\.\d+)*[a-z]?)(?:\s+\([^()\r\n]{1,80}\))?:\s*(.+?)\*\*(?:\s+—\s+\[([^\]]+)])?/i;
 const PHASE_DETAIL_HEADING_RE = /^(#{3,})\s+Phase\s+(\d+(?:\.\d+)*[a-z]?)(?::|$)/i;
 const PHASE_DETAIL_STATUS_RE = /^\s*\*\*Status\*\*:\s*\[([ x-])\]/i;
 const ACTIVE_MILESTONE_HEADING_RE = /^#{2,3}\s+(v[^\s]+)\s+(.+)$/im;
@@ -241,6 +241,18 @@ export function readBrownfieldChangeState(planningDir) {
   const dir = join(planningDir, BROWNFIELD_CHANGE_DIR);
   const changePath = join(dir, 'CHANGE.md');
   const handoffPath = join(dir, 'HANDOFF.md');
+  const verificationPath = join(dir, 'VERIFICATION.md');
+
+  // The bounded lane has one operational anchor.  Sibling folders are not
+  // alternate roots: they are evidence of a second stream and must be
+  // surfaced so callers can fail closed instead of guessing which one wins.
+  const siblingStreams = existsSync(planningDir)
+    ? readdirSync(planningDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && /^brownfield-change(?:-|\d)/i.test(entry.name) && entry.name.toLowerCase() !== BROWNFIELD_CHANGE_DIR)
+      .map((entry) => join(planningDir, entry.name, 'CHANGE.md'))
+      .filter((candidate) => existsSync(candidate))
+      .filter((candidate) => !/^\s*-\s*Current posture:\s*closed\s*$/im.test(readTextIfExists(candidate)))
+    : [];
 
   if (!existsSync(changePath)) {
     return {
@@ -248,6 +260,7 @@ export function readBrownfieldChangeState(planningDir) {
       dir,
       changePath,
       handoffPath,
+      verificationPath,
       title: null,
       changeId: null,
       currentStatus: null,
@@ -255,28 +268,66 @@ export function readBrownfieldChangeState(planningDir) {
       currentOwnerRuntime: null,
       nextAction: null,
       declaredOwnedPaths: [],
+      doneWhen: [],
+      hasDoneWhen: false,
+      contractErrors: siblingStreams.length > 0 ? ['multiple_active_brownfield_streams'] : [],
+      wideningRequested: false,
+      streamCount: siblingStreams.length,
+      verification: null,
       handoff: null,
     };
   }
 
   const changeArtifact = readMarkdownArtifact(changePath);
   const handoffArtifact = existsSync(handoffPath) ? readMarkdownArtifact(handoffPath) : null;
+  const verificationArtifact = existsSync(verificationPath) ? readMarkdownArtifact(verificationPath) : null;
   const currentStatusSection = extractMarkdownSection(changeArtifact.body, 'Current Status');
   const nextActionSection = extractMarkdownSection(changeArtifact.body, 'Next Action');
   const sliceSection = extractMarkdownSection(changeArtifact.body, 'PR Slice Ownership');
+  const doneWhenSection = extractMarkdownSection(changeArtifact.body, 'Done When');
+  const doneWhen = markdownBullets(doneWhenSection).filter((line) => !/^observable outcomes?|^conditions that must be true/i.test(line));
+  const currentStatus = extractBulletLabel(currentStatusSection, 'Current posture') || changeArtifact.frontmatter.status || null;
+  const normalizedStatus = String(currentStatus || '').trim().toLowerCase().replace(/[ -]+/g, '_');
+  const nextAction = collapseMarkdownSection(nextActionSection);
+  const contractErrors = [];
+  if (!extractMarkdownSection(changeArtifact.body, 'Goal').trim()) contractErrors.push('missing_goal');
+  if (!extractMarkdownSection(changeArtifact.body, 'In Scope').trim()) contractErrors.push('missing_in_scope');
+  if (!extractMarkdownSection(changeArtifact.body, 'Out of Scope').trim()) contractErrors.push('missing_out_of_scope');
+  if (doneWhen.length === 0) contractErrors.push('missing_done_when');
+  if (!nextAction.trim()) contractErrors.push('missing_next_action');
+  if (!extractMarkdownSection(changeArtifact.body, 'Closeout Path').trim()) contractErrors.push('missing_closeout_path');
+  if (!['active', 'blocked', 'ready_for_verification', 'closed'].includes(normalizedStatus)) contractErrors.push('invalid_posture');
+  if (handoffArtifact && extractMarkdownSection(handoffArtifact.body, 'Current Status').trim()) contractErrors.push('handoff_operational_authority');
+  if (siblingStreams.length > 0) contractErrors.push('multiple_active_brownfield_streams');
+  const wideningRequested = ['widening', 'promote', 'new_project', 'new_milestone'].includes(normalizedStatus)
+    || /(?:widen|promot|milestone planning|\/work-new-(?:project|milestone))/i.test(nextAction);
 
   return {
     exists: true,
     dir,
     changePath,
     handoffPath,
+    verificationPath,
     title: extractMarkdownHeading(changeArtifact.body),
     changeId: changeArtifact.frontmatter.change || null,
-    currentStatus: extractBulletLabel(currentStatusSection, 'Current posture') || changeArtifact.frontmatter.status || null,
+    currentStatus: normalizedStatus,
     currentIntegrationSurface: extractBulletLabel(currentStatusSection, 'Current branch / integration surface'),
     currentOwnerRuntime: extractBulletLabel(currentStatusSection, 'Current owner / runtime'),
-    nextAction: collapseMarkdownSection(nextActionSection),
+    nextAction,
     declaredOwnedPaths: parseOwnedPathHints(sliceSection),
+    doneWhen,
+    hasDoneWhen: doneWhen.length > 0,
+    contractErrors,
+    wideningRequested,
+    streamCount: siblingStreams.length,
+    verification: verificationArtifact
+      ? {
+          path: verificationPath,
+          status: String(verificationArtifact.frontmatter.status || verificationArtifact.frontmatter.result || '').trim().toLowerCase().replace(/[ -]+/g, '_') || null,
+          requiredEvidence: markdownBullets(extractMarkdownSection(verificationArtifact.body, 'Evidence')),
+          rawStatus: verificationArtifact.frontmatter.status || verificationArtifact.frontmatter.result || null,
+        }
+      : null,
     handoff: handoffArtifact
       ? {
           updated: handoffArtifact.frontmatter.updated || null,
@@ -288,6 +339,15 @@ export function readBrownfieldChangeState(planningDir) {
         }
       : null,
   };
+}
+
+function markdownBullets(section) {
+  return normalizeContent(section)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+/.test(line))
+    .map((line) => line.replace(/^[-*]\s+/, '').trim())
+    .filter(Boolean);
 }
 
 export function deriveNonPhaseState({ planningDir, hasSpec, hasRoadmap, brownfieldChange } = {}) {

@@ -77,6 +77,13 @@ If `.work/brownfield-change/HANDOFF.md` exists, read it as judgment-only context
 
 Do not treat `HANDOFF.md` as a co-equal status source. It explains the active change; `CHANGE.md` remains the operational anchor.
 
+If the brownfield contract is incomplete, has a second active stream, contains no concrete Done When
+items, or requests milestone-sized widening, report a bounded fail-closed warning. Do not repair or
+instantiate artifacts from `progress`; it remains read-only. When the operational posture is
+`ready_for_verification`, report the exact `CHANGE.md` Done When items and `VERIFICATION.md` as the
+next closeout surface. A closed brownfield change is terminal context only when its verification is
+passed; otherwise preserve the gap and route to verification.
+
 **Phase statuses:**
 If `.work/ROADMAP.md` exists, read it and parse phase statuses:
 - `[ ]` = not started

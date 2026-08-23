@@ -13,6 +13,11 @@ type: medium_scope_brownfield
 > `progress` and `resume` read this file first for status, scope, integration surface, and the authoritative next action.
 > If this lane no longer fits one active stream, widen explicitly through `/work-new-project` (first milestone) or `/work-new-milestone` (subsequent milestone) using this folder as the preserved input surface. Do not invent a separate promotion artifact.
 
+This file is the operational plan authority for the bounded stream. The lifecycle is deliberately
+single-track: `active` (plan/execute) -> `ready_for_verification` -> `closed`. The CLI/helper records
+the corresponding durable transition only after this artifact or the closeout evidence is present;
+it never creates a second state root or silently adds this change to a roadmap.
+
 ## Goal
 
 State the single cohesive outcome this change is meant to achieve.
@@ -51,6 +56,9 @@ Choose the widening surface case-by-case:
 - Observable outcomes that prove the change is complete.
 - Conditions that must be true before closeout.
 
+Each item must be concrete enough to verify in `VERIFICATION.md`. An empty or placeholder Done When
+section is a planning blocker; execution and closeout must not proceed on an inferred outcome.
+
 ## Current Status
 
 - Current posture: `active | blocked | ready_for_verification | closed`
@@ -58,6 +66,7 @@ Choose the widening surface case-by-case:
 - Current owner / runtime:
 
 Keep these labels concrete and current. This section is the canonical operational continuity surface for the active change.
+Use exactly one posture: `active`, `blocked`, `ready_for_verification`, or `closed`.
 
 ## Next Action
 
@@ -65,6 +74,10 @@ Keep these labels concrete and current. This section is the canonical operationa
 - If blocked, name the blocker and the exact unblock step.
 
 Keep the first bullet as the authoritative next action. `HANDOFF.md` may explain why, but it must not become a competing operational source.
+
+When execution satisfies the bounded contract, set posture to `ready_for_verification` and record the
+evidence in `VERIFICATION.md`. Set posture to `closed` only after verification is `passed`; `next`
+then exits this lane without routing into a milestone or another stream.
 
 ## PR Slice Ownership
 

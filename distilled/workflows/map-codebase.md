@@ -11,6 +11,9 @@ Use this workflow when:
 - Explicitly requested as a standalone re-mapping
 - You want a deeper brownfield orientation pass before choosing between bounded `quick` work and full `new-project` setup
 
+It is contextual orientation, not a mandatory first-run goal. Skip it for a familiar, concrete bounded
+change; choose `/work-quick`, `/work-plan`, or `/work-new-project` directly when the repo is already understood.
+
 Do NOT use when:
 - Greenfield project with no existing code
 - Maps already exist and are fresh (use Skip)

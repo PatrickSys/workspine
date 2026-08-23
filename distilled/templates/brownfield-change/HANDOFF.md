@@ -11,6 +11,10 @@ Operational state still lives in `CHANGE.md`.
 This file explains constraints, uncertainty, posture, and anti-regression context; it must not become a second status or routing authority.
 If this change widens into milestone planning, this file remains the preserved judgment input to `/work-new-project` or `/work-new-milestone`; do not copy it into a second promotion artifact.
 
+`CHANGE.md` is the only operational authority. Do not add a competing `Current Status`, `Next Action`,
+Done When, or lifecycle transition here. The helper and router read this file only as context after
+validating the operational artifact.
+
 ## Active Constraints
 
 - Boundaries that the next session must keep.

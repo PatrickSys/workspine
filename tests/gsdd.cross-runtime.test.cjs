@@ -17,6 +17,7 @@ const {
   cleanup,
   createTempProject,
   loadGsdd,
+  runCliAsMain,
   setNonInteractiveStdin,
 } = require('./gsdd.helpers.cjs');
 
@@ -413,6 +414,91 @@ describe('Portable workflow runtime_contract blocks', () => {
       for (const rt of NATIVE_RUNTIMES) {
         assert.ok(rtBlock.includes(rt), wf + ' runtime_contract must reference ' + rt);
       }
+    }
+  });
+});
+
+// ============================================================
+// Phase 11 — Generated rigor contract behavior (disposable consumers)
+// ============================================================
+
+describe('Generated portable rigor contracts', () => {
+  const projects = [];
+  const SUPPORTED_PORTABLE_INIT_PATHS = ['claude', 'opencode', 'codex'];
+  const WORKFLOW_SKILLS = ['work-plan', 'work-execute', 'work-verify'];
+
+  afterEach(() => {
+    while (projects.length > 0) cleanup(projects.pop());
+  });
+
+  async function createGeneratedConsumer(tool) {
+    const tmpDir = createTempProject();
+    projects.push(tmpDir);
+    const init = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', tool]);
+    assert.strictEqual(init.exitCode, 0, `${tool} init must succeed: ${init.output}`);
+    return tmpDir;
+  }
+
+  function readGeneratedContracts(tmpDir) {
+    return Object.fromEntries(WORKFLOW_SKILLS.map((skill) => {
+      const file = path.join(tmpDir, '.agents', 'skills', skill, 'SKILL.md');
+      assert.ok(fs.existsSync(file), `generated portable skill must exist: ${skill}`);
+      const content = fs.readFileSync(file, 'utf8');
+      const match = content.match(/<rigor_contract>[\s\S]*?<\/rigor_contract>/);
+      assert.ok(match, `${skill} must contain a generated rigor_contract`);
+      return [skill, match[0]];
+    }));
+  }
+
+  test('supported portable init paths generate all core rigor surfaces', async () => {
+    for (const tool of SUPPORTED_PORTABLE_INIT_PATHS) {
+      const tmpDir = await createGeneratedConsumer(tool);
+      const contracts = readGeneratedContracts(tmpDir);
+      for (const skill of WORKFLOW_SKILLS) {
+        assert.match(contracts[skill], /requested_level/);
+        assert.match(contracts[skill], /effective_level/);
+      }
+    }
+  });
+
+  test('generated contracts agree with real rigor show step policy and max behavior', async () => {
+    const tmpDir = await createGeneratedConsumer('claude,opencode,codex');
+    const setBase = await runCliAsMain(tmpDir, ['rigor', 'medium']);
+    assert.strictEqual(setBase.exitCode, 0, setBase.output);
+    const setExecute = await runCliAsMain(tmpDir, ['rigor', 'execute', 'max']);
+    assert.strictEqual(setExecute.exitCode, 0, setExecute.output);
+    const shown = await runCliAsMain(tmpDir, ['rigor', 'show']);
+    assert.strictEqual(shown.exitCode, 0, shown.output);
+    const payload = JSON.parse(shown.stdout);
+
+    assert.deepStrictEqual(payload.effective_levels, { plan: 'medium', execute: 'high', verify: 'medium' });
+    assert.strictEqual(payload.steps.execute.requested_level, 'max');
+    assert.strictEqual(payload.steps.execute.effective_level, 'high');
+    assert.strictEqual(payload.steps.execute.policy.path, 'frontier-alignment-preview-verification');
+    assert.strictEqual(payload.steps.plan.policy.path, 'research-plan-check');
+    assert.strictEqual(payload.steps.verify.policy.path, 'research-plan-check');
+
+    const contracts = readGeneratedContracts(tmpDir);
+    assert.match(contracts['work-plan'], /requested_level.*effective_level/);
+    assert.match(contracts['work-plan'], /max.*high/);
+    assert.match(contracts['work-plan'], /zero when specified/);
+    assert.match(contracts['work-plan'], /Agent's Discretion.*exempt/);
+
+    assert.match(contracts['work-execute'], /requested_level.*effective_level/);
+    assert.match(contracts['work-execute'], /max.*high/);
+    assert.match(contracts['work-execute'], /at most two recommendation-only code-preview checkpoint tasks/);
+    assert.match(contracts['work-execute'], /Headless logs unresolved questions/);
+    assert.match(contracts['work-execute'], /never claims answered\/signoff/);
+
+    assert.match(contracts['work-verify'], /requested_level.*effective_level/);
+    assert.match(contracts['work-verify'], /use high for `max`/);
+    assert.match(contracts['work-verify'], /Signoff requires actual signoff/);
+    assert.match(contracts['work-verify'], /explicit unknown narrows the claim/);
+    assert.match(contracts['work-verify'], /Headless unresolved is not an answer/);
+
+    for (const contract of Object.values(contracts)) {
+      assert.ok(contract.includes(String(payload.steps.execute.effective_level)),
+        'generated contract must reflect the effective max gate reported by rigor show');
     }
   });
 });

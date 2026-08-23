@@ -41,6 +41,9 @@ skills-lock.json
 # Milestone tracker (internal-only, not public)
 MILESTONES.md
 
+# Local framework goal pointer (runtime state lives under .work/)
+/goal.md
+
 # Codebase indexer cache
 .codebase-context/
 _bmad/

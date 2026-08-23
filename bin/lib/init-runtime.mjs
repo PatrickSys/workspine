@@ -43,17 +43,17 @@ export const GLOBAL_AGENT_OPTIONS = [
   {
     id: 'claude',
     label: 'Claude Code',
-    description: 'Install global skills, slash-command alias, and native GSDD agents under ~/.claude.',
+    description: 'Install global skills, slash-command alias, and native Workspine agents under ~/.claude.',
   },
   {
     id: 'opencode',
     label: 'OpenCode',
-    description: 'Install shared global skills under ~/.agents plus slash commands and native GSDD agents under ~/.config/opencode.',
+    description: 'Install shared global skills under ~/.agents plus slash commands and native Workspine agents under ~/.config/opencode.',
   },
   {
     id: 'codex',
     label: 'Codex CLI',
-    description: 'Install shared global skills under ~/.agents and native GSDD agents under ~/.codex.',
+    description: 'Install shared global skills under ~/.agents and native Workspine agents under ~/.codex.',
   },
   {
     id: 'copilot',
@@ -184,7 +184,10 @@ export function resolveWizardAdapterTargets(selectedRuntimes, installGovernance)
 // The help screen and the post-init routing lines both restate shipped workflow
 // ids. They read them out of the manifest in bin/lib/workflows.mjs so a workflow
 // added, removed or renamed there cannot leave a stale hand-written copy behind.
-const STARTING_LANE_SLUGS = Object.freeze(['new-project', 'quick', 'map-codebase']);
+// Keep the first decision small: a bounded change, a planned standalone change,
+// or a project to start/extend. Mapping is recommended only by the contextual
+// brownfield guidance, and milestone creation is history-gated in its workflow.
+const STARTING_LANE_SLUGS = Object.freeze(['quick', 'plan', 'new-project']);
 
 const HELP_WORKFLOW_SUMMARIES = Object.freeze({
   'new-project': 'Full initializer: questioning, brownfield audit, research, spec, roadmap',
@@ -203,9 +206,9 @@ const HELP_WORKFLOW_SUMMARIES = Object.freeze({
 });
 
 const STARTING_LANE_SUMMARIES = Object.freeze({
-  'new-project': 'Greenfield, fuzzy brownfield scope, or milestone-shaped work',
   quick: 'Concrete bounded brownfield change',
-  'map-codebase': 'Deeper brownfield orientation before choosing the lane above',
+  plan: 'Standalone change that needs a plan, execution, and verification',
+  'new-project': 'Start or extend a broader project or milestone',
 });
 
 const WORKFLOW_HELP_WIDTH = Math.max(...WORKFLOWS.map(({ name }) => name.length));
@@ -247,19 +250,18 @@ export function getPostInitRoutingLines(selectedRuntimes) {
   if (selectedRuntimes.includes('cursor')) lines.push(`  Cursor:       ${slashLanes}`);
   if (selectedRuntimes.includes('copilot')) lines.push(`  Copilot:      ${slashLanes}`);
   if (selectedRuntimes.includes('gemini')) lines.push(`  Gemini CLI:   ${slashLanes}`);
-  const lanePaths = STARTING_LANE_SLUGS.map((slug, index) => (
-    index === 0 ? `.agents/skills/${workflowId(slug)}/SKILL.md` : `${workflowId(slug)}/SKILL.md`
-  ));
+  const lanePaths = STARTING_LANE_SLUGS.map((slug) => `.agents/skills/${workflowId(slug)}/SKILL.md`);
   lines.push(`  Any tool:     open ${lanePaths.slice(0, -1).join(', ')}, or ${lanePaths[lanePaths.length - 1]}`);
   return lines;
 }
 
 export function getHelpText() {
   return `
-gsdd - Workspine CLI
+workspine - Workspine CLI
 Plan, execute, and verify AI-assisted work from files in your repo — with proof before "done".
 
-Usage: gsdd <command> [args]
+Usage: workspine <command> [args]
+Compatibility: gsdd <command> [args] remains a supported alias for existing installs.
 
 Commands:
   init [--tools <platform>] [--auto] [--brief <file>] [--migrate]
@@ -279,6 +281,7 @@ Commands:
                               health and update remain network-free; update is explicit repair only
   next [--json] [--format auto|json|human] [--init]
                               Read explicit file-backed \`.work\` continuity and emit the next coherent agent action
+Advanced/internal commands (available when you need them):
   journey [--json]            Show the milestone and phase delivery journey # (experimental)
   remember "<text>" --type <t> --scope <s> [--for <ref>]
                               Capture a candidate decision, rule, or lesson for later verification
@@ -343,7 +346,7 @@ Notes:
   - --tools codex generates .codex/agents/work-plan-checker.toml and .codex/agents/work-approach-explorer.toml (portable skill is the entry surface; $work-plan is plan-only until explicit $work-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
   - normal repo path: npx -y workspine init -> run /work-* or $work-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed
-  - post-init, choose your starting lane honestly: new-project for greenfield or fuzzy/milestone work, quick for a concrete bounded change, map-codebase first when the repo needs deeper orientation
+  - post-init, choose one goal: quick for a bounded change, plan for a standalone change that needs plan -> execute -> verify, or new-project to start/extend a project; use map-codebase first only when a risky or unfamiliar brownfield repo needs deeper orientation
 
 Examples:
   npx -y workspine init
@@ -374,6 +377,10 @@ ${renderWorkflowHelp()}
 
 Starting lanes after init:
 ${renderStartingLaneHelp()}
+
+Contextual routing:
+  map-codebase       Use first only for an unfamiliar, risky, or stale brownfield baseline
+  new-milestone      Appears after a shipped milestone is recorded; use new-project for the first one
 
 Advanced/internal helpers (kept available, but not the primary first-run user story):
   lifecycle-preflight       Inspect deterministic lifecycle gate results for a workflow surface
