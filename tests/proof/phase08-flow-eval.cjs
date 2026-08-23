@@ -96,16 +96,12 @@ function protectedSnapshot() {
     if (error.code === 'ENOENT') return { path: relative, type: 'missing', mode: null, bytes: null, sha256: null };
     throw error;
   }
-  const type = stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : 'other';
-  const snapshot = { path: relative, type, mode: stat.mode & 0o777, bytes: null, sha256: null };
-  if (type === 'file') {
-    const bytes = fs.readFileSync(file);
-    snapshot.bytes = bytes.length;
-    snapshot.sha256 = sha(bytes);
-  } else if (type === 'symlink') {
-    snapshot.target = fs.readlinkSync(file);
-  }
-  return snapshot;
+  need(stat.isFile(), 'containment_failure', 'protected input is not a regular file', {
+    path: relative,
+    type: stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory' : 'other',
+  });
+  const bytes = fs.readFileSync(file);
+  return { path: relative, type: 'file', mode: stat.mode & 0o777, bytes: bytes.length, sha256: sha(bytes) };
 }
 function sourceSnapshot(env) { return { git: gitSnapshot(env), protected: protectedSnapshot() }; }
 function assertConsumerGitAbsent(roots) {
