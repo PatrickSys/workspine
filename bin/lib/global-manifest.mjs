@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { dirname, join, relative, resolve } from 'path';
 
 export const GLOBAL_MANIFEST_FILENAME = 'workspine-file-manifest.json';
@@ -23,6 +23,27 @@ export function readGlobalManifest(rootDir) {
   }
 }
 
+/**
+ * Distinguish a missing manifest from a corrupt or unsafe manifest path.  The
+ * installer must make this distinction before it writes any target bytes.
+ */
+export function inspectGlobalManifest(rootDir) {
+  const manifestPath = join(rootDir, GLOBAL_MANIFEST_FILENAME);
+  let stat;
+  try {
+    stat = lstatSync(manifestPath);
+  } catch {
+    return { path: manifestPath, status: 'missing', manifest: null };
+  }
+  if (stat.isSymbolicLink()) return { path: manifestPath, status: 'linked', manifest: null };
+  if (!stat.isFile()) return { path: manifestPath, status: 'collision', manifest: null };
+
+  const manifest = readGlobalManifest(rootDir);
+  return manifest && typeof manifest === 'object' && !Array.isArray(manifest)
+    ? { path: manifestPath, status: 'valid', manifest }
+    : { path: manifestPath, status: 'corrupt', manifest: null };
+}
+
 export function writeGlobalManifest(rootDir, manifest) {
   mkdirSync(rootDir, { recursive: true });
   writeFileSync(join(rootDir, GLOBAL_MANIFEST_FILENAME), JSON.stringify(manifest, null, 2));
@@ -39,15 +60,50 @@ export function writeManifestTrackedFile({
   previousManifest,
   nextFiles,
   dryRun = false,
+  strictOwnership = false,
 }) {
   const absolutePath = join(rootDir, relativePath);
   const normalizedRelativePath = relativePath.replace(/\\/g, '/');
   const expectedHash = sha256(content);
   const previousHash = previousManifest?.files?.[normalizedRelativePath] || null;
 
-  if (existsSync(absolutePath)) {
+  let stat;
+  try {
+    stat = lstatSync(absolutePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') stat = null;
+    else {
+      return {
+        relativePath: normalizedRelativePath,
+        status: 'skipped_unreadable',
+        message: 'existing target could not be inspected safely',
+      };
+    }
+  }
+  if (stat) {
+    if (stat.isSymbolicLink()) {
+      return {
+        relativePath: normalizedRelativePath,
+        status: 'skipped_linked',
+        message: 'existing target is linked (symbolic link)',
+      };
+    }
+    if (!stat.isFile()) {
+      return {
+        relativePath: normalizedRelativePath,
+        status: 'skipped_collision',
+        message: 'existing target collision: not a regular file',
+      };
+    }
     const currentHash = fileHash(absolutePath);
     if (currentHash === expectedHash) {
+      if (strictOwnership && !previousHash) {
+        return {
+          relativePath: normalizedRelativePath,
+          status: 'skipped_unmanaged',
+          message: 'existing file is unowned (not tracked by Workspine manifest)',
+        };
+      }
       nextFiles[normalizedRelativePath] = expectedHash;
       return { relativePath: normalizedRelativePath, status: 'unchanged' };
     }
@@ -55,7 +111,7 @@ export function writeManifestTrackedFile({
       return {
         relativePath: normalizedRelativePath,
         status: 'skipped_unmanaged',
-        message: 'existing file is not tracked by Workspine manifest',
+        message: 'existing file is unowned (not tracked by Workspine manifest)',
       };
     }
     if (currentHash !== previousHash) {
@@ -99,11 +155,37 @@ export function pruneStaleManifestTrackedFiles({
       continue;
     }
 
-    if (!existsSync(absolutePath)) {
-      results.push({ relativePath: normalizedRelativePath, status: 'removed_missing' });
+    let stat;
+    try {
+      stat = lstatSync(absolutePath);
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        results.push({ relativePath: normalizedRelativePath, status: 'removed_missing' });
+        continue;
+      }
+      results.push({
+        relativePath: normalizedRelativePath,
+        status: 'skipped_unreadable',
+        message: 'stale target could not be inspected safely',
+      });
       continue;
     }
-
+    if (stat.isSymbolicLink()) {
+      results.push({
+        relativePath: normalizedRelativePath,
+        status: 'skipped_linked',
+        message: 'stale target is linked (symbolic link)',
+      });
+      continue;
+    }
+    if (!stat.isFile()) {
+      results.push({
+        relativePath: normalizedRelativePath,
+        status: 'skipped_collision',
+        message: 'stale target collision: not a regular file',
+      });
+      continue;
+    }
     const currentHash = fileHash(absolutePath);
     if (currentHash !== previousHash) {
       results.push({

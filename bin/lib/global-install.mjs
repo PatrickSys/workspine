@@ -1,6 +1,6 @@
 import os from 'os';
 import { spawnSync } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, lstatSync } from 'fs';
 import { join } from 'path';
 import { promptMultiSelect } from './init-prompts.mjs';
 import {
@@ -27,6 +27,7 @@ import {
 } from '../adapters/codex.mjs';
 import {
   GLOBAL_MANIFEST_FILENAME,
+  inspectGlobalManifest,
   pruneStaleManifestTrackedFiles,
   readGlobalManifest,
   writeGlobalManifest,
@@ -285,8 +286,33 @@ function buildGlobalInstallSpecs(target, roots, ctx) {
   ];
 }
 
-function preflightInstallSpec(spec) {
-  const previousManifest = readGlobalManifest(spec.rootDir);
+function preflightInstallSpec(spec, { strictOwnership = false } = {}) {
+  const manifestState = inspectGlobalManifest(spec.rootDir);
+  const previousManifest = manifestState.manifest;
+  const manifestOwnershipMismatch = manifestState.status === 'valid'
+    && (manifestState.manifest.product !== 'Workspine'
+      || manifestState.manifest.runtime !== spec.runtime
+      || !manifestState.manifest.files
+      || typeof manifestState.manifest.files !== 'object'
+      || Array.isArray(manifestState.manifest.files));
+  if (['linked', 'collision', 'unreadable', 'corrupt'].includes(manifestState.status) || manifestOwnershipMismatch) {
+    const status = manifestOwnershipMismatch ? 'skipped_collision' : `skipped_${manifestState.status}`;
+    return {
+      ...spec,
+      previousManifest,
+      nextFiles: {},
+      results: [{
+        relativePath: GLOBAL_MANIFEST_FILENAME,
+        status,
+        message: manifestOwnershipMismatch ? 'global manifest is not owned by this Workspine runtime' : `global manifest is ${manifestState.status}`,
+      }],
+      blocked: [{
+        relativePath: GLOBAL_MANIFEST_FILENAME,
+        status,
+        message: manifestOwnershipMismatch ? 'global manifest is not owned by this Workspine runtime' : `global manifest is ${manifestState.status}`,
+      }],
+    };
+  }
   const nextFiles = {};
   const fileResults = spec.entries.map((entry) => writeManifestTrackedFile({
     rootDir: spec.rootDir,
@@ -295,6 +321,7 @@ function preflightInstallSpec(spec) {
     previousManifest,
     nextFiles,
     dryRun: true,
+    strictOwnership,
   }));
   const pruneResults = pruneStaleManifestTrackedFiles({
     rootDir: spec.rootDir,
@@ -343,8 +370,9 @@ function writeInstallSpec(plan, ctx) {
   return results;
 }
 
-function planInstallTarget({ target, roots, ctx }) {
-  const plans = buildGlobalInstallSpecs(target, roots, ctx).map(preflightInstallSpec);
+function planInstallTarget({ target, roots, ctx, strictOwnership = false }) {
+  const plans = buildGlobalInstallSpecs(target, roots, ctx)
+    .map((spec) => preflightInstallSpec(spec, { strictOwnership }));
   const blocked = plans.flatMap((plan) => plan.blocked);
   const rootDir = plans.map((plan) => plan.rootDir).join(', ');
 
@@ -536,6 +564,108 @@ export function verifyGlobalRuntimeInstall({ targets, roots, ctx, liveRuntime = 
   };
 }
 
+/**
+ * Return only global targets that already have a Workspine-owned manifest.
+ * A directory or an unrelated file is not ownership evidence; a malformed
+ * manifest is retained as evidence so the normal preflight can refuse it
+ * without touching the target.
+ */
+export function getManifestOwnedGlobalTargets({ roots = resolveGlobalInstallRoots() } = {}) {
+  const manifestPathPresent = (rootDir) => {
+    try {
+      lstatSync(join(rootDir, GLOBAL_MANIFEST_FILENAME));
+      return true;
+    } catch (error) {
+      return error?.code !== 'ENOENT';
+    }
+  };
+  const expectedManifestRoots = {
+    claude: [roots.claude],
+    opencode: [roots.opencodeSkills, roots.opencode],
+    codex: [roots.codexSkills, roots.codex],
+    copilot: [roots.copilotSkills, roots.copilot],
+  };
+  return GLOBAL_AGENT_IDS.filter((target) => {
+    const manifestRoots = [...new Set(expectedManifestRoots[target])];
+    return manifestRoots.every(manifestPathPresent);
+  });
+}
+
+export function collectGlobalInstallSpecs({ target, roots, ctx }) {
+  return buildGlobalInstallSpecs(target, roots, ctx);
+}
+
+async function reconcileGlobalTargets({ ctx, targets, dryRun = false, heading = 'installing' }) {
+  const roots = resolveGlobalInstallRoots(ctx.globalInstallRootOptions);
+  if (!targets || targets.length === 0) {
+    console.error('ERROR: no manifest-owned global install targets found. Run `npx -y workspine install --global --tools <target>` first.');
+    process.exitCode = 1;
+    return { targets: [], reports: [], blocked: true };
+  }
+
+  const invalidMessage = validateGlobalTools(targets);
+  if (invalidMessage) {
+    console.error(invalidMessage);
+    process.exitCode = 1;
+    return { targets, reports: [], blocked: true };
+  }
+
+  console.log(`Workspine global ${heading} - reconciling manifest-owned runtime surfaces${dryRun ? ' (dry run)' : ''}\n`);
+  const installPlans = targets.map((target) => planInstallTarget({
+    target,
+    roots,
+    ctx,
+    strictOwnership: heading === 'update',
+  }));
+  const selectedSetBlocked = installPlans.some((plan) => plan.blocked.length > 0);
+  const reports = installPlans.map((plan) => completeInstallTarget(plan, {
+    ctx,
+    dryRun,
+    selectedSetBlocked,
+  }));
+
+  let hasBlocked = false;
+  for (const report of reports) {
+    const actionSummary = dryRun
+      ? `${report.wouldWriteCount} file(s) would be written, ${report.wouldRemoveCount} stale file(s) would be removed`
+      : selectedSetBlocked
+        ? `${report.wouldWriteCount} file(s) not written; selected set blocked during preflight`
+        : `${report.writtenCount} written, ${report.unchangedCount} unchanged, ${report.removedCount} stale removed`;
+    console.log(`  - ${report.target}: ${actionSummary} (${report.rootDir})`);
+    if (report.blocked.length > 0) {
+      hasBlocked = true;
+      for (const blocked of report.blocked.slice(0, 5)) {
+        console.log(`    WARN ${blocked.relativePath}: ${blocked.message}`);
+      }
+      if (report.blocked.length > 5) {
+        console.log(`    WARN ${report.blocked.length - 5} more file(s) were skipped`);
+      }
+    }
+  }
+
+  if (hasBlocked) {
+    console.error('\nGlobal reconciliation finished with skipped files. Review them before retrying.');
+    process.exitCode = 1;
+    return { targets, reports, blocked: true };
+  }
+  console.log(`\nGlobal ${heading === 'install' ? 'install' : 'reconciliation'} complete.`);
+  return { targets, reports, blocked: false };
+}
+
+export function createCmdGlobalUpdate(ctx) {
+  return async function cmdGlobalUpdate(...updateArgs) {
+    const dryRun = updateArgs.includes('--dry-run') || updateArgs.includes('--dry');
+    if (updateArgs.some((arg) => arg === '--workspace-root')) {
+      console.error('ERROR: global update does not accept --workspace-root; it operates on personal agent homes.');
+      process.exitCode = 1;
+      return;
+    }
+    const roots = resolveGlobalInstallRoots(ctx.globalInstallRootOptions);
+    const targets = getManifestOwnedGlobalTargets({ roots });
+    return reconcileGlobalTargets({ ctx, targets, dryRun, heading: 'update' });
+  };
+}
+
 export function createCmdInstall(ctx) {
   return async function cmdInstall(...installArgs) {
     // A15-44: fail before any write when a flag is unknown, duplicated, or missing its value.
@@ -601,45 +731,6 @@ export function createCmdInstall(ctx) {
       return;
     }
 
-    console.log(`Workspine global install - installing runtime surfaces${dryRun ? ' (dry run)' : ''}\n`);
-
-    const installPlans = targets.map((target) => planInstallTarget({
-      target,
-      roots,
-      ctx,
-    }));
-    const selectedSetBlocked = installPlans.some((plan) => plan.blocked.length > 0);
-    const reports = installPlans.map((plan) => completeInstallTarget(plan, {
-      ctx,
-      dryRun,
-      selectedSetBlocked,
-    }));
-
-    let hasBlocked = false;
-    for (const report of reports) {
-      const actionSummary = dryRun
-        ? `${report.wouldWriteCount} file(s) would be written, ${report.wouldRemoveCount} stale file(s) would be removed`
-        : selectedSetBlocked
-          ? `${report.wouldWriteCount} file(s) not written; selected set blocked during preflight`
-        : `${report.writtenCount} written, ${report.unchangedCount} unchanged, ${report.removedCount} stale removed`;
-      console.log(`  - ${report.target}: ${actionSummary} (${report.rootDir})`);
-      if (report.blocked.length > 0) {
-        hasBlocked = true;
-        for (const blocked of report.blocked.slice(0, 5)) {
-          console.log(`    WARN ${blocked.relativePath}: ${blocked.message}`);
-        }
-        if (report.blocked.length > 5) {
-          console.log(`    WARN ${report.blocked.length - 5} more file(s) were skipped`);
-        }
-      }
-    }
-
-    if (hasBlocked) {
-      console.error('\nGlobal install finished with skipped files. Review them before re-running or deleting local modifications.');
-      process.exitCode = 1;
-      return;
-    }
-
-    console.log('\nGlobal install complete.');
+    return reconcileGlobalTargets({ ctx, targets, dryRun, heading: 'install' });
   };
 }

@@ -7,7 +7,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const { createTempProject, loadGsdd, runCliAsMain, cleanup } = require('./gsdd.helpers.cjs');
+const { createTempProject, loadGsdd, runCliAsMain, cleanup, withEnv } = require('./gsdd.helpers.cjs');
 
 let tmpDir;
 
@@ -30,6 +30,21 @@ function writeFile(relativePath, content) {
   const fullPath = path.join(tmpDir, relativePath);
   fs.mkdirSync(path.dirname(fullPath), { recursive: true });
   fs.writeFileSync(fullPath, content);
+}
+
+function snapshotTree(rootDir) {
+  if (!fs.existsSync(rootDir)) return [];
+  const files = [];
+  const visit = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const absolutePath = path.join(dir, entry.name);
+      if (entry.isDirectory()) visit(absolutePath);
+      else if (entry.isSymbolicLink()) files.push([path.relative(rootDir, absolutePath).replace(/\\/g, '/'), `symlink:${fs.readlinkSync(absolutePath)}`]);
+      else files.push([path.relative(rootDir, absolutePath).replace(/\\/g, '/'), fs.readFileSync(absolutePath)]);
+    }
+  };
+  visit(rootDir);
+  return files.sort(([left], [right]) => left.localeCompare(right));
 }
 
 function writeAlignedTruthFixtures() {
@@ -925,6 +940,113 @@ describe('Health — human-readable output', () => {
     assert.match(result.output, /ERROR:/);
     assert.match(result.output, /Fix:/);
     assert.match(result.output, /BROKEN/);
+  });
+});
+
+describe('Health — global agent homes', () => {
+  test('global health is read-only and reports modified owned bytes', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const skillPath = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        const clean = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        assert.strictEqual(clean.exitCode, 0, clean.output);
+        assert.strictEqual(JSON.parse(clean.output).status, 'healthy');
+        fs.appendFileSync(skillPath, '\nuser edit\n');
+        const beforeHealthHome = snapshotTree(homeDir);
+        const beforeHealthRepo = snapshotTree(repoDir);
+        const degraded = await runCliAsMain(repoDir, ['health', '-g', '--json']);
+        assert.strictEqual(degraded.exitCode, 0, degraded.output);
+        assert.strictEqual(JSON.parse(degraded.output).status, 'degraded');
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeHealthHome, 'global health must not rewrite the modified owned home');
+        assert.deepStrictEqual(snapshotTree(repoDir), beforeHealthRepo, 'global health must not touch the invoking repo');
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global health reports linked, colliding, and corrupt ownership read-only', async () => {
+    const cases = [
+      {
+        name: 'linked',
+        mutate: (homeDir) => {
+          const target = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+          const external = path.join(homeDir, 'user-owned-skill.md');
+          fs.writeFileSync(external, 'user-owned bytes\n');
+          fs.unlinkSync(target);
+          fs.symlinkSync(external, target, 'file');
+        },
+      },
+      {
+        name: 'linked',
+        mutate: (homeDir) => {
+          const manifest = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+          fs.unlinkSync(manifest);
+          fs.symlinkSync(path.join(homeDir, 'missing-manifest.json'), manifest, 'file');
+        },
+      },
+      {
+        name: 'collision',
+        mutate: (homeDir) => {
+          const target = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+          fs.unlinkSync(target);
+          fs.mkdirSync(target, { recursive: true });
+        },
+      },
+      {
+        name: 'corrupt',
+        mutate: (homeDir) => {
+          fs.writeFileSync(path.join(homeDir, '.claude', 'workspine-file-manifest.json'), '{not-json');
+        },
+      },
+    ];
+    for (const scenario of cases) {
+      const homeDir = createTempProject();
+      const repoDir = createTempProject();
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+          const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+          assert.strictEqual(install.exitCode, 0, install.output);
+          scenario.mutate(homeDir);
+          const beforeHome = snapshotTree(homeDir);
+          const beforeRepo = snapshotTree(repoDir);
+          const result = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+          assert.strictEqual(result.exitCode, 1, `${scenario.name} should be broken`);
+          const parsed = JSON.parse(result.output);
+          assert.strictEqual(parsed.status, 'broken');
+          assert.match(`${parsed.errors.map((error) => error.message).join('\n')}\n${parsed.warnings.map((warning) => warning.message).join('\n')}`, new RegExp(scenario.name));
+          assert.deepStrictEqual(snapshotTree(homeDir), beforeHome, `${scenario.name} health must be zero-write`);
+          assert.deepStrictEqual(snapshotTree(repoDir), beforeRepo, `${scenario.name} health must not touch repo`);
+        });
+      } finally {
+        cleanup(homeDir);
+        cleanup(repoDir);
+      }
+    }
+  });
+
+  test('global health without an owned manifest fails read-only with guidance', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const beforeHome = snapshotTree(homeDir);
+        const result = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        assert.strictEqual(result.exitCode, 1);
+        const parsed = JSON.parse(result.output);
+        assert.strictEqual(parsed.status, 'broken');
+        assert.match(parsed.errors[0].fix, /install --global/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeHome);
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
   });
 });
 

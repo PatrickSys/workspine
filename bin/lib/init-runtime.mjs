@@ -316,7 +316,8 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 export const COMMAND_FLAGS = {
   setup: { '--global': false, '-g': false, '--agent': true, '--all': false, '-y': false, '--yes': false, '--dry-run': false, '--dry': false, '--workspace-root': true, '--migrate': false },
   init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--workspace-root': true },
-  update: { '--dry-run': false, '--dry': false, '--workspace-root': true },
+  update: { '--dry-run': false, '--dry': false, '--global': false, '-g': false, '--workspace-root': true },
+  health: { '--json': false, '--global': false, '-g': false, '--workspace-root': true },
   install: { '--global': false, '-g': false, '--auto': false, '--dry-run': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
   scaffold: { '--workspace-root': true },
   'file-op': { '--missing': true, '--flags': true, '--workspace-root': true },
@@ -488,7 +489,8 @@ export function validateCommandShape(command, commandArgs = []) {
   const usage = {
     setup: 'Usage: workspine setup [-g|--global] [--agent <target>] [--all] [-y|--yes] [--dry-run] [--workspace-root <path>] [--migrate]',
     init: 'Usage: workspine init [flags]',
-    update: 'Usage: workspine update [--dry-run]',
+    update: 'Usage: workspine update [--dry-run] [-g|--global]',
+    health: 'Usage: workspine health [--json] [-g|--global] [--workspace-root <path>]',
     install: 'Usage: workspine install --global [flags]',
     scaffold: 'Usage: workspine scaffold phase <phase-number> [phase-name]',
     'file-op': 'Usage: workspine file-op <copy|delete|regex-sub> ...',
@@ -503,7 +505,7 @@ export function validateCommandShape(command, commandArgs = []) {
   }[command];
   if (!usage) return null;
 
-  if (['setup', 'init', 'update', 'install'].includes(command) && positionals.length !== 0) {
+  if (['setup', 'init', 'update', 'install', 'health'].includes(command) && positionals.length !== 0) {
     return shapeError(command, usage);
   }
   if (command === 'scaffold' && (positionals.length < 2 || positionals.length > 3 || positionals[0] !== 'phase')) {
@@ -607,11 +609,11 @@ Commands:
                               Install reusable Workspine skills and native runtime surfaces into agent home directories
                               --auto: refresh detected existing agent homes; if none exist, print exact target commands without writing
                               In TTYs, omitting --tools opens an agent picker
-  update [--dry-run]
-                              Reconcile all manifest-owned repo outputs from latest framework sources
+  update [--dry-run] [-g|--global]
+                              Reconcile all manifest-owned repo outputs, or all owned personal-agent surfaces with --global
                               --dry-run: preview changes without writing files
-  health [--json]             Check workspace integrity (healthy/degraded/broken)
-                              health and update remain network-free; update is explicit repair only
+  health [--json] [-g|--global]
+                              Check repo or personal-agent integrity (healthy/degraded/broken); read-only
   next [--json] [--format auto|json|human]
                               Read explicit file-backed \`.work\` continuity and emit the next coherent agent action
 Advanced/internal commands (available when you need them):
@@ -668,6 +670,7 @@ Notes:
   - repo-local \`init --auto\` sets the legacy-named \`autoAdvance\` key only for brief-driven \`${workflowId('new-project')}\` SPEC/ROADMAP bootstrap; it never chains plan, execute, verify, release, or delivery
   - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
   - \`npx -y workspine health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y workspine update\` when they drift
+  - health and update remain network-free; health is read-only and update is explicit repair only
   - supported package runtime floor: Node >=22
   - update awareness is on by default for supported CLI/helper commands: a sequential/best-effort anonymous npm metadata check with a two-second timeout and a 64 KiB/normalized-version limit; there is no lock or cross-process concurrency guarantee
   - the notice uses only a contained .work/.local cache, sends no credentials or repository data, and cache/check failures never block commands

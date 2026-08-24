@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { createCliContext } from './lib/cli-context.mjs';
 import { cmdModels, cmdRigor } from './lib/config.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
-import { createCmdInstall } from './lib/global-install.mjs';
+import { createCmdGlobalUpdate, createCmdInstall } from './lib/global-install.mjs';
 import { createCmdSetup } from './lib/setup.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
 import { cmdFileOp } from './lib/file-ops.mjs';
@@ -26,6 +26,7 @@ const [,, command, ...args] = process.argv;
 const INIT_CONTEXT = createCliContext(process.cwd());
 const cmdInit = createCmdInit(INIT_CONTEXT);
 const cmdInstall = createCmdInstall(INIT_CONTEXT);
+const cmdGlobalUpdate = createCmdGlobalUpdate(INIT_CONTEXT);
 const cmdSetup = createCmdSetup(INIT_CONTEXT);
 const cmdHealth = createCmdHealth(INIT_CONTEXT);
 const cmdNext = createCmdNext(INIT_CONTEXT);
@@ -33,6 +34,9 @@ const cmdJourney = createCmdJourney(INIT_CONTEXT);
 const cmdGitIdentity = createCmdGitIdentity(INIT_CONTEXT);
 
 const cmdUpdate = (...updateArgs) => {
+  if (updateArgs.includes('--global') || updateArgs.includes('-g')) {
+    return cmdGlobalUpdate(...updateArgs);
+  }
   const { args: normalizedArgs, workspaceRoot, invalid, error } = resolveWorkspaceContext(updateArgs, { cwd: INIT_CONTEXT.cwd });
   if (invalid) {
     console.error(error);
@@ -120,4 +124,4 @@ if (IS_MAIN) {
     if (typeof process.stdin.unref === 'function') process.stdin.unref();
   }
 }
-export { cmdHelp, cmdInit, cmdInstall, cmdSetup, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdJourney, cmdGitIdentity, cmdFileOp, cmdLifecyclePreflight, cmdLifecycleTransition, cmdRemember, cmdDecisions, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdInstall, cmdSetup, cmdUpdate, cmdGlobalUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdJourney, cmdGitIdentity, cmdFileOp, cmdLifecyclePreflight, cmdLifecycleTransition, cmdRemember, cmdDecisions, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

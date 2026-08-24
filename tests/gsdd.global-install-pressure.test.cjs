@@ -138,6 +138,8 @@ function snapshotTree(rootDir) {
       if (entry.isDirectory()) {
         files.push([`${path.relative(rootDir, absolutePath).replace(/\\/g, '/')}/`, null]);
         visit(absolutePath);
+      } else if (entry.isSymbolicLink()) {
+        files.push([path.relative(rootDir, absolutePath).replace(/\\/g, '/'), `symlink:${fs.readlinkSync(absolutePath)}`]);
       } else {
         files.push([path.relative(rootDir, absolutePath).replace(/\\/g, '/'), fs.readFileSync(absolutePath)]);
       }
@@ -819,6 +821,263 @@ describe('global install pressure loop', () => {
       assert.strictEqual(commands[2].env.COPILOT_HOME, path.join(homeDir, '.copilot'));
       assert.strictEqual(commands[2].env.HOME, homeDir);
       assert.strictEqual(commands[2].env.USERPROFILE, homeDir);
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global update reconciles every owned target without a selector', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const claudeSkill = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude,codex'));
+        const beforeRepo = snapshotTree(repoDir);
+        const cleanUpdate = await captureLogs(() => gsdd.cmdGlobalUpdate());
+        assert.match(cleanUpdate, /claude:/);
+        assert.match(cleanUpdate, /codex:/);
+        assert.strictEqual(process.exitCode, undefined);
+        fs.writeFileSync(claudeSkill, 'user edit that should be recovered\n');
+        const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
+        assert.match(output, /claude:/);
+        assert.match(output, /codex:/);
+        assert.strictEqual(process.exitCode, 1, 'modified owned global bytes must refuse before any target writes');
+        assert.strictEqual(fs.readFileSync(claudeSkill, 'utf-8'), 'user edit that should be recovered\n');
+        assert.deepStrictEqual(snapshotTree(repoDir), beforeRepo, 'global update must not touch the invoking repo');
+      });
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global update repairs missing files across every owned target', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const missingFiles = [
+      path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md'),
+      path.join(homeDir, '.codex', 'agents', 'work-plan-checker.toml'),
+    ];
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude,codex'));
+        for (const filePath of missingFiles) fs.unlinkSync(filePath);
+        const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
+        assert.strictEqual(process.exitCode, undefined);
+        assert.match(output, /claude:/);
+        assert.match(output, /codex:/);
+        for (const filePath of missingFiles) assert.ok(fs.existsSync(filePath), `${filePath} must be reconciled`);
+      });
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global update dry-run preserves modified owned bytes and refuses', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const claudeSkill = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude,codex'));
+        const original = fs.readFileSync(claudeSkill, 'utf-8');
+        const manifest = JSON.parse(fs.readFileSync(path.join(homeDir, '.claude', 'workspine-file-manifest.json'), 'utf-8'));
+        fs.writeFileSync(claudeSkill, original.replace('work-plan', 'work-plan updated source'));
+        // Keep the refusal contract explicit: an owned byte drift is never silently overwritten.
+        const output = await captureLogs(() => gsdd.cmdGlobalUpdate('--dry-run'));
+        assert.strictEqual(process.exitCode, 1);
+        assert.match(output, /modified by the user/);
+        assert.ok(manifest.files['skills/work-plan/SKILL.md']);
+      });
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global update refuses linked, colliding, and corrupt selected targets without writes', async () => {
+    const cases = [
+      {
+        name: 'linked',
+        mutate: (homeDir) => {
+          const target = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+          const external = path.join(homeDir, 'user-owned-skill.md');
+          fs.writeFileSync(external, 'user-owned bytes\n');
+          fs.unlinkSync(target);
+          fs.symlinkSync(external, target, 'file');
+        },
+      },
+      {
+        name: 'linked-manifest',
+        mutate: (homeDir) => {
+          const manifest = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+          fs.unlinkSync(manifest);
+          fs.symlinkSync(path.join(homeDir, 'missing-manifest.json'), manifest, 'file');
+        },
+      },
+      {
+        name: 'collision',
+        mutate: (homeDir) => {
+          const target = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+          fs.unlinkSync(target);
+          fs.mkdirSync(target, { recursive: true });
+        },
+      },
+      {
+        name: 'corrupt',
+        mutate: (homeDir) => {
+          fs.writeFileSync(path.join(homeDir, '.claude', 'workspine-file-manifest.json'), '{not-json');
+        },
+      },
+      {
+        name: 'unowned',
+        mutate: (homeDir) => {
+          const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+          delete manifest.files['skills/work-plan/SKILL.md'];
+          fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        },
+      },
+    ];
+
+    for (const scenario of cases) {
+      const homeDir = createTempProject();
+      const repoDir = createTempProject();
+      const restoreStdin = setNonInteractiveStdin();
+      const previousExitCode = process.exitCode;
+      try {
+        await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+          const gsdd = await loadGsdd(repoDir);
+          await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude'));
+          scenario.mutate(homeDir);
+          const before = snapshotTree(homeDir);
+          const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
+          assert.strictEqual(process.exitCode, 1, `${scenario.name} must refuse`);
+          const expectedReason = scenario.name === 'corrupt' ? 'corrupt' : scenario.name === 'linked-manifest' ? 'linked' : scenario.name;
+          assert.match(output, new RegExp(expectedReason));
+          assert.deepStrictEqual(snapshotTree(homeDir), before, `${scenario.name} refusal must be zero-write`);
+        });
+      } finally {
+        restoreStdin();
+        process.exitCode = previousExitCode;
+        cleanup(homeDir);
+        cleanup(repoDir);
+      }
+    }
+  });
+
+  test('global update leaves unknown unowned files untouched while reconciling owned files', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const unknown = path.join(homeDir, '.claude', 'user-owned.txt');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude'));
+        fs.writeFileSync(unknown, 'do not touch\n');
+        const before = fs.readFileSync(unknown);
+        const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
+        assert.strictEqual(process.exitCode, undefined);
+        assert.match(output, /claude:/);
+        assert.deepStrictEqual(fs.readFileSync(unknown), before);
+      });
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global ownership discovery does not infer native ownership from shared agent-skills manifest', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'opencode'));
+        fs.unlinkSync(path.join(homeDir, '.config', 'opencode', 'workspine-file-manifest.json'));
+        fs.rmSync(path.join(homeDir, '.config', 'opencode', 'commands'), { recursive: true, force: true });
+        const { getManifestOwnedGlobalTargets, resolveGlobalInstallRoots } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-shared-discovery`);
+        const roots = resolveGlobalInstallRoots({ homeDir, env: { XDG_CONFIG_HOME: path.join(homeDir, '.config') } });
+        const ownedTargets = getManifestOwnedGlobalTargets({ roots });
+        assert.deepStrictEqual(ownedTargets, [], 'shared ownership must not imply a native target');
+        const before = snapshotTree(homeDir);
+        const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
+        assert.strictEqual(process.exitCode, 1, output);
+        assert.match(output, /no manifest-owned global install targets/);
+        assert.doesNotMatch(output, /codex|copilot|opencode/);
+        assert.deepStrictEqual(snapshotTree(homeDir), before, 'missing native manifest and files must refuse without writes');
+      });
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global OpenCode-only ownership reconciles only OpenCode split roots', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'opencode']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        const { getManifestOwnedGlobalTargets, resolveGlobalInstallRoots } = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-opencode-only`);
+        const roots = resolveGlobalInstallRoots({ homeDir, env: { XDG_CONFIG_HOME: path.join(homeDir, '.config') } });
+        assert.deepStrictEqual(getManifestOwnedGlobalTargets({ roots }), ['opencode']);
+        const beforeUpdateCodex = snapshotTree(path.join(homeDir, '.codex'));
+        const beforeUpdateCopilot = snapshotTree(path.join(homeDir, '.copilot'));
+        const beforeUpdateRepo = snapshotTree(repoDir);
+        const update = await runCliAsMain(repoDir, ['update', '-g']);
+        assert.strictEqual(update.exitCode, 0, update.output);
+        assert.match(update.output, /opencode:/);
+        assert.doesNotMatch(update.output, /codex|copilot/);
+        assert.deepStrictEqual(snapshotTree(repoDir), beforeUpdateRepo, 'global update must not touch the invoking repo');
+        assert.deepStrictEqual(snapshotTree(path.join(homeDir, '.codex')), beforeUpdateCodex, 'OpenCode-only update must not write Codex home');
+        assert.deepStrictEqual(snapshotTree(path.join(homeDir, '.copilot')), beforeUpdateCopilot, 'OpenCode-only update must not write Copilot home');
+
+        const beforeHealthHome = snapshotTree(homeDir);
+        const beforeHealthRepo = snapshotTree(repoDir);
+        const health = await runCliAsMain(repoDir, ['health', '-g', '--json']);
+        assert.strictEqual(health.exitCode, 0, health.output);
+        const report = JSON.parse(health.output);
+        assert.strictEqual(report.status, 'healthy');
+        const healthMessages = [...report.errors, ...report.warnings, ...report.info].map((entry) => entry.message).join('\n');
+        assert.match(healthMessages, /opencode/);
+        assert.doesNotMatch(healthMessages, /codex|copilot/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeHealthHome, 'global health must be read-only');
+        assert.deepStrictEqual(snapshotTree(repoDir), beforeHealthRepo, 'global health must not touch the invoking repo');
+        assert.ok(!fs.existsSync(path.join(homeDir, '.codex')), 'OpenCode-only global update must not create Codex home');
+        assert.ok(!fs.existsSync(path.join(homeDir, '.copilot')), 'OpenCode-only global update must not create Copilot home');
+      });
     } finally {
       restoreStdin();
       process.exitCode = previousExitCode;

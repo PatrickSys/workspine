@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, lstatSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -31,6 +31,7 @@ import {
   resolveRuntimeAgentModel,
 } from './config.mjs';
 import { resolveStateDir } from './state-dir.mjs';
+import { fileHash, inspectGlobalManifest } from './global-manifest.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -67,6 +68,83 @@ function compareGeneratedFile({ cwd, runtime, relativePath, expectedContent, rep
     relativePath,
     status: 'stale',
     repairCommand,
+  };
+}
+
+function compareGlobalGeneratedFile({ rootDir, runtime, relativePath, expectedContent, manifest }) {
+  const absolutePath = join(rootDir, relativePath);
+  let stat;
+  try {
+    stat = lstatSync(absolutePath);
+  } catch (error) {
+    return {
+      runtime,
+      relativePath,
+      status: error?.code === 'ENOENT' ? 'missing' : 'unreadable',
+      repairCommand: 'npx -y workspine update --global',
+    };
+  }
+  if (stat.isSymbolicLink()) {
+    return { runtime, relativePath, status: 'linked', repairCommand: 'npx -y workspine update --global' };
+  }
+  if (!stat.isFile()) {
+    return { runtime, relativePath, status: 'collision', repairCommand: 'npx -y workspine update --global' };
+  }
+
+  const manifestHash = manifest?.files?.[relativePath];
+  if (!manifestHash) {
+    return { runtime, relativePath, status: 'untracked', repairCommand: 'npx -y workspine update --global' };
+  }
+  const actualHash = fileHash(absolutePath);
+  if (actualHash !== manifestHash || normalizeContent(readFileSync(absolutePath, 'utf-8')) !== normalizeContent(expectedContent)) {
+    return { runtime, relativePath, status: 'modified', repairCommand: 'npx -y workspine update --global' };
+  }
+  return { runtime, relativePath, status: 'clean', repairCommand: 'npx -y workspine update --global' };
+}
+
+/**
+ * Read-only freshness evaluation for global manifest specs.  The global
+ * installer owns spec construction; this seam only compares bytes and never
+ * repairs or rewrites a personal-agent home.
+ */
+export function evaluateGlobalRuntimeFreshness({ specs = [] } = {}) {
+  const groups = specs.map((spec) => {
+    const manifestState = inspectGlobalManifest(spec.rootDir);
+    const manifestOwned = manifestState.status === 'valid'
+      && manifestState.manifest.product === 'Workspine'
+      && manifestState.manifest.runtime === spec.runtime
+      && manifestState.manifest.files
+      && typeof manifestState.manifest.files === 'object'
+      && !Array.isArray(manifestState.manifest.files);
+    const comparisons = manifestOwned
+      ? spec.entries.map((entry) => compareGlobalGeneratedFile({
+        rootDir: spec.rootDir,
+        runtime: spec.runtime,
+        relativePath: entry.relativePath,
+        expectedContent: entry.content,
+        manifest: manifestState.manifest,
+      }))
+      : [{
+        runtime: spec.runtime,
+        relativePath: 'workspine-file-manifest.json',
+        status: manifestState.status === 'valid' ? 'collision' : manifestState.status,
+        repairCommand: 'npx -y workspine update --global',
+      }];
+    return {
+      runtime: spec.runtime,
+      rootDir: spec.rootDir,
+      manifestStatus: manifestState.status,
+      comparisons,
+      issueCount: comparisons.filter((entry) => entry.status !== 'clean').length,
+    };
+  });
+  const issues = groups.flatMap((group) => group.comparisons.filter((entry) => entry.status !== 'clean'));
+  return {
+    groups,
+    issues,
+    issueCount: issues.length,
+    staleCount: issues.filter((entry) => entry.status === 'modified').length,
+    missingCount: issues.filter((entry) => entry.status === 'missing').length,
   };
 }
 

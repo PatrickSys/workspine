@@ -4421,3 +4421,33 @@ describe('G57 - Final Rigor Workflow Contract', () => {
     }
   });
 });
+
+describe('Phase 16-D - global update and health routes', () => {
+  test('public composition root wires global update through the existing global installer seam', () => {
+    const source = fs.readFileSync(GSDD_PATH, 'utf-8');
+    assert.match(source, /createCmdGlobalUpdate/);
+    assert.match(source, /updateArgs\.includes\('--global'\)/);
+    assert.match(source, /cmdGlobalUpdate\(\.\.\.updateArgs\)/);
+  });
+
+  test('help and central grammar expose both global aliases without a second parser', async () => {
+    const runtime = await import(pathToFileURL(INIT_RUNTIME_MODULE).href);
+    assert.deepStrictEqual(runtime.COMMAND_FLAGS.update['--global'], false);
+    assert.deepStrictEqual(runtime.COMMAND_FLAGS.update['-g'], false);
+    assert.deepStrictEqual(runtime.COMMAND_FLAGS.health['--global'], false);
+    assert.deepStrictEqual(runtime.COMMAND_FLAGS.health['-g'], false);
+    assert.match(runtime.getHelpText(), /update \[--dry-run\] \[-g\|--global\]/);
+    assert.match(runtime.getHelpText(), /health \[--json\] \[-g\|--global\]/);
+    assert.strictEqual(runtime.validateCommandShape('update', ['--global']), null);
+    assert.strictEqual(runtime.validateCommandShape('health', ['--global', '--json']), null);
+  });
+
+  test('global health remains read-only and consumes the shared freshness evaluator', () => {
+    const health = fs.readFileSync(HEALTH_MODULE, 'utf-8');
+    const freshness = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'runtime-freshness.mjs'), 'utf-8');
+    assert.match(health, /buildGlobalHealthReport/);
+    assert.match(health, /evaluateGlobalRuntimeFreshness/);
+    assert.match(freshness, /read-only freshness evaluation for global manifest specs/i);
+    assert.doesNotMatch(health, /writeFileSync|mkdirSync|rmSync/);
+  });
+});

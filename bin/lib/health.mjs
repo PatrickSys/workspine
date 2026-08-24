@@ -10,12 +10,75 @@ import { output } from './cli-utils.mjs';
 import { runTruthChecks, TRUTH_CHECK_IDS } from './health-truth.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
 import { evaluateRuntimeFreshness } from './runtime-freshness.mjs';
+import { evaluateGlobalRuntimeFreshness } from './runtime-freshness.mjs';
+import {
+  collectGlobalInstallSpecs,
+  getManifestOwnedGlobalTargets,
+  resolveGlobalInstallRoots,
+} from './global-install.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { stateAuthorityGate } from './state-dir.mjs';
 import { WORKFLOW_ID_PREFIX } from './workflows.mjs';
 
 function statePath(stateDirName, relativePath = '') {
   return relativePath ? `${stateDirName}/${relativePath}` : stateDirName;
+}
+
+/**
+ * Build the read-only global-agent health report from the same manifest/spec
+ * seam used by global install/update. No repo state or personal-agent bytes
+ * are written by this path.
+ */
+export function buildGlobalHealthReport(ctx, healthArgs = []) {
+  if (healthArgs.includes('--workspace-root')) {
+    const message = 'Global health does not accept --workspace-root; it inspects personal agent homes.';
+    return { status: 'broken', errors: [{ id: 'G1', severity: 'ERROR', message, fix: 'Remove --workspace-root from global health.' }], warnings: [], info: [], humanMessage: message };
+  }
+  const roots = resolveGlobalInstallRoots(ctx.globalInstallRootOptions);
+  const targets = getManifestOwnedGlobalTargets({ roots });
+  if (targets.length === 0) {
+    const message = 'No manifest-owned global install targets found. Run `npx -y workspine install --global --tools <target>` first.';
+    return { status: 'broken', errors: [{ id: 'G1', severity: 'ERROR', message, fix: message }], warnings: [], info: [], humanMessage: message };
+  }
+
+  const seenSpecs = new Set();
+  const specs = targets.flatMap((target) => collectGlobalInstallSpecs({ target, roots, ctx }))
+    .filter((spec) => {
+      const key = `${spec.runtime}:${spec.rootDir}`;
+      if (seenSpecs.has(key)) return false;
+      seenSpecs.add(key);
+      return true;
+    });
+  const freshness = evaluateGlobalRuntimeFreshness({ specs });
+  const severeStatuses = new Set(['missing', 'linked', 'collision', 'unreadable', 'corrupt']);
+  const errors = freshness.issues
+    .filter((issue) => severeStatuses.has(issue.status))
+    .map((issue, index) => ({
+      id: `G${index + 2}`,
+      severity: 'ERROR',
+      message: `${issue.runtime}: ${issue.relativePath} is ${issue.status}`,
+      fix: issue.repairCommand,
+    }));
+  const warnings = freshness.issues
+    .filter((issue) => !severeStatuses.has(issue.status))
+    .map((issue, index) => ({
+      id: `GW${index + 1}`,
+      severity: 'WARN',
+      message: `${issue.runtime}: ${issue.relativePath} is ${issue.status}`,
+      fix: issue.repairCommand,
+    }));
+  const info = targets.map((target) => ({
+    id: 'GI1',
+    severity: 'INFO',
+    message: `${target}: manifest-owned global runtime surface checked read-only`,
+  }));
+  return {
+    status: errors.length > 0 ? 'broken' : warnings.length > 0 ? 'degraded' : 'healthy',
+    errors,
+    warnings,
+    info,
+    targets,
+  };
 }
 
 /**
@@ -279,7 +342,9 @@ export function buildHealthReport(ctx, healthArgs = []) {
 export function createCmdHealth(ctx) {
   return async function cmdHealth(...healthArgs) {
     const jsonMode = healthArgs.includes('--json');
-    const report = buildHealthReport(ctx, healthArgs);
+    const report = healthArgs.includes('--global') || healthArgs.includes('-g')
+      ? buildGlobalHealthReport(ctx, healthArgs)
+      : buildHealthReport(ctx, healthArgs);
     const printableReport = {
       status: report.status,
       errors: report.errors,
