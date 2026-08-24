@@ -772,7 +772,8 @@ describe('gsdd init and update', () => {
     assert.match(launcher, /Usage: node \.work\/bin\/gsdd\.mjs \[--workspace-root <path>\] <command> \[args\]/);
     assert.match(launcher, /file-op <copy\|delete\|regex-sub>/);
     assert.match(launcher, /verify <N>\s+Run direct phase artifact checks/);
-    assert.match(launcher, /next \[--json\] \[--init\]/);
+    assert.doesNotMatch(launcher, /next \[--json\] \[--init\]/);
+    assert.match(launcher, /next \[--json\] \[--format auto\|json\|human\]/);
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'lib', 'next.mjs')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'lib', 'work-context.mjs')));
     assert.doesNotMatch(launcher, /\.agents\/bin\/gsdd\.mjs/);
@@ -857,7 +858,7 @@ describe('gsdd init and update', () => {
     }
   });
 
-  test('generated next resolves helper bootstrap and explicit workspace overrides at invocation time', async () => {
+  test('generated next resolves helper authority read-only and rejects partial bootstrap', async () => {
     const foreignDir = createTempProject();
     const overrideDir = createTempProject();
     try {
@@ -869,29 +870,71 @@ describe('gsdd init and update', () => {
       assert.ok(fs.existsSync(helperPath));
       assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work', 'state.json')), true);
       assert.strictEqual(fs.existsSync(path.join(overrideDir, '.work', 'state.json')), true);
+      const ownerBefore = snapshotTree(tmpDir);
       const foreignBefore = snapshotTree(foreignDir);
+      const overrideBefore = snapshotTree(overrideDir);
 
-      let result = spawnSync(process.execPath, [helperPath, 'next', '--init', '--json'], {
+      let result = spawnSync(process.execPath, [helperPath, 'next', '--json', '--no-update-notice'], {
         cwd: foreignDir,
         encoding: 'utf-8',
       });
       assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'state.json')));
-      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'helper bootstrap must not initialize the foreign cwd');
-      const helperTargetAfterBootstrap = snapshotTree(tmpDir);
+      const helperPacket = JSON.parse(result.stdout);
+      assert.strictEqual(helperPacket.operation, 'next');
+      assert.strictEqual(helperPacket.continuity.workspace_root, path.resolve(tmpDir).replace(/\\/g, '/'));
+      assert.deepStrictEqual(snapshotTree(tmpDir), ownerBefore, 'ordinary helper next must not write the helper-owning repo');
+      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'ordinary helper next must not write the foreign cwd');
+      assert.deepStrictEqual(snapshotTree(overrideDir), overrideBefore, 'ordinary helper next must not write an unrelated target');
 
       result = spawnSync(process.execPath, [
         helperPath,
         'next',
         '--init',
         '--json',
+        '--no-update-notice',
+      ], { cwd: foreignDir, encoding: 'utf-8' });
+      assert.strictEqual(result.status, 1, `${result.stdout}\n${result.stderr}`);
+      const rejected = JSON.parse(result.stdout);
+      assert.strictEqual(rejected.status, 'rejected');
+      assert.strictEqual(rejected.error_code, 'partial_bootstrap_removed');
+      assert.strictEqual(rejected.next_command, 'npx -y workspine init');
+      assert.deepStrictEqual(snapshotTree(tmpDir), ownerBefore, 'rejected helper bootstrap must not write the helper-owning repo');
+      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'rejected helper bootstrap must not write the foreign cwd');
+      assert.deepStrictEqual(snapshotTree(overrideDir), overrideBefore, 'rejected helper bootstrap must not write an unrelated target');
+
+      result = spawnSync(process.execPath, [
+        helperPath,
+        'next',
+        '--json',
+        '--no-update-notice',
         '--workspace-root',
         overrideDir,
       ], { cwd: foreignDir, encoding: 'utf-8' });
       assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-      assert.ok(fs.existsSync(path.join(overrideDir, '.work', 'state.json')));
-      assert.deepStrictEqual(snapshotTree(tmpDir), helperTargetAfterBootstrap, 'explicit override must not mutate the helper-owning repo');
+      const overridePacket = JSON.parse(result.stdout);
+      assert.strictEqual(overridePacket.operation, 'next');
+      assert.strictEqual(overridePacket.continuity.workspace_root, path.resolve(overrideDir).replace(/\\/g, '/'));
+      assert.deepStrictEqual(snapshotTree(tmpDir), ownerBefore, 'explicit override must not mutate the helper-owning repo');
       assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'explicit override must not mutate the foreign cwd');
+      assert.deepStrictEqual(snapshotTree(overrideDir), overrideBefore, 'ordinary override next must not write its target');
+
+      result = spawnSync(process.execPath, [
+        helperPath,
+        'next',
+        '--init',
+        '--json',
+        '--no-update-notice',
+        '--workspace-root',
+        overrideDir,
+      ], { cwd: foreignDir, encoding: 'utf-8' });
+      assert.strictEqual(result.status, 1, `${result.stdout}\n${result.stderr}`);
+      const overrideRejected = JSON.parse(result.stdout);
+      assert.strictEqual(overrideRejected.status, 'rejected');
+      assert.strictEqual(overrideRejected.error_code, 'partial_bootstrap_removed');
+      assert.strictEqual(overrideRejected.next_command, 'npx -y workspine init');
+      assert.deepStrictEqual(snapshotTree(tmpDir), ownerBefore, 'rejected override bootstrap must not mutate the helper-owning repo');
+      assert.deepStrictEqual(snapshotTree(foreignDir), foreignBefore, 'rejected override bootstrap must not mutate the foreign cwd');
+      assert.deepStrictEqual(snapshotTree(overrideDir), overrideBefore, 'rejected override bootstrap must not mutate the target');
     } finally {
       cleanup(foreignDir);
       cleanup(overrideDir);
@@ -1174,16 +1217,15 @@ describe('gsdd init and update', () => {
     ]);
     assert.strictEqual(captured.exitCode, 0, captured.output);
     const candidateId = JSON.parse(captured.stdout).record.id;
-    const initNext = await runCliAsMain(tmpDir, ['next', '--init', '--json', '--no-update-notice']);
-    assert.strictEqual(initNext.exitCode, 0, initNext.output);
-    const initialized = JSON.parse(initNext.output);
-    assert.deepStrictEqual(initialized.next.decisionsDigest.ids, [activeId]);
-    assert.strictEqual(initialized.next.decisionsDigest.counts.excluded.candidate, 1);
     const before = snapshotTree(path.join(tmpDir, '.work'));
 
     const packageNext = await runCliAsMain(tmpDir, ['next', '--json', '--no-update-notice']);
     assert.strictEqual(packageNext.exitCode, 0, packageNext.output);
     const packagePacket = JSON.parse(packageNext.output);
+    assert.deepStrictEqual(packagePacket.decisionsDigest.ids, [activeId]);
+    assert.strictEqual(packagePacket.decisionsDigest.counts.excluded.candidate, 1);
+    assert.deepStrictEqual(snapshotTree(path.join(tmpDir, '.work')), before,
+      'ordinary next decision digest must not partially bootstrap or write state');
 
     let result = spawnSync(process.execPath, [
       path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'),

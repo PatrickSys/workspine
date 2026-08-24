@@ -1460,6 +1460,34 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.strictEqual(typeof mod.cmdLifecyclePreflight, 'function');
   });
 
+  test('blocks malformed retained PLAN frontmatter with an exact repair instruction', async () => {
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), '# Roadmap\n\n- [ ] **Phase 30: Deterministic Lifecycle Gates**\n');
+    const planPath = path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md');
+    fs.writeFileSync(planPath, '---\nstatus: "active\n---\n# malformed\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '30']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    const blocker = output.blockers.find((entry) => entry.code === 'malformed_plan_frontmatter');
+    assert.ok(blocker);
+    assert.match(blocker.message, /unmatched quote/i);
+    assert.match(blocker.message, /Repair the retained PLAN frontmatter/);
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.work', 'state.json')), 'refusal must not persist a projection');
+  });
+
+  test('fails closed when a decision record cannot be parsed', async () => {
+    fs.writeFileSync(path.join(tmpDir, '.work', 'ROADMAP.md'), '# Roadmap\n\n- [ ] **Phase 30: Deterministic Lifecycle Gates**\n');
+    fs.writeFileSync(path.join(tmpDir, '.work', 'phases', '30-deterministic-lifecycle-gates', '30-PLAN.md'), '# plan\n');
+    fs.mkdirSync(path.join(tmpDir, '.work', 'decisions'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.work', 'decisions', 'broken.md'), 'not a decision record\n');
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', '30']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const output = JSON.parse(result.output);
+    assert.ok(output.blockers.some((entry) => entry.code === 'decision_store_unreadable'));
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.work', 'state.json')), 'refusal must not persist a projection');
+  });
+
   test('allows execute when the target phase has a pending plan and explicit phase-status mutation', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.work', 'ROADMAP.md'),
@@ -2225,7 +2253,7 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     assert.ok(!output.blockers.some((blocker) => blocker.code === 'missing_phase'));
   });
 
-  test('warns when lifecycle preflight sees overview/detail status mismatch', async () => {
+  test('blocks every mutating lifecycle preflight on overview/detail status mismatch', async () => {
     fs.writeFileSync(
       path.join(tmpDir, '.work', 'ROADMAP.md'),
       [
@@ -2252,10 +2280,10 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     );
 
     const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'verify', '30', '--expects-mutation', 'phase-status']);
-    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(result.exitCode, 1, result.output);
 
     const output = JSON.parse(result.output);
-    assert.ok(output.warnings.some((warning) => warning.code === 'roadmap_phase_status_mismatch'));
+    assert.ok(output.blockers.some((blocker) => blocker.code === 'roadmap_phase_status_mismatch'));
   });
 
   test('blocks terminal milestone preflight when roadmap overview/detail status mismatches', async () => {

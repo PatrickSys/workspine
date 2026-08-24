@@ -293,7 +293,7 @@ Other CLI commands that remain available outside the first-run path:
 ```bash
 gsdd next --json           # structured packet (the default captured output)
 gsdd next --format human   # compact supervisor card
-gsdd next --init           # bootstrap .work continuity state explicitly
+npx -y workspine init      # bootstrap the complete Workspine workspace
 ```
 
 JSON packets carry typed `next_action` values for CLI commands, workflow skills, manual review, and user-question gates. Blocking questions, decisions, graph rebuilds, and dogfood findings use explicit subcommands. A duplicate question, decision, or dogfood ID replays as unchanged when the content matches, and fails unless `--replace` is passed when the content differs. The continuity graph records answer and supersession edges, so a later agent can reconstruct decision history without rereading raw transcripts.

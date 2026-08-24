@@ -353,7 +353,7 @@ Commands:
                               --dry: preview changes without writing files
   health [--json]             Check workspace integrity (healthy/degraded/broken)
                               health and update remain network-free; update is explicit repair only
-  next [--json] [--format auto|json|human] [--init]
+  next [--json] [--format auto|json|human]
                               Read explicit file-backed \`.work\` continuity and emit the next coherent agent action
 Advanced/internal commands (available when you need them):
   journey [--json]            Show the milestone and phase delivery journey # (experimental)
@@ -412,7 +412,7 @@ Notes:
   - the notice uses only a contained .work/.local cache, sends no credentials or repository data, and cache/check failures never block commands
   - use \`--no-update-notice\`, \`WORKSPINE_UPDATE_AWARENESS=0\`, or the legacy \`GSDD_UPDATE_AWARENESS=0\` to opt out; only the supported public CLI/generated helper can show it
   - \`health\` and \`update\` remain network-free; run \`npx -y workspine update\` for explicit repair
-  - \`npx -y workspine next --init\` bootstraps the local .work continuity surface; plain \`next\` is read-only and emits a typed packet, including any explicit pause checkpoint; it never runs a background compaction or context-transfer hook
+  - \`npx -y workspine init\` bootstraps the complete Workspine workspace; plain \`next\` is read-only and emits a typed packet, including any explicit pause checkpoint; it never runs a background compaction or context-transfer hook
   - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
   - recorded launch proof in this repo currently covers the Codex CLI path; Claude Code and OpenCode get generated native surfaces with local freshness checks and no recorded run
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
@@ -441,7 +441,7 @@ Examples:
   npx -y workspine update
   npx -y workspine next --json
   npx -y workspine next --format human
-  npx -y workspine next --init
+  npx -y workspine next --json
   npx -y workspine find-phase
   npx -y workspine verify 1
   npx -y workspine scaffold phase 4 Payments

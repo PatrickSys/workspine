@@ -26,6 +26,8 @@ describe('next --json consumes control-map blockers', () => {
   });
 
   test('dirty tracked file while behind upstream -> blocked_by names the risk', async () => {
+    const init = await runCliAsMain(tmp, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(init.exitCode, 0, init.output);
     git(tmp, ['init', '-b', 'main']);
     git(tmp, ['config', 'user.email', 'test@example.com']);
     git(tmp, ['config', 'user.name', 'Test User']);
@@ -47,8 +49,6 @@ describe('next --json consumes control-map blockers', () => {
     git(tmp, ['fetch', 'origin']);
     fs.writeFileSync(path.join(tmp, 'tracked.txt'), 'local dirty\n');
 
-    const init = await runCliAsMain(tmp, ['next', '--init', '--json']);
-    assert.strictEqual(init.exitCode, 0);
     const result = await runCliAsMain(tmp, ['next', '--json']);
     assert.strictEqual(result.exitCode, 0);
     const packet = JSON.parse(result.output);

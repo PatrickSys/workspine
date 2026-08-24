@@ -786,6 +786,24 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'Generated new-project workflow must not suggest bare gsdd init for auto brief setup. FIX: Use npx -y workspine init --auto --tools <runtime> --brief <path>.');
   });
 
+  test('public, production, and smoke surfaces do not advertise partial next bootstrap', () => {
+    const publicAndRuntime = [
+      README_MD,
+      path.join(ROOT, 'docs', 'USER-GUIDE.md'),
+      path.join(ROOT, 'bin', 'lib', 'rendering.mjs'),
+      INIT_HELP,
+      path.join(ROOT, '.github', 'workflows', 'smoke.yml'),
+    ].map((filePath) => fs.readFileSync(filePath, 'utf-8')).join('\n');
+    assert.doesNotMatch(publicAndRuntime, /next\s+--init|next \[--json\][^\n]*--init/i,
+      'Public, production, and smoke surfaces must use full init plus read-only next. FIX: Remove next --init guidance or invocation.');
+
+    const smoke = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'smoke.yml'), 'utf-8');
+    assert.match(smoke, /node "\$CLI" init --auto --tools claude/,
+      'Smoke must initialize the complete workspace before routing next.');
+    assert.match(smoke, /node "\$CLI" next --json/,
+      'Smoke must exercise ordinary read-only next after init.');
+  });
+
   test('public docs distinguish Codex CLI from Codex VS Code and app fallback', () => {
     const docs = [
       fs.readFileSync(README_MD, 'utf-8'),

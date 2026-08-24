@@ -176,7 +176,7 @@ npx -y workspine update                  # regenerate stale runtime surfaces
 npx -y workspine update --templates      # also refresh template payloads
 npx -y workspine next --json             # what to do next, read from .work
 npx -y workspine next --format human     # compact supervisor card
-npx -y workspine next --init             # bootstrap .work continuity state
+npx -y workspine init                    # bootstrap the complete Workspine workspace
 npx -y workspine lifecycle-transition    # record an artifact-backed lifecycle transition
 npx -y workspine git-identity check      # read-only identity check before a commit
 npx -y workspine rigor                   # inspect or update rigor configuration

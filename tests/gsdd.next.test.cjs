@@ -37,8 +37,10 @@ async function runJson(args) {
 }
 
 async function initWork() {
-  const result = await runJson(['next', '--init', '--json']);
-  assert.strictEqual(result.operation, 'next init');
+  const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+  const { ensureWorkStructure } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+  ensureWorkStructure(tmpDir);
+  const result = await runJson(['next', '--json']);
   return result;
 }
 
@@ -436,7 +438,7 @@ describe('next command bootstrap', () => {
     });
 
     const initialized = await initWork();
-    assert.deepStrictEqual(initialized.next.decisionsDigest, missing.decisionsDigest);
+    assert.deepStrictEqual(initialized.decisionsDigest, missing.decisionsDigest);
   });
 
   test('plain next refuses dual roots instead of silently selecting .work', async () => {
@@ -610,7 +612,7 @@ describe('next command bootstrap', () => {
     const result = await runCliAsMain(tmpDir, ['next', '--help']);
 
     assert.strictEqual(result.exitCode, 0, result.output);
-    assert.match(result.output, /gsdd next --init/);
+    assert.doesNotMatch(result.output, /gsdd next --init/);
     assert.match(result.output, /question add/);
     assert.match(result.output, /dogfood capture/);
   });
@@ -619,38 +621,23 @@ describe('next command bootstrap', () => {
     const result = await runJson(['next', '--json']);
 
     assert.strictEqual(result.state, 'ask_user');
-    assert.strictEqual(result.next_command, 'gsdd next --init');
+    assert.strictEqual(result.next_command, 'npx -y workspine init');
     assert.strictEqual(result.next_action.type, 'cli_command');
-    assert.deepStrictEqual(result.next_action.argv, ['next', '--init']);
+    assert.deepStrictEqual(result.next_action.argv, ['npx', '-y', 'workspine', 'init']);
     assert.strictEqual(result.requires_user, true);
     assert.ok(!fs.existsSync(path.join(tmpDir, '.work')), 'plain next must not create .work');
   });
 
-  test('next --init creates .work state, graph, question, evidence, and privacy defaults idempotently', async () => {
-    const first = await initWork();
-    const second = await runJson(['next', '--init', '--json']);
-
-    assert.strictEqual(first.status, 'ok');
-    assert.strictEqual(first.changed, true);
-    assert.strictEqual(second.status, 'ok');
-    assert.strictEqual(second.next.state, 'plan');
-    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'goal.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'state.json')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'graph', 'events.jsonl')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'graph', 'index.json')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'questions', 'open.json')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'evidence', 'manifest.json')));
-
-    const gitignore = fs.readFileSync(path.join(tmpDir, '.work', '.gitignore'), 'utf-8');
-    assert.match(gitignore, /state\.json/);
-    assert.match(gitignore, /graph\/events\.jsonl/);
-    assert.match(gitignore, /!goal\.md/);
-    assert.match(gitignore, /!milestone\//);
-
-    const state = readJson(path.join(tmpDir, '.work', 'state.json'));
-    assert.strictEqual(state.privacy.raw_transcript_ingestion, 'disabled');
-    const manifest = readJson(path.join(tmpDir, '.work', 'evidence', 'manifest.json'));
-    assert.strictEqual(manifest.privacy.raw_artifacts_safe_to_publish, false);
+  test('next --init rejects partial bootstrap and leaves the workspace untouched', async () => {
+    const before = fs.readdirSync(tmpDir).sort();
+    const result = await runCliAsMain(tmpDir, ['next', '--init', '--json']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const response = JSON.parse(result.output);
+    assert.strictEqual(response.status, 'rejected');
+    assert.strictEqual(response.error_code, 'partial_bootstrap_removed');
+    assert.strictEqual(response.next_command, 'npx -y workspine init');
+    assert.deepStrictEqual(fs.readdirSync(tmpDir).sort(), before);
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.work')));
   });
 
   test('nested next init refuses a supported legacy workspace without creating a second root', async () => {
@@ -1145,6 +1132,39 @@ describe('next command questions and decisions', () => {
 });
 
 describe('next command routing', () => {
+  test('stale state is only a projection and cannot outrank roadmap truth', async () => {
+    await initWork();
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/ROADMAP.md', '# Roadmap\n\n- [ ] **Phase 1: Pending work**\n');
+    writeFile('.work/phases/01-pending/01-PLAN.md', '---\nstatus: active\n---\n# Plan\n');
+    writeJson('.work/state.json', {
+      schema_version: 1,
+      workflow: { current_state: 'execute', plan: { approved: true }, execution: { status: 'not_started' } },
+    });
+
+    const result = await runJson(['next', '--json']);
+    assert.notStrictEqual(result.state, 'execute');
+    assert.strictEqual(result.state, 'plan');
+    assert.match(result.reason, /plan/i);
+  });
+
+  test('malformed retained PLAN frontmatter blocks next with a precise repair path', async () => {
+    await initWork();
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/ROADMAP.md', '# Roadmap\n\n- [ ] **Phase 1: Pending work**\n');
+    const planPath = '.work/phases/01-pending/01-PLAN.md';
+    writeFile(planPath, '---\nstatus: "active\n---\n# Plan\n');
+
+    const result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'blocked');
+    assert.strictEqual(result.error_code, 'malformed_plan_frontmatter');
+    assert.ok(result.repair_targets.length > 0);
+    assert.match(result.reason, /01-PLAN\.md/);
+    assert.match(result.reason, /unmatched quote|Repair the retained PLAN frontmatter/i);
+  });
+
   test('missing Workspine lifecycle truth routes to Workspine-native planning, not false lifecycle progress', async () => {
     await initWork();
     fs.mkdirSync(path.join(tmpDir, '.work'), { recursive: true });

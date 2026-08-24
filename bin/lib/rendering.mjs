@@ -164,7 +164,7 @@ function printHelp() {
     '  lifecycle-transition <target> --plan <path> [--artifact <path>]',
     '                               Record one artifact-backed plan/execute/verify lifecycle transition',
     '                               Example: node ${helperPath} lifecycle-transition verify --plan phases/{phase_dir}/{plan_id}-PLAN.md --artifact phases/{phase_dir}/{plan_id}-SUMMARY.md --authority workflow --json',
-    '  next [--json] [--init]',
+    '  next [--json] [--format auto|json|human]',
     '                               Route to the next safe Workspine action from ${normalizeStateDirName(stateDirName)}, brownfield, planning, and repo truth',
     '  supported package runtime floor: Node >=22',
     '  next/verify update notice: sequential/best-effort network-bounded checks; no lock or cross-process concurrency guarantee; use --no-update-notice, WORKSPINE_UPDATE_AWARENESS=0, or the legacy GSDD_UPDATE_AWARENESS=0 to opt out',

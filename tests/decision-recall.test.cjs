@@ -1016,6 +1016,12 @@ describe('S1 decision recall loop', () => {
     }
   });
 
+  test('legacy decision guidance uses the full migration route', () => {
+    const cli = fs.readFileSync(DECISION_CLI_PATH, 'utf-8');
+    assert.match(cli, /Run `npx -y workspine init --migrate` first/);
+    assert.doesNotMatch(cli, /gsdd next --init/);
+  });
+
   test('legacy .planning-only workspaces refuse every decision command without changing any bytes or members', async () => {
     const refusal = /Legacy \.planning\/ state is not an active Workspine root.+npx -y workspine init --migrate/i;
     const cases = [

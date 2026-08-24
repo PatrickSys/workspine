@@ -35,9 +35,10 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
   const phases = parseActiveRoadmapPhases(roadmap);
   const phaseStatusAlignment = evaluateRoadmapPhaseStatusAlignment(roadmap);
   const structuralPhaseArtifacts = collectPhaseArtifacts(phasesDir);
+  const malformedPlanFrontmatter = [];
   const { currentArtifacts: phaseArtifacts, historicalArtifacts: historicalPhaseArtifacts } = partitionPlanChains(
     structuralPhaseArtifacts,
-    { companionKinds: ['summary', 'verification'] }
+    { companionKinds: ['summary', 'verification'], malformedPlanFrontmatter }
   );
   const enrichedPhases = phases.map((phase) => {
     const matchingArtifacts = phaseArtifacts.filter((artifact) => artifact.phaseToken === phase.number);
@@ -85,6 +86,7 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     phaseArtifacts,
     historicalPhaseArtifacts,
     incompletePlans,
+    malformedPlanFrontmatter,
     brownfieldChange,
     nonPhaseState,
     phaseStatusAlignment,
@@ -573,7 +575,7 @@ export function resolveStandardPlanSelection({ lifecycle, planPath, phaseSelecti
 }
 
 /** Select one current native PLAN by its emitted milestone-relative path. */
-export function resolveNativePlanSelection({ workspaceRoot, phasesDir, identityPrefix = 'milestone/phases', planPath, phaseSelection = null } = {}) {
+export function resolveNativePlanSelection({ workspaceRoot, phasesDir, identityPrefix = 'milestone/phases', planPath, phaseSelection = null, malformedPlanFrontmatter = null } = {}) {
   const rawPath = String(planPath || '').trim().replace(/\\/g, '/');
   if (!workspaceRoot || !phasesDir || !rawPath || rawPath.startsWith('/') || rawPath.includes('..') || !rawPath.startsWith(`${identityPrefix}/`)) {
     return { status: 'invalid', reason: 'invalid_plan_selector' };
@@ -582,7 +584,7 @@ export function resolveNativePlanSelection({ workspaceRoot, phasesDir, identityP
   if (!relativePath) return { status: 'invalid', reason: 'invalid_plan_selector' };
   const partition = partitionPlanChains(
     collectNativePhaseArtifacts({ workspaceRoot, phasesDir }),
-    { companionKinds: ['execute', 'verification'] }
+    { companionKinds: ['execute', 'verification'], malformedPlanFrontmatter }
   );
   const plan = partition.currentArtifacts.find((artifact) => (
     artifact.kind === 'plan'
@@ -598,7 +600,7 @@ export function resolveNativePlanSelection({ workspaceRoot, phasesDir, identityP
 }
 
 /** Resolve a PLAN selector against exactly one already-selected lifecycle authority. */
-export function resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath, phaseSelection = null } = {}) {
+export function resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath, phaseSelection = null, malformedPlanFrontmatter = null } = {}) {
   const authority = phaseSelection?.status === 'selected' ? phaseSelection.candidate.authority : null;
   if (authority === 'native' || String(planPath || '').replace(/\\/g, '/').startsWith(`${nativeIdentityPrefix}/`)) {
     return resolveNativePlanSelection({
@@ -607,19 +609,20 @@ export function resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, native
       identityPrefix: nativeIdentityPrefix,
       planPath,
       phaseSelection,
+      malformedPlanFrontmatter,
     });
   }
   return resolveStandardPlanSelection({ lifecycle, planPath, phaseSelection });
 }
 
 /** Resolve a Workspine-native milestone phase using the same classifier family. */
-export function resolveNativePhaseSelection({ workspaceRoot, phasesDir, selector, identityPrefix = 'milestone/phases' } = {}) {
+export function resolveNativePhaseSelection({ workspaceRoot, phasesDir, selector, identityPrefix = 'milestone/phases', malformedPlanFrontmatter = null } = {}) {
   const rawSelector = String(selector || '').trim().replace(/\\/g, '/');
   if (!workspaceRoot || !phasesDir || !rawSelector) return { status: 'missing' };
   if (rawSelector.startsWith('/') || rawSelector.includes('..')) return { status: 'invalid', reason: 'invalid_phase_selector' };
   const partition = partitionPlanChains(
     collectNativePhaseArtifacts({ workspaceRoot, phasesDir }),
-    { companionKinds: ['execute', 'verification'] }
+    { companionKinds: ['execute', 'verification'], malformedPlanFrontmatter }
   );
   const plans = partition.currentArtifacts.filter((artifact) => artifact.kind === 'plan');
   const candidateForDir = (dir) => {
@@ -653,13 +656,14 @@ export function resolveNativePhaseSelection({ workspaceRoot, phasesDir, selector
 }
 
 /** Combine standard and native candidates before accepting a bare phase token. */
-export function resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector } = {}) {
+export function resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector, malformedPlanFrontmatter = null } = {}) {
   const standard = resolveStandardPhaseSelection({ lifecycle, selector });
   const native = resolveNativePhaseSelection({
     workspaceRoot,
     phasesDir: nativePhasesDir,
     selector,
     identityPrefix: nativeIdentityPrefix,
+    malformedPlanFrontmatter,
   });
   const raw = String(selector || '');
   const standardExact = raw.startsWith('phases/') || raw.startsWith('ROADMAP.md#phase-');
@@ -754,7 +758,11 @@ function compareArtifactPaths(left, right) {
  * Partition only a superseded PLAN and its exact configured chain companion.
  * Verification and all unrelated evidence remain visible as current artifacts.
  */
-export function partitionPlanChains(artifacts, { companionKinds = ['summary', 'verification', 'execute'], readFile = readFileSync } = {}) {
+export function partitionPlanChains(artifacts, {
+  companionKinds = ['summary', 'verification', 'execute'],
+  readFile = readFileSync,
+  malformedPlanFrontmatter = null,
+} = {}) {
   const source = Array.isArray(artifacts) ? artifacts : [];
   const companionSet = new Set(companionKinds.map((kind) => String(kind).toLowerCase()));
   const historicalChainKeys = new Set();
@@ -765,8 +773,19 @@ export function partitionPlanChains(artifacts, { companionKinds = ['summary', 'v
     }
     if (artifact.kind !== 'plan') continue;
     if (!artifact.path) throw new Error(`PLAN artifact is missing an absolute path: ${artifact.displayPath || artifact.name || 'unknown'}`);
-    if (isSupersededPlanContent(readFile(artifact.path, 'utf-8'))) {
-      historicalChainKeys.add(artifact.chainKey);
+    try {
+      if (isSupersededPlanContent(readFile(artifact.path, 'utf-8'))) {
+        historicalChainKeys.add(artifact.chainKey);
+      }
+    } catch (error) {
+      if (!isPlanFrontmatterError(error)) throw error;
+      const issue = {
+        path: artifact.path,
+        displayPath: artifact.displayPath || artifact.name || artifact.path,
+        error: error.message,
+        repair: `Repair the retained PLAN frontmatter in ${artifact.displayPath || artifact.name || artifact.path}; preserve the file and rerun lifecycle preflight.`,
+      };
+      if (Array.isArray(malformedPlanFrontmatter)) malformedPlanFrontmatter.push(issue);
     }
   }
 
@@ -778,6 +797,10 @@ export function partitionPlanChains(artifacts, { companionKinds = ['summary', 'v
     (historical ? historicalArtifacts : currentArtifacts).push(artifact);
   }
   return { currentArtifacts, historicalArtifacts };
+}
+
+function isPlanFrontmatterError(error) {
+  return /PLAN (?:frontmatter starts with --- but is not closed|status frontmatter scalar has an unmatched quote)/i.test(String(error?.message || ''));
 }
 
 /**

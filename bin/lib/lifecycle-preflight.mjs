@@ -97,7 +97,8 @@ export function evaluateLifecyclePreflight({
   const nativeMilestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
   const nativePhasesDir = join(nativeMilestoneDir, 'phases');
   const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
-  const selection = phaseNumber ? resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector: phaseNumber }) : null;
+  const malformedPlanFrontmatter = [];
+  const selection = phaseNumber ? resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector: phaseNumber, malformedPlanFrontmatter }) : null;
   const normalizedPhase = selection?.candidate?.phaseToken || (phaseNumber ? normalizePhaseToken(phaseNumber) : null);
   const usesBrownfieldAuthority = surface === 'plan' && normalizedPhase === 'brownfield-change';
   const usesPlanAmendAuthority = surface === 'plan' && normalizedPhase === 'amend';
@@ -111,7 +112,7 @@ export function evaluateLifecyclePreflight({
     ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath, checkpoint: continuityCheckpoint })
     : null;
   const planSelection = planPath
-    ? resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath, phaseSelection: selection })
+    ? resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath, phaseSelection: selection, malformedPlanFrontmatter })
     : null;
   let workMilestone = normalizedPhase && (usesNativeAuthority || selection?.status !== 'selected')
     ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase })
@@ -129,6 +130,13 @@ export function evaluateLifecyclePreflight({
   const specPath = join(planningDir, 'SPEC.md');
   const milestonesPath = join(planningDir, 'MILESTONES.md');
   const blockers = [];
+
+  const malformedPlans = [
+    ...(lifecycle.malformedPlanFrontmatter || []),
+    ...malformedPlanFrontmatter,
+    ...(workMilestone?.malformedPlanFrontmatter || []),
+  ].filter((issue, index, all) => all.findIndex((candidate) => candidate.path === issue.path) === index);
+  blockers.push(...buildMalformedPlanBlockers(malformedPlans));
 
   if (selection?.status === 'ambiguous') {
     blockers.push(blocker(
@@ -263,12 +271,14 @@ export function evaluateLifecyclePreflight({
     else warnings.push(notice);
   }
 
-  if (!usesAlternateAuthority && lifecycle.phaseStatusAlignment.mismatches.length > 0) {
-    warnings.push({
+  if (lifecycle.phaseStatusAlignment.mismatches.length > 0) {
+    const mismatch = {
       code: 'roadmap_phase_status_mismatch',
       message: `ROADMAP.md overview/detail phase statuses disagree: ${lifecycle.phaseStatusAlignment.mismatches.join('; ')}`,
       artifacts: [stateLabel('ROADMAP.md')],
-    });
+    };
+    if (policy.classification === 'owned_write') blockers.push(blocker(mismatch.code, mismatch.message, mismatch.artifacts));
+    else warnings.push(mismatch);
   }
 
   // Every lifecycle verb consumes the same active-decision digest. The JSON field keeps the
@@ -280,15 +290,17 @@ export function evaluateLifecyclePreflight({
     paths: normalizedPhase ? [`phase:${normalizedPhase}`] : [],
   });
 
-  if (decisionsDigest.directoryUnreadable) {
-    warnings.push({
+  if (decisionsDigest.readErrors.length > 0) {
+    const decisionIssue = {
       code: 'decision_store_unreadable',
-      message: 'Decision store could not be enumerated; lifecycle preflight continues with an empty digest.',
+      message: 'Decision records could not be read or parsed; lifecycle preflight refuses to continue until the decision store is repaired.',
       artifacts: decisionsDigest.readErrors.map((entry) => entry.path),
-    });
+    };
+    if (policy.classification === 'owned_write') blockers.push(blocker(decisionIssue.code, decisionIssue.message, decisionIssue.artifacts));
+    else warnings.push(decisionIssue);
   }
 
-  if (surface === 'plan') {
+  if (surface === 'plan' && blockers.length === 0) {
     persistDecisionsDigest(planningDir, { phase: normalizedPhase, digest: decisionsDigest });
   } else if (surface === 'execute') {
     warnings.push(...evaluateDecisionDispositionWarnings({
@@ -480,7 +492,8 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
 
   if (!existsSync(roadmapPath)) {
     const allPhaseArtifacts = collectWorkPhaseArtifacts({ workspaceRoot, phasesDir });
-    const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute', 'verification'] });
+    const malformedPlanFrontmatter = [];
+    const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute', 'verification'], malformedPlanFrontmatter });
     const allPlanArtifacts = allPhaseArtifacts.filter((artifact) => artifact.kind === 'plan');
     if (allPlanArtifacts.length === 0) return null;
     const phases = deriveWorkPlanPhases(allPlanArtifacts);
@@ -494,6 +507,7 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
       phaseEntry,
       phaseArtifacts: partitioned.currentArtifacts.filter((artifact) => artifact.phaseToken === phaseToken),
       historicalPhaseArtifacts: partitioned.historicalArtifacts.filter((artifact) => artifact.phaseToken === phaseToken),
+      malformedPlanFrontmatter,
       roadmapFallback: true,
     };
   }
@@ -505,7 +519,8 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
   }
 
   const allPhaseArtifacts = collectWorkPhaseArtifacts({ workspaceRoot, phasesDir, phaseToken });
-  const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute', 'verification'] });
+  const malformedPlanFrontmatter = [];
+  const partitioned = partitionPlanChains(allPhaseArtifacts, { companionKinds: ['execute', 'verification'], malformedPlanFrontmatter });
   return {
     milestoneDir,
     roadmapPath,
@@ -514,6 +529,7 @@ function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
     phaseEntry,
     phaseArtifacts: partitioned.currentArtifacts,
     historicalPhaseArtifacts: partitioned.historicalArtifacts,
+    malformedPlanFrontmatter,
     roadmapFallback: false,
   };
 }
@@ -522,7 +538,12 @@ function deriveWorkPlanPhases(planArtifacts) {
   const phases = new Map();
   for (const artifact of planArtifacts) {
     if (phases.has(artifact.phaseToken)) continue;
-    const frontmatter = parsePlanFrontmatter(readFileSync(artifact.path, 'utf-8'));
+    let frontmatter;
+    try {
+      frontmatter = parsePlanFrontmatter(readFileSync(artifact.path, 'utf-8'));
+    } catch {
+      frontmatter = { status: null };
+    }
     phases.set(artifact.phaseToken, {
       number: artifact.phaseToken,
       title: artifact.displayPath,
@@ -715,6 +736,14 @@ function buildRoadmapAlignmentBlockers(lifecycle, stateLabel) {
       [stateLabel('ROADMAP.md')]
     ),
   ];
+}
+
+function buildMalformedPlanBlockers(issues) {
+  return issues.map((issue) => blocker(
+    'malformed_plan_frontmatter',
+    `${issue.displayPath} has malformed retained PLAN frontmatter (${issue.error}). ${issue.repair}`,
+    [issue.displayPath],
+  ));
 }
 
 function buildAuditBlockers(lifecycle, { allowArchivedBlocker = false, stateLabel } = {}) {

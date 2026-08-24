@@ -173,7 +173,7 @@ function resolveDecisionWorkDir(workspace) {
     throw new Error(
       `Decision commands require canonical ${WORK_DIR_NAME}/ authority. `
       + `This repo only has legacy ${workspace.stateDirName}/ lifecycle state. `
-      + 'Run `gsdd next --init` first; migrate legacy lifecycle state explicitly when ready. '
+      + 'Run `npx -y workspine init --migrate` first; migrate legacy lifecycle state explicitly when ready. '
       + `Decisions from ${workspace.stateDirName}/ are not imported automatically.`,
     );
   }

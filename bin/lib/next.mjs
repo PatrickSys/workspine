@@ -5,13 +5,13 @@ import { buildControlMap } from './control-map.mjs';
 import { resolveStateDir, stateAuthorityGate } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { workflowId } from './workflows.mjs';
+import { evaluateLifecycleState, collectNativePhaseArtifacts, partitionPlanChains } from './lifecycle-state.mjs';
 import {
   NEXT_STATES,
   addOpenQuestion,
   answerQuestion,
   captureDogfoodFinding,
   buildDecisionsDigest,
-  ensureWorkStructure,
   getWorkPaths,
   inspectWorkContext,
   readJsonIfExists,
@@ -22,7 +22,6 @@ import {
 const NEXT_USAGE = [
   'Usage:',
   '  gsdd next [--json] [--format auto|json|human]',
-  '  gsdd next --init [--json] [--format auto|json|human]',
   '  gsdd next graph rebuild [--json] [--format auto|json|human]',
   '  gsdd next question add --id <id> --prompt <text> [--default <text>] [--gate <type>] [--blocking <true|false>] [--replace] [--json]',
   '  gsdd next question answer --id <id> --answer <text> [--json]',
@@ -363,17 +362,17 @@ function routeNext(ctx) {
   ];
 
   if (!context.has_goal) {
-    return packet({
+    return projectDecisionsDigest(ctx, packet({
       state: 'ask_user',
       reason: 'No `.work/goal.md` continuity contract exists yet.',
       confidence: 'high',
-      next_command: 'gsdd next --init',
-      next_action: cliAction(['next', '--init'], 'Bootstrap `.work` explicitly after user approval.'),
+      next_command: 'npx -y workspine init',
+      next_action: cliAction(['npx', '-y', 'workspine', 'init'], 'Initialize the complete Workspine workspace through the supported init command.'),
       requires_user: true,
       questions: [{
         id: 'work-bootstrap',
         question: 'Initialize `.work/` as the canonical Workspine continuity root?',
-        default: 'Yes: run `gsdd next --init`.',
+        default: 'Yes: run `npx -y workspine init`.',
         gate: 'bootstrap',
         blocking: true,
       }],
@@ -382,7 +381,7 @@ function routeNext(ctx) {
       privacy_notes: privacyNotes,
       inputs_considered: inputsConsidered,
       inputs_skipped: ['.work files: missing'],
-    });
+    }));
   }
 
   inputsConsidered.push('.work/goal.md');
@@ -567,8 +566,33 @@ function routeNext(ctx) {
     });
   }
 
+  const lifecycleTruth = readLifecycleTruth(ctx.cwd, context);
+  if (lifecycleTruth.malformed.length > 0) {
+    const first = lifecycleTruth.malformed[0];
+    return packet({
+      state: 'blocked',
+      reason: `${first.displayPath} has malformed retained PLAN frontmatter (${first.error}). ${first.repair}`,
+      confidence: 'high',
+      next_action: manualReviewAction([first.displayPath], 'Repair the retained PLAN frontmatter, preserving the file, then rerun `gsdd next --json`.'),
+      error_code: 'malformed_plan_frontmatter',
+      repair_action: 'manual_review',
+      repair_targets: lifecycleTruth.malformed.map((issue) => issue.displayPath),
+      artifacts_to_read: lifecycleTruth.malformed.map((issue) => issue.displayPath),
+      constraints,
+      privacy_notes: privacyNotes,
+      inputs_considered: inputsConsidered,
+      inputs_skipped: inputsSkipped,
+      trace_refs: traceRefs,
+    });
+  }
+
+  // state.json is a validated projection, not a competing lifecycle authority. Once
+  // roadmap or phase artifacts exist, route from those durable artifacts below.
+  const hasDurableLifecycleTruth = context.planning.has_roadmap
+    || context.milestone?.has_roadmap
+    || context.planning.phases.some((phase) => phase.plans?.length || phase.summaries?.length || phase.verifications?.length);
   const stateRoute = routeFromStateObject(context.state.value);
-  if (stateRoute) {
+  if (stateRoute && !hasDurableLifecycleTruth) {
     return enrichRoute(stateRoute, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
   }
 
@@ -760,6 +784,46 @@ function routeNext(ctx) {
     inputs_skipped: inputsSkipped,
     trace_refs: traceRefs,
   });
+}
+
+function readLifecycleTruth(cwd, context) {
+  const planningDir = resolveStateDir(cwd).dir;
+  const malformed = [];
+  try {
+    const lifecycle = evaluateLifecycleState({ planningDir });
+    malformed.push(...(lifecycle.malformedPlanFrontmatter || []));
+  } catch (error) {
+    if (!isMalformedPlanFrontmatterError(error)) throw error;
+    malformed.push({
+      displayPath: `${stateDirName(context)}/phases/PLAN.md`,
+      error: error.message,
+      repair: 'Repair the retained PLAN frontmatter and rerun lifecycle routing.',
+    });
+  }
+  const milestoneDir = context.milestone?.dir;
+  const phasesDir = milestoneDir ? join(milestoneDir, 'phases') : null;
+  if (phasesDir && existsSync(phasesDir)) {
+    const nativeIssues = [];
+    try {
+      partitionPlanChains(collectNativePhaseArtifacts({ workspaceRoot: cwd, phasesDir }), {
+        companionKinds: ['execute', 'verification'],
+        malformedPlanFrontmatter: nativeIssues,
+      });
+      malformed.push(...nativeIssues);
+    } catch (error) {
+      if (!isMalformedPlanFrontmatterError(error)) throw error;
+      malformed.push({
+        displayPath: `${stateDirName(context)}/milestone/phases/PLAN.md`,
+        error: error.message,
+        repair: 'Repair the retained PLAN frontmatter and rerun lifecycle routing.',
+      });
+    }
+  }
+  return { malformed: malformed.filter((issue, index, all) => all.findIndex((candidate) => candidate.displayPath === issue.displayPath) === index) };
+}
+
+function isMalformedPlanFrontmatterError(error) {
+  return /PLAN frontmatter starts with --- but is not closed|PLAN status frontmatter scalar has an unmatched quote/i.test(String(error?.message || ''));
 }
 
 function inspectWorkflowStateContradiction(context) {
@@ -1261,31 +1325,25 @@ export function createCmdNext(ctx) {
       }
 
       if (args.includes('--init')) {
-        const result = ensureWorkStructure(effectiveCtx.cwd);
-        const index = rebuildGraphIndex(result.paths.workDir, { write: true });
         const response = {
           schema_version: 1,
           operation: 'next init',
-          status: 'ok',
-          changed: result.created.length > 0,
-          created: result.created,
-          work_dir: '.work',
-          index: {
-            event_count: index.event_count,
-            invalid_event_count: index.invalid_event_count,
-          },
-          next: projectDecisionsDigest(effectiveCtx, routeNext(effectiveCtx)),
+          status: 'rejected',
+          error_code: 'partial_bootstrap_removed',
+          reason: '`next --init` is not a setup path; it would create an incomplete `.work` root.',
+          next_command: 'npx -y workspine init',
+          next_action: 'Run `npx -y workspine init` to create the complete Workspine workspace.',
         };
         if (jsonMode) output(response);
         else {
-          console.log(`Initialized .work (${result.created.length} created).`);
-          printHuman(response.next);
+          console.error(`${response.reason} ${response.next_action}`);
         }
+        process.exitCode = 1;
         return;
       }
 
       if (args[0] === 'graph' && args[1] === 'rebuild') {
-        if (!existsSync(workPaths.workDir)) throw new Error('No `.work/` directory found. Run `gsdd next --init` first.');
+        if (!existsSync(workPaths.workDir)) throw new Error('No `.work/` directory found. Run `npx -y workspine init` first.');
         const index = rebuildGraphIndex(workPaths.workDir, { write: true });
         const response = {
           schema_version: 1,
@@ -1339,7 +1397,7 @@ export function createCmdNext(ctx) {
 }
 
 function handleQuestion(ctx, args, jsonMode) {
-  if (!existsSync(getWorkPaths(ctx.cwd).workDir)) throw new Error('No `.work/` directory found. Run `gsdd next --init` first.');
+  if (!existsSync(getWorkPaths(ctx.cwd).workDir)) throw new Error('No `.work/` directory found. Run `npx -y workspine init` first.');
   if (args[0] === 'add') {
     const id = requireFlag(args, '--id');
     const question = requireFlag(args, '--prompt');
@@ -1387,7 +1445,7 @@ function handleQuestion(ctx, args, jsonMode) {
 }
 
 function handleDecision(ctx, args, jsonMode) {
-  if (!existsSync(getWorkPaths(ctx.cwd).workDir)) throw new Error('No `.work/` directory found. Run `gsdd next --init` first.');
+  if (!existsSync(getWorkPaths(ctx.cwd).workDir)) throw new Error('No `.work/` directory found. Run `npx -y workspine init` first.');
   if (args[0] !== 'record') throw new Error(NEXT_USAGE);
   const id = requireFlag(args, '--id');
   const title = requireFlag(args, '--title');
@@ -1409,7 +1467,7 @@ function handleDecision(ctx, args, jsonMode) {
 }
 
 function handleDogfood(ctx, args, jsonMode) {
-  if (!existsSync(getWorkPaths(ctx.cwd).workDir)) throw new Error('No `.work/` directory found. Run `gsdd next --init` first.');
+  if (!existsSync(getWorkPaths(ctx.cwd).workDir)) throw new Error('No `.work/` directory found. Run `npx -y workspine init` first.');
   if (args[0] !== 'capture') throw new Error(NEXT_USAGE);
   const id = requireFlag(args, '--id');
   const title = requireFlag(args, '--title');

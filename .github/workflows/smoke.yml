@@ -23,8 +23,7 @@ jobs:
           FIXTURE="$(mktemp -d)"
           cd "$FIXTURE"
           node "$CLI" init --auto --tools claude
-          node "$CLI" next --init
-          node "$CLI" next
+          node "$CLI" next --json
           node "$CLI" lifecycle-preflight progress
       - name: Publish-path smoke — npm pack + install tarball (D-74; catches bin-name mapping bugs npx-on-checkout cannot)
         shell: bash
