@@ -178,7 +178,7 @@ describe('gsdd models and model propagation', () => {
         modelProfile: 'balanced',
         runtimeModelOverrides: { opencode: { 'plan-checker': 'openai/gpt-5.2' } },
       });
-      await gsdd.cmdUpdate('--tools', 'opencode');
+      await gsdd.cmdUpdate();
 
       checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.match(checker, /^model: openai\/gpt-5\.2$/m);
@@ -186,7 +186,7 @@ describe('gsdd models and model propagation', () => {
       const config = readJson(path.join(tmpDir, '.work', 'config.json'));
       delete config.runtimeModelOverrides;
       fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), JSON.stringify(config, null, 2));
-      await gsdd.cmdUpdate('--tools', 'opencode');
+      await gsdd.cmdUpdate();
 
       checker = fs.readFileSync(path.join(tmpDir, '.opencode', 'agents', 'work-plan-checker.md'), 'utf-8');
       assert.doesNotMatch(checker, /^model:/m);
@@ -262,7 +262,7 @@ describe('gsdd models and model propagation', () => {
         modelProfile: 'balanced',
         runtimeModelOverrides: { codex: { 'plan-checker': 'gpt-5-codex' } },
       });
-      await gsdd.cmdUpdate('--tools', 'codex');
+      await gsdd.cmdUpdate();
 
       checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8');
       assert.match(checker, /^model = "gpt-5-codex"$/m);
@@ -270,7 +270,7 @@ describe('gsdd models and model propagation', () => {
       const config = readJson(path.join(tmpDir, '.work', 'config.json'));
       delete config.runtimeModelOverrides;
       fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), JSON.stringify(config, null, 2));
-      await gsdd.cmdUpdate('--tools', 'codex');
+      await gsdd.cmdUpdate();
 
       checker = fs.readFileSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml'), 'utf-8');
       assert.doesNotMatch(checker, /^model = /m);

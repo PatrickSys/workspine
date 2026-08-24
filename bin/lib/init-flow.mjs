@@ -23,10 +23,8 @@ import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs'
 import { applyTemplateRefresh, explicitTemplateOwnership, installProjectTemplates, planTemplateRefresh, refreshTemplates, validateTemplateOwnership, validateTemplateSources } from './templates.mjs';
 import {
   detectPlatforms,
-  findInvalidFlag,
-  getAdaptersToUpdate,
+  validateCommandShape,
   getPostInitRoutingLines,
-  normalizeRequestedTools,
   getLocalAdapterTargets,
   getLocalAdapterInventory,
   resolveAdapters,
@@ -95,7 +93,7 @@ function validateKindContract(adapter, cwd) {
 export function createCmdInit(ctx) {
   return async function cmdInit(...initArgs) {
     // A15-44: fail before any write when a flag is unknown, duplicated, or missing its value.
-    const flagError = findInvalidFlag('init', initArgs);
+    const flagError = validateCommandShape('init', initArgs);
     if (flagError) {
       console.error(`ERROR: ${flagError}`);
       process.exitCode = 1;
@@ -307,19 +305,10 @@ export function createCmdInit(ctx) {
 
 export function createCmdUpdate(ctx) {
   return function cmdUpdate(...updateArgs) {
-    // A15-44: fail before any write when a flag is unknown or duplicated.
-    const flagError = findInvalidFlag('update', updateArgs);
+    // A15-44: fail before any write when a flag is unknown, duplicated, or value-less.
+    const flagError = validateCommandShape('update', updateArgs);
     if (flagError) {
       console.error(`ERROR: ${flagError}`);
-      process.exitCode = 1;
-      return;
-    }
-    // `init` and `install` already refuse a `--tools` with no value; `update` never did, so a
-    // malformed `--tools` fell through `parseToolsFlag` as an empty list and silently regenerated
-    // whatever happened to be installed. Refuse it here, before any adapter is written.
-    const updateToolsFlag = parseFlagValue(updateArgs, '--tools');
-    if (updateToolsFlag.invalid) {
-      console.error('ERROR: --tools requires a value. Example: npx -y workspine update --tools claude');
       process.exitCode = 1;
       return;
     }
@@ -329,36 +318,24 @@ export function createCmdUpdate(ctx) {
       process.exitCode = 1;
       return;
     }
-    const isDry = updateArgs.includes('--dry');
-    const doTemplates = updateArgs.includes('--templates');
+    const isDry = updateArgs.includes('--dry-run') || updateArgs.includes('--dry');
+    // Ordinary update is the one manifest-owned reconciliation route. Selectors were an unsafe
+    // partial-update escape hatch: templates, helpers, skills, and every owned adapter move
+    // together through the existing preflight/writer seams.
+    const doTemplates = true;
     const { planningDir, stateDirName } = ctx;
 
     console.log(`gsdd update - regenerating adapter files${isDry ? ' (dry run)' : ''}\n`);
 
-    const parsedTools = parseToolsFlag(updateArgs);
-    const requested = normalizeRequestedTools(parsedTools);
     const existingManifest = readManifest(planningDir);
     const manifestPlatforms = Array.isArray(existingManifest?.adapterSelection)
       ? existingManifest.adapterSelection.filter((name) => typeof name === 'string')
       : [...new Set(Object.values(existingManifest?.adapterFiles ?? {})
         .map((entry) => entry && typeof entry === 'object' ? entry.adapter : null)
         .filter((name) => typeof name === 'string'))];
-    // A plain update is manifest-owned and all-owned: runtime detection is only
-    // the compatibility fallback for pre-candidate manifests and scoped legacy
-    // --tools calls. This keeps preflight and writers on the same target set.
-    const platforms = parsedTools.length > 0
-      ? requested.adapterTargets
-      : (manifestPlatforms.length > 0 ? manifestPlatforms : detectPlatforms(ctx.adapters));
-    const adaptersToUpdate = parsedTools.length === 0
-      ? resolveAdapters(ctx.adapters, platforms)
-      : getAdaptersToUpdate(ctx.adapters, platforms);
-    // The legacy selector path may include already-installed adapters in
-    // addition to the explicitly requested names. Expand the preflight set to
-    // exactly the adapters that the writer will invoke.
-    const writerPlatforms = [...new Set([
-      ...platforms,
-      ...adaptersToUpdate.map((adapter) => adapter.name),
-    ])];
+    const platforms = manifestPlatforms.length > 0 ? manifestPlatforms : detectPlatforms(ctx.adapters);
+    const adaptersToUpdate = resolveAdapters(ctx.adapters, platforms);
+    const writerPlatforms = [...new Set([...platforms, ...adaptersToUpdate.map((adapter) => adapter.name)])];
     const localAdapterTargets = getLocalAdapterTargets(ctx.adapters, ctx.workflows, writerPlatforms);
 
     let updated = false;
@@ -381,7 +358,7 @@ export function createCmdUpdate(ctx) {
         manifest: existingManifest,
         stateDirName,
         requireManifest: existsSync(planningDir),
-        requireExistingNativeTargets: parsedTools.length === 0,
+        requireExistingNativeTargets: true,
       });
       if (!isDry) applyAdapterRecovery(adapterPlan);
       if (doTemplates) templateOwnership = refreshTemplates({ ...ctx, isDry });
@@ -390,7 +367,7 @@ export function createCmdUpdate(ctx) {
       process.exitCode = 1;
       return;
     }
-    if (doTemplates) {
+    if (doTemplates && existsSync(planningDir)) {
       updated = true;
     }
 
@@ -427,6 +404,7 @@ export function createCmdUpdate(ctx) {
 
     if (!updated) {
       console.log('  - no adapters found to update (run `npx -y workspine init` first; bare `gsdd init` is equivalent only when globally installed)');
+      if (isDry) console.log('\nDry run complete. No files were written.\n');
     } else if (isDry) {
       console.log('\nDry run complete. No files were written.\n');
     } else {
@@ -442,7 +420,7 @@ export function createCmdUpdate(ctx) {
             planningDir,
             targets: localAdapterTargets,
             existingManifest: existingManifest,
-            selectedPlatforms: platforms,
+          selectedPlatforms: platforms,
           }),
           adapterInventory: getLocalAdapterInventory(ctx.adapters, ctx.workflows),
         });

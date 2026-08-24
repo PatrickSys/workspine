@@ -167,7 +167,7 @@ describe('generation manifest', () => {
     const claudeTarget = path.join(tmpDir, ...claudePath.split('/'));
     fs.writeFileSync(claudeTarget, 'consumer-modified Claude skill bytes\n');
 
-    let result = await runCliAsMain(tmpDir, ['update', '--tools', 'claude']);
+    let result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);
     const afterClaude = readJson(manifestPath);
     assert.deepStrictEqual(afterClaude.adapterFiles[codexPath], before.adapterFiles[codexPath]);
@@ -184,7 +184,7 @@ describe('generation manifest', () => {
       'Claude scope must reconcile the selected target',
     );
 
-    result = await runCliAsMain(tmpDir, ['update', '--tools', 'codex']);
+    result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);
     const afterCodex = readJson(manifestPath);
     assert.deepStrictEqual(afterCodex.adapterFiles[opencodePath], before.adapterFiles[opencodePath]);
@@ -199,8 +199,8 @@ describe('generation manifest', () => {
   test('repeated dry updates are byte-for-byte read-only', async () => {
     await initProjectWithArgs('--auto', '--tools', 'all');
     const before = snapshotTree(tmpDir);
-    const first = await runCliAsMain(tmpDir, ['update', '--tools', 'all', '--dry']);
-    const second = await runCliAsMain(tmpDir, ['update', '--tools', 'all', '--dry']);
+    const first = await runCliAsMain(tmpDir, ['update', '--dry-run']);
+    const second = await runCliAsMain(tmpDir, ['update', '--dry-run']);
     assert.strictEqual(first.exitCode, 0, first.output);
     assert.strictEqual(second.exitCode, 0, second.output);
     assert.deepStrictEqual(snapshotTree(tmpDir), before);
@@ -213,7 +213,7 @@ describe('generation manifest', () => {
     const original = Buffer.from('consumer-owned adapter bytes\n');
     fs.writeFileSync(target, original);
 
-    const result = await runCliAsMain(tmpDir, ['update', '--tools', 'claude']);
+    const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);
     const recoveryDir = path.join(tmpDir, '.work', '.local', 'template-recovery');
     const receipts = fs.readdirSync(recoveryDir).filter((entry) => entry.endsWith('.json'));
@@ -279,7 +279,7 @@ describe('generation manifest', () => {
     const unknownBytes = Buffer.from('team-owned adapter note\n');
     fs.writeFileSync(unknownPath, unknownBytes);
 
-    const result = await runCliAsMain(tmpDir, ['update', '--tools', 'all']);
+    const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.deepStrictEqual(fs.readFileSync(unknownPath), unknownBytes);
     assert.ok(!Object.hasOwn(readJson(path.join(tmpDir, '.work', 'generation-manifest.json')).adapterFiles, '.claude/skills/team-custom.md'));
@@ -292,7 +292,7 @@ describe('generation manifest', () => {
       if (state === 'missing') fs.rmSync(manifestPath);
       else fs.writeFileSync(manifestPath, '{not-json');
       const before = snapshotTree(tmpDir);
-      const result = await runCliAsMain(tmpDir, ['update', '--tools', 'all']);
+      const result = await runCliAsMain(tmpDir, ['update']);
       assert.notStrictEqual(result.exitCode, 0, `${state} manifest must refuse`);
       assert.deepStrictEqual(snapshotTree(tmpDir), before, `${state} manifest refusal must not write`);
       cleanup(tmpDir);
@@ -359,7 +359,7 @@ describe('generation manifest', () => {
     delete manifest.adapterFiles[collisionTarget];
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     const collisionTargetBytes = fs.readFileSync(path.join(tmpDir, ...collisionTarget.split('/')));
-    const collisionResult = await runCliAsMain(tmpDir, ['update', '--tools', 'codex']);
+    const collisionResult = await runCliAsMain(tmpDir, ['update']);
     assert.notStrictEqual(collisionResult.exitCode, 0, collisionResult.output);
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, ...collisionTarget.split('/'))), collisionTargetBytes);
     assert.strictEqual(fs.readFileSync(collision, 'utf-8'), 'team-owned\n');
@@ -383,7 +383,7 @@ describe('generation manifest', () => {
       return;
     }
     const manifestBefore = fs.readFileSync(manifestPath);
-    const linkedResult = await runCliAsMain(tmpDir, ['update', '--tools', 'codex']);
+    const linkedResult = await runCliAsMain(tmpDir, ['update']);
     assert.notStrictEqual(linkedResult.exitCode, 0, linkedResult.output);
     assert.deepStrictEqual(fs.readFileSync(manifestPath), manifestBefore);
     assert.strictEqual(fs.readlinkSync(linked), path.join(external, 'target.toml'));
@@ -547,13 +547,13 @@ describe('generation manifest', () => {
     }
   });
 
-  test('update --templates refreshes corrupted delegate', async () => {
+  test('plain update refreshes corrupted delegate', async () => {
     await initProject();
 
     const delegatePath = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
     fs.writeFileSync(delegatePath, 'stale content');
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0);
     assert.match(result.output, /refreshed delegates\/mapper-tech\.md/);
 
@@ -562,75 +562,75 @@ describe('generation manifest', () => {
     assert.notStrictEqual(restored, 'stale content');
   });
 
-  test('update --templates warns about user-modified files', async () => {
+  test('plain update warns about user-modified files', async () => {
     await initProject();
 
     const delegatePath = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
     fs.writeFileSync(delegatePath, 'user-modified content');
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    const result = await runCliAsMain(tmpDir, ['update']);
     assert.match(result.output, /WARN.*mapper-tech\.md/);
   });
 
-  test('update --dry does not write files', async () => {
+  test('update --dry-run does not write files', async () => {
     await initProject();
 
     const delegatePath = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
     fs.writeFileSync(delegatePath, 'stale content');
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates', '--dry']);
+    const result = await runCliAsMain(tmpDir, ['update', '--dry-run']);
     assert.match(result.output, /would refresh delegates\/mapper-tech\.md/);
     assert.match(result.output, /Dry run/);
     assert.strictEqual(fs.readFileSync(delegatePath, 'utf-8'), 'stale content');
   });
 
-  test('update --templates refreshes role contracts', async () => {
+  test('plain update refreshes role contracts', async () => {
     await initProject();
 
     const rolePath = path.join(tmpDir, '.work', 'templates', 'roles', 'mapper.md');
     fs.writeFileSync(rolePath, 'stale role');
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    const result = await runCliAsMain(tmpDir, ['update']);
     assert.match(result.output, /refreshed roles\/mapper\.md/);
 
     const restored = fs.readFileSync(rolePath, 'utf-8');
     assert.ok(restored.includes('Responsibility') || restored.includes('<role>'));
   });
 
-  test('update --templates skips unchanged files', async () => {
+  test('plain update skips unchanged files', async () => {
     await initProject();
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    const result = await runCliAsMain(tmpDir, ['update']);
     assert.ok(!result.output.includes('refreshed delegates/'));
     assert.ok(!result.output.includes('refreshed roles/'));
   });
 
-  test('update without --templates does not touch templates', async () => {
+  test('plain update reconciles templates as owned outputs', async () => {
     await initProject();
 
     const delegatePath = path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md');
     fs.writeFileSync(delegatePath, 'stale content');
 
     const result = await runCliAsMain(tmpDir, ['update']);
-    assert.ok(!result.output.includes('refreshed delegates/'));
-    assert.strictEqual(fs.readFileSync(delegatePath, 'utf-8'), 'stale content');
+    assert.match(result.output, /refreshed delegates\/mapper-tech\.md|WARN.*mapper-tech\.md/);
+    assert.notStrictEqual(fs.readFileSync(delegatePath, 'utf-8'), 'stale content');
   });
 
-  test('update without --templates does not rewrite manifest', async () => {
+  test('plain update keeps a valid manifest while reconciling templates', async () => {
     await initProject();
 
     const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
-    const beforeContent = fs.readFileSync(manifestPath, 'utf-8');
     fs.writeFileSync(path.join(tmpDir, '.work', 'templates', 'delegates', 'mapper-tech.md'), 'user-modified content');
 
     const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0);
 
-    const afterContent = fs.readFileSync(manifestPath, 'utf-8');
-    assert.strictEqual(afterContent, beforeContent);
+    const after = readJson(manifestPath);
+    assert.ok(after.templates.delegates['mapper-tech.md']);
+    assert.match(result.output, /WARN.*mapper-tech\.md/);
   });
 
-  test('update without --templates refuses corrupt template ownership before helper writes', async () => {
+  test('plain update refuses corrupt template ownership before helper writes', async () => {
     await initProject();
     const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
     fs.writeFileSync(manifestPath, '{not-json');
@@ -745,7 +745,7 @@ describe('generation manifest', () => {
     }
   });
 
-  test('nested update --dry reports missing generated surfaces without repairing or writing', async () => {
+  test('nested update --dry-run reports missing generated surfaces without repairing or writing', async () => {
     await initProject();
 
     const nestedDir = path.join(tmpDir, 'src', 'feature', 'deep');
@@ -757,7 +757,7 @@ describe('generation manifest', () => {
     fs.rmSync(skillsDir, { recursive: true, force: true });
     const manifestBefore = fs.readFileSync(manifestPath, 'utf-8');
 
-    const result = await runCliAsMain(nestedDir, ['update', '--dry']);
+    const result = await runCliAsMain(nestedDir, ['update', '--dry-run']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /would update open-standard skills/);
     assert.match(result.output, /would update local workflow helpers/);
@@ -769,30 +769,30 @@ describe('generation manifest', () => {
     assert.ok(!fs.existsSync(path.join(nestedDir, '.planning')), 'dry update must not initialize nested cwd as a separate workspace');
   });
 
-  test('dry-run --templates creates no directories in fresh project', async () => {
+  test('dry-run creates no directories in fresh project', async () => {
     const planningDir = path.join(tmpDir, '.planning');
     assert.ok(!fs.existsSync(planningDir));
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates', '--dry']);
+    const result = await runCliAsMain(tmpDir, ['update', '--dry-run']);
     assert.match(result.output, /Dry run/);
     assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'delegates')));
     assert.ok(!fs.existsSync(path.join(tmpDir, '.planning', 'templates', 'roles')));
   });
 
-  test('update --templates preserves unknown root templates and does not adopt them into the manifest', async () => {
+  test('plain update preserves unknown root templates and does not adopt them into the manifest', async () => {
     await initProject();
 
     const orphanPath = path.join(tmpDir, '.work', 'templates', 'obsolete-template.md');
     fs.writeFileSync(orphanPath, '# Obsolete');
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0);
     assert.doesNotMatch(result.output, /removed orphan templates\/obsolete-template\.md/);
     assert.strictEqual(fs.readFileSync(orphanPath, 'utf-8'), '# Obsolete');
     assert.ok(!Object.hasOwn(readJson(path.join(tmpDir, '.work', 'generation-manifest.json')).templates.root, 'obsolete-template.md'));
   });
 
-  test('update --templates writes a receipt-bound byte-exact recovery copy before replacing a modified managed template', async () => {
+  test('plain update writes a receipt-bound byte-exact recovery copy before replacing a modified managed template', async () => {
     await initProject();
 
     const relativeTarget = 'templates/delegates/mapper-tech.md';
@@ -800,7 +800,7 @@ describe('generation manifest', () => {
     const original = Buffer.from('consumer-owned bytes\n');
     fs.writeFileSync(delegatePath, original);
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0, result.output);
 
     const recoveryDir = path.join(tmpDir, '.work', '.local', 'template-recovery');
@@ -835,7 +835,7 @@ describe('generation manifest', () => {
     fs.writeFileSync(path.join(recovery, `${identity}.original`), 'conflicting bytes');
     const before = snapshotTree(tmpDir);
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    const result = await runCliAsMain(tmpDir, ['update']);
 
     assert.notStrictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /conflicting recovery bytes/);
@@ -889,7 +889,7 @@ describe('generation manifest', () => {
     fs.writeFileSync(recoveryBytes, original);
     fs.writeFileSync(receiptPath, JSON.stringify({ targetPath, action: 'replace', oldHash, newHash, recoveryPath }, null, 2));
 
-    const result = await runCliAsMain(tmpDir, ['update', '--templates']);
+    const result = await runCliAsMain(tmpDir, ['update']);
 
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.deepStrictEqual(fs.readFileSync(recoveryBytes), original);
@@ -1031,7 +1031,7 @@ describe('generation manifest', () => {
     assert.deepStrictEqual(Object.keys(readJson(manifestPath).runtimeHelpers).sort(), currentRuntimePaths);
   });
 
-  test('update --dry leaves obsolete runtime helper bytes and raw manifest unchanged', async () => {
+  test('update --dry-run leaves obsolete runtime helper bytes and raw manifest unchanged', async () => {
     await initProject();
 
     const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
@@ -1043,7 +1043,7 @@ describe('generation manifest', () => {
     writeRawManifest(manifestPath, manifest);
     const manifestBefore = fs.readFileSync(manifestPath);
 
-    const result = await runCliAsMain(tmpDir, ['update', '--dry']);
+    const result = await runCliAsMain(tmpDir, ['update', '--dry-run']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.deepStrictEqual(fs.readFileSync(manifestPath), manifestBefore);
     assert.strictEqual(fs.readFileSync(obsoletePath, 'utf-8'), content);

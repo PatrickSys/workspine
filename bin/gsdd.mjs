@@ -15,7 +15,7 @@ import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
 import { createCmdGitIdentity } from './lib/git-identity.mjs';
 import { maybeShowUpdateNotice } from './lib/update-awareness.mjs';
-import { classifyInformationRequest, findInvalidFlag } from './lib/init-runtime.mjs';
+import { classifyInformationRequest, reportCommandShapeError, validateCommandShape } from './lib/init-runtime.mjs';
 import { FRAMEWORK_VERSION } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const IS_MAIN = process.argv[1] ? realpathSync(process.argv[1]) === realpathSync(__filename) : false;
@@ -87,10 +87,9 @@ async function runCli(cliCommand = command, ...cliArgs) {
     return;
   }
 
-  const flagError = findInvalidFlag(cliCommand, normalizedArgs);
-  if (flagError) {
-    console.error(flagError);
-    console.error(`Run \`${INIT_CONTEXT.packageName} help\` for supported usage.`);
+  const grammarError = validateCommandShape(cliCommand, normalizedArgs);
+  if (grammarError) {
+    reportCommandShapeError(cliCommand, normalizedArgs, grammarError, INIT_CONTEXT.packageName);
     process.exitCode = 1;
     return;
   }

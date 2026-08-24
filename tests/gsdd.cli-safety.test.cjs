@@ -243,6 +243,121 @@ test.describe('CLI safety: invalid flags are rejected before any write', () => {
   });
 });
 
+test.describe('CLI safety: every mutator rejects all malformed classes before update awareness', () => {
+  let tmpDir;
+  test.beforeEach(() => { tmpDir = createTempRepo(); });
+  test.afterEach(() => { cleanup(tmpDir); });
+
+  const malformedByFamily = {
+    init: {
+      unknown: ['init', '--bad'], duplicate: ['init', '--auto', '--auto'],
+      missing: ['init', '--tools'], positional: ['init', 'trailing'],
+    },
+    install: {
+      unknown: ['install', '--bad'], duplicate: ['install', '-g', '-g'],
+      missing: ['install', '--tools'], positional: ['install', '--global', 'trailing'],
+    },
+    update: {
+      unknown: ['update', '--bad'], duplicate: ['update', '--dry-run', '--dry-run'],
+      missing: ['update', '--workspace-root'], positional: ['update', 'trailing'],
+    },
+    'file-op': {
+      unknown: ['file-op', 'delete', 'target', '--bad'], duplicate: ['file-op', 'delete', 'target', '--missing', 'ok', '--missing', 'fail'],
+      missing: ['file-op', 'delete', 'target', '--missing'], positional: ['file-op', 'copy', 'source', 'destination', 'trailing'],
+    },
+    'lifecycle-preflight': {
+      unknown: ['lifecycle-preflight', 'progress', '--bad'], duplicate: ['lifecycle-preflight', 'progress', '--expects-mutation', 'one', '--expects-mutation', 'two'],
+      missing: ['lifecycle-preflight', 'progress', '--expects-mutation'], positional: ['lifecycle-preflight', 'progress', 'phase', 'trailing'],
+    },
+    'lifecycle-transition': {
+      unknown: ['lifecycle-transition', 'execute', '--bad'], duplicate: ['lifecycle-transition', 'execute', '--authority', 'owner', '--authority', 'owner'],
+      missing: ['lifecycle-transition', 'execute', '--plan'], positional: ['lifecycle-transition', 'execute', 'trailing'],
+    },
+    scaffold: {
+      unknown: ['scaffold', 'phase', '1', '--bad'], duplicate: ['scaffold', 'phase', '1', '--workspace-root', 'one', '--workspace-root', 'two'],
+      missing: ['scaffold', 'phase', '1', '--workspace-root'], positional: ['scaffold', 'phase', '1', 'name', 'extra'],
+    },
+    'phase-status': {
+      unknown: ['phase-status', '1', 'done', '--bad'], duplicate: ['phase-status', '1', 'done', '--workspace-root', 'one', '--workspace-root', 'two'],
+      missing: ['phase-status', '1', 'done', '--workspace-root'], positional: ['phase-status', '1', 'done', 'extra'],
+    },
+    remember: {
+      unknown: ['remember', 'candidate', '--bad'], duplicate: ['remember', 'candidate', '--type', 'rule', '--type', 'lesson'],
+      missing: ['remember', 'candidate', '--type'], positional: ['remember', 'candidate', 'extra'],
+    },
+    decisions: {
+      unknown: ['decisions', 'query', 'terms', '--bad'], duplicate: ['decisions', 'query', 'terms', '--path', 'one', '--path', 'two'],
+      missing: ['decisions', 'invalidate', 'id', '--reason'], positional: ['decisions', 'query', 'terms', 'extra'],
+    },
+    next: {
+      unknown: ['next', 'graph', 'rebuild', '--bad'], duplicate: ['next', 'question', 'add', '--id', 'q1', '--id', 'q2', '--prompt', 'Question'],
+      missing: ['next', 'question', 'add', '--id'], positional: ['next', 'graph', 'rebuild', 'extra'],
+    },
+    models: {
+      unknown: ['models', 'set', '--bad'], duplicate: ['models', 'set', '--runtime', 'codex', '--runtime', 'claude', '--agent', 'plan-checker', '--model', 'model'],
+      missing: ['models', 'set', '--runtime'], positional: ['models', 'set', 'extra'],
+    },
+    rigor: {
+      unknown: ['rigor', 'high', '--bad'], duplicate: ['rigor', 'plan', 'high', 'high'],
+      missing: ['rigor', 'plan'], positional: ['rigor', 'high', 'extra'],
+    },
+  };
+
+  for (const [family, cases] of Object.entries(malformedByFamily)) {
+    test(`${family} rejects unknown, duplicate, missing-value, and positional malformed input without writing`, () => {
+      for (const [kind, args] of Object.entries(cases)) {
+        const result = runZeroWrite(tmpDir, args);
+        assert.equal(result.exitCode, 1, `${family}/${kind}: ${result.output}`);
+        assert.match(result.output, /Unknown flag|Duplicate flag|requires a value|Malformed/, `${family}/${kind}: ${result.output}`);
+      }
+    });
+  }
+
+  test('a missing workspace-root value is not swallowed by --version', () => {
+    const result = runZeroWrite(tmpDir, ['init', '--workspace-root', '--version']);
+    assert.equal(result.exitCode, 1, result.output);
+    assert.match(result.output, /requires a value/, result.output);
+  });
+
+  const crossOperationFlags = [
+    ['file-op', ['file-op', 'copy', 'source', 'destination', '--flags', 'i']],
+    ['lifecycle-transition', ['lifecycle-transition', 'approve', '--question', 'wrong operation']],
+    ['next', ['next', 'graph', 'rebuild', '--prompt', 'wrong operation']],
+    ['models', ['models', 'set', '--runtime', 'codex', '--agent', 'plan-checker', '--model', 'model', '--profile', 'quality']],
+  ];
+  for (const [family, args] of crossOperationFlags) {
+    test(`${family} rejects a flag owned by a different operation without writing`, () => {
+      const result = runZeroWrite(tmpDir, args);
+      assert.equal(result.exitCode, 1, result.output);
+      assert.match(result.output, /not valid for this .* operation/, result.output);
+    });
+  }
+
+  test('next preserves its JSON error envelope for operation-specific grammar rejection', () => {
+    const result = runZeroWrite(tmpDir, ['next', 'graph', 'rebuild', '--prompt', 'wrong operation', '--json']);
+    assert.equal(result.exitCode, 1, result.output);
+    const body = JSON.parse(result.stdout);
+    assert.equal(body.operation, 'next');
+    assert.equal(body.status, 'error');
+  });
+
+  test('next graph rebuild retains its documented --format selector', () => {
+    const result = runZeroWrite(tmpDir, ['next', 'graph', 'rebuild', '--format', 'json']);
+    assert.ok(!/not valid for this next operation/.test(result.output), result.output);
+  });
+
+  test('lifecycle-transition preserves its JSON error envelope for operation-specific grammar rejection', () => {
+    const result = runZeroWrite(tmpDir, ['lifecycle-transition', 'approve', '--question', 'wrong operation', '--json']);
+    assert.equal(result.exitCode, 1, result.output);
+    const body = JSON.parse(result.stdout);
+    assert.equal(body.operation, 'lifecycle-transition');
+    assert.equal(body.status, 'error');
+    assert.equal(body.error_code, 'invalid_arguments');
+    assert.deepEqual(body.evidence, []);
+    assert.equal(body.changed, false);
+  });
+});
+
 test.describe('CLI safety: existing contracts are preserved', () => {
   let tmpDir;
   test.beforeEach(() => { tmpDir = createTempRepo(); });
@@ -279,8 +394,11 @@ test.describe('CLI safety: existing contracts are preserved', () => {
   });
 
   test('the legacy rigor alias set still resolves', () => {
-    const result = runZeroWrite(tmpDir, ['rigor', 'show']);
-    assert.ok(!/Unknown flag/.test(result.output), result.output);
+    for (const alias of ['quick', 'balanced', 'thorough']) {
+      const result = runZeroWrite(tmpDir, ['rigor', alias]);
+      assert.ok(!/Malformed rigor command shape/.test(result.output), `${alias}: ${result.output}`);
+      assert.ok(!/Invalid rigor argument/.test(result.output), `${alias}: ${result.output}`);
+    }
   });
 });
 
@@ -300,16 +418,16 @@ test.describe('CLI safety: an initialised workspace still refuses malformed muta
 
   test.afterEach(() => { cleanup(tmpDir); });
 
-  test('update refuses a --tools whose value was swallowed by an unknown flag, and writes nothing', () => {
+  test('update retires the --tools selector before any write', () => {
     const result = runZeroWrite(tmpDir, ['update', '--tools', '--evil-unknown']);
     assert.equal(result.exitCode, 1, result.output);
-    assert.match(result.output, /--tools requires a value/, result.output);
+    assert.match(result.output, /Unknown flag.*--tools/, result.output);
   });
 
-  test('update refuses a --tools with no value at all, and writes nothing', () => {
+  test('update rejects the retired --tools selector with no value, and writes nothing', () => {
     const result = runZeroWrite(tmpDir, ['update', '--tools']);
     assert.equal(result.exitCode, 1, result.output);
-    assert.match(result.output, /--tools requires a value/, result.output);
+    assert.match(result.output, /Unknown flag.*--tools/, result.output);
   });
 
   test('update still refuses an unknown flag once a workspace exists', () => {
@@ -318,8 +436,8 @@ test.describe('CLI safety: an initialised workspace still refuses malformed muta
     assert.match(result.output, /Unknown flag/, result.output);
   });
 
-  test('a valid update in the same workspace is still permitted', () => {
-    const result = runEntry(tmpDir, ['update', '--tools', 'claude']);
+  test('a valid plain update in the same workspace is still permitted', () => {
+    const result = runEntry(tmpDir, ['update']);
     assert.equal(result.exitCode, 0, result.output);
     assert.ok(!/Unknown flag|requires a value/.test(result.output), result.output);
   });

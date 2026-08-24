@@ -315,11 +315,18 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 // reject them with a specific message; that message must still be the one a user sees.
 export const COMMAND_FLAGS = {
   init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--workspace-root': true },
-  update: { '--tools': true, '--templates': false, '--dry': false, '--workspace-root': true },
-  install: { '--global': false, '-g': false, '--auto': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
+  update: { '--dry-run': false, '--dry': false, '--workspace-root': true },
+  install: { '--global': false, '-g': false, '--auto': false, '--dry-run': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
   scaffold: { '--workspace-root': true },
   'file-op': { '--missing': true, '--flags': true, '--workspace-root': true },
   'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--json': false, '--workspace-root': true },
+  'lifecycle-preflight': { '--expects-mutation': true, '--plan': true, '--workspace-root': true },
+  'phase-status': { '--workspace-root': true },
+  remember: { '--type': true, '--scope': true, '--for': true, '--code': true, '--why': true, '--by-user': false, '--workspace-root': true },
+  decisions: { '--path': true, '--authority': true, '--approval-ref': true, '--reason': true, '--workspace-root': true },
+  next: { '--json': false, '--format': true, '--init': false, '--id': true, '--prompt': true, '--default': true, '--gate': true, '--blocking': true, '--answer': true, '--replace': false, '--title': true, '--body': true, '--supersedes': true, '--privacy': true, '--backlog': true },
+  models: { '--agent': true, '--profile': true, '--runtime': true, '--model': true },
+  rigor: {},
 };
 
 // Bare words count only in the command position, so a positional argument that happens to read
@@ -331,6 +338,8 @@ const VERSION_FLAGS = new Set(['--version', '-v', '-V']);
 
 // These render their own richer usage for --help, so the root help must not override them.
 const COMMANDS_WITH_OWN_HELP = new Set(['next', 'lifecycle-transition']);
+const RIGOR_LEVEL_NAMES = new Set(['low', 'medium', 'high', 'max', 'quick', 'balanced', 'thorough']);
+const RIGOR_STEP_NAMES = new Set(['plan', 'execute', 'verify']);
 
 // Classifies a dispatch as a zero-write information request so the entrypoint can answer it before
 // any handler writes or the update-awareness check runs. Returns 'help', 'version', or null.
@@ -339,6 +348,10 @@ export function classifyInformationRequest(command, commandArgs = [], knownComma
   if (command && VERSION_TOKENS.has(command)) return 'version';
   if (command && HELP_TOKENS.has(command)) return 'help';
   if (!command || !Object.hasOwn(knownCommands, command)) return null;
+  // Information requests are zero-write only after the command grammar itself is unambiguous.
+  // In particular, `init --workspace-root --version` must not let --version swallow the missing
+  // workspace-root value and bypass the mutator's pre-write validation.
+  if (findInvalidFlag(command, commandArgs)) return null;
   if (commandArgs.some((arg) => VERSION_FLAGS.has(arg))) return 'version';
   if (!COMMANDS_WITH_OWN_HELP.has(command) && commandArgs.some((arg) => HELP_FLAGS.has(arg))) return 'help';
   return null;
@@ -350,13 +363,8 @@ export function classifyInformationRequest(command, commandArgs = [], knownComma
 // `--help` unreachable and would break the documented opt-out on every mutating command.
 const UNIVERSAL_FLAGS = new Set(['--help', '-h', '--version', '-v', '-V', '--no-update-notice']);
 
-// Returns an error string for the first unknown or duplicated flag, or null when the flags are
-// acceptable. Positional arguments are ignored: only tokens that look like flags are inspected.
-//
-// A flag present but missing its value is deliberately NOT reported here. `--tools`, `--brief` and
-// `--workspace-root` already answer that case with a specific, more useful message, and duplicating
-// the check would replace those messages with a generic one. Value presence stays each command's
-// own responsibility; this function only answers "is this flag mine, and did I already see it".
+// Returns an error string for the first unknown, duplicated, or value-less flag, or null when the
+// flags are acceptable. Positional grammar is checked separately by validateCommandShape.
 export function findInvalidFlag(command, commandArgs = []) {
   const accepted = COMMAND_FLAGS[command];
   if (!accepted) return null;
@@ -364,7 +372,11 @@ export function findInvalidFlag(command, commandArgs = []) {
   for (let index = 0; index < commandArgs.length; index += 1) {
     const token = commandArgs[index];
     if (typeof token !== 'string' || !token.startsWith('-') || token === '-') continue;
-    if (UNIVERSAL_FLAGS.has(token)) continue;
+    if (UNIVERSAL_FLAGS.has(token)) {
+      if (seen.has(token)) return `Duplicate flag for \`${command}\`: ${token}`;
+      seen.add(token);
+      continue;
+    }
     if (!Object.hasOwn(accepted, token)) return `Unknown flag for \`${command}\`: ${token}`;
     if (seen.has(token)) return `Duplicate flag for \`${command}\`: ${token}`;
     seen.add(token);
@@ -373,10 +385,200 @@ export function findInvalidFlag(command, commandArgs = []) {
     // A value-taking flag whose value is absent or is itself a flag makes everything after it
     // ambiguous: the next token could be a duplicate flag, or the value the user meant to pass.
     // Stop rather than guess, and let the command's own specific message answer it.
-    if (value === undefined || value.startsWith('-')) return null;
+    if (value === undefined || value.startsWith('-')) {
+      if (command === 'init' && token === '--brief') {
+        return 'Flag --brief requires a file path. Example: npx -y workspine init --brief project-idea.md';
+      }
+      if (command === 'init' && token === '--workspace-root') {
+        return 'Flag --workspace-root requires a value\nUsage: --workspace-root <path>';
+      }
+      if (command === 'phase-status' && token === '--workspace-root') {
+        return 'Flag --workspace-root requires a value\nUsage: --workspace-root <path>';
+      }
+      if (command === 'remember' && token === '--for') {
+        return 'Flag --for requires a value\nUsage: gsdd remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--for <ref>]';
+      }
+      if (command === 'decisions' && ['--authority', '--approval-ref'].includes(token)) {
+        return `Flag ${token} requires a value\nUsage: gsdd decisions query "<terms>" [--path <path>] | promote <id> --authority owner --approval-ref <non-sensitive-ref> | reject <id> [--reason <text>] | invalidate <id> --reason <text>`;
+      }
+      return `Flag ${token} requires a value`;
+    }
     index += 1;
   }
   return null;
+}
+
+function commandPositionals(command, commandArgs) {
+  const accepted = COMMAND_FLAGS[command] || {};
+  const positionals = [];
+  for (let index = 0; index < commandArgs.length; index += 1) {
+    const token = commandArgs[index];
+    if (UNIVERSAL_FLAGS.has(token)) continue;
+    if (Object.hasOwn(accepted, token)) {
+      if (accepted[token]) index += 1;
+      continue;
+    }
+    positionals.push(token);
+  }
+  return positionals;
+}
+
+function shapeError(command, usage) {
+  return `Malformed ${command} command shape. ${usage}`;
+}
+
+function commandSpecificFlagError(command, positionals, commandArgs) {
+  const used = commandArgs.filter((token) =>
+    typeof token === 'string' && token.startsWith('-') && token !== '-' && !UNIVERSAL_FLAGS.has(token));
+  let allowed = null;
+  const allow = (...flags) => new Set(flags);
+
+  if (command === 'file-op') {
+    allowed = positionals[0] === 'regex-sub'
+      ? allow('--missing', '--flags', '--workspace-root')
+      : allow('--missing', '--workspace-root');
+  } else if (command === 'lifecycle-transition') {
+    const target = positionals[0];
+    if (target === 'ask_user') allowed = allow('--question', '--reason', '--json', '--workspace-root');
+    else if (target === 'blocked') allowed = allow('--reason', '--json', '--workspace-root');
+    else if (['approve', 'execute'].includes(target)) {
+      allowed = allow('--plan', '--authority', '--approval-ref', '--approved', '--reason', '--json', '--workspace-root');
+    } else if (['verify', 'audit', 'next', 'fix_gaps'].includes(target)) {
+      allowed = allow('--plan', '--artifact', '--authority', '--reason', '--json', '--workspace-root');
+    } else {
+      allowed = allow('--plan', '--authority', '--reason', '--json', '--workspace-root');
+    }
+  } else if (command === 'decisions') {
+    const subcommand = positionals[0];
+    if (subcommand === 'query') allowed = allow('--path', '--workspace-root');
+    else if (subcommand === 'promote') allowed = allow('--authority', '--approval-ref', '--workspace-root');
+    else allowed = allow('--reason', '--workspace-root');
+  } else if (command === 'next') {
+    const operation = positionals.slice(0, 2).join(' ');
+    if (positionals.length === 0) allowed = allow('--json', '--format', '--init');
+    else if (operation === 'graph rebuild') allowed = allow('--json', '--format');
+    else if (operation === 'question add') allowed = allow('--id', '--prompt', '--default', '--gate', '--blocking', '--replace', '--json');
+    else if (operation === 'question answer') allowed = allow('--id', '--answer', '--json');
+    else if (operation === 'decision record') allowed = allow('--id', '--title', '--body', '--supersedes', '--privacy', '--replace', '--json');
+    else if (operation === 'dogfood capture') allowed = allow('--id', '--title', '--body', '--backlog', '--replace', '--json');
+  } else if (command === 'models') {
+    const subcommand = positionals[0] || 'show';
+    if (['show', 'profile'].includes(subcommand)) allowed = allow();
+    else if (subcommand === 'agent-profile') allowed = allow('--agent', '--profile');
+    else if (subcommand === 'clear-agent-profile') allowed = allow('--agent');
+    else if (subcommand === 'set') allowed = allow('--runtime', '--agent', '--model');
+    else if (subcommand === 'clear') allowed = allow('--runtime', '--agent');
+  }
+
+  if (!allowed) return null;
+  const invalid = used.find((flag) => !allowed.has(flag));
+  return invalid ? `Flag ${invalid} is not valid for this ${command} operation` : null;
+}
+
+/**
+ * Validate the small, exact positional grammars of existing mutators. This intentionally stays
+ * beside findInvalidFlag: it is a pre-write guard, not a general argument-parser framework.
+ */
+export function validateCommandShape(command, commandArgs = []) {
+  const flagError = findInvalidFlag(command, commandArgs);
+  if (flagError) return flagError;
+  if (commandArgs.includes('--help') || commandArgs.includes('-h')) return null;
+  const positionals = commandPositionals(command, commandArgs);
+  const usage = {
+    init: 'Usage: workspine init [flags]',
+    update: 'Usage: workspine update [--dry-run]',
+    install: 'Usage: workspine install --global [flags]',
+    scaffold: 'Usage: workspine scaffold phase <phase-number> [phase-name]',
+    'file-op': 'Usage: workspine file-op <copy|delete|regex-sub> ...',
+    'lifecycle-preflight': 'Usage: workspine lifecycle-preflight <surface> [phase] [flags]',
+    'lifecycle-transition': 'Usage: workspine lifecycle-transition <target> [flags]',
+    'phase-status': 'Usage: workspine phase-status <phase-number> <not_started|todo|in_progress|done>',
+    remember: 'Usage: workspine remember "<text>" --type <type> --scope <scope> [flags]',
+    decisions: 'Usage: workspine decisions <query|promote|reject|invalidate> <id> [flags]',
+    next: 'Usage: workspine next [graph rebuild|question add|question answer|decision record|dogfood capture] [flags]',
+    models: 'Usage: workspine models [show|profile|agent-profile|clear-agent-profile|set|clear] [flags]',
+    rigor: 'Usage: workspine rigor [show|low|medium|high|max|<step> <level>]',
+  }[command];
+  if (!usage) return null;
+
+  if (['init', 'update', 'install'].includes(command) && positionals.length !== 0) {
+    return shapeError(command, usage);
+  }
+  if (command === 'scaffold' && (positionals.length < 2 || positionals.length > 3 || positionals[0] !== 'phase')) {
+    return shapeError(command, usage);
+  }
+  if (command === 'file-op') {
+    const [operation, ...rest] = positionals;
+    const expected = operation === 'copy' ? 2 : operation === 'delete' ? 1 : operation === 'regex-sub' ? 3 : -1;
+    if (expected < 0 || rest.length !== expected) return shapeError(command, usage);
+  }
+  if (command === 'lifecycle-preflight') {
+    const surfaces = ['progress', 'plan', 'execute', 'verify', 'audit-milestone', 'complete-milestone', 'new-milestone', 'resume'];
+    if (positionals.length < 1 || positionals.length > 2 || !surfaces.includes(positionals[0])) {
+      return shapeError(command, usage);
+    }
+    if (positionals.length === 2 && !['plan', 'execute', 'verify'].includes(positionals[0])) {
+      return shapeError(command, usage);
+    }
+  }
+  if (command === 'lifecycle-transition') {
+    const targets = ['plan', 'execute', 'approve', 'verify', 'audit', 'next', 'fix_gaps', 'blocked', 'ask_user'];
+    if (positionals.length !== 1 || (!targets.includes(positionals[0]) && positionals[0] !== 'help')) return shapeError(command, usage);
+  }
+  if (command === 'phase-status' && positionals.length !== 2) return shapeError(command, usage);
+  if (command === 'remember' && positionals.length !== 1) return shapeError(command, usage);
+  if (command === 'decisions') {
+    const [subcommand, subject, ...rest] = positionals;
+    if (!['query', 'promote', 'reject', 'invalidate'].includes(subcommand) || !subject || rest.length > 0) {
+      return shapeError(command, usage);
+    }
+  }
+  if (command === 'next') {
+    const [first, second, ...rest] = positionals;
+    const valid = positionals.length === 0
+      || (first === 'graph' && second === 'rebuild' && rest.length === 0)
+      || (first === 'question' && ['add', 'answer'].includes(second) && rest.length === 0)
+      || (first === 'decision' && second === 'record' && rest.length === 0)
+      || (first === 'dogfood' && second === 'capture' && rest.length === 0);
+    if (!valid) return shapeError(command, usage);
+  }
+  if (command === 'models') {
+    const [subcommand, ...rest] = positionals;
+    const valid = !subcommand || subcommand === 'show' && rest.length === 0
+      || subcommand === 'profile' && rest.length === 1
+      || ['agent-profile', 'clear-agent-profile', 'set', 'clear'].includes(subcommand) && rest.length === 0;
+    if (!valid) return shapeError(command, usage);
+  }
+  if (command === 'rigor') {
+    const [first, second, ...rest] = positionals;
+    const valid = !first || first === 'show' && !second
+      || RIGOR_LEVEL_NAMES.has(first) && !second
+      || RIGOR_STEP_NAMES.has(first) && RIGOR_LEVEL_NAMES.has(second) && rest.length === 0;
+    if (!valid) return shapeError(command, usage);
+  }
+  return commandSpecificFlagError(command, positionals, commandArgs);
+}
+
+export function reportCommandShapeError(command, commandArgs, error, packageName = 'workspine') {
+  if (command === 'lifecycle-preflight') {
+    console.log(JSON.stringify({ error: 'invalid_plan_selector', reason: 'invalid_plan_selector', message: error }));
+  } else if (command === 'lifecycle-transition') {
+    const body = { schema_version: 1, operation: command, status: 'error', error_code: 'invalid_arguments', error, evidence: [], changed: false };
+    if (commandArgs.includes('--json')) console.log(JSON.stringify(body));
+    else console.error(`Lifecycle transition blocked: ${error}`);
+  } else if (command === 'next') {
+    const body = { schema_version: 1, operation: command, status: 'error', error };
+    if (commandArgs.includes('--json')) console.log(JSON.stringify(body));
+    else console.error(`gsdd next failed: ${error}`);
+  } else if (command === 'verify') {
+    console.log(JSON.stringify({ error: 'invalid_arguments', message: error }));
+  } else if (command === 'decisions') {
+    console.error('Usage: gsdd decisions query "<terms>" [--path <path>] | promote <id> --authority owner --approval-ref <non-sensitive-ref> | reject <id> [--reason <text>] | invalidate <id> --reason <text>');
+    console.error(error);
+  } else {
+    console.error(error);
+    console.error(`Run \`${packageName} help\` for supported usage.`);
+  }
 }
 
 export function getHelpText() {
@@ -396,14 +598,13 @@ Commands:
                                --auto: non-interactive new-project bootstrap config (requires --tools)
                               --brief <file>: copy project brief to .work/PROJECT_BRIEF.md
                               --migrate: explicitly move a supported legacy state tree to .work/ before setup
-  install --global [--auto] [--tools <platform>] [--dry]
+  install --global [--auto] [--tools <platform>] [--dry-run]
                               Install reusable Workspine skills and native runtime surfaces into agent home directories
                               --auto: refresh detected existing agent homes; if none exist, print exact target commands without writing
                               In TTYs, omitting --tools opens an agent picker
-  update [--tools <platform>] [--templates] [--dry]
-                              Regenerate adapters from latest framework sources
-                              --templates: also refresh .work/templates/ and roles
-                              --dry: preview changes without writing files
+  update [--dry-run]
+                              Reconcile all manifest-owned repo outputs from latest framework sources
+                              --dry-run: preview changes without writing files
   health [--json]             Check workspace integrity (healthy/degraded/broken)
                               health and update remain network-free; update is explicit repair only
   next [--json] [--format auto|json|human]
@@ -469,7 +670,7 @@ Notes:
   - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
   - recorded launch proof in this repo currently covers the Codex CLI path; Claude Code and OpenCode get generated native surfaces with local freshness checks and no recorded run
   - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
-  - --tools remains the advanced/manual path and preserves legacy runtime aliases for backward compatibility
+  - --tools remains the advanced/manual path for init/install and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/work-plan-checker.toml and .codex/agents/work-approach-explorer.toml (portable skill is the entry surface; $work-plan is plan-only until explicit $work-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
   - normal repo path: npx -y workspine init -> run /work-* or $work-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed

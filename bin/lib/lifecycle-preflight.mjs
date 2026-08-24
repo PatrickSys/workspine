@@ -1129,11 +1129,11 @@ export function cmdLifecycleTransition(...args) {
   try {
     assertStateAuthority(state);
     if (normalizedArgs.includes('--help') || normalizedArgs[0] === 'help') {
-      console.log('Usage: lifecycle-transition <plan|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--question <text>] [--json]');
+      console.log('Usage: lifecycle-transition <plan|approve|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--question <text>] [--json]');
       return;
     }
     const target = String(normalizedArgs.find((arg) => !arg.startsWith('--')) || '').toLowerCase();
-    if (!target || target === 'help') throw transitionErrorForCli('usage', 'Usage: lifecycle-transition <plan|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--json]');
+    if (!target || target === 'help') throw transitionErrorForCli('usage', 'Usage: lifecycle-transition <plan|approve|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--json]');
     const flag = (name) => {
       const index = normalizedArgs.indexOf(name);
       return index === -1 ? null : normalizedArgs[index + 1] || null;

@@ -2054,7 +2054,7 @@ describe('gsdd init and update', () => {
     assert.match(updatedCmdShim, /gsdd\.mjs/);
   });
 
-  test('update with --tools codex regenerates Codex checker agent', async () => {
+  test('plain update regenerates Codex checker agent', async () => {
     const restoreStdin = setNonInteractiveStdin();
     let gsdd;
     try {
@@ -2067,7 +2067,7 @@ describe('gsdd init and update', () => {
     const checkerPath = path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml');
     fs.writeFileSync(checkerPath, 'stale checker\n');
 
-    await gsdd.cmdUpdate('--tools', 'codex');
+    await gsdd.cmdUpdate();
 
     const updatedChecker = fs.readFileSync(checkerPath, 'utf-8');
     assert.doesNotMatch(updatedChecker, /^stale checker$/m);
@@ -2075,7 +2075,7 @@ describe('gsdd init and update', () => {
     assert.match(updatedChecker, /^sandbox_mode = "read-only"/m);
   });
 
-  test('update --templates refreshes templates without rewriting historical phase artifacts', async () => {
+  test('plain update refreshes templates without rewriting historical phase artifacts', async () => {
     const restoreStdin = setNonInteractiveStdin();
     let gsdd;
     try {
@@ -2102,7 +2102,7 @@ describe('gsdd init and update', () => {
     const templatePath = path.join(tmpDir, '.work', 'templates', 'ui-proof.md');
     fs.writeFileSync(templatePath, 'stale template\n');
 
-    await gsdd.cmdUpdate('--templates');
+    await gsdd.cmdUpdate();
 
     const updatedTemplate = fs.readFileSync(templatePath, 'utf-8');
     assert.doesNotMatch(updatedTemplate, /^stale template$/m);
@@ -2271,7 +2271,7 @@ describe('gsdd init and update', () => {
         fs.writeFileSync(configPath, legacy);
 
         await gsdd.cmdInit('--auto', '--tools', 'claude');
-        await gsdd.cmdUpdate('--tools', 'claude');
+        await gsdd.cmdUpdate();
 
         assert.strictEqual(fs.readFileSync(configPath, 'utf-8'), legacy);
       } finally {

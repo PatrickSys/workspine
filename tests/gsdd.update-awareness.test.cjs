@@ -416,7 +416,7 @@ describe('bounded update awareness', () => {
       globalThis.fetch = async (url) => { assert.equal(url, ENDPOINT); return fakeResponse(JSON.stringify({ version: '0.33.0' })); };
       console.error = (line) => lines.push(line);
       const cli = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'gsdd.mjs')).href}?dispatch=${Date.now()}-${Math.random()}`);
-      await cli.runCli('remember');
+      await cli.runCli('remember', 'candidate');
       assert.equal(lines.filter((line) => String(line).includes('Update available')).length, 1);
     } finally {
       process.chdir(previousCwd);
@@ -670,8 +670,8 @@ describe('bounded update awareness', () => {
     const rows = {
       init: ['--tools'], install: ['--tools'], health: ['--json'], update: ['--dry'], help: [],
       models: ['show'], rigor: ['show'], 'file-op': ['unknown'], 'lifecycle-preflight': [],
-      next: ['--json'], verify: ['999999'], 'phase-status': [], scaffold: [], 'find-phase': [],
-      journey: ['--json'], remember: [], decisions: [], 'git-identity': [],
+      next: ['--json'], verify: ['999999'], 'phase-status': ['not-a-phase', 'done'], scaffold: ['phase', 'not-a-phase'], 'find-phase': [],
+      journey: ['--json'], remember: ['candidate'], decisions: [], 'git-identity': [],
     };
     for (const [command, args] of Object.entries(rows)) {
       const fixture = createTempProject();

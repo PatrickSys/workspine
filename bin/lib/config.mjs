@@ -8,6 +8,7 @@ import { join } from 'path';
 import { CLAUDE_MODEL_PROFILES } from '../adapters/claude.mjs';
 import { detectOpenCodeConfiguredModel } from '../adapters/opencode.mjs';
 import { parseFlagValue, output } from './cli-utils.mjs';
+import { validateCommandShape } from './init-runtime.mjs';
 import { assertStateAuthority, resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
@@ -208,6 +209,12 @@ export function getRuntimeAgentModelState({ config, runtime, agentId, profileMap
 }
 
 export function cmdModels(...modelArgs) {
+  const grammarError = validateCommandShape('models', modelArgs);
+  if (grammarError) {
+    console.error(grammarError);
+    process.exitCode = 1;
+    return;
+  }
   const cwd = resolveConfigCommandRoot();
   if (!cwd) return;
   const subcommand = modelArgs[0] || 'show';
@@ -535,12 +542,20 @@ function printChangedFlags(before, after) {
 }
 
 export function cmdRigor(...rigorArgs) {
+  const grammarError = validateCommandShape('rigor', rigorArgs);
+  if (grammarError) {
+    console.error(grammarError);
+    process.exitCode = 1;
+    return;
+  }
   const cwd = resolveConfigCommandRoot();
   if (!cwd) return;
   const [first, second] = rigorArgs;
   if (!first || first === 'show') return cmdRigorShow(cwd);
-  if (RIGOR_STEPS.includes(first)) return cmdRigorSetStep(first, second, cwd);
-  if (RIGOR_LEVELS.includes(first)) return cmdRigorSetProfile(first, cwd);
+  const normalizedFirst = RIGOR_ALIASES[first] ?? first;
+  const normalizedSecond = RIGOR_ALIASES[second] ?? second;
+  if (RIGOR_STEPS.includes(first)) return cmdRigorSetStep(first, normalizedSecond, cwd);
+  if (RIGOR_LEVELS.includes(normalizedFirst)) return cmdRigorSetProfile(normalizedFirst, cwd);
   console.error(
     `ERROR: Invalid rigor argument "${first}". Usage: gsdd rigor [show | ${RIGOR_LEVELS.join('|')} | <${RIGOR_STEPS.join('|')}> <level>]`,
   );

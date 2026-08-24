@@ -33,7 +33,7 @@ import {
   writeManifestTrackedFile,
 } from './global-manifest.mjs';
 import { parseFlagValue } from './cli-utils.mjs';
-import { GLOBAL_AGENT_OPTIONS, findInvalidFlag } from './init-runtime.mjs';
+import { GLOBAL_AGENT_OPTIONS, validateCommandShape } from './init-runtime.mjs';
 import { SUBAGENT_IDS } from './workflows.mjs';
 
 export { GLOBAL_AGENT_OPTIONS } from './init-runtime.mjs';
@@ -539,7 +539,7 @@ export function verifyGlobalRuntimeInstall({ targets, roots, ctx, liveRuntime = 
 export function createCmdInstall(ctx) {
   return async function cmdInstall(...installArgs) {
     // A15-44: fail before any write when a flag is unknown, duplicated, or missing its value.
-    const flagError = findInvalidFlag('install', installArgs);
+    const flagError = validateCommandShape('install', installArgs);
     if (flagError) {
       console.error(`ERROR: ${flagError}`);
       process.exitCode = 1;
@@ -548,7 +548,7 @@ export function createCmdInstall(ctx) {
     const globalFlag = installArgs.includes('--global') || installArgs.includes('-g');
     const localFlag = installArgs.includes('--local');
     const autoFlag = installArgs.includes('--auto');
-    const dryRun = installArgs.includes('--dry');
+    const dryRun = installArgs.includes('--dry-run') || installArgs.includes('--dry');
     const verifyRuntime = installArgs.includes('--verify-runtime');
     const liveRuntime = installArgs.includes('--live-runtime');
     const toolsFlag = parseFlagValue(installArgs, '--tools');

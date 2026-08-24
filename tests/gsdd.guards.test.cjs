@@ -112,7 +112,7 @@ describe('G10 - CLI Module Boundary', () => {
       'gsdd.mjs must export the CLI command surface. FIX: Re-export cmdInit/cmdUpdate from gsdd.mjs.');
   });
 
-  test('help text still documents --templates and --dry', async () => {
+  test('help text documents plain update and canonical --dry-run', async () => {
     const mod = await import(`file://${INIT_MODULE.replace(/\\/g, '/')}`);
     const previousLog = console.log;
     let output = '';
@@ -123,10 +123,12 @@ describe('G10 - CLI Module Boundary', () => {
       console.log = previousLog;
     }
 
-    assert.match(output, /--templates/,
-      'Help text must document --templates flag. FIX: Add --templates to the extracted cmdHelp output.');
-    assert.match(output, /--dry/,
-      'Help text must document --dry flag. FIX: Add --dry to the extracted cmdHelp output.');
+    assert.match(output, /update \[--dry-run\]/,
+      'Help text must document plain update. FIX: Keep update selector-free.');
+    assert.match(output, /--dry-run/,
+      'Help text must document the canonical --dry-run flag. FIX: Add --dry-run to the extracted cmdHelp output.');
+    assert.doesNotMatch(output, /update .*--templates|update .*--tools/,
+      'Help text must not advertise retired update selectors.');
   });
 
   test('gsdd.mjs no longer defines extracted command bodies inline', () => {

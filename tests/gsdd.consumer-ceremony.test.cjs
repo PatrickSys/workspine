@@ -160,7 +160,7 @@ describe('consumer ceremony reduction', () => {
       await gsdd.cmdInit('--tools', 'agents');
       const agentsPath = path.join(tmpDir, 'AGENTS.md');
       fs.writeFileSync(agentsPath, `${fs.readFileSync(agentsPath, 'utf8')}\n## Local Notes\nDo not remove.\n`);
-      await gsdd.cmdUpdate('--tools', 'agents');
+      await gsdd.cmdUpdate();
       const updated = fs.readFileSync(agentsPath, 'utf8');
       assert.match(updated, /## Local Notes/);
       assert.match(updated, /Do not remove\./);
