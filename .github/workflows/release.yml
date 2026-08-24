@@ -27,17 +27,23 @@ jobs:
           ref: ${{ inputs.sha }}
 
       - name: Guard the dispatched commit to main
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
         run: |
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9A-Fa-f]{40}$ ]]; then
+            echo "::error::the dispatched SHA must be exactly 40 hexadecimal characters"
+            exit 1
+          fi
           git fetch origin main
-          if [ "$(git rev-parse HEAD)" != "${{ inputs.sha }}" ]; then
+          if [ "$(git rev-parse HEAD)" != "$RELEASE_SHA" ]; then
             echo "::error::checkout is not the dispatched exact commit"
             exit 1
           fi
-          if ! git merge-base --is-ancestor "${{ inputs.sha }}" origin/main; then
+          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
             echo "::error::the dispatched commit is not on main"
             exit 1
           fi
-          echo "release guard: exact commit ${{ inputs.sha }} is on main"
+          printf 'release guard: exact commit %s is on main\n' "$RELEASE_SHA"
 
       - uses: actions/setup-node@v4
         with:

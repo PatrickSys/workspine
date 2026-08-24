@@ -3907,6 +3907,24 @@ describe('G43 - Release Packaging Audit', () => {
       'package.json must keep semantic-release on v25+ so @semantic-release/npm supports OIDC trusted publishing. FIX: Upgrade semantic-release.');
   });
 
+  test('release workflow validates the dispatch SHA before using it in shell', () => {
+    const releaseWorkflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf-8');
+    const guardStep = releaseWorkflow.match(/- name: Guard the dispatched commit to main[\s\S]*?(?=\n\s+- (?:uses|name):|\s*\z)/i)?.[0] || '';
+    const guardRun = guardStep.match(/\n\s+run:\s+\|\r?\n([\s\S]*)/i)?.[1] || '';
+    const exactShaCheck = guardRun.match(/if \[\[ ! "\$RELEASE_SHA" =~ \^\[0-9A-Fa-f\]\{40\}\$ \]\]; then/i);
+
+    assert.match(guardStep, /env:\s*\r?\n\s+RELEASE_SHA:\s+\$\{\{ inputs\.sha \}\}/i,
+      'release guard must pass the dispatch input through a step environment variable. FIX: Bind inputs.sha to RELEASE_SHA under env.');
+    assert.ok(exactShaCheck,
+      'release guard must validate an exact case-insensitive 40-hex SHA before use. FIX: Reject every value outside ^[0-9A-Fa-f]{40}$.');
+    assert.ok(exactShaCheck.index < guardRun.indexOf('git fetch origin main'),
+      'release guard must validate RELEASE_SHA before fetching or checking the dispatched commit. FIX: Keep the exact SHA check first.');
+    assert.doesNotMatch(guardRun, /\$\{\{\s*inputs\.sha\s*\}\}/i,
+      'release guard shell must not interpolate workflow input expressions directly. FIX: Use the quoted RELEASE_SHA environment variable.');
+    assert.doesNotMatch(guardRun, /(?<!["'])\$RELEASE_SHA(?!["'])/i,
+      'release guard shell must quote every RELEASE_SHA expansion. FIX: Use "$RELEASE_SHA" for each shell reference.');
+  });
+
   test('smoke workflow verifies a disposable installed tarball instead of source checkout paths', () => {
     const smokeWorkflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'smoke.yml'), 'utf-8');
 
