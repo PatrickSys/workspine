@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from 'fs';
-import { basename, dirname, join, relative, resolve } from 'path';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 
 const BROWNFIELD_CHANGE_DIR = 'brownfield-change';
 
@@ -372,25 +372,53 @@ function splitRequirementList(rawRequirements = '') {
 function collectPhaseArtifacts(phasesDir) {
   if (!existsSync(phasesDir)) return [];
 
-  const artifacts = [];
-  for (const entry of readdirSync(phasesDir, { withFileTypes: true })) {
-    const entryPath = join(phasesDir, entry.name);
-    if (entry.isFile()) {
-      const artifact = classifyPhaseArtifact('', entry.name, join(phasesDir, entry.name));
-      if (artifact) artifacts.push(artifact);
-      continue;
-    }
-
-    if (!entry.isDirectory()) continue;
-
-    for (const child of readdirSync(entryPath, { withFileTypes: true })) {
-      if (!child.isFile()) continue;
-      const artifact = classifyPhaseArtifact(entry.name, child.name, join(entryPath, child.name));
-      if (artifact) artifacts.push(artifact);
-    }
+  const declaredRoot = resolve(phasesDir);
+  let phasesRoot;
+  try {
+    phasesRoot = realpathSync(declaredRoot);
+  } catch {
+    return [];
   }
+  // A phase root that is itself a link is not the canonical planning root.
+  // Refuse it rather than allowing recursive discovery to escape the caller's
+  // state tree through a junction or symlink.
+  if (!isWithinRoot(declaredRoot, phasesRoot)) return [];
 
-  return artifacts;
+  const artifacts = [];
+  const walk = (directory, relativeDirectory) => {
+    const entries = readdirSync(directory, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' }));
+    for (const entry of entries) {
+      const entryPath = join(directory, entry.name);
+      const artifactDirectory = relativeDirectory || '';
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isFile()) {
+        if (!isContainedRealPath(phasesRoot, entryPath)) continue;
+        const artifact = classifyPhaseArtifact(artifactDirectory, entry.name, entryPath);
+        if (artifact) artifacts.push(artifact);
+        continue;
+      }
+      if (entry.isDirectory() && isContainedRealPath(phasesRoot, entryPath)) {
+        walk(entryPath, artifactDirectory ? `${artifactDirectory}/${entry.name}` : entry.name);
+      }
+    }
+  };
+
+  walk(phasesDir, '');
+  return artifacts.sort(compareArtifactPaths);
+}
+
+function isWithinRoot(root, candidate) {
+  const candidateRelative = relative(resolve(root), resolve(candidate));
+  return candidateRelative === '' || (!candidateRelative.startsWith('..') && !isAbsolute(candidateRelative));
+}
+
+function isContainedRealPath(root, candidate) {
+  try {
+    return isWithinRoot(root, realpathSync(candidate));
+  } catch {
+    return false;
+  }
 }
 
 function classifyPhaseArtifact(dir, name, path) {
@@ -796,7 +824,10 @@ export function partitionPlanChains(artifacts, {
       && (artifact.kind === 'plan' || companionSet.has(artifact.kind));
     (historical ? historicalArtifacts : currentArtifacts).push(artifact);
   }
-  return { currentArtifacts, historicalArtifacts };
+  return {
+    currentArtifacts: currentArtifacts.sort(compareArtifactPaths),
+    historicalArtifacts: historicalArtifacts.sort(compareArtifactPaths),
+  };
 }
 
 function isPlanFrontmatterError(error) {
@@ -842,7 +873,9 @@ export function collectNativePhaseArtifacts({ workspaceRoot, phasesDir } = {}) {
   if (!workspaceRoot || !phasesDir || !existsSync(phasesDir)) return [];
   const artifacts = [];
   const visit = (dir) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const entries = readdirSync(dir, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' }));
+    for (const entry of entries) {
       const entryPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         visit(entryPath);
@@ -854,7 +887,7 @@ export function collectNativePhaseArtifacts({ workspaceRoot, phasesDir } = {}) {
     }
   };
   visit(phasesDir);
-  return artifacts;
+  return artifacts.sort(compareArtifactPaths);
 }
 
 function stripPlanInlineComment(value) {

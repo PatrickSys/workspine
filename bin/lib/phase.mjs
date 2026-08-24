@@ -907,7 +907,7 @@ function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, p
   }
 
   const sections = matchingSummaries.flatMap((summaryPath) => {
-    const summaryFullPath = join(phasesDir, summaryPath);
+    const summaryFullPath = phaseArtifactPath(phasesDir, summaryPath);
     if (!existsSync(summaryFullPath)) return [];
     const found = findBrowserProofObservationSections(
       readFileSync(summaryFullPath, 'utf-8'),
@@ -917,7 +917,7 @@ function evaluateBrowserProofObservation(browserProofPlans, matchingSummaries, p
     return found.sections.map(({ section, sourcePath }) => ({ section, summaryPath, sourcePath }));
   });
   const linkBlockers = matchingSummaries.flatMap((summaryPath) => {
-    const summaryFullPath = join(phasesDir, summaryPath);
+    const summaryFullPath = phaseArtifactPath(phasesDir, summaryPath);
     if (!existsSync(summaryFullPath)) return [];
     return findBrowserProofObservationSections(
       readFileSync(summaryFullPath, 'utf-8'),
@@ -1022,6 +1022,19 @@ function evaluatePlanArtifacts(artifacts) {
     satisfied: unsatisfied.length === 0,
     unsatisfied,
   };
+}
+
+function sortArtifactPaths(paths) {
+  return [...paths].sort((left, right) => String(left).localeCompare(String(right), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  }));
+}
+
+function phaseArtifactPath(phasesDir, displayPath) {
+  const relativePath = String(displayPath || '').replace(/\\/g, '/');
+  if (!relativePath || relativePath.startsWith('/') || relativePath.split('/').includes('..')) return null;
+  return join(phasesDir, ...relativePath.split('/'));
 }
 
 export function updateRoadmapPhaseStatus(roadmap, phaseNumber, status) {
@@ -1228,8 +1241,8 @@ export function cmdFindPhase(...args) {
     const historicalArtifacts = isNative
       ? []
       : lifecycle.historicalPhaseArtifacts.filter((artifact) => artifact.phaseToken === selection.candidate.phaseToken && (selection.candidate.dir === null || artifact.dir === selection.candidate.dir));
-    const plans = artifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath);
-    const summaries = artifacts.filter((artifact) => artifact.kind === (isNative ? 'execute' : 'summary')).map((artifact) => artifact.displayPath);
+    const plans = sortArtifactPaths(artifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath));
+    const summaries = sortArtifactPaths(artifacts.filter((artifact) => artifact.kind === (isNative ? 'execute' : 'summary')).map((artifact) => artifact.displayPath));
 
     output({
       phase: selection.candidate.phaseToken,
@@ -1239,8 +1252,8 @@ export function cmdFindPhase(...args) {
       plans,
       summaries,
       historical: {
-        plans: historicalArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath),
-        summaries: historicalArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath),
+        plans: sortArtifactPaths(historicalArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath)),
+        summaries: sortArtifactPaths(historicalArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath)),
       },
       hasResearch: existsSync(researchDir) && readdirSync(researchDir).length > 0,
       incomplete: plans.filter((p) => !summaries.some((s) => s.replace('SUMMARY', '') === p.replace('PLAN', ''))),
@@ -1391,8 +1404,8 @@ export function buildPhaseVerificationReport(...args) {
       ? artifact.phaseToken === phaseToken
       : artifact.dir === phaseSelection.candidate.dir
   ));
-  const matchingPlans = matchingArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath);
-  const matchingSummaries = matchingArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath);
+  const matchingPlans = sortArtifactPaths(matchingArtifacts.filter((artifact) => artifact.kind === 'plan').map((artifact) => artifact.displayPath));
+  const matchingSummaries = sortArtifactPaths(matchingArtifacts.filter((artifact) => artifact.kind === 'summary').map((artifact) => artifact.displayPath));
   const incompletePlans = lifecycle.incompletePlans.filter((artifact) => matchingPlans.includes(artifact.displayPath));
   const prerequisiteBlockers = [];
   if (matchingPlans.length === 0) {
@@ -1414,13 +1427,13 @@ export function buildPhaseVerificationReport(...args) {
     })));
   }
   const artifacts = matchingPlans.flatMap((planPath) => {
-    const fullPath = join(phasesDir, planPath);
+    const fullPath = phaseArtifactPath(phasesDir, planPath);
     return existsSync(fullPath)
       ? extractPlanFileArtifacts(readFileSync(fullPath, 'utf-8'), workspaceRoot)
       : [];
   });
   const browserProofPlans = matchingPlans.map((planPath) => {
-    const fullPath = join(phasesDir, planPath);
+    const fullPath = phaseArtifactPath(phasesDir, planPath);
     return existsSync(fullPath)
       ? evaluateBrowserProofContract(readFileSync(fullPath, 'utf-8'), planPath)
       : {

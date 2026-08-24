@@ -14,6 +14,7 @@ import {
 import {
   buildDecisionsDigest,
   getWorkPaths,
+  inspectWorkMilestone,
   persistDecisionsDigest,
   readJsonIfExists,
   readContinuityCheckpoint,
@@ -96,11 +97,17 @@ export function evaluateLifecyclePreflight({
   const decisionWorkDir = getWorkPaths(workspaceRoot).workDir;
   const nativeMilestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
   const nativePhasesDir = join(nativeMilestoneDir, 'phases');
+  const workMilestoneAuthority = inspectWorkMilestone(decisionWorkDir);
   const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
   const malformedPlanFrontmatter = [];
   const selection = phaseNumber ? resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector: phaseNumber, malformedPlanFrontmatter }) : null;
   const normalizedPhase = selection?.candidate?.phaseToken || (phaseNumber ? normalizePhaseToken(phaseNumber) : null);
-  const usesBrownfieldAuthority = surface === 'plan' && normalizedPhase === 'brownfield-change';
+  // The selected lane is the authority for every lifecycle consumer.  A
+  // brownfield stream intentionally has no ROADMAP phase, so execute and
+  // verify must stay on the same lane instead of falling through to the
+  // roadmap phase blockers.
+  const usesBrownfieldAuthority = ['plan', 'execute', 'verify'].includes(surface)
+    && normalizedPhase === 'brownfield-change';
   const usesPlanAmendAuthority = surface === 'plan' && normalizedPhase === 'amend';
   const usesNativeAuthority = selection?.candidate?.authority === 'native';
   const checkpointPath = join(planningDir, '.continue-here.md');
@@ -188,11 +195,19 @@ export function evaluateLifecyclePreflight({
           [stateLabel('brownfield-change', 'CHANGE.md')]
         )
       );
-    } else if (String(lifecycle.brownfieldChange.currentStatus || '').toLowerCase() === 'closed') {
+    } else if (surface !== 'verify' && String(lifecycle.brownfieldChange.currentStatus || '').toLowerCase() === 'closed') {
       blockers.push(
         blocker(
           'brownfield_change_closed',
           'Brownfield-change planning cannot continue because CHANGE.md marks the change closed.',
+          [stateLabel('brownfield-change', 'CHANGE.md')]
+        )
+      );
+    } else if ((lifecycle.brownfieldChange.contractErrors || []).length > 0) {
+      blockers.push(
+        blocker(
+          'brownfield_contract_invalid',
+          'Brownfield CHANGE.md is missing a required bounded-change contract field or contains competing operational authority.',
           [stateLabel('brownfield-change', 'CHANGE.md')]
         )
       );
@@ -202,7 +217,35 @@ export function evaluateLifecyclePreflight({
         'The bounded change requests milestone-sized widening; route through the explicit milestone workflow before continuing.',
         [stateLabel('brownfield-change', 'CHANGE.md')]
       ));
+    } else if (surface === 'execute' && lifecycle.brownfieldChange.currentStatus !== 'active') {
+      blockers.push(
+        blocker(
+          'brownfield_not_active',
+          `Brownfield execution requires CHANGE.md posture active, not ${lifecycle.brownfieldChange.currentStatus || 'unknown'}.`,
+          [stateLabel('brownfield-change', 'CHANGE.md')]
+        )
+      );
+    } else if (surface === 'verify' && !['ready_for_verification', 'closed'].includes(lifecycle.brownfieldChange.currentStatus)) {
+      blockers.push(
+        blocker(
+          'brownfield_not_ready',
+          'Brownfield verification requires CHANGE.md posture ready_for_verification or closed.',
+          [stateLabel('brownfield-change', 'CHANGE.md')]
+        )
+      );
     }
+  }
+
+  if (usesBrownfieldAuthority && workMilestoneAuthority.exists) {
+    blockers.push(blocker(
+      'authority_conflict',
+      'Active brownfield-change authority and .work/milestone authority both exist; continuing would silently choose between two continuity roots.',
+      [
+        stateLabel('brownfield-change', 'CHANGE.md'),
+        stateLabel('milestone', 'MILESTONE.md'),
+        stateLabel('milestone', 'ROADMAP.md'),
+      ]
+    ));
   }
 
   if (normalizedPhase && !usesBrownfieldAuthority && !usesPlanAmendAuthority) {

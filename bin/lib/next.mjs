@@ -1047,7 +1047,7 @@ function defaultReadArtifacts(state, context) {
   if (state === 'execute') return ['.work/goal.md', '.work/focus/current.md'];
   if (state === 'verify') return context.milestone?.has_roadmap
     ? ['.work/goal.md', milestonePath(context, 'ROADMAP.md'), milestonePath(context, 'phases/*/*-VERIFY.md')]
-    : ['.work/goal.md', '.work/evidence/manifest.json', statePath(context, 'phases/*/*-SUMMARY.md')];
+    : ['.work/goal.md', '.work/evidence/manifest.json', statePath(context, 'phases/**/*-SUMMARY.md')];
   if (state === 'audit') return context.milestone?.has_roadmap
     ? ['.work/goal.md', milestonePath(context, 'ROADMAP.md'), milestonePath(context, 'phases/*/*-VERIFY.md')]
     : ['.work/goal.md', '.work/evidence/manifest.json', statePath(context, 'phases/**/*-VERIFICATION.md')];
