@@ -51,6 +51,19 @@ async function importModule(filePath) {
   return import(`${pathToFileURL(filePath).href}?t=${Date.now()}-${Math.random()}`);
 }
 
+// A real Git root. An empty `.git` directory is no longer one: `hasGitMarker` now requires what Git
+// itself requires -- `HEAD` plus `objects/` or `commondir`. Measured 2026-08-23, a hollow `.git`
+// holding only `info/exclude` on the developer's home directory made every non-Git directory beneath
+// it look like a project, so commands run there initialised a workspace in the home directory. These
+// fixtures previously asserted that a marker Git disowns is a project root; now they use real ones.
+function makeRealGitRoot(dir) {
+  const created = spawnSync('git', ['init', '--quiet'], { cwd: dir, encoding: 'utf-8' });
+  assert.strictEqual(created.status, 0, `git init failed in fixture ${dir}: ${created.stderr}`);
+  // Warm the index once so a later read-only `git` call inside the CLI cannot be the first writer
+  // to `.git/index` and perturb a byte-identity snapshot taken during setup.
+  spawnSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf-8' });
+}
+
 function snapshotTree(directory, prefix = '') {
   return fs.readdirSync(directory, { withFileTypes: true })
     .flatMap((entry) => {
@@ -154,7 +167,7 @@ describe('gsdd init and update', () => {
     const foreignRoot = createTempProject();
     const targetRoot = createTempProject();
     const foreignCwd = path.join(foreignRoot, 'nested', 'invocation');
-    fs.mkdirSync(path.join(foreignRoot, '.git'));
+    makeRealGitRoot(foreignRoot);
     fs.mkdirSync(foreignCwd, { recursive: true });
     const foreignBefore = snapshotTree(foreignRoot);
     const targetBefore = snapshotTree(targetRoot);
@@ -182,7 +195,7 @@ describe('gsdd init and update', () => {
     const targetRoot = createTempProject();
     const foreignCwd = path.join(foreignRoot, 'nested', 'invocation');
     const targetBrief = 'Target brief is authoritative.\n';
-    fs.mkdirSync(path.join(foreignRoot, '.git'));
+    makeRealGitRoot(foreignRoot);
     fs.mkdirSync(foreignCwd, { recursive: true });
     fs.writeFileSync(path.join(foreignCwd, 'brief.md'), 'Foreign brief must not be read.\n');
     fs.writeFileSync(path.join(targetRoot, 'brief.md'), targetBrief);
@@ -214,7 +227,7 @@ describe('gsdd init and update', () => {
     const fileRoot = path.join(invalidParent, 'regular-file-root');
     const realRoot = path.join(invalidParent, 'real-root');
     const linkedRoot = path.join(invalidParent, 'linked-root');
-    fs.mkdirSync(path.join(foreignRoot, '.git'));
+    makeRealGitRoot(foreignRoot);
     fs.mkdirSync(foreignCwd, { recursive: true });
     fs.writeFileSync(fileRoot, 'not a directory\n');
     fs.mkdirSync(realRoot);
@@ -2791,7 +2804,7 @@ describe('gsdd init and update', () => {
     });
 
     test('nested migration writes only at the discovered Git root', async () => {
-      fs.mkdirSync(path.join(tmpDir, '.git'));
+      makeRealGitRoot(tmpDir);
       fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
       fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
       const nested = path.join(tmpDir, 'packages', 'app');
@@ -2845,5 +2858,355 @@ describe('gsdd init and update', () => {
         restoreStdin();
       }
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Root admission and containment. R16-02, R16-03, A15-44.
+//
+// Every case here was chosen from a measured incident, not from imagination:
+//
+//   - A hollow `C:/Users/bitaz/.git` holding only `info/exclude` made the developer's home
+//     directory look like a Git project. `git rev-parse` refused it three ways; `hasGitMarker`
+//     accepted it on `isDirectory()` alone. Every Workspine command run from any non-Git directory
+//     beneath it therefore initialised a workspace in the home directory, exit 0, silently. Proven
+//     by A/B on 2026-08-23: marker present -> wrote to home and left the invocation directory
+//     empty; marker removed -> wrote locally. That is what created the home workspace on
+//     2026-08-11 and what recreated it at 22:44:09.
+//   - A `.work` sitting exactly at `os.tmpdir()` was captured from a subdirectory despite a
+//     sentinel existing for that path, because the sentinel was checked *after* the marker match.
+//   - An explicit `--workspace-root` writes a complete workspace into an arbitrary sibling. That
+//     is deliberate and retained: the user named the directory. It is pinned here so the write
+//     stays confined to the named target and reaches nothing else.
+//   - `install --global` targets the real home directory unless `GSDD_TEST_HOME` is set. It is
+//     pinned here so a global write is proven to land only under an isolated home.
+//
+// The observer watches every path `init` is known to write, at every strict ancestor AND every
+// sibling of the invocation directory. An earlier `.work`-only, ancestors-only observer reported a
+// zero-write result that was true of the directory it looked at and false of the filesystem.
+// ---------------------------------------------------------------------------------------------
+
+describe('root admission and containment', () => {
+  const WATCHED = ['.work', '.planning', '.agents', '.claude', '.gitignore', 'goal.md', 'AGENTS.md'];
+  let sandbox;
+
+  beforeEach(() => { sandbox = createTempProject(); });
+  afterEach(() => { cleanup(sandbox); });
+
+  function markerState(target) {
+    let stat;
+    try {
+      stat = fs.lstatSync(target);
+    } catch (error) {
+      if (error.code === 'ENOENT') return 'absent';
+      throw error;
+    }
+    if (stat.isSymbolicLink()) return `symlink -> ${fs.readlinkSync(target)}`;
+    if (!stat.isDirectory()) return `file bytes=${stat.size}`;
+    let newest = 0;
+    let count = 0;
+    let dirs = 0;
+    (function walk(dir) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) { dirs += 1; walk(full); continue; }
+        count += 1;
+        // An entry can vanish or dangle between readdir and stat. Count it and move on rather than
+        // letting unrelated churn abort a containment measurement.
+        try { newest = Math.max(newest, fs.statSync(full).mtimeMs); } catch { /* transient */ }
+      }
+    })(target);
+    return `dir files=${count} dirs=${dirs} newest=${newest}`;
+  }
+
+  // Presence plus top-level entry count. Enough to prove a workspace was not created or extended
+  // at a real filesystem location, without reading anything below it.
+  function shallowMarkerState(target) {
+    try {
+      const stat = fs.lstatSync(target);
+      if (!stat.isDirectory()) return `nondirectory bytes=${stat.size}`;
+      return `dir entries=${fs.readdirSync(target).length}`;
+    } catch (error) {
+      if (error.code === 'ENOENT') return 'absent';
+      return `unreadable ${error.code}`;
+    }
+  }
+
+  // Every strict ancestor of `dir` up to the sandbox, plus every sibling directory at each of those
+  // levels, plus the two real-world locations a containment escape has actually been measured
+  // reaching. The ancestor walk deliberately stops at the sandbox: above it lies the shared OS temp
+  // root, whose sibling directories belong to other tests running concurrently and appear and vanish
+  // mid-run, which would make this observer report their churn as an escape. The real locations above
+  // the sandbox are therefore watched by exact path instead of by enumeration.
+  function surroundingState(dir) {
+    const root = path.resolve(sandbox);
+    const state = new Map();
+    const watch = (base) => {
+      for (const name of WATCHED) state.set(path.join(base, name), markerState(path.join(base, name)));
+    };
+
+    let current = path.resolve(dir);
+    while (current !== root && current.startsWith(root + path.sep)) {
+      const parent = path.dirname(current);
+      watch(parent);
+      let entries = [];
+      try {
+        entries = fs.readdirSync(parent, { withFileTypes: true });
+      } catch { entries = []; }
+      for (const entry of entries) {
+        const sibling = path.join(parent, entry.name);
+        if (!entry.isDirectory() || sibling === current) continue;
+        watch(sibling);
+      }
+      current = parent;
+    }
+    watch(root);
+
+    // Measured escape targets, by exact path. `C:/Users/bitaz/.work` was created by exactly this
+    // class of defect on 2026-08-11 and recreated on 2026-08-23. Only the workspace markers are
+    // watched here, and only shallowly: a deep walk of a real home directory reads unrelated live
+    // trees such as `.claude/`, whose contents change during the run and can contain dangling links.
+    for (const base of [os.tmpdir(), os.homedir()]) {
+      for (const name of ['.work', '.planning', '.claude', '.agents', '.codex', '.copilot', '.config']) {
+        const target = path.join(base, name);
+        state.set(target, shallowMarkerState(target));
+      }
+    }
+    return state;
+  }
+
+  // `allowed` names the directories this command was legitimately asked to write -- an explicit
+  // `--workspace-root` target, or an isolated global-install home. Everything else must be
+  // byte-stable. Naming the permitted target explicitly is what keeps this assertion meaningful:
+  // a blanket exemption would let the real escape hide behind the intended one.
+  function assertNoEscape(before, dir, label, allowed = []) {
+    const permitted = allowed.map((entry) => path.resolve(entry));
+    const after = surroundingState(dir);
+    // The union of both key sets, not just `before`. A write under a directory the command itself
+    // created has no prior key, so iterating `before` alone could not see it -- measured in review
+    // against a full workspace planted in a brand-new sibling directory.
+    for (const target of new Set([...before.keys(), ...after.keys()])) {
+      if (permitted.some((base) => target === base || target.startsWith(base + path.sep))) continue;
+      const previous = before.has(target) ? before.get(target) : 'absent';
+      const now = after.has(target) ? after.get(target) : 'absent';
+      assert.strictEqual(now, previous,
+        `${label}: escaped to ${target} (was ${previous}, now ${now})`);
+    }
+  }
+
+  function runIn(cwd, args, env = {}) {
+    const result = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'gsdd.mjs'), ...args], {
+      cwd,
+      encoding: 'utf-8',
+      env: { ...process.env, WORKSPINE_UPDATE_AWARENESS: '0', GSDD_UPDATE_AWARENESS: '0', ...env },
+    });
+    return { exitCode: result.status, output: `${result.stdout ?? ''}${result.stderr ?? ''}` };
+  }
+
+  function makeDir(...segments) {
+    const dir = path.join(sandbox, ...segments);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  test('a hollow .git holding only info/ is not a project root and is never written', () => {
+    const liar = makeDir('liar-root');
+    fs.mkdirSync(path.join(liar, '.git', 'info'), { recursive: true });
+    fs.writeFileSync(path.join(liar, '.git', 'info', 'exclude'), '# git init template residue\n');
+    const nested = makeDir('liar-root', 'deep', 'work-here');
+    const before = surroundingState(nested);
+
+    const result = runIn(nested, ['init', '--auto', '--tools', 'agents']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(fs.existsSync(path.join(liar, '.work')), false,
+      'a directory Git itself disowns must never receive a workspace');
+    assert.ok(fs.existsSync(path.join(nested, '.work', 'config.json')),
+      'the invocation directory must receive the workspace instead');
+    assertNoEscape(before, nested, 'hollow .git');
+  });
+
+  test('an empty .git directory is not a project root', () => {
+    const fake = makeDir('empty-git-root');
+    fs.mkdirSync(path.join(fake, '.git'));
+    const nested = makeDir('empty-git-root', 'packages', 'app');
+    const before = surroundingState(nested);
+
+    const result = runIn(nested, ['init', '--auto', '--tools', 'agents']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(fs.existsSync(path.join(fake, '.work')), false);
+    assert.ok(fs.existsSync(path.join(nested, '.work', 'config.json')));
+    assertNoEscape(before, nested, 'empty .git');
+  });
+
+  test('a gitfile pointing at a directory Git would refuse is not a project root', () => {
+    const fake = makeDir('gitfile-root');
+    fs.mkdirSync(path.join(fake, 'git-metadata'));
+    fs.writeFileSync(path.join(fake, '.git'), 'gitdir: git-metadata\n');
+    const nested = makeDir('gitfile-root', 'deep');
+    const before = surroundingState(nested);
+
+    const result = runIn(nested, ['init', '--auto', '--tools', 'agents']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(fs.existsSync(path.join(fake, '.work')), false);
+    assertNoEscape(before, nested, 'gitfile to refused target');
+  });
+
+  test('a real Git root is still discovered from a nested directory', () => {
+    const repo = makeDir('real-repo');
+    makeRealGitRoot(repo);
+    const nested = makeDir('real-repo', 'packages', 'app');
+
+    const result = runIn(nested, ['init', '--auto', '--tools', 'agents']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.ok(fs.existsSync(path.join(repo, '.work', 'config.json')),
+      'the repository root must receive the workspace');
+    assert.strictEqual(fs.existsSync(path.join(nested, '.work')), false,
+      'the nested directory must not become a second root');
+  });
+
+  test('a real linked worktree is admitted as its own root', () => {
+    const main = makeDir('worktree-main');
+    makeRealGitRoot(main);
+    spawnSync('git', ['-c', 'user.email=fixture@example.invalid', '-c', 'user.name=fixture',
+      'commit', '--allow-empty', '-qm', 'seed'], { cwd: main, encoding: 'utf-8' });
+    const linked = path.join(sandbox, 'worktree-linked');
+    const added = spawnSync('git', ['worktree', 'add', '-q', linked], { cwd: main, encoding: 'utf-8' });
+    assert.strictEqual(added.status, 0, `git worktree add failed: ${added.stderr}`);
+    const nested = path.join(linked, 'packages');
+    fs.mkdirSync(nested, { recursive: true });
+
+    const result = runIn(nested, ['init', '--auto', '--tools', 'agents']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.ok(fs.existsSync(path.join(linked, '.work', 'config.json')),
+      'a linked worktree is a valid root when the probe succeeds');
+    assert.strictEqual(fs.existsSync(path.join(main, '.work')), false,
+      'the main worktree must not be written by an init inside the linked one');
+  });
+
+  test('a .work at exactly os.tmpdir() is not captured from a subdirectory', () => {
+    const fakeTmp = makeDir('fake-tmp');
+    const env = { TEMP: fakeTmp, TMP: fakeTmp, TMPDIR: fakeTmp };
+    // Overriding TMPDIR removes the real temp root's sentinel from this child's walk, so the fixture
+    // must supply its own boundary: a real Git root at the sandbox means no walk from inside it can
+    // reach the developer's actual home directory even if the sentinel logic regresses. Review
+    // measured the unbounded version reaching the real home profile, where it would have adopted a
+    // home `.work` had one existed.
+    makeRealGitRoot(sandbox);
+    // Seed by naming the target, so the seeding call itself performs no upward walk.
+    const seeded = runIn(fakeTmp, ['init', '--workspace-root', fakeTmp, '--auto', '--tools', 'agents'], env);
+    assert.strictEqual(seeded.exitCode, 0, seeded.output);
+    assert.ok(fs.existsSync(path.join(fakeTmp, '.work')), 'fixture must seed a workspace at the temp root');
+
+    const nested = makeDir('fake-tmp', 'below');
+    const tmpRootBefore = markerState(path.join(fakeTmp, '.work'));
+
+    const result = runIn(nested, ['init', '--auto', '--tools', 'agents'], env);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(markerState(path.join(fakeTmp, '.work')), tmpRootBefore,
+      'the temp-root workspace must not be captured or rewritten from a subdirectory');
+    assert.ok(fs.existsSync(path.join(nested, '.work', 'config.json')),
+      'the subdirectory must receive its own workspace instead');
+  });
+
+  // Pinned baseline, not an endorsement. Owner decision 17 kept `.work` ancestor discovery because
+  // eight existing tests treat it as intended monorepo behaviour, and reopened "should `.work` walk
+  // at all" as its own question. This test records exactly what is true today so that question is
+  // answered against a measurement rather than a memory.
+  // The regression this fix was rejected for on its first review. Standing IN `os.tmpdir()` with no
+  // marker there, the walk must terminate at the temp root. An earlier version replaced the
+  // terminating sentinel with an ancestors-only pre-check, so the walk climbed past the temp root and
+  // adopted a workspace above it -- worse than the behaviour it was fixing, and invisible to the
+  // teeth proof, which reverted to the old check order and therefore never exercised depth 0.
+  test('standing in os.tmpdir() itself does not climb past it to an ancestor workspace', () => {
+    makeRealGitRoot(sandbox);
+    const homelike = makeDir('homelike');
+    const fakeTmp = makeDir('homelike', 'faketmp');
+    const env = { TEMP: fakeTmp, TMP: fakeTmp, TMPDIR: fakeTmp };
+    const seeded = runIn(sandbox, ['init', '--workspace-root', homelike, '--auto', '--tools', 'agents']);
+    assert.strictEqual(seeded.exitCode, 0, seeded.output);
+    const ancestorBefore = markerState(path.join(homelike, '.work'));
+
+    const result = runIn(fakeTmp, ['init', '--auto', '--tools', 'agents'], env);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(markerState(path.join(homelike, '.work')), ancestorBefore,
+      'the ancestor workspace must not be captured or rewritten from inside the temp root');
+    assert.ok(fs.existsSync(path.join(fakeTmp, '.work', 'config.json')),
+      'the temp root itself must receive its own workspace instead');
+  });
+
+  test('a .work at a non-temp ancestor is still discovered, which is the reopened question', () => {
+    const ancestor = makeDir('ancestor-work-root');
+    const seeded = runIn(ancestor, ['init', '--auto', '--tools', 'agents']);
+    assert.strictEqual(seeded.exitCode, 0, seeded.output);
+    const nested = makeDir('ancestor-work-root', 'unrelated', 'deep');
+
+    const result = runIn(nested, ['next', '--json']);
+
+    assert.strictEqual(fs.existsSync(path.join(nested, '.work')), false,
+      'the nested directory must not become a second root');
+    assert.ok(fs.existsSync(path.join(ancestor, '.work', 'config.json')),
+      'documented current behaviour: the ancestor workspace is the resolved root');
+    assert.ok(result.output.length > 0, 'the command must produce output rather than fail silently');
+  });
+
+  test('an explicit --workspace-root writes only the named target', () => {
+    const repo = makeDir('explicit-origin');
+    makeRealGitRoot(repo);
+    const target = makeDir('explicit-target');
+    const before = surroundingState(target);
+
+    const result = runIn(repo, ['init', '--workspace-root', target, '--auto', '--tools', 'agents']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.ok(fs.existsSync(path.join(target, '.work', 'config.json')),
+      'the named target must receive the workspace');
+    assert.strictEqual(fs.existsSync(path.join(repo, '.work')), false,
+      'the invocation root must not be written when a target is named');
+    assertNoEscape(before, target, 'explicit --workspace-root', [target]);
+  });
+
+  for (const target of [
+    { name: 'a path that does not exist', make: (root) => path.join(root, 'absent') },
+    { name: 'a regular file', make: (root) => { const f = path.join(root, 'a-file'); fs.writeFileSync(f, 'x'); return f; } },
+  ]) {
+    test(`an explicit --workspace-root refuses ${target.name} before writing`, () => {
+      const repo = makeDir('refuse-origin');
+      makeRealGitRoot(repo);
+      const bad = target.make(sandbox);
+      const before = surroundingState(repo);
+
+      const result = runIn(repo, ['init', '--workspace-root', bad, '--auto', '--tools', 'agents']);
+
+      assert.notStrictEqual(result.exitCode, 0, result.output);
+      assert.strictEqual(fs.existsSync(path.join(repo, '.work')), false,
+        'a refused target must not fall back to writing the invocation root');
+      assertNoEscape(before, repo, `refused ${target.name}`);
+    });
+  }
+
+  test('install --global writes only under an isolated home when GSDD_TEST_HOME is set', () => {
+    const repo = makeDir('global-origin');
+    makeRealGitRoot(repo);
+    const fakeHome = makeDir('fake-home');
+    const before = surroundingState(repo);
+
+    // `--global --auto` alone fails closed when no agent home is detected, which an existing test
+    // already pins. Name the tools so this case exercises the write path it is here to observe.
+    const result = runIn(repo, ['install', '--global', '--tools', 'claude'], {
+      GSDD_TEST_HOME: fakeHome,
+      XDG_CONFIG_HOME: path.join(fakeHome, '.config'),
+    });
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const wroteSomething = fs.readdirSync(fakeHome).length > 0;
+    assert.ok(wroteSomething, 'the isolated home must receive the global install');
+    assertNoEscape(before, repo, 'install --global', [fakeHome]);
   });
 });

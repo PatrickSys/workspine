@@ -30,6 +30,19 @@ function classificationContract(result, root) {
   };
 }
 
+// A real Git root. An empty `.git` directory is no longer one: `hasGitMarker` now requires what Git
+// itself requires -- `HEAD` plus `objects/` or `commondir`. Measured 2026-08-23, a hollow `.git`
+// holding only `info/exclude` on the developer's home directory made every non-Git directory beneath
+// it look like a project, so commands run there initialised a workspace in the home directory. These
+// fixtures previously asserted that a marker Git disowns is a project root; now they use real ones.
+function makeRealGitRoot(dir) {
+  const created = spawnSync('git', ['init', '--quiet'], { cwd: dir, encoding: 'utf-8' });
+  assert.strictEqual(created.status, 0, `git init failed in fixture ${dir}: ${created.stderr}`);
+  // Warm the index once so a later read-only `git` call inside the CLI cannot be the first writer
+  // to `.git/index` and perturb a byte-identity snapshot taken during setup.
+  spawnSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf-8' });
+}
+
 function snapshotTree(root) {
   const entries = [];
   const visit = (relativePath = '') => {
@@ -205,10 +218,14 @@ describe('workspace-root discovery', () => {
       const { findWorkspaceRoot, resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
       const nested = path.join(tmp, 'packages', 'feature', 'deep');
       fs.mkdirSync(nested, { recursive: true });
-      if (markerKind === 'directory') fs.mkdirSync(path.join(tmp, '.git'));
+      if (markerKind === 'directory') makeRealGitRoot(tmp);
       else {
         const target = path.join(tmp, 'git-metadata');
-        fs.mkdirSync(target);
+        // A real gitdir moved aside with `.git` left as a pointer file -- a layout Git supports,
+        // and the shape a linked worktree uses. The previous fixture pointed at an empty
+        // directory, which Git itself would refuse.
+        makeRealGitRoot(tmp);
+        fs.renameSync(path.join(tmp, '.git'), target);
         const pointer = markerKind === 'absolute-file' ? target : 'git-metadata';
         fs.writeFileSync(path.join(tmp, '.git'), `gitdir: ${pointer}\n`);
       }
@@ -360,6 +377,62 @@ describe('workspace-root discovery', () => {
     }
   });
 
+  test('explicit workspace override refuses a real directory through a symlinked parent', async (t) => {
+    const { resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
+    const outside = createTempProject();
+    const target = path.join(outside, 'target');
+    fs.mkdirSync(target);
+    const linkedParent = path.join(tmp, 'linked-parent');
+    try {
+      fs.symlinkSync(outside, linkedParent, 'junction');
+    } catch (error) {
+      cleanup(outside);
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return t.skip('symlink creation unavailable');
+      throw error;
+    }
+
+    const before = snapshotTree(outside);
+    const context = resolveWorkspaceContext(
+      ['--workspace-root', path.join(linkedParent, 'target')],
+      { cwd: tmp, env: {} }
+    );
+
+    assert.strictEqual(context.invalid, true);
+    assert.match(context.error, /symlink|symbolic link|real directory/i);
+    assert.deepStrictEqual(snapshotTree(outside), before,
+      'a root reached through a symlinked parent must not become an admitted write target');
+    cleanup(outside);
+  });
+
+  test('discovered workspace root refuses a symlinked root chain before selecting it', async (t) => {
+    const { findWorkspaceRoot, resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
+    const outside = createTempProject();
+    makeRealGitRoot(outside);
+    const linkedParent = path.join(tmp, 'linked-repo');
+    try {
+      fs.symlinkSync(outside, linkedParent, 'junction');
+    } catch (error) {
+      cleanup(outside);
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return t.skip('symlink creation unavailable');
+      throw error;
+    }
+    const nested = path.join(linkedParent, 'packages', 'feature');
+    fs.mkdirSync(nested, { recursive: true });
+    const before = snapshotTree(outside);
+
+    assert.throws(
+      () => findWorkspaceRoot(nested),
+      /symlink|symbolic link/i,
+      'discovery must not return a lexical path whose root chain leaves the invocation tree'
+    );
+    const context = resolveWorkspaceContext([], { cwd: nested, env: {} });
+    assert.strictEqual(context.invalid, true);
+    assert.match(context.error, /symlink|symbolic link/i);
+    assert.deepStrictEqual(snapshotTree(outside), before,
+      'a discovered symlinked root must not receive workspace writes');
+    cleanup(outside);
+  });
+
   test('ancestor marker inspection failures return an invalid context and never select a nested write root', async () => {
     const { resolveWorkspaceContext } = await loadModule(WORKSPACE_ROOT_MODULE);
     const nested = path.join(tmp, 'packages', 'feature', 'deep');
@@ -405,7 +478,7 @@ describe('workspace-root discovery', () => {
   });
 
   test('nested init writes at the fresh Git root, never the package subdirectory', async () => {
-    fs.mkdirSync(path.join(tmp, '.git'));
+    makeRealGitRoot(tmp);
     const nested = path.join(tmp, 'packages', 'app');
     fs.mkdirSync(nested, { recursive: true });
     const result = await runCliAsMain(nested, ['init', '--auto', '--tools', 'agents']);
