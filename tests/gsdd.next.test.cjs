@@ -1483,6 +1483,32 @@ describe('next command routing', () => {
     assert.doesNotMatch(result.reason, /canonical `.planning` lifecycle truth is incomplete/);
   });
 
+  test('native passed-audit artifacts outrank stale state and route to dogfood', async () => {
+    await initWork();
+    writeFile('.work/milestone/MILESTONE.md', '# Milestone\n');
+    writeFile('.work/milestone/ROADMAP.md', '# Roadmap\n\n- [x] **Phase 1: Bootstrap** - done\n');
+    writeFile('.work/milestone/AUDIT.md', '# Audit\n\nStatus: passed\n');
+    writeJson('.work/state.json', {
+      schema_version: 1,
+      status: 'complete',
+      current_state: 'complete',
+      workflow: {
+        current_state: 'complete',
+        audit: { status: 'passed' },
+        dogfood: { status: 'captured' },
+        completion_approved: true,
+      },
+    });
+
+    const result = await runJson(['next', '--json']);
+
+    assert.strictEqual(result.state, 'dogfood');
+    assert.strictEqual(result.route_kind, 'dogfood');
+    assert.strictEqual(result.authority, 'work_milestone');
+    assert.strictEqual(result.reason, 'Workspine-native `.work/milestone` audit passed and no dogfood finding has been captured.');
+    assert.ok(result.inputs_considered.includes('.work/milestone/AUDIT.md'));
+  });
+
   test('historical-only native packets remain inspectable but cannot route verify', async () => {
     await initWork();
     writeFile('.work/milestone/MILESTONE.md', '# Milestone\n');
