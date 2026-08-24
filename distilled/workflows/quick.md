@@ -23,9 +23,9 @@ orientation before choosing a lane, not a required fourth goal.
 </anti_patterns>
 
 <prerequisites>
-`.work/` must exist (from `npx -y workspine init`, or `gsdd init` when globally installed). ROADMAP.md is NOT required -- quick tasks work during any project phase.
+`.work/` must exist. If this is a first run, use `npx -y workspine setup` (or `npx -y workspine setup -y` headlessly); `gsdd init` remains a compatibility alias. ROADMAP.md is NOT required -- quick tasks work during any project phase.
 
-If `.work/` does not exist, stop and tell the user to run `npx -y workspine init` first.
+If `.work/` does not exist, stop and tell the user to run `npx -y workspine setup` first (or `npx -y workspine setup -y` headlessly).
 </prerequisites>
 
 <repo_root_helper_contract>

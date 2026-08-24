@@ -7,7 +7,7 @@ Scope boundary: unlike progress.md, you have side effects — checkpoint cleanup
 </role>
 
 <prerequisites>
-`.work/` should exist. If it does not, route the user to `npx -y workspine init`.
+`.work/` should exist. If it does not, route the user to `npx -y workspine setup` (or `npx -y workspine setup -y` headlessly); `gsdd init` remains a compatibility alias.
 </prerequisites>
 
 <repo_root_helper_contract>
@@ -42,7 +42,7 @@ Before routing from a checkpoint, run `node .work/bin/gsdd.mjs control-map --jso
 <detect_state>
 Check for project artifacts in order:
 
-1. **No `.work/` directory** — route user to run `npx -y workspine init`. Stop.
+1. **No `.work/` directory** — route user to run `npx -y workspine setup` (or `npx -y workspine setup -y` headlessly). Stop.
 2. **If `.work/brownfield-change/CHANGE.md` exists and `Current posture` is not `closed`** — this repo has an active medium-scope brownfield change. Proceed to load brownfield continuity state even if there is no active roadmap.
    - If `Current posture` is `closed`, treat the file as historical context only; it does not replace a checkpoint or active roadmap.
 3. **No `.work/SPEC.md` or no `.work/ROADMAP.md`** — `.work/` exists but the project is not fully initialized (partial init). Route user to run the `/work-new-project` workflow. Stop.

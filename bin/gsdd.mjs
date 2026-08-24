@@ -5,6 +5,7 @@ import { createCliContext } from './lib/cli-context.mjs';
 import { cmdModels, cmdRigor } from './lib/config.mjs';
 import { createCmdInit, createCmdUpdate, cmdHelp } from './lib/init.mjs';
 import { createCmdInstall } from './lib/global-install.mjs';
+import { createCmdSetup } from './lib/setup.mjs';
 import { cmdFindPhase, cmdVerify, cmdScaffold, cmdPhaseStatus } from './lib/phase.mjs';
 import { cmdFileOp } from './lib/file-ops.mjs';
 import { createCmdHealth } from './lib/health.mjs';
@@ -25,6 +26,7 @@ const [,, command, ...args] = process.argv;
 const INIT_CONTEXT = createCliContext(process.cwd());
 const cmdInit = createCmdInit(INIT_CONTEXT);
 const cmdInstall = createCmdInstall(INIT_CONTEXT);
+const cmdSetup = createCmdSetup(INIT_CONTEXT);
 const cmdHealth = createCmdHealth(INIT_CONTEXT);
 const cmdNext = createCmdNext(INIT_CONTEXT);
 const cmdJourney = createCmdJourney(INIT_CONTEXT);
@@ -60,6 +62,9 @@ const COMMANDS = {
   scaffold: cmdScaffold,
   help: cmdHelp,
 };
+// Setup is the first-run facade; keep it outside the retained compatibility table while help
+// remains the truthful user-facing documentation for this route.
+COMMANDS.setup = cmdSetup;
 
 async function runCli(cliCommand = command, ...cliArgs) {
   const normalizedArgs = cliArgs.length === 0
@@ -115,4 +120,4 @@ if (IS_MAIN) {
     if (typeof process.stdin.unref === 'function') process.stdin.unref();
   }
 }
-export { cmdHelp, cmdInit, cmdInstall, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdJourney, cmdGitIdentity, cmdFileOp, cmdLifecyclePreflight, cmdLifecycleTransition, cmdRemember, cmdDecisions, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };
+export { cmdHelp, cmdInit, cmdInstall, cmdSetup, cmdUpdate, cmdModels, cmdRigor, cmdHealth, cmdNext, cmdJourney, cmdGitIdentity, cmdFileOp, cmdLifecyclePreflight, cmdLifecycleTransition, cmdRemember, cmdDecisions, cmdFindPhase, cmdPhaseStatus, cmdVerify, cmdScaffold, runCli, FRAMEWORK_VERSION, createCliContext };

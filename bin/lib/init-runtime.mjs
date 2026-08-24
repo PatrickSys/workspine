@@ -314,6 +314,7 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 // `install` lists --local/--verify-runtime/--live-runtime because it recognises them only to
 // reject them with a specific message; that message must still be the one a user sees.
 export const COMMAND_FLAGS = {
+  setup: { '--global': false, '-g': false, '--agent': true, '--all': false, '-y': false, '--yes': false, '--dry-run': false, '--dry': false, '--workspace-root': true, '--migrate': false },
   init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--workspace-root': true },
   update: { '--dry-run': false, '--dry': false, '--workspace-root': true },
   install: { '--global': false, '-g': false, '--auto': false, '--dry-run': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
@@ -485,6 +486,7 @@ export function validateCommandShape(command, commandArgs = []) {
   if (commandArgs.includes('--help') || commandArgs.includes('-h')) return null;
   const positionals = commandPositionals(command, commandArgs);
   const usage = {
+    setup: 'Usage: workspine setup [-g|--global] [--agent <target>] [--all] [-y|--yes] [--dry-run] [--workspace-root <path>] [--migrate]',
     init: 'Usage: workspine init [flags]',
     update: 'Usage: workspine update [--dry-run]',
     install: 'Usage: workspine install --global [flags]',
@@ -501,7 +503,7 @@ export function validateCommandShape(command, commandArgs = []) {
   }[command];
   if (!usage) return null;
 
-  if (['init', 'update', 'install'].includes(command) && positionals.length !== 0) {
+  if (['setup', 'init', 'update', 'install'].includes(command) && positionals.length !== 0) {
     return shapeError(command, usage);
   }
   if (command === 'scaffold' && (positionals.length < 2 || positionals.length > 3 || positionals[0] !== 'phase')) {
@@ -593,6 +595,9 @@ Compatibility: gsdd <command> [args] remains a supported alias for existing inst
   --version, -v               Print the installed package version and exit without writing anything
 
 Commands:
+  setup [-g|--global] [--agent <target>] [--all] [-y|--yes] [--dry-run]
+                              First-time setup: portable repo skills or personal agent-home surfaces
+                              --migrate: explicitly move a supported legacy state tree before repo setup
   init [--tools <platform>] [--auto] [--brief <file>] [--migrate]
                               Launch guided install wizard in TTYs, or use --tools for manual/headless setup
                                --auto: non-interactive new-project bootstrap config (requires --tools)
@@ -650,6 +655,8 @@ Global install targets:
 ${renderGlobalInstallTargetHelp()}
 
 Notes:
+  - use \`npx -y workspine setup\` for first-time onboarding; it defaults to this repo and always installs portable skills
+  - use \`npx -y workspine setup --global --agent claude\` for one personal agent home; setup never installs an npm package globally
   - use \`npx -y workspine init\` for repo-local setup; for a fresh global install choose targets interactively or pass \`--tools <targets>\`
   - init always generates open-standard skills at .agents/skills/work-*; this is the shared workflow entry surface
   - init also generates a local .work/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
