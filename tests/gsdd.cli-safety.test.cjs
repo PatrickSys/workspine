@@ -356,6 +356,11 @@ test.describe('CLI safety: every mutator rejects all malformed classes before up
     assert.deepEqual(body.evidence, []);
     assert.equal(body.changed, false);
   });
+
+  test('lifecycle-preflight retains the packed consumer --json route', () => {
+    const result = runZeroWrite(tmpDir, ['lifecycle-preflight', 'progress', '--json']);
+    assert.ok(!/Unknown flag/.test(result.output), result.output);
+  });
 });
 
 test.describe('CLI safety: existing contracts are preserved', () => {

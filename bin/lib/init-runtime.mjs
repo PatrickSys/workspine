@@ -320,7 +320,7 @@ export const COMMAND_FLAGS = {
   scaffold: { '--workspace-root': true },
   'file-op': { '--missing': true, '--flags': true, '--workspace-root': true },
   'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--json': false, '--workspace-root': true },
-  'lifecycle-preflight': { '--expects-mutation': true, '--plan': true, '--workspace-root': true },
+  'lifecycle-preflight': { '--expects-mutation': true, '--plan': true, '--json': false, '--workspace-root': true },
   'phase-status': { '--workspace-root': true },
   remember: { '--type': true, '--scope': true, '--for': true, '--code': true, '--why': true, '--by-user': false, '--workspace-root': true },
   decisions: { '--path': true, '--authority': true, '--approval-ref': true, '--reason': true, '--workspace-root': true },
