@@ -8,6 +8,8 @@ import {
 import { localizeStateDirReferences } from '../lib/rendering.mjs';
 import { SUBAGENT_IDS } from '../lib/workflows.mjs';
 
+const SOURCE_FILE = 'bin/adapters/claude.mjs';
+
 const CLAUDE_MODEL_PROFILES = {
   quality: 'opus',
   balanced: 'sonnet',
@@ -146,11 +148,19 @@ function createClaudeAdapter({ cwd, workflows, stateDirName = '.work', renderSki
   return {
     id: 'claude',
     name: 'claude',
+    sourceFile: SOURCE_FILE,
     kind: 'native_capable',
     subagentFiles: [
       `.claude/agents/${SUBAGENT_IDS.planChecker}.md`,
       `.claude/agents/${SUBAGENT_IDS.approachExplorer}.md`,
     ],
+    generatedFiles() {
+      return [
+        ...workflows.map(({ name }) => `.claude/skills/${name}/SKILL.md`),
+        '.claude/commands/work-plan.md',
+        ...this.subagentFiles,
+      ];
+    },
     detect() {
       return existsSync(join(cwd, 'CLAUDE.md')) || existsSync(join(cwd, '.claude'));
     },

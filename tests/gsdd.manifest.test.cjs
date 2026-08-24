@@ -39,6 +39,16 @@ describe('generation manifest', () => {
     }
   }
 
+  async function initProjectWithArgs(...args) {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit(...args);
+    } finally {
+      restoreStdin();
+    }
+  }
+
   function sha256(content) {
     return createHash('sha256').update(content).digest('hex');
   }
@@ -96,6 +106,288 @@ describe('generation manifest', () => {
     assert.match(manifest.runtimeHelpers['bin/gsdd.mjs'], /^[a-f0-9]{64}$/);
     assert.match(manifest.runtimeHelpers['bin/gsdd'], /^[a-f0-9]{64}$/);
     assert.match(manifest.runtimeHelpers['bin/gsdd.cmd'], /^[a-f0-9]{64}$/);
+  });
+
+  test('manifest inventories every adapter source and emitted local target', async () => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+
+    const manifest = readJson(path.join(tmpDir, '.work', 'generation-manifest.json'));
+    const expectedSources = [
+      'bin/adapters/agents.mjs',
+      'bin/adapters/claude.mjs',
+      'bin/adapters/codex.mjs',
+      'bin/adapters/index.mjs',
+      'bin/adapters/opencode.mjs',
+    ];
+    assert.deepStrictEqual(Object.keys(manifest.adapterSources).sort(), expectedSources);
+    for (const alias of ['agents', 'claude', 'codex', 'opencode', 'cursor', 'copilot', 'gemini']) {
+      assert.ok(manifest.adapterInventory[alias], `${alias} must be inventoried through the adapter index`);
+    }
+    for (const source of expectedSources) {
+      assert.strictEqual(
+        manifest.adapterSources[source],
+        sha256(fs.readFileSync(path.join(__dirname, '..', source))),
+        `${source} must be source-derived`,
+      );
+    }
+
+    const generated = Object.keys(manifest.adapterFiles);
+    for (const required of [
+      '.agents/skills/work-plan/SKILL.md',
+      '.claude/skills/work-plan/SKILL.md',
+      '.claude/commands/work-plan.md',
+      '.claude/agents/work-plan-checker.md',
+      '.opencode/commands/work-plan.md',
+      '.opencode/agents/work-plan-checker.md',
+      '.codex/agents/work-plan-checker.toml',
+      'AGENTS.md',
+    ]) {
+      assert.ok(generated.includes(required), `${required} must be manifest-owned`);
+    }
+    for (const [relativePath, ownership] of Object.entries(manifest.adapterFiles)) {
+      assert.match(ownership.source, /^bin\/(adapters|lib)\/.+\.mjs$/);
+      assert.match(ownership.sourceHash, /^[a-f0-9]{64}$/);
+      assert.strictEqual(ownership.hash, sha256(fs.readFileSync(path.join(tmpDir, ...relativePath.split('/')))));
+    }
+  });
+
+  test('scoped adapter updates merge existing ownership and retain governance', async () => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const before = readJson(manifestPath);
+    const claudePath = '.claude/skills/work-plan/SKILL.md';
+    const codexPath = '.codex/agents/work-plan-checker.toml';
+    const opencodePath = '.opencode/agents/work-plan-checker.md';
+    const governancePath = 'AGENTS.md';
+    for (const relativePath of [claudePath, codexPath, opencodePath, governancePath]) {
+      assert.ok(before.adapterFiles[relativePath], `${relativePath} must be owned before scoped update`);
+    }
+
+    const claudeTarget = path.join(tmpDir, ...claudePath.split('/'));
+    fs.writeFileSync(claudeTarget, 'consumer-modified Claude skill bytes\n');
+
+    let result = await runCliAsMain(tmpDir, ['update', '--tools', 'claude']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const afterClaude = readJson(manifestPath);
+    assert.deepStrictEqual(afterClaude.adapterFiles[codexPath], before.adapterFiles[codexPath]);
+    assert.deepStrictEqual(afterClaude.adapterFiles[opencodePath], before.adapterFiles[opencodePath]);
+    assert.deepStrictEqual(afterClaude.adapterFiles[governancePath], before.adapterFiles[governancePath]);
+    assert.strictEqual(
+      Object.keys(afterClaude.adapterFiles).length,
+      Object.keys(before.adapterFiles).length,
+      'scoped reconciliation must preserve unselected ownership entries',
+    );
+    assert.strictEqual(
+      afterClaude.adapterFiles[claudePath].hash,
+      sha256(fs.readFileSync(claudeTarget)),
+      'Claude scope must reconcile the selected target',
+    );
+
+    result = await runCliAsMain(tmpDir, ['update', '--tools', 'codex']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const afterCodex = readJson(manifestPath);
+    assert.deepStrictEqual(afterCodex.adapterFiles[opencodePath], before.adapterFiles[opencodePath]);
+    assert.deepStrictEqual(afterCodex.adapterFiles[governancePath], before.adapterFiles[governancePath]);
+
+    result = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const afterNoArg = readJson(manifestPath);
+    assert.deepStrictEqual(afterNoArg.adapterFiles[governancePath], before.adapterFiles[governancePath]);
+  });
+
+  test('repeated dry updates are byte-for-byte read-only', async () => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+    const before = snapshotTree(tmpDir);
+    const first = await runCliAsMain(tmpDir, ['update', '--tools', 'all', '--dry']);
+    const second = await runCliAsMain(tmpDir, ['update', '--tools', 'all', '--dry']);
+    assert.strictEqual(first.exitCode, 0, first.output);
+    assert.strictEqual(second.exitCode, 0, second.output);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('modified generated adapter gets byte-exact recovery before replacement', async () => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+    const targetPath = '.claude/skills/work-plan/SKILL.md';
+    const target = path.join(tmpDir, ...targetPath.split('/'));
+    const original = Buffer.from('consumer-owned adapter bytes\n');
+    fs.writeFileSync(target, original);
+
+    const result = await runCliAsMain(tmpDir, ['update', '--tools', 'claude']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const recoveryDir = path.join(tmpDir, '.work', '.local', 'template-recovery');
+    const receipts = fs.readdirSync(recoveryDir).filter((entry) => entry.endsWith('.json'));
+    const receiptPath = receipts.find((entry) => readJson(path.join(recoveryDir, entry)).targetPath === targetPath);
+    assert.ok(receiptPath, 'adapter replacement must leave a recovery receipt');
+    const receipt = readJson(path.join(recoveryDir, receiptPath));
+    assert.strictEqual(receipt.action, 'replace');
+    assert.strictEqual(receipt.oldHash, sha256(original));
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, ...receipt.recoveryPath.split('/'))), original);
+    assert.notDeepStrictEqual(fs.readFileSync(target), original);
+  });
+
+  test('plain update reconciles every manifest-owned adapter and records the current source hash', async () => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifestBefore = readJson(manifestPath);
+    assert.ok(manifestBefore.adapterSelection.includes('agents'));
+
+    const targetPath = 'AGENTS.md';
+    const target = path.join(tmpDir, targetPath);
+    const original = Buffer.from('consumer-owned governance bytes\n');
+    fs.writeFileSync(target, original);
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const recoveryDir = path.join(tmpDir, '.work', '.local', 'template-recovery');
+    const receiptName = fs.readdirSync(recoveryDir).find((entry) => {
+      if (!entry.endsWith('.json')) return false;
+      return readJson(path.join(recoveryDir, entry)).targetPath === targetPath;
+    });
+    assert.ok(receiptName, 'plain update must recover modified AGENTS.md');
+    const receipt = readJson(path.join(recoveryDir, receiptName));
+    assert.strictEqual(receipt.oldHash, sha256(original));
+    assert.strictEqual(
+      receipt.newHash,
+      sha256(fs.readFileSync(path.join(__dirname, '..', 'bin', 'adapters', 'agents.mjs'))),
+      'recovery must name the current adapter source hash',
+    );
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, ...receipt.recoveryPath.split('/'))), original);
+    assert.ok(!fs.readFileSync(target).equals(original));
+    for (const [relativePath, ownership] of Object.entries(readJson(manifestPath).adapterFiles)) {
+      if (ownership.adapter === 'agents' || ownership.adapter === 'shared-skills') {
+        assert.ok(fs.existsSync(path.join(tmpDir, ...relativePath.split('/'))), `${relativePath} must remain present after all-owned update`);
+      }
+    }
+  });
+
+  test('plain update refuses an owned native target that disappeared before writing', async () => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+    const targetPath = '.codex/agents/work-plan-checker.toml';
+    fs.rmSync(path.join(tmpDir, ...targetPath.split('/')));
+    const before = snapshotTree(tmpDir);
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.notStrictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /owned target .* is missing/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'missing owned target refusal must not write');
+  });
+
+  test('unknown local adapter files remain untouched and unowned', async () => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+    const unknownPath = path.join(tmpDir, '.claude', 'skills', 'team-custom.md');
+    const unknownBytes = Buffer.from('team-owned adapter note\n');
+    fs.writeFileSync(unknownPath, unknownBytes);
+
+    const result = await runCliAsMain(tmpDir, ['update', '--tools', 'all']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.deepStrictEqual(fs.readFileSync(unknownPath), unknownBytes);
+    assert.ok(!Object.hasOwn(readJson(path.join(tmpDir, '.work', 'generation-manifest.json')).adapterFiles, '.claude/skills/team-custom.md'));
+  });
+
+  test('missing or corrupt manifest refuses adapter update before writes', async () => {
+    for (const state of ['missing', 'corrupt']) {
+      await initProjectWithArgs('--auto', '--tools', 'all');
+      const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+      if (state === 'missing') fs.rmSync(manifestPath);
+      else fs.writeFileSync(manifestPath, '{not-json');
+      const before = snapshotTree(tmpDir);
+      const result = await runCliAsMain(tmpDir, ['update', '--tools', 'all']);
+      assert.notStrictEqual(result.exitCode, 0, `${state} manifest must refuse`);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, `${state} manifest refusal must not write`);
+      cleanup(tmpDir);
+      tmpDir = createTempProject();
+    }
+  });
+
+  test('plain update refuses a missing ownership entry and target before any write', async () => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const targetPath = '.codex/agents/work-plan-checker.toml';
+    const manifest = readJson(manifestPath);
+    delete manifest.adapterFiles[targetPath];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    fs.rmSync(path.join(tmpDir, ...targetPath.split('/')));
+    const before = snapshotTree(tmpDir);
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+    assert.notStrictEqual(result.exitCode, 0, result.output);
+    assert.match(result.output, /ownership for selected target .* is missing/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('structurally incomplete or mismatched adapter ownership refuses before writes', async () => {
+    const cases = [
+      ['bare hash', (manifest, targetPath) => {
+        manifest.adapterFiles[targetPath] = sha256(fs.readFileSync(path.join(tmpDir, ...targetPath.split('/'))));
+      }],
+      ['missing sourceHash', (manifest, targetPath) => {
+        const entry = manifest.adapterFiles[targetPath];
+        delete entry.sourceHash;
+      }],
+      ['mismatched provenance', (manifest, targetPath) => {
+        const entry = manifest.adapterFiles[targetPath];
+        entry.source = 'bin/adapters/claude.mjs';
+        entry.sourceHash = sha256(fs.readFileSync(path.join(__dirname, '..', 'bin', 'adapters', 'claude.mjs')));
+      }],
+    ];
+
+    for (const [label, corrupt] of cases) {
+      await initProjectWithArgs('--auto', '--tools', 'all');
+      const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+      const targetPath = 'AGENTS.md';
+      const manifest = readJson(manifestPath);
+      corrupt(manifest, targetPath);
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+      const before = snapshotTree(tmpDir);
+      const result = await runCliAsMain(tmpDir, ['update']);
+      assert.notStrictEqual(result.exitCode, 0, `${label}: ${result.output}`);
+      assert.match(result.output, /generation manifest ownership is missing or corrupt|inconsistent source provenance/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, `${label} refusal must not write`);
+      cleanup(tmpDir);
+      tmpDir = createTempProject();
+    }
+  });
+
+  test('linked or colliding generated targets refuse before mutation', async (t) => {
+    await initProjectWithArgs('--auto', '--tools', 'all');
+    const collision = path.join(tmpDir, '.codex', 'agents', 'unmanaged.toml');
+    fs.writeFileSync(collision, 'team-owned\n');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = readJson(manifestPath);
+    const collisionTarget = '.codex/agents/work-plan-checker.toml';
+    delete manifest.adapterFiles[collisionTarget];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    const collisionTargetBytes = fs.readFileSync(path.join(tmpDir, ...collisionTarget.split('/')));
+    const collisionResult = await runCliAsMain(tmpDir, ['update', '--tools', 'codex']);
+    assert.notStrictEqual(collisionResult.exitCode, 0, collisionResult.output);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, ...collisionTarget.split('/'))), collisionTargetBytes);
+    assert.strictEqual(fs.readFileSync(collision, 'utf-8'), 'team-owned\n');
+
+    const external = path.join(path.dirname(tmpDir), `${path.basename(tmpDir)}-outside`);
+    fs.mkdirSync(external, { recursive: true });
+    const linked = path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml');
+    const restoredManifest = readJson(manifestPath);
+    restoredManifest.adapterFiles[collisionTarget] = {
+      adapter: 'codex',
+      source: 'bin/adapters/codex.mjs',
+      sourceHash: sha256(fs.readFileSync(path.join(__dirname, '..', 'bin/adapters/codex.mjs'))),
+      hash: sha256(collisionTargetBytes),
+    };
+    fs.writeFileSync(manifestPath, JSON.stringify(restoredManifest, null, 2));
+    try {
+      fs.rmSync(linked);
+      fs.symlinkSync(path.join(external, 'target.toml'), linked, 'file');
+    } catch (error) {
+      t.skip(`symlink creation unavailable in this environment: ${error.code}`);
+      return;
+    }
+    const manifestBefore = fs.readFileSync(manifestPath);
+    const linkedResult = await runCliAsMain(tmpDir, ['update', '--tools', 'codex']);
+    assert.notStrictEqual(linkedResult.exitCode, 0, linkedResult.output);
+    assert.deepStrictEqual(fs.readFileSync(manifestPath), manifestBefore);
+    assert.strictEqual(fs.readlinkSync(linked), path.join(external, 'target.toml'));
+    fs.rmSync(external, { recursive: true, force: true });
   });
 
   test('writeManifest replaces an existing manifest with its exact JSON serialization', async () => {

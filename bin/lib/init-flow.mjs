@@ -9,7 +9,15 @@ import {
   renderSkillContent,
   upsertBoundedBlock,
 } from './rendering.mjs';
-import { buildManifest, fileHash, readManifest, writeManifest } from './manifest.mjs';
+import {
+  applyAdapterRecovery,
+  buildAdapterOwnership,
+  buildManifest,
+  fileHash,
+  planAdapterGeneration,
+  readManifest,
+  writeManifest,
+} from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs';
 import { applyTemplateRefresh, explicitTemplateOwnership, installProjectTemplates, planTemplateRefresh, refreshTemplates, validateTemplateOwnership, validateTemplateSources } from './templates.mjs';
@@ -19,6 +27,8 @@ import {
   getAdaptersToUpdate,
   getPostInitRoutingLines,
   normalizeRequestedTools,
+  getLocalAdapterTargets,
+  getLocalAdapterInventory,
   resolveAdapters,
   resolveInteractiveInitSession,
 } from './init-runtime.mjs';
@@ -204,6 +214,26 @@ export function createCmdInit(ctx) {
       process.exitCode = 1;
       return;
     }
+    const initAdapterTargets = getLocalAdapterTargets(
+      initCtx.adapters,
+      initCtx.workflows,
+      interactiveSession.adapterTargets,
+    );
+    let adapterPlan;
+    try {
+      adapterPlan = planAdapterGeneration({
+        cwd: initCtx.cwd,
+        planningDir,
+        targets: initAdapterTargets,
+        manifest: readManifest(planningDir),
+        stateDirName,
+      });
+      applyAdapterRecovery(adapterPlan);
+    } catch (error) {
+      console.error(`ERROR: ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
     mkdirSync(join(planningDir, 'phases'), { recursive: true });
     mkdirSync(join(planningDir, 'research'), { recursive: true });
     console.log(existed
@@ -254,10 +284,18 @@ export function createCmdInit(ctx) {
       frameworkVersion: ctx.frameworkVersion,
       runtimeHelperPaths: runtimeGeneration.runtimeHelperPaths,
       templateOwnership: templatePlan?.ownership ?? explicitTemplateOwnership(initCtx),
+      adapterOwnership: buildAdapterOwnership({
+        cwd: initCtx.cwd,
+        planningDir,
+        targets: initAdapterTargets,
+        existingManifest: readManifest(planningDir),
+        selectedPlatforms: interactiveSession.adapterTargets,
+      }),
+      adapterInventory: getLocalAdapterInventory(initCtx.adapters, initCtx.workflows),
     });
+    applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration.obsoleteRuntimeHelpers);
     writeManifest(planningDir, manifest);
     console.log('  - wrote generation manifest');
-    applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration.obsoleteRuntimeHelpers);
 
     console.log('\n\x1B[1m\x1B[32m✓ Workspine initialized.\x1B[0m');
     printInitSummary(interactiveSession.config ?? buildDefaultConfig({ autoAdvance: isAuto }));
@@ -299,20 +337,54 @@ export function createCmdUpdate(ctx) {
 
     const parsedTools = parseToolsFlag(updateArgs);
     const requested = normalizeRequestedTools(parsedTools);
-    const platforms = parsedTools.length > 0 ? requested.adapterTargets : detectPlatforms(ctx.adapters);
+    const existingManifest = readManifest(planningDir);
+    const manifestPlatforms = Array.isArray(existingManifest?.adapterSelection)
+      ? existingManifest.adapterSelection.filter((name) => typeof name === 'string')
+      : [...new Set(Object.values(existingManifest?.adapterFiles ?? {})
+        .map((entry) => entry && typeof entry === 'object' ? entry.adapter : null)
+        .filter((name) => typeof name === 'string'))];
+    // A plain update is manifest-owned and all-owned: runtime detection is only
+    // the compatibility fallback for pre-candidate manifests and scoped legacy
+    // --tools calls. This keeps preflight and writers on the same target set.
+    const platforms = parsedTools.length > 0
+      ? requested.adapterTargets
+      : (manifestPlatforms.length > 0 ? manifestPlatforms : detectPlatforms(ctx.adapters));
+    const adaptersToUpdate = parsedTools.length === 0
+      ? resolveAdapters(ctx.adapters, platforms)
+      : getAdaptersToUpdate(ctx.adapters, platforms);
+    // The legacy selector path may include already-installed adapters in
+    // addition to the explicitly requested names. Expand the preflight set to
+    // exactly the adapters that the writer will invoke.
+    const writerPlatforms = [...new Set([
+      ...platforms,
+      ...adaptersToUpdate.map((adapter) => adapter.name),
+    ])];
+    const localAdapterTargets = getLocalAdapterTargets(ctx.adapters, ctx.workflows, writerPlatforms);
 
     let updated = false;
     let runtimeGeneration = null;
 
     let templateOwnership = null;
     try {
-      if (doTemplates) {
-        templateOwnership = refreshTemplates({ ...ctx, isDry });
-      } else if (existsSync(planningDir)) {
+      if (doTemplates && existsSync(planningDir)) {
+        // Validate ownership before any template refresh bytes are changed.
+        validateTemplateOwnership(planningDir);
+      } else if (!doTemplates && existsSync(planningDir)) {
         // Updating helpers/adapters may write a new manifest: require valid
         // prior template ownership before any unrelated generated surface.
         validateTemplateOwnership(planningDir);
       }
+      const adapterPlan = planAdapterGeneration({
+        cwd: ctx.cwd,
+        planningDir,
+        targets: localAdapterTargets,
+        manifest: existingManifest,
+        stateDirName,
+        requireManifest: existsSync(planningDir),
+        requireExistingNativeTargets: parsedTools.length === 0,
+      });
+      if (!isDry) applyAdapterRecovery(adapterPlan);
+      if (doTemplates) templateOwnership = refreshTemplates({ ...ctx, isDry });
     } catch (error) {
       console.error(`ERROR: ${error.message}`);
       process.exitCode = 1;
@@ -342,7 +414,7 @@ export function createCmdUpdate(ctx) {
       updated = true;
     }
 
-    for (const adapter of getAdaptersToUpdate(ctx.adapters, platforms)) {
+    for (const adapter of adaptersToUpdate) {
       if (isDry) {
         console.log(`  - would update ${adapter.name} adapter`);
       } else {
@@ -365,11 +437,19 @@ export function createCmdUpdate(ctx) {
           updateTemplates: doTemplates,
           runtimeHelperPaths: runtimeGeneration.runtimeHelperPaths,
           templateOwnership,
+          adapterOwnership: buildAdapterOwnership({
+            cwd: ctx.cwd,
+            planningDir,
+            targets: localAdapterTargets,
+            existingManifest: existingManifest,
+            selectedPlatforms: platforms,
+          }),
+          adapterInventory: getLocalAdapterInventory(ctx.adapters, ctx.workflows),
         });
         if (manifest) {
+          applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration.obsoleteRuntimeHelpers);
           writeManifest(planningDir, manifest);
           console.log('  - updated generation manifest');
-          applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration.obsoleteRuntimeHelpers);
         }
       }
       console.log('\nAdapters updated.\n');
@@ -731,7 +811,7 @@ function applyObsoleteRuntimeHelperCleanup(planningDir, candidates) {
   }
 }
 
-function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates, runtimeHelperPaths, templateOwnership = null }) {
+function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates, runtimeHelperPaths, templateOwnership = null, adapterOwnership = null, adapterInventory = null }) {
   const existingManifest = readManifest(planningDir);
   const preservedOwnership = !updateTemplates && existingManifest
     ? { templates: existingManifest.templates, roles: existingManifest.roles }
@@ -741,6 +821,14 @@ function buildUpdateManifest({ planningDir, frameworkVersion, updateTemplates, r
     frameworkVersion,
     runtimeHelperPaths,
     templateOwnership: templateOwnership ?? preservedOwnership,
+    adapterOwnership: adapterOwnership ?? (existingManifest
+      ? {
+        adapterSources: existingManifest.adapterSources,
+        adapterFiles: existingManifest.adapterFiles,
+        adapterSelection: existingManifest.adapterSelection,
+      }
+      : null),
+    adapterInventory: adapterInventory ?? existingManifest?.adapterInventory ?? null,
   });
 
   if (existingManifest && !updateTemplates) {

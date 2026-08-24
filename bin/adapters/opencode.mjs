@@ -9,6 +9,8 @@ import {
 import { localizeStateDirReferences } from '../lib/rendering.mjs';
 import { SUBAGENT_IDS } from '../lib/workflows.mjs';
 
+const SOURCE_FILE = 'bin/adapters/opencode.mjs';
+
 function expandHome(filePath) {
   if (!filePath) return filePath;
   if (filePath.startsWith('~/')) {
@@ -235,11 +237,18 @@ function createOpenCodeAdapter({
   return {
     id: 'opencode',
     name: 'opencode',
+    sourceFile: SOURCE_FILE,
     kind: 'native_capable',
     subagentFiles: [
       `.opencode/agents/${SUBAGENT_IDS.planChecker}.md`,
       `.opencode/agents/${SUBAGENT_IDS.approachExplorer}.md`,
     ],
+    generatedFiles() {
+      return [
+        ...workflows.map(({ name }) => `.opencode/commands/${name}.md`),
+        ...this.subagentFiles,
+      ];
+    },
     detect() {
       return existsSync(join(cwd, '.opencode'));
     },

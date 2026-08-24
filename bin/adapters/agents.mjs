@@ -1,12 +1,18 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+const SOURCE_FILE = 'bin/adapters/agents.mjs';
+
 function createRootAgentsAdapter({ cwd, stateDirName = '.work', renderAgentsBoundedBlock, renderAgentsFileContent, upsertBoundedBlock }, name = 'agents') {
   return {
     id: 'agents',
     name,
+    sourceFile: SOURCE_FILE,
     kind: 'governance_only',
     subagentFiles: [],
+    generatedFiles() {
+      return ['AGENTS.md'];
+    },
     detect() {
       return false;
     },

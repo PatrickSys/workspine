@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { SUBAGENT_IDS } from '../lib/workflows.mjs';
 
+const SOURCE_FILE = 'bin/adapters/codex.mjs';
+
 function safeTomlString(value) {
   return value.replace(/[\\"]/g, '\\$&').replace(/\n/g, '\\n');
 }
@@ -44,11 +46,15 @@ function createCodexAdapter({
   return {
     id: 'codex',
     name: 'codex',
+    sourceFile: SOURCE_FILE,
     kind: 'native_capable',
     subagentFiles: [
       `.codex/agents/${SUBAGENT_IDS.planChecker}.toml`,
       `.codex/agents/${SUBAGENT_IDS.approachExplorer}.toml`,
     ],
+    generatedFiles() {
+      return [...this.subagentFiles];
+    },
     detect() {
       return existsSync(join(cwd, '.codex'));
     },
