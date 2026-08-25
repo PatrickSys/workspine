@@ -934,7 +934,7 @@ function realAgentServedIdentity(runtime, result) {
 
 function realAgentInvocationArgv(runtime, root, prompt, role, provider) {
   return runtime === 'codex'
-    ? ['exec', '--ephemeral', '--ignore-user-config', '--json', '--color', 'never', '--sandbox', role === 'execute' ? 'workspace-write' : 'read-only', ...(role === 'execute' ? ['--approve-for-me'] : []), '-m', provider.model, '-c', `model_reasoning_effort="${provider.reasoning}"`, '-C', root, prompt]
+    ? ['exec', '--ephemeral', '--ignore-user-config', '--json', '--color', 'never', ...(role === 'execute' ? ['--approve-for-me'] : ['--sandbox', 'read-only']), '-m', provider.model, '-c', `model_reasoning_effort="${provider.reasoning}"`, '-C', root, prompt]
     : runtime === 'claude'
       ? ['-p', prompt, '--verbose', '--no-session-persistence', '--setting-sources', 'project', '--model', provider.model, '--effort', provider.reasoning, '--output-format', 'stream-json', '--input-format', 'text', '--permission-mode', 'dontAsk']
       : ['run', '--dir', root, '--model', provider.model, '--variant', provider.reasoning, '--format', 'json', prompt];
@@ -1500,6 +1500,29 @@ function realAgentCheck(contract) {
     const streamJsonIndex = claudeArgv.indexOf('--output-format');
     need(claudeArgv[0] === '-p' && claudeArgv.includes('--verbose') && streamJsonIndex >= 0 && claudeArgv[streamJsonIndex + 1] === 'stream-json', 'infrastructure', 'negative_check_failed', 'Claude -p argv omitted --verbose or stream-json output format', { argv: claudeArgv });
     negative.push({ id: 'claude_stream_json_argv', status: 'passed', observed_code: 'verbose_stream_json' });
+    for (const role of ['plan-check', 'execute', 'independent-verify']) {
+      const codexArgv = realAgentInvocationArgv('codex', negativeRoot, 'fixed public prompt', role, REAL_AGENT_PROVIDERS.codex);
+      const sandboxIndex = codexArgv.indexOf('--sandbox');
+      const sandboxMode = sandboxIndex >= 0 ? codexArgv[sandboxIndex + 1] : null;
+      const hasApproval = codexArgv.includes('--approve-for-me');
+      const expectedReadOnly = role !== 'execute';
+      need(codexArgv[0] === 'exec'
+        && codexArgv.includes('--ephemeral')
+        && codexArgv.includes('--ignore-user-config')
+        && codexArgv.includes('--json')
+        && codexArgv.includes('--color')
+        && codexArgv[codexArgv.indexOf('--color') + 1] === 'never'
+        && codexArgv.includes('-m')
+        && codexArgv[codexArgv.indexOf('-m') + 1] === REAL_AGENT_PROVIDERS.codex.model
+        && codexArgv.includes('-c')
+        && codexArgv[codexArgv.indexOf('-c') + 1] === `model_reasoning_effort="${REAL_AGENT_PROVIDERS.codex.reasoning}"`
+        && codexArgv.includes('-C')
+        && codexArgv[codexArgv.indexOf('-C') + 1] === negativeRoot
+        && codexArgv.at(-1) === 'fixed public prompt'
+        && (expectedReadOnly ? sandboxMode === 'read-only' && !hasApproval : sandboxIndex === -1 && hasApproval),
+      'infrastructure', 'negative_check_failed', `Codex ${role} argv has incompatible sandbox/approval flags or lost the existing execution contract`, { role, argv: codexArgv });
+      negative.push({ id: `codex_${role}_argv`, status: 'passed', observed_code: expectedReadOnly ? 'read_only_without_approval' : 'approval_without_sandbox' });
+    }
     const credential = 'opaqueCredentialValue1234567890';
     const quotedSecret = 'short value';
     const safeStreamJsonFlag = '--output-format=stream-json';
