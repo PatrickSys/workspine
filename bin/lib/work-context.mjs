@@ -579,7 +579,45 @@ export function readOpenQuestions(workDir) {
     };
   }
   const questions = Array.isArray(raw) ? raw : raw.questions;
+  const invalid = questions.findIndex((question) => !isValidOpenQuestionMember(question));
+  if (invalid !== -1) {
+    return {
+      exists: result.exists,
+      ok: false,
+      questions: [],
+      error: invalidOpenQuestionError(questions[invalid], invalid),
+    };
+  }
   return { exists: result.exists, ok: true, questions, error: null };
+}
+
+function isValidOpenQuestionMember(question) {
+  return Boolean(question)
+    && typeof question === 'object'
+    && !Array.isArray(question)
+    && typeof question.id === 'string'
+    && question.id.trim().length > 0
+    && typeof question.question === 'string'
+    && question.question.trim().length > 0
+    && typeof question.blocking === 'boolean';
+}
+
+function invalidOpenQuestionError(question, index) {
+  const fields = [];
+  if (!question || typeof question !== 'object' || Array.isArray(question)) {
+    fields.push('member');
+  } else {
+    if (typeof question.id !== 'string' || question.id.trim().length === 0) fields.push('id');
+    if (typeof question.question !== 'string' || question.question.trim().length === 0) fields.push('question');
+    if (typeof question.blocking !== 'boolean') fields.push('blocking');
+  }
+  const boundedFields = fields.slice(0, 3);
+  return {
+    code: 'open_questions_invalid_member',
+    message: `open question member ${index} is invalid (${boundedFields.join(', ') || 'member'})`,
+    index,
+    fields: boundedFields,
+  };
 }
 
 export function writeOpenQuestions(workDir, questions) {

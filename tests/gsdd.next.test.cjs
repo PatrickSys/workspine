@@ -614,6 +614,8 @@ describe('next command bootstrap', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.doesNotMatch(result.output, /gsdd next --init/);
     assert.match(result.output, /question add/);
+    assert.match(result.output, /experimental mutation/);
+    assert.doesNotMatch(result.output, /decision record/);
     assert.match(result.output, /dogfood capture/);
   });
 
@@ -1625,6 +1627,31 @@ describe('next command routing', () => {
     assert.strictEqual(result.state, 'blocked');
     assert.match(result.reason, /open\.json/);
     assert.ok(result.artifacts_to_read.includes('.work/questions/open.json'));
+  });
+
+  test('invalid open question members fail closed with bounded validation details', async () => {
+    await initWork();
+    const invalidQuestions = [
+      null,
+      { question: 'Missing id', blocking: true },
+      { id: 42, question: 'Non-string id', blocking: true },
+      { id: 'empty-question', question: '   ', blocking: true },
+      { id: 'non-boolean-blocking', question: 'Invalid blocking', blocking: 'true' },
+    ];
+
+    for (const question of invalidQuestions) {
+      writeJson('.work/questions/open.json', { schema_version: 1, questions: [question] });
+      const result = await runJson(['next', '--json']);
+
+      assert.strictEqual(result.state, 'blocked');
+      assert.strictEqual(result.requires_user, false);
+      assert.deepStrictEqual(result.questions, []);
+      assert.strictEqual(result.error_code, 'open_questions_invalid_member');
+      assert.ok(result.validation_error);
+      assert.strictEqual(result.validation_error.index, 0);
+      assert.ok(Array.isArray(result.validation_error.fields));
+      assert.ok(result.validation_error.fields.length <= 3);
+    }
   });
 
   test('malformed graph events block routing and graph rebuild reports invalid events', async () => {

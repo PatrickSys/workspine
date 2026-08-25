@@ -23,9 +23,8 @@ const NEXT_USAGE = [
   'Usage:',
   '  gsdd next [--json] [--format auto|json|human]',
   '  gsdd next graph rebuild [--json] [--format auto|json|human]',
-  '  gsdd next question add --id <id> --prompt <text> [--default <text>] [--gate <type>] [--blocking <true|false>] [--replace] [--json]',
-  '  gsdd next question answer --id <id> --answer <text> [--json]',
-  '  gsdd next decision record --id <id> --title <text> --body <text> [--supersedes <id>] [--privacy <public|repo|local_only|secret_risk>] [--replace] [--json]',
+  '  gsdd next question add --id <id> --prompt <text> [--default <text>] [--gate <type>] [--blocking <true|false>] [--replace] [--json] (experimental mutation)',
+  '  gsdd next question answer --id <id> --answer <text> [--json] (experimental mutation)',
   '  gsdd next dogfood capture --id <id> --title <text> --body <text> [--backlog <pointer>] [--replace] [--json]',
 ].join('\n');
 
@@ -81,6 +80,7 @@ function packet(overrides) {
     artifacts_to_read: overrides.artifacts_to_read || [],
     artifacts_to_write: overrides.artifacts_to_write || [],
     error_code: overrides.error_code || null,
+    validation_error: overrides.validation_error || null,
     repair_action: overrides.repair_action || null,
     repair_targets: overrides.repair_targets || [],
     repo_warnings: overrides.repo_warnings || [],
@@ -389,7 +389,7 @@ function routeNext(ctx) {
   else inputsSkipped.push('.work/state.json: missing');
   if (context.questions.ok && context.questions.exists) inputsConsidered.push('.work/questions/open.json');
   else if (context.questions.ok) inputsSkipped.push('.work/questions/open.json: missing');
-  else inputsSkipped.push(`.work/questions/open.json: ${context.questions.error}`);
+  else inputsSkipped.push(`.work/questions/open.json: ${context.questions.error?.message || context.questions.error}`);
   if (context.evidence.exists) inputsConsidered.push('.work/evidence/manifest.json');
   else inputsSkipped.push('.work/evidence/manifest.json: missing');
   if (context.graph.events.length > 0) {
@@ -480,7 +480,8 @@ function routeNext(ctx) {
       next_command: null,
       next_action: manualReviewAction(['.work/questions/open.json'], 'Repair or replace malformed open-question JSON.'),
       requires_user: false,
-      error_code: 'open_questions_unparseable',
+      error_code: context.questions.error?.code || 'open_questions_unparseable',
+      validation_error: context.questions.error?.code ? context.questions.error : null,
       repair_action: 'manual_review',
       repair_targets: ['.work/questions/open.json'],
       constraints,
