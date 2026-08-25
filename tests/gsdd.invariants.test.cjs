@@ -1263,6 +1263,16 @@ describe('I3-gate — New-project.md Approval Gates', () => {
     );
   });
 
+  test('new-project.md hard-gates first-turn implementation context', () => {
+    const gate = newProjectContent.match(/<first_turn_hard_gate>([\s\S]*?)<\/first_turn_hard_gate>/);
+    assert.ok(gate, 'new-project.md must have a first-turn hard gate');
+    assert.match(gate[1], /implementation arguments are context only/i);
+    assert.match(gate[1], /do not write candidate source\/tests|do not write candidate/i);
+    assert.match(gate[1], /SPEC\.md.*ROADMAP\.md.*approvals/i);
+    assert.match(gate[1], /autoAdvance: true.*PROJECT_BRIEF\.md|PROJECT_BRIEF\.md.*autoAdvance: true/i);
+    assert.match(gate[1], /stops before any candidate write/i);
+  });
+
   test('new-project.md success_criteria references SPEC.md approval', () => {
     assert.ok(
       /SPEC\.md.*reviewed and approved/s.test(newProjectContent),
@@ -1275,6 +1285,20 @@ describe('I3-gate — New-project.md Approval Gates', () => {
       /ROADMAP\.md.*reviewed and approved/s.test(newProjectContent),
       'new-project.md success_criteria must require ROADMAP.md approval by developer'
     );
+  });
+
+  test('plan and execute workflows preserve approval and lifecycle ordering', () => {
+    const planContent = readWorkflow('plan.md');
+    const executeContent = readWorkflow('execute.md');
+    for (const field of ['status: approved', 'approved_by', 'approved_at', 'approval_ref']) {
+      assert.ok(planContent.includes(field), `plan.md must require durable approval metadata: ${field}`);
+    }
+    const transition = executeContent.indexOf('lifecycle-transition execute');
+    const implementation = executeContent.indexOf('implement the task action');
+    assert.ok(transition !== -1 && implementation !== -1 && transition < implementation,
+      'execute.md must record execute transition before implementation');
+    assert.match(executeContent, /After the execution artifact is durable|After the execution artifact is complete|After the .*SUMMARY.*durable/i,
+      'execute.md must gate verify transition on a complete SUMMARY');
   });
 });
 

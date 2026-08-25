@@ -95,7 +95,7 @@ For each task in the plan, follow this loop:
 ```text
 1. Read the plan frontmatter and current task.
 2. Read the task_scoped files and focused references needed for that task.
-3. Implement the task action.
+3. Before implementation, run `node .work/bin/gsdd.mjs lifecycle-transition execute --plan phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`; stop if it refuses, then implement the task action.
 4. Run the task's verify steps.
 5. Handle any git actions using repo or user conventions.
 6. Re-read the plan's Objective and `non_goals`. Confirm the work just completed serves the objective and crossed no boundary; if not, record a deviation before continuing.

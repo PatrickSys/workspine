@@ -25,6 +25,10 @@ When `autoAdvance: true`, this workflow runs non-interactively only for brief-dr
 All other sections (`<detect_mode>`, `<codebase_context>`, `<research>`, `<spec_creation>`, `<roadmap_creation>`, `<success_criteria>`) execute normally. Auto mode bypasses: the `<questioning>` section, both `<approval_gate>` blocks, the user question in `<project_principles>`, and the user question in `<capability_gates>`. All other workflow logic executes normally.
 </auto_mode>
 
+<first_turn_hard_gate>
+On the first turn, implementation arguments are context only: do not write candidate source/tests or invoke work-plan until discovery produces SPEC.md and ROADMAP.md and the required approvals are recorded. A headless run without `autoAdvance: true` plus `.work/PROJECT_BRIEF.md` stops before any candidate write and points to `npx -y workspine init --auto --tools <runtime> --brief <path>`; auto mode is only brief-driven SPEC/ROADMAP bootstrap.
+</first_turn_hard_gate>
+
 <load_context>
 Before starting, read these files (if they exist):
 1. `AGENTS.md` (root) — understand the full SDD workflow and governance rules.

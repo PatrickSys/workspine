@@ -46,6 +46,14 @@ describe('specialized plan adapter surfaces', () => {
       path.join(tmpDir, '.claude', 'commands', 'work-plan.md'),
       'utf-8'
     );
+    const portablePlanSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md'),
+      'utf-8'
+    );
+    const portableExecuteSkill = fs.readFileSync(
+      path.join(tmpDir, '.agents', 'skills', 'work-execute', 'SKILL.md'),
+      'utf-8'
+    );
 
     assert.match(claudePlanSkill, /^name: work-plan/m);
     assert.match(claudePlanSkill, /canonical Claude-native entry surface/);
@@ -63,6 +71,11 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /work-approach-explorer[\s\S]{0,240}\.work\/config\.json[\s\S]{0,100}workflow\.discuss/i);
     assert.match(claudePlanSkill, /workflow\.planCheck: false[\s\S]{0,260}does not skip[\s\S]{0,160}alignment-proof gate/i);
     assert.match(claudePlanSkill, /\.work\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
+    assert.match(claudeNewProjectSkill, /first_turn_hard_gate/);
+    assert.match(claudeNewProjectSkill, /implementation arguments are context only/i);
+    assert.match(claudeNewProjectSkill, /stops before any candidate write/i);
+    assert.match(portablePlanSkill, /status: approved[\s\S]{0,180}approved_by[\s\S]{0,120}approved_at[\s\S]{0,120}approval_ref/);
+    assert.ok(portableExecuteSkill.indexOf('lifecycle-transition execute') < portableExecuteSkill.indexOf('implement the task action'));
     assert.doesNotMatch(claudePlanSkill, /^context: fork$/m);
     assert.doesNotMatch(claudePlanSkill, /^agent:/m);
 
@@ -116,7 +129,6 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(opencodePlanCommand, /work-approach-explorer[\s\S]{0,220}\.work\/config\.json[\s\S]{0,80}workflow\.discuss/i);
     assert.match(opencodePlanCommand, /workflow\.planCheck: false[\s\S]{0,260}does not skip[\s\S]{0,160}alignment-proof gate/i);
     assert.match(opencodePlanCommand, /\.work\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
-
     assert.doesNotMatch(opencodeExecuteCommand, /^subtask: false$/m);
 
     assert.match(opencodePlanChecker, /^mode: subagent$/m);

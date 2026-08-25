@@ -1854,6 +1854,49 @@ describe('next command routing', () => {
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), beforeReplay);
   });
 
+  test('approved PLAN transitions execute before implementation and verify only after complete SUMMARY', async () => {
+    await initWork();
+    const planPath = '.work/phases/01-transition/01-PLAN.md';
+    const summaryPath = '.work/phases/01-transition/01-SUMMARY.md';
+    writeFile(planPath, '---\nstatus: pending\n---\n# plan\n');
+
+    let result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'plan', '--plan', planPath,
+      '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const beforeRejectedExecute = fs.readFileSync(path.join(tmpDir, '.work', 'state.json'));
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'execute', '--plan', planPath,
+      '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).error_code, 'not_approved');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), beforeRejectedExecute);
+
+    writeFile(planPath, '---\nstatus: approved\napproved_by: owner\napproved_at: 2026-08-25T12:00:00.000Z\napproval_ref: owner-plan-review\n---\n# plan\n');
+    const approvedPlan = fs.readFileSync(path.join(tmpDir, planPath), 'utf8');
+    for (const field of ['status: approved', 'approved_by:', 'approved_at:', 'approval_ref:']) {
+      assert.match(approvedPlan, new RegExp(field.replace(':', '\\:')));
+    }
+
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'execute', '--plan', planPath,
+      '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
+
+    writeFile(summaryPath, '---\nstatus: complete\n---\n# summary\n');
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'verify', '--plan', planPath,
+      '--artifact', summaryPath, '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'verify');
+  });
+
   test('lifecycle-transition blocks missing terminal artifacts before dereference and without writing', async () => {
     await initWork();
     writeFile('.work/phases/01-transition/01-PLAN.md', '---\nstatus: approved\n---\n# plan\n');
