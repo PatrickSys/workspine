@@ -98,6 +98,7 @@ function run(command, argv, options) {
   const result = cp.spawnSync(command, argv, {
     cwd: options.cwd,
     env: options.env,
+    shell: false,
     encoding: 'utf8',
     windowsHide: true,
     timeout: options.timeout || 120000,
@@ -441,6 +442,128 @@ const REAL_AGENT_PROVIDERS = Object.freeze({
   claude: Object.freeze({ command: 'claude', model: 'claude-sonnet-5', reasoning: 'high' }),
   opencode: Object.freeze({ command: 'opencode', model: 'openai/gpt-5.6-luna', reasoning: 'high' }),
 });
+const REAL_AGENT_WINDOWS_TARGETS = Object.freeze({
+  codex: 'node_modules/@openai/codex/bin/codex.js',
+  claude: 'node_modules/@anthropic-ai/claude-code/cli.js',
+  opencode: 'node_modules/opencode-ai/bin/opencode.exe',
+});
+
+function realAgentWhereEntries(command, env = process.env, platform = process.platform, fixtureEntries = null) {
+  if (fixtureEntries) return fixtureEntries.map(String);
+  const probe = cp.spawnSync(platform === 'win32' ? 'where.exe' : 'which', [command], { env, encoding: 'utf8', windowsHide: true, shell: false, timeout: 5000 });
+  return String(probe.stdout || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+}
+
+function realAgentRegularFile(file) {
+  try { return fs.statSync(file).isFile(); } catch { return false; }
+}
+
+function realAgentResolvedPath(file) {
+  try { return fs.realpathSync(file); } catch { return null; }
+}
+
+function realAgentWindowsShimTarget(shim, expectedTarget) {
+  const shimPath = realAgentResolvedPath(shim);
+  if (!shimPath || path.extname(shimPath).toLowerCase() !== '.cmd' || !realAgentRegularFile(shimPath)) return null;
+  let source;
+  try { source = fs.readFileSync(shimPath, 'utf8'); } catch { return null; }
+  const references = [];
+  const referencePattern = /%(?:~)?dp0%?[\\/]([^\r\n"']+)/ig;
+  for (const match of source.matchAll(referencePattern)) {
+    const relative = String(match[1]).trim().split(/\s+/)[0];
+    if (!relative || !/^node_modules[\\/]/i.test(relative)) continue;
+    if (relative.replaceAll('\\', '/').toLowerCase() !== expectedTarget.toLowerCase()) return null;
+    const target = path.resolve(path.dirname(shimPath), relative);
+    if (!references.includes(target)) references.push(target);
+  }
+  if (references.length !== 1) return null;
+  const nodeModulesRoot = realAgentResolvedPath(path.join(path.dirname(shimPath), 'node_modules'));
+  const targetPath = realAgentResolvedPath(references[0]);
+  if (!nodeModulesRoot || !targetPath || !inside(nodeModulesRoot, targetPath) || !realAgentRegularFile(targetPath)) return null;
+  const extension = path.extname(targetPath).toLowerCase();
+  if (extension !== '.js' && extension !== '.exe') return null;
+  return { shim_path: shimPath, node_modules_root: nodeModulesRoot, target_path: targetPath, target_kind: extension.slice(1) };
+}
+
+function realAgentResolveProvider(runtime, provider, env = process.env, options = {}) {
+  const platform = options.platform || process.platform;
+  const entries = realAgentWhereEntries(provider.command, env, platform, options.whereEntries);
+  for (const entry of entries) {
+    const candidate = realAgentResolvedPath(entry);
+    if (!candidate || !realAgentRegularFile(candidate)) continue;
+    if (platform !== 'win32') {
+      return {
+        runtime,
+        logical_command: provider.command,
+        command: candidate,
+        prefix: [],
+        source: 'PATH',
+        source_kind: 'direct',
+        source_path: candidate,
+        target_path: candidate,
+        target_kind: path.extname(candidate).slice(1).toLowerCase() || 'direct',
+        shell: false,
+      };
+    }
+    const extension = path.extname(candidate).toLowerCase();
+    if (extension === '.exe') {
+      return {
+        runtime,
+        logical_command: provider.command,
+        command: candidate,
+        prefix: [],
+        source: 'PATH',
+        source_kind: 'direct-exe',
+        source_path: candidate,
+        target_path: candidate,
+        target_kind: 'exe',
+        shell: false,
+      };
+    }
+    if (extension !== '.cmd') continue;
+    const target = realAgentWindowsShimTarget(candidate, REAL_AGENT_WINDOWS_TARGETS[runtime]);
+    if (!target) continue;
+    return {
+      runtime,
+      logical_command: provider.command,
+      command: target.target_kind === 'js' ? process.execPath : target.target_path,
+      prefix: target.target_kind === 'js' ? [target.target_path] : [],
+      source: 'PATH',
+      source_kind: 'cmd-shim',
+      source_path: target.shim_path,
+      target_path: target.target_path,
+      target_kind: target.target_kind,
+      shell: false,
+    };
+  }
+  return null;
+}
+
+function realAgentProviderEvidence(descriptor, root = null, env = process.env) {
+  if (!descriptor) return null;
+  const scrubPath = (value) => scrub(value, root, env);
+  const sourceSha = descriptor.source_path && realAgentRegularFile(descriptor.source_path) ? shaFile(descriptor.source_path) : null;
+  const targetSha = descriptor.target_path && realAgentRegularFile(descriptor.target_path) ? shaFile(descriptor.target_path) : null;
+  return {
+    runtime: descriptor.runtime,
+    logical_command: descriptor.logical_command,
+    command: scrubPath(descriptor.command),
+    prefix: descriptor.prefix.map(scrubPath),
+    source: descriptor.source,
+    source_kind: descriptor.source_kind,
+    source_path: scrubPath(descriptor.source_path),
+    source_sha256: sourceSha,
+    target_path: scrubPath(descriptor.target_path),
+    target_kind: descriptor.target_kind,
+    target_sha256: targetSha,
+    shell: false,
+  };
+}
+
+function realAgentRunProvider(descriptor, argv, options) {
+  need(descriptor && descriptor.shell === false && !/\.cmd$/i.test(descriptor.command) && !/\\cmd(?:\.exe)?$/i.test(descriptor.command), 'infrastructure', 'provider_resolution_unsafe', 'provider descriptor is not directly spawnable');
+  return run(descriptor.command, [...descriptor.prefix, ...argv], options);
+}
 const REAL_AGENT_SCENARIOS = Object.freeze({
   'csv-quality-gate-greenfield': Object.freeze({ oracle_id: 'csv-quality-boundary', behaviors: Object.freeze(['csv_valid_result', 'csv_malformed_rejection', 'csv_alias_refusal']), flow: Object.freeze(['setup', 'health', 'new-project', 'plan', 'execute', 'verify']), artifact_family: 'project-plan-summary-verification' }),
   'update-health-quick': Object.freeze({ source_identity_sha256: '364cf8fde47d1959e4c2b193e2dd851431c7032c0083757369fcd4d3007f0c1f', oracle_id: 'p-limit-issue-22-behavior', behaviors: Object.freeze(['p_limit_issue_22', 'p_limit_notes_preserved', 'p_limit_managed_state']), flow: Object.freeze(['setup', 'health', 'update', 'quick', 'verify']), artifact_family: 'quick-change' }),
@@ -557,11 +680,6 @@ function realAgentWriteReceipt(file, receipt) {
   fs.writeFileSync(file, `${JSON.stringify(receipt)}\n`, { flag: 'wx' });
 }
 
-function realAgentCommandAvailable(command) {
-  const probe = cp.spawnSync(process.platform === 'win32' ? 'where.exe' : 'which', [command], { encoding: 'utf8', windowsHide: true, timeout: 5000 });
-  return probe.status === 0 && Boolean(String(probe.stdout || '').trim());
-}
-
 function realAgentPaths(root, runtime) {
   const isolated = path.join(root, 'isolated');
   const paths = {
@@ -616,16 +734,18 @@ function realAgentEnv(root, paths, runtime, baseEnv = process.env) {
   return env;
 }
 
-function realAgentAuthPreflight(runtime, env, root, binding, paths, testMode = false, dryRun = false, deadline = null) {
+function realAgentAuthPreflight(runtime, env, root, binding, paths, testMode = false, dryRun = false, deadline = null, descriptor = null) {
   const provider = REAL_AGENT_PROVIDERS[runtime];
+  const resolved = descriptor || (!dryRun && !testMode ? realAgentResolveProvider(runtime, provider, env) : null);
   const denied = Object.keys(process.env).filter((key) => /(?:API_KEY|AUTH_TOKEN|SECRET|TOKEN)$/i.test(key) && !(key in env));
   const allowed = runtime === 'opencode' ? ['HOME', 'USERPROFILE', 'XDG_CONFIG_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'] : ['HOME', 'USERPROFILE', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR'];
-  const result = { runtime, command: provider.command, requested_model: provider.model, requested_reasoning: provider.reasoning, auth_source: runtime === 'opencode' ? 'owner-profile-oauth-discovery' : 'owner-profile-auth-discovery', allowed_environment_keys: allowed, denied_inherited_secret_key_names: denied, writable_roots: [root, paths?.temp, paths?.npm_cache, paths?.output, paths?.provider_state, paths?.plugins, paths?.skills, paths?.work_state], provider_available: realAgentCommandAvailable(provider.command), served_identity: null, status: 'unavailable' };
+  const result = { runtime, command: provider.command, requested_model: provider.model, requested_reasoning: provider.reasoning, auth_source: runtime === 'opencode' ? 'owner-profile-oauth-discovery' : 'owner-profile-auth-discovery', allowed_environment_keys: allowed, denied_inherited_secret_key_names: denied, writable_roots: [root, paths?.temp, paths?.npm_cache, paths?.output, paths?.provider_state, paths?.plugins, paths?.skills, paths?.work_state], provider_available: Boolean(resolved), provider_resolution: realAgentProviderEvidence(resolved, root, env), served_identity: null, status: 'unavailable' };
   if (dryRun) { result.status = 'not_checked_dry_run'; return result; }
   if (testMode) { result.status = 'test_mode'; result.provider_available = false; return result; }
   need(result.provider_available, 'infrastructure', 'provider_unavailable', `requested provider is not installed: ${runtime}`, result);
   const statusArgs = runtime === 'codex' ? ['login', 'status'] : runtime === 'claude' ? ['auth', 'status'] : ['auth', 'list'];
-  const status = run(provider.command, statusArgs, { cwd: root, env, timeout: deadline ? Math.min(30000, realAgentRemaining(deadline, 'authentication preflight')) : 30000 });
+  need(resolved, 'infrastructure', 'provider_unavailable', `requested provider is not installed: ${runtime}`, result);
+  const status = realAgentRunProvider(resolved, statusArgs, { cwd: root, env, timeout: deadline ? Math.min(30000, realAgentRemaining(deadline, 'authentication preflight')) : 30000 });
   result.status_command = { argv: statusArgs, status: status.status, stdout_sha256: sha(status.stdout), stderr_sha256: sha(status.stderr) };
   const text = `${status.stdout}\n${status.stderr}`;
   result.authenticated = status.status === 0 && !status.error;
@@ -787,7 +907,7 @@ function realAgentFailureDiagnostic(result, proofRoot, env) {
   return `${text.slice(0, side)}${marker}${text.slice(-(diagnosticLimit - marker.length - side))}`;
 }
 
-function realAgentInvocation(runtime, root, context, role, scenario, env, timeout, testMode) {
+function realAgentInvocation(runtime, root, context, role, scenario, env, timeout, testMode, descriptor = null) {
   const provider = REAL_AGENT_PROVIDERS[runtime];
   const prompt = realAgentPublicPrompt(scenario, role, root);
   if (testMode === 'exit') return run(process.execPath, ['-e', "process.stderr.write('PHASE16_TEST_PROVIDER_EXIT\\n'); process.exit(23)"], { cwd: root, env, timeout });
@@ -795,11 +915,11 @@ function realAgentInvocation(runtime, root, context, role, scenario, env, timeou
   const roleEnv = { ...env, PHASE16_ROLE: role, PHASE16_CONTEXT_DIR: context };
   const argv = realAgentInvocationArgv(runtime, root, prompt, role, provider);
   realAgentAssertNoOracleExposure({ prompt, argv, env: roleEnv, root, label: `${runtime} invocation` });
-  return run(provider.command, argv, { cwd: root, env: roleEnv, timeout });
+  return realAgentRunProvider(descriptor, argv, { cwd: root, env: roleEnv, timeout });
 }
 
 function realAgentSeal(proofRoot, scenarioFile, scenario, binding, sourceIdentity, provider, paths) {
-  const seal = { schema_version: 1, approval_ref: '16-04A owner approval 2026-08-25', stage: sourceIdentity.stage || 'sealed', head: sourceIdentity.head, consumer_head: sourceIdentity.consumer_head || null, consumer_origin: sourceIdentity.consumer_origin || null, consumer_clean: sourceIdentity.consumer_clean, consumer_history_count: sourceIdentity.consumer_history_count ?? null, packed_candidate_sha256: sourceIdentity.package_sha256, package_tarball_sha256: sourceIdentity.tarball_sha256, runner_sha256: shaFile(__filename), scenario_data_sha256: shaFile(scenarioFile), runtime: binding.runtime, runtime_help_sha256: provider.help_sha256 || null, runtime_version_sha256: provider.version_sha256 || null, scenario_id: scenario.id, run_id: binding.run_id, intended_writable_roots: [proofRoot, paths.output, paths.work_state], owner_profile_access: 'authentication-read; nonmutation not claimed', created_at: new Date().toISOString() };
+  const seal = { schema_version: 1, approval_ref: '16-04A owner approval 2026-08-25', stage: sourceIdentity.stage || 'sealed', head: sourceIdentity.head, consumer_head: sourceIdentity.consumer_head || null, consumer_origin: sourceIdentity.consumer_origin || null, consumer_clean: sourceIdentity.consumer_clean, consumer_history_count: sourceIdentity.consumer_history_count ?? null, packed_candidate_sha256: sourceIdentity.package_sha256, package_tarball_sha256: sourceIdentity.tarball_sha256, runner_sha256: shaFile(__filename), scenario_data_sha256: shaFile(scenarioFile), runtime: binding.runtime, logical_command: provider.command, provider_resolution: provider.resolution_evidence || null, runtime_help_sha256: provider.help_sha256 || null, runtime_version_sha256: provider.version_sha256 || null, scenario_id: scenario.id, run_id: binding.run_id, intended_writable_roots: [proofRoot, paths.output, paths.work_state], owner_profile_access: 'authentication-read; nonmutation not claimed', created_at: new Date().toISOString() };
   const file = path.join(proofRoot, 'seals', `${binding.run_id}.json`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(seal, null, 2)}\n`);
@@ -1229,10 +1349,71 @@ function realAgentNpmBootstrapCheck() {
   }
 }
 
+function realAgentProviderResolutionCheck() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-provider-resolution-'));
+  try {
+    const jsShim = path.join(root, 'js-shim', 'codex.cmd');
+    const jsTarget = path.join(root, 'js-shim', 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+    const exeShim = path.join(root, 'exe-shim', 'opencode.cmd');
+    const exeTarget = path.join(root, 'exe-shim', 'node_modules', 'opencode-ai', 'bin', 'opencode.exe');
+    const extensionless = path.join(root, 'extensionless', 'codex');
+    const escapingShim = path.join(root, 'escaping', 'codex.cmd');
+    const escapingTarget = path.join(root, 'escaping', 'outside.exe');
+    const uncontainedShim = path.join(root, 'uncontained', 'codex.cmd');
+    const uncontainedTarget = path.join(root, 'uncontained', 'outside.exe');
+    const extraShim = path.join(root, 'extra', 'codex.cmd');
+    const extraTarget = path.join(root, 'extra', 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+    const decoyTarget = path.join(root, 'extra', 'node_modules', 'decoy', 'bin', 'decoy.js');
+    const junctionShim = path.join(root, 'junction', 'codex.cmd');
+    const junctionPackage = path.join(root, 'junction', 'node_modules', '@openai', 'codex');
+    const junctionOutsidePackage = path.join(root, 'junction-outside', '@openai', 'codex');
+    write(jsTarget, 'process.exit(0);\n');
+    write(jsShim, '@ECHO off\n"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\n');
+    write(exeTarget, 'fake exe\n');
+    write(exeShim, '@ECHO off\n"%~dp0%\\node_modules\\opencode-ai\\bin\\opencode.exe" %*\n');
+    write(extensionless, 'not spawnable\n');
+    write(escapingTarget, 'outside\n');
+    write(escapingShim, '@ECHO off\n"%dp0%\\node_modules\\..\\outside.exe" %*\n');
+    write(uncontainedTarget, 'outside\n');
+    write(uncontainedShim, '@ECHO off\n"%dp0%\\outside.exe" %*\n');
+    write(extraTarget, 'process.exit(0);\n');
+    write(decoyTarget, 'process.exit(0);\n');
+    write(extraShim, '@ECHO off\n"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\n"%dp0%\\node_modules\\decoy\\bin\\decoy.js" %*\n');
+    write(path.join(junctionOutsidePackage, 'bin', 'codex.js'), 'process.exit(0);\n');
+    fs.mkdirSync(path.dirname(junctionPackage), { recursive: true });
+    try { fs.symlinkSync(junctionOutsidePackage, junctionPackage, process.platform === 'win32' ? 'junction' : 'dir'); }
+    catch (error) { infrastructureFailure('provider_resolution_check_failed', 'junction escape fixture could not be created', { message: error.message }); }
+    write(junctionShim, '@ECHO off\n"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\n');
+    const codex = { command: 'codex', model: 'test', reasoning: 'high' };
+    const opencode = { command: 'opencode', model: 'test', reasoning: 'high' };
+    const jsDescriptor = realAgentResolveProvider('codex', codex, {}, { platform: 'win32', whereEntries: [extensionless, jsShim] });
+    need(jsDescriptor && jsDescriptor.target_path === fs.realpathSync(jsTarget) && jsDescriptor.command === process.execPath && jsDescriptor.prefix.length === 1, 'infrastructure', 'provider_resolution_check_failed', 'contained JavaScript shim target did not resolve to process.execPath plus target prefix');
+    const exeDescriptor = realAgentResolveProvider('opencode', opencode, {}, { platform: 'win32', whereEntries: [exeShim] });
+    need(exeDescriptor && exeDescriptor.target_path === fs.realpathSync(exeTarget) && exeDescriptor.command === fs.realpathSync(exeTarget) && exeDescriptor.prefix.length === 0, 'infrastructure', 'provider_resolution_check_failed', 'contained executable shim target did not resolve to the executable');
+    for (const [id, provider, entries] of [['extensionless', codex, [extensionless]], ['escaping', codex, [escapingShim]], ['uncontained', codex, [uncontainedShim]]]) {
+      need(!realAgentResolveProvider('codex', provider, {}, { platform: 'win32', whereEntries: entries }), 'infrastructure', 'provider_resolution_check_failed', `${id} provider shim was not rejected`);
+    }
+    need(!realAgentResolveProvider('codex', codex, {}, { platform: 'win32', whereEntries: [extraShim] }), 'infrastructure', 'provider_resolution_check_failed', 'shim with an extra node_modules command was not rejected');
+    need(!realAgentResolveProvider('codex', codex, {}, { platform: 'win32', whereEntries: [junctionShim] }), 'infrastructure', 'provider_resolution_check_failed', 'junction target escaping the shim node_modules root was not rejected');
+    const posixCandidate = realAgentResolvedPath(process.execPath);
+    const posixDescriptor = realAgentResolveProvider('codex', codex, {}, { platform: 'posix', whereEntries: [process.execPath] });
+    need(posixDescriptor && posixDescriptor.command === posixCandidate && path.isAbsolute(posixDescriptor.command), 'infrastructure', 'provider_resolution_check_failed', 'POSIX descriptor did not use the absolute resolved executable');
+    for (const descriptor of [jsDescriptor, exeDescriptor]) {
+      need(descriptor.shell === false && !/\.cmd$/i.test(descriptor.command) && !/\\cmd(?:\.exe)?$/i.test(descriptor.command), 'infrastructure', 'provider_resolution_check_failed', 'provider descriptor permits shell or command-wrapper execution');
+      const evidence = realAgentProviderEvidence(descriptor, root, {});
+      need(evidence.source_sha256 && evidence.target_sha256 && evidence.logical_command, 'infrastructure', 'provider_resolution_check_failed', 'provider descriptor omitted truthful source/path/hash evidence');
+    }
+    return { status: 'passed', cases: ['contained_js', 'contained_exe', 'extensionless_rejected', 'escaping_rejected', 'uncontained_rejected', 'extra_reference_rejected', 'junction_escape_rejected', 'posix_absolute'], shell: false };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
 function realAgentCheck(contract) {
   const checks = [];
   const negative = [];
   const npmBootstrap = realAgentNpmBootstrapCheck();
+  const providerResolution = realAgentProviderResolutionCheck();
   const negativeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-negative-'));
   try {
     write(path.join(negativeRoot, 'PLAN.md'), 'preseeded lifecycle artifact\n');
@@ -1276,7 +1457,7 @@ function realAgentCheck(contract) {
     const fixed = REAL_AGENT_SCENARIOS[scenario.id];
     checks.push({ scenario_id: scenario.id, oracle_id: scenario.oracle_id, behavior_ids: scenario.behavior_ids, positive_schema: true, negative_preseeded_lifecycle: { status: 'passed', rule: 'fresh roots reject SPEC/ROADMAP/PLAN/SUMMARY/VERIFICATION before provider launch' }, negative_oracle_visibility: { status: 'passed', rule: 'public prompt and provider-readable roots contain no hidden oracle paths/content' }, fixed_flow: stableStringify(scenario.flow) === stableStringify(fixed.flow), fixed_artifact_family: scenario.required_artifact_family === fixed.artifact_family });
   }
-  return { schema_version: REAL_AGENT_SCHEMA_VERSION, mode: 'real-agent', check: { status: 'passed', scenarios: checks, npm_bootstrap: npmBootstrap, negative_checks: negative, scenario_count: 7, run_binding_count: 14, run_ids: contract.runs.map((binding) => binding.run_id), no_all_binding: !args.includes('--all'), package_claim: 'harness-only; no provider was invoked' }, terminal: { status: 'passed', failure_class: null, failure_code: null, message: 'real-agent scenario contract and executable negative graders passed' } };
+  return { schema_version: REAL_AGENT_SCHEMA_VERSION, mode: 'real-agent', check: { status: 'passed', scenarios: checks, npm_bootstrap: npmBootstrap, provider_resolution: providerResolution, negative_checks: negative, scenario_count: 7, run_binding_count: 14, run_ids: contract.runs.map((binding) => binding.run_id), no_all_binding: !args.includes('--all'), package_claim: 'harness-only; no provider was invoked' }, terminal: { status: 'passed', failure_class: null, failure_code: null, message: 'real-agent scenario contract and executable negative graders passed' } };
 }
 
 function realAgentPersistEvidence(proofRoot, receiptFile, root, receipt) {
@@ -1326,6 +1507,7 @@ function realAgentRun(contract, scenarioFile, binding, options) {
   let providerProbeInvoked = false;
   let preflight = null;
   let seal = null;
+  let providerResolutionEvidence = null;
   let calls = [];
   let stage = 'preparation';
   let consumerRoot = null;
@@ -1368,12 +1550,16 @@ function realAgentRun(contract, scenarioFile, binding, options) {
     bindingDeadline = Date.now() + binding.timeout_seconds * 1000;
     const testMode = options.providerTimeout ? 'timeout' : options.providerExit !== null ? 'exit' : null;
     providerProbeInvoked = !options.dryRun && !testMode;
-    const providerHelp = options.dryRun || testMode ? { stdout: '', stderr: '', status: 0 } : run(provider.command, ['--help'], { cwd: root, env, timeout: Math.min(30000, realAgentRemaining(bindingDeadline, 'provider help preflight')) });
-    const providerVersion = options.dryRun || testMode ? { stdout: '', stderr: '', status: 0 } : run(provider.command, ['--version'], { cwd: root, env, timeout: Math.min(30000, realAgentRemaining(bindingDeadline, 'provider version preflight')) });
+    const providerDescriptor = options.dryRun || testMode ? null : realAgentResolveProvider(binding.runtime, provider, env);
+    provider.resolution_evidence = realAgentProviderEvidence(providerDescriptor, root, env);
+    providerResolutionEvidence = provider.resolution_evidence;
+    need(options.dryRun || testMode || providerDescriptor, 'infrastructure', 'provider_unavailable', `requested provider is not installed: ${binding.runtime}`, provider.resolution_evidence);
+    const providerHelp = options.dryRun || testMode ? { stdout: '', stderr: '', status: 0 } : realAgentRunProvider(providerDescriptor, ['--help'], { cwd: root, env, timeout: Math.min(30000, realAgentRemaining(bindingDeadline, 'provider help preflight')) });
+    const providerVersion = options.dryRun || testMode ? { stdout: '', stderr: '', status: 0 } : realAgentRunProvider(providerDescriptor, ['--version'], { cwd: root, env, timeout: Math.min(30000, realAgentRemaining(bindingDeadline, 'provider version preflight')) });
     provider.help_sha256 = options.dryRun || testMode ? null : sha(`${providerHelp.stdout}\n${providerHelp.stderr}`);
     provider.version_sha256 = options.dryRun || testMode ? null : sha(`${providerVersion.stdout}\n${providerVersion.stderr}`);
     need(options.dryRun || (providerHelp.status === 0 && providerVersion.status === 0), 'infrastructure', 'provider_preflight_failed', 'provider help/version preflight failed', { help_status: providerHelp.status, version_status: providerVersion.status });
-    preflight = realAgentAuthPreflight(binding.runtime, env, root, binding, paths, testMode, options.dryRun, bindingDeadline);
+    preflight = realAgentAuthPreflight(binding.runtime, env, root, binding, paths, testMode, options.dryRun, bindingDeadline, providerDescriptor);
     identity.stage = options.dryRun ? 'dry-run' : 'sealed';
     seal = realAgentSeal(proofRoot, scenarioFile, scenario, binding, identity, provider, paths);
     if (options.dryRun) {
@@ -1390,8 +1576,8 @@ function realAgentRun(contract, scenarioFile, binding, options) {
         const budget = Number(scenario.role_budgets_seconds?.[budgetKey]) || Math.floor(binding.timeout_seconds / 3);
         const roleTimeout = Math.min(budget * 1000, realAgentRemaining(bindingDeadline, `${role} role`));
         providerInvoked = !testMode;
-        const result = realAgentInvocation(binding.runtime, root, context, role, scenario, env, roleTimeout, testMode);
-        calls.push({ role, status: result.status, timed_out: result.timed_out, budget_seconds: budget, aggregate_deadline_at: new Date(bindingDeadline).toISOString(), stdout_sha256: sha(result.stdout), stderr_sha256: sha(result.stderr), served_identity: realAgentServedIdentity(binding.runtime, result), failure_diagnostic: result.status !== 0 || result.timed_out ? realAgentFailureDiagnostic(result, proofRoot, env) : null });
+        const result = realAgentInvocation(binding.runtime, root, context, role, scenario, env, roleTimeout, testMode, providerDescriptor);
+        calls.push({ role, runtime: binding.runtime, logical_command: provider.command, status: result.status, timed_out: result.timed_out, budget_seconds: budget, aggregate_deadline_at: new Date(bindingDeadline).toISOString(), stdout_sha256: sha(result.stdout), stderr_sha256: sha(result.stderr), served_identity: realAgentServedIdentity(binding.runtime, result), failure_diagnostic: result.status !== 0 || result.timed_out ? realAgentFailureDiagnostic(result, proofRoot, env) : null });
         if (role !== 'execute') {
           const roleChanges = realAgentChangedFiles(roleBefore, snapshotTree(root)).filter((entry) => !entry.startsWith('.work/') && !entry.startsWith('contexts/') && !entry.startsWith('isolated/') && !REAL_AGENT_ARTIFACT_RE.test(entry));
           need(roleChanges.length === 0, 'product', 'non_execute_scope_write', `${role} changed application or test files`, { role, paths: roleChanges });
@@ -1428,7 +1614,7 @@ function realAgentRun(contract, scenarioFile, binding, options) {
     }
   } catch (error) {
     const failure = error instanceof ProofFailure ? error : new ProofFailure('infrastructure', 'real_agent_harness_exception', error.message, { stack: error.stack });
-    receipt = { schema_version: 1, record_type: 'terminal_receipt', run_id: binding.run_id, scenario_id: scenario.id, mode: 'real-agent', provider_invoked: providerInvoked, provider_probe_invoked: providerProbeInvoked, preflight, seal, calls, stage, terminal: { status: 'failed', failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: providerInvoked ? 'No product or workflow claim; provider execution or grading failed.' : 'No product claim: real-agent preparation terminated before provider execution.' };
+    receipt = { schema_version: 1, record_type: 'terminal_receipt', run_id: binding.run_id, scenario_id: scenario.id, mode: 'real-agent', provider_invoked: providerInvoked, provider_probe_invoked: providerProbeInvoked, provider_resolution: providerResolutionEvidence, preflight, seal, calls, stage, terminal: { status: 'failed', failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: providerInvoked ? 'No product or workflow claim; provider execution or grading failed.' : 'No product claim: real-agent preparation terminated before provider execution.' };
   } finally {
     if (receipt && providerInvoked) {
       try { realAgentPersistEvidence(proofRoot, options.receiptFile, consumerRoot, receipt); }
