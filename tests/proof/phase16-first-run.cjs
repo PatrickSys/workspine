@@ -586,6 +586,11 @@ const REAL_AGENT_ARTIFACT_RE = /(?:^|[\\/])(?:SPEC|ROADMAP|PLAN|SUMMARY|VERIFICA
 const REAL_AGENT_FORBIDDEN_RE = /(?:gold(?:en)?|solution(?:[_ -]?(?:patch|code))?|secret|holdout|oracle[_ -](?:path|content|command))/i;
 const REAL_AGENT_ROOT_FORBIDDEN_RE = /(?:gold(?:en)?\s+(?:answer|patch|solution)|solution[_ -]?(?:patch|code)|holdout|oracle[_ -](?:path|content|command))/i;
 const REAL_AGENT_LIFECYCLE_NAMES = new Set(['SPEC.md', 'ROADMAP.md', 'PLAN.md', 'SUMMARY.md', 'VERIFICATION.md']);
+// Fixed bounded policy for the approved scenarios: provider-readable paths,
+// nondependency content entries, and nondependency content bytes.
+const REAL_AGENT_ORACLE_PATH_CAP = 131072;
+const REAL_AGENT_ORACLE_NONDEPENDENCY_ENTRY_CAP = 32768;
+const REAL_AGENT_ORACLE_CONTENT_BYTE_CAP = 256 * 1024 * 1024;
 
 function realAgentArg(name, fallback = null) {
   const index = args.indexOf(name);
@@ -844,19 +849,68 @@ function realAgentPublicPrompt(scenario, role, root) {
   return prompt;
 }
 
+function realAgentAssertOracleScanLimits({ pathEntries, nondependencyEntries, contentBytes, label = 'provider-readable root' }) {
+  need(pathEntries <= REAL_AGENT_ORACLE_PATH_CAP, 'infrastructure', 'oracle_scan_unbounded', `${label} exceeds the bounded provider-readable path scan`, { count: pathEntries, cap: REAL_AGENT_ORACLE_PATH_CAP });
+  need(nondependencyEntries <= REAL_AGENT_ORACLE_NONDEPENDENCY_ENTRY_CAP, 'infrastructure', 'oracle_scan_unbounded', `${label} exceeds the bounded nondependency content-entry scan`, { count: nondependencyEntries, cap: REAL_AGENT_ORACLE_NONDEPENDENCY_ENTRY_CAP });
+  need(contentBytes <= REAL_AGENT_ORACLE_CONTENT_BYTE_CAP, 'infrastructure', 'oracle_scan_unbounded', `${label} exceeds the bounded nondependency content-byte scan`, { bytes: contentBytes, cap: REAL_AGENT_ORACLE_CONTENT_BYTE_CAP });
+}
+
+function realAgentOracleExcludedPath(relative) {
+  const normalized = String(relative).replaceAll('\\', '/');
+  const comparable = process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  return ['.git', 'isolated', 'contexts'].some((prefix) => comparable === prefix || comparable.startsWith(`${prefix}/`));
+}
+
 function realAgentAssertNoOracleExposure({ prompt = '', argv = [], env = {}, root, label = 'provider input' }) {
   const values = [prompt, ...argv.map(String), ...Object.entries(env).flatMap(([key, value]) => [key, value])];
   need(!values.some((value) => REAL_AGENT_FORBIDDEN_RE.test(String(value))), 'infrastructure', 'oracle_packet_exposure', `${label} contains forbidden oracle material`);
   if (!root || !exists(root)) return;
-  const rootEntries = snapshotTree(root).filter((entry) => entry.type === 'file' && entry.path !== '.' && !entry.path.startsWith('.git/') && !entry.path.startsWith('isolated/') && !entry.path.startsWith('contexts/'));
-  need(rootEntries.length <= 4096, 'infrastructure', 'oracle_scan_unbounded', 'provider-readable root exceeds the bounded oracle scan', { count: rootEntries.length });
-  for (const entry of rootEntries) {
-    need(!REAL_AGENT_ROOT_FORBIDDEN_RE.test(entry.path), 'infrastructure', 'oracle_packet_exposure', `${label} can read a forbidden oracle path`, { path: entry.path });
-    const file = path.join(root, ...entry.path.split('/'));
-    if (entry.bytes > 256 * 1024) continue;
-    const text = fs.readFileSync(file, 'utf8');
-    need(!REAL_AGENT_ROOT_FORBIDDEN_RE.test(text), 'infrastructure', 'oracle_packet_exposure', `${label} can read forbidden oracle content`, { path: entry.path });
+  const rootPath = realAgentResolvedPath(root) || path.resolve(root);
+  let pathEntries = 0;
+  let nondependencyEntries = 0;
+  let contentBytes = 0;
+  function visit(full, relative, isRoot = false) {
+    let stat;
+    try { stat = fs.lstatSync(full); } catch (error) { infrastructureFailure('oracle_walk_failure', `${label} could not inspect a provider-readable path`, { path: slash(relative), message: error.message }); }
+    const type = stat.isSymbolicLink() ? 'link' : stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : 'other';
+    if (isRoot) {
+      need(type === 'directory', 'infrastructure', 'oracle_walk_failure', `${label} provider-readable root is not a directory`, { path: slash(relative), type });
+      for (const name of fs.readdirSync(full).sort()) visit(path.join(full, name), path.join(relative, name));
+      return;
+    }
+    const visiblePath = slash(relative);
+    if (realAgentOracleExcludedPath(visiblePath)) return;
+    if (!['file', 'directory', 'link'].includes(type)) return;
+    pathEntries += 1;
+    realAgentAssertOracleScanLimits({ pathEntries, nondependencyEntries, contentBytes, label });
+    need(!REAL_AGENT_ROOT_FORBIDDEN_RE.test(visiblePath), 'infrastructure', 'oracle_packet_exposure', `${label} can read a forbidden oracle path`, { path: visiblePath });
+    if (type === 'directory') {
+      for (const name of fs.readdirSync(full).sort()) visit(path.join(full, name), path.join(relative, name));
+      return;
+    }
+    let contentFile = full;
+    let resolvedPath = null;
+    if (type === 'link') {
+      const target = fs.readlinkSync(full);
+      need(!REAL_AGENT_ROOT_FORBIDDEN_RE.test(target), 'infrastructure', 'oracle_packet_exposure', `${label} can read a forbidden link target`, { path: visiblePath, target });
+      resolvedPath = realAgentResolvedPath(full);
+      need(resolvedPath && inside(rootPath, resolvedPath), 'infrastructure', 'oracle_link_unsafe', `${label} contains a link escaping the provider-readable root`, { path: visiblePath, target, resolved: resolvedPath });
+      const resolvedRelative = slash(path.relative(rootPath, resolvedPath));
+      need(!realAgentOracleExcludedPath(resolvedRelative), 'infrastructure', 'oracle_link_unsafe', `${label} contains a link into an excluded provider root`, { path: visiblePath, target, resolved: resolvedRelative });
+      need(!REAL_AGENT_ROOT_FORBIDDEN_RE.test(resolvedRelative), 'infrastructure', 'oracle_packet_exposure', `${label} can read a forbidden link target path`, { path: visiblePath, target, resolved: resolvedRelative });
+      need(realAgentRegularFile(resolvedPath), 'infrastructure', 'oracle_link_unsafe', `${label} contains a link that does not resolve to a regular file`, { path: visiblePath, target, resolved: resolvedPath });
+      contentFile = resolvedPath;
+    }
+    const resolvedRelative = resolvedPath ? slash(path.relative(rootPath, resolvedPath)) : visiblePath;
+    const dependency = [visiblePath, resolvedRelative].some((candidate) => candidate.split('/').some((segment) => segment.toLowerCase() === 'node_modules'));
+    if (dependency) return;
+    nondependencyEntries += 1;
+    contentBytes += fs.statSync(contentFile).size;
+    realAgentAssertOracleScanLimits({ pathEntries, nondependencyEntries, contentBytes, label });
+    const text = fs.readFileSync(contentFile, 'utf8');
+    need(!REAL_AGENT_ROOT_FORBIDDEN_RE.test(text), 'infrastructure', 'oracle_packet_exposure', `${label} can read forbidden oracle content`, { path: visiblePath });
   }
+  visit(root, '.', true);
 }
 
 function realAgentServedIdentity(runtime, result) {
@@ -907,14 +961,15 @@ function realAgentFailureDiagnostic(result, proofRoot, env) {
   return `${text.slice(0, side)}${marker}${text.slice(-(diagnosticLimit - marker.length - side))}`;
 }
 
-function realAgentInvocation(runtime, root, context, role, scenario, env, timeout, testMode, descriptor = null) {
+function realAgentInvocation(runtime, root, context, role, scenario, env, timeout, testMode, descriptor = null, onInvoke = null) {
   const provider = REAL_AGENT_PROVIDERS[runtime];
   const prompt = realAgentPublicPrompt(scenario, role, root);
-  if (testMode === 'exit') return run(process.execPath, ['-e', "process.stderr.write('PHASE16_TEST_PROVIDER_EXIT\\n'); process.exit(23)"], { cwd: root, env, timeout });
-  if (testMode === 'timeout') return run(process.execPath, ['-e', 'setTimeout(() => {}, 2147483647)'], { cwd: root, env, timeout: Math.min(timeout, 1000) });
   const roleEnv = { ...env, PHASE16_ROLE: role, PHASE16_CONTEXT_DIR: context };
   const argv = realAgentInvocationArgv(runtime, root, prompt, role, provider);
   realAgentAssertNoOracleExposure({ prompt, argv, env: roleEnv, root, label: `${runtime} invocation` });
+  if (testMode === 'exit') return run(process.execPath, ['-e', "process.stderr.write('PHASE16_TEST_PROVIDER_EXIT\\n'); process.exit(23)"], { cwd: root, env, timeout });
+  if (testMode === 'timeout') return run(process.execPath, ['-e', 'setTimeout(() => {}, 2147483647)'], { cwd: root, env, timeout: Math.min(timeout, 1000) });
+  if (onInvoke) onInvoke();
   return realAgentRunProvider(descriptor, argv, { cwd: root, env: roleEnv, timeout });
 }
 
@@ -1452,6 +1507,99 @@ function realAgentCheck(contract) {
     const diagnostic = realAgentFailureDiagnostic({ stderr: `PHASE16_TEST_PROVIDER_EXIT ${safeStreamJsonFlag} ${embeddedOpaque} Authorization: Bearer ${credential} "secret": "${quotedSecret}" ${'detail '.repeat(600)}`, stdout: '' }, negativeRoot, {});
     need(diagnostic && diagnostic.length <= 2000 && diagnostic.includes('PHASE16_TEST_PROVIDER_EXIT') && diagnostic.includes(safeStreamJsonFlag) && diagnostic.includes('...[truncated]...') && !diagnostic.includes(embeddedOpaque) && !diagnostic.includes(credential) && !diagnostic.includes(quotedSecret) && diagnostic.includes('<REDACTED>'), 'infrastructure', 'negative_check_failed', 'bounded provider diagnostic did not retain only the standalone safe CLI marker, redact embedded opaque text and credentials, and enforce its exact cap');
     negative.push({ id: 'failure_diagnostic_privacy', status: 'passed', observed_code: 'redacted_and_bounded' });
+
+    const exactLimits = { pathEntries: REAL_AGENT_ORACLE_PATH_CAP, nondependencyEntries: REAL_AGENT_ORACLE_NONDEPENDENCY_ENTRY_CAP, contentBytes: REAL_AGENT_ORACLE_CONTENT_BYTE_CAP, label: 'exact oracle scan limits' };
+    realAgentAssertOracleScanLimits(exactLimits);
+    for (const [id, field] of [['path_cap_plus_one', 'pathEntries'], ['nondependency_cap_plus_one', 'nondependencyEntries'], ['content_bytes_cap_plus_one', 'contentBytes']]) {
+      try {
+        realAgentAssertOracleScanLimits({ ...exactLimits, [field]: exactLimits[field] + 1, label: `${id} oracle scan limits` });
+        productFailure('negative_check_failed', `${id} was accepted`);
+      } catch (error) {
+        need(error instanceof ProofFailure && error.code === 'oracle_scan_unbounded', 'infrastructure', 'negative_check_failed', `${id} did not reject with the fixed cap code`, { code: error.code });
+        negative.push({ id, status: 'passed', observed_code: error.code });
+      }
+    }
+
+    const dependencyRoot = path.join(negativeRoot, 'dependency-fixture');
+    const dependencyDirectory = path.join(dependencyRoot, 'node_modules', 'harmless-fixture');
+    fs.mkdirSync(dependencyDirectory, { recursive: true });
+    for (let index = 0; index < 4100; index += 1) write(path.join(dependencyDirectory, `file-${index}.txt`), 'dependency fixture\n');
+    write(path.join(dependencyDirectory, 'large.txt'), Buffer.alloc(256 * 1024 + 1, 'x'));
+    write(path.join(dependencyRoot, 'consumer.txt'), 'benign application content\n');
+    realAgentAssertNoOracleExposure({ root: dependencyRoot, label: 'large dependency fixture' });
+    negative.push({ id: 'large_dependency_fixture', status: 'passed', observed_code: 'path_scan_passed_content_excluded', dependency_files: 4101, dependency_large_file_bytes: 256 * 1024 + 1 });
+
+    const forbiddenDependencyPath = path.join(dependencyRoot, 'node_modules', 'harmless-fixture', 'oracle-holdout.txt');
+    write(forbiddenDependencyPath, 'benign dependency content\n');
+    try { realAgentAssertNoOracleExposure({ root: dependencyRoot, label: 'forbidden dependency path' }); productFailure('negative_check_failed', 'forbidden oracle-named dependency path was accepted'); } catch (error) {
+      need(error instanceof ProofFailure && error.code === 'oracle_packet_exposure', 'infrastructure', 'negative_check_failed', 'forbidden oracle-named dependency path did not reject with the fixed code', { code: error.code });
+      negative.push({ id: 'forbidden_dependency_path', status: 'passed', observed_code: error.code });
+    }
+
+    const benignContentRoot = path.join(negativeRoot, 'benign-content');
+    write(path.join(benignContentRoot, 'notes.txt'), 'holdout oracle content\n');
+    try { realAgentAssertNoOracleExposure({ root: benignContentRoot, label: 'benign-path forbidden content' }); productFailure('negative_check_failed', 'forbidden oracle content outside dependencies was accepted'); } catch (error) {
+      need(error instanceof ProofFailure && error.code === 'oracle_packet_exposure', 'infrastructure', 'negative_check_failed', 'forbidden oracle content outside dependencies did not reject with the fixed code', { code: error.code });
+      negative.push({ id: 'forbidden_content_outside_dependency', status: 'passed', observed_code: error.code });
+    }
+
+    const externalLinkRoot = path.join(negativeRoot, 'external-link-fixture');
+    const externalDirectory = path.join(negativeRoot, 'external-link-directory');
+    write(path.join(externalDirectory, 'entry.txt'), 'benign external directory target\n');
+    fs.mkdirSync(externalLinkRoot, { recursive: true });
+    const externalDirectoryLink = path.join(externalLinkRoot, 'external-directory-link');
+    try { fs.symlinkSync(externalDirectory, externalDirectoryLink, process.platform === 'win32' ? 'junction' : 'dir'); } catch (error) { infrastructureFailure('oracle_link_fixture_failure', 'external directory junction/symlink fixture could not be created', { message: error.message }); }
+    try { realAgentAssertNoOracleExposure({ root: externalLinkRoot, label: 'external link fixture' }); productFailure('negative_check_failed', 'external symlink/junction was accepted'); } catch (error) {
+      need(error instanceof ProofFailure && error.code === 'oracle_link_unsafe', 'infrastructure', 'negative_check_failed', 'external symlink/junction did not reject with the fixed link-safety code', { code: error.code });
+      negative.push({ id: 'external_link_rejected', status: 'passed', observed_code: error.code });
+    }
+
+    const internalTargetTextRoot = path.join(negativeRoot, 'internal-link-target-text');
+    const internalTargetText = path.join(internalTargetTextRoot, 'oracle-content-target');
+    const internalTargetTextLink = path.join(internalTargetTextRoot, 'safe-directory-link');
+    write(path.join(internalTargetText, 'entry.txt'), 'benign target content\n');
+    try { fs.symlinkSync('oracle-content-target', internalTargetTextLink, process.platform === 'win32' ? 'junction' : 'dir'); } catch (error) { infrastructureFailure('oracle_link_fixture_failure', 'internal forbidden-target directory junction/symlink fixture could not be created', { message: error.message }); }
+    try { realAgentAssertNoOracleExposure({ root: internalTargetTextRoot, label: 'internal link target text' }); productFailure('negative_check_failed', 'forbidden internal link-target text was accepted'); } catch (error) {
+      need(error instanceof ProofFailure && error.code === 'oracle_packet_exposure', 'infrastructure', 'negative_check_failed', 'forbidden internal link-target text did not reject with the fixed code', { code: error.code });
+      negative.push({ id: 'forbidden_link_target_text', status: 'passed', observed_code: error.code });
+    }
+
+    for (const [id, excludedRoot] of [['excluded_git_link', '.git'], ['excluded_contexts_link', 'contexts'], ['excluded_upper_contexts_link', 'CONTEXTS']]) {
+      const excludedLinkRoot = path.join(negativeRoot, id);
+      const excludedTarget = path.join(excludedLinkRoot, excludedRoot, 'safe-target');
+      const excludedLink = path.join(excludedLinkRoot, 'safe-directory-link');
+      write(path.join(excludedTarget, 'entry.txt'), 'benign excluded target\n');
+      try { fs.symlinkSync(path.join(excludedRoot, 'safe-target'), excludedLink, process.platform === 'win32' ? 'junction' : 'dir'); } catch (error) { infrastructureFailure('oracle_link_fixture_failure', `${id} directory junction/symlink fixture could not be created`, { message: error.message }); }
+      try { realAgentAssertNoOracleExposure({ root: excludedLinkRoot, label: id }); productFailure('negative_check_failed', `${id} was accepted`); } catch (error) {
+        need(error instanceof ProofFailure && error.code === 'oracle_link_unsafe', 'infrastructure', 'negative_check_failed', `${id} did not reject with the fixed link-safety code`, { code: error.code });
+        negative.push({ id, status: 'passed', observed_code: error.code });
+      }
+    }
+
+    const guardRoot = path.join(negativeRoot, 'invocation-guard');
+    const dummyProvider = path.join(guardRoot, 'dummy-provider.js');
+    const touchedMarker = path.join(guardRoot, 'dummy-provider-touched.txt');
+    write(dummyProvider, `require('node:fs').writeFileSync(${JSON.stringify(touchedMarker)}, 'touched');\n`);
+    write(path.join(guardRoot, 'blocked.txt'), 'holdout oracle content\n');
+    const dummyDescriptor = { command: process.execPath, prefix: [dummyProvider], shell: false };
+    let callbackInvoked = false;
+    try {
+      realAgentInvocation('codex', guardRoot, path.join(guardRoot, 'contexts', 'plan-check'), 'plan-check', scenario, { PATH: process.env.PATH || '' }, 30000, null, dummyDescriptor, () => { callbackInvoked = true; });
+      productFailure('negative_check_failed', 'pre-run oracle guard failure was not raised');
+    } catch (error) {
+      need(error instanceof ProofFailure && error.code === 'oracle_packet_exposure', 'infrastructure', 'negative_check_failed', 'pre-run invocation guard did not reject with the fixed code', { code: error.code });
+    }
+    need(!callbackInvoked && !exists(touchedMarker), 'infrastructure', 'negative_check_failed', 'pre-run invocation guard touched the provider or marked it invoked', { callbackInvoked, touched: exists(touchedMarker) });
+    negative.push({ id: 'pre_run_guard_provenance', status: 'passed', observed_code: 'callback_false_provider_untouched' });
+
+    const syntheticRoot = path.join(negativeRoot, 'synthetic-invocation');
+    const syntheticProvider = path.join(syntheticRoot, 'dummy-provider.js');
+    const syntheticTouchedMarker = path.join(syntheticRoot, 'dummy-provider-touched.txt');
+    write(syntheticProvider, `require('node:fs').writeFileSync(${JSON.stringify(syntheticTouchedMarker)}, 'touched');\n`);
+    let syntheticCallbackInvoked = false;
+    const syntheticResult = realAgentInvocation('codex', syntheticRoot, path.join(syntheticRoot, 'contexts', 'plan-check'), 'plan-check', scenario, { PATH: process.env.PATH || '' }, 30000, 'exit', { command: process.execPath, prefix: [syntheticProvider], shell: false }, () => { syntheticCallbackInvoked = true; });
+    need(syntheticResult.status === 23 && !syntheticCallbackInvoked && !exists(syntheticTouchedMarker), 'infrastructure', 'negative_check_failed', 'synthetic provider exit did not remain uninvoked', { status: syntheticResult.status, callbackInvoked: syntheticCallbackInvoked, touched: exists(syntheticTouchedMarker) });
+    negative.push({ id: 'synthetic_exit_provenance', status: 'passed', observed_code: 'callback_false_provider_untouched' });
   } finally { fs.rmSync(negativeRoot, { recursive: true, force: true }); }
   for (const scenario of contract.scenarios.values()) {
     const fixed = REAL_AGENT_SCENARIOS[scenario.id];
@@ -1575,8 +1723,7 @@ function realAgentRun(contract, scenarioFile, binding, options) {
         const budgetKey = role === 'plan-check' ? 'plan_check' : role === 'independent-verify' ? 'independent_verify' : 'execute';
         const budget = Number(scenario.role_budgets_seconds?.[budgetKey]) || Math.floor(binding.timeout_seconds / 3);
         const roleTimeout = Math.min(budget * 1000, realAgentRemaining(bindingDeadline, `${role} role`));
-        providerInvoked = !testMode;
-        const result = realAgentInvocation(binding.runtime, root, context, role, scenario, env, roleTimeout, testMode, providerDescriptor);
+        const result = realAgentInvocation(binding.runtime, root, context, role, scenario, env, roleTimeout, testMode, providerDescriptor, () => { providerInvoked = true; });
         calls.push({ role, runtime: binding.runtime, logical_command: provider.command, status: result.status, timed_out: result.timed_out, budget_seconds: budget, aggregate_deadline_at: new Date(bindingDeadline).toISOString(), stdout_sha256: sha(result.stdout), stderr_sha256: sha(result.stderr), served_identity: realAgentServedIdentity(binding.runtime, result), failure_diagnostic: result.status !== 0 || result.timed_out ? realAgentFailureDiagnostic(result, proofRoot, env) : null });
         if (role !== 'execute') {
           const roleChanges = realAgentChangedFiles(roleBefore, snapshotTree(root)).filter((entry) => !entry.startsWith('.work/') && !entry.startsWith('contexts/') && !entry.startsWith('isolated/') && !REAL_AGENT_ARTIFACT_RE.test(entry));
