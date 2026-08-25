@@ -758,8 +758,18 @@ function realAgentServedIdentity(runtime, result) {
   return [...new Set(candidates)].length === 1 ? candidates[0] : null;
 }
 
+function realAgentInvocationArgv(runtime, root, prompt, role, provider) {
+  return runtime === 'codex'
+    ? ['exec', '--ephemeral', '--ignore-user-config', '--json', '--color', 'never', '--sandbox', role === 'execute' ? 'workspace-write' : 'read-only', ...(role === 'execute' ? ['--approve-for-me'] : []), '-m', provider.model, '-c', `model_reasoning_effort="${provider.reasoning}"`, '-C', root, prompt]
+    : runtime === 'claude'
+      ? ['-p', prompt, '--verbose', '--no-session-persistence', '--setting-sources', 'project', '--model', provider.model, '--effort', provider.reasoning, '--output-format', 'stream-json', '--input-format', 'text', '--permission-mode', 'dontAsk']
+      : ['run', '--dir', root, '--model', provider.model, '--variant', provider.reasoning, '--format', 'json', prompt];
+}
+
 function realAgentFailureDiagnostic(result, proofRoot, env) {
   const diagnosticLimit = 2000;
+  const safeStreamJsonFlag = '--output-format=stream-json';
+  const safeStreamJsonPlaceholder = '§'.repeat(safeStreamJsonFlag.length);
   let text = scrub(`${result.stderr || ''}\n${result.stdout || ''}`.trim(), proofRoot, env);
   text = text.replace(/PHASE16_TEST_PROVIDER_EXIT/g, '__P16__');
   text = text
@@ -767,8 +777,10 @@ function realAgentFailureDiagnostic(result, proofRoot, env) {
     .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,})\b/g, '<REDACTED_CREDENTIAL>')
     .replace(/(["'])(authorization|api[_ -]?key|auth[_ -]?token|access[_ -]?token|secret)\1\s*:\s*(["'])[^"'\r\n]*\3/gi, '$1$2$1: $3<REDACTED>$3')
     .replace(/\b(authorization|api[_ -]?key|auth[_ -]?token|access[_ -]?token|secret)\s*[:=]\s*["']?[^"'\s,;]+["']?/gi, '$1=<REDACTED>')
+    .replace(/(^|\s)--output-format=stream-json(?=\s|$)/g, (_, prefix) => `${prefix}${safeStreamJsonPlaceholder}`)
     .replace(/[A-Za-z0-9_+/.=-]{20,}/g, '<REDACTED_OPAQUE>')
-    .replace(/__P16__/g, 'PHASE16_TEST_PROVIDER_EXIT');
+    .replace(/__P16__/g, 'PHASE16_TEST_PROVIDER_EXIT')
+    .replaceAll(safeStreamJsonPlaceholder, safeStreamJsonFlag);
   if (text.length <= diagnosticLimit) return text || null;
   const marker = '\n...[truncated]...\n';
   const side = Math.floor((diagnosticLimit - marker.length) / 2);
@@ -781,11 +793,7 @@ function realAgentInvocation(runtime, root, context, role, scenario, env, timeou
   if (testMode === 'exit') return run(process.execPath, ['-e', "process.stderr.write('PHASE16_TEST_PROVIDER_EXIT\\n'); process.exit(23)"], { cwd: root, env, timeout });
   if (testMode === 'timeout') return run(process.execPath, ['-e', 'setTimeout(() => {}, 2147483647)'], { cwd: root, env, timeout: Math.min(timeout, 1000) });
   const roleEnv = { ...env, PHASE16_ROLE: role, PHASE16_CONTEXT_DIR: context };
-  const argv = runtime === 'codex'
-    ? ['exec', '--ephemeral', '--ignore-user-config', '--json', '--color', 'never', '--sandbox', role === 'execute' ? 'workspace-write' : 'read-only', ...(role === 'execute' ? ['--approve-for-me'] : []), '-m', provider.model, '-c', `model_reasoning_effort="${provider.reasoning}"`, '-C', root, prompt]
-    : runtime === 'claude'
-      ? ['-p', prompt, '--no-session-persistence', '--setting-sources', 'project', '--model', provider.model, '--effort', provider.reasoning, '--output-format', 'stream-json', '--input-format', 'text', '--permission-mode', 'dontAsk']
-      : ['run', '--dir', root, '--model', provider.model, '--variant', provider.reasoning, '--format', 'json', prompt];
+  const argv = realAgentInvocationArgv(runtime, root, prompt, role, provider);
   realAgentAssertNoOracleExposure({ prompt, argv, env: roleEnv, root, label: `${runtime} invocation` });
   return run(provider.command, argv, { cwd: root, env: roleEnv, timeout });
 }
@@ -1216,10 +1224,16 @@ function realAgentCheck(contract) {
       need(error instanceof ProofFailure && error.code === 'oracle_packet_exposure', 'infrastructure', 'negative_check_failed', 'provider-readable oracle root did not reject with the fixed code', { code: error.code });
       negative.push({ id: 'oracle_root_visibility', status: 'passed', observed_code: error.code });
     }
+    const claudeArgv = realAgentInvocationArgv('claude', negativeRoot, 'fixed public prompt', 'plan-check', REAL_AGENT_PROVIDERS.claude);
+    const streamJsonIndex = claudeArgv.indexOf('--output-format');
+    need(claudeArgv[0] === '-p' && claudeArgv.includes('--verbose') && streamJsonIndex >= 0 && claudeArgv[streamJsonIndex + 1] === 'stream-json', 'infrastructure', 'negative_check_failed', 'Claude -p argv omitted --verbose or stream-json output format', { argv: claudeArgv });
+    negative.push({ id: 'claude_stream_json_argv', status: 'passed', observed_code: 'verbose_stream_json' });
     const credential = 'opaqueCredentialValue1234567890';
     const quotedSecret = 'short value';
-    const diagnostic = realAgentFailureDiagnostic({ stderr: `PHASE16_TEST_PROVIDER_EXIT Authorization: Bearer ${credential} "secret": "${quotedSecret}" ${'detail '.repeat(600)}`, stdout: '' }, negativeRoot, {});
-    need(diagnostic && diagnostic.length <= 2000 && diagnostic.includes('PHASE16_TEST_PROVIDER_EXIT') && diagnostic.includes('...[truncated]...') && !diagnostic.includes(credential) && !diagnostic.includes(quotedSecret) && diagnostic.includes('<REDACTED>'), 'infrastructure', 'negative_check_failed', 'bounded provider diagnostic did not retain the safe marker, redact credentials, and enforce its exact cap');
+    const safeStreamJsonFlag = '--output-format=stream-json';
+    const embeddedOpaque = 'abc--output-format=stream-jsonxyz';
+    const diagnostic = realAgentFailureDiagnostic({ stderr: `PHASE16_TEST_PROVIDER_EXIT ${safeStreamJsonFlag} ${embeddedOpaque} Authorization: Bearer ${credential} "secret": "${quotedSecret}" ${'detail '.repeat(600)}`, stdout: '' }, negativeRoot, {});
+    need(diagnostic && diagnostic.length <= 2000 && diagnostic.includes('PHASE16_TEST_PROVIDER_EXIT') && diagnostic.includes(safeStreamJsonFlag) && diagnostic.includes('...[truncated]...') && !diagnostic.includes(embeddedOpaque) && !diagnostic.includes(credential) && !diagnostic.includes(quotedSecret) && diagnostic.includes('<REDACTED>'), 'infrastructure', 'negative_check_failed', 'bounded provider diagnostic did not retain only the standalone safe CLI marker, redact embedded opaque text and credentials, and enforce its exact cap');
     negative.push({ id: 'failure_diagnostic_privacy', status: 'passed', observed_code: 'redacted_and_bounded' });
   } finally { fs.rmSync(negativeRoot, { recursive: true, force: true }); }
   for (const scenario of contract.scenarios.values()) {
