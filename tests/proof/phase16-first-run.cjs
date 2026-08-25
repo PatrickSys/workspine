@@ -758,10 +758,27 @@ function realAgentServedIdentity(runtime, result) {
   return [...new Set(candidates)].length === 1 ? candidates[0] : null;
 }
 
+function realAgentFailureDiagnostic(result, proofRoot, env) {
+  const diagnosticLimit = 2000;
+  let text = scrub(`${result.stderr || ''}\n${result.stdout || ''}`.trim(), proofRoot, env);
+  text = text.replace(/PHASE16_TEST_PROVIDER_EXIT/g, '__P16__');
+  text = text
+    .replace(/\bBearer\s+["']?[^"'\s,;]+["']?/gi, 'Bearer <REDACTED>')
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{12,}|[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,})\b/g, '<REDACTED_CREDENTIAL>')
+    .replace(/(["'])(authorization|api[_ -]?key|auth[_ -]?token|access[_ -]?token|secret)\1\s*:\s*(["'])[^"'\r\n]*\3/gi, '$1$2$1: $3<REDACTED>$3')
+    .replace(/\b(authorization|api[_ -]?key|auth[_ -]?token|access[_ -]?token|secret)\s*[:=]\s*["']?[^"'\s,;]+["']?/gi, '$1=<REDACTED>')
+    .replace(/[A-Za-z0-9_+/.=-]{20,}/g, '<REDACTED_OPAQUE>')
+    .replace(/__P16__/g, 'PHASE16_TEST_PROVIDER_EXIT');
+  if (text.length <= diagnosticLimit) return text || null;
+  const marker = '\n...[truncated]...\n';
+  const side = Math.floor((diagnosticLimit - marker.length) / 2);
+  return `${text.slice(0, side)}${marker}${text.slice(-(diagnosticLimit - marker.length - side))}`;
+}
+
 function realAgentInvocation(runtime, root, context, role, scenario, env, timeout, testMode) {
   const provider = REAL_AGENT_PROVIDERS[runtime];
   const prompt = realAgentPublicPrompt(scenario, role, root);
-  if (testMode === 'exit') return run(process.execPath, ['-e', 'process.exit(23)'], { cwd: root, env, timeout });
+  if (testMode === 'exit') return run(process.execPath, ['-e', "process.stderr.write('PHASE16_TEST_PROVIDER_EXIT\\n'); process.exit(23)"], { cwd: root, env, timeout });
   if (testMode === 'timeout') return run(process.execPath, ['-e', 'setTimeout(() => {}, 2147483647)'], { cwd: root, env, timeout: Math.min(timeout, 1000) });
   const roleEnv = { ...env, PHASE16_ROLE: role, PHASE16_CONTEXT_DIR: context };
   const argv = runtime === 'codex'
@@ -1199,6 +1216,11 @@ function realAgentCheck(contract) {
       need(error instanceof ProofFailure && error.code === 'oracle_packet_exposure', 'infrastructure', 'negative_check_failed', 'provider-readable oracle root did not reject with the fixed code', { code: error.code });
       negative.push({ id: 'oracle_root_visibility', status: 'passed', observed_code: error.code });
     }
+    const credential = 'opaqueCredentialValue1234567890';
+    const quotedSecret = 'short value';
+    const diagnostic = realAgentFailureDiagnostic({ stderr: `PHASE16_TEST_PROVIDER_EXIT Authorization: Bearer ${credential} "secret": "${quotedSecret}" ${'detail '.repeat(600)}`, stdout: '' }, negativeRoot, {});
+    need(diagnostic && diagnostic.length <= 2000 && diagnostic.includes('PHASE16_TEST_PROVIDER_EXIT') && diagnostic.includes('...[truncated]...') && !diagnostic.includes(credential) && !diagnostic.includes(quotedSecret) && diagnostic.includes('<REDACTED>'), 'infrastructure', 'negative_check_failed', 'bounded provider diagnostic did not retain the safe marker, redact credentials, and enforce its exact cap');
+    negative.push({ id: 'failure_diagnostic_privacy', status: 'passed', observed_code: 'redacted_and_bounded' });
   } finally { fs.rmSync(negativeRoot, { recursive: true, force: true }); }
   for (const scenario of contract.scenarios.values()) {
     const fixed = REAL_AGENT_SCENARIOS[scenario.id];
@@ -1319,7 +1341,7 @@ function realAgentRun(contract, scenarioFile, binding, options) {
         const roleTimeout = Math.min(budget * 1000, realAgentRemaining(bindingDeadline, `${role} role`));
         providerInvoked = !testMode;
         const result = realAgentInvocation(binding.runtime, root, context, role, scenario, env, roleTimeout, testMode);
-        calls.push({ role, status: result.status, timed_out: result.timed_out, budget_seconds: budget, aggregate_deadline_at: new Date(bindingDeadline).toISOString(), stdout_sha256: sha(result.stdout), stderr_sha256: sha(result.stderr), served_identity: realAgentServedIdentity(binding.runtime, result) });
+        calls.push({ role, status: result.status, timed_out: result.timed_out, budget_seconds: budget, aggregate_deadline_at: new Date(bindingDeadline).toISOString(), stdout_sha256: sha(result.stdout), stderr_sha256: sha(result.stderr), served_identity: realAgentServedIdentity(binding.runtime, result), failure_diagnostic: result.status !== 0 || result.timed_out ? realAgentFailureDiagnostic(result, proofRoot, env) : null });
         if (role !== 'execute') {
           const roleChanges = realAgentChangedFiles(roleBefore, snapshotTree(root)).filter((entry) => !entry.startsWith('.work/') && !entry.startsWith('contexts/') && !entry.startsWith('isolated/') && !REAL_AGENT_ARTIFACT_RE.test(entry));
           need(roleChanges.length === 0, 'product', 'non_execute_scope_write', `${role} changed application or test files`, { role, paths: roleChanges });
