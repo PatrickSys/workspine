@@ -928,7 +928,7 @@ function realAgentRunCommand(root, command, env, timeout, proofRoot, records, la
   return { result, record };
 }
 
-function realAgentBootstrap(root, scenario, env, proofRoot, records, paths) {
+function realAgentBootstrap(root, scenario, env, proofRoot, records, paths, npm) {
   let command = null;
   if (scenario.id === 'update-health-quick') command = ['npm', 'install', '--ignore-scripts', '--no-audit', '--no-fund'];
   if (scenario.id === 'docusaurus-11122') command = ['corepack', 'yarn', 'install', '--frozen-lockfile'];
@@ -955,8 +955,13 @@ function realAgentBootstrap(root, scenario, env, proofRoot, records, paths) {
     return { status: 'passed', python: venvPython, records: [venvRecord, depsRecord] };
   }
   const [name, ...argv] = command;
-  const result = run(name, argv, { cwd: root, env, timeout: Math.min(scenario.timeout_seconds * 1000, 600000) });
-  const record = { kind: 'bootstrap', scope: 'consumer-root', argv: command, ...commandRecord(result, proofRoot, env) };
+  const actualCommand = name === 'npm' ? process.execPath : name;
+  const actualArgv = name === 'npm' ? [npm, ...argv] : argv;
+  if (name === 'npm') need(npm, 'infrastructure', 'npm_resolution_failure', 'trusted npm-cli.js is required for the npm bootstrap');
+  const result = run(actualCommand, actualArgv, { cwd: root, env, timeout: Math.min(scenario.timeout_seconds * 1000, 600000) });
+  // Keep the scenario's logical command for receipt consumers while the flattened
+  // command/args fields retain the truthful process.execPath/npm-cli.js record.
+  const record = { kind: 'bootstrap', scope: 'consumer-root', ...commandRecord(result, proofRoot, env), argv: command };
   records.push(record); assertNoNetwork(result, record);
   need(result.status === 0 && !result.timed_out, 'infrastructure', 'dependency_bootstrap_failed', `scenario dependency bootstrap failed: ${scenario.id}`, record);
   return { status: 'passed', record };
@@ -1194,9 +1199,40 @@ function realAgentBrowserOracle(root, scenario, env, proofRoot, records) {
   } finally { if (website.exitCode === null) website.kill(); }
 }
 
+function realAgentNpmBootstrapCheck() {
+  const proofRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-npm-check-'));
+  try {
+    const npm = npmCliPath();
+    const guard = path.join(proofRoot, 'network-guard.cjs');
+    makeNetworkGuard(guard);
+    const root = path.join(proofRoot, 'consumer');
+    const emptyPath = path.join(proofRoot, 'empty-path');
+    fs.mkdirSync(root, { recursive: true });
+    fs.mkdirSync(emptyPath, { recursive: true });
+    write(path.join(root, 'package.json'), '{"name":"phase16-npm-bootstrap-check","private":true}\n');
+    const env = realAgentPreparationEnv(proofRoot);
+    env.PATH = emptyPath;
+    env.Path = emptyPath;
+    env.npm_config_offline = 'true';
+    env.NPM_CONFIG_OFFLINE = 'true';
+    env.NODE_OPTIONS = `--require=${guard}`;
+    const records = [];
+    const scenario = { id: 'update-health-quick', timeout_seconds: 120 };
+    const bootstrap = realAgentBootstrap(root, scenario, env, proofRoot, records, {}, npm);
+    const record = bootstrap.record;
+    need(record.argv[0] === 'npm', 'infrastructure', 'npm_bootstrap_record_failure', 'npm bootstrap receipt lost its logical argv', record);
+    need(record.command === path.basename(process.execPath), 'infrastructure', 'npm_bootstrap_record_failure', 'npm bootstrap receipt did not record process.execPath', record);
+    need(record.args?.[0] === scrub(npm, proofRoot, env) && record.args[0] !== 'npm' && record.args[0] !== 'npm.cmd', 'infrastructure', 'npm_bootstrap_record_failure', 'npm bootstrap receipt did not record the trusted npm-cli.js argv', { record, npm });
+    return { status: 'passed', logical_argv: record.argv, actual_command: record.command, actual_args: record.args };
+  } finally {
+    fs.rmSync(proofRoot, { recursive: true, force: true });
+  }
+}
+
 function realAgentCheck(contract) {
   const checks = [];
   const negative = [];
+  const npmBootstrap = realAgentNpmBootstrapCheck();
   const negativeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-negative-'));
   try {
     write(path.join(negativeRoot, 'PLAN.md'), 'preseeded lifecycle artifact\n');
@@ -1240,7 +1276,7 @@ function realAgentCheck(contract) {
     const fixed = REAL_AGENT_SCENARIOS[scenario.id];
     checks.push({ scenario_id: scenario.id, oracle_id: scenario.oracle_id, behavior_ids: scenario.behavior_ids, positive_schema: true, negative_preseeded_lifecycle: { status: 'passed', rule: 'fresh roots reject SPEC/ROADMAP/PLAN/SUMMARY/VERIFICATION before provider launch' }, negative_oracle_visibility: { status: 'passed', rule: 'public prompt and provider-readable roots contain no hidden oracle paths/content' }, fixed_flow: stableStringify(scenario.flow) === stableStringify(fixed.flow), fixed_artifact_family: scenario.required_artifact_family === fixed.artifact_family });
   }
-  return { schema_version: REAL_AGENT_SCHEMA_VERSION, mode: 'real-agent', check: { status: 'passed', scenarios: checks, negative_checks: negative, scenario_count: 7, run_binding_count: 14, run_ids: contract.runs.map((binding) => binding.run_id), no_all_binding: !args.includes('--all'), package_claim: 'harness-only; no provider was invoked' }, terminal: { status: 'passed', failure_class: null, failure_code: null, message: 'real-agent scenario contract and executable negative graders passed' } };
+  return { schema_version: REAL_AGENT_SCHEMA_VERSION, mode: 'real-agent', check: { status: 'passed', scenarios: checks, npm_bootstrap: npmBootstrap, negative_checks: negative, scenario_count: 7, run_binding_count: 14, run_ids: contract.runs.map((binding) => binding.run_id), no_all_binding: !args.includes('--all'), package_claim: 'harness-only; no provider was invoked' }, terminal: { status: 'passed', failure_class: null, failure_code: null, message: 'real-agent scenario contract and executable negative graders passed' } };
 }
 
 function realAgentPersistEvidence(proofRoot, receiptFile, root, receipt) {
@@ -1311,7 +1347,7 @@ function realAgentRun(contract, scenarioFile, binding, options) {
     need(same(sourceBefore, sourceAfterPack) && same(protectedBefore, protectedAfterPack), 'infrastructure', 'source_mutation', 'candidate or protected source changed during real-agent pack/install');
     const records = [];
     realAgentSetup(root, scenario, packed, env, proofRoot, records, binding.runtime, options.dryRun);
-    const bootstrap = options.dryRun && scenario.source.kind === 'pinned' ? {} : realAgentBootstrap(root, scenario, envBase, proofRoot, records, paths);
+    const bootstrap = options.dryRun && scenario.source.kind === 'pinned' ? {} : realAgentBootstrap(root, scenario, envBase, proofRoot, records, paths, npm);
     if (bootstrap.python) env.PHASE16_PYTHON = bootstrap.python;
     const beforeProvider = snapshotTree(root);
     const generatedHelperBefore = shaFile(path.join(root, '.work', 'bin', 'gsdd.mjs'));
