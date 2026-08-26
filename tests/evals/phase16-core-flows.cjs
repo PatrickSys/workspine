@@ -386,8 +386,9 @@ function realAgentOracleExcludedPath(relative) {
   return ['.git', 'isolated', 'contexts'].some((prefix) => comparable === prefix || comparable.startsWith(`${prefix}/`));
 }
 
-function realAgentAssertNoOracleExposure({ prompt = '', argv = [], env = {}, root, label = 'provider input' }) {
-  const values = [prompt, ...argv.map(String), ...Object.entries(env).flatMap(([key, value]) => [key, value])];
+function realAgentAssertNoOracleExposure({ prompt = '', argv = [], env = {}, root, label = 'provider input', allowEnvNames = [] }) {
+  const allowed = new Set(allowEnvNames);
+  const values = [prompt, ...argv.map(String), ...Object.entries(env).filter(([key]) => !allowed.has(key)).flatMap(([key, value]) => [key, value])];
   need(!values.some((value) => REAL_AGENT_FORBIDDEN_RE.test(String(value))), 'infrastructure', 'oracle_packet_exposure', `${label} contains forbidden oracle material`);
   if (!root || !exists(root)) return;
   const rootPath = realAgentResolvedPath(root) || path.resolve(root);
@@ -447,11 +448,12 @@ function realAgentInvocationArgv(runtime, root, prompt, role, provider) {
       : ['run', '--dir', root, '--model', provider.model, '--variant', provider.reasoning, '--format', 'json', prompt];
 }
 
-function realAgentFailureDiagnostic(result, proofRoot, env) {
+function realAgentFailureDiagnostic(result, proofRoot, env, secretValues = []) {
   const diagnosticLimit = 2000;
   const safeStreamJsonFlag = '--output-format=stream-json';
   const safeStreamJsonPlaceholder = '§'.repeat(safeStreamJsonFlag.length);
   let text = scrub(`${result.stderr || ''}\n${result.stdout || ''}`.trim(), proofRoot, env);
+  for (const secret of secretValues) if (secret) text = text.split(String(secret)).join('<REDACTED_SECRET>');
   text = text.replace(/PHASE16_TEST_PROVIDER_EXIT/g, '__P16__');
   text = text
     .replace(/\bBearer\s+["']?[^"'\s,;]+["']?/gi, 'Bearer <REDACTED>')
@@ -967,12 +969,575 @@ function coreSimulation(contract, binding) {
   return receipt;
 }
 
+/*
+ * Task 16-06-00B deliberately ends at the provider boundary.  Keep this seam
+ * next to the existing resolver rather than teaching the audit-pack grader
+ * about provider output: a provider cannot attest to Workspine lifecycle,
+ * artifacts, verification, or grading.
+ */
+const LIVE_REVISION_CONTRACT = 'phase16-live-campaign-revision.v1';
+const LIVE_ROLE_ORDER = Object.freeze(['plan-check', 'execute', 'independent-verify']);
+const LIVE_ROLE_KEYS = Object.freeze({ 'plan-check': 'plan_check', execute: 'execute', 'independent-verify': 'independent_verify' });
+const LIVE_ENV_NAMES = Object.freeze([
+  'PATH', 'SystemRoot', 'WINDIR', 'ComSpec', 'PATHEXT', 'OS', 'PROCESSOR_ARCHITECTURE',
+  'PROCESSOR_IDENTIFIER', 'NUMBER_OF_PROCESSORS', 'LANG', 'LC_ALL', 'TZ',
+]);
+
+const LIVE_VALUE_OPTIONS = Object.freeze(new Set(['--run', '--campaign', '--campaign-revision', '--receipt']));
+function liveValidateArguments() {
+  const seen = new Set();
+  for (let index = 0; index < args.length; index += 1) {
+    const option = args[index];
+    need(LIVE_VALUE_OPTIONS.has(option), 'infrastructure', 'unknown_flag', `unsupported live-run option: ${option}`);
+    need(!seen.has(option), 'infrastructure', 'duplicate_option', `live-run option was repeated: ${option}`);
+    seen.add(option);
+    const value = args[++index];
+    need(value && !String(value).startsWith('--'), 'infrastructure', 'option_value_missing', `live-run option requires one value: ${option}`);
+  }
+}
+
+function liveAbsoluteFile(value, code, label) {
+  const file = String(value || '');
+  need(path.isAbsolute(file), 'infrastructure', code, `${label} must be absolute`, { path: file });
+  need(exists(file), 'infrastructure', `${code}_missing`, `${label} is missing`, { path: slash(file) });
+  const stat = fs.lstatSync(file);
+  need(stat.isFile() && !stat.isSymbolicLink(), 'infrastructure', `${code}_unsafe`, `${label} must be a regular file`, { path: slash(file) });
+  return file;
+}
+
+function liveHash(value, label) {
+  const text = String(value || '');
+  need(/^[0-9a-f]{64}$/i.test(text), 'infrastructure', 'revision_hash_invalid', `${label} must be a SHA-256`, { label });
+  return text.toLowerCase();
+}
+
+function liveRevisionPath(value) {
+  const file = liveAbsoluteFile(value, 'campaign_revision', 'campaign revision');
+  const real = realAgentResolvedPath(file);
+  need(real && real === file, 'infrastructure', 'campaign_revision_unsafe', 'campaign revision must not be a reparse path', { path: slash(file) });
+  return file;
+}
+
+function liveCanonicalRevision(file) {
+  let revision;
+  try { revision = json(file); } catch (error) { infrastructureFailure('campaign_revision_invalid', 'campaign revision is not valid JSON', { message: error.message }); }
+  need(revision && typeof revision === 'object' && !Array.isArray(revision), 'infrastructure', 'campaign_revision_invalid', 'campaign revision must be an object');
+  need(revision.contract === LIVE_REVISION_CONTRACT && revision.schema_version === 1, 'infrastructure', 'campaign_revision_invalid', 'unsupported campaign revision contract');
+  need(typeof revision.revision_id === 'string' && revision.revision_id.length > 0, 'infrastructure', 'campaign_revision_invalid', 'campaign revision id is missing');
+  const canonical = fs.readFileSync(file);
+  const revisionSha = sha(canonical);
+  if (revision.revision_sha256) need(revisionSha === liveHash(revision.revision_sha256, 'campaign revision hash'), 'infrastructure', 'campaign_revision_hash_mismatch', 'campaign revision self-hash does not match its bytes');
+  const candidate = revision.candidate || {};
+  const artifact = candidate.artifact || candidate.package_artifact || {};
+  const artifactPath = candidate.artifact_path || candidate.package_artifact_path || artifact.path;
+  const artifactHash = candidate.artifact_sha256 || candidate.package_artifact_sha256 || artifact.sha256;
+  const artifactFile = liveAbsoluteFile(artifactPath, 'candidate_artifact', 'candidate artifact');
+  const expectedArtifactHash = liveHash(artifactHash, 'candidate artifact hash');
+  need(shaFile(artifactFile) === expectedArtifactHash, 'infrastructure', 'candidate_artifact_hash_mismatch', 'candidate artifact hash does not match the revision');
+  const entry = candidate.entry || candidate.package_entry || {};
+  const entryPath = entry.path || candidate.entry_path;
+  const entryHash = entry.sha256 || candidate.entry_sha256;
+  need(typeof entryPath === 'string' && entryPath.length > 0, 'infrastructure', 'candidate_entry_missing', 'candidate package entry is missing');
+  const memberLedger = candidate.members || candidate.member_ledger || candidate.artifact_members || artifact.members;
+  const members = Array.isArray(memberLedger)
+    ? memberLedger
+    : memberLedger && typeof memberLedger === 'object'
+      ? Object.entries(memberLedger).map(([memberPath, value]) => ({ path: memberPath, ...(typeof value === 'string' ? { sha256: value } : value) }))
+      : null;
+  need(Array.isArray(members) && members.length > 0, 'infrastructure', 'candidate_members_missing', 'candidate artifact member ledger is missing');
+  const memberMap = new Map();
+  for (const member of members) {
+    const memberPath = liveMemberPath(member?.path || member?.name);
+    const memberHash = liveHash(member?.sha256 || member?.hash, `candidate member ${memberPath}`);
+    need(!memberMap.has(memberPath), 'infrastructure', 'candidate_members_duplicate', `candidate member is duplicated: ${memberPath}`);
+    memberMap.set(memberPath, { path: memberPath, sha256: memberHash, size_bytes: member.size_bytes ?? member.bytes ?? null });
+  }
+  const sourceHashes = candidate.source_hashes || candidate.sources || revision.source_hashes;
+  need(sourceHashes && typeof sourceHashes === 'object' && !Array.isArray(sourceHashes), 'infrastructure', 'candidate_sources_missing', 'candidate source hashes are missing');
+  const normalizedSources = {};
+  for (const [sourcePath, sourceValue] of Object.entries(sourceHashes)) {
+    const relative = liveMemberPath(sourcePath);
+    need(!Object.hasOwn(normalizedSources, relative), 'infrastructure', 'candidate_sources_duplicate', `candidate source is duplicated: ${relative}`);
+    const sourceHash = typeof sourceValue === 'string' ? sourceValue : sourceValue?.sha256 || sourceValue?.hash;
+    normalizedSources[relative] = liveHash(sourceHash, `candidate source ${relative}`);
+  }
+  need(Object.keys(normalizedSources).length > 0, 'infrastructure', 'candidate_sources_missing', 'candidate source hash ledger is empty');
+  need(typeof entryHash === 'string', 'infrastructure', 'candidate_entry_missing', 'candidate package entry hash is missing');
+  const runtimes = revision.runtimes || revision.runtime_pins;
+  need(runtimes && typeof runtimes === 'object', 'infrastructure', 'runtime_pins_missing', 'runtime pins are missing');
+  for (const runtime of CORE_RUNTIME_IDS) {
+    const pin = runtimes[runtime];
+    need(pin && typeof pin === 'object', 'infrastructure', 'runtime_pin_missing', `runtime pin is missing: ${runtime}`);
+    need(pin.version, 'infrastructure', 'runtime_pin_missing', `runtime version pin is missing: ${runtime}`);
+    liveRuntimeVersionPin(pin);
+    for (const [key, nested] of [['executable_sha256', 'executable'], ['shim_sha256', 'shim'], ['target_sha256', 'target'], ['config_sha256', 'config']]) {
+      const value = pin[key] ?? (pin[nested] && typeof pin[nested] === 'object' ? pin[nested].sha256 || pin[nested].hash : null);
+      if (key !== 'shim_sha256' || process.platform === 'win32') need(value, 'infrastructure', 'runtime_pin_incomplete', `${runtime} ${key} is missing`);
+      if (value != null) liveHash(value, `${runtime} ${key}`);
+    }
+    const configPath = pin.config_path || (pin.config && typeof pin.config === 'object' ? pin.config.path : null);
+    const configHash = pin.config_sha256 || (pin.config && typeof pin.config === 'object' ? pin.config.sha256 || pin.config.hash : null);
+    need(configPath && configHash, 'infrastructure', 'runtime_pin_incomplete', `${runtime} config pin is incomplete`);
+    const configFile = liveAbsoluteFile(configPath, 'runtime_config', `${runtime} config`);
+    need(shaFile(configFile) === liveHash(configHash, `${runtime} config hash`), 'infrastructure', 'runtime_pin_mismatch', `${runtime} config bytes differ from revision`);
+  }
+  const campaignPin = revision.campaign || {};
+  if (campaignPin.path) {
+    const campaignFile = liveAbsoluteFile(campaignPin.path, 'campaign_pin', 'revision campaign');
+    if (campaignPin.sha256) need(shaFile(campaignFile) === liveHash(campaignPin.sha256, 'revision campaign hash'), 'infrastructure', 'campaign_pin_mismatch', 'revision campaign hash does not match');
+  }
+  return {
+    revision,
+    file,
+    sha256: revisionSha,
+    candidate: { ...candidate, artifact_path: artifactFile, artifact_sha256: expectedArtifactHash, entry_path: liveMemberPath(entryPath), entry_sha256: liveHash(entryHash, 'candidate entry hash'), members: memberMap, source_hashes: normalizedSources },
+    runtimes,
+  };
+}
+
+function liveMemberPath(value) {
+  const raw = String(value || '').replaceAll('\\', '/');
+  const segments = raw.split('/');
+  need(!path.isAbsolute(raw) && !raw.startsWith('/') && !/^[A-Za-z]:/.test(raw) && !segments.includes('..') && !raw.includes('\0'), 'infrastructure', 'candidate_member_path_invalid', 'candidate member path must be a safe relative path', { path: raw });
+  const text = segments.filter((segment) => segment && segment !== '.').join('/');
+  need(text, 'infrastructure', 'candidate_member_path_invalid', 'candidate member path must not be empty', { path: raw });
+  return text;
+}
+
+function liveTarEntries(file) {
+  let bytes = fs.readFileSync(file);
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    try { bytes = require('node:zlib').gunzipSync(bytes); } catch (error) { infrastructureFailure('candidate_artifact_invalid', 'candidate artifact gzip is invalid', { message: error.message }); }
+  }
+  const entries = [];
+  const seen = new Set();
+  let offset = 0;
+  let zeroBlocks = 0;
+  while (offset + 512 <= bytes.length) {
+    const header = bytes.subarray(offset, offset + 512);
+    if (header.every((value) => value === 0)) {
+      zeroBlocks += 1;
+      offset += 512;
+      if (zeroBlocks === 2) break;
+      continue;
+    }
+    need(zeroBlocks === 0, 'infrastructure', 'candidate_artifact_trailing', 'candidate artifact has nonzero bytes after its end marker');
+    const checksumText = header.subarray(148, 156).toString('ascii').replace(/\0.*$/, '').trim();
+    need(/^[0-7]{1,7}$/.test(checksumText), 'infrastructure', 'candidate_artifact_checksum', 'candidate artifact tar header checksum is not octal');
+    const storedChecksum = parseInt(checksumText, 8);
+    let computedChecksum = 0;
+    for (let index = 0; index < 512; index += 1) computedChecksum += index >= 148 && index < 156 ? 0x20 : header[index];
+    need(Number.isFinite(storedChecksum) && storedChecksum === computedChecksum, 'infrastructure', 'candidate_artifact_checksum', 'candidate artifact tar header checksum is invalid');
+    const readText = (start, length) => header.subarray(start, start + length).toString('utf8').replace(/\0.*$/, '').trim();
+    const name = readText(0, 100);
+    const prefix = readText(345, 155);
+    const memberPath = liveMemberPath(prefix ? `${prefix}/${name}` : name);
+    const sizeText = header.subarray(124, 136).toString('ascii').replace(/\0.*$/, '').trim();
+    need(/^[0-7]*$/.test(sizeText), 'infrastructure', 'candidate_artifact_size', 'candidate artifact tar member size is not octal');
+    const size = sizeText ? parseInt(sizeText, 8) : 0;
+    const type = String.fromCharCode(header[156] || 0);
+    need(type === '\0' || type === '0' || type === '5', 'infrastructure', 'candidate_artifact_link', 'candidate artifact contains an unsupported link or special member', { path: memberPath, type });
+    need(!seen.has(memberPath), 'infrastructure', 'candidate_artifact_duplicate', `candidate artifact member is duplicated: ${memberPath}`);
+    seen.add(memberPath);
+    entries.push({ path: memberPath, type: type === '5' ? 'directory' : 'file', size, content: type === '5' ? null : bytes.subarray(offset + 512, offset + 512 + size) });
+    offset += 512 + Math.ceil(size / 512) * 512;
+  }
+  need(zeroBlocks === 2 && offset === bytes.length, 'infrastructure', 'candidate_artifact_truncated', 'candidate artifact must end with exactly two zero tar blocks and no trailing bytes');
+  need(entries.length > 0, 'infrastructure', 'candidate_artifact_invalid', 'candidate artifact contains no members');
+  return entries;
+}
+
+function liveBootstrapArtifact(revision, destination) {
+  need(shaFile(revision.candidate.artifact_path) === revision.candidate.artifact_sha256, 'infrastructure', 'candidate_artifact_hash_mismatch', 'candidate artifact changed after revision validation');
+  fs.mkdirSync(destination, { recursive: true });
+  const entries = liveTarEntries(revision.candidate.artifact_path);
+  const actual = new Map(entries.filter((item) => item.type === 'file').map((item) => [item.path, item]));
+  need(actual.size === revision.candidate.members.size, 'infrastructure', 'candidate_member_mismatch', 'candidate artifact member count differs from its revision ledger');
+  for (const [memberPath, expected] of revision.candidate.members) {
+    const item = actual.get(memberPath);
+    need(item && item.type === 'file' && sha(item.content) === expected.sha256, 'infrastructure', 'candidate_member_mismatch', `candidate artifact member hash mismatch: ${memberPath}`);
+    if (expected.size_bytes != null) need(Number(expected.size_bytes) === item.size, 'infrastructure', 'candidate_member_mismatch', `candidate artifact member size mismatch: ${memberPath}`);
+    const target = path.join(destination, ...memberPath.split('/'));
+    need(inside(destination, target), 'infrastructure', 'candidate_member_path_invalid', 'candidate artifact member escaped its isolated root');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, item.content, { flag: 'wx' });
+  }
+  const entry = path.join(destination, ...revision.candidate.entry_path.split('/'));
+  need(exists(entry) && shaFile(entry) === revision.candidate.entry_sha256, 'infrastructure', 'candidate_entry_mismatch', 'candidate package entry hash does not match its revision');
+  for (const [sourcePath, sourceHash] of Object.entries(revision.candidate.source_hashes)) {
+    const member = actual.get(sourcePath);
+    need(member && member.type === 'file' && sha(member.content) === sourceHash, 'infrastructure', 'candidate_source_mismatch', `candidate source hash mismatch: ${sourcePath}`);
+  }
+  return { entry, members: actual };
+}
+
+function liveRevisionFiles(revision, roleRoot, runtimePin) {
+  const files = revision.revision.auth_config_files || revision.revision.config_files || revision.revision.auth || [];
+  need(Array.isArray(files), 'infrastructure', 'auth_config_invalid', 'revision auth/config allowlist must be an array');
+  const copied = [];
+  for (const item of files) {
+    const source = liveAbsoluteFile(item?.path || item?.source, 'auth_config', 'allowlisted auth/config input');
+    const expected = liveHash(item?.sha256 || item?.hash, `allowlisted auth/config input ${source}`);
+    need(shaFile(source) === expected, 'infrastructure', 'auth_config_hash_mismatch', 'allowlisted auth/config input changed after revision freeze');
+    const relative = liveMemberPath(item.destination || item.dest || path.basename(source));
+    const target = path.join(roleRoot, 'config', ...relative.split('/'));
+    need(inside(roleRoot, target), 'infrastructure', 'auth_config_path_escape', 'allowlisted auth/config destination escaped its isolated root');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
+    copied.push({ path: `<ISOLATED_ROOT>/config/${relative}`, sha256: expected });
+  }
+  const runtimeConfigPath = runtimePin.config_path || (runtimePin.config && typeof runtimePin.config === 'object' ? runtimePin.config.path : null);
+  const runtimeConfigHash = runtimePin.config_sha256 || (runtimePin.config && typeof runtimePin.config === 'object' ? runtimePin.config.sha256 || runtimePin.config.hash : null);
+  if (runtimeConfigPath) {
+    const source = liveAbsoluteFile(runtimeConfigPath, 'runtime_config', `${runtimePin.runtime || 'runtime'} config`);
+    const expected = liveHash(runtimeConfigHash, 'runtime config hash');
+    need(shaFile(source) === expected, 'infrastructure', 'runtime_config_hash_mismatch', 'runtime config changed after revision freeze');
+    const target = path.join(roleRoot, 'config', path.basename(source));
+    fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
+    copied.push({ path: `<ISOLATED_ROOT>/config/${path.basename(source)}`, sha256: expected });
+  }
+  return copied;
+}
+
+function liveMinimalEnv(roleRoot, revisionId, runtime) {
+  const env = {};
+  for (const name of LIVE_ENV_NAMES) if (process.env[name]) env[name] = process.env[name];
+  const nodeDir = path.dirname(process.execPath);
+  // The resolver already selected an absolute executable. Do not carry the
+  // owner's PATH into a provider context where it could discover more state.
+  env.PATH = nodeDir;
+  const home = path.join(roleRoot, 'home');
+  const config = path.join(roleRoot, 'config');
+  const cache = path.join(roleRoot, 'cache');
+  const temp = path.join(roleRoot, 'temp');
+  for (const dir of [home, config, cache, temp]) fs.mkdirSync(dir, { recursive: true });
+  env.HOME = home; env.USERPROFILE = home; env.TMP = temp; env.TEMP = temp;
+  env.XDG_CONFIG_HOME = config; env.XDG_CACHE_HOME = cache; env.XDG_STATE_HOME = path.join(roleRoot, 'state');
+  env.CODEX_HOME = path.join(config, 'codex'); env.CLAUDE_CONFIG_DIR = path.join(config, 'claude'); env.OPENCODE_CONFIG_DIR = path.join(config, 'opencode');
+  env.NPM_CONFIG_USERCONFIG = path.join(config, 'npmrc');
+  env[`WORKSPINE_PHASE16_${String(revisionId).replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}_RUNTIME`] = runtime;
+  return env;
+}
+
+function liveSecretEnv(revision, env) {
+  const declarations = revision.revision.secret_env || revision.revision.secret_environment || [];
+  need(Array.isArray(declarations), 'infrastructure', 'secret_env_invalid', 'revision secret environment must be an array');
+  const names = [];
+  for (const item of declarations) {
+    const sourceName = String(item?.source_name || item?.name || '');
+    const targetName = String(item?.target_name || item?.name || '');
+    need(/^[A-Z][A-Z0-9_]*$/.test(sourceName) && /^[A-Z][A-Z0-9_]*$/.test(targetName), 'infrastructure', 'secret_env_invalid', 'secret environment names are invalid');
+    const value = process.env[sourceName];
+    need(typeof value === 'string' && value.length > 0, 'infrastructure', 'secret_env_missing', `revision secret environment value is unavailable: ${sourceName}`);
+    if (item.sha256) need(sha(value) === liveHash(item.sha256, `secret environment ${sourceName}`), 'infrastructure', 'secret_env_hash_mismatch', `secret environment value changed: ${sourceName}`);
+    env[targetName] = value;
+    names.push(targetName);
+  }
+  return names;
+}
+
+function liveRolePrompt(binding, role) {
+  const task = binding.task_ceiling || binding.run_id;
+  if (role === 'plan-check') return `Plan-check only for ${task}. Read the frozen candidate and state whether the requested task is actionable. Do not execute changes or claim workflow results.`;
+  if (role === 'execute') return `Execute only the requested task: ${task}. Work inside the supplied project root and report what you attempted. Do not claim independent verification or grading.`;
+  return `Independent verify only for ${task}. Inspect the supplied project root independently and report observations. Do not claim provider identity, lifecycle success, artifact validity, or grading.`;
+}
+
+function liveParseCodex(stdout, requestedModel, argv) {
+  const events = String(stdout).split(/\r?\n/).filter(Boolean).map((line) => { try { return JSON.parse(line); } catch { return null; } });
+  need(events.length > 0 && events.every(Boolean), 'infrastructure', 'native_parse_invalid', 'Codex output is not valid JSONL');
+  const types = events.map((event) => String(event.type || event.event || ''));
+  need(!types.some((type) => /error|reroute|redirect/i.test(type)), 'infrastructure', types.some((type) => /reroute|redirect/i.test(type)) ? 'provider_reroute' : 'native_error', 'Codex output contains an error or reroute event');
+  const threadIndex = types.indexOf('thread.started');
+  const turnStartIndex = types.indexOf('turn.started');
+  const turnCompleteIndex = types.indexOf('turn.completed');
+  need(threadIndex === 0 && turnStartIndex > threadIndex && turnCompleteIndex > turnStartIndex, 'infrastructure', 'native_sequence_invalid', 'Codex output lacks a normal thread/turn sequence');
+  need(types.filter((type) => type === 'turn.started').length === 1 && types.filter((type) => type === 'turn.completed').length === 1, 'infrastructure', 'native_sequence_invalid', 'Codex output must contain exactly one completed turn');
+  const thread = events[threadIndex];
+  const turnStart = events[turnStartIndex];
+  const turnComplete = events[turnCompleteIndex];
+  need(typeof thread.thread_id === 'string' && thread.thread_id.length > 0, 'infrastructure', 'native_linkage_invalid', 'Codex thread.started lacks thread_id');
+  if (turnStart.thread_id != null) need(turnStart.thread_id === thread.thread_id, 'infrastructure', 'native_linkage_invalid', 'Codex turn.started is not linked to its thread');
+  if (turnComplete.thread_id != null) need(turnComplete.thread_id === thread.thread_id, 'infrastructure', 'native_linkage_invalid', 'Codex turn.completed is not linked to its thread');
+  const turnId = turnStart.turn_id || turnStart.id || turnComplete.turn_id || turnComplete.id || null;
+  if (turnStart.turn_id != null || turnComplete.turn_id != null || turnStart.id != null || turnComplete.id != null) need(turnId && (!turnStart.turn_id || turnStart.turn_id === turnId) && (!turnComplete.turn_id || turnComplete.turn_id === turnId), 'infrastructure', 'native_linkage_invalid', 'Codex turn lifecycle ids are not coherent');
+  const itemEvents = events.filter((event) => /^item\./.test(String(event.type || '')));
+  need(itemEvents.length > 0, 'infrastructure', 'native_linkage_invalid', 'Codex output contains no linked item events');
+  const itemIds = itemEvents.map((event) => event.item_id || event.item?.id || event.id);
+  need(itemEvents.every((event, index) => typeof itemIds[index] === 'string' && itemIds[index].length > 0), 'infrastructure', 'native_linkage_invalid', 'Codex item event lacks an item id');
+  itemEvents.forEach((event, index) => {
+    const itemId = itemIds[index];
+    for (const key of ['thread_id', 'turn_id']) if (event[key] != null) need(event[key] === (key === 'thread_id' ? thread.thread_id : turnId), 'infrastructure', 'native_linkage_invalid', `Codex item event is not linked to its ${key}`);
+  });
+  const startedItems = new Set(itemEvents.filter((event) => event.type === 'item.started').map((event) => event.item_id || event.item?.id || event.id));
+  const completedItems = new Set();
+  for (const event of itemEvents.filter((item) => item.type === 'item.completed')) {
+    const itemId = event.item_id || event.item?.id || event.id;
+    need(startedItems.has(itemId) && !completedItems.has(itemId), 'infrastructure', 'native_linkage_invalid', 'Codex item.completed is not paired with exactly one item.started');
+    completedItems.add(itemId);
+  }
+  need(startedItems.size > 0 && startedItems.size === completedItems.size, 'infrastructure', 'native_linkage_invalid', 'Codex item lifecycle is incomplete');
+  need(argv.includes('-m') && argv[argv.indexOf('-m') + 1] === requestedModel, 'infrastructure', 'requested_model_not_accepted', 'Codex invocation did not carry the requested model flag');
+  return { parser: 'codex-jsonl', event_types: types, identity: 'requested-model-accepted' };
+}
+
+function liveParseClaude(stdout, requestedModel) {
+  const events = String(stdout).split(/\r?\n/).filter(Boolean).map((line) => { try { return JSON.parse(line); } catch { return null; } });
+  need(events.length > 0 && events.every(Boolean), 'infrastructure', 'native_parse_invalid', 'Claude output is not valid stream JSON');
+  const init = events.find((event) => event.type === 'system' && event.subtype === 'init');
+  const assistant = events.find((event) => event.type === 'assistant' && event.message && typeof event.message === 'object');
+  const result = events.find((event) => event.type === 'result');
+  need(init && assistant && result, 'infrastructure', 'native_sequence_invalid', 'Claude output lacks init, assistant, or result events');
+  const session = init.session_id;
+  need(session && assistant.session_id === session && result.session_id === session, 'infrastructure', 'native_session_mismatch', 'Claude session identities do not match');
+  need(assistant.message.model === requestedModel, 'infrastructure', 'served_model_mismatch', 'Claude assistant model does not match the requested model');
+  const modelUsage = result.modelUsage || result.model_usage;
+  need(modelUsage && (Object.hasOwn(modelUsage, requestedModel) || modelUsage.model === requestedModel), 'infrastructure', 'served_model_missing', 'Claude result model usage does not identify the assistant model');
+  return { parser: 'claude-stream-json', session_id: '<SESSION_REDACTED>', assistant_model: requestedModel, identity: 'served-model-matched' };
+}
+
+function liveParseOpenCode(stdout, requestedModel) {
+  const events = String(stdout).split(/\r?\n/).filter(Boolean).map((line) => { try { return JSON.parse(line); } catch { return null; } });
+  need(events.length > 0 && events.every(Boolean), 'infrastructure', 'native_parse_invalid', 'OpenCode output is not valid JSON events');
+  const allowed = new Set(['step_start', 'step_finish', 'text', 'reasoning', 'tool_use', 'error']);
+  need(events.every((event) => allowed.has(String(event.type || ''))), 'infrastructure', 'native_sequence_invalid', 'OpenCode output contains an unsupported event type');
+  need(!events.some((event) => event.type === 'error'), 'infrastructure', 'native_error', 'OpenCode output contains an error event');
+  const sessions = new Set(events.map((event) => event.sessionID || event.session_id || event.part?.sessionID || event.data?.sessionID).filter(Boolean));
+  need(sessions.size === 1, 'infrastructure', 'native_session_mismatch', 'OpenCode events do not bind to exactly one session');
+  const messageIds = [...new Set(events.map((event) => event.messageID || event.messageId || event.message_id || event.part?.messageID || event.data?.messageID).filter(Boolean))];
+  need(messageIds.length > 0, 'infrastructure', 'native_linkage_invalid', 'OpenCode events contain no assistant message identity');
+  return { parser: 'opencode-json-events', session_id: [...sessions][0], assistant_message_ids: messageIds, model: requestedModel, identity: 'pending-sanitized-export' };
+}
+
+function liveOpenCodeModelMatches(provider, model, requested) {
+  return typeof provider === 'string' && typeof model === 'string' && (model === requested || `${provider}/${model}` === requested || model === String(requested).split('/').slice(1).join('/'));
+}
+
+function liveParseOpenCodeExport(stdout, identity) {
+  let document;
+  try { document = JSON.parse(String(stdout)); } catch { infrastructureFailure('native_export_invalid', 'OpenCode export is not valid JSON'); }
+  const messages = Array.isArray(document) ? document : document.messages;
+  const infos = Array.isArray(messages) ? messages.map((event) => event.info || event.message || event) : null;
+  const sessionId = (Array.isArray(document) ? null : document.info?.id || document.session_id || document.sessionID || document.session?.id) || infos?.map((event) => event.sessionID || event.session_id || event.session?.id).find(Boolean);
+  need(sessionId === identity.session_id && Array.isArray(messages), 'infrastructure', 'native_export_mismatch', 'OpenCode export is not bound to the captured session');
+  const get = (event, ...keys) => keys.map((key) => event?.[key]).find((value) => value != null);
+  const assistant = infos.find((event) => get(event, 'role', 'message_role') === 'assistant' && identity.assistant_message_ids.includes(get(event, 'id', 'messageID', 'message_id')));
+  const parentId = get(assistant, 'parentID', 'parent_id', 'parent');
+  const user = infos.find((event) => get(event, 'role', 'message_role') === 'user' && get(event, 'id', 'messageID', 'message_id') === parentId);
+  need(user && assistant, 'infrastructure', 'native_export_ancestry_mismatch', 'OpenCode export does not preserve user/assistant ancestry');
+  need([user, assistant].every((event) => get(event, 'sessionID', 'session_id', 'session') === sessionId), 'infrastructure', 'native_export_mismatch', 'OpenCode export messages are not bound to the captured session');
+  const provider = get(assistant, 'provider', 'provider_id', 'providerID');
+  const model = get(assistant, 'model', 'model_id', 'modelID');
+  need(liveOpenCodeModelMatches(provider, model, identity.model), 'infrastructure', 'native_export_identity_mismatch', 'OpenCode export provider/model differs from the requested model');
+  return { parser: 'opencode-sanitized-export', session_id: '<SESSION_REDACTED>', user_message_id: '<USER_REDACTED>', assistant_message_id: '<ASSISTANT_REDACTED>', provider: '<PROVIDER_REDACTED>', model: identity.model, identity: 'served-model-matched' };
+}
+
+function liveSanitizeNative(runtime, native) {
+  if (runtime !== 'opencode') return native;
+  return { parser: native.parser, session_id: '<SESSION_REDACTED>', user_message_id: '<USER_REDACTED>', assistant_message_id: '<ASSISTANT_REDACTED>', provider: '<PROVIDER_REDACTED>', model: native.model, identity: native.identity, export: native.export };
+}
+
+function liveParseNative(runtime, stdout, requestedModel, argv) {
+  if (runtime === 'codex') return liveParseCodex(stdout, requestedModel, argv);
+  if (runtime === 'claude') return liveParseClaude(stdout, requestedModel);
+  return liveParseOpenCode(stdout, requestedModel);
+}
+
+function liveValidateRuntimePin(runtime, descriptor, evidence, pin) {
+  const executableHash = pin.executable_sha256 ?? (pin.executable && typeof pin.executable === 'object' ? pin.executable.sha256 || pin.executable.hash : null);
+  const shimHash = pin.shim_sha256 ?? (pin.shim && typeof pin.shim === 'object' ? pin.shim.sha256 || pin.shim.hash : null);
+  const targetHash = pin.target_sha256 ?? (pin.target && typeof pin.target === 'object' ? pin.target.sha256 || pin.target.hash : null);
+  need(executableHash && targetHash && (process.platform !== 'win32' || shimHash), 'infrastructure', 'runtime_pin_incomplete', `${runtime} executable/shim/target pins are incomplete`);
+  if (executableHash) need(evidence.target_sha256 === liveHash(executableHash, `${runtime} executable hash`), 'infrastructure', 'runtime_pin_mismatch', `${runtime} executable hash differs from revision`);
+  if (shimHash) need(evidence.source_sha256 === liveHash(shimHash, `${runtime} shim hash`), 'infrastructure', 'runtime_pin_mismatch', `${runtime} shim hash differs from revision`);
+  if (targetHash) need(evidence.target_sha256 === liveHash(targetHash, `${runtime} target hash`), 'infrastructure', 'runtime_pin_mismatch', `${runtime} target hash differs from revision`);
+  const executablePath = pin.executable_path || (typeof pin.executable === 'string' ? pin.executable : null);
+  const targetPath = pin.target_path || (typeof pin.target === 'string' ? pin.target : null);
+  if (executablePath || targetPath) {
+    const expected = path.resolve(executablePath || targetPath);
+    need(path.resolve(descriptor.target_path) === expected, 'infrastructure', 'runtime_pin_mismatch', `${runtime} executable target differs from revision`);
+  }
+  const configPath = pin.config_path || (pin.config && typeof pin.config === 'object' ? pin.config.path : null);
+  const configHash = pin.config_sha256 || (pin.config && typeof pin.config === 'object' ? pin.config.sha256 || pin.config.hash : null);
+  need(configPath && configHash, 'infrastructure', 'runtime_pin_incomplete', `${runtime} config pin is incomplete`);
+}
+
+function liveValidatePinnedRuntimeFiles(runtime, pin) {
+  const fileSpec = (key, nested) => ({
+    path: pin[`${key}_path`] || (pin[nested] && typeof pin[nested] === 'object' ? pin[nested].path : (typeof pin[nested] === 'string' ? pin[nested] : null)),
+    hash: pin[`${key}_sha256`] || (pin[nested] && typeof pin[nested] === 'object' ? pin[nested].sha256 || pin[nested].hash : null),
+  });
+  for (const [key, nested, required] of [['executable', 'executable', true], ['target', 'target', true], ['shim', 'shim', process.platform === 'win32']]) {
+    const spec = fileSpec(key, nested);
+    if (!required && !spec.path && !spec.hash) continue;
+    need(spec.path && spec.hash, 'infrastructure', 'runtime_pin_incomplete', `${runtime} ${key} path/hash pin is incomplete`);
+    const file = liveAbsoluteFile(spec.path, 'runtime_pin', `${runtime} ${key}`);
+    need(shaFile(file) === liveHash(spec.hash, `${runtime} ${key} hash`), 'infrastructure', 'runtime_pin_mismatch', `${runtime} ${key} bytes differ from revision`);
+  }
+}
+
+function liveRuntimeVersionPin(pin) {
+  const value = typeof pin.version === 'object' ? pin.version.value || pin.version.name : pin.version;
+  const hash = pin.version_sha256 || (pin.version && typeof pin.version === 'object' ? pin.version.sha256 || pin.version.hash : null);
+  need(typeof value === 'string' && value.length > 0 && hash, 'infrastructure', 'runtime_version_pin_invalid', 'runtime version pin is incomplete');
+  return { value, hash: liveHash(hash, 'runtime version output hash'), expectedOutput: pin.version_output || (pin.version && typeof pin.version === 'object' ? pin.version.output : null) };
+}
+
+function liveRun(contract, binding, revision, receiptFile) {
+  const runRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-live-'));
+  let providerInvoked = false;
+  let descriptor = null;
+  const roles = [];
+  const cleanup = { attempted: false, removed: false };
+  let evidence = null;
+  let versionProbe = null;
+  let completedReceipt = null;
+  try {
+    need(binding.kind !== 'docusaurus-browser' || revision.revision.browser_calibration_digest, 'infrastructure', 'browser_pending', 'Docusaurus binding remains pending and cannot execute');
+    const networkGuard = path.join(runRoot, 'network-guard.cjs');
+    makeNetworkGuard(networkGuard);
+    liveBootstrapArtifact(revision, path.join(runRoot, 'candidate'));
+    liveValidatePinnedRuntimeFiles(binding.runtime, revision.runtimes[binding.runtime]);
+    descriptor = realAgentResolveProvider(binding.runtime, CORE_RUNTIME_PINS[binding.runtime], process.env);
+    need(descriptor, 'infrastructure', 'provider_not_found', `provider was not resolved: ${binding.runtime}`);
+    evidence = realAgentProviderEvidence(descriptor, runRoot, process.env);
+    liveValidateRuntimePin(binding.runtime, descriptor, evidence, revision.runtimes[binding.runtime]);
+    const versionPin = liveRuntimeVersionPin(revision.runtimes[binding.runtime]);
+    const versionRoot = path.join(runRoot, 'version-probe');
+    const versionEnv = liveMinimalEnv(versionRoot, revision.revision.revision_id, binding.runtime);
+    versionEnv.NODE_OPTIONS = `--require=${networkGuard}`;
+    liveRevisionFiles(revision, versionRoot, revision.runtimes[binding.runtime]);
+    const versionResult = realAgentRunProvider(descriptor, ['--version'], { cwd: versionRoot, env: versionEnv, timeout: 30000 });
+    providerInvoked = true;
+    const versionOutput = String(versionResult.stdout || '');
+    versionProbe = { status: versionResult.status, timed_out: versionResult.timed_out, stdout_sha256: sha(Buffer.from(versionOutput, 'utf8')), stderr_sha256: sha(Buffer.from(String(versionResult.stderr || ''), 'utf8')), output_bytes: Buffer.byteLength(versionOutput) + Buffer.byteLength(String(versionResult.stderr || '')) };
+    need(!versionResult.timed_out && versionResult.status === 0, 'infrastructure', 'runtime_version_probe_failed', 'runtime version probe failed', versionProbe);
+    need(versionOutput.includes(versionPin.value), 'infrastructure', 'runtime_version_mismatch', 'runtime version output does not contain the pinned version', versionProbe);
+    need(versionProbe.stdout_sha256 === versionPin.hash, 'infrastructure', 'runtime_version_mismatch', 'runtime version output hash differs from the revision', versionProbe);
+    for (const name of Object.keys(versionEnv)) delete versionEnv[name];
+    for (const role of LIVE_ROLE_ORDER) {
+      const roleRoot = path.join(runRoot, 'contexts', role);
+      fs.mkdirSync(roleRoot, { recursive: true });
+      // Every role starts from the same frozen bytes, but has a distinct root,
+      // home, config, cache, temp, process, and provider invocation.
+      liveBootstrapArtifact(revision, path.join(roleRoot, 'candidate'));
+      const env = liveMinimalEnv(roleRoot, revision.revision.revision_id, binding.runtime);
+      env.NODE_OPTIONS = `--require=${networkGuard}`;
+      const configFiles = liveRevisionFiles(revision, roleRoot, revision.runtimes[binding.runtime]);
+      const secretNames = liveSecretEnv(revision, env);
+      const prompt = liveRolePrompt(binding, role);
+      const argv = realAgentInvocationArgv(binding.runtime, path.join(roleRoot, 'candidate'), prompt, role === 'plan-check' ? 'plan-check' : role, { model: binding.model, reasoning: binding.effort });
+      realAgentAssertNoOracleExposure({ prompt, argv, env, root: roleRoot, label: `${role} provider input`, allowEnvNames: secretNames });
+      const budget = binding.role_budgets_seconds[LIVE_ROLE_KEYS[role]];
+      need(Number.isInteger(budget) && budget >= 60, 'infrastructure', 'role_budget_invalid', `role budget is invalid: ${role}`);
+      const redactedArgv = argv.map((value) => scrub(value, roleRoot, env));
+      const started = Date.now();
+      const result = realAgentRunProvider(descriptor, argv, { cwd: path.join(roleRoot, 'candidate'), env, timeout: budget * 1000 });
+      providerInvoked = true;
+      let exportResult = null;
+      let exportInvocation = null;
+      const outputResults = [result];
+      const outputBytes = () => outputResults.reduce((total, item) => total + Buffer.byteLength(item.stdout || '') + Buffer.byteLength(item.stderr || ''), 0);
+      const rawCap = Number(revision.revision.raw_output_limit_bytes || revision.revision.raw_output_cap_bytes || 262144);
+      const retainedCap = Number(revision.revision.retained_event_limit_bytes || revision.revision.retained_event_cap_bytes || 65536);
+      const providerRecord = commandRecord(result, roleRoot, env);
+      const outputEvidence = { stdout_sha256: providerRecord.stdout_sha256, stderr_sha256: providerRecord.stderr_sha256, output_bytes: outputBytes() };
+      const invocation = { role, budget_seconds: budget, elapsed_ms: Date.now() - started, argv: redactedArgv, config_files: configFiles, secret_env_names: secretNames, status: result.status, signal: result.signal, error: result.error, output_bytes: outputBytes(), stdout_sha256: providerRecord.stdout_sha256, stderr_sha256: providerRecord.stderr_sha256 };
+      let native = null;
+      let failure = null;
+      if (result.stderr.includes('PHASE16_NETWORK_BLOCKED') || result.stdout.includes('PHASE16_NETWORK_BLOCKED')) failure = { failure_class: 'infrastructure', failure_code: 'network_violation', message: 'network guard observed an attempted connection' };
+      else if (!Number.isInteger(rawCap) || rawCap <= 0 || outputBytes() > rawCap) failure = { failure_class: 'infrastructure', failure_code: 'raw_output_cap', message: 'provider output exceeded the frozen raw-output cap' };
+      else if (result.timed_out) failure = { failure_class: 'infrastructure', failure_code: 'provider_timeout', message: 'provider exceeded its role budget' };
+      else if (result.status !== 0) failure = { failure_class: 'infrastructure', failure_code: 'provider_nonzero', message: 'provider exited nonzero' };
+      else {
+        try { native = liveParseNative(binding.runtime, result.stdout, binding.model, argv); } catch (error) { failure = { failure_class: error.kind || 'infrastructure', failure_code: error.code || 'native_parse_invalid', message: error.message }; }
+      }
+      if (!failure && binding.runtime === 'opencode') {
+        const exportArgv = ['export', native.session_id, '--sanitize'];
+        realAgentAssertNoOracleExposure({ prompt: 'sanitized OpenCode export', argv: exportArgv, env, root: roleRoot, label: 'OpenCode export input' });
+        exportResult = realAgentRunProvider(descriptor, exportArgv, { cwd: path.join(roleRoot, 'candidate'), env, timeout: budget * 1000 });
+        providerInvoked = true;
+        outputResults.push(exportResult);
+        exportInvocation = { argv: ['export', '<SESSION_REDACTED>', '--sanitize'], status: exportResult.status, timed_out: exportResult.timed_out, stdout_sha256: sha(String(exportResult.stdout || '')), stderr_sha256: sha(String(exportResult.stderr || '')) };
+        if (exportResult.timed_out) failure = { failure_class: 'infrastructure', failure_code: 'provider_timeout', message: 'OpenCode export exceeded its role budget' };
+        else if (exportResult.status !== 0) failure = { failure_class: 'infrastructure', failure_code: 'provider_nonzero', message: 'OpenCode export exited nonzero' };
+        else { try { native.export = liveParseOpenCodeExport(exportResult.stdout, native); native.identity = native.export.identity; } catch (error) { failure = { failure_class: error.kind || 'infrastructure', failure_code: error.code || 'native_export_invalid', message: error.message }; } }
+        invocation.export = exportInvocation;
+        outputEvidence.export_stdout_sha256 = exportInvocation.stdout_sha256;
+        outputEvidence.export_stderr_sha256 = exportInvocation.stderr_sha256;
+        outputEvidence.output_bytes = outputBytes();
+        if (!failure && outputBytes() > rawCap) failure = { failure_class: 'infrastructure', failure_code: 'raw_output_cap', message: 'provider output exceeded the frozen raw-output cap' };
+      }
+      const eventBytes = Buffer.byteLength(JSON.stringify({ invocation, native, failure }));
+      if (!failure && (!Number.isInteger(retainedCap) || retainedCap <= 0 || eventBytes > retainedCap)) failure = { failure_class: 'infrastructure', failure_code: 'retained_event_cap', message: 'retained provider facts exceeded the frozen cap' };
+      if (failure) outputEvidence.diagnostic = realAgentFailureDiagnostic(result, roleRoot, env, secretNames.map((name) => env[name]));
+      roles.push({ role, context: `<ISOLATED_ROOT>/contexts/${role}`, invocation, native: native ? liveSanitizeNative(binding.runtime, native) : null, output: outputEvidence, terminal: { status: failure ? 'failed' : 'completed', exit_code: result.status, timed_out: result.timed_out, failure_class: failure?.failure_class || null, failure_code: failure?.failure_code || null, message: failure?.message || null } });
+      for (const name of secretNames) delete env[name];
+      if (failure) infrastructureFailure(failure.failure_code, failure.message, { role, ...outputEvidence });
+    }
+    completedReceipt = { schema_version: 1, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked, workflow_verdict: 'not_evaluated', campaign_revision: { revision_id: revision.revision.revision_id, sha256: revision.sha256 }, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: bindingFingerprint(binding), run_id: binding.run_id, journey_id: binding.journey_id || null, trial_kind: binding.kind, runtime: binding.runtime, provider: { logical_command: CORE_RUNTIME_PINS[binding.runtime].command, runtime_version: revision.runtimes[binding.runtime].version || revision.runtimes[binding.runtime].version_string, version_probe: versionProbe, requested_model: binding.model, requested_effort: binding.effort, resolution: evidence, identity_claim: 'requested/native identity only' }, candidate: { commit: revision.candidate.commit || revision.revision.candidate?.commit || null, artifact_sha256: revision.candidate.artifact_sha256, member_count: revision.candidate.members.size, entry_path: `<ISOLATED_ROOT>/${revision.candidate.entry_path}`, entry_sha256: revision.candidate.entry_sha256, source_hashes: revision.candidate.source_hashes }, isolation: { root: '<ISOLATED_ROOT>', provider_readable_paths: ['<ISOLATED_ROOT>/contexts/<ROLE>/candidate'], writable_roots: ['<ISOLATED_ROOT>/contexts/execute'], owner_state: 'not_inherited' }, roles, cleanup, terminal: { status: 'completed', receipt_count: 1, failure_class: null, failure_code: null, message: 'provider execution completed; workflow was not evaluated' }, claim_limit: 'Provider execution only: requested/native identity, event sequence, exit, timeout, and bounded output facts; no lifecycle, artifact, verifier, grader, workflow, or product claim.' };
+    return completedReceipt;
+  } catch (error) {
+    error.providerInvoked = Boolean(error.providerInvoked || providerInvoked);
+    error.providerEvidence = evidence;
+    error.versionProbe = versionProbe;
+    error.roles = roles;
+    error.cleanup = cleanup;
+    throw error;
+  } finally {
+    cleanup.attempted = true;
+    try { fs.rmSync(runRoot, { recursive: true, force: false, maxRetries: 3, retryDelay: 25 }); cleanup.removed = !exists(runRoot); } catch (error) { cleanup.error = error.message; }
+    if (completedReceipt && !cleanup.removed) {
+      completedReceipt.terminal.status = 'failed';
+      completedReceipt.terminal.failure_class = 'infrastructure';
+      completedReceipt.terminal.failure_code = 'cleanup_failed';
+      completedReceipt.terminal.message = 'provider execution receipt could not prove isolated-root cleanup';
+    }
+  }
+}
+
+function liveMain(contract) {
+  let receiptFile = null;
+  let revision = null;
+  let binding = null;
+  let providerInvoked = false;
+  try {
+    receiptFile = coreArg('--receipt');
+    need(receiptFile && path.isAbsolute(receiptFile), 'infrastructure', 'receipt_path_invalid', 'live run requires an absolute --receipt path');
+    need(!exists(receiptFile), 'infrastructure', 'receipt_exists', 'refusing to overwrite an existing provider receipt', { path: slash(receiptFile) });
+    liveValidateArguments();
+    const revisionFile = coreArg('--campaign-revision');
+    need(revisionFile && path.isAbsolute(revisionFile), 'infrastructure', 'campaign_revision_invalid', 'live run requires an absolute --campaign-revision path');
+    revision = liveCanonicalRevision(liveRevisionPath(revisionFile));
+    const runId = coreArg('--run');
+    need(runId, 'product', 'run_required', 'live run requires one explicit --run binding');
+    binding = contract.bindings.find((item) => item.run_id === runId);
+    need(binding, 'product', 'run_unknown', `unknown campaign binding: ${runId}`);
+    need(binding.calibration_digest !== null, 'infrastructure', 'calibration_pending', `binding remains pending: ${runId}`);
+    const receipt = liveRun(contract, binding, revision, receiptFile);
+    realAgentWriteReceipt(receiptFile, receipt);
+    process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+  } catch (error) {
+    const failure = error instanceof ProofFailure ? error : new ProofFailure('infrastructure', 'provider_execution_failure', error.message, { stack: error.stack });
+    const failed = { schema_version: 1, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked || Boolean(error.providerInvoked), workflow_verdict: 'not_evaluated', campaign_revision: revision ? { revision_id: revision.revision.revision_id, sha256: revision.sha256 } : null, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: binding ? bindingFingerprint(binding) : null, run_id: binding?.run_id || coreArg('--run'), trial_kind: binding?.kind || null, runtime: binding?.runtime || null, provider: { logical_command: binding ? CORE_RUNTIME_PINS[binding.runtime].command : null, version_probe: error.versionProbe || null, requested_model: binding?.model || null, requested_effort: binding?.effort || null, resolution: error.providerEvidence || null, identity_claim: error.providerEvidence ? 'requested/native identity only' : 'none' }, roles: error.roles || [], isolation: { root: '<ISOLATED_ROOT>', provider_readable_paths: [], writable_roots: [], owner_state: 'not_inherited' }, cleanup: error.cleanup || { attempted: false, removed: false }, terminal: { status: 'failed', receipt_count: 1, failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: 'No workflow claim: provider execution failed or was not admitted; workflow_verdict remains not_evaluated.' };
+    if (receiptFile && path.isAbsolute(receiptFile) && !exists(receiptFile)) {
+      try { realAgentWriteReceipt(receiptFile, failed); } catch { /* stdout remains the authoritative failure when the path is unsafe */ }
+    }
+    process.stdout.write(`${JSON.stringify(failed, null, 2)}\n`);
+    process.exitCode = 1;
+  }
+}
+
 function coreMain() {
   let receiptFile = null;
   try {
     const campaignFile = coreCampaignFile(coreArg('--campaign'));
     const contract = coreReadCampaign(campaignFile);
     need(!coreFlag('--real-agent'), 'product', 'legacy_mode_forbidden', 'the historical --real-agent mode is not an executable authority');
+    if (coreFlag('--campaign-revision')) {
+      liveMain(contract);
+      return;
+    }
     const verifyPackFile = coreArg('--verify-pack') || coreArg('--grade-pack');
     if (verifyPackFile) {
       const packFile = path.resolve(verifyPackFile);
@@ -1018,4 +1583,22 @@ function coreMain() {
   }
 }
 
-coreMain();
+if (require.main === module) coreMain();
+
+// Pure native parsers are exported for the synthetic live matrix. Requiring
+// this evaluator never runs a provider or campaign command.
+module.exports = {
+  realAgentResolveProvider,
+  realAgentRunProvider,
+  realAgentInvocationArgv,
+  realAgentProviderEvidence,
+  liveParseCodex,
+  liveParseClaude,
+  liveParseOpenCode,
+  liveParseOpenCodeExport,
+  liveParseNative,
+  liveTarEntries,
+  liveCanonicalRevision,
+  liveBootstrapArtifact,
+  liveMemberPath,
+};
