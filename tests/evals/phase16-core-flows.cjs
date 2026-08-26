@@ -484,6 +484,11 @@ const CORE_CAMPAIGN_SCHEMA_VERSION = 2;
 const CORE_CAMPAIGN_CONTRACT = 'phase16-core-flows.v2';
 const CORE_CAMPAIGN_APPROVAL = '16-05 owner approval 2026-08-26';
 const HISTORICAL_SCENARIO_SHA256 = 'D66601B028C92CB520011DFE9DC669190FD45F3AE435BC722D2AF395DDDA4504';
+const CALIBRATION_CONTRACT = 'phase16-calibration.v1';
+const CALIBRATION_CASE_IDS = Object.freeze([
+  'treesnap-greenfield', 'itsdangerous-fips-sha1', 'chi-bodyless-charset',
+  'packed-readme-install', 'scripted-owner-broker', 'docusaurus-browser',
+]);
 const FRESH_PAUSE_RESUME_WITNESS = 'fresh-pause-resume';
 const CRITICAL_WITNESSES = Object.freeze([
   'provider-events', 'generated-skill-observations', 'lifecycle-transitions',
@@ -642,6 +647,15 @@ function coreReadCampaign(file) {
   need(campaign && campaign.schema_version === CORE_CAMPAIGN_SCHEMA_VERSION && campaign.contract === CORE_CAMPAIGN_CONTRACT, 'product', 'campaign_schema_invalid', 'unsupported core-flow campaign contract', { schema_version: campaign?.schema_version, contract: campaign?.contract });
   need(campaign.approval_ref === CORE_CAMPAIGN_APPROVAL, 'product', 'campaign_approval_invalid', 'campaign approval reference is not the approved Task 16-05 reference');
   need(campaign.authority === 'live-evaluation' && campaign.execution === 'audit-pack-only-until-16-06', 'product', 'campaign_authority_invalid', 'campaign is not explicitly bounded to the Task 16-05-02 audit-pack lane');
+  need(campaign.calibration && campaign.calibration.contract === CALIBRATION_CONTRACT && campaign.calibration.case_file === 'tests/evals/phase16-calibration-cases.json', 'product', 'calibration_contract_invalid', 'campaign does not point at the approved offline calibration contract');
+  need(stableStringify(campaign.calibration.case_ids) === stableStringify(CALIBRATION_CASE_IDS), 'product', 'calibration_contract_invalid', 'campaign calibration case matrix drifted');
+  const calibrationFile = path.resolve(REPO, campaign.calibration.case_file);
+  need(exists(calibrationFile), 'infrastructure', 'calibration_contract_missing', 'offline calibration case file is missing', { file: slash(calibrationFile) });
+  let calibration;
+  try { calibration = json(calibrationFile); } catch (error) { infrastructureFailure('calibration_contract_invalid', 'offline calibration case file is not valid JSON', { message: error.message }); }
+  need(calibration.contract === CALIBRATION_CONTRACT && calibration.approval_ref === CORE_CAMPAIGN_APPROVAL && Array.isArray(calibration.cases), 'product', 'calibration_contract_invalid', 'offline calibration case contract is not approved');
+  const calibrationCases = new Map(calibration.cases.map((item) => [item.id, item]));
+  need(stableStringify([...calibrationCases.keys()]) === stableStringify(CALIBRATION_CASE_IDS), 'product', 'calibration_contract_invalid', 'offline calibration case IDs do not match campaign');
   need(campaign.historical_scenario_sha256 === HISTORICAL_SCENARIO_SHA256, 'product', 'historical_hash_invalid', 'campaign does not pin the immutable historical scenario bytes');
   need(stableStringify(campaign.critical_witnesses) === stableStringify(CRITICAL_WITNESSES), 'product', 'critical_witness_contract_invalid', 'campaign does not declare the approved critical witness contract');
   need(campaign.advisory_judge && campaign.advisory_judge.enabled === true && campaign.advisory_judge.must_run_after === 'deterministic-grader' && campaign.advisory_judge.affects_verdict === false, 'product', 'advisory_contract_invalid', 'campaign advisory judge is not strictly post-grade and non-authoritative');
@@ -661,7 +675,19 @@ function coreReadCampaign(file) {
   need(stableStringify([...journeys.keys()].sort()) === stableStringify(Object.keys(CORE_JOURNEYS).sort()), 'product', 'journey_matrix_invalid', 'campaign journeys are not the exact three approved core journeys');
   need(Array.isArray(campaign.bindings) && campaign.bindings.length === 27, 'product', 'binding_count_invalid', 'campaign must contain exactly 27 trial bindings');
   const ids = new Set();
-  for (const binding of campaign.bindings) { need(!ids.has(binding?.run_id), 'product', 'binding_duplicate', `duplicate binding: ${binding?.run_id}`); ids.add(binding?.run_id); coreValidateBinding(binding, journeys); }
+  for (const binding of campaign.bindings) {
+    need(!ids.has(binding?.run_id), 'product', 'binding_duplicate', `duplicate binding: ${binding?.run_id}`); ids.add(binding?.run_id);
+    need(CALIBRATION_CASE_IDS.includes(binding.calibration_case), 'product', 'calibration_binding_invalid', `binding calibration reference is missing: ${binding?.run_id}`);
+    const calibrationCase = calibrationCases.get(binding.calibration_case);
+    need(calibrationCase && calibrationCase.campaign_refs.includes(binding.run_id), 'product', 'calibration_binding_invalid', `binding is not covered by its calibration case: ${binding?.run_id}`);
+    if (binding.kind === 'core') {
+      need(/^[0-9a-f]{64}$/i.test(binding.calibration_digest), 'product', 'calibration_binding_invalid', `core binding calibration digest is missing: ${binding?.run_id}`);
+      need(sha(Buffer.from(stableStringify(calibrationCase), 'utf8')) === binding.calibration_digest.toLowerCase(), 'product', 'calibration_binding_invalid', `binding calibration digest does not match its case: ${binding?.run_id}`);
+    } else {
+      need(binding.calibration_digest === null && calibrationCase.admission === 'pending', 'product', 'calibration_pending_contract_invalid', `auxiliary binding must remain explicitly pending: ${binding?.run_id}`);
+    }
+    coreValidateBinding(binding, journeys);
+  }
   const core = campaign.bindings.filter((binding) => binding.kind === 'core');
   need(core.length === 18, 'product', 'core_matrix_invalid', 'core matrix must contain 18 trials');
   for (const journey of journeys.keys()) for (const runtime of CORE_RUNTIME_IDS) {

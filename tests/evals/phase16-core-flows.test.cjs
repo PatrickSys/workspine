@@ -11,6 +11,8 @@ const test = require('node:test');
 const REPO = path.resolve(__dirname, '..', '..');
 const EVAL = path.join(REPO, 'tests', 'evals', 'phase16-core-flows.cjs');
 const CAMPAIGN = path.join(REPO, 'tests', 'evals', 'phase16-core-flows.json');
+const CALIBRATION = path.join(REPO, 'tests', 'evals', 'phase16-calibration.cjs');
+const CALIBRATION_CASES = path.join(REPO, 'tests', 'evals', 'phase16-calibration-cases.json');
 const PROOF = path.join(REPO, 'tests', 'proof', 'phase16-first-run.cjs');
 const HISTORICAL = path.join(REPO, 'tests', 'evals', 'historical', 'phase16-04A-scenarios.json');
 const HISTORICAL_SHA256 = 'D66601B028C92CB520011DFE9DC669190FD45F3AE435BC722D2AF395DDDA4504';
@@ -23,11 +25,17 @@ function stableStringify(value) {
 }
 function stableHash(value) { return crypto.createHash('sha256').update(stableStringify(value)).digest('hex'); }
 function run(argv) { return cp.spawnSync(process.execPath, [EVAL, ...argv], { cwd: REPO, encoding: 'utf8', windowsHide: true }); }
+function runCalibration(argv) { return cp.spawnSync(process.execPath, [CALIBRATION, ...argv], { cwd: REPO, encoding: 'utf8', windowsHide: true }); }
 function parse(stdout) { return JSON.parse(stdout); }
 
 test('campaign has exactly three journeys and 27 bindings', () => {
   const campaign = JSON.parse(fs.readFileSync(CAMPAIGN, 'utf8'));
   assert.equal(campaign.contract, 'phase16-core-flows.v2');
+  assert.deepEqual(campaign.calibration, {
+    contract: 'phase16-calibration.v1',
+    case_file: 'tests/evals/phase16-calibration-cases.json',
+    case_ids: ['treesnap-greenfield', 'itsdangerous-fips-sha1', 'chi-bodyless-charset', 'packed-readme-install', 'scripted-owner-broker', 'docusaurus-browser'],
+  });
   assert.equal(campaign.journeys.length, 3);
   assert.equal(campaign.bindings.length, 27);
   const freshRuns = campaign.bindings.filter((binding) => binding.critical_witnesses.includes('fresh-pause-resume')).map((binding) => binding.run_id);
@@ -54,6 +62,65 @@ test('campaign has exactly three journeys and 27 bindings', () => {
   }
   assert.equal(campaign.bindings.filter((binding) => binding.kind === 'core').length, 18);
   for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) assert.equal(campaign.bindings.filter((binding) => binding.kind === kind).length, 3);
+});
+
+test('offline calibration contract admits only three core cases', () => {
+  const result = runCalibration(['--check', '--cases', CALIBRATION_CASES]);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const receipt = parse(result.stdout);
+  assert.equal(receipt.provider_invoked, false);
+  assert.equal(receipt.browser_invoked, false);
+  assert.equal(receipt.terminal.status, 'passed');
+  assert.equal(receipt.matrix.cases, 3);
+  assert.equal(receipt.matrix.pending_cases, 3);
+  assert.deepEqual(receipt.terminal.pending_cases, ['packed-readme-install', 'scripted-owner-broker', 'docusaurus-browser']);
+  assert.ok(receipt.cases.filter((item) => item.admission === 'admitted-core').every((item) => item.status === 'ready'));
+  assert.ok(receipt.cases.filter((item) => item.admission === 'pending').every((item) => item.status === 'pending'));
+});
+
+test('offline calibration executes the three native core controls twice', () => {
+  const result = runCalibration(['--all', '--repeat', '2', '--cases', CALIBRATION_CASES]);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const receipt = parse(result.stdout);
+  assert.equal(receipt.provider_invoked, false);
+  assert.equal(receipt.browser_invoked, false);
+  assert.equal(receipt.terminal.status, 'passed');
+  assert.equal(receipt.matrix.cases, 3);
+  assert.equal(receipt.matrix.repetitions, 2);
+  assert.equal(receipt.terminal.message, 'all admitted core native red/green/red controls passed twice');
+  assert.ok(receipt.cases.every((item) => item.repetitions === 2 && item.status === 'calibrated'));
+});
+
+test('offline calibration reports the requested repetition count', () => {
+  const result = runCalibration(['--case', 'treesnap-greenfield', '--repeat', '1', '--cases', CALIBRATION_CASES]);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const receipt = parse(result.stdout);
+  assert.equal(receipt.terminal.status, 'passed');
+  assert.equal(receipt.terminal.message, 'all admitted core native red/green/red controls passed once');
+  assert.equal(receipt.matrix.repetitions, 1);
+  assert.deepEqual(receipt.cases.map((item) => item.repetitions), [1]);
+});
+
+test('offline calibration rejects tampered pins before executing an oracle', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-tamper-'));
+  try {
+    const mutations = [
+      (data) => { data.cases.find((item) => item.id === 'chi-bodyless-charset').variants[0].sha256 = '0'.repeat(64); },
+      (data) => { data.cases.find((item) => item.id === 'treesnap-greenfield').oracle.path = 'missing/oracle.py'; },
+      (data) => { data.cases.find((item) => item.id === 'chi-bodyless-charset').source.candidate_commit = '0'.repeat(40); },
+    ];
+    for (const [index, mutate] of mutations.entries()) {
+      const tampered = path.join(tempRoot, `cases-${index}.json`);
+      const data = JSON.parse(fs.readFileSync(CALIBRATION_CASES, 'utf8'));
+      mutate(data);
+      fs.writeFileSync(tampered, JSON.stringify(data, null, 2));
+      const result = runCalibration(['--check', '--cases', tampered]);
+      assert.notEqual(result.status, 0, result.stdout + result.stderr);
+      const receipt = parse(result.stdout);
+       assert.equal(receipt.terminal.status, 'failed');
+       assert.notEqual(receipt.terminal.failure_code, 'calibration_input_missing');
+    }
+  } finally { fs.rmSync(tempRoot, { recursive: true, force: true }); }
 });
 
 test('check is provider-free and validates the new campaign', () => {

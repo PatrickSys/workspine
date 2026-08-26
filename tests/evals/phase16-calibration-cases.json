@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "contract": "phase16-calibration.v1",
+  "approval_ref": "16-05 owner approval 2026-08-26",
+  "provider_invoked": false,
+  "browser_invoked": false,
+  "repeat_required": 2,
+  "portable_root": ".work/phases/16-safe-cohesive-first-run/16-05-calibration-inputs",
+  "cases": [
+    {
+      "id": "treesnap-greenfield",
+      "admission": "admitted-core",
+      "kind": "generated-standard-library",
+      "campaign_refs": ["core-treesnap-codex-1", "core-treesnap-codex-2", "core-treesnap-claude-1", "core-treesnap-claude-2", "core-treesnap-opencode-1", "core-treesnap-opencode-2"],
+      "flow": ["setup", "health", "new-project", "plan", "execute", "verify"],
+      "manifest": {"path": "treesnap/MANIFEST.json", "sha256": "99D3C6A6B91CF4E208EB3EFB323C5696C7CDF59E2ADB297C3BF16B19A01CB0B0"},
+      "oracle": {"path": "treesnap/oracle/treesnap_oracle.py", "sha256": "3EA79D90793454141A0976E18EEB333C22438EF90E9868A3F6D572EB5643704D"},
+      "variants": [
+        {"id": "baseline", "root": "treesnap", "path": "candidates/baseline_treesnap.py", "sha256": "D2671D83A6FBC16FAC3D8F3FC48EA60BE427591E5F1109799AF1FA7501CCA8F0", "expected": "red"},
+        {"id": "reference", "root": "treesnap", "path": "candidates/reference_treesnap.py", "sha256": "AB2122F6A67DE51596498362F9D10EBB20982C86EB73685FFCA9441DA347D53A", "expected": "green"},
+        {"id": "mutant", "root": "treesnap", "path": "candidates/mutant_follow_symlink_treesnap.py", "sha256": "F382C15A88A66F9691A25444C4750A78917E17B8E563D022A1A1905885B79789", "expected": "red"},
+        {"id": "mutant-content", "root": "treesnap", "path": "candidates/mutant_ignore_content_treesnap.py", "sha256": "2558B32F181DDC8898B0142DD606A27FFE840CC3A81B16911C936D712C0E8CC1", "expected": "red"}
+      ],
+      "claim_limit": "Only the pinned treesnap standard-library task and its documented greenfield workflow.",
+      "oracle_contract": "native oracle repeats each candidate against fresh materialized fixtures"
+    },
+    {
+      "id": "itsdangerous-fips-sha1",
+      "admission": "admitted-core",
+      "kind": "pinned-python",
+      "campaign_refs": ["core-brownfield-plan-codex-1", "core-brownfield-plan-codex-2", "core-brownfield-plan-claude-1", "core-brownfield-plan-claude-2", "core-brownfield-plan-opencode-1", "core-brownfield-plan-opencode-2"],
+      "flow": ["setup", "health", "brownfield-plan", "pause", "fresh-resume", "execute", "verify", "progress"],
+      "source": {"repository": "https://github.com/pallets/itsdangerous.git", "baseline_commit": "93ae366874bbd4f69d90495c45b2cd336387496c", "reference_commit": "2f69e841d2a979c616a55b226e444694f5d9c962", "fix_commit": "7f4dcf83a07bb3d53f4e0e65ef1b43327b4cca90"},
+      "manifest": {"path": "itsdangerous/manifest.json", "sha256": "45463E710CF4EA2709A252A154CA3211CB0E76ED5AD1D980A49EE03D242B1110"},
+      "oracle": {"path": "itsdangerous/oracle/oracle.py", "sha256": "9186F00AC3E514429D939BC3A67AC3B6410EE79B1E85EF06919A7ADE9EC6FCFB"},
+      "archives": [
+        {"path": "itsdangerous/itsdangerous-93ae366.tar.gz", "sha256": "8C9E39C3E32B7F842DDDBE9C03936DA6C3223CFC32F45F502FA18F638963CC3A"},
+        {"path": "itsdangerous/itsdangerous-2f69e84.tar.gz", "sha256": "9A47E392440631327288F85A67596909484795AEE1A8A28117A6820954B61009"}
+      ],
+      "variants": [
+        {"id": "baseline", "root": "itsdangerous/source", "path": "src/itsdangerous/signer.py", "sha256": "6F1D88F1908BE2B763697EC2D2A1CDB34364E475E817258D2A4E3D57FC6FCF29", "expected": "red"},
+        {"id": "reference", "root": "itsdangerous/source/reference", "path": "src/itsdangerous/signer.py", "sha256": "85D41EF5F64EB63E1299CAD82D775B6021950CBFAD355AF3021084267BE663C6", "expected": "green"},
+        {"id": "mutant", "root": "itsdangerous/mutant", "path": "src/itsdangerous/signer.py", "sha256": "630D1DE056094BC0EB3E15BAF7CF8F2D43708F0AE4E39898F28075DCA901E5AF", "expected": "red"}
+      ],
+      "claim_limit": "Only pinned itsdangerous SHA-1-unavailable import behavior and bounded security/scope review.",
+      "oracle_contract": "native oracle verifies FIPS import, explicit SHA-256 behavior, default behavior, and upstream tests"
+    },
+    {
+      "id": "chi-bodyless-charset",
+      "admission": "admitted-core",
+      "kind": "pinned-go",
+      "campaign_refs": ["core-brownfield-quick-codex-1", "core-brownfield-quick-codex-2", "core-brownfield-quick-claude-1", "core-brownfield-quick-claude-2", "core-brownfield-quick-opencode-1", "core-brownfield-quick-opencode-2"],
+      "flow": ["setup", "health", "quick", "verify"],
+      "source": {"repository": "https://github.com/go-chi/chi.git", "candidate_commit": "15767233591fd4267ae99d05299fa3807c375cdd", "baseline_commit": "6adf733e0ebb79ade04909069f6abdc6f53648a8", "reference_commit": "87c34a24a64984d80c6f1d11eb19dc8584930433"},
+      "manifest": {"path": "chi/chi-calibration-manifest.json", "sha256": "ECB7C933B74FC7CB37E4BAFE3D623AB4B18100E20D2CE4913CA6BFD446A5BA75"},
+      "oracle": {"path": "chi/.oracle/chi_oracle_test.go", "sha256": "032432EE28A4C57D47E68AC241E90B4691E867422912EAD8FFB413636D4736C9"},
+      "toolchain": {"path": "chi/toolchain/go/bin/go.exe", "sha256": "7D828191BA32519A9C9361789AB647486236ED45C660889196C7770A8FF1985C"},
+      "reference_patch": {"path": "chi/authoritative/reference.patch", "sha256": "51DC3BDB7CDBE2BD5E5F204A935B8FE64AD2EA30B38CDFC91E4D49DF8281F2EE"},
+      "variants": [
+        {"id": "baseline", "root": "chi/runs/repeat-1-baseline", "path": "middleware/content_charset.go", "sha256": "D7ECBB1878543E7459BCBF80FAB2401998E241DDBC03565ABAC213B9B43E4307", "test_sha256": "C4E27A427E80A112ADAECEF8858BB9EA89ADEF65F13D6FD192D9FA8F278104F4", "expected": "red"},
+        {"id": "reference", "root": "chi/runs/repeat-1-reference", "path": "middleware/content_charset.go", "sha256": "014E63B3DF65440689A40466A169D3E584C2937CD650BA886ECAE2B68164C91A", "test_sha256": "4605ED8133FF2ED9ADD2E2400807473E0EF3019B14B3D2DD42A5B70F41EB0683", "expected": "green"},
+        {"id": "mutant", "root": "chi/runs/repeat-1-mutant", "path": "middleware/content_charset.go", "sha256": "6F71071EE0EF1930D4879CCB12206176B9BE75E4EB29D1E1C7C94A4A48250865", "test_sha256": "4605ED8133FF2ED9ADD2E2400807473E0EF3019B14B3D2DD42A5B70F41EB0683", "expected": "red"}
+      ],
+      "claim_limit": "Only pinned chi bodyless-request charset behavior and its quick/verify workflow outcome.",
+      "oracle_contract": "standalone native Go test covers bodyless red/green and bodyful mismatch controls"
+    },
+    {"id": "packed-readme-install", "admission": "pending", "kind": "packed-readme", "campaign_refs": ["packed-readme-codex", "packed-readme-claude", "packed-readme-opencode"], "pending_reason": "deferred to 16-05-03B auxiliary calibration", "claim_limit": "No packed-install calibration claim in the core slice."},
+    {"id": "scripted-owner-broker", "admission": "pending", "kind": "scripted-owner", "campaign_refs": ["owner-scripted-plan-check", "owner-scripted-pause-resume", "owner-scripted-verify"], "pending_reason": "deferred to 16-05-03B auxiliary calibration", "claim_limit": "No scripted-owner calibration claim in the core slice."},
+    {"id": "docusaurus-browser", "admission": "pending", "kind": "docusaurus-browser", "campaign_refs": ["docusaurus-browser-codex", "docusaurus-browser-claude", "docusaurus-browser-opencode"], "pending_reason": "deferred to 16-06-03 browser calibration", "claim_limit": "No browser calibration claim in the core slice."}
+  ]
+}
