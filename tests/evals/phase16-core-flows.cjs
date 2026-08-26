@@ -683,6 +683,9 @@ function coreReadCampaign(file) {
     if (binding.kind === 'core') {
       need(/^[0-9a-f]{64}$/i.test(binding.calibration_digest), 'product', 'calibration_binding_invalid', `core binding calibration digest is missing: ${binding?.run_id}`);
       need(sha(Buffer.from(stableStringify(calibrationCase), 'utf8')) === binding.calibration_digest.toLowerCase(), 'product', 'calibration_binding_invalid', `binding calibration digest does not match its case: ${binding?.run_id}`);
+    } else if (calibrationCase.admission === 'admitted-auxiliary') {
+      need(/^[0-9a-f]{64}$/i.test(binding.calibration_digest), 'product', 'calibration_binding_invalid', `auxiliary binding calibration digest is missing: ${binding?.run_id}`);
+      need(sha(Buffer.from(stableStringify(calibrationCase), 'utf8')) === binding.calibration_digest.toLowerCase(), 'product', 'calibration_binding_invalid', `auxiliary binding calibration digest does not match its case: ${binding?.run_id}`);
     } else {
       need(binding.calibration_digest === null && calibrationCase.admission === 'pending', 'product', 'calibration_pending_contract_invalid', `auxiliary binding must remain explicitly pending: ${binding?.run_id}`);
     }
@@ -695,6 +698,8 @@ function coreReadCampaign(file) {
     need(rows.length === 2 && rows.every((binding) => [1, 2].includes(binding.repetition)), 'product', 'core_matrix_invalid', `core matrix must have two repetitions for ${journey}/${runtime}`);
   }
   for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) need(campaign.bindings.filter((binding) => binding.kind === kind).length === 3, 'product', 'auxiliary_matrix_invalid', `${kind} must contain exactly three trials`);
+  need(campaign.bindings.filter((binding) => binding.calibration_digest !== null).length === 24, 'product', 'calibration_admission_count_invalid', 'exactly 24 bindings must be calibrated before the browser gate');
+  need(campaign.bindings.filter((binding) => binding.calibration_digest === null).length === 3, 'product', 'calibration_pending_count_invalid', 'exactly three browser bindings must remain pending');
   return { campaign, journeys, bindings: campaign.bindings, file, sha256: shaFile(file) };
 }
 
@@ -979,7 +984,7 @@ function coreMain() {
       return;
     }
     if (coreFlag('--check')) {
-      const result = { schema_version: 2, record_type: 'campaign_check', mode: 'check', campaign: { contract: CORE_CAMPAIGN_CONTRACT, file: slash(campaignFile), sha256: contract.sha256 }, matrix: { journeys: contract.journeys.size, bindings: contract.bindings.length, core: contract.bindings.filter((binding) => binding.kind === 'core').length, auxiliary: 9 }, provider_invoked: false, critical_witnesses: CRITICAL_WITNESSES, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '27-binding campaign schema and critical-witness contract passed' }, claim_limit: 'Schema and command construction only; no provider or product claim.' };
+      const result = { schema_version: 2, record_type: 'campaign_check', mode: 'check', campaign: { contract: CORE_CAMPAIGN_CONTRACT, file: slash(campaignFile), sha256: contract.sha256 }, matrix: { journeys: contract.journeys.size, bindings: contract.bindings.length, core: contract.bindings.filter((binding) => binding.kind === 'core').length, auxiliary: 9, calibrated: 24, pending: 3 }, provider_invoked: false, critical_witnesses: CRITICAL_WITNESSES, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '27-binding campaign schema and critical-witness contract passed; 24 calibrated, 3 browser-pending' }, claim_limit: 'Schema and command construction only; no provider or product claim.' };
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       return;
     }

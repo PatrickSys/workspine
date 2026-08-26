@@ -64,30 +64,34 @@ test('campaign has exactly three journeys and 27 bindings', () => {
   for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) assert.equal(campaign.bindings.filter((binding) => binding.kind === kind).length, 3);
 });
 
-test('offline calibration contract admits only three core cases', () => {
+test('offline calibration contract admits five cases and keeps Docusaurus pending', () => {
   const result = runCalibration(['--check', '--cases', CALIBRATION_CASES]);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const receipt = parse(result.stdout);
   assert.equal(receipt.provider_invoked, false);
   assert.equal(receipt.browser_invoked, false);
   assert.equal(receipt.terminal.status, 'passed');
-  assert.equal(receipt.matrix.cases, 3);
-  assert.equal(receipt.matrix.pending_cases, 3);
-  assert.deepEqual(receipt.terminal.pending_cases, ['packed-readme-install', 'scripted-owner-broker', 'docusaurus-browser']);
-  assert.ok(receipt.cases.filter((item) => item.admission === 'admitted-core').every((item) => item.status === 'ready'));
+  assert.equal(receipt.matrix.cases, 5);
+  assert.equal(receipt.matrix.calibrated_cases, 5);
+  assert.equal(receipt.matrix.calibrated_bindings, 24);
+  assert.equal(receipt.matrix.pending_bindings, 3);
+  assert.equal(receipt.matrix.pending_cases, 1);
+  assert.deepEqual(receipt.terminal.pending_cases, ['docusaurus-browser']);
+  assert.ok(receipt.cases.filter((item) => item.admission === 'admitted-core' || item.admission === 'admitted-auxiliary').every((item) => item.status === 'ready'));
   assert.ok(receipt.cases.filter((item) => item.admission === 'pending').every((item) => item.status === 'pending'));
 });
 
-test('offline calibration executes the three native core controls twice', () => {
+test('offline calibration executes all five admitted native controls twice', () => {
   const result = runCalibration(['--all', '--repeat', '2', '--cases', CALIBRATION_CASES]);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const receipt = parse(result.stdout);
   assert.equal(receipt.provider_invoked, false);
   assert.equal(receipt.browser_invoked, false);
   assert.equal(receipt.terminal.status, 'passed');
-  assert.equal(receipt.matrix.cases, 3);
+  assert.equal(receipt.matrix.cases, 5);
+  assert.equal(receipt.matrix.calibrated_bindings, 24);
   assert.equal(receipt.matrix.repetitions, 2);
-  assert.equal(receipt.terminal.message, 'all admitted core native red/green/red controls passed twice');
+  assert.equal(receipt.terminal.message, 'all admitted native red/green/red controls passed twice');
   assert.ok(receipt.cases.every((item) => item.repetitions === 2 && item.status === 'calibrated'));
 });
 
@@ -96,7 +100,7 @@ test('offline calibration reports the requested repetition count', () => {
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const receipt = parse(result.stdout);
   assert.equal(receipt.terminal.status, 'passed');
-  assert.equal(receipt.terminal.message, 'all admitted core native red/green/red controls passed once');
+  assert.equal(receipt.terminal.message, 'all admitted native red/green/red controls passed once');
   assert.equal(receipt.matrix.repetitions, 1);
   assert.deepEqual(receipt.cases.map((item) => item.repetitions), [1]);
 });
@@ -130,6 +134,8 @@ test('check is provider-free and validates the new campaign', () => {
   assert.equal(receipt.terminal.status, 'passed');
   assert.equal(receipt.provider_invoked, false);
   assert.equal(receipt.matrix.bindings, 27);
+  assert.equal(receipt.matrix.calibrated, 24);
+  assert.equal(receipt.matrix.pending, 3);
   assert.equal(receipt.critical_witnesses.length, 10);
 });
 
