@@ -477,12 +477,26 @@ function realAgentWriteReceipt(file, receipt) {
 }
 
 
-// Task 16-05-01 deliberately admits only construction and dry-run checks. The
-// old 16-04A contract is historical evidence, not an executable campaign.
-const CORE_CAMPAIGN_SCHEMA_VERSION = 1;
-const CORE_CAMPAIGN_CONTRACT = 'phase16-core-flows.v1';
+// Task 16-05-02 admits only bounded, re-gradeable audit packs.  Provider
+// execution remains an explicit later lane; --simulate and --verify-pack never
+// resolve or invoke a provider.
+const CORE_CAMPAIGN_SCHEMA_VERSION = 2;
+const CORE_CAMPAIGN_CONTRACT = 'phase16-core-flows.v2';
 const CORE_CAMPAIGN_APPROVAL = '16-05 owner approval 2026-08-26';
 const HISTORICAL_SCENARIO_SHA256 = 'D66601B028C92CB520011DFE9DC669190FD45F3AE435BC722D2AF395DDDA4504';
+const FRESH_PAUSE_RESUME_WITNESS = 'fresh-pause-resume';
+const CRITICAL_WITNESSES = Object.freeze([
+  'provider-events', 'generated-skill-observations', 'lifecycle-transitions',
+  FRESH_PAUSE_RESUME_WITNESS, 'patch-diff', 'changed-file-hashes',
+  'verifier-verdict', 'deterministic-grader', 'selected-artifacts', 'terminal-receipt',
+]);
+const AUDIT_PACK_SCHEMA_VERSION = 1;
+const AUDIT_PACK_EVENT_CAP = 96;
+const AUDIT_PACK_ARTIFACT_CAP = 16;
+const AUDIT_PACK_CONTENT_CAP = 128 * 1024;
+const SIMULATED_ROOT_TOKEN = '<SIMULATED_ROOT>';
+const SAFE_TOKEN = /^<(?:SIMULATED_ROOT|ISOLATED_ROOT|EPHEMERAL_[A-Z0-9_]+)>/;
+
 const CORE_RUNTIME_PINS = Object.freeze({
   codex: Object.freeze({ command: 'codex', model: 'gpt-5.6-luna', effort: 'high' }),
   claude: Object.freeze({ command: 'claude', model: 'claude-sonnet-5', effort: 'high' }),
@@ -505,6 +519,71 @@ const CORE_JOURNEYS = Object.freeze({
     artifact_family: 'quick-change', timeout_seconds: 3300,
   }),
 });
+const SKILL_FOR_PHASE = Object.freeze({
+  'new-project': 'work-new-project', plan: 'work-plan', 'brownfield-plan': 'work-plan', 'plan-check': 'work-plan',
+  pause: 'work-pause', 'fresh-resume': 'work-resume', execute: 'work-execute', verify: 'work-verify',
+  progress: 'work-progress', quick: 'work-quick',
+});
+const SKILL_WITNESS = 'generated-skill-observations';
+
+function bindingFlow(binding) {
+  if (binding.kind === 'core') return binding.flow;
+  if (binding.run_id === 'owner-scripted-pause-resume') return ['setup', 'health', 'pause', 'fresh-resume', 'verify'];
+  if (binding.run_id === 'owner-scripted-plan-check') return ['setup', 'health', 'plan-check'];
+  if (binding.run_id === 'owner-scripted-verify') return ['setup', 'health', 'verify'];
+  return ['setup', 'health'];
+}
+
+function bindingRequiredSkills(binding) {
+  return bindingFlow(binding).map((phase) => SKILL_FOR_PHASE[phase]).filter(Boolean).filter((id, index, values) => values.indexOf(id) === index);
+}
+
+function bindingCriticalWitnesses(binding) {
+  const required = bindingRequiredSkills(binding);
+  const needsFreshResume = binding?.journey_id === 'brownfield-plan' || binding?.run_id === 'owner-scripted-pause-resume';
+  return CRITICAL_WITNESSES.filter((id) => (id !== SKILL_WITNESS || required.length > 0) && (id !== FRESH_PAUSE_RESUME_WITNESS || needsFreshResume));
+}
+
+function journeyRequiredSkills(journeyId) {
+  const journey = CORE_JOURNEYS[journeyId];
+  return journey ? journey.flow.map((phase) => SKILL_FOR_PHASE[phase]).filter(Boolean).filter((id, index, values) => values.indexOf(id) === index) : [];
+}
+
+function journeyCriticalWitnesses(journeyId) {
+  const required = journeyRequiredSkills(journeyId);
+  return CRITICAL_WITNESSES.filter((id) => (id !== SKILL_WITNESS || required.length > 0) && (id !== FRESH_PAUSE_RESUME_WITNESS || journeyId === 'brownfield-plan'));
+}
+
+function bindingFingerprintPayload(binding) {
+  return {
+    run_id: binding.run_id,
+    repetition: binding.repetition || 1,
+    journey_id: binding.journey_id || null,
+    flow: bindingFlow(binding),
+    kind: binding.kind,
+    runtime: binding.runtime,
+    model: binding.model,
+    effort: binding.effort,
+    required_artifact_family: binding.required_artifact_family || null,
+    timeout_seconds: binding.timeout_seconds,
+    role_budgets_seconds: binding.role_budgets_seconds,
+    critical_witnesses: bindingCriticalWitnesses(binding),
+    required_skills: bindingRequiredSkills(binding),
+  };
+}
+
+function bindingFingerprint(binding) { return sha(Buffer.from(stableStringify(bindingFingerprintPayload(binding)), 'utf8')); }
+
+function exactKeys(value, allowed, label) {
+  need(value && typeof value === 'object' && !Array.isArray(value), 'product', 'receipt_schema_invalid', `${label} must be an object`);
+  const actual = Object.keys(value).sort();
+  const expected = [...allowed].sort();
+  need(stableStringify(actual) === stableStringify(expected), 'product', 'receipt_schema_invalid', `${label} has unknown or missing keys`, { actual, expected });
+}
+
+const RECEIPT_KEYS = Object.freeze(['schema_version', 'record_type', 'mode', 'provider_invoked', 'campaign', 'binding_fingerprint', 'run_id', 'journey_id', 'trial_kind', 'runtime', 'provider', 'critical_witnesses', 'audit_pack', 'terminal', 'claim_limit']);
+const PACK_KEYS = Object.freeze(['schema_version', 'bounded', 'binding_fingerprint', 'critical_witnesses', 'required_skills', 'events', 'generated_skills', 'lifecycle', 'candidate', 'artifacts', 'selected_artifacts', 'verifier', 'deterministic_grader', 'advisory_judge']);
+const TERMINAL_KEYS = Object.freeze(['status', 'receipt_count', 'failure_class', 'failure_code', 'message']);
 const CORE_RUNTIME_IDS = Object.freeze(['codex', 'claude', 'opencode']);
 const CORE_TRIAL_KINDS = new Set(['core', 'scripted-owner', 'packed-readme', 'docusaurus-browser']);
 const CORE_ROLE_BUDGET_KEYS = Object.freeze(['plan_check', 'execute', 'independent_verify']);
@@ -541,8 +620,9 @@ function coreValidateBinding(binding, journeys) {
   const fixedBudget = CORE_BINDING_CONTRACT[binding.kind];
   need(binding.timeout_seconds === fixedBudget.timeout_seconds && stableStringify(binding.role_budgets_seconds) === stableStringify(fixedBudget.role_budgets_seconds), 'product', 'binding_budget_contract_invalid', `binding does not use the approved fixed ceiling: ${binding.run_id}`);
   need(typeof binding.task_ceiling === 'string' && binding.task_ceiling.length >= 20, 'product', 'binding_ceiling_invalid', `task ceiling missing: ${binding.run_id}`);
-  need(binding.grader_mode === 'deterministic-only' && binding.advisory_judge === false, 'product', 'binding_grader_invalid', `binding is not deterministic-only: ${binding.run_id}`);
-  need(Array.isArray(binding.critical_witnesses) && binding.critical_witnesses.length === 0, 'product', 'critical_witnesses_present', `critical witnesses must be deferred: ${binding.run_id}`);
+  need(binding.grader_mode === 'deterministic-only' && binding.advisory_judge === false, 'product', 'binding_grader_invalid', `binding must use deterministic grading; advisory judging is controlled by the campaign: ${binding.run_id}`);
+  need(stableStringify(binding.critical_witnesses) === stableStringify(bindingCriticalWitnesses(binding)), 'product', 'critical_witness_contract_invalid', `binding critical witness declaration mismatch: ${binding.run_id}`);
+  need(stableStringify(binding.required_skills) === stableStringify(bindingRequiredSkills(binding)), 'product', 'required_skills_contract_invalid', `binding required skill declaration mismatch: ${binding.run_id}`);
   if (binding.kind === 'core') {
     need(typeof binding.journey_id === 'string' && journeys.has(binding.journey_id), 'product', 'binding_journey_invalid', `core binding references unknown journey: ${binding.run_id}`);
     const journey = journeys.get(binding.journey_id);
@@ -561,8 +641,10 @@ function coreReadCampaign(file) {
   need(!historical, 'product', 'historical_campaign_rejected', 'the 16-04A scenario contract is historical evidence and cannot be used as live authority', { file: slash(file), sha256: shaFile(file), expected_sha256: HISTORICAL_SCENARIO_SHA256 });
   need(campaign && campaign.schema_version === CORE_CAMPAIGN_SCHEMA_VERSION && campaign.contract === CORE_CAMPAIGN_CONTRACT, 'product', 'campaign_schema_invalid', 'unsupported core-flow campaign contract', { schema_version: campaign?.schema_version, contract: campaign?.contract });
   need(campaign.approval_ref === CORE_CAMPAIGN_APPROVAL, 'product', 'campaign_approval_invalid', 'campaign approval reference is not the approved Task 16-05 reference');
-  need(campaign.authority === 'live-evaluation' && campaign.execution === 'dry-run-only-until-16-05-02', 'product', 'campaign_authority_invalid', 'campaign is not explicitly bounded to the Task 16-05-01 dry-run lane');
+  need(campaign.authority === 'live-evaluation' && campaign.execution === 'audit-pack-only-until-16-06', 'product', 'campaign_authority_invalid', 'campaign is not explicitly bounded to the Task 16-05-02 audit-pack lane');
   need(campaign.historical_scenario_sha256 === HISTORICAL_SCENARIO_SHA256, 'product', 'historical_hash_invalid', 'campaign does not pin the immutable historical scenario bytes');
+  need(stableStringify(campaign.critical_witnesses) === stableStringify(CRITICAL_WITNESSES), 'product', 'critical_witness_contract_invalid', 'campaign does not declare the approved critical witness contract');
+  need(campaign.advisory_judge && campaign.advisory_judge.enabled === true && campaign.advisory_judge.must_run_after === 'deterministic-grader' && campaign.advisory_judge.affects_verdict === false, 'product', 'advisory_contract_invalid', 'campaign advisory judge is not strictly post-grade and non-authoritative');
   need(Array.isArray(campaign.journeys) && campaign.journeys.length === 3, 'product', 'journey_count_invalid', 'campaign must contain exactly three core journeys');
   const journeys = new Map();
   for (const journey of campaign.journeys) {
@@ -572,7 +654,8 @@ function coreReadCampaign(file) {
     need(journey.kind === fixed.kind && journey.title === fixed.title, 'product', 'journey_metadata_invalid', `journey metadata mismatch: ${journey.id}`);
     need(stableStringify(journey.flow) === stableStringify(fixed.flow), 'product', 'journey_flow_invalid', `journey flow mismatch: ${journey.id}`);
     need(journey.required_artifact_family === fixed.artifact_family && journey.timeout_seconds === fixed.timeout_seconds, 'product', 'journey_contract_invalid', `journey contract mismatch: ${journey.id}`);
-    need(Array.isArray(journey.critical_witnesses) && journey.critical_witnesses.length === 0, 'product', 'critical_witnesses_present', `journey critical witnesses must be deferred: ${journey.id}`);
+    need(Array.isArray(journey.critical_witnesses) && stableStringify(journey.critical_witnesses) === stableStringify(journeyCriticalWitnesses(journey.id)), 'product', 'critical_witness_contract_invalid', `journey critical witness contract mismatch: ${journey.id}`);
+    need(stableStringify(journey.required_skills) === stableStringify(journeyRequiredSkills(journey.id)), 'product', 'required_skills_contract_invalid', `journey required skill declaration mismatch: ${journey.id}`);
     journeys.set(journey.id, journey);
   }
   need(stableStringify([...journeys.keys()].sort()) === stableStringify(Object.keys(CORE_JOURNEYS).sort()), 'product', 'journey_matrix_invalid', 'campaign journeys are not the exact three approved core journeys');
@@ -601,14 +684,14 @@ function coreDryRun(contract, binding) {
     realAgentAssertNoOracleExposure({ prompt, argv, env: {}, root, label: 'core-flow dry-run invocation' });
     const redactedArgv = argv.map((value) => scrub(value, root, {}));
     const receipt = {
-      schema_version: 1, record_type: 'terminal_receipt', mode: 'dry-run', provider_invoked: false,
+      schema_version: 2, record_type: 'terminal_receipt', mode: 'dry-run', provider_invoked: false,
       campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 },
       run_id: binding.run_id, trial_kind: binding.kind, runtime: binding.runtime,
       provider: { logical_command: provider.command, model: provider.model, effort: provider.effort, resolution: 'deferred_until_task_16_05_02' },
       argv: redactedArgv, isolation: { root: '<EPHEMERAL_DRY_RUN_ROOT>', provider_readable_paths: [], writable_roots: ['<EPHEMERAL_DRY_RUN_ROOT>'] },
-      critical_witnesses: { status: 'deferred', count: 0 },
-      cleanup, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '27-binding construction and dry-run contract passed' },
-      claim_limit: 'No provider execution, product behavior, critical-witness, artifact, or reliability claim; Task 16-05-01 contract construction only.',
+      critical_witnesses: { status: 'deferred-to-simulation', required: CRITICAL_WITNESSES },
+      cleanup, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '27-binding construction and provider-free dry-run contract passed' },
+      claim_limit: 'No provider execution or product claim; this is command construction only.',
     };
     return receipt;
   } finally {
@@ -617,18 +700,277 @@ function coreDryRun(contract, binding) {
   }
 }
 
+function auditSafeRelative(value, label) {
+  const text = String(value || '');
+  need(text && !path.isAbsolute(text) && !text.includes('\0'), 'product', 'path_escape', `${label} must be a relative path`, { path: text });
+  const normalized = text.replaceAll('\\', '/');
+  need(!normalized.split('/').includes('..'), 'product', 'path_escape', `${label} escapes its isolated root`, { path: normalized });
+  need(!normalized.startsWith('/') && !/^[A-Za-z]:/.test(normalized), 'product', 'path_escape', `${label} contains an absolute path`, { path: normalized });
+  return normalized;
+}
+
+function auditRedactionScan(value, label = 'audit pack') {
+  if (typeof value === 'string') {
+    need(!REAL_AGENT_FORBIDDEN_RE.test(value), 'product', 'hidden_input_leakage', `${label} contains forbidden hidden-input material`);
+    need(!/(?:[A-Za-z]:[\\/]|\\\\|\/Users\/|\/home\/|USERPROFILE|API[_-]?KEY|BEARER\s+)/i.test(value), 'product', 'unredacted_provider_event', `${label} contains an unredacted path or credential`);
+    need(value.length <= AUDIT_PACK_CONTENT_CAP, 'product', 'audit_pack_unbounded', `${label} contains an over-sized string`);
+    return;
+  }
+  if (Array.isArray(value)) { for (const item of value) auditRedactionScan(item, label); return; }
+  if (value && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) {
+      if (typeof item === 'string' && /(?:^|_)(?:realpath|target_path)$/.test(key)) need(SAFE_TOKEN.test(item), 'product', 'path_escape', `${label}.${key} is not a redacted isolated-root token`, { path: item });
+      auditRedactionScan(item, `${label}.${key}`);
+    }
+  }
+}
+
+function auditStableHash(value) { return sha(Buffer.from(stableStringify(value), 'utf8')); }
+
+function auditArtifact(pathName, kind, content, selected = true) {
+  const relative = auditSafeRelative(pathName, 'artifact path');
+  need(content.length <= AUDIT_PACK_CONTENT_CAP, 'product', 'audit_pack_unbounded', `artifact is over the bounded content cap: ${relative}`);
+  return { path: relative, kind, content, sha256: sha(content), selected };
+}
+
+function auditExpectedLifecycle(binding, journey) {
+  const flow = bindingFlow(binding);
+  return flow.map((phase, index) => ({
+    sequence: index + 50,
+    type: 'lifecycle_transition',
+    from: index === 0 ? 'created' : flow[index - 1],
+    to: phase,
+    context_id: phase === 'fresh-resume' ? 'ctx-fresh-2' : 'ctx-initial',
+    process_id: phase === 'fresh-resume' ? 'process-2' : 'process-1',
+    session_id: phase === 'fresh-resume' ? 'session-2' : 'session-1',
+    fresh_context: phase === 'fresh-resume',
+  }));
+}
+
+function auditBuildSimulation(contract, binding) {
+  const journey = binding.journey_id ? contract.journeys.get(binding.journey_id) : { flow: ['setup', 'health', 'plan-check', 'execute', 'verify'], required_artifact_family: binding.required_artifact_family || binding.kind };
+  const lifecycle = auditExpectedLifecycle(binding, journey);
+  const requiredWitnesses = bindingCriticalWitnesses(binding);
+  const requiredSkills = bindingRequiredSkills(binding);
+  const fingerprint = bindingFingerprint(binding);
+  const generatedSkills = requiredSkills.map((id, index) => ({
+    id,
+    path: `.agents/skills/${id}/SKILL.md`,
+    stable_hash: sha(`name: ${id}\n# generated simulation skill\n`),
+    read_sequence: 30 + (index * 2),
+    invocation_sequence: 31 + (index * 2),
+  }));
+  const skillEvents = generatedSkills.flatMap((skill) => [
+    { sequence: skill.read_sequence, type: 'skill_read', skill_id: skill.id, path: skill.path, realpath: `${SIMULATED_ROOT_TOKEN}/${skill.path}`, content_hash: skill.stable_hash },
+    { sequence: skill.invocation_sequence, type: 'skill_invocation', skill_id: skill.id, invocation: `name: ${skill.id}`, path: skill.path },
+  ]);
+  const providerEvents = [
+    { sequence: 1, type: 'provider_event', event: 'invocation', runtime: binding.runtime, command: '<PROVIDER_COMMAND>', argv: ['--model', binding.model, '--effort', binding.effort, '<PROMPT_REDACTED>'], stream: 'stdout' },
+    { sequence: 2, type: 'provider_event', event: 'completed', runtime: binding.runtime, exit_code: 0, stream: 'stdout', content: '<PROVIDER_OUTPUT_REDACTED>' },
+  ];
+  const changedFileContent = 'export const observed = true;\n';
+  const artifacts = [
+    auditArtifact('project/PLAN.md', 'markdown', '# PLAN\n\nBounded simulated plan.\n'),
+    auditArtifact('project/SUMMARY.md', 'markdown', '# SUMMARY\n\nBounded simulated summary.\n'),
+    auditArtifact('project/VERIFICATION.md', 'markdown', '# VERIFICATION\n\nDeterministic checks passed.\n'),
+    auditArtifact('project/patch.diff', 'patch', `diff --git a/src/observed.js b/src/observed.js\n--- a/src/observed.js\n+++ b/src/observed.js\n@@\n+${changedFileContent}`, true),
+    auditArtifact('project/state.json', 'state', '{"phase":"verify","status":"passed"}\n', true),
+  ];
+  const changedFiles = [{ path: 'src/observed.js', content: changedFileContent, sha256: sha(changedFileContent) }];
+  const candidateBody = { identity: 'simulated-candidate', changed_files: changedFiles.map(({ path, sha256 }) => ({ path, sha256 })), patch_sha256: artifacts.find((artifact) => artifact.kind === 'patch').sha256 };
+  const candidate = { ...candidateBody, sha256: auditStableHash(candidateBody) };
+  const artifactHashes = Object.fromEntries(artifacts.map((artifact) => [artifact.path, artifact.sha256]));
+  const verifierBody = { status: 'passed', candidate_sha256: candidate.sha256, artifact_hashes: artifactHashes };
+  const verifier = { ...verifierBody, verdict_sha256: auditStableHash(verifierBody) };
+  const checks = requiredWitnesses.map((id) => ({ id, status: 'passed' }));
+  const graderBody = { mode: 'deterministic', status: 'passed', checks, score: checks.length, maximum: checks.length, sequence: 90 };
+  const deterministicGrader = { ...graderBody, output_sha256: auditStableHash(graderBody) };
+  const advisoryBody = { status: 'passed', after: 'deterministic-grader', sequence: 100, input_grader_sha256: deterministicGrader.output_sha256, note: 'advisory only; cannot change deterministic result' };
+  const advisoryJudge = { ...advisoryBody, output_sha256: auditStableHash(advisoryBody) };
+  return {
+    schema_version: AUDIT_PACK_SCHEMA_VERSION,
+    bounded: true,
+    critical_witnesses: requiredWitnesses,
+    events: [...providerEvents, ...skillEvents, ...lifecycle],
+    generated_skills: generatedSkills,
+    lifecycle: { transitions: lifecycle, pause_resume: lifecycle.some((item) => item.to === 'fresh-resume') ? (() => { const pause = lifecycle.find((item) => item.to === 'pause'); const fresh = lifecycle.find((item) => item.to === 'fresh-resume'); const evidence = { pause_context_id: pause.context_id, resumed_context_id: fresh.context_id, pause_process_id: pause.process_id, resumed_process_id: fresh.process_id, pause_session_id: pause.session_id, resumed_session_id: fresh.session_id, continuity_hash: null }; const basis = { binding_fingerprint: fingerprint, ...evidence }; delete basis.continuity_hash; evidence.continuity_hash = auditStableHash(basis); return evidence; })() : null },
+    binding_fingerprint: fingerprint,
+    required_skills: requiredSkills,
+    candidate: { ...candidate, changed_files: changedFiles },
+    artifacts,
+    selected_artifacts: artifacts.filter((artifact) => artifact.selected).map(({ path, kind, sha256 }) => ({ path, kind, sha256 })),
+    verifier,
+    deterministic_grader: deterministicGrader,
+    advisory_judge: advisoryJudge,
+  };
+}
+
+function auditValidatePack(receipt, contract) {
+  need(receipt && receipt.record_type === 'terminal_receipt', 'product', 'incomplete_receipt', 'audit pack must contain one terminal receipt');
+  exactKeys(receipt, RECEIPT_KEYS, 'terminal receipt');
+  need(receipt.mode === 'simulate' && receipt.provider_invoked === false, 'product', 'provider_invoked', 'simulation audit pack must not invoke a provider');
+  const binding = contract?.bindings.find((item) => item.run_id === receipt.run_id);
+  need(binding, 'product', 'binding_missing', 'audit pack run_id is not present in the immutable campaign');
+  need((binding.journey_id || null) === (receipt.journey_id || null) && binding.kind === receipt.trial_kind && binding.runtime === receipt.runtime, 'product', 'binding_contradiction', 'receipt identity does not match its immutable campaign binding');
+  need(receipt.campaign?.contract === CORE_CAMPAIGN_CONTRACT && receipt.campaign?.sha256 === contract.sha256, 'product', 'campaign_contradiction', 'receipt campaign identity does not match the immutable campaign');
+  exactKeys(receipt.campaign, ['contract', 'sha256'], 'receipt campaign');
+  exactKeys(receipt.provider, ['logical_command', 'model', 'effort', 'resolution'], 'receipt provider');
+  exactKeys(receipt.critical_witnesses, ['status', 'required'], 'receipt critical witnesses');
+  exactKeys(receipt.terminal, TERMINAL_KEYS, 'terminal receipt terminal object');
+  const requiredWitnesses = bindingCriticalWitnesses(binding);
+  need(receipt.binding_fingerprint === bindingFingerprint(binding), 'product', 'binding_contradiction', 'receipt binding fingerprint does not match the immutable binding');
+  need(stableStringify(receipt.critical_witnesses?.required) === stableStringify(requiredWitnesses), 'product', 'critical_witness_contract_invalid', 'receipt witness declaration does not match its binding');
+  const pack = receipt.audit_pack;
+  need(pack && pack.schema_version === AUDIT_PACK_SCHEMA_VERSION && pack.bounded === true, 'product', 'incomplete_receipt', 'bounded audit pack is missing');
+  exactKeys(pack, PACK_KEYS, 'audit pack');
+  need(pack.binding_fingerprint === bindingFingerprint(binding), 'product', 'binding_contradiction', 'audit pack binding fingerprint does not match the immutable binding');
+  need(!pack.events?.some((event) => event.type === 'terminal_receipt' || event.record_type === 'terminal_receipt'), 'product', 'duplicate_terminal_receipt', 'audit pack contains an additional terminal receipt record');
+  need(stableStringify(pack.critical_witnesses) === stableStringify(requiredWitnesses), 'product', 'critical_witness_contract_invalid', 'pack witness declaration does not match its binding');
+  auditRedactionScan(receipt);
+  need(Array.isArray(pack.events) && pack.events.length <= AUDIT_PACK_EVENT_CAP, 'product', 'audit_pack_unbounded', 'provider event list is missing or unbounded');
+  need(pack.events.some((event) => event.type === 'provider_event' && event.event === 'invocation') && pack.events.some((event) => event.type === 'provider_event' && event.event === 'completed' && event.exit_code === 0), 'product', 'missing_provider_witness', 'structured provider invocation/completion witnesses are incomplete');
+  const providerPin = CORE_RUNTIME_PINS[binding.runtime];
+  need(receipt.provider.logical_command === providerPin.command && receipt.provider.model === binding.model && receipt.provider.effort === binding.effort && receipt.provider.resolution === 'not-invoked-simulation', 'product', 'provider_contradiction', 'receipt provider pin does not match its binding');
+  const invocationEvent = pack.events.find((event) => event.type === 'provider_event' && event.event === 'invocation');
+  exactKeys(invocationEvent, ['sequence', 'type', 'event', 'runtime', 'command', 'argv', 'stream'], 'provider invocation event');
+  need(invocationEvent.runtime === binding.runtime && invocationEvent.command === '<PROVIDER_COMMAND>' && stableStringify(invocationEvent.argv) === stableStringify(['--model', binding.model, '--effort', binding.effort, '<PROMPT_REDACTED>']), 'product', 'provider_contradiction', 'provider invocation argv does not match its immutable binding');
+  const completedEvent = pack.events.find((event) => event.type === 'provider_event' && event.event === 'completed');
+  exactKeys(completedEvent, ['sequence', 'type', 'event', 'runtime', 'exit_code', 'stream', 'content'], 'provider completion event');
+  need(completedEvent.runtime === binding.runtime && completedEvent.exit_code === 0, 'product', 'provider_contradiction', 'provider completion witness does not match its immutable binding');
+  const sequences = pack.events.map((event) => event.sequence);
+  need(sequences.every((value, index) => Number.isInteger(value) && (index === 0 || value > sequences[index - 1])), 'product', 'event_order_invalid', 'structured events must have strictly increasing sequence numbers');
+  for (const event of pack.events) {
+    if (event.path) auditSafeRelative(event.path, `${event.type} path`);
+    if (event.realpath) need(SAFE_TOKEN.test(event.realpath), 'product', 'path_escape', 'event realpath is not a redacted isolated-root token', { realpath: event.realpath });
+    need(event.is_reparse_point !== true, 'product', 'reparse_point_forbidden', 'reparse-point evidence cannot be admitted');
+  }
+  const requiredSkills = bindingRequiredSkills(binding);
+  need(stableStringify(pack.required_skills) === stableStringify(requiredSkills), 'product', 'required_skills_contract_invalid', 'audit pack required skills do not match its immutable binding');
+  need(Array.isArray(pack.generated_skills) && pack.generated_skills.length === requiredSkills.length, 'product', 'missing_skill_witness', 'generated skill reads/invocations are incomplete');
+  const generatedSkillIds = [];
+  for (const skill of pack.generated_skills) {
+    exactKeys(skill, ['id', 'path', 'stable_hash', 'read_sequence', 'invocation_sequence'], 'generated skill witness');
+    need(requiredSkills.includes(skill.id) && !generatedSkillIds.includes(skill.id), 'product', 'missing_skill_witness', `unexpected or duplicate generated skill: ${skill.id}`);
+    generatedSkillIds.push(skill.id);
+    auditSafeRelative(skill.path, 'generated skill path');
+    const read = pack.events.find((event) => event.type === 'skill_read' && event.skill_id === skill.id);
+    const invocation = pack.events.find((event) => event.type === 'skill_invocation' && event.skill_id === skill.id);
+    need(read && invocation, 'product', 'missing_skill_witness', `generated skill read/invocation missing: ${skill.id}`);
+    exactKeys(read, ['sequence', 'type', 'skill_id', 'path', 'realpath', 'content_hash'], 'generated skill read event');
+    exactKeys(invocation, ['sequence', 'type', 'skill_id', 'invocation', 'path'], 'generated skill invocation event');
+    need(read.path === skill.path && invocation.path === skill.path && invocation.invocation === `name: ${skill.id}`, 'product', 'skill_identity_mismatch', `generated skill identity/path mismatch: ${skill.id}`);
+    need(read.content_hash === skill.stable_hash && read.sequence === skill.read_sequence && invocation.sequence === skill.invocation_sequence && read.sequence < invocation.sequence, 'product', 'skill_witness_contradiction', `generated skill content/order mismatch: ${skill.id}`);
+  }
+  need(stableStringify(generatedSkillIds) === stableStringify(requiredSkills), 'product', 'missing_skill_witness', 'generated skill witness order/set does not match required skills');
+  const observedSkillIds = pack.events.filter((event) => event.type === 'skill_read' || event.type === 'skill_invocation').map((event) => event.skill_id);
+  need(observedSkillIds.every((id) => requiredSkills.includes(id)) && observedSkillIds.length === requiredSkills.length * 2, 'product', 'missing_skill_witness', 'audit pack contains extra or missing skill observations');
+  const transitions = pack.lifecycle?.transitions;
+  need(Array.isArray(transitions) && transitions.length > 0, 'product', 'lifecycle_disorder', 'lifecycle transitions are missing');
+  const lifecycleSequences = transitions.map((item) => item.sequence);
+  need(lifecycleSequences.every((value, index) => Number.isInteger(value) && (index === 0 || value > lifecycleSequences[index - 1])), 'product', 'lifecycle_disorder', 'lifecycle transitions are out of order');
+  const requiredFlow = bindingFlow(binding);
+  let cursor = -1;
+  for (const phase of requiredFlow) { const next = transitions.findIndex((item, index) => index > cursor && item.to === phase); need(next > cursor, 'product', 'lifecycle_disorder', `required lifecycle transition missing or disordered: ${phase}`); cursor = next; }
+  if (requiredFlow.includes('fresh-resume')) {
+    const pause = transitions.find((item) => item.to === 'pause');
+    const fresh = transitions.find((item) => item.to === 'fresh-resume');
+    const evidence = pack.lifecycle.pause_resume;
+    need(pause && fresh && fresh.sequence > pause.sequence && fresh.fresh_context === true && evidence, 'product', 'pause_resume_invalid', 'fresh pause/resume evidence is missing or stale');
+    exactKeys(evidence, ['pause_context_id', 'resumed_context_id', 'pause_process_id', 'resumed_process_id', 'pause_session_id', 'resumed_session_id', 'continuity_hash'], 'pause/resume evidence');
+    need(pause.context_id === evidence.pause_context_id && fresh.context_id === evidence.resumed_context_id && fresh.process_id === evidence.resumed_process_id && pause.process_id === evidence.pause_process_id && fresh.session_id === evidence.resumed_session_id && pause.session_id === evidence.pause_session_id, 'product', 'pause_resume_invalid', 'pause/resume transition IDs do not match their evidence');
+    need(evidence.pause_context_id !== evidence.resumed_context_id && evidence.pause_process_id !== evidence.resumed_process_id && evidence.pause_session_id !== evidence.resumed_session_id, 'product', 'pause_resume_invalid', 'fresh resume does not have a distinct process/session identity');
+    const continuityBasis = { binding_fingerprint: bindingFingerprint(binding), pause_context_id: evidence.pause_context_id, resumed_context_id: evidence.resumed_context_id, pause_process_id: evidence.pause_process_id, resumed_process_id: evidence.resumed_process_id, pause_session_id: evidence.pause_session_id, resumed_session_id: evidence.resumed_session_id };
+    need(evidence.continuity_hash === auditStableHash(continuityBasis), 'product', 'pause_resume_invalid', 'pause/resume continuity hash is disconnected from binding and exact IDs');
+  }
+  need(Array.isArray(pack.artifacts) && pack.artifacts.length > 0 && pack.artifacts.length <= AUDIT_PACK_ARTIFACT_CAP, 'product', 'missing_artifacts', 'selected artifacts are missing or unbounded');
+  const artifactMap = new Map();
+  for (const artifact of pack.artifacts) { auditSafeRelative(artifact.path, 'artifact path'); need(artifact.is_reparse_point !== true, 'product', 'reparse_point_forbidden', 'reparse-point artifact cannot be admitted'); need(typeof artifact.content === 'string' && sha(artifact.content) === artifact.sha256, 'product', 'artifact_hash_mismatch', `artifact hash mismatch: ${artifact.path}`); artifactMap.set(artifact.path, artifact); }
+  need(pack.artifacts.some((artifact) => artifact.kind === 'patch' && artifact.path.endsWith('.diff')), 'product', 'patch_missing', 'patch/diff artifact is missing');
+  need(Array.isArray(pack.selected_artifacts) && pack.selected_artifacts.length > 0, 'product', 'missing_artifacts', 'selected artifact witness is missing');
+  for (const selected of pack.selected_artifacts) { const artifact = artifactMap.get(selected.path); need(artifact && artifact.selected && artifact.sha256 === selected.sha256, 'product', 'selected_artifact_invalid', `selected artifact mismatch: ${selected.path}`); }
+  const candidateBody = { identity: pack.candidate?.identity, changed_files: (pack.candidate?.changed_files || []).map(({ path: filePath, sha256: fileSha }) => ({ path: auditSafeRelative(filePath, 'changed file path'), sha256: fileSha })), patch_sha256: pack.candidate?.patch_sha256 };
+  need(pack.candidate && auditStableHash(candidateBody) === pack.candidate.sha256, 'product', 'candidate_hash_mismatch', 'candidate hash does not match changed-file and patch evidence');
+  need(candidateBody.changed_files.length > 0 && candidateBody.changed_files.every(({ path: filePath, sha256: fileSha }) => { const item = pack.candidate.changed_files.find((entry) => entry.path === filePath); return item && typeof item.content === 'string' && sha(item.content) === fileSha; }), 'product', 'changed_file_hash_mismatch', 'changed-file hash evidence is missing or forged');
+  const patch = pack.artifacts.find((artifact) => artifact.kind === 'patch');
+  need(candidateBody.patch_sha256 === patch.sha256, 'product', 'patch_hash_mismatch', 'candidate patch hash does not match selected diff');
+  const verifierBody = { status: pack.verifier?.status, candidate_sha256: pack.verifier?.candidate_sha256, artifact_hashes: pack.verifier?.artifact_hashes };
+  need(pack.verifier && pack.verifier.status === 'passed' && pack.verifier.candidate_sha256 === pack.candidate.sha256 && auditStableHash(verifierBody) === pack.verifier.verdict_sha256, 'product', 'verifier_contradiction', 'structured verifier verdict contradicts candidate evidence');
+  need(pack.verifier.artifact_hashes && Object.keys(pack.verifier.artifact_hashes).length === artifactMap.size, 'product', 'verifier_contradiction', 'verifier does not cover every selected artifact');
+  for (const [filePath, fileSha] of Object.entries(pack.verifier.artifact_hashes || {})) need(artifactMap.get(filePath)?.sha256 === fileSha, 'product', 'verifier_contradiction', `verifier artifact hash mismatch: ${filePath}`);
+  const grader = pack.deterministic_grader;
+  need(grader && grader.mode === 'deterministic' && Array.isArray(grader.checks) && stableStringify(grader.checks.map((check) => check.id).sort()) === stableStringify([...requiredWitnesses].sort()), 'product', 'grader_incomplete', 'deterministic grader output is incomplete');
+  const graderBody = { mode: grader.mode, status: grader.status, checks: grader.checks, score: grader.score, maximum: grader.maximum, sequence: grader.sequence };
+  need(auditStableHash(graderBody) === grader.output_sha256, 'product', 'grader_contradiction', 'deterministic grader hash is invalid');
+  const witnessEvidence = {
+    'provider-events': pack.events.some((event) => event.type === 'provider_event' && event.event === 'invocation') && pack.events.some((event) => event.type === 'provider_event' && event.event === 'completed' && event.exit_code === 0),
+    'generated-skill-observations': requiredSkills.length > 0 && Array.isArray(pack.generated_skills) && pack.generated_skills.length === requiredSkills.length,
+    'lifecycle-transitions': Array.isArray(pack.lifecycle?.transitions) && pack.lifecycle.transitions.length > 0,
+    'fresh-pause-resume': Boolean(pack.lifecycle?.pause_resume && requiredFlow.includes('fresh-resume')),
+    'patch-diff': pack.artifacts.some((artifact) => artifact.kind === 'patch' && artifact.path.endsWith('.diff')),
+    'changed-file-hashes': Boolean(pack.candidate?.changed_files?.length),
+    'verifier-verdict': Boolean(pack.verifier?.status === 'passed'),
+    'deterministic-grader': Boolean(grader),
+    'selected-artifacts': Boolean(pack.selected_artifacts?.length),
+    'terminal-receipt': Boolean(receipt.terminal?.status === 'passed' && receipt.terminal.receipt_count === 1),
+  };
+  for (const check of grader.checks) need(witnessEvidence[check.id] === true, 'product', check.id === FRESH_PAUSE_RESUME_WITNESS ? 'pause_resume_invalid' : 'missing_witness', `grader marked ${check.id} passed without its evidence`);
+  need(grader.status === 'passed' && grader.checks.every((check) => check.status === 'passed') && grader.score === grader.maximum, 'product', 'deterministic_grader_failed', 'deterministic grader did not pass all critical checks');
+  const advisory = pack.advisory_judge;
+  need(advisory && advisory.after === 'deterministic-grader' && advisory.sequence > grader.sequence && advisory.input_grader_sha256 === grader.output_sha256, 'product', 'advisory_order_invalid', 'advisory judge did not run after completed deterministic grading');
+  need(receipt.terminal?.status === 'passed' && receipt.terminal.receipt_count === 1, 'product', 'incomplete_receipt', 'terminal receipt is missing or duplicated');
+  return { status: 'passed', deterministic: 'passed', advisory: 'ignored-for-verdict', events: pack.events.length, artifacts: pack.artifacts.length };
+}
+
+function coreSimulation(contract, binding) {
+  const pack = auditBuildSimulation(contract, binding);
+  const receipt = {
+    schema_version: 2, record_type: 'terminal_receipt', mode: 'simulate', provider_invoked: false,
+    campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 },
+    binding_fingerprint: bindingFingerprint(binding),
+    run_id: binding.run_id, journey_id: binding.journey_id || null, trial_kind: binding.kind, runtime: binding.runtime,
+    provider: { logical_command: CORE_RUNTIME_PINS[binding.runtime].command, model: binding.model, effort: binding.effort, resolution: 'not-invoked-simulation' },
+    critical_witnesses: { status: 'complete', required: bindingCriticalWitnesses(binding) },
+    audit_pack: pack,
+    terminal: { status: 'passed', receipt_count: 1, failure_class: null, failure_code: null, message: 'bounded simulated audit pack passed deterministic grading' },
+    claim_limit: 'Provider-free simulation only; no provider, model, network, browser, release, or product reliability claim.',
+  };
+  auditValidatePack(receipt, contract);
+  return receipt;
+}
+
 function coreMain() {
   let receiptFile = null;
   try {
     const campaignFile = coreCampaignFile(coreArg('--campaign'));
     const contract = coreReadCampaign(campaignFile);
     need(!coreFlag('--real-agent'), 'product', 'legacy_mode_forbidden', 'the historical --real-agent mode is not an executable authority');
+    const verifyPackFile = coreArg('--verify-pack') || coreArg('--grade-pack');
+    if (verifyPackFile) {
+      const packFile = path.resolve(verifyPackFile);
+      need(exists(packFile), 'infrastructure', 'audit_pack_missing', 'audit pack file is missing', { file: slash(packFile) });
+      const verdict = auditValidatePack(json(packFile), contract);
+      process.stdout.write(`${JSON.stringify({ ...verdict, provider_invoked: false, terminal: { status: 'passed', failure_class: null, failure_code: null, message: 'audit pack re-graded deterministically' } }, null, 2)}\n`);
+      return;
+    }
     if (coreFlag('--check')) {
-      const result = { schema_version: 1, record_type: 'campaign_check', mode: 'check', campaign: { contract: CORE_CAMPAIGN_CONTRACT, file: slash(campaignFile), sha256: contract.sha256 }, matrix: { journeys: contract.journeys.size, bindings: contract.bindings.length, core: contract.bindings.filter((binding) => binding.kind === 'core').length, auxiliary: 9 }, provider_invoked: false, critical_witnesses: 'deferred-to-task-16-05-02', terminal: { status: 'passed', failure_class: null, failure_code: null, message: '27-binding campaign schema passed' }, claim_limit: 'Schema and command construction only; no provider or product claim.' };
+      const result = { schema_version: 2, record_type: 'campaign_check', mode: 'check', campaign: { contract: CORE_CAMPAIGN_CONTRACT, file: slash(campaignFile), sha256: contract.sha256 }, matrix: { journeys: contract.journeys.size, bindings: contract.bindings.length, core: contract.bindings.filter((binding) => binding.kind === 'core').length, auxiliary: 9 }, provider_invoked: false, critical_witnesses: CRITICAL_WITNESSES, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '27-binding campaign schema and critical-witness contract passed' }, claim_limit: 'Schema and command construction only; no provider or product claim.' };
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       return;
     }
-    need(coreFlag('--dry-run'), 'infrastructure', 'dry_run_required', 'Task 16-05-01 permits only --check or --dry-run; provider execution is deferred');
+    if (coreFlag('--simulate')) {
+      const simulation = coreArg('--simulate');
+      need(simulation === 'success', 'product', 'simulation_mode_invalid', 'only --simulate success is admitted');
+      const runId = coreArg('--run', 'core-treesnap-codex-1');
+      const binding = contract.bindings.find((item) => item.run_id === runId);
+      need(binding, 'product', 'run_unknown', `unknown campaign binding: ${runId}`);
+      receiptFile = coreArg('--receipt');
+      need(receiptFile && path.isAbsolute(receiptFile), 'infrastructure', 'receipt_path_invalid', 'simulation requires an absolute --receipt path');
+      const receipt = coreSimulation(contract, binding);
+      realAgentWriteReceipt(receiptFile, receipt);
+      process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+      return;
+    }
+    need(coreFlag('--dry-run'), 'infrastructure', 'dry_run_required', 'only --check, --simulate success, --verify-pack, or --dry-run are admitted; provider execution is deferred');
     const runId = coreArg('--run');
     need(runId, 'product', 'run_required', 'dry-run requires one explicit --run binding');
     const binding = contract.bindings.find((item) => item.run_id === runId);
@@ -640,7 +982,7 @@ function coreMain() {
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
   } catch (error) {
     const failure = error instanceof ProofFailure ? error : new ProofFailure('infrastructure', 'core_flow_argument_failure', error.message, { stack: error.stack });
-    const failed = { schema_version: 1, record_type: 'terminal_receipt', mode: 'dry-run', provider_invoked: false, terminal: { status: 'failed', failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: 'No product claim: core-flow campaign validation or dry-run failed.' };
+    const failed = { schema_version: 2, record_type: 'terminal_receipt', mode: coreFlag('--simulate') ? 'simulate' : 'dry-run', provider_invoked: false, terminal: { status: 'failed', receipt_count: 1, failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: 'No product claim: core-flow campaign validation, simulation, or dry-run failed.' };
     if (receiptFile && path.isAbsolute(receiptFile) && !exists(receiptFile)) realAgentWriteReceipt(receiptFile, failed);
     process.stdout.write(`${JSON.stringify(failed, null, 2)}\n`);
     process.exitCode = 1;
