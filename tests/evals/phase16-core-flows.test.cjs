@@ -28,7 +28,7 @@ function run(argv) { return cp.spawnSync(process.execPath, [EVAL, ...argv], { cw
 function runCalibration(argv) { return cp.spawnSync(process.execPath, [CALIBRATION, ...argv], { cwd: REPO, encoding: 'utf8', windowsHide: true }); }
 function parse(stdout) { return JSON.parse(stdout); }
 
-test('campaign has exactly three journeys and 27 bindings', () => {
+test('campaign has exactly three journeys and the retained 21-binding matrix', () => {
   const campaign = JSON.parse(fs.readFileSync(CAMPAIGN, 'utf8'));
   assert.equal(campaign.contract, 'phase16-core-flows.v2');
   assert.deepEqual(campaign.calibration, {
@@ -37,17 +37,33 @@ test('campaign has exactly three journeys and 27 bindings', () => {
     case_ids: ['treesnap-greenfield', 'itsdangerous-fips-sha1', 'chi-bodyless-charset', 'packed-readme-install', 'scripted-owner-broker', 'docusaurus-browser'],
   });
   assert.equal(campaign.journeys.length, 3);
-  assert.equal(campaign.bindings.length, 27);
+  assert.equal(campaign.bindings.length, 21);
+  const retainedAuxiliary = ['owner-scripted-plan-check', 'packed-readme-codex', 'docusaurus-browser-codex'];
+  const removedAuxiliary = [
+    'owner-scripted-pause-resume', 'owner-scripted-verify',
+    'packed-readme-claude', 'packed-readme-opencode',
+    'docusaurus-browser-claude', 'docusaurus-browser-opencode',
+  ];
+  assert.deepEqual(campaign.bindings.filter((binding) => binding.kind !== 'core').map((binding) => binding.run_id), retainedAuxiliary);
+  const expectedCore = [
+    'core-treesnap-codex-1', 'core-treesnap-codex-2', 'core-treesnap-claude-1', 'core-treesnap-claude-2', 'core-treesnap-opencode-1', 'core-treesnap-opencode-2',
+    'core-brownfield-plan-codex-1', 'core-brownfield-plan-codex-2', 'core-brownfield-plan-claude-1', 'core-brownfield-plan-claude-2', 'core-brownfield-plan-opencode-1', 'core-brownfield-plan-opencode-2',
+    'core-brownfield-quick-codex-1', 'core-brownfield-quick-codex-2', 'core-brownfield-quick-claude-1', 'core-brownfield-quick-claude-2', 'core-brownfield-quick-opencode-1', 'core-brownfield-quick-opencode-2',
+  ];
+  assert.deepEqual(campaign.bindings.filter((binding) => binding.kind === 'core').map((binding) => binding.run_id), expectedCore);
+  const calibration = JSON.parse(fs.readFileSync(CALIBRATION_CASES, 'utf8'));
+  assert.deepEqual(calibration.cases.filter((item) => item.admission !== 'admitted-core').flatMap((item) => item.campaign_refs).sort(), [...retainedAuxiliary].sort());
+  assert.ok(removedAuxiliary.every((runId) => !campaign.bindings.some((binding) => binding.run_id === runId)));
+  assert.ok(removedAuxiliary.every((runId) => !calibration.cases.some((item) => item.campaign_refs.includes(runId))));
   const freshRuns = campaign.bindings.filter((binding) => binding.critical_witnesses.includes('fresh-pause-resume')).map((binding) => binding.run_id);
   assert.deepEqual(freshRuns, [
     'core-brownfield-plan-codex-1', 'core-brownfield-plan-codex-2', 'core-brownfield-plan-claude-1',
     'core-brownfield-plan-claude-2', 'core-brownfield-plan-opencode-1', 'core-brownfield-plan-opencode-2',
-    'owner-scripted-pause-resume',
   ]);
   assert.ok(campaign.bindings.every((binding) => binding.critical_witnesses.length === (binding.required_skills.length > 0 ? 9 : 8) + (freshRuns.includes(binding.run_id) ? 1 : 0)));
   assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'core-treesnap-codex-1').required_skills, ['work-new-project', 'work-plan', 'work-execute', 'work-verify']);
   assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'core-brownfield-plan-codex-1').required_skills, ['work-plan', 'work-pause', 'work-resume', 'work-execute', 'work-verify', 'work-progress']);
-  assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'owner-scripted-pause-resume').required_skills, ['work-pause', 'work-resume', 'work-verify']);
+  assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'owner-scripted-plan-check').required_skills, ['work-plan']);
   assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'packed-readme-codex').required_skills, []);
   const expectedJourneyTimeout = 3300;
   const expectedBudgets = {
@@ -61,7 +77,7 @@ test('campaign has exactly three journeys and 27 bindings', () => {
     assert.deepEqual({ timeout_seconds: binding.timeout_seconds, role_budgets_seconds: binding.role_budgets_seconds }, expectedBudgets[binding.kind], `${binding.run_id} budget drifted`);
   }
   assert.equal(campaign.bindings.filter((binding) => binding.kind === 'core').length, 18);
-  for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) assert.equal(campaign.bindings.filter((binding) => binding.kind === kind).length, 3);
+  for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) assert.equal(campaign.bindings.filter((binding) => binding.kind === kind).length, 1);
 });
 
 test('offline calibration contract admits five cases and keeps Docusaurus pending', () => {
@@ -73,8 +89,8 @@ test('offline calibration contract admits five cases and keeps Docusaurus pendin
   assert.equal(receipt.terminal.status, 'passed');
   assert.equal(receipt.matrix.cases, 5);
   assert.equal(receipt.matrix.calibrated_cases, 5);
-  assert.equal(receipt.matrix.calibrated_bindings, 24);
-  assert.equal(receipt.matrix.pending_bindings, 3);
+  assert.equal(receipt.matrix.calibrated_bindings, 20);
+  assert.equal(receipt.matrix.pending_bindings, 1);
   assert.equal(receipt.matrix.pending_cases, 1);
   assert.deepEqual(receipt.terminal.pending_cases, ['docusaurus-browser']);
   assert.ok(receipt.cases.filter((item) => item.admission === 'admitted-core' || item.admission === 'admitted-auxiliary').every((item) => item.status === 'ready'));
@@ -89,7 +105,7 @@ test('offline calibration executes all five admitted native controls twice', () 
   assert.equal(receipt.browser_invoked, false);
   assert.equal(receipt.terminal.status, 'passed');
   assert.equal(receipt.matrix.cases, 5);
-  assert.equal(receipt.matrix.calibrated_bindings, 24);
+  assert.equal(receipt.matrix.calibrated_bindings, 20);
   assert.equal(receipt.matrix.repetitions, 2);
   assert.equal(receipt.terminal.message, 'all admitted native red/green/red controls passed twice');
   assert.ok(receipt.cases.every((item) => item.repetitions === 2 && item.status === 'calibrated'));
@@ -133,9 +149,11 @@ test('check is provider-free and validates the new campaign', () => {
   const receipt = parse(result.stdout);
   assert.equal(receipt.terminal.status, 'passed');
   assert.equal(receipt.provider_invoked, false);
-  assert.equal(receipt.matrix.bindings, 27);
-  assert.equal(receipt.matrix.calibrated, 24);
-  assert.equal(receipt.matrix.pending, 3);
+  assert.equal(receipt.matrix.bindings, 21);
+  assert.equal(receipt.matrix.core, 18);
+  assert.equal(receipt.matrix.auxiliary, 3);
+  assert.equal(receipt.matrix.calibrated, 20);
+  assert.equal(receipt.matrix.pending, 1);
   assert.equal(receipt.critical_witnesses.length, 10);
 });
 
@@ -184,7 +202,7 @@ test('simulation emits and re-grades one bounded provider-free audit pack', () =
   } finally { fs.rmSync(receiptPath, { force: true }); }
 });
 
-test('all 27 simulations use only applicable witnesses', () => {
+test('all 21 simulations use only applicable witnesses', () => {
   const campaign = JSON.parse(fs.readFileSync(CAMPAIGN, 'utf8'));
   const freshRuns = new Set(campaign.bindings.filter((binding) => binding.critical_witnesses.includes('fresh-pause-resume')).map((binding) => binding.run_id));
   for (const binding of campaign.bindings) {
@@ -197,6 +215,23 @@ test('all 27 simulations use only applicable witnesses', () => {
       assert.equal(receipt.audit_pack.deterministic_grader.checks.some((check) => check.id === 'fresh-pause-resume'), freshRuns.has(binding.run_id));
       const reread = run(['--verify-pack', receiptPath, '--campaign', CAMPAIGN]);
       assert.equal(reread.status, 0, `${binding.run_id} re-grade: ${reread.stderr}`);
+    } finally { fs.rmSync(receiptPath, { force: true }); }
+  }
+});
+
+test('removed auxiliary IDs are rejected as non-authoritative', () => {
+  const removed = [
+    'owner-scripted-pause-resume', 'owner-scripted-verify',
+    'packed-readme-claude', 'packed-readme-opencode',
+    'docusaurus-browser-claude', 'docusaurus-browser-opencode',
+  ];
+  for (const runId of removed) {
+    const receiptPath = path.join(os.tmpdir(), `workspine-phase16-removed-${process.pid}-${runId}.json`);
+    try {
+      const result = run(['--simulate', 'success', '--run', runId, '--campaign', CAMPAIGN, '--receipt', receiptPath]);
+      assert.notEqual(result.status, 0, runId);
+      assert.equal(parse(result.stdout).terminal.failure_code, 'run_unknown', runId);
+      assert.equal(fs.existsSync(receiptPath), false, runId);
     } finally { fs.rmSync(receiptPath, { force: true }); }
   }
 });

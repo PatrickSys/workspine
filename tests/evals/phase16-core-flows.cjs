@@ -533,9 +533,7 @@ const SKILL_WITNESS = 'generated-skill-observations';
 
 function bindingFlow(binding) {
   if (binding.kind === 'core') return binding.flow;
-  if (binding.run_id === 'owner-scripted-pause-resume') return ['setup', 'health', 'pause', 'fresh-resume', 'verify'];
   if (binding.run_id === 'owner-scripted-plan-check') return ['setup', 'health', 'plan-check'];
-  if (binding.run_id === 'owner-scripted-verify') return ['setup', 'health', 'verify'];
   return ['setup', 'health'];
 }
 
@@ -545,7 +543,7 @@ function bindingRequiredSkills(binding) {
 
 function bindingCriticalWitnesses(binding) {
   const required = bindingRequiredSkills(binding);
-  const needsFreshResume = binding?.journey_id === 'brownfield-plan' || binding?.run_id === 'owner-scripted-pause-resume';
+  const needsFreshResume = binding?.journey_id === 'brownfield-plan';
   return CRITICAL_WITNESSES.filter((id) => (id !== SKILL_WITNESS || required.length > 0) && (id !== FRESH_PAUSE_RESUME_WITNESS || needsFreshResume));
 }
 
@@ -673,7 +671,7 @@ function coreReadCampaign(file) {
     journeys.set(journey.id, journey);
   }
   need(stableStringify([...journeys.keys()].sort()) === stableStringify(Object.keys(CORE_JOURNEYS).sort()), 'product', 'journey_matrix_invalid', 'campaign journeys are not the exact three approved core journeys');
-  need(Array.isArray(campaign.bindings) && campaign.bindings.length === 27, 'product', 'binding_count_invalid', 'campaign must contain exactly 27 trial bindings');
+  need(Array.isArray(campaign.bindings) && campaign.bindings.length === 21, 'product', 'binding_count_invalid', 'campaign must contain exactly 21 trial bindings');
   const ids = new Set();
   for (const binding of campaign.bindings) {
     need(!ids.has(binding?.run_id), 'product', 'binding_duplicate', `duplicate binding: ${binding?.run_id}`); ids.add(binding?.run_id);
@@ -697,9 +695,9 @@ function coreReadCampaign(file) {
     const rows = core.filter((binding) => binding.journey_id === journey && binding.runtime === runtime);
     need(rows.length === 2 && rows.every((binding) => [1, 2].includes(binding.repetition)), 'product', 'core_matrix_invalid', `core matrix must have two repetitions for ${journey}/${runtime}`);
   }
-  for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) need(campaign.bindings.filter((binding) => binding.kind === kind).length === 3, 'product', 'auxiliary_matrix_invalid', `${kind} must contain exactly three trials`);
-  need(campaign.bindings.filter((binding) => binding.calibration_digest !== null).length === 24, 'product', 'calibration_admission_count_invalid', 'exactly 24 bindings must be calibrated before the browser gate');
-  need(campaign.bindings.filter((binding) => binding.calibration_digest === null).length === 3, 'product', 'calibration_pending_count_invalid', 'exactly three browser bindings must remain pending');
+  for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) need(campaign.bindings.filter((binding) => binding.kind === kind).length === 1, 'product', 'auxiliary_matrix_invalid', `${kind} must contain exactly one retained trial`);
+  need(campaign.bindings.filter((binding) => binding.calibration_digest !== null).length === 20, 'product', 'calibration_admission_count_invalid', 'exactly 20 bindings must be calibrated before the browser gate');
+  need(campaign.bindings.filter((binding) => binding.calibration_digest === null).length === 1, 'product', 'calibration_pending_count_invalid', 'exactly one browser binding must remain pending');
   return { campaign, journeys, bindings: campaign.bindings, file, sha256: shaFile(file) };
 }
 
@@ -721,7 +719,7 @@ function coreDryRun(contract, binding) {
       provider: { logical_command: provider.command, model: provider.model, effort: provider.effort, resolution: 'deferred_until_task_16_05_02' },
       argv: redactedArgv, isolation: { root: '<EPHEMERAL_DRY_RUN_ROOT>', provider_readable_paths: [], writable_roots: ['<EPHEMERAL_DRY_RUN_ROOT>'] },
       critical_witnesses: { status: 'deferred-to-simulation', required: CRITICAL_WITNESSES },
-      cleanup, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '27-binding construction and provider-free dry-run contract passed' },
+      cleanup, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '21-binding construction and provider-free dry-run contract passed' },
       claim_limit: 'No provider execution or product claim; this is command construction only.',
     };
     return receipt;
@@ -984,7 +982,7 @@ function coreMain() {
       return;
     }
     if (coreFlag('--check')) {
-      const result = { schema_version: 2, record_type: 'campaign_check', mode: 'check', campaign: { contract: CORE_CAMPAIGN_CONTRACT, file: slash(campaignFile), sha256: contract.sha256 }, matrix: { journeys: contract.journeys.size, bindings: contract.bindings.length, core: contract.bindings.filter((binding) => binding.kind === 'core').length, auxiliary: 9, calibrated: 24, pending: 3 }, provider_invoked: false, critical_witnesses: CRITICAL_WITNESSES, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '27-binding campaign schema and critical-witness contract passed; 24 calibrated, 3 browser-pending' }, claim_limit: 'Schema and command construction only; no provider or product claim.' };
+      const result = { schema_version: 2, record_type: 'campaign_check', mode: 'check', campaign: { contract: CORE_CAMPAIGN_CONTRACT, file: slash(campaignFile), sha256: contract.sha256 }, matrix: { journeys: contract.journeys.size, bindings: contract.bindings.length, core: contract.bindings.filter((binding) => binding.kind === 'core').length, auxiliary: 3, calibrated: 20, pending: 1 }, provider_invoked: false, critical_witnesses: CRITICAL_WITNESSES, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '21-binding campaign schema and critical-witness contract passed; 20 calibrated, 1 browser-pending' }, claim_limit: 'Schema and command construction only; no provider or product claim.' };
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       return;
     }
@@ -1021,4 +1019,3 @@ function coreMain() {
 }
 
 coreMain();
-
