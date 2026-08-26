@@ -91,6 +91,7 @@ const DECISION_DIGEST_MAX_LINES = 15;
 const APPROVAL_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,127}$/;
 const SENSITIVE_APPROVAL_REF_RE = /(secret|token|password|passwd|bearer|api[-_]?key|credential|private[-_]?key)/i;
 const TOKEN_SHAPED_APPROVAL_REF_RE = /^(?:sk(?:[-_]|$)|pk(?:[-_]|$)|gh[pousr]_|github_pat_|xox[baprs]-|eyJ|(?:AKIA|ASIA)[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{16,})/i;
+const SYNTHETIC_APPROVAL_REF_RE = /^(?:auto(?:matic)?|self|system|workflow)$/i;
 
 const DEFAULT_WORK_GITIGNORE = [
   '# Workspine local runtime state',
@@ -236,6 +237,7 @@ export function transitionWorkflowState(workDir, {
   reason = null,
   question = null,
   approved = null,
+  durablePlanApproved = false,
   now = new Date(),
 } = {}) {
   const statePath = join(workDir, 'state.json');
@@ -249,6 +251,14 @@ export function transitionWorkflowState(workDir, {
   const normalizedTarget = String(target || '').trim().toLowerCase();
   const allowed = new Set(['plan', 'execute', 'verify', 'audit', 'next', 'fix_gaps', 'blocked', 'ask_user', 'approve']);
   if (!allowed.has(normalizedTarget)) throw transitionError('unsupported_transition', `Unsupported lifecycle transition: ${target}.`);
+
+  const approvalRequested = normalizedTarget === 'approve' || approved === true;
+  if (approvalRequested && (authority !== 'owner' || !isValidApprovalReference(approvalRef))) {
+    throw transitionError('owner_approval_required', 'Explicit approval requires --authority owner and a valid non-sensitive --approval-ref.', ['--authority owner', '--approval-ref']);
+  }
+  if (authority !== 'owner' && approvalRef) {
+    throw transitionError('approval_ref_authority_mismatch', 'Only owner authority may carry an approval reference.', ['--authority owner', '--approval-ref']);
+  }
 
   const expectedPlan = planPath || planIdentity;
   const recordedPlan = workflow.plan.path || workflow.plan.identity || null;
@@ -299,7 +309,7 @@ export function transitionWorkflowState(workDir, {
     next.workflow.execution.status = 'not_started';
     next.workflow.current_state = 'plan';
   } else if (effectiveTarget === 'execute') {
-    if (next.workflow.plan.approved !== true && approved !== true) {
+    if (next.workflow.plan.approved !== true && !durablePlanApproved && approved !== true) {
       throw transitionError('not_approved', 'The plan artifact is not approved; approve the plan before execution.', [normalizedPlan || '.work/state.json']);
     }
     next.workflow.plan.approved = true;
@@ -1224,6 +1234,7 @@ export function isValidApprovalReference(value) {
     && APPROVAL_REF_RE.test(normalized)
     && !SENSITIVE_APPROVAL_REF_RE.test(normalized)
     && !TOKEN_SHAPED_APPROVAL_REF_RE.test(normalized)
+    && !SYNTHETIC_APPROVAL_REF_RE.test(normalized)
     && !/^[a-f0-9]{32,}$/i.test(normalized);
 }
 

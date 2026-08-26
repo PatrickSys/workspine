@@ -1313,8 +1313,11 @@ describe('next command routing', () => {
     assert.strictEqual(JSON.parse(result.output).status, 'replayed');
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, changePath)), beforeReplay, 'plan rerun must preserve CHANGE.md bytes');
 
-    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'execute', '--plan', changePath, '--approved', 'true', '--approval-ref', 'test-approval', '--authority', 'workflow', '--json']);
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'approve', '--plan', changePath, '--approval-ref', 'test-approval', '--authority', 'owner', '--json']);
     assert.strictEqual(result.exitCode, 0, result.output);
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
     writeFile(changePath, brownfieldChange({ posture: 'ready_for_verification', nextAction: 'Record Done-When evidence.' }));
     result = await runJson(['next', '--json']);
     assert.strictEqual(result.state, 'verify');
@@ -1895,6 +1898,88 @@ describe('next command routing', () => {
     ]);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.strictEqual(JSON.parse(result.output).state.current_state, 'verify');
+  });
+
+  test('lifecycle approval is owner-bound and workflow execution cannot self-approve or carry a reference', async () => {
+    const planPath = '.work/phases/01-transition/01-PLAN.md';
+
+    async function freshPlan(status = 'pending', extra = '') {
+      cleanup(tmpDir);
+      tmpDir = createTempProject();
+      await initWork();
+      writeFile(planPath, `---\nstatus: ${status}\napproved_by: owner\napproved_at: 2026-08-26T12:00:00.000Z\napproval_ref: durable-owner-review\n${extra}---\n# plan\n`);
+      let result = await runCliAsMain(tmpDir, [
+        'lifecycle-transition', 'plan', '--plan', planPath, '--authority', 'workflow', '--json', '--no-update-notice',
+      ]);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      return result;
+    }
+
+    async function assertNoWrite(args, expectedCode) {
+      const stateBefore = fs.readFileSync(path.join(tmpDir, '.work', 'state.json'));
+      const planBefore = fs.readFileSync(path.join(tmpDir, planPath));
+      const result = await runCliAsMain(tmpDir, args);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.strictEqual(JSON.parse(result.output).error_code, expectedCode, result.output);
+      assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), stateBefore);
+      assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, planPath)), planBefore);
+    }
+
+    await freshPlan('approved');
+    await assertNoWrite([
+      'lifecycle-transition', 'execute', '--plan', planPath, '--approved', 'true', '--approval-ref', 'auto', '--authority', 'workflow', '--json', '--no-update-notice',
+    ], 'owner_approval_required');
+
+    await freshPlan();
+    await assertNoWrite([
+      'lifecycle-transition', 'approve', '--plan', planPath, '--approval-ref', 'owner-review', '--authority', 'workflow', '--json', '--no-update-notice',
+    ], 'owner_approval_required');
+
+    for (const reference of ['auto', 'automatic', 'self', 'system', 'workflow']) {
+      await freshPlan();
+      await assertNoWrite([
+        'lifecycle-transition', 'approve', '--plan', planPath, '--approval-ref', reference, '--authority', 'owner', '--json', '--no-update-notice',
+      ], 'owner_approval_required');
+    }
+
+    await freshPlan();
+    const mismatchedState = readJson(path.join(tmpDir, '.work', 'state.json'));
+    mismatchedState.workflow.plan.approved = true;
+    mismatchedState.workflow.plan.identity = planPath;
+    mismatchedState.workflow.plan.path = '.work/phases/99-other/99-PLAN.md';
+    writeJson('.work/state.json', mismatchedState);
+    await assertNoWrite([
+      'lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json', '--no-update-notice',
+    ], 'not_approved');
+
+    for (const missingField of ['path', 'identity']) {
+      await freshPlan();
+      const incompleteState = readJson(path.join(tmpDir, '.work', 'state.json'));
+      incompleteState.workflow.plan.approved = true;
+      incompleteState.workflow.plan.path = planPath;
+      incompleteState.workflow.plan.identity = planPath;
+      delete incompleteState.workflow.plan[missingField];
+      writeJson('.work/state.json', incompleteState);
+      await assertNoWrite([
+        'lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json', '--no-update-notice',
+      ], 'not_approved');
+    }
+
+    await freshPlan();
+    let result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'approve', '--plan', planPath, '--approval-ref', 'owner-review-2026-08-26', '--authority', 'owner', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
+
+    await freshPlan('approved');
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    const workflowState = JSON.parse(result.output).state;
+    assert.strictEqual(workflowState.current_state, 'execute');
+    assert.ok(!Object.hasOwn(workflowState.workflow, 'approval_ref'), 'workflow execution must not manufacture approval provenance');
   });
 
   test('lifecycle-transition blocks missing terminal artifacts before dereference and without writing', async () => {

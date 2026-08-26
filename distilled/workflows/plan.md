@@ -31,7 +31,7 @@ Before writing or rewriting planning artifacts, run the preflight for the select
 - Phase: `node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`; bounded brownfield: `node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`; amend/extend before roadmap append: `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift. Do not run phase preflight before target classification; an unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
-After developer approval, persist `status: approved`, `approved_by`, `approved_at`, and `approval_ref` in the PLAN frontmatter, then record posture through the shared repo-local helper:
+After developer approval, persist `status: approved`, `approved_by`, `approved_at`, and `approval_ref` in the PLAN frontmatter, then record posture through the shared repo-local helper. The plan approval is an owner decision; workflow agents must not simulate it with `--approved` or pass an approval reference while executing:
 `node .work/bin/gsdd.mjs lifecycle-transition plan --plan phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`.
 This is the only lifecycle-state writer for the plan step; if it fails, preserve the PLAN and stop with bounded evidence instead of editing `.work/state.json` directly.
 <amend_extend_mode>
