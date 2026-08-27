@@ -8,7 +8,17 @@
     "archive_url": "https://codeload.github.com/pallets/itsdangerous/tar.gz/93ae366874bbd4f69d90495c45b2cd336387496c",
     "archive_sha256": "ba5756b3437eddb59b81627b47f412cf0af9db8b06bdfd2cc7c3cf0cd5da6632",
     "root_prefix": "itsdangerous-93ae366874bbd4f69d90495c45b2cd336387496c",
-    "candidate_path": "src/itsdangerous/signer.py"
+    "candidate_path": "src/itsdangerous/signer.py",
+    "source_root": {
+      "contract": "phase16-public-source-root-v1",
+      "archive_prefix": "itsdangerous-93ae366874bbd4f69d90495c45b2cd336387496c",
+      "materialized_root": "project",
+      "candidate_path": "project/src/itsdangerous/signer.py",
+      "required_paths": [
+        "project/src/itsdangerous/signer.py",
+        "project/tests"
+      ]
+    }
   },
   "runtime": {
     "implementation": "cpython",
@@ -39,6 +49,87 @@
     "sha256": "21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11",
     "contract": "black-box import with SHA-1 unavailable, explicit SHA-256 round-trip, default SHA-1 refusal, and upstream tests"
   },
+  "input_bundle": {
+    "contract": "phase16-public-input-bundle-v1",
+    "source_root": "project",
+    "task_path": "owner/TASK.md",
+    "brief_path": "owner/BRIEF.md",
+    "members": [
+      {
+        "path": "owner/TASK.md",
+        "content": "# Itsdangerous FIPS compatibility\n\nUpdate only `src/itsdangerous/signer.py` so importing the package succeeds when `hashlib.sha1` is unavailable. Preserve explicit SHA-256 signing, reject the unavailable SHA-1 default, and run the upstream tests. Do not change dependencies, workflows, or files outside the declared path.\n",
+        "sha256": "62f98ea5fde2ebd7322940f4907c92227723974045f0c51e6364c11fa476aa98"
+      },
+      {
+        "path": "owner/BRIEF.md",
+        "content": "# Brownfield compatibility request\n\nWork in one existing consumer repository. Plan the bounded signer compatibility change, pause with the canonical brownfield checkpoint, then resume in a fresh process and execute through verification and progress. The workflow authority is CHANGE.md; HANDOFF.md is judgment context; VERIFICATION.md is closeout evidence.\n",
+        "sha256": "a8ae3f5400318ea279aa5c05ea646b6daa36bb2908b2d48b413fbe794f9acb42"
+      }
+    ]
+  },
+  "brownfield": {
+    "contract": "phase16-brownfield-artifacts-v1",
+    "root": ".work/brownfield-change",
+    "files": [
+      {
+        "path": ".work/brownfield-change/CHANGE.md",
+        "role": "operational_authority",
+        "owns": ["goal", "status", "next_action", "allowed_paths"]
+      },
+      {
+        "path": ".work/brownfield-change/HANDOFF.md",
+        "role": "judgment_context",
+        "owns": ["constraints", "uncertainty", "decision_posture", "anti_regression"]
+      },
+      {
+        "path": ".work/brownfield-change/VERIFICATION.md",
+        "role": "closeout_evidence",
+        "owns": ["done_when", "evidence", "gaps", "decision"]
+      }
+    ],
+    "status_values": ["active", "ready_for_verification", "closed"]
+  },
+  "controls": {
+    "contract": "phase16-itsdangerous-controls-v1",
+    "oracle": {
+      "path": "tests/evals/cases/itsdangerous-fips-sha1-oracle.py",
+      "sha256": "21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11"
+    },
+    "execution": "black-box-provider-free",
+    "mount_policy": "never-live-agent-root",
+    "variants": [
+      {
+        "id": "baseline",
+        "source": "pinned-baseline-source-root",
+        "revision": "93ae366874bbd4f69d90495c45b2cd336387496c",
+        "archive_url": "https://codeload.github.com/pallets/itsdangerous/tar.gz/93ae366874bbd4f69d90495c45b2cd336387496c",
+        "archive_sha256": "ba5756b3437eddb59b81627b47f412cf0af9db8b06bdfd2cc7c3cf0cd5da6632",
+        "root_prefix": "itsdangerous-93ae366874bbd4f69d90495c45b2cd336387496c",
+        "candidate_path": "src/itsdangerous/signer.py",
+        "candidate_sha256": "b1126648fe80efcc376c4053918fa67e75bca3ba0e9039f3b21f7f541280f6db",
+        "expected": "red"
+      },
+      {
+        "id": "reference",
+        "source": "separately-pinned-reference-control",
+        "revision": "2f69e841d2a979c616a55b226e444694f5d9c962",
+        "archive_url": "https://codeload.github.com/pallets/itsdangerous/tar.gz/2f69e841d2a979c616a55b226e444694f5d9c962",
+        "archive_sha256": "359fabd71e810f2a99f9e7ec938d579bf2a2bcc1ef01860dfb0ea1ac14e44e9b",
+        "root_prefix": "itsdangerous-2f69e841d2a979c616a55b226e444694f5d9c962",
+        "candidate_path": "src/itsdangerous/signer.py",
+        "candidate_sha256": "60ed0257b341bc703a8f9e3d4441c91548d4a23c36a47ab0714a509d4ef23584",
+        "expected": "green"
+      },
+      {
+        "id": "mutant",
+        "source": "deterministic-black-box-mutant-control",
+        "derived_from": "reference",
+        "mutation": "replace-all-hashlib-sha1-with-hashlib-sha256",
+        "candidate_sha256": "37b7f2666e05940927d5521559c10ad9d3ff85effd4d3cba04af717078ec5f24",
+        "expected": "red"
+      }
+    ]
+  },
   "acquisition": {
     "allowed_hosts": ["codeload.github.com", "files.pythonhosted.org"],
     "allowed_urls": [
@@ -50,7 +141,8 @@
       "https://files.pythonhosted.org/packages/a5/5b/0cc789b59e8cc1bf288b38111d002d8c5917123194d45b29dcdac64723cc/pluggy-1.4.0-py3-none-any.whl",
       "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
       "https://files.pythonhosted.org/packages/d9/5a/e7c31adbe875f2abbb91bd84cf2dc52d792b5a01506781dbcf25c91daf11/six-1.16.0-py2.py3-none-any.whl",
-      "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl"
+      "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl",
+      "https://codeload.github.com/pallets/itsdangerous/tar.gz/2f69e841d2a979c616a55b226e444694f5d9c962"
     ]
   }
 }

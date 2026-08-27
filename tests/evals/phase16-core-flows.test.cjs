@@ -1125,6 +1125,63 @@ test('disconnected pause IDs fail even when a superficial continuity hash is rec
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 });
 
+test('itsdangerous public case binds source root, canonical brownfield ownership, and isolated red-green-red controls', () => {
+  const caseFile = path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1.json');
+  const data = JSON.parse(fs.readFileSync(caseFile, 'utf8'));
+  const checked = LIVE.caseValidate(data);
+  assert.equal(checked.sourceRoot.archive_prefix, data.source.root_prefix);
+  assert.equal(checked.sourceRoot.candidate_path, 'project/src/itsdangerous/signer.py');
+  assert.deepEqual(checked.inputBundle.member_hashes, Object.fromEntries(data.input_bundle.members.map((item) => [item.path, item.sha256])));
+  assert.deepEqual(data.controls.variants.map((item) => item.expected), ['red', 'green', 'red']);
+  assert.equal(data.controls.mount_policy, 'never-live-agent-root');
+  assert.deepEqual(data.brownfield.files.map((item) => [item.path, item.role]), [
+    ['.work/brownfield-change/CHANGE.md', 'operational_authority'],
+    ['.work/brownfield-change/HANDOFF.md', 'judgment_context'],
+    ['.work/brownfield-change/VERIFICATION.md', 'closeout_evidence'],
+  ]);
+  const tamperedInput = JSON.parse(JSON.stringify(data));
+  tamperedInput.input_bundle.members[0].content += 'tampered';
+  assert.throws(() => LIVE.caseValidate(tamperedInput), (error) => error.code === 'case_input_bundle_hash_mismatch');
+  const recomputedInput = JSON.parse(JSON.stringify(data));
+  recomputedInput.input_bundle.members[0].content += 'tampered';
+  recomputedInput.input_bundle.members[0].sha256 = bytesHash(Buffer.from(recomputedInput.input_bundle.members[0].content));
+  assert.throws(() => LIVE.caseValidate(recomputedInput), (error) => error.code === 'case_input_bundle_pin_mismatch');
+  const recomputedDependency = JSON.parse(JSON.stringify(data));
+  recomputedDependency.dependencies.artifacts[0].version = '8.1.2';
+  recomputedDependency.dependencies.artifacts[0].sha256 = bytesHash(Buffer.from('internally consistent cache bytes'));
+  assert.throws(() => LIVE.caseValidate(recomputedDependency), (error) => error.code === 'case_dependency_pin_mismatch');
+  const wrongRoot = JSON.parse(JSON.stringify(data));
+  wrongRoot.source.source_root.candidate_path = 'other/src/itsdangerous/signer.py';
+  assert.throws(() => LIVE.caseValidate(wrongRoot), (error) => error.code === 'case_source_root_mismatch');
+  const coordinatedWrongRoot = JSON.parse(JSON.stringify(data));
+  coordinatedWrongRoot.source.source_root.materialized_root = 'other';
+  coordinatedWrongRoot.source.source_root.candidate_path = 'other/src/itsdangerous/signer.py';
+  coordinatedWrongRoot.source.source_root.required_paths = ['other/src/itsdangerous/signer.py', 'other/tests'];
+  coordinatedWrongRoot.input_bundle.source_root = 'other';
+  coordinatedWrongRoot.task.allowed_paths = ['other/src/itsdangerous/signer.py'];
+  assert.throws(() => LIVE.caseValidate(coordinatedWrongRoot), (error) => error.code === 'case_source_root_pin_mismatch');
+  const privateMember = JSON.parse(JSON.stringify(data));
+  privateMember.input_bundle.members[0].path = '.work/secret.md';
+  privateMember.input_bundle.members[0].sha256 = bytesHash(Buffer.from(privateMember.input_bundle.members[0].content));
+  assert.throws(() => LIVE.caseValidate(privateMember), (error) => error.code === 'case_input_private');
+  const wrongArtifactRole = JSON.parse(JSON.stringify(data));
+  wrongArtifactRole.brownfield.files[1].role = 'operational_authority';
+  assert.throws(() => LIVE.caseValidate(wrongArtifactRole), (error) => error.code === 'case_brownfield_invalid');
+  const liveControls = JSON.parse(JSON.stringify(data));
+  liveControls.controls.mount_policy = 'live-agent-root';
+  assert.throws(() => LIVE.caseValidate(liveControls), (error) => error.code === 'case_controls_invalid');
+  const wrongControl = JSON.parse(JSON.stringify(data));
+  wrongControl.controls.variants[2].expected = 'green';
+  assert.throws(() => LIVE.caseValidate(wrongControl), (error) => error.code === 'case_controls_invalid');
+  const fakeControlPin = JSON.parse(JSON.stringify(data));
+  fakeControlPin.controls.variants[1].revision = '0123456789012345678901234567890123456789';
+  fakeControlPin.controls.variants[1].candidate_sha256 = '0'.repeat(64);
+  assert.throws(() => LIVE.caseValidate(fakeControlPin), (error) => error.code === 'case_controls_pin_mismatch');
+  const fakeControlSource = JSON.parse(JSON.stringify(data));
+  fakeControlSource.controls.variants[1].source = 'private-solution-source';
+  assert.throws(() => LIVE.caseValidate(fakeControlSource), (error) => error.code === 'case_controls_invalid');
+});
+
 test('itsdangerous public case prepares and rechecks offline', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-public-case-'));
   const sourceParent = path.join(root, 'source-parent');
@@ -1132,6 +1189,8 @@ test('itsdangerous public case prepares and rechecks offline', async () => {
   const sourceRoot = path.join(sourceParent, prefix);
   fs.mkdirSync(path.join(sourceRoot, 'src', 'itsdangerous'), { recursive: true });
   fs.writeFileSync(path.join(sourceRoot, 'src', 'itsdangerous', 'signer.py'), 'class Signer: pass\n');
+  fs.mkdirSync(path.join(sourceRoot, 'tests'), { recursive: true });
+  fs.writeFileSync(path.join(sourceRoot, 'tests', 'test_signer.py'), 'def test_fixture_source(): pass\n');
   const archive = path.join(root, 'source.tar.gz');
   const packed = cp.spawnSync(process.platform === 'win32' ? 'tar.exe' : 'tar', ['-czf', archive, '-C', sourceParent, prefix], { encoding: 'utf8', windowsHide: true });
   assert.equal(packed.status, 0, packed.stderr);
@@ -1144,6 +1203,8 @@ test('itsdangerous public case prepares and rechecks offline', async () => {
   fixture.source.archive_url = sourceUrl;
   fixture.source.archive_sha256 = bytesHash(archiveBytes);
   fixture.source.root_prefix = prefix;
+  fixture.source.source_root.archive_prefix = prefix;
+  fixture.source.source_root.candidate_path = `${fixture.source.source_root.materialized_root}/${fixture.source.candidate_path}`;
   fixture.acquisition.allowed_hosts = ['codeload.github.com', 'files.pythonhosted.org'];
   fixture.dependencies.artifacts = [{ name: 'pytest', version: '8.1.1', url: dependencyUrl, sha256: bytesHash(dependencyBytes) }];
   fixture.acquisition.allowed_urls = [sourceUrl, dependencyUrl];
@@ -1154,10 +1215,18 @@ test('itsdangerous public case prepares and rechecks offline', async () => {
   try {
     const prepared = await LIVE.preparePublicCase(caseFile, cache, { fixture: true, fetch: async (url) => downloads.get(url) });
     assert.equal(prepared.source_archive_sha256, bytesHash(archiveBytes));
+    assert.ok(/^[a-f0-9]{64}$/.test(prepared.source_root_sha256));
+    assert.equal(prepared.source_member_hashes.find((item) => item.path === 'src/itsdangerous/signer.py').sha256, prepared.source_candidate_sha256);
+    assert.deepEqual(prepared.input_member_hashes, LIVE.caseValidate(fixture, { fixture: true }).inputBundle.member_hashes);
     const checked = LIVE.checkPublicCase(caseFile, cache, { fixture: true, offline: true });
     assert.equal(checked.terminal.status, 'passed');
     assert.equal(checked.network, 'offline');
     assert.deepEqual(fs.readdirSync(cache), [fixture.id]);
+    const cachedCandidate = path.join(cache, fixture.id, 'source', 'src', 'itsdangerous', 'signer.py');
+    const candidateBytes = fs.readFileSync(cachedCandidate);
+    fs.appendFileSync(cachedCandidate, 'tampered');
+    assert.throws(() => LIVE.checkPublicCase(caseFile, cache, { fixture: true, offline: true }), (error) => ['case_cache_mismatch', 'case_source_member_mismatch'].includes(error.code));
+    fs.writeFileSync(cachedCandidate, candidateBytes);
     const dependencyDir = path.join(cache, fixture.id, 'dependencies');
     const dependencyFile = path.join(dependencyDir, 'pytest-8.1.1-py3-none-any.whl');
     const dependencyBytesOnDisk = fs.readFileSync(dependencyFile);
@@ -1228,7 +1297,7 @@ test('itsdangerous public case prepares and rechecks offline', async () => {
       await assert.rejects(() => LIVE.caseFetch(`http://127.0.0.1:${port}/large`, { maxBytes: 8 }), (error) => error.code === 'case_download_too_large');
     } finally { await new Promise((resolve) => server.close(resolve)); }
     const publicText = fs.readFileSync(path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1.json'), 'utf8') + fs.readFileSync(path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1-oracle.py'), 'utf8');
-    assert.doesNotMatch(publicText, /(?:\.work|gold(?:en)?|solution[_ -]?patch|private[_ -]?oracle)/i);
+    assert.doesNotMatch(publicText, /(?:gold(?:en)?|solution[_ -]?patch|private[_ -]?oracle|expected[_ -]?patch)/i);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -1238,6 +1307,7 @@ test('itsdangerous public case acquires the pinned codeload archive when network
   try {
     const prepared = run(['--prepare-case', caseFile, '--cache', cache]);
     assert.equal(prepared.status, 0, prepared.stdout || prepared.stderr);
+    assert.deepEqual(parse(prepared.stdout).preparation.control_results.results.map((item) => [item.id, item.status]), [['baseline', 'fail'], ['reference', 'pass'], ['mutant', 'fail']]);
     const checked = run(['--check-case', caseFile, '--offline', '--cache', cache]);
     assert.equal(checked.status, 0, checked.stdout || checked.stderr);
     assert.equal(parse(checked.stdout).terminal.status, 'passed');
