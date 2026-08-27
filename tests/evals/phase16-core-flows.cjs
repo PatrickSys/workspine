@@ -513,17 +513,17 @@ const CORE_JOURNEYS = Object.freeze({
   treesnap: Object.freeze({
     kind: 'core', title: 'Greenfield new-project treesnap journey',
     flow: Object.freeze(['setup', 'health', 'new-project', 'plan', 'execute', 'verify']),
-    artifact_family: 'project-plan-summary-verification', timeout_seconds: 3300,
+    artifact_family: 'project-plan-summary-verification', timeout_seconds: 3300, process_count: 1,
   }),
   'brownfield-plan': Object.freeze({
     kind: 'core', title: 'Brownfield plan pause and fresh-resume journey',
     flow: Object.freeze(['setup', 'health', 'brownfield-plan', 'pause', 'fresh-resume', 'execute', 'verify', 'progress']),
-    artifact_family: 'brownfield-change-checkpoint', timeout_seconds: 3300,
+    artifact_family: 'brownfield-change-checkpoint', timeout_seconds: 3300, process_count: 2,
   }),
   'brownfield-quick': Object.freeze({
     kind: 'core', title: 'Brownfield quick and verify journey',
     flow: Object.freeze(['setup', 'health', 'quick', 'verify']),
-    artifact_family: 'quick-change', timeout_seconds: 3300,
+    artifact_family: 'quick-change', timeout_seconds: 3300, process_count: 1,
   }),
 });
 const SKILL_FOR_PHASE = Object.freeze({
@@ -535,12 +535,15 @@ const SKILL_WITNESS = 'generated-skill-observations';
 
 function bindingFlow(binding) {
   if (binding.kind === 'core') return binding.flow;
-  if (binding.run_id === 'owner-scripted-plan-check') return ['setup', 'health', 'plan-check'];
+  if (binding.run_id === 'owner-scripted-plan-check') return ['setup', 'health', 'plan'];
+  if (binding.kind === 'packed-readme') return ['install', 'setup', 'health', 'update', 'rerun'];
+  if (binding.kind === 'docusaurus-browser') return ['init-auto', 'health', 'new-project', 'plan', 'execute', 'verify', 'audit'];
   return ['setup', 'health'];
 }
 
 function bindingRequiredSkills(binding) {
-  return bindingFlow(binding).map((phase) => SKILL_FOR_PHASE[phase]).filter(Boolean).filter((id, index, values) => values.indexOf(id) === index);
+  const flow = binding.journey_id === 'brownfield-quick' ? bindingFlow(binding).filter((phase) => phase !== 'verify') : bindingFlow(binding);
+  return flow.map((phase) => SKILL_FOR_PHASE[phase]).filter(Boolean).filter((id, index, values) => values.indexOf(id) === index);
 }
 
 function bindingCriticalWitnesses(binding) {
@@ -551,7 +554,11 @@ function bindingCriticalWitnesses(binding) {
 
 function journeyRequiredSkills(journeyId) {
   const journey = CORE_JOURNEYS[journeyId];
-  return journey ? journey.flow.map((phase) => SKILL_FOR_PHASE[phase]).filter(Boolean).filter((id, index, values) => values.indexOf(id) === index) : [];
+  if (!journey) return [];
+  // quick owns semantic verification internally.  Keeping work-verify out of
+  // this declaration prevents the harness from inventing a second verifier.
+  const flow = journeyId === 'brownfield-quick' ? journey.flow.filter((phase) => phase !== 'verify') : journey.flow;
+  return flow.map((phase) => SKILL_FOR_PHASE[phase]).filter(Boolean).filter((id, index, values) => values.indexOf(id) === index);
 }
 
 function journeyCriticalWitnesses(journeyId) {
@@ -565,6 +572,7 @@ function bindingFingerprintPayload(binding) {
     repetition: binding.repetition || 1,
     journey_id: binding.journey_id || null,
     flow: bindingFlow(binding),
+    process_count: binding.process_count || (binding.journey_id ? CORE_JOURNEYS[binding.journey_id]?.process_count : 1),
     kind: binding.kind,
     runtime: binding.runtime,
     model: binding.model,
@@ -633,6 +641,7 @@ function coreValidateBinding(binding, journeys) {
     const journey = journeys.get(binding.journey_id);
     need(binding.flow && stableStringify(binding.flow) === stableStringify(journey.flow), 'product', 'binding_flow_invalid', `core binding flow mismatch: ${binding.run_id}`);
     need(binding.required_artifact_family === journey.required_artifact_family, 'product', 'binding_artifact_invalid', `core binding artifact family mismatch: ${binding.run_id}`);
+    need((binding.process_count || journey.process_count) === journey.process_count, 'product', 'binding_process_count_invalid', `binding process count mismatch: ${binding.run_id}`);
     need(binding.repetition === 1 || binding.repetition === 2, 'product', 'binding_repetition_invalid', `core binding repetition must be 1 or 2: ${binding.run_id}`);
   } else {
     need(!binding.journey_id && binding.repetition === 1, 'product', 'binding_shape_invalid', `non-core binding has core-only fields: ${binding.run_id}`);
@@ -667,7 +676,7 @@ function coreReadCampaign(file) {
     need(!journeys.has(journey.id), 'product', 'journey_duplicate', `duplicate journey: ${journey.id}`);
     need(journey.kind === fixed.kind && journey.title === fixed.title, 'product', 'journey_metadata_invalid', `journey metadata mismatch: ${journey.id}`);
     need(stableStringify(journey.flow) === stableStringify(fixed.flow), 'product', 'journey_flow_invalid', `journey flow mismatch: ${journey.id}`);
-    need(journey.required_artifact_family === fixed.artifact_family && journey.timeout_seconds === fixed.timeout_seconds, 'product', 'journey_contract_invalid', `journey contract mismatch: ${journey.id}`);
+    need(journey.required_artifact_family === fixed.artifact_family && journey.timeout_seconds === fixed.timeout_seconds && journey.process_count === fixed.process_count, 'product', 'journey_contract_invalid', `journey contract mismatch: ${journey.id}`);
     need(Array.isArray(journey.critical_witnesses) && stableStringify(journey.critical_witnesses) === stableStringify(journeyCriticalWitnesses(journey.id)), 'product', 'critical_witness_contract_invalid', `journey critical witness contract mismatch: ${journey.id}`);
     need(stableStringify(journey.required_skills) === stableStringify(journeyRequiredSkills(journey.id)), 'product', 'required_skills_contract_invalid', `journey required skill declaration mismatch: ${journey.id}`);
     journeys.set(journey.id, journey);
@@ -697,6 +706,9 @@ function coreReadCampaign(file) {
     const rows = core.filter((binding) => binding.journey_id === journey && binding.runtime === runtime);
     need(rows.length === 2 && rows.every((binding) => [1, 2].includes(binding.repetition)), 'product', 'core_matrix_invalid', `core matrix must have two repetitions for ${journey}/${runtime}`);
   }
+  const journeyProcesses = campaign.bindings.reduce((sum, binding) => sum + (binding.process_count || (binding.journey_id === 'brownfield-plan' ? 2 : 1)), 0);
+  need(journeyProcesses === 27, 'product', 'process_count_invalid', 'campaign must account for exactly 27 top-level journey processes');
+  need(campaign.process_contract && campaign.process_contract.journey_processes === 27 && campaign.process_contract.version_probes === 21 && campaign.process_contract.opencode_exports === 8, 'product', 'process_contract_invalid', 'campaign process accounting is not the approved 27-process contract');
   for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) need(campaign.bindings.filter((binding) => binding.kind === kind).length === 1, 'product', 'auxiliary_matrix_invalid', `${kind} must contain exactly one retained trial`);
   need(campaign.bindings.filter((binding) => binding.calibration_digest !== null).length === 20, 'product', 'calibration_admission_count_invalid', 'exactly 20 bindings must be calibrated before the browser gate');
   need(campaign.bindings.filter((binding) => binding.calibration_digest === null).length === 1, 'product', 'calibration_pending_count_invalid', 'exactly one browser binding must remain pending');
@@ -779,7 +791,7 @@ function auditExpectedLifecycle(binding, journey) {
 }
 
 function auditBuildSimulation(contract, binding) {
-  const journey = binding.journey_id ? contract.journeys.get(binding.journey_id) : { flow: ['setup', 'health', 'plan-check', 'execute', 'verify'], required_artifact_family: binding.required_artifact_family || binding.kind };
+  const journey = binding.journey_id ? contract.journeys.get(binding.journey_id) : { flow: bindingFlow(binding), required_artifact_family: binding.required_artifact_family || binding.kind };
   const lifecycle = auditExpectedLifecycle(binding, journey);
   const requiredWitnesses = bindingCriticalWitnesses(binding);
   const requiredSkills = bindingRequiredSkills(binding);
@@ -976,14 +988,12 @@ function coreSimulation(contract, binding) {
  * artifacts, verification, or grading.
  */
 const LIVE_REVISION_CONTRACT = 'phase16-live-campaign-revision.v1';
-const LIVE_ROLE_ORDER = Object.freeze(['plan-check', 'execute', 'independent-verify']);
-const LIVE_ROLE_KEYS = Object.freeze({ 'plan-check': 'plan_check', execute: 'execute', 'independent-verify': 'independent_verify' });
 const LIVE_ENV_NAMES = Object.freeze([
   'PATH', 'SystemRoot', 'WINDIR', 'ComSpec', 'PATHEXT', 'OS', 'PROCESSOR_ARCHITECTURE',
   'PROCESSOR_IDENTIFIER', 'NUMBER_OF_PROCESSORS', 'LANG', 'LC_ALL', 'TZ',
 ]);
 
-const LIVE_VALUE_OPTIONS = Object.freeze(new Set(['--run', '--campaign', '--campaign-revision', '--receipt']));
+const LIVE_VALUE_OPTIONS = Object.freeze(new Set(['--run', '--campaign', '--campaign-revision', '--receipt', '--handoff']));
 function liveValidateArguments() {
   const seen = new Set();
   for (let index = 0; index < args.length; index += 1) {
@@ -1199,13 +1209,13 @@ function liveRevisionFiles(revision, roleRoot, runtimePin) {
   return copied;
 }
 
-function liveMinimalEnv(roleRoot, revisionId, runtime) {
+function liveMinimalEnv(roleRoot, revisionId, runtime, pathAllowlist = []) {
   const env = {};
   for (const name of LIVE_ENV_NAMES) if (process.env[name]) env[name] = process.env[name];
   const nodeDir = path.dirname(process.execPath);
   // The resolver already selected an absolute executable. Do not carry the
   // owner's PATH into a provider context where it could discover more state.
-  env.PATH = nodeDir;
+  env.PATH = [...new Set((pathAllowlist.length ? pathAllowlist : [nodeDir]).map((item) => path.resolve(item)))].join(path.delimiter);
   const home = path.join(roleRoot, 'home');
   const config = path.join(roleRoot, 'config');
   const cache = path.join(roleRoot, 'cache');
@@ -1215,8 +1225,47 @@ function liveMinimalEnv(roleRoot, revisionId, runtime) {
   env.XDG_CONFIG_HOME = config; env.XDG_CACHE_HOME = cache; env.XDG_STATE_HOME = path.join(roleRoot, 'state');
   env.CODEX_HOME = path.join(config, 'codex'); env.CLAUDE_CONFIG_DIR = path.join(config, 'claude'); env.OPENCODE_CONFIG_DIR = path.join(config, 'opencode');
   env.NPM_CONFIG_USERCONFIG = path.join(config, 'npmrc');
+  env.npm_config_offline = 'true'; env.npm_config_registry = 'http://127.0.0.1:9/';
+  env.npm_config_update_notifier = 'false'; env.npm_config_audit = 'false'; env.npm_config_fund = 'false';
   env[`WORKSPINE_PHASE16_${String(revisionId).replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}_RUNTIME`] = runtime;
   return env;
+}
+
+function liveToolchain(revision, providerPin, providerDescriptor) {
+  const declared = revision.revision.toolchain || revision.revision.toolchain_pins || {};
+  const resolveHost = (name) => {
+    const probe = cp.spawnSync(process.platform === 'win32' ? 'where.exe' : 'which', [name], { env: process.env, encoding: 'utf8', windowsHide: true, shell: false, timeout: 5000 });
+    return String(probe.stdout || '').split(/\r?\n/).map((value) => value.trim()).find(Boolean) || null;
+  };
+  const files = {};
+  const add = (name, spec, fallback) => {
+    const source = typeof spec === 'string' ? spec : spec?.path || spec?.executable_path || fallback;
+    need(source && path.isAbsolute(source), 'infrastructure', 'toolchain_pin_incomplete', `${name} toolchain path is missing`);
+    const file = liveAbsoluteFile(source, 'toolchain_pin', `${name} toolchain executable`);
+    const expected = typeof spec === 'object' ? spec.sha256 || spec.hash : null;
+    need(expected, 'infrastructure', 'toolchain_pin_incomplete', `${name} toolchain hash is missing`);
+    need(shaFile(file) === liveHash(expected, `${name} toolchain hash`), 'infrastructure', 'toolchain_pin_mismatch', `${name} toolchain bytes differ from revision`);
+    files[name] = { path: file, sha256: liveHash(expected, `${name} toolchain hash`) };
+  };
+  add('node', declared.node || declared.Node, process.execPath);
+  const npmFallback = npmCliPath();
+  add('npm', declared.npm || declared.NPM, npmFallback);
+  add('git', declared.git || declared.Git, resolveHost('git'));
+  const optional = [['python', declared.python], ['go', declared.go]];
+  for (const [name, spec] of optional) if (spec) add(name, spec, null);
+  const providerPath = providerDescriptor?.source_path ? path.dirname(providerDescriptor.source_path) : path.dirname(providerPin.shim_path || providerPin.executable_path || providerDescriptor?.command || process.execPath);
+  const declaredPath = revision.revision.path_allowlist || revision.revision.path_allowlist_entries || declared.path_allowlist;
+  const entries = Array.isArray(declaredPath) && declaredPath.length ? declaredPath.map(String) : [providerPath, path.dirname(files.node.path), path.dirname(files.npm.path), path.dirname(files.git.path)];
+  const normalized = entries.map((entry) => path.resolve(entry));
+  need(new Set(normalized.map((entry) => process.platform === 'win32' ? entry.toLowerCase() : entry)).size === normalized.length, 'infrastructure', 'path_allowlist_duplicate', 'toolchain PATH allowlist contains duplicate entries');
+  for (const entry of normalized) need(fs.existsSync(entry) && fs.statSync(entry).isDirectory(), 'infrastructure', 'path_allowlist_invalid', 'toolchain PATH allowlist entry is not a directory', { entry: slash(entry) });
+  const contained = (file, label) => need(normalized.some((entry) => inside(entry, file)), 'infrastructure', 'path_allowlist_excludes_target', `${label} is outside the declared PATH allowlist`, { path: slash(file) });
+  for (const [name, item] of Object.entries(files)) contained(item.path, `${name} executable`);
+  contained(providerDescriptor.command, 'provider command');
+  for (const item of providerDescriptor.prefix || []) contained(item, 'provider target');
+  if (providerDescriptor.source_path) contained(providerDescriptor.source_path, 'provider shim');
+  if (providerDescriptor.target_path) contained(providerDescriptor.target_path, 'provider target');
+  return { files, path: normalized, hashes: Object.fromEntries(Object.entries(files).map(([name, item]) => [name, item.sha256])) };
 }
 
 function liveSecretEnv(revision, env) {
@@ -1234,13 +1283,6 @@ function liveSecretEnv(revision, env) {
     names.push(targetName);
   }
   return names;
-}
-
-function liveRolePrompt(binding, role) {
-  const task = binding.task_ceiling || binding.run_id;
-  if (role === 'plan-check') return `Plan-check only for ${task}. Read the frozen candidate and state whether the requested task is actionable. Do not execute changes or claim workflow results.`;
-  if (role === 'execute') return `Execute only the requested task: ${task}. Work inside the supplied project root and report what you attempted. Do not claim independent verification or grading.`;
-  return `Independent verify only for ${task}. Inspect the supplied project root independently and report observations. Do not claim provider identity, lifecycle success, artifact validity, or grading.`;
 }
 
 function liveParseCodex(stdout, requestedModel, argv) {
@@ -1278,7 +1320,7 @@ function liveParseCodex(stdout, requestedModel, argv) {
   }
   need(startedItems.size > 0 && startedItems.size === completedItems.size, 'infrastructure', 'native_linkage_invalid', 'Codex item lifecycle is incomplete');
   need(argv.includes('-m') && argv[argv.indexOf('-m') + 1] === requestedModel, 'infrastructure', 'requested_model_not_accepted', 'Codex invocation did not carry the requested model flag');
-  return { parser: 'codex-jsonl', event_types: types, identity: 'requested-model-accepted' };
+  return { parser: 'codex-jsonl', event_types: types, thread_id: thread.thread_id, turn_id: turnId, identity: 'requested-model-accepted' };
 }
 
 function liveParseClaude(stdout, requestedModel) {
@@ -1293,7 +1335,7 @@ function liveParseClaude(stdout, requestedModel) {
   need(assistant.message.model === requestedModel, 'infrastructure', 'served_model_mismatch', 'Claude assistant model does not match the requested model');
   const modelUsage = result.modelUsage || result.model_usage;
   need(modelUsage && (Object.hasOwn(modelUsage, requestedModel) || modelUsage.model === requestedModel), 'infrastructure', 'served_model_missing', 'Claude result model usage does not identify the assistant model');
-  return { parser: 'claude-stream-json', session_id: '<SESSION_REDACTED>', assistant_model: requestedModel, identity: 'served-model-matched' };
+  return { parser: 'claude-stream-json', session_id: session, assistant_message_id: assistant.id || assistant.message?.id || null, result_session_id: result.session_id, assistant_model: requestedModel, identity: 'served-model-matched' };
 }
 
 function liveParseOpenCode(stdout, requestedModel) {
@@ -1383,28 +1425,139 @@ function liveRuntimeVersionPin(pin) {
   return { value, hash: liveHash(hash, 'runtime version output hash'), expectedOutput: pin.version_output || (pin.version && typeof pin.version === 'object' ? pin.version.output : null) };
 }
 
-function liveRun(contract, binding, revision, receiptFile) {
-  const runRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-live-'));
+function liveJourneyPrompt(binding, processIndex) {
+  const journey = binding.journey_id || binding.kind;
+  const phases = binding.journey_id === 'brownfield-plan'
+    ? (processIndex === 1 ? ['setup', 'health', 'brownfield-plan', 'pause'] : ['resume', 'execute', 'verify', 'progress'])
+    : (binding.flow || bindingFlow(binding));
+  const processNote = binding.journey_id === 'brownfield-plan'
+    ? (processIndex === 1 ? 'This is process A: pause after creating the plan/checkpoint; do not execute.' : 'This is process B: resume the same retained workspace, then execute, verify, and progress.')
+    : 'Run the complete journey in this one process.';
+  const input = binding.__input_paths || { source: '<CONSUMER_ROOT>/inputs/project', task: '<CONSUMER_ROOT>/inputs/owner/TASK.md', brief: '<CONSUMER_ROOT>/inputs/owner/BRIEF.md' };
+  const cli = binding.kind === 'packed-readme' ? '<CONSUMER_ROOT>/inputs/workspine.tgz (install this yourself)' : '<CONSUMER_ROOT>/node_modules/workspine/bin/gsdd.mjs';
+  const ownerAnswer = binding.kind === 'scripted-owner' ? ` Frozen owner answer/approval input: ${input.owner_answer}. Read it as the only deterministic owner response; do not invent or substitute an answer.` : '';
+  return `Natural Workspine consumer journey ${journey}. ${processNote} Execute exactly these phases in order: ${phases.join(', ')}. Frozen project source: ${input.source}; owner task: ${input.task}; owner brief: ${input.brief}.${ownerAnswer} Workspine CLI: ${cli}. Use only these frozen inputs and the supplied workspace. Do not claim workflow verdicts or access the source checkout.`;
+}
+
+function liveJourneyArgv(binding, workspace, prompt, processIndex) {
+  return realAgentInvocationArgv(binding.runtime, workspace, prompt, 'execute', { model: binding.model, reasoning: binding.effort });
+}
+
+function liveIdentityKey(runtime, native) {
+  if (!native) return null;
+  if (runtime === 'codex') return [native.thread_id, native.turn_id].filter(Boolean).join(':');
+  if (runtime === 'claude') return [native.session_id, native.assistant_message_id, native.result_session_id].filter(Boolean).join(':');
+  return [native.session_id, native.assistant_message_id].filter(Boolean).join(':');
+}
+
+function liveCaptureCheckpoint(workspace) {
+  const file = path.join(workspace, '.work', '.continue-here.md');
+  need(exists(file) && fs.statSync(file).isFile(), 'infrastructure', 'checkpoint_missing', 'brownfield process A did not leave .work/.continue-here.md');
+  const bytes = fs.readFileSync(file);
+  const text = bytes.toString('utf8');
+  need(bytes.length >= 64 && /current\s+task/i.test(text) && /evidence/i.test(text) && /next\s+action/i.test(text), 'infrastructure', 'checkpoint_not_substantive', 'brownfield pause checkpoint lacks the required substantive sections');
+  return { path: '<CONSUMER_ROOT>/.work/' + path.basename(file), bytes: bytes.length, sha256: sha(bytes) };
+}
+
+function liveInputBundle(revision, binding, destination) {
+  const bundles = revision.revision.consumer_input_bundles || revision.revision.consumer_inputs;
+  const input = (bundles && !Array.isArray(bundles) ? bundles[binding.calibration_case] : null) || revision.revision.consumer_input_bundle || revision.revision.consumer_input || revision.revision.input_bundle;
+  need(input && typeof input === 'object', 'infrastructure', 'consumer_input_bundle_missing', `frozen consumer input bundle is missing: ${binding.calibration_case}`);
+  if (input.calibration_case) need(input.calibration_case === binding.calibration_case, 'infrastructure', 'consumer_input_bundle_binding_mismatch', 'frozen consumer input bundle is bound to another calibration case');
+  const archive = liveAbsoluteFile(input.path || input.artifact_path || input.bundle_path, 'consumer_input_bundle', 'frozen consumer input bundle');
+  const expectedArchive = liveHash(input.sha256 || input.artifact_sha256 || input.hash, 'frozen consumer input bundle hash');
+  need(shaFile(archive) === expectedArchive, 'infrastructure', 'consumer_input_bundle_hash_mismatch', 'frozen consumer input bundle changed after revision freeze');
+  const entries = liveTarEntries(archive);
+  const ledger = input.members || input.member_ledger || input.artifact_members;
+  need(ledger && typeof ledger === 'object', 'infrastructure', 'consumer_input_bundle_ledger_missing', 'frozen consumer input member ledger is missing');
+  const expected = new Map();
+  const expectedSizes = new Map();
+  for (const item of (Array.isArray(ledger) ? ledger : Object.entries(ledger).map(([key, value]) => ({ path: key, ...(typeof value === 'string' ? { sha256: value } : value) })))) {
+    const memberPath = liveMemberPath(item.path || item.name);
+    need(!expected.has(memberPath), 'infrastructure', 'consumer_input_bundle_ledger_duplicate', `frozen consumer input member is duplicated: ${memberPath}`);
+    expected.set(memberPath, liveHash(item.sha256 || item.hash, `consumer input member ${item.path}`));
+    if (item.size_bytes != null || item.bytes != null) expectedSizes.set(memberPath, Number(item.size_bytes ?? item.bytes));
+  }
+  const actual = new Map(entries.filter((item) => item.type === 'file').map((item) => [item.path, item]));
+  need(actual.size === expected.size && [...expected].every(([name, hash]) => actual.get(name) && sha(actual.get(name).content) === hash), 'infrastructure', 'consumer_input_bundle_member_mismatch', 'frozen consumer input member bytes differ from its ledger');
+  for (const [name, size] of expectedSizes) need(Number.isInteger(size) && size >= 0 && actual.get(name).size === size, 'infrastructure', 'consumer_input_bundle_member_mismatch', `frozen consumer input member size differs from its ledger: ${name}`);
+  const sourcePath = input.source_path || input.source || 'project';
+  const taskPath = input.task_path || input.task || 'owner/TASK.md';
+  const briefPath = input.brief_path || input.brief || 'owner/BRIEF.md';
+  const configuredOwnerAnswerPath = input.owner_answer_path || input.approval_path || input.owner_answer || null;
+  const ownerAnswerPath = binding.kind === 'scripted-owner' ? configuredOwnerAnswerPath : null;
+  if (binding.kind === 'scripted-owner') need(ownerAnswerPath, 'infrastructure', 'owner_answer_missing', 'scripted-owner binding requires a frozen owner answer/approval input');
+  const hasMaterial = (relative) => actual.has(liveMemberPath(relative)) || [...actual.keys()].some((name) => name.startsWith(`${liveMemberPath(relative)}/`));
+  need(hasMaterial(sourcePath), 'infrastructure', 'consumer_input_bundle_member_missing', `frozen consumer input source is missing: ${sourcePath}`);
+  for (const relative of [taskPath, briefPath]) need(actual.has(liveMemberPath(relative)), 'infrastructure', 'consumer_input_bundle_member_missing', `frozen consumer input member is missing: ${relative}`);
+  const sourceMember = liveMemberPath(sourcePath);
+  const taskMember = liveMemberPath(taskPath);
+  const briefMember = liveMemberPath(briefPath);
+  const memberHashes = Object.fromEntries([...expected.entries()].sort(([left], [right]) => left.localeCompare(right)));
+  const sourceHashes = Object.fromEntries(Object.entries(memberHashes).filter(([name]) => name === sourceMember || name.startsWith(`${sourceMember}/`)));
+  const answerMember = ownerAnswerPath ? liveMemberPath(ownerAnswerPath) : null;
+  if (answerMember) need(actual.has(answerMember), 'infrastructure', 'owner_answer_missing', `frozen owner answer/approval input is missing: ${ownerAnswerPath}`);
+  const materializedRoot = `<CONSUMER_ROOT>/inputs`;
+  liveBootstrapArtifact({ candidate: { artifact_path: archive, artifact_sha256: expectedArchive, members: new Map([...expected].map(([pathName, hash]) => [pathName, { path: pathName, sha256: hash }])), entry_path: [...expected.keys()][0], entry_sha256: [...expected.values()][0], source_hashes: Object.fromEntries(expected) } }, destination);
+  return {
+    archive: expectedArchive,
+    members: expected.size,
+    member_hashes: memberHashes,
+    source: `${materializedRoot}/${sourceMember}`,
+    source_sha256: sourceHashes[sourceMember] || null,
+    source_hashes: sourceHashes,
+    task: `${materializedRoot}/${taskMember}`,
+    task_sha256: expected.get(taskMember),
+    brief: `${materializedRoot}/${briefMember}`,
+    brief_sha256: expected.get(briefMember),
+    owner_answer: answerMember ? `${materializedRoot}/${answerMember}` : null,
+    owner_answer_sha256: answerMember ? expected.get(answerMember) : null,
+  };
+}
+
+function liveRun(contract, binding, revision, receiptFile, handoffFile) {
+  const runDir = path.dirname(receiptFile);
+  const runRoot = path.join(runDir, `consumer-${binding.run_id}`);
   let providerInvoked = false;
   let descriptor = null;
-  const roles = [];
+  const processes = [];
   const cleanup = { attempted: false, removed: false };
   let evidence = null;
   let versionProbe = null;
   let completedReceipt = null;
+  let workspaceToken = `workspace-${sha(binding.run_id).slice(0, 16)}`;
+  let toolchain = null;
+  let checkpoint = null;
+  let inputBundle = null;
+  let workspaceCreated = false;
   try {
     need(binding.kind !== 'docusaurus-browser' || revision.revision.browser_calibration_digest, 'infrastructure', 'browser_pending', 'Docusaurus binding remains pending and cannot execute');
+    need(!exists(runRoot), 'infrastructure', 'workspace_exists', 'refusing to reuse an existing retained consumer workspace', { path: slash(runRoot) });
     const networkGuard = path.join(runRoot, 'network-guard.cjs');
+    fs.mkdirSync(runRoot, { recursive: true });
+    workspaceCreated = true;
     makeNetworkGuard(networkGuard);
-    liveBootstrapArtifact(revision, path.join(runRoot, 'candidate'));
+    inputBundle = liveInputBundle(revision, binding, path.join(runRoot, 'inputs'));
+    binding.__input_paths = inputBundle;
+    const packedArtifact = path.join(runRoot, 'inputs', 'workspine.tgz');
+    fs.copyFileSync(revision.candidate.artifact_path, packedArtifact, fs.constants.COPYFILE_EXCL);
+    if (binding.kind === 'packed-readme') {
+      const readme = revision.revision.readme || revision.revision.consumer_readme || 'Install the frozen Workspine package from workspine.tgz.\n';
+      write(path.join(runRoot, 'inputs', 'README.md'), String(readme));
+    } else {
+      liveBootstrapArtifact(revision, path.join(runRoot, 'candidate'));
+    }
     liveValidatePinnedRuntimeFiles(binding.runtime, revision.runtimes[binding.runtime]);
-    descriptor = realAgentResolveProvider(binding.runtime, CORE_RUNTIME_PINS[binding.runtime], process.env);
+    const providerPin = revision.runtimes[binding.runtime];
+    const providerEntry = providerPin.shim_path || providerPin.executable_path || providerPin.target_path;
+    descriptor = realAgentResolveProvider(binding.runtime, CORE_RUNTIME_PINS[binding.runtime], process.env, { whereEntries: [providerEntry] });
     need(descriptor, 'infrastructure', 'provider_not_found', `provider was not resolved: ${binding.runtime}`);
     evidence = realAgentProviderEvidence(descriptor, runRoot, process.env);
-    liveValidateRuntimePin(binding.runtime, descriptor, evidence, revision.runtimes[binding.runtime]);
+    liveValidateRuntimePin(binding.runtime, descriptor, evidence, providerPin);
+    toolchain = liveToolchain(revision, providerPin, descriptor);
     const versionPin = liveRuntimeVersionPin(revision.runtimes[binding.runtime]);
     const versionRoot = path.join(runRoot, 'version-probe');
-    const versionEnv = liveMinimalEnv(versionRoot, revision.revision.revision_id, binding.runtime);
+    const versionEnv = liveMinimalEnv(versionRoot, revision.revision.revision_id, binding.runtime, toolchain.path);
     versionEnv.NODE_OPTIONS = `--require=${networkGuard}`;
     liveRevisionFiles(revision, versionRoot, revision.runtimes[binding.runtime]);
     const versionResult = realAgentRunProvider(descriptor, ['--version'], { cwd: versionRoot, env: versionEnv, timeout: 30000 });
@@ -1415,24 +1568,42 @@ function liveRun(contract, binding, revision, receiptFile) {
     need(versionOutput.includes(versionPin.value), 'infrastructure', 'runtime_version_mismatch', 'runtime version output does not contain the pinned version', versionProbe);
     need(versionProbe.stdout_sha256 === versionPin.hash, 'infrastructure', 'runtime_version_mismatch', 'runtime version output hash differs from the revision', versionProbe);
     for (const name of Object.keys(versionEnv)) delete versionEnv[name];
-    for (const role of LIVE_ROLE_ORDER) {
-      const roleRoot = path.join(runRoot, 'contexts', role);
+    let installRecord = null;
+    let installed = { status: 0, timed_out: false };
+    if (binding.kind !== 'packed-readme') {
+      write(path.join(runRoot, 'package.json'), '{"name":"phase16-consumer","private":true}\n');
+      const installEnv = liveMinimalEnv(path.join(runRoot, 'install-context'), revision.revision.revision_id, binding.runtime, toolchain.path);
+      installEnv.NODE_OPTIONS = `--require=${networkGuard}`;
+      installed = run(toolchain.files.node.path, [toolchain.files.npm.path, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--no-save', packedArtifact], { cwd: runRoot, env: installEnv, timeout: 120000 });
+      installRecord = commandRecord(installed, runRoot, installEnv);
+      assertNoNetwork(installed, installRecord);
+      need(installed.status === 0 && !installed.timed_out, 'infrastructure', 'consumer_install_failed', 'frozen package install failed in the retained consumer workspace', installRecord);
+      need(exists(path.join(runRoot, 'node_modules', 'workspine', 'bin', 'gsdd.mjs')), 'infrastructure', 'installed_cli_missing', 'frozen Workspine CLI is not reachable from the consumer root');
+    }
+    const processCount = binding.journey_id === 'brownfield-plan' ? 2 : 1;
+    for (let processIndex = 1; processIndex <= processCount; processIndex += 1) {
+      const roleRoot = path.join(runRoot, 'contexts', `process-${processIndex}`);
       fs.mkdirSync(roleRoot, { recursive: true });
-      // Every role starts from the same frozen bytes, but has a distinct root,
-      // home, config, cache, temp, process, and provider invocation.
-      liveBootstrapArtifact(revision, path.join(roleRoot, 'candidate'));
-      const env = liveMinimalEnv(roleRoot, revision.revision.revision_id, binding.runtime);
+      const env = liveMinimalEnv(roleRoot, revision.revision.revision_id, binding.runtime, toolchain.path);
       env.NODE_OPTIONS = `--require=${networkGuard}`;
+      env.PHASE16_PROCESS_INDEX = String(processIndex);
+      env.PHASE16_WORKSPACE_ROOT = runRoot;
+      env.PHASE16_NPM_CLI = toolchain.files.npm.path;
+      env.PHASE16_PACKED_ARTIFACT = packedArtifact;
       const configFiles = liveRevisionFiles(revision, roleRoot, revision.runtimes[binding.runtime]);
       const secretNames = liveSecretEnv(revision, env);
-      const prompt = liveRolePrompt(binding, role);
-      const argv = realAgentInvocationArgv(binding.runtime, path.join(roleRoot, 'candidate'), prompt, role === 'plan-check' ? 'plan-check' : role, { model: binding.model, reasoning: binding.effort });
-      realAgentAssertNoOracleExposure({ prompt, argv, env, root: roleRoot, label: `${role} provider input`, allowEnvNames: secretNames });
-      const budget = binding.role_budgets_seconds[LIVE_ROLE_KEYS[role]];
-      need(Number.isInteger(budget) && budget >= 60, 'infrastructure', 'role_budget_invalid', `role budget is invalid: ${role}`);
-      const redactedArgv = argv.map((value) => scrub(value, roleRoot, env));
+      const prompt = liveJourneyPrompt({ ...binding, __input_paths: inputBundle }, processIndex);
+      const argv = liveJourneyArgv(binding, runRoot, prompt, processIndex);
+      realAgentAssertNoOracleExposure({ prompt, argv, env, root: runRoot, label: `journey process ${processIndex} provider input`, allowEnvNames: secretNames });
+      const installedCli = path.join(runRoot, 'node_modules', 'workspine', 'bin', 'gsdd.mjs');
+      const preexistingInstalledCli = exists(installedCli);
+      if (binding.kind === 'packed-readme') need(!preexistingInstalledCli, 'infrastructure', 'packed_preinstall_forbidden', 'packed README journey had an installed CLI before provider launch');
+      else need(preexistingInstalledCli, 'infrastructure', 'installed_cli_missing', 'non-packed journey lacks the frozen installed Workspine CLI before provider launch');
+      const budget = binding.timeout_seconds;
+      need(Number.isInteger(budget) && budget >= 60, 'infrastructure', 'process_budget_invalid', `journey process budget is invalid: ${processIndex}`);
+      const redactedArgv = argv.map((value) => scrub(value, runRoot, env));
       const started = Date.now();
-      const result = realAgentRunProvider(descriptor, argv, { cwd: path.join(roleRoot, 'candidate'), env, timeout: budget * 1000 });
+      const result = realAgentRunProvider(descriptor, argv, { cwd: runRoot, env, timeout: budget * 1000 });
       providerInvoked = true;
       let exportResult = null;
       let exportInvocation = null;
@@ -1442,7 +1613,7 @@ function liveRun(contract, binding, revision, receiptFile) {
       const retainedCap = Number(revision.revision.retained_event_limit_bytes || revision.revision.retained_event_cap_bytes || 65536);
       const providerRecord = commandRecord(result, roleRoot, env);
       const outputEvidence = { stdout_sha256: providerRecord.stdout_sha256, stderr_sha256: providerRecord.stderr_sha256, output_bytes: outputBytes() };
-      const invocation = { role, budget_seconds: budget, elapsed_ms: Date.now() - started, argv: redactedArgv, config_files: configFiles, secret_env_names: secretNames, status: result.status, signal: result.signal, error: result.error, output_bytes: outputBytes(), stdout_sha256: providerRecord.stdout_sha256, stderr_sha256: providerRecord.stderr_sha256 };
+      const invocation = { process_index: processIndex, budget_seconds: budget, elapsed_ms: Date.now() - started, argv: redactedArgv, config_files: configFiles, secret_env_names: secretNames, status: result.status, signal: result.signal, error: result.error, output_bytes: outputBytes(), stdout_sha256: providerRecord.stdout_sha256, stderr_sha256: providerRecord.stderr_sha256, install_state: { preexisting_cli: preexistingInstalledCli, reachable_after: exists(installedCli) } };
       let native = null;
       let failure = null;
       if (result.stderr.includes('PHASE16_NETWORK_BLOCKED') || result.stdout.includes('PHASE16_NETWORK_BLOCKED')) failure = { failure_class: 'infrastructure', failure_code: 'network_violation', message: 'network guard observed an attempted connection' };
@@ -1471,29 +1642,63 @@ function liveRun(contract, binding, revision, receiptFile) {
       const eventBytes = Buffer.byteLength(JSON.stringify({ invocation, native, failure }));
       if (!failure && (!Number.isInteger(retainedCap) || retainedCap <= 0 || eventBytes > retainedCap)) failure = { failure_class: 'infrastructure', failure_code: 'retained_event_cap', message: 'retained provider facts exceeded the frozen cap' };
       if (failure) outputEvidence.diagnostic = realAgentFailureDiagnostic(result, roleRoot, env, secretNames.map((name) => env[name]));
-      roles.push({ role, context: `<ISOLATED_ROOT>/contexts/${role}`, invocation, native: native ? liveSanitizeNative(binding.runtime, native) : null, output: outputEvidence, terminal: { status: failure ? 'failed' : 'completed', exit_code: result.status, timed_out: result.timed_out, failure_class: failure?.failure_class || null, failure_code: failure?.failure_code || null, message: failure?.message || null } });
+      if (!failure && binding.kind === 'packed-readme') need(exists(installedCli), 'infrastructure', 'packed_install_missing', 'packed README provider journey did not install the frozen Workspine CLI');
+      processes.push({ process_index: processIndex, context: `<CONSUMER_ROOT>/contexts/process-${processIndex}`, invocation, native: native ? liveSanitizeNative(binding.runtime, native) : null, native_identity: liveIdentityKey(binding.runtime, native), output: outputEvidence, terminal: { status: failure ? 'failed' : 'completed', exit_code: result.status, timed_out: result.timed_out, failure_class: failure?.failure_class || null, failure_code: failure?.failure_code || null, message: failure?.message || null } });
       for (const name of secretNames) delete env[name];
-      if (failure) infrastructureFailure(failure.failure_code, failure.message, { role, ...outputEvidence });
+      if (failure) infrastructureFailure(failure.failure_code, failure.message, { process_index: processIndex, ...outputEvidence });
+      if (binding.journey_id === 'brownfield-plan' && processIndex === 1) checkpoint = liveCaptureCheckpoint(runRoot);
     }
-    completedReceipt = { schema_version: 1, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked, workflow_verdict: 'not_evaluated', campaign_revision: { revision_id: revision.revision.revision_id, sha256: revision.sha256 }, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: bindingFingerprint(binding), run_id: binding.run_id, journey_id: binding.journey_id || null, trial_kind: binding.kind, runtime: binding.runtime, provider: { logical_command: CORE_RUNTIME_PINS[binding.runtime].command, runtime_version: revision.runtimes[binding.runtime].version || revision.runtimes[binding.runtime].version_string, version_probe: versionProbe, requested_model: binding.model, requested_effort: binding.effort, resolution: evidence, identity_claim: 'requested/native identity only' }, candidate: { commit: revision.candidate.commit || revision.revision.candidate?.commit || null, artifact_sha256: revision.candidate.artifact_sha256, member_count: revision.candidate.members.size, entry_path: `<ISOLATED_ROOT>/${revision.candidate.entry_path}`, entry_sha256: revision.candidate.entry_sha256, source_hashes: revision.candidate.source_hashes }, isolation: { root: '<ISOLATED_ROOT>', provider_readable_paths: ['<ISOLATED_ROOT>/contexts/<ROLE>/candidate'], writable_roots: ['<ISOLATED_ROOT>/contexts/execute'], owner_state: 'not_inherited' }, roles, cleanup, terminal: { status: 'completed', receipt_count: 1, failure_class: null, failure_code: null, message: 'provider execution completed; workflow was not evaluated' }, claim_limit: 'Provider execution only: requested/native identity, event sequence, exit, timeout, and bounded output facts; no lifecycle, artifact, verifier, grader, workflow, or product claim.' };
+    if (binding.journey_id === 'brownfield-plan') {
+      const identities = processes.map((item) => item.native_identity).filter(Boolean);
+      need(identities.length === 2 && new Set(identities).size === 2, 'infrastructure', 'native_identity_not_distinct', 'brownfield processes did not produce distinct native identities');
+    }
+    completedReceipt = { schema_version: 2, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked, workflow_verdict: 'not_evaluated', campaign_revision: { revision_id: revision.revision.revision_id, sha256: revision.sha256 }, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: bindingFingerprint(binding), run_id: binding.run_id, journey_id: binding.journey_id || null, trial_kind: binding.kind, runtime: binding.runtime, workspace: { token: workspaceToken, locator: '<PRIVATE_CONSUMER_ROOT>', realpath_sha256: sha(fs.realpathSync(runRoot)), retained: true, prepared: true }, preparation: { frozen_artifact_sha256: revision.candidate.artifact_sha256, frozen_source_hashes: revision.candidate.source_hashes, input_bundle: inputBundle, install: { mode: binding.kind === 'packed-readme' ? 'provider-owned-offline-frozen-artifact' : 'offline-frozen-artifact', command_sha256: installRecord?.stdout_sha256 || null, status: installed.status } }, provider: { logical_command: CORE_RUNTIME_PINS[binding.runtime].command, runtime_version: revision.runtimes[binding.runtime].version || revision.runtimes[binding.runtime].version_string, version_probe: versionProbe, requested_model: binding.model, requested_effort: binding.effort, resolution: evidence, identity_claim: 'requested/native identity only' }, toolchain: { path_allowlist: toolchain.path.map(() => '<TOOLCHAIN_PATH>'), hashes: toolchain.hashes }, candidate: { commit: revision.candidate.commit || revision.revision.candidate?.commit || null, artifact_sha256: revision.candidate.artifact_sha256, member_count: revision.candidate.members.size, entry_path: `<CONSUMER_ROOT>/${revision.candidate.entry_path}`, entry_sha256: revision.candidate.entry_sha256, source_hashes: revision.candidate.source_hashes }, processes, process_count: processes.length, journey: { flow: bindingFlow(binding), process_count: processes.length, checkpoint }, isolation: { root: '<PRIVATE_CONSUMER_ROOT>', provider_readable_paths: ['<CONSUMER_ROOT>'], writable_roots: ['<CONSUMER_ROOT>', '<CONSUMER_ROOT>/contexts'], owner_state: 'not_inherited', owner_path: 'not_inherited' }, cleanup, terminal: { status: 'provider_complete', receipt_count: 1, failure_class: null, failure_code: null, message: 'natural consumer journey provider execution completed; workflow was not evaluated' }, claim_limit: 'Provider execution only: native identity, process sequence, exit, timeout, bounded output, frozen installation, and retained-root facts; no lifecycle, artifact, verifier, grader, workflow, or product claim.' };
     return completedReceipt;
   } catch (error) {
     error.providerInvoked = Boolean(error.providerInvoked || providerInvoked);
     error.providerEvidence = evidence;
     error.versionProbe = versionProbe;
-    error.roles = roles;
+    error.processes = processes;
+    error.workspace_created = workspaceCreated;
+    error.workspace = { token: workspaceToken, locator: '<PRIVATE_CONSUMER_ROOT>', realpath_sha256: exists(runRoot) ? sha(fs.realpathSync(runRoot)) : null, retained: workspaceCreated, prepared: workspaceCreated, created_by_run: workspaceCreated };
+    error.toolchain = toolchain;
+    error.checkpoint = checkpoint;
     error.cleanup = cleanup;
     throw error;
   } finally {
-    cleanup.attempted = true;
-    try { fs.rmSync(runRoot, { recursive: true, force: false, maxRetries: 3, retryDelay: 25 }); cleanup.removed = !exists(runRoot); } catch (error) { cleanup.error = error.message; }
-    if (completedReceipt && !cleanup.removed) {
-      completedReceipt.terminal.status = 'failed';
-      completedReceipt.terminal.failure_class = 'infrastructure';
-      completedReceipt.terminal.failure_code = 'cleanup_failed';
-      completedReceipt.terminal.message = 'provider execution receipt could not prove isolated-root cleanup';
-    }
+    // 00B1 deliberately retains both successful and failed roots.  00C owns
+    // observation, grading, and the sole later cleanup transition.
   }
+}
+
+function liveBuildHandoff(contract, binding, receiptFile, handoffFile, receipt, root) {
+  need(handoffFile && path.isAbsolute(handoffFile), 'infrastructure', 'handoff_path_invalid', 'live run requires an absolute --handoff path');
+  need(path.dirname(handoffFile) === path.dirname(receiptFile), 'infrastructure', 'handoff_path_invalid', 'handoff must share the provider receipt directory');
+  need(!exists(handoffFile), 'infrastructure', 'handoff_exists', 'refusing to overwrite an existing handoff receipt', { path: slash(handoffFile) });
+  need(receipt.workspace?.retained === true && ['provider_complete', 'failed'].includes(receipt.terminal?.status), 'infrastructure', 'handoff_not_ready', 'only a sealed retained provider receipt can be handed off');
+  const rootExists = Boolean(root && exists(root) && fs.statSync(root).isDirectory());
+  need(rootExists, 'infrastructure', 'workspace_missing', 'retained consumer workspace does not exist for handoff');
+  const bytes = fs.readFileSync(receiptFile);
+  const handoff = {
+    schema: 'phase16-retained-workspace-v1', state: receipt.terminal.status === 'failed' ? 'failed' : 'handed_off',
+    run_id: binding.run_id, binding_fingerprint: bindingFingerprint(binding),
+    campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 },
+    workspace_token: receipt.workspace.token, workspace_locator: receipt.workspace.locator,
+    workspace_realpath_sha256: receipt.workspace.realpath_sha256,
+    provider_receipt_locator: `<RUN_DIR>/${path.basename(receiptFile)}`, provider_receipt_sha256: sha(bytes),
+    native_process_identities: (receipt.processes || []).map((item) => item.native_identity),
+    path_toolchain_hashes: receipt.toolchain?.hashes || {},
+    checkpoint_sha256: receipt.journey.checkpoint?.sha256 || null,
+    root_exists: rootExists, failure_code: receipt.terminal.failure_code || null, cleanup: { attempted: false, removed: false },
+  };
+  realAgentWriteReceipt(handoffFile, handoff);
+  const reread = json(handoffFile);
+  const providerReread = json(receiptFile);
+  need(providerReread.binding_fingerprint === bindingFingerprint(binding) && providerReread.run_id === binding.run_id, 'infrastructure', 'handoff_binding_invalid', 'sealed provider receipt no longer matches its campaign binding');
+  const expectedState = receipt.terminal.status === 'failed' ? 'failed' : 'handed_off';
+  need(reread.state === expectedState && reread.provider_receipt_sha256 === sha(fs.readFileSync(receiptFile)), 'infrastructure', 'handoff_binding_invalid', 'handoff does not bind the sealed provider receipt or terminal state');
+  need(reread.workspace_token === receipt.workspace.token && reread.root_exists === rootExists, 'infrastructure', 'handoff_binding_invalid', 'handoff workspace binding is invalid');
+  return handoff;
 }
 
 function liveMain(contract) {
@@ -1501,10 +1706,15 @@ function liveMain(contract) {
   let revision = null;
   let binding = null;
   let providerInvoked = false;
+  let handoffFile = null;
   try {
     receiptFile = coreArg('--receipt');
     need(receiptFile && path.isAbsolute(receiptFile), 'infrastructure', 'receipt_path_invalid', 'live run requires an absolute --receipt path');
     need(!exists(receiptFile), 'infrastructure', 'receipt_exists', 'refusing to overwrite an existing provider receipt', { path: slash(receiptFile) });
+    handoffFile = coreArg('--handoff');
+    need(handoffFile && path.isAbsolute(handoffFile), 'infrastructure', 'handoff_path_invalid', 'live run requires an absolute --handoff path');
+    need(path.dirname(handoffFile) === path.dirname(receiptFile), 'infrastructure', 'handoff_path_invalid', 'handoff must share the provider receipt directory');
+    need(!exists(handoffFile), 'infrastructure', 'handoff_exists', 'refusing to overwrite an existing handoff receipt', { path: slash(handoffFile) });
     liveValidateArguments();
     const revisionFile = coreArg('--campaign-revision');
     need(revisionFile && path.isAbsolute(revisionFile), 'infrastructure', 'campaign_revision_invalid', 'live run requires an absolute --campaign-revision path');
@@ -1514,14 +1724,26 @@ function liveMain(contract) {
     binding = contract.bindings.find((item) => item.run_id === runId);
     need(binding, 'product', 'run_unknown', `unknown campaign binding: ${runId}`);
     need(binding.calibration_digest !== null, 'infrastructure', 'calibration_pending', `binding remains pending: ${runId}`);
-    const receipt = liveRun(contract, binding, revision, receiptFile);
+    const receipt = liveRun(contract, binding, revision, receiptFile, handoffFile);
     realAgentWriteReceipt(receiptFile, receipt);
+    const retainedRoot = path.join(path.dirname(receiptFile), `consumer-${binding.run_id}`);
+    liveBuildHandoff(contract, binding, receiptFile, handoffFile, receipt, retainedRoot);
+    need(exists(retainedRoot), 'infrastructure', 'workspace_missing', 'retained consumer workspace disappeared before return');
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
   } catch (error) {
     const failure = error instanceof ProofFailure ? error : new ProofFailure('infrastructure', 'provider_execution_failure', error.message, { stack: error.stack });
-    const failed = { schema_version: 1, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked || Boolean(error.providerInvoked), workflow_verdict: 'not_evaluated', campaign_revision: revision ? { revision_id: revision.revision.revision_id, sha256: revision.sha256 } : null, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: binding ? bindingFingerprint(binding) : null, run_id: binding?.run_id || coreArg('--run'), trial_kind: binding?.kind || null, runtime: binding?.runtime || null, provider: { logical_command: binding ? CORE_RUNTIME_PINS[binding.runtime].command : null, version_probe: error.versionProbe || null, requested_model: binding?.model || null, requested_effort: binding?.effort || null, resolution: error.providerEvidence || null, identity_claim: error.providerEvidence ? 'requested/native identity only' : 'none' }, roles: error.roles || [], isolation: { root: '<ISOLATED_ROOT>', provider_readable_paths: [], writable_roots: [], owner_state: 'not_inherited' }, cleanup: error.cleanup || { attempted: false, removed: false }, terminal: { status: 'failed', receipt_count: 1, failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: 'No workflow claim: provider execution failed or was not admitted; workflow_verdict remains not_evaluated.' };
+    const failed = { schema_version: 2, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked || Boolean(error.providerInvoked), workflow_verdict: 'not_evaluated', campaign_revision: revision ? { revision_id: revision.revision.revision_id, sha256: revision.sha256 } : null, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: binding ? bindingFingerprint(binding) : null, run_id: binding?.run_id || coreArg('--run'), journey_id: binding?.journey_id || null, trial_kind: binding?.kind || null, runtime: binding?.runtime || null, workspace: error.workspace || { token: null, locator: '<PRIVATE_CONSUMER_ROOT>', realpath_sha256: null, retained: false, prepared: false }, provider: { logical_command: binding ? CORE_RUNTIME_PINS[binding.runtime].command : null, version_probe: error.versionProbe || null, requested_model: binding?.model || null, requested_effort: binding?.effort || null, resolution: error.providerEvidence || null, identity_claim: error.providerEvidence ? 'requested/native identity only' : 'none' }, toolchain: error.toolchain ? { path_allowlist: error.toolchain.path?.map(() => '<TOOLCHAIN_PATH>') || [], hashes: error.toolchain.hashes || {} } : null, processes: error.processes || [], process_count: (error.processes || []).length, journey: { flow: binding ? bindingFlow(binding) : [], process_count: (error.processes || []).length, checkpoint: error.checkpoint || null }, isolation: { root: '<PRIVATE_CONSUMER_ROOT>', provider_readable_paths: [], writable_roots: [], owner_state: 'not_inherited', owner_path: 'not_inherited' }, cleanup: { attempted: false, removed: false }, terminal: { status: 'failed', receipt_count: 1, failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: 'No workflow claim: provider execution failed or was not admitted; workflow_verdict remains not_evaluated.' };
     if (receiptFile && path.isAbsolute(receiptFile) && !exists(receiptFile)) {
       try { realAgentWriteReceipt(receiptFile, failed); } catch { /* stdout remains the authoritative failure when the path is unsafe */ }
+    }
+    const retainedRoot = binding ? path.join(path.dirname(receiptFile || ''), `consumer-${binding.run_id}`) : null;
+    if (receiptFile && handoffFile && binding && exists(receiptFile) && !exists(handoffFile) && error.workspace_created === true && retainedRoot && exists(retainedRoot)) {
+      try {
+        liveBuildHandoff(contract, binding, receiptFile, handoffFile, failed, retainedRoot);
+      } catch (handoffError) {
+        failed.terminal.evidence = { ...(failed.terminal.evidence || {}), handoff_failure: { failure_code: handoffError.code || 'handoff_validation_failed', message: handoffError.message } };
+        try { realAgentWriteReceipt(receiptFile, failed); } catch { /* the JSON stdout below remains the failure record */ }
+      }
     }
     process.stdout.write(`${JSON.stringify(failed, null, 2)}\n`);
     process.exitCode = 1;
@@ -1601,4 +1823,7 @@ module.exports = {
   liveCanonicalRevision,
   liveBootstrapArtifact,
   liveMemberPath,
+  bindingFlow,
+  bindingRequiredSkills,
+  liveCaptureCheckpoint,
 };

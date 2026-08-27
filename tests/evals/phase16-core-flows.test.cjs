@@ -31,7 +31,14 @@ function runCalibration(argv) { return cp.spawnSync(process.execPath, [CALIBRATI
 function parse(stdout) { return JSON.parse(stdout); }
 
 function bytesHash(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
-function runWithEnv(argv, env) { return cp.spawnSync(process.execPath, [EVAL, ...argv], { cwd: REPO, env, encoding: 'utf8', windowsHide: true }); }
+function runWithEnv(argv, env) {
+  const values = [...argv];
+  if (values.includes('--campaign-revision') && !values.includes('--handoff')) {
+    const receipt = values[values.indexOf('--receipt') + 1];
+    values.push('--handoff', path.join(path.dirname(receipt), 'handoff.json'));
+  }
+  return cp.spawnSync(process.execPath, [EVAL, ...values], { cwd: REPO, env, encoding: 'utf8', windowsHide: true });
+}
 
 // A small local-only provider fixture. It is intentionally outside the
 // checkout and is never used by the normal campaign tests.
@@ -51,7 +58,7 @@ function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, sec
   fs.mkdirSync(path.dirname(providerTarget), { recursive: true });
   fs.mkdirSync(providerBin, { recursive: true });
   fs.writeFileSync(path.join(packageRoot, 'bin', 'gsdd.mjs'), 'export default true;\n');
-  fs.writeFileSync(path.join(packageRoot, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
+  fs.writeFileSync(path.join(packageRoot, 'package.json'), '{"name":"workspine","version":"1.0.0","bin":{"gsdd":"bin/gsdd.mjs"}}\n');
   fs.writeFileSync(configFile, '{"fixture":true}\n');
   fs.writeFileSync(authFile, '{"auth":"fixture-only"}\n');
   const version = runtime === 'claude' ? 'fixture-claude-1' : 'fixture-codex-1';
@@ -67,13 +74,24 @@ function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, sec
     { type: 'turn.completed', thread_id: 'thread-fixture', turn_id: 'turn-fixture' },
   ];
   const encodedOutput = lines.map((item) => typeof item === 'string' ? item : JSON.stringify(item)).join('\n') + '\n';
-  fs.writeFileSync(providerTarget, `if (process.argv.includes('--version')) { process.stdout.write(${JSON.stringify(`${version}\n`)}); process.exitCode=0; } else if (${Number(sleepMs)} > 0) { setTimeout(() => { process.stdout.write(${JSON.stringify(encodedOutput)}); process.exitCode=${exitCode}; }, ${Number(sleepMs)}); } else { process.stdout.write(${JSON.stringify(encodedOutput)}); process.exitCode=${exitCode}; }\n`);
+  fs.writeFileSync(providerTarget, `if (process.argv.includes('--version')) { process.stdout.write(${JSON.stringify(`${version}\n`)}); process.exitCode=0; } else if (${Number(sleepMs)} > 0) { setTimeout(() => { process.stdout.write(${JSON.stringify(encodedOutput)}); process.exitCode=${exitCode}; }, ${Number(sleepMs)}); } else { const index = process.env.PHASE16_PROCESS_INDEX || '0'; const fs = require('node:fs'); if (process.argv.join(' ').includes('packed-readme')) { const cp = require('node:child_process'); const install = cp.spawnSync(process.execPath, [process.env.PHASE16_NPM_CLI, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--no-save', process.env.PHASE16_PACKED_ARTIFACT], { cwd: process.env.PHASE16_WORKSPACE_ROOT, env: process.env, encoding: 'utf8' }); if (install.status !== 0) { process.stderr.write(install.stderr || 'packed install failed'); process.exitCode = install.status || 1; } } const output = ${JSON.stringify(encodedOutput)}.replaceAll('thread-fixture', 'thread-fixture-' + index).replaceAll('turn-fixture', 'turn-fixture-' + index).replaceAll('item-fixture', 'item-fixture-' + index); if (index === '1' && process.argv.join(' ').includes('brownfield-plan')) { fs.mkdirSync('.work', { recursive: true }); fs.writeFileSync('.work/.continue-here.md', '# Current task\\nBounded brownfield task.\\n\\n## Evidence\\nPlan paused with frozen inputs.\\n\\n## Next action\\nResume process B and execute only the approved plan.\\n', { flag: 'w' }); } process.stdout.write(output); process.exitCode=${exitCode}; }\n`);
   const command = runtime === 'claude' ? 'claude' : 'codex';
   const shim = path.join(providerBin, `${command}.cmd`);
   fs.writeFileSync(shim, `@echo off\r\n"%~dp0\\${targetRelative.replaceAll('/', '\\')}" %*\r\n`);
   const artifact = path.join(root, 'candidate.tgz');
   const packed = cp.spawnSync('tar', ['-czf', artifact, '-C', source, 'package'], { encoding: 'utf8', windowsHide: true });
   assert.equal(packed.status, 0, packed.stderr);
+  const inputRoot = path.join(root, 'input-bundle');
+  fs.mkdirSync(path.join(inputRoot, 'project', 'src'), { recursive: true });
+  fs.mkdirSync(path.join(inputRoot, 'owner'), { recursive: true });
+  fs.writeFileSync(path.join(inputRoot, 'project', 'src', 'app.js'), 'export const consumerInput = true;\n');
+  fs.writeFileSync(path.join(inputRoot, 'owner', 'TASK.md'), '# Owner task\nChange only the declared consumer input.\n');
+  fs.writeFileSync(path.join(inputRoot, 'owner', 'BRIEF.md'), '# Owner brief\nA bounded first-run consumer task.\n');
+  fs.writeFileSync(path.join(inputRoot, 'owner', 'ANSWER.md'), '# Owner answer\nApprove the bounded plan only.\n');
+  const inputBundle = path.join(root, 'consumer-input.tgz');
+  const inputPacked = cp.spawnSync('tar', ['-czf', inputBundle, '-C', inputRoot, 'project', 'owner'], { encoding: 'utf8', windowsHide: true });
+  assert.equal(inputPacked.status, 0, inputPacked.stderr);
+  const inputMembers = ['project/src/app.js', 'owner/TASK.md', 'owner/BRIEF.md', 'owner/ANSWER.md'].map((memberPath) => ({ path: memberPath, sha256: bytesHash(fs.readFileSync(path.join(inputRoot, ...memberPath.split('/')))) }));
   const entryPath = 'package/bin/gsdd.mjs';
   const sourceHashes = {
     [entryPath]: bytesHash(fs.readFileSync(path.join(packageRoot, 'bin', 'gsdd.mjs'))),
@@ -87,14 +105,18 @@ function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, sec
     claude: runtime === 'claude' ? selectedPin : unusedPin('claude'),
     opencode: unusedPin('opencode'),
   };
+  const gitProbe = cp.spawnSync(process.platform === 'win32' ? 'where.exe' : 'which', ['git'], { encoding: 'utf8', windowsHide: true });
+  const gitPath = String(gitProbe.stdout || '').split(/\r?\n/).map((item) => item.trim()).find(Boolean);
+  const npmPath = process.platform === 'win32' ? path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js') : path.join(path.dirname(path.dirname(process.execPath)), 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  const toolchain = { node: { path: process.execPath, sha256: bytesHash(fs.readFileSync(process.execPath)) }, npm: { path: npmPath, sha256: bytesHash(fs.readFileSync(npmPath)) }, git: { path: gitPath, sha256: bytesHash(fs.readFileSync(gitPath)) } };
   const revision = {
     schema_version: 1, contract: 'phase16-live-campaign-revision.v1', revision_id: `fixture-${process.pid}`,
-    candidate: { commit: '0123456789012345678901234567890123456789', artifact_path: artifact, artifact_sha256: bytesHash(fs.readFileSync(artifact)), members, entry: { path: entryPath, sha256: sourceHashes[entryPath] }, source_hashes: sourceHashes },
+    candidate: { commit: '0123456789012345678901234567890123456789', artifact_path: artifact, artifact_sha256: bytesHash(fs.readFileSync(artifact)), members, entry: { path: entryPath, sha256: sourceHashes[entryPath] }, source_hashes: sourceHashes }, consumer_input_bundle: { path: inputBundle, sha256: bytesHash(fs.readFileSync(inputBundle)), members: inputMembers, source_path: 'project/src/app.js', task_path: 'owner/TASK.md', brief_path: 'owner/BRIEF.md', owner_answer_path: 'owner/ANSWER.md' }, toolchain, path_allowlist: [providerBin, path.dirname(process.execPath), path.dirname(npmPath), path.dirname(gitPath)],
     runtimes, raw_output_limit_bytes: 65536, retained_event_limit_bytes: 65536, auth_config_files: [{ path: authFile, sha256: bytesHash(fs.readFileSync(authFile)), destination: 'fixture-auth.json' }], secret_env: secretValue ? [{ name: 'PHASE16_TEST_SECRET', sha256: bytesHash(Buffer.from(secretValue)) }] : [],
   };
   const revisionFile = path.join(root, 'revision.json');
   fs.writeFileSync(revisionFile, `${JSON.stringify(revision, null, 2)}\n`);
-  return { root, source, revisionFile, receiptFile: path.join(root, 'receipt.json'), configFile, authFile, providerTarget, shim, artifact, env: { ...process.env, PATH: `${providerBin}${path.delimiter}${process.env.PATH || ''}`, ...(secretValue ? { PHASE16_TEST_SECRET: secretValue } : {}) }, runtime };
+  return { root, source, revisionFile, receiptFile: path.join(root, 'receipt.json'), configFile, authFile, providerTarget, shim, artifact, inputMembers, env: { ...process.env, PATH: `${providerBin}${path.delimiter}${process.env.PATH || ''}`, ...(secretValue ? { PHASE16_TEST_SECRET: secretValue } : {}) }, runtime };
 }
 
 test('campaign has exactly three journeys and the retained 21-binding matrix', () => {
@@ -134,6 +156,7 @@ test('campaign has exactly three journeys and the retained 21-binding matrix', (
   assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'core-brownfield-plan-codex-1').required_skills, ['work-plan', 'work-pause', 'work-resume', 'work-execute', 'work-verify', 'work-progress']);
   assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'owner-scripted-plan-check').required_skills, ['work-plan']);
   assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'packed-readme-codex').required_skills, []);
+  assert.deepEqual(campaign.bindings.find((binding) => binding.run_id === 'docusaurus-browser-codex').required_skills, ['work-new-project', 'work-plan', 'work-execute', 'work-verify']);
   const expectedJourneyTimeout = 3300;
   const expectedBudgets = {
     core: { timeout_seconds: 3300, role_budgets_seconds: { plan_check: 900, execute: 1800, independent_verify: 600 } },
@@ -149,6 +172,13 @@ test('campaign has exactly three journeys and the retained 21-binding matrix', (
   for (const kind of ['scripted-owner', 'packed-readme', 'docusaurus-browser']) assert.equal(campaign.bindings.filter((binding) => binding.kind === kind).length, 1);
 });
 
+test('campaign declares natural process accounting and retained auxiliary routes', () => {
+  assert.deepEqual(JSON.parse(fs.readFileSync(CAMPAIGN, 'utf8')).process_contract, { journey_processes: 27, version_probes: 21, opencode_exports: 8 });
+  assert.deepEqual(LIVE.bindingFlow({ kind: 'core', journey_id: 'brownfield-plan', flow: ['setup', 'health', 'brownfield-plan', 'pause', 'fresh-resume', 'execute', 'verify', 'progress'] }), ['setup', 'health', 'brownfield-plan', 'pause', 'fresh-resume', 'execute', 'verify', 'progress']);
+  assert.deepEqual(LIVE.bindingFlow({ kind: 'packed-readme' }), ['install', 'setup', 'health', 'update', 'rerun']);
+  assert.deepEqual(LIVE.bindingFlow({ kind: 'docusaurus-browser' }), ['init-auto', 'health', 'new-project', 'plan', 'execute', 'verify', 'audit']);
+});
+
 test('live run consumes a frozen artifact and emits only a non-verdict provider receipt', () => {
   const fixture = liveFixture();
   try {
@@ -158,17 +188,41 @@ test('live run consumes a frozen artifact and emits only a non-verdict provider 
     assert.equal(receipt.record_type, 'provider_execution_receipt');
     assert.equal(receipt.provider_invoked, true);
     assert.equal(receipt.workflow_verdict, 'not_evaluated');
-    assert.equal(receipt.terminal.status, 'completed');
-    assert.deepEqual(receipt.cleanup, { attempted: true, removed: true });
-    assert.equal(receipt.roles.length, 3);
-    assert.deepEqual(receipt.roles.map((role) => role.role), ['plan-check', 'execute', 'independent-verify']);
-    assert.deepEqual(receipt.roles.map((role) => role.invocation.budget_seconds), [900, 1800, 600]);
-    assert.equal(new Set(receipt.roles.map((role) => role.invocation.argv.at(-1))).size, 3);
-    assert.equal(new Set(receipt.roles.map((role) => role.context)).size, 3);
-    assert.ok(receipt.roles.every((role) => role.terminal.status === 'completed'));
-    assert.ok(receipt.roles.every((role) => role.invocation.config_files.some((item) => item.path.endsWith('/fixture-auth.json'))));
+    assert.equal(receipt.terminal.status, 'provider_complete');
+    assert.deepEqual(receipt.cleanup, { attempted: false, removed: false });
+    assert.equal(receipt.processes.length, 1);
+    assert.equal(receipt.process_count, 1);
+    assert.equal(receipt.journey.process_count, 1);
+    assert.equal(receipt.processes[0].terminal.status, 'completed');
+    assert.ok(receipt.processes[0].invocation.config_files.some((item) => item.path.endsWith('/fixture-auth.json')));
+    assert.equal(receipt.preparation.input_bundle.source, '<CONSUMER_ROOT>/inputs/project/src/app.js');
+    const expectedInputHashes = Object.fromEntries(fixture.inputMembers.map((item) => [item.path, item.sha256]));
+    assert.deepEqual(receipt.preparation.input_bundle.member_hashes, expectedInputHashes);
+    assert.equal(receipt.preparation.input_bundle.source_sha256, expectedInputHashes['project/src/app.js']);
+    assert.equal(receipt.preparation.input_bundle.task_sha256, expectedInputHashes['owner/TASK.md']);
+    assert.equal(receipt.preparation.input_bundle.brief_sha256, expectedInputHashes['owner/BRIEF.md']);
+    assert.equal(receipt.preparation.input_bundle.owner_answer, null);
+    assert.deepEqual(JSON.parse(JSON.stringify(receipt.preparation.input_bundle)).member_hashes, expectedInputHashes);
+    assert.match(receipt.processes[0].invocation.argv.join(' '), /inputs[\\/]owner[\\/]TASK\.md/);
+    assert.match(receipt.processes[0].invocation.argv.join(' '), /node_modules[\\/]workspine[\\/]bin[\\/]gsdd\.mjs/);
+    assert.equal(fs.existsSync(path.join(fixture.root, 'consumer-core-treesnap-codex-1')), true);
+    assert.equal(fs.existsSync(path.join(fixture.root, 'handoff.json')), true);
     assert.ok(!JSON.stringify(receipt).includes(process.env.USERPROFILE || '___owner_profile_not_set___'));
     assert.equal(receipt.provider.identity_claim, 'requested/native identity only');
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('scripted-owner uses the frozen deterministic approval input and binds its hash', () => {
+  const fixture = liveFixture();
+  try {
+    const result = runWithEnv(['--run', 'owner-scripted-plan-check', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const receipt = parse(result.stdout);
+    const expected = fixture.inputMembers.find((item) => item.path === 'owner/ANSWER.md').sha256;
+    assert.equal(receipt.preparation.input_bundle.owner_answer, '<CONSUMER_ROOT>/inputs/owner/ANSWER.md');
+    assert.equal(receipt.preparation.input_bundle.owner_answer_sha256, expected);
+    assert.match(receipt.processes[0].invocation.argv.join(' '), /inputs[\\/]owner[\\/]ANSWER\.md/);
+    assert.equal(JSON.parse(JSON.stringify(receipt.preparation.input_bundle)).owner_answer_sha256, expected);
   } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
 });
 
@@ -180,9 +234,111 @@ test('live Claude binding captures native session, assistant model, and result l
     const receipt = parse(result.stdout);
     assert.equal(receipt.provider_invoked, true);
     assert.equal(receipt.provider.runtime_version, 'fixture-claude-1');
-    assert.equal(receipt.roles.length, 3);
-    assert.ok(receipt.roles.every((role) => role.native.parser === 'claude-stream-json' && role.native.assistant_model === 'claude-sonnet-5'));
+    assert.equal(receipt.processes.length, 1);
+    assert.equal(receipt.processes[0].native.parser, 'claude-stream-json');
+    assert.equal(receipt.processes[0].native.assistant_model, 'claude-sonnet-5');
     assert.equal(receipt.workflow_verdict, 'not_evaluated');
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('brownfield journey uses two fresh processes over one retained root and creates handoff', () => {
+  const fixture = liveFixture();
+  try {
+    const result = runWithEnv(['--run', 'core-brownfield-plan-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.process_count, 2);
+    assert.deepEqual(receipt.processes.map((item) => item.process_index), [1, 2]);
+    assert.equal(new Set(receipt.processes.map((item) => item.native_identity)).size, 2);
+    assert.ok(receipt.journey.checkpoint.bytes >= 64);
+    assert.equal(receipt.cleanup.attempted, false);
+    const handoff = JSON.parse(fs.readFileSync(path.join(fixture.root, 'handoff.json'), 'utf8'));
+    assert.equal(handoff.state, 'handed_off');
+    assert.equal(handoff.provider_receipt_sha256, sha(fixture.receiptFile).toLowerCase());
+    assert.equal(handoff.root_exists, true);
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('packed README journey owns installation while frozen inputs and task paths are visible', () => {
+  const fixture = liveFixture();
+  try {
+    const result = runWithEnv(['--run', 'packed-readme-codex', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.preparation.install.mode, 'provider-owned-offline-frozen-artifact');
+    assert.equal(receipt.processes[0].invocation.install_state.preexisting_cli, false);
+    assert.equal(receipt.processes[0].invocation.install_state.reachable_after, true);
+    assert.match(receipt.processes[0].invocation.argv.join(' '), /inputs[\\/]owner[\\/]TASK\.md/);
+    assert.match(receipt.processes[0].invocation.argv.join(' '), /inputs[\\/]workspine\.tgz/);
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('consumer input bundle tamper is rejected before provider execution', () => {
+  const fixture = liveFixture();
+  try {
+    const revision = JSON.parse(fs.readFileSync(fixture.revisionFile, 'utf8'));
+    revision.consumer_input_bundle.sha256 = '0'.repeat(64);
+    fs.writeFileSync(fixture.revisionFile, `${JSON.stringify(revision, null, 2)}\n`);
+    const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.notEqual(result.status, 0);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.provider_invoked, false);
+    assert.equal(receipt.terminal.failure_code, 'consumer_input_bundle_hash_mismatch');
+    assert.equal(fs.existsSync(path.join(fixture.root, 'handoff.json')), true);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(fixture.root, 'handoff.json'), 'utf8')).state, 'failed');
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('consumer input member ledger tamper is rejected before provider execution', () => {
+  const fixture = liveFixture();
+  try {
+    const revision = JSON.parse(fs.readFileSync(fixture.revisionFile, 'utf8'));
+    revision.consumer_input_bundle.members.find((item) => item.path === 'owner/TASK.md').sha256 = '0'.repeat(64);
+    fs.writeFileSync(fixture.revisionFile, `${JSON.stringify(revision, null, 2)}\n`);
+    const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.notEqual(result.status, 0);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.provider_invoked, false);
+    assert.equal(receipt.terminal.failure_code, 'consumer_input_bundle_member_mismatch');
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('pre-existing consumer roots are rejected without creating a handoff', () => {
+  const fixture = liveFixture();
+  const runRoot = path.join(fixture.root, 'consumer-core-treesnap-codex-1');
+  try {
+    fs.mkdirSync(runRoot, { recursive: true });
+    const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.notEqual(result.status, 0);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.terminal.failure_code, 'workspace_exists');
+    assert.equal(receipt.workspace.created_by_run, false);
+    assert.equal(fs.existsSync(path.join(fixture.root, 'handoff.json')), false);
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('brownfield checkpoint accepts only substantive .work/.continue-here.md', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-checkpoint-'));
+  try {
+    fs.mkdirSync(path.join(root, '.work'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.work', 'state.json'), '{}\n');
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), /did not leave/);
+    fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), '# Current task\nshort\n');
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), /substantive/);
+    fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), '# Current task\nBounded task.\n\n## Evidence\nObserved.\n\n## Next action\nResume process B.\n');
+    assert.ok(LIVE.liveCaptureCheckpoint(root).sha256);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('provider and toolchain targets must be inside the declared PATH allowlist', () => {
+  const fixture = liveFixture();
+  try {
+    const revision = JSON.parse(fs.readFileSync(fixture.revisionFile, 'utf8'));
+    revision.path_allowlist = [path.dirname(process.execPath), path.dirname(revision.toolchain.npm.path), path.dirname(revision.toolchain.git.path)];
+    fs.writeFileSync(fixture.revisionFile, `${JSON.stringify(revision, null, 2)}\n`);
+    const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.notEqual(result.status, 0);
+    assert.equal(parse(result.stdout).terminal.failure_code, 'path_allowlist_excludes_target');
   } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
 });
 
@@ -444,9 +600,9 @@ test('live failures preserve provider invocation evidence for output caps, netwo
       const receipt = parse(result.stdout);
       assert.equal(receipt.provider_invoked, true, item.name);
       assert.equal(receipt.terminal.failure_code, item.code, item.name);
-      assert.equal(receipt.roles.length, 1, item.name);
-      assert.ok(receipt.roles[0].invocation.argv.length > 0, item.name);
-      assert.ok(receipt.roles[0].output.stdout_sha256, item.name);
+      assert.equal(receipt.processes.length, 1, item.name);
+      assert.ok(receipt.processes[0].invocation.argv.length > 0, item.name);
+      assert.ok(receipt.processes[0].output.stdout_sha256, item.name);
       assert.equal(receipt.workflow_verdict, 'not_evaluated', item.name);
     } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
   }
@@ -456,7 +612,7 @@ test('live failures preserve provider invocation evidence for output caps, netwo
     const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
     assert.equal(result.status, 0, result.stderr || result.stdout);
     const receipt = parse(result.stdout);
-    assert.ok(receipt.roles.every((role) => role.invocation.secret_env_names.includes('PHASE16_TEST_SECRET')));
+    assert.ok(receipt.processes.every((item) => item.invocation.secret_env_names.includes('PHASE16_TEST_SECRET')));
     assert.ok(!JSON.stringify(receipt).includes(secret));
     assert.ok(!JSON.stringify(receipt).includes('PHASE16_TEST_SECRET='));
   } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
