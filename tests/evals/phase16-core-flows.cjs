@@ -64,14 +64,32 @@ function write(file, value) {
   fs.writeFileSync(file, value, { flag: 'wx' });
 }
 
-function makeNetworkGuard(file) {
+const NETWORK_ATTEMPT_SCHEMA = 'phase16-network-attempt-v1';
+const NETWORK_ATTEMPT_MAX_BYTES = 2048;
+const NETWORK_ATTEMPT_KINDS = Object.freeze(new Set([
+  'net.connect', 'net.createConnection', 'tls.connect',
+  'dns.lookup', 'dns.resolve', 'dns.resolve4', 'dns.resolve6', 'dns.resolveAny', 'dns.resolveCaa', 'dns.resolveCname', 'dns.resolveMx', 'dns.resolveNaptr', 'dns.resolveNs', 'dns.resolvePtr', 'dns.resolveSoa', 'dns.resolveSrv', 'dns.resolveTxt', 'dns.reverse',
+  'dns.promises.lookup', 'dns.promises.resolve', 'dns.promises.resolve4', 'dns.promises.resolve6', 'dns.promises.resolveAny', 'dns.promises.resolveCaa', 'dns.promises.resolveCname', 'dns.promises.resolveMx', 'dns.promises.resolveNaptr', 'dns.promises.resolveNs', 'dns.promises.resolvePtr', 'dns.promises.resolveSoa', 'dns.promises.resolveSrv', 'dns.promises.resolveTxt', 'dns.promises.reverse',
+  'http.get', 'http.request', 'https.get', 'https.request', 'fetch',
+  'undici.fetch', 'undici.request', 'undici.connect', 'undici.dispatch',
+  'undici.stream', 'undici.pipeline', 'undici.upgrade',
+]));
+
+function makeNetworkGuard(file, { sentinelPath, nonce, role }) {
+  need(path.isAbsolute(file) && path.isAbsolute(sentinelPath), 'infrastructure', 'network_guard_path_invalid', 'network guard paths must be absolute');
+  need(typeof nonce === 'string' && /^[a-f0-9]{32}$/i.test(nonce), 'infrastructure', 'network_guard_nonce_invalid', 'network guard nonce is invalid');
+  need(typeof role === 'string' && role.length > 0 && role.length <= 64, 'infrastructure', 'network_guard_role_invalid', 'network guard role is invalid');
+  const safeKinds = JSON.stringify([...NETWORK_ATTEMPT_KINDS]);
   write(file, [
     "'use strict';",
-    "const blocked = (kind) => { process.stderr.write('PHASE16_NETWORK_BLOCKED:' + kind + '\\n'); process.exitCode = 86; throw new Error('phase16 network blocked: ' + kind); };",
+    "const fs = require('node:fs');",
+    `const sentinelPath = ${JSON.stringify(sentinelPath)}; const nonce = ${JSON.stringify(nonce)}; const role = ${JSON.stringify(role)}; const safeKinds = new Set(${safeKinds}); const abortProcess = process.abort.bind(process);`,
+    "const blocked = (kind) => { const safeKind = safeKinds.has(kind) ? kind : null; const record = safeKind ? { schema: 'phase16-network-attempt-v1', nonce, pid: process.pid, role, kind: safeKind } : null; if (record) { try { const bytes = Buffer.from(JSON.stringify(record) + '\\n'); if (bytes.length <= 2048) fs.writeFileSync(sentinelPath, bytes, { flag: 'wx' }); } catch (error) { if (error?.code !== 'EEXIST') { /* blocking remains fail-closed when the witness cannot be sealed */ } } } abortProcess(); };",
     "const net = require('node:net'); const tls = require('node:tls'); const dns = require('node:dns'); const http = require('node:http'); const https = require('node:https');",
     "for (const key of ['connect', 'createConnection']) if (typeof net[key] === 'function') net[key] = () => blocked('net.' + key);",
     "if (typeof tls.connect === 'function') tls.connect = () => blocked('tls.connect');",
-    "for (const key of ['lookup', 'resolve', 'resolve4', 'resolve6', 'reverse']) if (typeof dns[key] === 'function') dns[key] = () => blocked('dns.' + key);",
+    "for (const key of ['lookup', 'resolve', 'resolve4', 'resolve6', 'resolveAny', 'resolveCaa', 'resolveCname', 'resolveMx', 'resolveNaptr', 'resolveNs', 'resolvePtr', 'resolveSoa', 'resolveSrv', 'resolveTxt', 'reverse']) if (typeof dns[key] === 'function') dns[key] = () => blocked('dns.' + key);",
+    "if (dns.promises) for (const key of ['lookup', 'resolve', 'resolve4', 'resolve6', 'resolveAny', 'resolveCaa', 'resolveCname', 'resolveMx', 'resolveNaptr', 'resolveNs', 'resolvePtr', 'resolveSoa', 'resolveSrv', 'resolveTxt', 'reverse']) if (typeof dns.promises[key] === 'function') dns.promises[key] = () => blocked('dns.promises.' + key);",
     "for (const mod of [http, https]) for (const key of ['get', 'request']) if (typeof mod[key] === 'function') mod[key] = () => blocked(mod === http ? 'http.' + key : 'https.' + key);",
     "if (typeof globalThis.fetch === 'function') globalThis.fetch = () => blocked('fetch');",
     "try { const undici = require('undici'); for (const key of ['fetch', 'request', 'connect', 'dispatch', 'stream', 'pipeline', 'upgrade']) if (typeof undici[key] === 'function') { try { undici[key] = () => blocked('undici.' + key); } catch {} } } catch {}",
@@ -103,6 +121,7 @@ function run(command, argv, options) {
     argv: argv.map(String),
     cwd: options.cwd,
     status: result.status === null ? -1 : result.status,
+    pid: Number.isInteger(result.pid) ? result.pid : null,
     signal: result.signal || null,
     error: result.error ? { code: result.error.code, message: result.error.message } : null,
     timed_out: result.error?.code === 'ETIMEDOUT',
@@ -129,9 +148,35 @@ function commandRecord(result, root, env) {
   };
 }
 function assertNoNetwork(result, record) {
-  if (result.stderr.includes('PHASE16_NETWORK_BLOCKED') || result.stdout.includes('PHASE16_NETWORK_BLOCKED')) {
-    infrastructureFailure('network_violation', 'network guard observed an attempted connection', record);
-  }
+  // Marker text is provider-authored diagnostic output. Every network
+  // classification must come from a current-operation guard sentinel.
+}
+
+function readNetworkAttemptSentinel(file, { nonce, role, pid, runDirectory, operationDirectory }) {
+  if (!exists(file)) return null;
+  need(path.isAbsolute(file), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel path must be absolute');
+  need(path.isAbsolute(runDirectory) && path.isAbsolute(operationDirectory), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel directories must be absolute');
+  need(inside(runDirectory, operationDirectory) && inside(operationDirectory, file), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel escaped its run or operation directory');
+  let runStat; let operationStat; let runReal; let operationReal; let fileReal;
+  try {
+    runStat = fs.lstatSync(runDirectory); operationStat = fs.lstatSync(operationDirectory);
+    runReal = fs.realpathSync(runDirectory); operationReal = fs.realpathSync(operationDirectory); fileReal = fs.realpathSync(file);
+  } catch (error) { infrastructureFailure('network_guard_sentinel_invalid', 'network sentinel containment could not be resolved', { message: error.message }); }
+  need(runStat.isDirectory() && !runStat.isSymbolicLink() && operationStat.isDirectory() && !operationStat.isSymbolicLink(), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel directories must be regular directories');
+  need(inside(runReal, operationReal) && inside(operationReal, fileReal), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel reparse path escaped its run or operation directory');
+  let stat;
+  try { stat = fs.lstatSync(file); } catch (error) { infrastructureFailure('network_guard_sentinel_invalid', 'network sentinel could not be inspected', { message: error.message }); }
+  need(stat.isFile() && !stat.isSymbolicLink(), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel must be a regular file');
+  const bytes = fs.readFileSync(file);
+  need(bytes.length > 0 && bytes.length <= NETWORK_ATTEMPT_MAX_BYTES && bytes.at(-1) === 0x0a, 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel exceeds its bounded format');
+  let value;
+  try { value = JSON.parse(bytes.toString('utf8')); } catch { infrastructureFailure('network_guard_sentinel_invalid', 'network sentinel is not valid JSON'); }
+  const expectedKeys = ['kind', 'nonce', 'pid', 'role', 'schema'];
+  need(value && typeof value === 'object' && !Array.isArray(value) && stableStringify(Object.keys(value).sort()) === stableStringify(expectedKeys), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel has unexpected fields');
+  need(Buffer.compare(bytes, Buffer.from(`${JSON.stringify(value)}\n`)) === 0, 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel is not canonical guard output');
+  need(value.schema === NETWORK_ATTEMPT_SCHEMA && value.nonce === nonce && value.role === role && value.pid === pid, 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel is stale or bound to another process/role');
+  need(NETWORK_ATTEMPT_KINDS.has(value.kind), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel kind is not allowlisted');
+  return { kind: value.kind, sha256: sha(bytes), pid: value.pid, role: value.role, nonce: value.nonce };
 }
 
 function stableFileSha(full, relative, normalizeVolatile = false) {
@@ -1227,6 +1272,10 @@ function liveMinimalEnv(roleRoot, revisionId, runtime, pathAllowlist = []) {
   env.NPM_CONFIG_USERCONFIG = path.join(config, 'npmrc');
   env.npm_config_offline = 'true'; env.npm_config_registry = 'http://127.0.0.1:9/';
   env.npm_config_update_notifier = 'false'; env.npm_config_audit = 'false'; env.npm_config_fund = 'false';
+  // Hermetic evaluator journeys must not let normal phase-status, remember,
+  // or scaffold discovery perform update-awareness registry checks.
+  env.WORKSPINE_UPDATE_AWARENESS = '0';
+  env.GSDD_UPDATE_AWARENESS = '0';
   env[`WORKSPINE_PHASE16_${String(revisionId).replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}_RUNTIME`] = runtime;
   return env;
 }
@@ -1533,10 +1582,13 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
   try {
     need(binding.kind !== 'docusaurus-browser' || revision.revision.browser_calibration_digest, 'infrastructure', 'browser_pending', 'Docusaurus binding remains pending and cannot execute');
     need(!exists(runRoot), 'infrastructure', 'workspace_exists', 'refusing to reuse an existing retained consumer workspace', { path: slash(runRoot) });
-    const networkGuard = path.join(runRoot, 'network-guard.cjs');
+    const networkNonce = crypto.randomBytes(16).toString('hex');
+    const networkOperationDir = path.join(runDir, `.network-attempt-${binding.run_id}-${networkNonce}`);
+    const networkSentinel = path.join(networkOperationDir, 'attempt.json');
+    need(inside(runDir, networkOperationDir) && !inside(runRoot, networkOperationDir) && !exists(networkSentinel), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel must start absent and remain outside the consumer root');
+    fs.mkdirSync(networkOperationDir, { recursive: true });
     fs.mkdirSync(runRoot, { recursive: true });
     workspaceCreated = true;
-    makeNetworkGuard(networkGuard);
     inputBundle = liveInputBundle(revision, binding, path.join(runRoot, 'inputs'));
     binding.__input_paths = inputBundle;
     const packedArtifact = path.join(runRoot, 'inputs', 'workspine.tgz');
@@ -1558,10 +1610,14 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
     const versionPin = liveRuntimeVersionPin(revision.runtimes[binding.runtime]);
     const versionRoot = path.join(runRoot, 'version-probe');
     const versionEnv = liveMinimalEnv(versionRoot, revision.revision.revision_id, binding.runtime, toolchain.path);
-    versionEnv.NODE_OPTIONS = `--require=${networkGuard}`;
+    const versionGuard = path.join(runRoot, 'network-guard-version.cjs');
+    makeNetworkGuard(versionGuard, { sentinelPath: networkSentinel, nonce: networkNonce, role: 'version-probe' });
+    versionEnv.NODE_OPTIONS = `--require=${versionGuard}`;
     liveRevisionFiles(revision, versionRoot, revision.runtimes[binding.runtime]);
     const versionResult = realAgentRunProvider(descriptor, ['--version'], { cwd: versionRoot, env: versionEnv, timeout: 30000 });
     providerInvoked = true;
+    const versionAttempt = readNetworkAttemptSentinel(networkSentinel, { nonce: networkNonce, role: 'version-probe', pid: versionResult.pid, runDirectory: runDir, operationDirectory: networkOperationDir });
+    if (versionAttempt) infrastructureFailure('network_violation', 'network guard observed an attempted connection', { network_attempt: versionAttempt });
     const versionOutput = String(versionResult.stdout || '');
     versionProbe = { status: versionResult.status, timed_out: versionResult.timed_out, stdout_sha256: sha(Buffer.from(versionOutput, 'utf8')), stderr_sha256: sha(Buffer.from(String(versionResult.stderr || ''), 'utf8')), output_bytes: Buffer.byteLength(versionOutput) + Buffer.byteLength(String(versionResult.stderr || '')) };
     need(!versionResult.timed_out && versionResult.status === 0, 'infrastructure', 'runtime_version_probe_failed', 'runtime version probe failed', versionProbe);
@@ -1573,10 +1629,13 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
     if (binding.kind !== 'packed-readme') {
       write(path.join(runRoot, 'package.json'), '{"name":"phase16-consumer","private":true}\n');
       const installEnv = liveMinimalEnv(path.join(runRoot, 'install-context'), revision.revision.revision_id, binding.runtime, toolchain.path);
-      installEnv.NODE_OPTIONS = `--require=${networkGuard}`;
+      const installGuard = path.join(runRoot, 'network-guard-install.cjs');
+      makeNetworkGuard(installGuard, { sentinelPath: networkSentinel, nonce: networkNonce, role: 'offline-install' });
+      installEnv.NODE_OPTIONS = `--require=${installGuard}`;
       installed = run(toolchain.files.node.path, [toolchain.files.npm.path, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--no-save', packedArtifact], { cwd: runRoot, env: installEnv, timeout: 120000 });
       installRecord = commandRecord(installed, runRoot, installEnv);
-      assertNoNetwork(installed, installRecord);
+      const installAttempt = readNetworkAttemptSentinel(networkSentinel, { nonce: networkNonce, role: 'offline-install', pid: installed.pid, runDirectory: runDir, operationDirectory: networkOperationDir });
+      if (installAttempt) infrastructureFailure('network_violation', 'network guard observed an attempted connection', { network_attempt: installAttempt });
       need(installed.status === 0 && !installed.timed_out, 'infrastructure', 'consumer_install_failed', 'frozen package install failed in the retained consumer workspace', installRecord);
       need(exists(path.join(runRoot, 'node_modules', 'workspine', 'bin', 'gsdd.mjs')), 'infrastructure', 'installed_cli_missing', 'frozen Workspine CLI is not reachable from the consumer root');
     }
@@ -1585,7 +1644,10 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
       const roleRoot = path.join(runRoot, 'contexts', `process-${processIndex}`);
       fs.mkdirSync(roleRoot, { recursive: true });
       const env = liveMinimalEnv(roleRoot, revision.revision.revision_id, binding.runtime, toolchain.path);
-      env.NODE_OPTIONS = `--require=${networkGuard}`;
+      const processRole = `process-${processIndex}`;
+      const processGuard = path.join(runRoot, `network-guard-${processRole}.cjs`);
+      makeNetworkGuard(processGuard, { sentinelPath: networkSentinel, nonce: networkNonce, role: processRole });
+      env.NODE_OPTIONS = `--require=${processGuard}`;
       env.PHASE16_PROCESS_INDEX = String(processIndex);
       env.PHASE16_WORKSPACE_ROOT = runRoot;
       env.PHASE16_NPM_CLI = toolchain.files.npm.path;
@@ -1613,10 +1675,15 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
       const retainedCap = Number(revision.revision.retained_event_limit_bytes || revision.revision.retained_event_cap_bytes || 65536);
       const providerRecord = commandRecord(result, roleRoot, env);
       const outputEvidence = { stdout_sha256: providerRecord.stdout_sha256, stderr_sha256: providerRecord.stderr_sha256, output_bytes: outputBytes() };
-      const invocation = { process_index: processIndex, budget_seconds: budget, elapsed_ms: Date.now() - started, argv: redactedArgv, config_files: configFiles, secret_env_names: secretNames, status: result.status, signal: result.signal, error: result.error, output_bytes: outputBytes(), stdout_sha256: providerRecord.stdout_sha256, stderr_sha256: providerRecord.stderr_sha256, install_state: { preexisting_cli: preexistingInstalledCli, reachable_after: exists(installedCli) } };
+      const invocation = { process_index: processIndex, pid: result.pid, budget_seconds: budget, elapsed_ms: Date.now() - started, argv: redactedArgv, config_files: configFiles, secret_env_names: secretNames, status: result.status, signal: result.signal, error: result.error, output_bytes: outputBytes(), stdout_sha256: providerRecord.stdout_sha256, stderr_sha256: providerRecord.stderr_sha256, install_state: { preexisting_cli: preexistingInstalledCli, reachable_after: exists(installedCli) } };
       let native = null;
       let failure = null;
-      if (result.stderr.includes('PHASE16_NETWORK_BLOCKED') || result.stdout.includes('PHASE16_NETWORK_BLOCKED')) failure = { failure_class: 'infrastructure', failure_code: 'network_violation', message: 'network guard observed an attempted connection' };
+      let networkAttempt = null;
+      let networkSentinelFailure = null;
+      try { networkAttempt = readNetworkAttemptSentinel(networkSentinel, { nonce: networkNonce, role: processRole, pid: result.pid, runDirectory: runDir, operationDirectory: networkOperationDir }); }
+      catch (error) { networkSentinelFailure = { failure_class: 'infrastructure', failure_code: error.code || 'network_guard_sentinel_invalid', message: error.message }; }
+      if (networkSentinelFailure) failure = networkSentinelFailure;
+      else if (networkAttempt) failure = { failure_class: 'infrastructure', failure_code: 'network_violation', message: 'network guard observed an attempted connection', network_attempt: networkAttempt };
       else if (!Number.isInteger(rawCap) || rawCap <= 0 || outputBytes() > rawCap) failure = { failure_class: 'infrastructure', failure_code: 'raw_output_cap', message: 'provider output exceeded the frozen raw-output cap' };
       else if (result.timed_out) failure = { failure_class: 'infrastructure', failure_code: 'provider_timeout', message: 'provider exceeded its role budget' };
       else if (result.status !== 0) failure = { failure_class: 'infrastructure', failure_code: 'provider_nonzero', message: 'provider exited nonzero' };
@@ -1630,7 +1697,11 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
         providerInvoked = true;
         outputResults.push(exportResult);
         exportInvocation = { argv: ['export', '<SESSION_REDACTED>', '--sanitize'], status: exportResult.status, timed_out: exportResult.timed_out, stdout_sha256: sha(String(exportResult.stdout || '')), stderr_sha256: sha(String(exportResult.stderr || '')) };
-        if (exportResult.timed_out) failure = { failure_class: 'infrastructure', failure_code: 'provider_timeout', message: 'OpenCode export exceeded its role budget' };
+        let exportAttempt = null;
+        try { exportAttempt = readNetworkAttemptSentinel(networkSentinel, { nonce: networkNonce, role: processRole, pid: exportResult.pid, runDirectory: runDir, operationDirectory: networkOperationDir }); }
+        catch (error) { failure = { failure_class: 'infrastructure', failure_code: error.code || 'network_guard_sentinel_invalid', message: error.message }; }
+        if (!failure && exportAttempt) { networkAttempt = exportAttempt; failure = { failure_class: 'infrastructure', failure_code: 'network_violation', message: 'network guard observed an attempted connection', network_attempt: exportAttempt }; }
+        if (!failure && exportResult.timed_out) failure = { failure_class: 'infrastructure', failure_code: 'provider_timeout', message: 'OpenCode export exceeded its role budget' };
         else if (exportResult.status !== 0) failure = { failure_class: 'infrastructure', failure_code: 'provider_nonzero', message: 'OpenCode export exited nonzero' };
         else { try { native.export = liveParseOpenCodeExport(exportResult.stdout, native); native.identity = native.export.identity; } catch (error) { failure = { failure_class: error.kind || 'infrastructure', failure_code: error.code || 'native_export_invalid', message: error.message }; } }
         invocation.export = exportInvocation;
@@ -1639,13 +1710,15 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
         outputEvidence.output_bytes = outputBytes();
         if (!failure && outputBytes() > rawCap) failure = { failure_class: 'infrastructure', failure_code: 'raw_output_cap', message: 'provider output exceeded the frozen raw-output cap' };
       }
-      const eventBytes = Buffer.byteLength(JSON.stringify({ invocation, native, failure }));
+      invocation.network_attempt = networkAttempt;
+      outputEvidence.network_attempt = networkAttempt;
+       const eventBytes = Buffer.byteLength(JSON.stringify({ invocation, native, failure }));
       if (!failure && (!Number.isInteger(retainedCap) || retainedCap <= 0 || eventBytes > retainedCap)) failure = { failure_class: 'infrastructure', failure_code: 'retained_event_cap', message: 'retained provider facts exceeded the frozen cap' };
       if (failure) outputEvidence.diagnostic = realAgentFailureDiagnostic(result, roleRoot, env, secretNames.map((name) => env[name]));
       if (!failure && binding.kind === 'packed-readme') need(exists(installedCli), 'infrastructure', 'packed_install_missing', 'packed README provider journey did not install the frozen Workspine CLI');
       processes.push({ process_index: processIndex, context: `<CONSUMER_ROOT>/contexts/process-${processIndex}`, invocation, native: native ? liveSanitizeNative(binding.runtime, native) : null, native_identity: liveIdentityKey(binding.runtime, native), output: outputEvidence, terminal: { status: failure ? 'failed' : 'completed', exit_code: result.status, timed_out: result.timed_out, failure_class: failure?.failure_class || null, failure_code: failure?.failure_code || null, message: failure?.message || null } });
       for (const name of secretNames) delete env[name];
-      if (failure) infrastructureFailure(failure.failure_code, failure.message, { process_index: processIndex, ...outputEvidence });
+      if (failure) infrastructureFailure(failure.failure_code, failure.message, { process_index: processIndex, ...outputEvidence, network_attempt: failure.network_attempt || null });
       if (binding.journey_id === 'brownfield-plan' && processIndex === 1) checkpoint = liveCaptureCheckpoint(runRoot);
     }
     if (binding.journey_id === 'brownfield-plan') {
@@ -1810,6 +1883,8 @@ if (require.main === module) coreMain();
 // Pure native parsers are exported for the synthetic live matrix. Requiring
 // this evaluator never runs a provider or campaign command.
 module.exports = {
+  readNetworkAttemptSentinel,
+  liveMinimalEnv,
   realAgentResolveProvider,
   realAgentRunProvider,
   realAgentInvocationArgv,

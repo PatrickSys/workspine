@@ -42,7 +42,7 @@ function runWithEnv(argv, env) {
 
 // A small local-only provider fixture. It is intentionally outside the
 // checkout and is never used by the normal campaign tests.
-function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, secretValue = null } = {}) {
+function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, secretValue = null, marker = false, networkKind = null, tamperAbort = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-00b-'));
   const source = path.join(root, 'source');
   const packageRoot = path.join(source, 'package');
@@ -74,7 +74,10 @@ function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, sec
     { type: 'turn.completed', thread_id: 'thread-fixture', turn_id: 'turn-fixture' },
   ];
   const encodedOutput = lines.map((item) => typeof item === 'string' ? item : JSON.stringify(item)).join('\n') + '\n';
-  fs.writeFileSync(providerTarget, `if (process.argv.includes('--version')) { process.stdout.write(${JSON.stringify(`${version}\n`)}); process.exitCode=0; } else if (${Number(sleepMs)} > 0) { setTimeout(() => { process.stdout.write(${JSON.stringify(encodedOutput)}); process.exitCode=${exitCode}; }, ${Number(sleepMs)}); } else { const index = process.env.PHASE16_PROCESS_INDEX || '0'; const fs = require('node:fs'); if (process.argv.join(' ').includes('packed-readme')) { const cp = require('node:child_process'); const install = cp.spawnSync(process.execPath, [process.env.PHASE16_NPM_CLI, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--no-save', process.env.PHASE16_PACKED_ARTIFACT], { cwd: process.env.PHASE16_WORKSPACE_ROOT, env: process.env, encoding: 'utf8' }); if (install.status !== 0) { process.stderr.write(install.stderr || 'packed install failed'); process.exitCode = install.status || 1; } } const output = ${JSON.stringify(encodedOutput)}.replaceAll('thread-fixture', 'thread-fixture-' + index).replaceAll('turn-fixture', 'turn-fixture-' + index).replaceAll('item-fixture', 'item-fixture-' + index); if (index === '1' && process.argv.join(' ').includes('brownfield-plan')) { fs.mkdirSync('.work', { recursive: true }); fs.writeFileSync('.work/.continue-here.md', '# Current task\\nBounded brownfield task.\\n\\n## Evidence\\nPlan paused with frozen inputs.\\n\\n## Next action\\nResume process B and execute only the approved plan.\\n', { flag: 'w' }); } process.stdout.write(output); process.exitCode=${exitCode}; }\n`);
+  const markerCode = marker ? "process.stderr.write('PHASE16_NETWORK_BLOCKED\\n');" : '';
+  const abortTamperCode = tamperAbort ? "try { process.abort = () => {}; } catch {} try { delete process.abort; } catch {} try { Object.defineProperty(process, 'abort', { value: () => {}, writable: true, configurable: true }); } catch {}" : '';
+  const networkCode = networkKind === 'net.connect' ? "require('node:net').connect();" : networkKind === 'dns.lookup' ? "require('node:dns').lookup('example.invalid', () => {});" : networkKind === 'dns.promises.lookup' ? "require('node:dns').promises.lookup('example.invalid');" : networkKind === 'fetch' ? "globalThis.fetch('https://example.invalid');" : '';
+  fs.writeFileSync(providerTarget, `if (process.argv.includes('--version')) { process.stdout.write(${JSON.stringify(`${version}\n`)}); process.exitCode=0; } else if (${Number(sleepMs)} > 0) { setTimeout(() => { process.stdout.write(${JSON.stringify(encodedOutput)}); process.exitCode=${exitCode}; }, ${Number(sleepMs)}); } else { const index = process.env.PHASE16_PROCESS_INDEX || '0'; const fs = require('node:fs'); ${markerCode} ${abortTamperCode} ${networkCode} if (process.argv.join(' ').includes('packed-readme')) { const cp = require('node:child_process'); const install = cp.spawnSync(process.execPath, [process.env.PHASE16_NPM_CLI, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--no-save', process.env.PHASE16_PACKED_ARTIFACT], { cwd: process.env.PHASE16_WORKSPACE_ROOT, env: process.env, encoding: 'utf8' }); if (install.status !== 0) { process.stderr.write(install.stderr || 'packed install failed'); process.exitCode = install.status || 1; } } const output = ${JSON.stringify(encodedOutput)}.replaceAll('thread-fixture', 'thread-fixture-' + index).replaceAll('turn-fixture', 'turn-fixture-' + index).replaceAll('item-fixture', 'item-fixture-' + index); if (index === '1' && process.argv.join(' ').includes('brownfield-plan')) { fs.mkdirSync('.work', { recursive: true }); fs.writeFileSync('.work/.continue-here.md', '# Current task\\nBounded brownfield task.\\n\\n## Evidence\\nPlan paused with frozen inputs.\\n\\n## Next action\\nResume process B and execute only the approved plan.\\n', { flag: 'w' }); } process.stdout.write(output); process.exitCode=${exitCode}; }\n`);
   const command = runtime === 'claude' ? 'claude' : 'codex';
   const shim = path.join(providerBin, `${command}.cmd`);
   fs.writeFileSync(shim, `@echo off\r\n"%~dp0\\${targetRelative.replaceAll('/', '\\')}" %*\r\n`);
@@ -280,7 +283,7 @@ test('consumer input bundle tamper is rejected before provider execution', () =>
     revision.consumer_input_bundle.sha256 = '0'.repeat(64);
     fs.writeFileSync(fixture.revisionFile, `${JSON.stringify(revision, null, 2)}\n`);
     const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
-    assert.notEqual(result.status, 0);
+    assert.ok(result.status !== 0 || result.signal, 'guarded network process must terminate abnormally');
     const receipt = parse(result.stdout);
     assert.equal(receipt.provider_invoked, false);
     assert.equal(receipt.terminal.failure_code, 'consumer_input_bundle_hash_mismatch');
@@ -583,11 +586,10 @@ test('direct synthetic provider timeout is observable without retry or fallback'
   } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
 });
 
-test('live failures preserve provider invocation evidence for output caps, network markers, and secret redaction', () => {
+test('live failures preserve provider invocation evidence for output caps and secret redaction', () => {
   const cases = [
     { name: 'raw cap', fixture: () => liveFixture({ output: ['x'.repeat(80)] }), mutate: (revision) => { revision.raw_output_limit_bytes = 16; }, code: 'raw_output_cap' },
     { name: 'retained cap', fixture: () => liveFixture(), mutate: (revision) => { revision.retained_event_limit_bytes = 1; }, code: 'retained_event_cap' },
-    { name: 'network marker', fixture: () => liveFixture({ output: ['PHASE16_NETWORK_BLOCKED'] }), mutate: () => {}, code: 'network_violation' },
   ];
   for (const item of cases) {
     const fixture = item.fixture();
@@ -616,6 +618,102 @@ test('live failures preserve provider invocation evidence for output caps, netwo
     assert.ok(!JSON.stringify(receipt).includes(secret));
     assert.ok(!JSON.stringify(receipt).includes('PHASE16_TEST_SECRET='));
   } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('provider-authored network marker without a guard sentinel is not a network violation', () => {
+  const fixture = liveFixture({ marker: true });
+  try {
+    const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.terminal.status, 'provider_complete');
+    assert.equal(receipt.processes[0].terminal.failure_code, null);
+    assert.equal(receipt.processes[0].invocation.network_attempt, null);
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('an actual patched network call writes a process-bound sentinel and preserves its exact kind/hash', () => {
+  const fixture = liveFixture({ networkKind: 'dns.lookup' });
+  try {
+    const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.notEqual(result.status, 0);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.provider_invoked, true);
+    assert.equal(receipt.workflow_verdict, 'not_evaluated');
+    assert.equal(receipt.terminal.failure_code, 'network_violation');
+    const attempt = receipt.processes[0].invocation.network_attempt;
+    assert.equal(attempt.kind, 'dns.lookup');
+    assert.match(attempt.sha256, /^[0-9a-f]{64}$/);
+    assert.equal(receipt.terminal.evidence.network_attempt.kind, 'dns.lookup');
+    assert.equal(receipt.terminal.evidence.network_attempt.sha256, attempt.sha256);
+    assert.ok(!JSON.stringify(receipt).includes('example.invalid'));
+    assert.ok(receipt.processes[0].invocation.signal || receipt.processes[0].invocation.status !== 0);
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('dns.promises calls are blocked with an exact validated sentinel and no external lookup', () => {
+  const fixture = liveFixture({ networkKind: 'dns.promises.lookup' });
+  try {
+    const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.ok(result.status !== 0 || result.signal);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.terminal.failure_code, 'network_violation');
+    assert.equal(receipt.processes[0].invocation.network_attempt.kind, 'dns.promises.lookup');
+    assert.match(receipt.processes[0].invocation.network_attempt.sha256, /^[0-9a-f]{64}$/);
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('provider cannot replace, delete, or reset captured process.abort before a blocked call', () => {
+  const fixture = liveFixture({ networkKind: 'dns.lookup', tamperAbort: true });
+  try {
+    const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
+    assert.notEqual(result.status, 0);
+    const receipt = parse(result.stdout);
+    assert.equal(receipt.terminal.failure_code, 'network_violation');
+    const attempt = receipt.processes[0].invocation.network_attempt;
+    assert.equal(attempt.kind, 'dns.lookup');
+    assert.match(attempt.sha256, /^[0-9a-f]{64}$/);
+    assert.deepEqual(receipt.terminal.evidence.network_attempt, attempt);
+    assert.ok(receipt.processes[0].invocation.signal || receipt.processes[0].invocation.status !== 0);
+  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+});
+
+test('network sentinels reject malformed, forged, stale, wrong-process, and overwrite attempts', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-network-sentinel-'));
+  const file = path.join(root, 'attempt.json');
+  const base = { schema: 'phase16-network-attempt-v1', nonce: 'a'.repeat(32), pid: 1234, role: 'process-1', kind: 'dns.lookup' };
+  try {
+    assert.equal(Object.hasOwn(LIVE, 'makeNetworkGuard'), false);
+    const write = (value) => fs.writeFileSync(file, `${JSON.stringify(value)}\n`);
+    write({ ...base, extra: 'forged' });
+    const operation = path.join(root, 'operation'); fs.mkdirSync(operation);
+    assert.throws(() => LIVE.readNetworkAttemptSentinel(file, { nonce: base.nonce, role: base.role, pid: base.pid, runDirectory: root, operationDirectory: operation }), /escaped/);
+    assert.throws(() => LIVE.readNetworkAttemptSentinel(file, { nonce: base.nonce, role: base.role, pid: base.pid, runDirectory: root, operationDirectory: root }), /unexpected fields/);
+    write({ ...base, nonce: 'b'.repeat(32) });
+    assert.throws(() => LIVE.readNetworkAttemptSentinel(file, { nonce: base.nonce, role: base.role, pid: base.pid, runDirectory: root, operationDirectory: root }), /stale/);
+    write({ ...base, pid: 5678 });
+    assert.throws(() => LIVE.readNetworkAttemptSentinel(file, { nonce: base.nonce, role: base.role, pid: base.pid, runDirectory: root, operationDirectory: root }), /stale/);
+    write({ ...base, kind: 'dns.lookup', role: 'process-2' });
+    assert.throws(() => LIVE.readNetworkAttemptSentinel(file, { nonce: base.nonce, role: base.role, pid: base.pid, runDirectory: root, operationDirectory: root }), /stale/);
+    write(base);
+    const first = fs.readFileSync(file);
+    assert.throws(() => fs.writeFileSync(file, `${JSON.stringify({ ...base, kind: 'fetch' })}\n`, { flag: 'wx' }), /EEXIST/);
+    assert.deepEqual(fs.readFileSync(file), first);
+    fs.writeFileSync(file, '{malformed}\n');
+    assert.throws(() => LIVE.readNetworkAttemptSentinel(file, { nonce: base.nonce, role: base.role, pid: base.pid, runDirectory: root, operationDirectory: root }), /valid JSON/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('liveMinimalEnv disables both update-awareness flags for providers and child Node processes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-env-'));
+  try {
+    const env = LIVE.liveMinimalEnv(root, 'fixture-revision', 'codex', [path.dirname(process.execPath)]);
+    assert.equal(env.WORKSPINE_UPDATE_AWARENESS, '0');
+    assert.equal(env.GSDD_UPDATE_AWARENESS, '0');
+    const child = cp.spawnSync(process.execPath, ['-e', "process.stdout.write(JSON.stringify({workspine:process.env.WORKSPINE_UPDATE_AWARENESS,gsdd:process.env.GSDD_UPDATE_AWARENESS}))"], { cwd: root, env, encoding: 'utf8', windowsHide: true });
+    assert.equal(child.status, 0, child.stderr);
+    assert.deepEqual(JSON.parse(child.stdout), { workspine: '0', gsdd: '0' });
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('offline calibration contract admits five cases and keeps Docusaurus pending', () => {
