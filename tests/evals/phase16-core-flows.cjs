@@ -1338,11 +1338,21 @@ function liveParseCodex(stdout, requestedModel, argv) {
   const events = String(stdout).split(/\r?\n/).filter(Boolean).map((line) => { try { return JSON.parse(line); } catch { return null; } });
   need(events.length > 0 && events.every(Boolean), 'infrastructure', 'native_parse_invalid', 'Codex output is not valid JSONL');
   const types = events.map((event) => String(event.type || event.event || ''));
-  need(!types.some((type) => /error|reroute|redirect/i.test(type)), 'infrastructure', types.some((type) => /reroute|redirect/i.test(type)) ? 'provider_reroute' : 'native_error', 'Codex output contains an error or reroute event');
+  const errorEvents = events.filter((event, index) => {
+    const type = types[index];
+    return type === 'turn.failed' || type === 'error' || type === 'reroute' || type === 'redirect' || (type === 'item.completed' && event.item?.type === 'error');
+  });
+  if (errorEvents.length > 0) {
+    const errorText = errorEvents.map((event) => JSON.stringify(event)).join('\n');
+    infrastructureFailure(/reroute|redirect/i.test(errorText) ? 'provider_reroute' : 'native_error', 'Codex output contains a native error or reroute event');
+  }
+  const allowedTypes = new Set(['thread.started', 'turn.started', 'turn.completed', 'item.started', 'item.updated', 'item.completed']);
+  need(types.every((type) => allowedTypes.has(type)), 'infrastructure', 'native_sequence_invalid', 'Codex output contains an unknown event type');
   const threadIndex = types.indexOf('thread.started');
   const turnStartIndex = types.indexOf('turn.started');
   const turnCompleteIndex = types.indexOf('turn.completed');
   need(threadIndex === 0 && turnStartIndex > threadIndex && turnCompleteIndex > turnStartIndex, 'infrastructure', 'native_sequence_invalid', 'Codex output lacks a normal thread/turn sequence');
+  need(types.filter((type) => type === 'thread.started').length === 1, 'infrastructure', 'native_sequence_invalid', 'Codex output must contain exactly one started thread');
   need(types.filter((type) => type === 'turn.started').length === 1 && types.filter((type) => type === 'turn.completed').length === 1, 'infrastructure', 'native_sequence_invalid', 'Codex output must contain exactly one completed turn');
   const thread = events[threadIndex];
   const turnStart = events[turnStartIndex];
@@ -1354,20 +1364,43 @@ function liveParseCodex(stdout, requestedModel, argv) {
   if (turnStart.turn_id != null || turnComplete.turn_id != null || turnStart.id != null || turnComplete.id != null) need(turnId && (!turnStart.turn_id || turnStart.turn_id === turnId) && (!turnComplete.turn_id || turnComplete.turn_id === turnId), 'infrastructure', 'native_linkage_invalid', 'Codex turn lifecycle ids are not coherent');
   const itemEvents = events.filter((event) => /^item\./.test(String(event.type || '')));
   need(itemEvents.length > 0, 'infrastructure', 'native_linkage_invalid', 'Codex output contains no linked item events');
-  const itemIds = itemEvents.map((event) => event.item_id || event.item?.id || event.id);
-  need(itemEvents.every((event, index) => typeof itemIds[index] === 'string' && itemIds[index].length > 0), 'infrastructure', 'native_linkage_invalid', 'Codex item event lacks an item id');
-  itemEvents.forEach((event, index) => {
-    const itemId = itemIds[index];
-    for (const key of ['thread_id', 'turn_id']) if (event[key] != null) need(event[key] === (key === 'thread_id' ? thread.thread_id : turnId), 'infrastructure', 'native_linkage_invalid', `Codex item event is not linked to its ${key}`);
-  });
-  const startedItems = new Set(itemEvents.filter((event) => event.type === 'item.started').map((event) => event.item_id || event.item?.id || event.id));
-  const completedItems = new Set();
-  for (const event of itemEvents.filter((item) => item.type === 'item.completed')) {
-    const itemId = event.item_id || event.item?.id || event.id;
-    need(startedItems.has(itemId) && !completedItems.has(itemId), 'infrastructure', 'native_linkage_invalid', 'Codex item.completed is not paired with exactly one item.started');
-    completedItems.add(itemId);
+  const terminalKinds = new Set(['agent_message', 'reasoning', 'file_change']);
+  const pairedKinds = new Set(['command_execution', 'mcp_tool_call', 'collab_tool_call', 'web_search', 'todo_list']);
+  const itemKinds = new Set([...terminalKinds, ...pairedKinds]);
+  const lifecycles = new Map();
+  for (const event of itemEvents) {
+    const item = event.item && typeof event.item === 'object' ? event.item : null;
+    const itemId = event.item_id || item?.id || event.id;
+    const itemKind = event.item_type || event.item_kind || item?.type || item?.kind;
+    need(typeof itemId === 'string' && itemId.length > 0, 'infrastructure', 'native_linkage_invalid', 'Codex item event lacks an item id');
+    need(typeof itemKind === 'string' && itemKinds.has(itemKind), 'infrastructure', 'native_linkage_invalid', `Codex item event has an unknown item kind: ${String(itemKind || '<missing>')}`);
+    for (const key of ['thread_id', 'turn_id']) {
+      const eventValue = event[key];
+      const itemValue = item?.[key];
+      if (eventValue != null && itemValue != null) need(eventValue === itemValue, 'infrastructure', 'native_linkage_invalid', `Codex item event has incoherent ${key} linkage`);
+      const value = eventValue ?? itemValue;
+      if (value != null) need(value === (key === 'thread_id' ? thread.thread_id : turnId), 'infrastructure', 'native_linkage_invalid', `Codex item event is not linked to its ${key}`);
+    }
+    const position = events.indexOf(event);
+    need(position > turnStartIndex && position < turnCompleteIndex, 'infrastructure', 'native_sequence_invalid', 'Codex item event is outside the turn lifecycle');
+    const state = lifecycles.get(itemId) || { kind: itemKind, started: false, completed: false };
+    need(state.kind === itemKind, 'infrastructure', 'native_linkage_invalid', 'Codex item lifecycle changed kind for one item id');
+    if (event.type === 'item.started') {
+      need(pairedKinds.has(itemKind), 'infrastructure', 'native_linkage_invalid', `Codex terminal-only item kind cannot start: ${itemKind}`);
+      need(!state.started && !state.completed, 'infrastructure', 'native_linkage_invalid', 'Codex item.started is duplicated or follows completion');
+      state.started = true;
+    } else if (event.type === 'item.updated') {
+      need(itemKind === 'todo_list' && state.started && !state.completed, 'infrastructure', 'native_linkage_invalid', 'Codex item.updated must belong to an open todo_list lifecycle');
+    } else {
+      need(!state.completed, 'infrastructure', 'native_linkage_invalid', 'Codex item.completed is duplicated');
+      if (pairedKinds.has(itemKind)) need(state.started, 'infrastructure', 'native_linkage_invalid', 'Codex paired item.completed is orphaned');
+      else need(!state.started, 'infrastructure', 'native_linkage_invalid', 'Codex terminal-only item was incorrectly started');
+      state.completed = true;
+    }
+    lifecycles.set(itemId, state);
   }
-  need(startedItems.size > 0 && startedItems.size === completedItems.size, 'infrastructure', 'native_linkage_invalid', 'Codex item lifecycle is incomplete');
+  need(lifecycles.size > 0, 'infrastructure', 'native_linkage_invalid', 'Codex output contains no linked item lifecycle');
+  need([...lifecycles.values()].every((state) => !pairedKinds.has(state.kind) || (state.started && state.completed)), 'infrastructure', 'native_linkage_invalid', 'Codex paired item lifecycle is incomplete');
   need(argv.includes('-m') && argv[argv.indexOf('-m') + 1] === requestedModel, 'infrastructure', 'requested_model_not_accepted', 'Codex invocation did not carry the requested model flag');
   return { parser: 'codex-jsonl', event_types: types, thread_id: thread.thread_id, turn_id: turnId, identity: 'requested-model-accepted' };
 }

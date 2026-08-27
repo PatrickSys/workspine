@@ -69,8 +69,8 @@ function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, sec
   ] : [
     { type: 'thread.started', thread_id: 'thread-fixture' },
     { type: 'turn.started', thread_id: 'thread-fixture', turn_id: 'turn-fixture' },
-    { type: 'item.started', thread_id: 'thread-fixture', turn_id: 'turn-fixture', item_id: 'item-fixture' },
-    { type: 'item.completed', thread_id: 'thread-fixture', turn_id: 'turn-fixture', item_id: 'item-fixture' },
+    { type: 'item.started', thread_id: 'thread-fixture', turn_id: 'turn-fixture', item: { id: 'item-fixture', type: 'command_execution' } },
+    { type: 'item.completed', thread_id: 'thread-fixture', turn_id: 'turn-fixture', item: { id: 'item-fixture', type: 'command_execution' } },
     { type: 'turn.completed', thread_id: 'thread-fixture', turn_id: 'turn-fixture' },
   ];
   const encodedOutput = lines.map((item) => typeof item === 'string' ? item : JSON.stringify(item)).join('\n') + '\n';
@@ -382,11 +382,51 @@ test('synthetic native matrix accepts only complete Codex, Claude, and OpenCode 
   const codex = [
     { type: 'thread.started', thread_id: 'thread-1' },
     { type: 'turn.started', thread_id: 'thread-1', turn_id: 'turn-1' },
-    { type: 'item.started', thread_id: 'thread-1', turn_id: 'turn-1', item_id: 'item-1' },
-    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item_id: 'item-1' },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-1', type: 'agent_message', text: 'Plan complete.' } },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'reasoning-1', type: 'reasoning', text: 'Bounded reasoning.' } },
+    { type: 'item.started', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'command-1', type: 'command_execution', command: 'git status' } },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'command-1', type: 'command_execution', exit_code: 0 } },
+    { type: 'item.started', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'todo-1', type: 'todo_list', items: [] } },
+    { type: 'item.updated', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'todo-1', type: 'todo_list', items: [{ text: 'done' }] } },
+    { type: 'item.updated', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'todo-1', type: 'todo_list', items: [{ text: 'done', completed: true }] } },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'todo-1', type: 'todo_list', items: [{ text: 'done', completed: true }] } },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'file-change-1', type: 'file_change', changes: [] } },
     { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1' },
   ].map(JSON.stringify).join('\n');
   assert.equal(LIVE.liveParseCodex(codex, 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']).identity, 'requested-model-accepted');
+
+  const codexEnvelope = (items) => [
+    { type: 'thread.started', thread_id: 'thread-1' },
+    { type: 'turn.started', thread_id: 'thread-1', turn_id: 'turn-1' },
+    ...items,
+    { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1' },
+  ].map(JSON.stringify).join('\n');
+  const commandStart = { type: 'item.started', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'command-1', type: 'command_execution' } };
+  const commandComplete = { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'command-1', type: 'command_execution' } };
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { id: 'unknown-1', type: 'unknown_kind' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /unknown item kind/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([commandComplete]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /orphaned/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([commandStart, commandComplete, commandComplete]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /duplicated/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([commandStart]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /incomplete/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.started', item: { id: 'message-1', type: 'agent_message' } }, { type: 'item.completed', item: { id: 'message-1', type: 'agent_message' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /terminal-only/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.delta', item: { id: 'message-1', type: 'agent_message' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /unknown event/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.updated', item: { id: 'todo-1', type: 'todo_list' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /open todo_list/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.started', item: { id: 'todo-1', type: 'todo_list' } }, { type: 'item.completed', item: { id: 'todo-1', type: 'todo_list' } }, { type: 'item.updated', item: { id: 'todo-1', type: 'todo_list' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /open todo_list/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ ...commandStart, item: { id: 'command-1', type: 'command' } }, { ...commandComplete, item: { id: 'command-1', type: 'command' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /unknown item kind/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'error', message: 'ordinary failure' }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /native error/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { id: 'error-1', type: 'error', message: 'ordinary failure' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /native error/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { id: 'error-1', type: 'error', message: 'redirected to fallback' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /reroute/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'turn.failed', message: 'turn failed' }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /native error/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { type: 'agent_message' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /item id/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-1', type: 'agent_message', thread_id: 'thread-2', turn_id: 'turn-2' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /incoherent/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', thread_id: 'thread-2', turn_id: 'turn-2', item: { id: 'message-1', type: 'agent_message' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /not linked/);
+  assert.throws(() => LIVE.liveParseCodex([
+    { type: 'thread.started', thread_id: 'thread-1' },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-1', type: 'agent_message' } },
+    { type: 'turn.started', thread_id: 'thread-1', turn_id: 'turn-1' },
+    { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1' },
+  ].map(JSON.stringify).join('\n'), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /outside the turn/);
+  assert.throws(() => LIVE.liveParseCodex(codex, 'gpt-5.6-luna', ['exec']), /model flag/);
+  assert.throws(() => LIVE.liveParseCodex(codex, 'gpt-5.6-luna', ['exec', '-m', 'wrong-model']), /requested model/);
 
   const claude = [
     { type: 'system', subtype: 'init', session_id: 'session-1' },
@@ -413,10 +453,10 @@ test('synthetic native matrix accepts only complete Codex, Claude, and OpenCode 
   ].map(JSON.stringify).join('\n'), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /reroute/);
   assert.throws(() => LIVE.liveParseCodex([
     { type: 'thread.started', thread_id: 'thread-1' },
-    { type: 'turn.started' },
-    { type: 'item.started', item: { id: 'item-1' } },
-    { type: 'item.completed', item: { id: 'item-2' } },
-    { type: 'turn.completed' },
+    { type: 'turn.started', thread_id: 'thread-1', turn_id: 'turn-1' },
+    { type: 'item.started', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'item-1', type: 'command_execution' } },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'item-2', type: 'command_execution' } },
+    { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1' },
   ].map(JSON.stringify).join('\n'), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /paired|lifecycle/);
   assert.throws(() => LIVE.liveParseClaude(JSON.stringify({ type: 'result', session_id: 'wrong' }), 'claude-sonnet-5'), /Claude output lacks/);
   assert.throws(() => LIVE.liveParseClaude([
