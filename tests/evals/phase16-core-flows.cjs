@@ -776,7 +776,7 @@ function coreDryRun(contract, binding) {
       campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 },
       run_id: binding.run_id, trial_kind: binding.kind, runtime: binding.runtime,
       provider: { logical_command: provider.command, model: provider.model, effort: provider.effort, resolution: 'deferred_until_task_16_05_02' },
-      argv: redactedArgv, isolation: { root: '<EPHEMERAL_DRY_RUN_ROOT>', provider_readable_paths: [], writable_roots: ['<EPHEMERAL_DRY_RUN_ROOT>'] },
+      argv: redactedArgv, isolation: { root: '<EPHEMERAL_DRY_RUN_ROOT>', provider_sandbox: 'not_claimed' },
       critical_witnesses: { status: 'deferred-to-simulation', required: CRITICAL_WITNESSES },
       cleanup, terminal: { status: 'passed', failure_class: null, failure_code: null, message: '21-binding construction and provider-free dry-run contract passed' },
       claim_limit: 'No provider execution or product claim; this is command construction only.',
@@ -1596,9 +1596,67 @@ function liveInputBundle(revision, binding, destination) {
   };
 }
 
+const OWNER_AUTHORITY_FILES = Object.freeze(['.work/SPEC.md', '.work/ROADMAP.md', '.work/state.json']);
+
+function liveRetainedRoot(receiptFile, runId) {
+  need(path.isAbsolute(receiptFile) && typeof runId === 'string' && runId.length > 0, 'infrastructure', 'workspace_path_invalid', 'retained workspace inputs are invalid');
+  return path.join(os.tmpdir(), `workspine-phase16-consumer-${sha(`${path.resolve(receiptFile)}\0${runId}`).slice(0, 24)}`);
+}
+
+function liveReserveRetainedRoot(root) {
+  need(path.isAbsolute(root), 'infrastructure', 'workspace_path_invalid', 'retained workspace path must be absolute');
+  try {
+    fs.mkdirSync(root);
+  } catch (error) {
+    if (error?.code === 'EEXIST') infrastructureFailure('workspace_exists', 'refusing to reuse an existing retained consumer workspace');
+    throw error;
+  }
+  return root;
+}
+
+function liveOwnerAuthoritySnapshot(root = REPO) {
+  return Object.fromEntries(OWNER_AUTHORITY_FILES.map((relative) => {
+    const file = path.join(root, ...relative.split('/'));
+    return [relative, exists(file) ? shaFile(file) : null];
+  }));
+}
+
+function liveOwnerAuthorityStatus(snapshot, root = REPO) {
+  const changed = OWNER_AUTHORITY_FILES.filter((relative) => {
+    const file = path.join(root, ...relative.split('/'));
+    const current = exists(file) ? shaFile(file) : null;
+    return current !== snapshot[relative];
+  });
+  return { status: changed.length === 0 ? 'unchanged' : 'changed', files: snapshot, changed };
+}
+
+function liveAssertOwnerAuthority(snapshot, root = REPO) {
+  const status = liveOwnerAuthorityStatus(snapshot, root);
+  need(status.status === 'unchanged', 'infrastructure', 'owner_authority_changed', 'source owner authority changed during provider execution', { changed: status.changed });
+  return status;
+}
+
+function liveAssertRetainedRootIsolation(root, { sourceRoot = REPO, receiptDirectory = null } = {}) {
+  need(path.isAbsolute(root), 'infrastructure', 'workspace_path_invalid', 'retained workspace path must be absolute');
+  const rootReal = fs.realpathSync(root);
+  const checkoutReal = fs.realpathSync(sourceRoot);
+  const receiptRoot = receiptDirectory;
+  const receiptReal = receiptRoot ? (exists(receiptRoot) ? fs.realpathSync(receiptRoot) : path.resolve(receiptRoot)) : null;
+  need(!inside(rootReal, checkoutReal) && !inside(checkoutReal, rootReal), 'infrastructure', 'workspace_checkout_overlap', 'retained workspace overlaps the source checkout');
+  need(!receiptReal || (!inside(rootReal, receiptReal) && !inside(receiptReal, rootReal)), 'infrastructure', 'workspace_receipt_overlap', 'retained workspace overlaps the receipt directory');
+  let cursor = path.dirname(rootReal);
+  while (true) {
+    need(!exists(path.join(cursor, '.git')) && !exists(path.join(cursor, '.work')), 'infrastructure', 'workspace_authority_ancestor', 'retained workspace has a repository or planning authority ancestor');
+    const parent = path.dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  return rootReal;
+}
+
 function liveRun(contract, binding, revision, receiptFile, handoffFile) {
   const runDir = path.dirname(receiptFile);
-  const runRoot = path.join(runDir, `consumer-${binding.run_id}`);
+  const runRoot = liveRetainedRoot(receiptFile, binding.run_id);
   let providerInvoked = false;
   let descriptor = null;
   const processes = [];
@@ -1611,16 +1669,20 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
   let checkpoint = null;
   let inputBundle = null;
   let workspaceCreated = false;
+  let ownerAuthority = null;
+  let isolationVerified = false;
   try {
     need(binding.kind !== 'docusaurus-browser' || revision.revision.browser_calibration_digest, 'infrastructure', 'browser_pending', 'Docusaurus binding remains pending and cannot execute');
-    need(!exists(runRoot), 'infrastructure', 'workspace_exists', 'refusing to reuse an existing retained consumer workspace', { path: slash(runRoot) });
+    liveReserveRetainedRoot(runRoot);
+    workspaceCreated = true;
     const networkNonce = crypto.randomBytes(16).toString('hex');
     const networkOperationDir = path.join(runDir, `.network-attempt-${binding.run_id}-${networkNonce}`);
     const networkSentinel = path.join(networkOperationDir, 'attempt.json');
     need(inside(runDir, networkOperationDir) && !inside(runRoot, networkOperationDir) && !exists(networkSentinel), 'infrastructure', 'network_guard_sentinel_invalid', 'network sentinel must start absent and remain outside the consumer root');
     fs.mkdirSync(networkOperationDir, { recursive: true });
-    fs.mkdirSync(runRoot, { recursive: true });
-    workspaceCreated = true;
+    liveAssertRetainedRootIsolation(runRoot, { receiptDirectory: runDir });
+    isolationVerified = true;
+    ownerAuthority = liveOwnerAuthoritySnapshot();
     inputBundle = liveInputBundle(revision, binding, path.join(runRoot, 'inputs'));
     binding.__input_paths = inputBundle;
     const packedArtifact = path.join(runRoot, 'inputs', 'workspine.tgz');
@@ -1757,9 +1819,12 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
       const identities = processes.map((item) => item.native_identity).filter(Boolean);
       need(identities.length === 2 && new Set(identities).size === 2, 'infrastructure', 'native_identity_not_distinct', 'brownfield processes did not produce distinct native identities');
     }
-    completedReceipt = { schema_version: 2, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked, workflow_verdict: 'not_evaluated', campaign_revision: { revision_id: revision.revision.revision_id, sha256: revision.sha256 }, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: bindingFingerprint(binding), run_id: binding.run_id, journey_id: binding.journey_id || null, trial_kind: binding.kind, runtime: binding.runtime, workspace: { token: workspaceToken, locator: '<PRIVATE_CONSUMER_ROOT>', realpath_sha256: sha(fs.realpathSync(runRoot)), retained: true, prepared: true }, preparation: { frozen_artifact_sha256: revision.candidate.artifact_sha256, frozen_source_hashes: revision.candidate.source_hashes, input_bundle: inputBundle, install: { mode: binding.kind === 'packed-readme' ? 'provider-owned-offline-frozen-artifact' : 'offline-frozen-artifact', command_sha256: installRecord?.stdout_sha256 || null, status: installed.status } }, provider: { logical_command: CORE_RUNTIME_PINS[binding.runtime].command, runtime_version: revision.runtimes[binding.runtime].version || revision.runtimes[binding.runtime].version_string, version_probe: versionProbe, requested_model: binding.model, requested_effort: binding.effort, resolution: evidence, identity_claim: 'requested/native identity only' }, toolchain: { path_allowlist: toolchain.path.map(() => '<TOOLCHAIN_PATH>'), hashes: toolchain.hashes }, candidate: { commit: revision.candidate.commit || revision.revision.candidate?.commit || null, artifact_sha256: revision.candidate.artifact_sha256, member_count: revision.candidate.members.size, entry_path: `<CONSUMER_ROOT>/${revision.candidate.entry_path}`, entry_sha256: revision.candidate.entry_sha256, source_hashes: revision.candidate.source_hashes }, processes, process_count: processes.length, journey: { flow: bindingFlow(binding), process_count: processes.length, checkpoint }, isolation: { root: '<PRIVATE_CONSUMER_ROOT>', provider_readable_paths: ['<CONSUMER_ROOT>'], writable_roots: ['<CONSUMER_ROOT>', '<CONSUMER_ROOT>/contexts'], owner_state: 'not_inherited', owner_path: 'not_inherited' }, cleanup, terminal: { status: 'provider_complete', receipt_count: 1, failure_class: null, failure_code: null, message: 'natural consumer journey provider execution completed; workflow was not evaluated' }, claim_limit: 'Provider execution only: native identity, process sequence, exit, timeout, bounded output, frozen installation, and retained-root facts; no lifecycle, artifact, verifier, grader, workflow, or product claim.' };
-    return completedReceipt;
+    ownerAuthority = liveAssertOwnerAuthority(ownerAuthority);
+    completedReceipt = { schema_version: 2, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked, workflow_verdict: 'not_evaluated', campaign_revision: { revision_id: revision.revision.revision_id, sha256: revision.sha256 }, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: bindingFingerprint(binding), run_id: binding.run_id, journey_id: binding.journey_id || null, trial_kind: binding.kind, runtime: binding.runtime, workspace: { token: workspaceToken, locator: '<PRIVATE_CONSUMER_ROOT>', realpath_sha256: sha(fs.realpathSync(runRoot)), retained: true, prepared: true }, owner_authority: ownerAuthority, preparation: { frozen_artifact_sha256: revision.candidate.artifact_sha256, frozen_source_hashes: revision.candidate.source_hashes, input_bundle: inputBundle, install: { mode: binding.kind === 'packed-readme' ? 'provider-owned-offline-frozen-artifact' : 'offline-frozen-artifact', command_sha256: installRecord?.stdout_sha256 || null, status: installed.status } }, provider: { logical_command: CORE_RUNTIME_PINS[binding.runtime].command, runtime_version: revision.runtimes[binding.runtime].version || revision.runtimes[binding.runtime].version_string, version_probe: versionProbe, requested_model: binding.model, requested_effort: binding.effort, resolution: evidence, identity_claim: 'requested/native identity only' }, toolchain: { path_allowlist: toolchain.path.map(() => '<TOOLCHAIN_PATH>'), hashes: toolchain.hashes }, candidate: { commit: revision.candidate.commit || revision.revision.candidate?.commit || null, artifact_sha256: revision.candidate.artifact_sha256, member_count: revision.candidate.members.size, entry_path: `<CONSUMER_ROOT>/${revision.candidate.entry_path}`, entry_sha256: revision.candidate.entry_sha256, source_hashes: revision.candidate.source_hashes }, processes, process_count: processes.length, journey: { flow: bindingFlow(binding), process_count: processes.length, checkpoint }, isolation: { verified: isolationVerified, root: '<PRIVATE_CONSUMER_ROOT>', source_checkout_overlap: false, receipt_directory_overlap: false, authority_ancestors: { git: false, work: false }, provider_sandbox: 'not_claimed' }, cleanup, terminal: { status: 'provider_complete', receipt_count: 1, failure_class: null, failure_code: null, message: 'natural consumer journey provider execution completed; workflow was not evaluated' }, claim_limit: 'Provider execution only: native identity, process sequence, exit, timeout, bounded output, frozen installation, retained-root facts, and verified consumer-root location; no lifecycle, artifact, verifier, grader, workflow, or product claim.' };
+    return { receipt: completedReceipt, retainedRoot: runRoot };
   } catch (error) {
+    const authorityFailure = ownerAuthority && liveOwnerAuthorityStatus(ownerAuthority).status === 'changed';
+    if (authorityFailure) error = new ProofFailure('infrastructure', 'owner_authority_changed', 'source owner authority changed during provider execution', { changed: liveOwnerAuthorityStatus(ownerAuthority).changed });
     error.providerInvoked = Boolean(error.providerInvoked || providerInvoked);
     error.providerEvidence = evidence;
     error.versionProbe = versionProbe;
@@ -1769,6 +1834,9 @@ function liveRun(contract, binding, revision, receiptFile, handoffFile) {
     error.toolchain = toolchain;
     error.checkpoint = checkpoint;
     error.cleanup = cleanup;
+    error.ownerAuthority = ownerAuthority ? liveOwnerAuthorityStatus(ownerAuthority) : null;
+    error.isolationVerified = isolationVerified;
+    error.retainedRoot = runRoot;
     throw error;
   } finally {
     // 00B1 deliberately retains both successful and failed roots.  00C owns
@@ -1781,8 +1849,10 @@ function liveBuildHandoff(contract, binding, receiptFile, handoffFile, receipt, 
   need(path.dirname(handoffFile) === path.dirname(receiptFile), 'infrastructure', 'handoff_path_invalid', 'handoff must share the provider receipt directory');
   need(!exists(handoffFile), 'infrastructure', 'handoff_exists', 'refusing to overwrite an existing handoff receipt', { path: slash(handoffFile) });
   need(receipt.workspace?.retained === true && ['provider_complete', 'failed'].includes(receipt.terminal?.status), 'infrastructure', 'handoff_not_ready', 'only a sealed retained provider receipt can be handed off');
+  need(receipt.isolation?.verified === true, 'infrastructure', 'handoff_isolation_unverified', 'retained workspace isolation was not verified before handoff');
   const rootExists = Boolean(root && exists(root) && fs.statSync(root).isDirectory());
   need(rootExists, 'infrastructure', 'workspace_missing', 'retained consumer workspace does not exist for handoff');
+  liveAssertRetainedRootIsolation(root, { receiptDirectory: path.dirname(receiptFile) });
   const bytes = fs.readFileSync(receiptFile);
   const handoff = {
     schema: 'phase16-retained-workspace-v1', state: receipt.terminal.status === 'failed' ? 'failed' : 'handed_off',
@@ -1829,19 +1899,19 @@ function liveMain(contract) {
     binding = contract.bindings.find((item) => item.run_id === runId);
     need(binding, 'product', 'run_unknown', `unknown campaign binding: ${runId}`);
     need(binding.calibration_digest !== null, 'infrastructure', 'calibration_pending', `binding remains pending: ${runId}`);
-    const receipt = liveRun(contract, binding, revision, receiptFile, handoffFile);
+    const liveResult = liveRun(contract, binding, revision, receiptFile, handoffFile);
+    const receipt = liveResult.receipt;
     realAgentWriteReceipt(receiptFile, receipt);
-    const retainedRoot = path.join(path.dirname(receiptFile), `consumer-${binding.run_id}`);
-    liveBuildHandoff(contract, binding, receiptFile, handoffFile, receipt, retainedRoot);
-    need(exists(retainedRoot), 'infrastructure', 'workspace_missing', 'retained consumer workspace disappeared before return');
+    liveBuildHandoff(contract, binding, receiptFile, handoffFile, receipt, liveResult.retainedRoot);
+    need(exists(liveResult.retainedRoot), 'infrastructure', 'workspace_missing', 'retained consumer workspace disappeared before return');
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
   } catch (error) {
     const failure = error instanceof ProofFailure ? error : new ProofFailure('infrastructure', 'provider_execution_failure', error.message, { stack: error.stack });
-    const failed = { schema_version: 2, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked || Boolean(error.providerInvoked), workflow_verdict: 'not_evaluated', campaign_revision: revision ? { revision_id: revision.revision.revision_id, sha256: revision.sha256 } : null, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: binding ? bindingFingerprint(binding) : null, run_id: binding?.run_id || coreArg('--run'), journey_id: binding?.journey_id || null, trial_kind: binding?.kind || null, runtime: binding?.runtime || null, workspace: error.workspace || { token: null, locator: '<PRIVATE_CONSUMER_ROOT>', realpath_sha256: null, retained: false, prepared: false }, provider: { logical_command: binding ? CORE_RUNTIME_PINS[binding.runtime].command : null, version_probe: error.versionProbe || null, requested_model: binding?.model || null, requested_effort: binding?.effort || null, resolution: error.providerEvidence || null, identity_claim: error.providerEvidence ? 'requested/native identity only' : 'none' }, toolchain: error.toolchain ? { path_allowlist: error.toolchain.path?.map(() => '<TOOLCHAIN_PATH>') || [], hashes: error.toolchain.hashes || {} } : null, processes: error.processes || [], process_count: (error.processes || []).length, journey: { flow: binding ? bindingFlow(binding) : [], process_count: (error.processes || []).length, checkpoint: error.checkpoint || null }, isolation: { root: '<PRIVATE_CONSUMER_ROOT>', provider_readable_paths: [], writable_roots: [], owner_state: 'not_inherited', owner_path: 'not_inherited' }, cleanup: { attempted: false, removed: false }, terminal: { status: 'failed', receipt_count: 1, failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: 'No workflow claim: provider execution failed or was not admitted; workflow_verdict remains not_evaluated.' };
+    const failed = { schema_version: 2, record_type: 'provider_execution_receipt', mode: 'run', provider_invoked: providerInvoked || Boolean(error.providerInvoked), workflow_verdict: 'not_evaluated', campaign_revision: revision ? { revision_id: revision.revision.revision_id, sha256: revision.sha256 } : null, campaign: { contract: CORE_CAMPAIGN_CONTRACT, sha256: contract.sha256 }, binding_fingerprint: binding ? bindingFingerprint(binding) : null, run_id: binding?.run_id || coreArg('--run'), journey_id: binding?.journey_id || null, trial_kind: binding?.kind || null, runtime: binding?.runtime || null, workspace: error.workspace || { token: null, locator: '<PRIVATE_CONSUMER_ROOT>', realpath_sha256: null, retained: false, prepared: false }, owner_authority: error.ownerAuthority || null, provider: { logical_command: binding ? CORE_RUNTIME_PINS[binding.runtime].command : null, version_probe: error.versionProbe || null, requested_model: binding?.model || null, requested_effort: binding?.effort || null, resolution: error.providerEvidence || null, identity_claim: error.providerEvidence ? 'requested/native identity only' : 'none' }, toolchain: error.toolchain ? { path_allowlist: error.toolchain.path?.map(() => '<TOOLCHAIN_PATH>') || [], hashes: error.toolchain.hashes || {} } : null, processes: error.processes || [], process_count: (error.processes || []).length, journey: { flow: binding ? bindingFlow(binding) : [], process_count: (error.processes || []).length, checkpoint: error.checkpoint || null }, isolation: { verified: Boolean(error.isolationVerified), root: '<PRIVATE_CONSUMER_ROOT>', provider_sandbox: 'not_claimed' }, cleanup: { attempted: false, removed: false }, terminal: { status: 'failed', receipt_count: 1, failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: 'No workflow claim: provider execution failed or was not admitted; workflow_verdict remains not_evaluated.' };
     if (receiptFile && path.isAbsolute(receiptFile) && !exists(receiptFile)) {
       try { realAgentWriteReceipt(receiptFile, failed); } catch { /* stdout remains the authoritative failure when the path is unsafe */ }
     }
-    const retainedRoot = binding ? path.join(path.dirname(receiptFile || ''), `consumer-${binding.run_id}`) : null;
+    const retainedRoot = error.retainedRoot || null;
     if (receiptFile && handoffFile && binding && exists(receiptFile) && !exists(handoffFile) && error.workspace_created === true && retainedRoot && exists(retainedRoot)) {
       try {
         liveBuildHandoff(contract, binding, receiptFile, handoffFile, failed, retainedRoot);
@@ -1930,6 +2000,14 @@ module.exports = {
   liveCanonicalRevision,
   liveBootstrapArtifact,
   liveMemberPath,
+  liveRetainedRoot,
+  liveReserveRetainedRoot,
+  bindingFingerprint,
+  liveOwnerAuthoritySnapshot,
+  liveOwnerAuthorityStatus,
+  liveAssertOwnerAuthority,
+  liveAssertRetainedRootIsolation,
+  liveBuildHandoff,
   bindingFlow,
   bindingRequiredSkills,
   liveCaptureCheckpoint,

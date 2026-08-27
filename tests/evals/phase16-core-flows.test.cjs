@@ -40,6 +40,15 @@ function runWithEnv(argv, env) {
   return cp.spawnSync(process.execPath, [EVAL, ...values], { cwd: REPO, env, encoding: 'utf8', windowsHide: true });
 }
 
+function cleanupLiveFixture(fixture, { receiptFiles = [], runIds = [] } = {}) {
+  const receipts = [...new Set([fixture.receiptFile, ...receiptFiles])];
+  const campaignRunIds = runIds.length ? runIds : JSON.parse(fs.readFileSync(CAMPAIGN, 'utf8')).bindings.map((binding) => binding.run_id);
+  for (const receiptFile of receipts) for (const runId of campaignRunIds) {
+    fs.rmSync(LIVE.liveRetainedRoot(receiptFile, runId), { recursive: true, force: true });
+  }
+  fs.rmSync(fixture.root, { recursive: true, force: true });
+}
+
 // A small local-only provider fixture. It is intentionally outside the
 // checkout and is never used by the normal campaign tests.
 function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, secretValue = null, marker = false, networkKind = null, tamperAbort = false } = {}) {
@@ -208,11 +217,19 @@ test('live run consumes a frozen artifact and emits only a non-verdict provider 
     assert.deepEqual(JSON.parse(JSON.stringify(receipt.preparation.input_bundle)).member_hashes, expectedInputHashes);
     assert.match(receipt.processes[0].invocation.argv.join(' '), /inputs[\\/]owner[\\/]TASK\.md/);
     assert.match(receipt.processes[0].invocation.argv.join(' '), /node_modules[\\/]workspine[\\/]bin[\\/]gsdd\.mjs/);
-    assert.equal(fs.existsSync(path.join(fixture.root, 'consumer-core-treesnap-codex-1')), true);
+    const retainedRoot = LIVE.liveRetainedRoot(fixture.receiptFile, 'core-treesnap-codex-1');
+    assert.equal(fs.existsSync(retainedRoot), true);
+    assert.equal(path.relative(fixture.root, retainedRoot).startsWith('..'), true);
+    assert.equal(fs.existsSync(path.join(retainedRoot, '.git')), false);
+    assert.equal(fs.existsSync(path.join(retainedRoot, '.work')), false);
+    assert.ok(!JSON.stringify(receipt).includes(retainedRoot));
     assert.equal(fs.existsSync(path.join(fixture.root, 'handoff.json')), true);
     assert.ok(!JSON.stringify(receipt).includes(process.env.USERPROFILE || '___owner_profile_not_set___'));
     assert.equal(receipt.provider.identity_claim, 'requested/native identity only');
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    assert.equal(receipt.owner_authority.status, 'unchanged');
+  } finally {
+    cleanupLiveFixture(fixture);
+  }
 });
 
 test('scripted-owner uses the frozen deterministic approval input and binds its hash', () => {
@@ -226,7 +243,7 @@ test('scripted-owner uses the frozen deterministic approval input and binds its 
     assert.equal(receipt.preparation.input_bundle.owner_answer_sha256, expected);
     assert.match(receipt.processes[0].invocation.argv.join(' '), /inputs[\\/]owner[\\/]ANSWER\.md/);
     assert.equal(JSON.parse(JSON.stringify(receipt.preparation.input_bundle)).owner_answer_sha256, expected);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('live Claude binding captures native session, assistant model, and result linkage', () => {
@@ -241,7 +258,7 @@ test('live Claude binding captures native session, assistant model, and result l
     assert.equal(receipt.processes[0].native.parser, 'claude-stream-json');
     assert.equal(receipt.processes[0].native.assistant_model, 'claude-sonnet-5');
     assert.equal(receipt.workflow_verdict, 'not_evaluated');
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('brownfield journey uses two fresh processes over one retained root and creates handoff', () => {
@@ -255,11 +272,14 @@ test('brownfield journey uses two fresh processes over one retained root and cre
     assert.equal(new Set(receipt.processes.map((item) => item.native_identity)).size, 2);
     assert.ok(receipt.journey.checkpoint.bytes >= 64);
     assert.equal(receipt.cleanup.attempted, false);
+    const retainedRoot = LIVE.liveRetainedRoot(fixture.receiptFile, 'core-brownfield-plan-codex-1');
     const handoff = JSON.parse(fs.readFileSync(path.join(fixture.root, 'handoff.json'), 'utf8'));
     assert.equal(handoff.state, 'handed_off');
     assert.equal(handoff.provider_receipt_sha256, sha(fixture.receiptFile).toLowerCase());
     assert.equal(handoff.root_exists, true);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    assert.equal(fs.existsSync(retainedRoot), true);
+    assert.equal(path.relative(fixture.root, retainedRoot).startsWith('..'), true);
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('packed README journey owns installation while frozen inputs and task paths are visible', () => {
@@ -273,7 +293,7 @@ test('packed README journey owns installation while frozen inputs and task paths
     assert.equal(receipt.processes[0].invocation.install_state.reachable_after, true);
     assert.match(receipt.processes[0].invocation.argv.join(' '), /inputs[\\/]owner[\\/]TASK\.md/);
     assert.match(receipt.processes[0].invocation.argv.join(' '), /inputs[\\/]workspine\.tgz/);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('consumer input bundle tamper is rejected before provider execution', () => {
@@ -289,7 +309,11 @@ test('consumer input bundle tamper is rejected before provider execution', () =>
     assert.equal(receipt.terminal.failure_code, 'consumer_input_bundle_hash_mismatch');
     assert.equal(fs.existsSync(path.join(fixture.root, 'handoff.json')), true);
     assert.equal(JSON.parse(fs.readFileSync(path.join(fixture.root, 'handoff.json'), 'utf8')).state, 'failed');
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    const retainedRoot = LIVE.liveRetainedRoot(fixture.receiptFile, 'core-treesnap-codex-1');
+    assert.equal(fs.existsSync(retainedRoot), true);
+    assert.ok(!JSON.stringify(receipt).includes(retainedRoot));
+    assert.ok(!fs.readFileSync(path.join(fixture.root, 'handoff.json'), 'utf8').includes(retainedRoot));
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('consumer input member ledger tamper is rejected before provider execution', () => {
@@ -303,21 +327,108 @@ test('consumer input member ledger tamper is rejected before provider execution'
     const receipt = parse(result.stdout);
     assert.equal(receipt.provider_invoked, false);
     assert.equal(receipt.terminal.failure_code, 'consumer_input_bundle_member_mismatch');
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    assert.equal(fs.existsSync(LIVE.liveRetainedRoot(fixture.receiptFile, 'core-treesnap-codex-1')), true);
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('pre-existing consumer roots are rejected without creating a handoff', () => {
   const fixture = liveFixture();
-  const runRoot = path.join(fixture.root, 'consumer-core-treesnap-codex-1');
+  const runRoot = LIVE.liveRetainedRoot(fixture.receiptFile, 'core-treesnap-codex-1');
   try {
-    fs.mkdirSync(runRoot, { recursive: true });
+    fs.mkdirSync(runRoot);
     const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
     assert.notEqual(result.status, 0);
     const receipt = parse(result.stdout);
     assert.equal(receipt.terminal.failure_code, 'workspace_exists');
     assert.equal(receipt.workspace.created_by_run, false);
     assert.equal(fs.existsSync(path.join(fixture.root, 'handoff.json')), false);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
+});
+
+test('retained-root containment rejects enclosing authorities and receipt overlap', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-containment-'));
+  const sourceRoot = path.join(root, 'source');
+  const enclosing = path.join(root, 'enclosing');
+  const receipt = path.join(root, 'receipts');
+  const consumerUnderAuthority = path.join(enclosing, 'consumer');
+  const consumerUnderReceipt = path.join(receipt, 'consumer');
+  const consumerWithLocalWork = path.join(root, 'local-consumer');
+  try {
+    fs.mkdirSync(path.join(enclosing, '.git'), { recursive: true });
+    fs.mkdirSync(sourceRoot, { recursive: true });
+    fs.mkdirSync(path.join(receipt), { recursive: true });
+    fs.mkdirSync(consumerUnderAuthority, { recursive: true });
+    fs.mkdirSync(consumerUnderReceipt, { recursive: true });
+    fs.mkdirSync(path.join(consumerWithLocalWork, '.work'), { recursive: true });
+    assert.throws(() => LIVE.liveAssertRetainedRootIsolation(consumerUnderAuthority, { sourceRoot, receiptDirectory: receipt }), /repository or planning authority ancestor/);
+    assert.throws(() => LIVE.liveAssertRetainedRootIsolation(consumerUnderReceipt, { sourceRoot, receiptDirectory: receipt }), /overlaps the receipt directory/);
+    assert.doesNotThrow(() => LIVE.liveAssertRetainedRootIsolation(consumerWithLocalWork, { sourceRoot, receiptDirectory: receipt }));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('owner authority snapshot detects byte changes without exposing paths', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-owner-'));
+  try {
+    for (const relative of ['.work/SPEC.md', '.work/ROADMAP.md', '.work/state.json']) {
+      const file = path.join(root, ...relative.split('/'));
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `${relative}\n`);
+    }
+    const snapshot = LIVE.liveOwnerAuthoritySnapshot(root);
+    assert.equal(LIVE.liveOwnerAuthorityStatus(snapshot, root).status, 'unchanged');
+    fs.appendFileSync(path.join(root, '.work', 'SPEC.md'), 'mutated\n');
+    const status = LIVE.liveOwnerAuthorityStatus(snapshot, root);
+    assert.equal(status.status, 'changed');
+    assert.deepEqual(status.changed, ['.work/SPEC.md']);
+    assert.throws(() => LIVE.liveAssertOwnerAuthority(snapshot, root), /source owner authority changed/);
+    assert.ok(!JSON.stringify(status).includes(root));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('retained-root reservation is atomic under two bounded concurrent attempts', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-reservation-'));
+  const target = path.join(root, 'retained');
+  const script = "const fs=require('node:fs');try{fs.mkdirSync(process.argv[1]);process.stdout.write('reserved')}catch(error){process.stdout.write(error.code||'other')}";
+  const reserve = () => new Promise((resolve, reject) => {
+    const child = cp.spawn(process.execPath, ['-e', script, target], { encoding: 'utf8', windowsHide: true });
+    let output = '';
+    child.stdout.on('data', (chunk) => { output += chunk; });
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code, output }));
+  });
+  try {
+    const results = await Promise.all([reserve(), reserve()]);
+    assert.equal(results.filter((item) => item.output === 'reserved').length, 1);
+    assert.equal(results.filter((item) => item.output === 'EEXIST').length, 1);
+    assert.throws(() => LIVE.liveReserveRetainedRoot(target), /reuse an existing retained consumer workspace/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('handoff refuses unverified or re-invalidated isolation without writing a receipt', () => {
+  const fixture = liveFixture();
+  const campaign = JSON.parse(fs.readFileSync(CAMPAIGN, 'utf8'));
+  const binding = campaign.bindings.find((item) => item.run_id === 'core-treesnap-codex-1');
+  const contract = { sha256: 'fixture-contract' };
+  const root = path.join(fixture.root, 'invalid-consumer');
+  const handoff = path.join(fixture.root, 'handoff-invalid.json');
+  const receipt = {
+    workspace: { retained: true, token: 'fixture-token', realpath_sha256: 'fixture-root-hash' },
+    isolation: { verified: false },
+    terminal: { status: 'failed', failure_code: 'fixture_failure' },
+    binding_fingerprint: LIVE.bindingFingerprint(binding), run_id: binding.run_id,
+    processes: [], toolchain: { hashes: {} }, journey: { checkpoint: null },
+  };
+  try {
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(fixture.receiptFile, `${JSON.stringify(receipt)}\n`);
+    assert.throws(() => LIVE.liveBuildHandoff(contract, binding, fixture.receiptFile, handoff, receipt, root), /isolation was not verified/);
+    assert.equal(fs.existsSync(handoff), false);
+    receipt.isolation.verified = true;
+    fs.writeFileSync(fixture.receiptFile, `${JSON.stringify(receipt)}\n`);
+    const revalidatedHandoff = path.join(fixture.root, 'handoff-revalidated-invalid.json');
+    assert.throws(() => LIVE.liveBuildHandoff(contract, binding, fixture.receiptFile, revalidatedHandoff, receipt, root), /overlaps the receipt directory/);
+    assert.equal(fs.existsSync(revalidatedHandoff), false);
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('brownfield checkpoint accepts only substantive .work/.continue-here.md', () => {
@@ -342,7 +453,7 @@ test('provider and toolchain targets must be inside the declared PATH allowlist'
     const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
     assert.notEqual(result.status, 0);
     assert.equal(parse(result.stdout).terminal.failure_code, 'path_allowlist_excludes_target');
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('live run ignores mutable checkout/source drift after the frozen artifact is sealed', () => {
@@ -354,7 +465,7 @@ test('live run ignores mutable checkout/source drift after the frozen artifact i
     const receipt = parse(result.stdout);
     assert.equal(receipt.candidate.entry_sha256, bytesHash(Buffer.from('export default true;\n')));
     assert.equal(receipt.workflow_verdict, 'not_evaluated');
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('live native parser failures remain provider-invoked red receipts', () => {
@@ -374,7 +485,7 @@ test('live native parser failures remain provider-invoked red receipts', () => {
       assert.equal(receipt.terminal.failure_code, item.code, item.name);
       assert.equal(receipt.terminal.status, 'failed', item.name);
       assert.equal(receipt.terminal.receipt_count, 1, item.name);
-    } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    } finally { cleanupLiveFixture(fixture); }
   }
 });
 
@@ -522,14 +633,16 @@ test('live run rejects a pending Docusaurus binding before provider resolution',
     assert.equal(receipt.provider_invoked, false);
     assert.equal(receipt.terminal.failure_code, 'calibration_pending');
     assert.equal(fs.existsSync(fixture.receiptFile), true);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('live run rejects duplicate or unknown flags before provider resolution and preserves one receipt', () => {
   const fixture = liveFixture();
+  const alternateReceipts = [];
   try {
     for (const extra of [['--unknown'], ['--run', 'core-treesnap-codex-1']]) {
       const receipt = path.join(fixture.root, `${extra.length}.json`);
+      alternateReceipts.push(receipt);
       const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', receipt, ...extra], fixture.env);
       assert.notEqual(result.status, 0);
       const output = parse(result.stdout);
@@ -539,7 +652,7 @@ test('live run rejects duplicate or unknown flags before provider resolution and
       assert.equal(fs.existsSync(receipt), true);
       fs.rmSync(receipt, { force: true });
     }
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture, { receiptFiles: alternateReceipts }); }
 });
 
 test('live admission rejects frozen artifact, member, entry, source, runtime, and config drift before provider execution', () => {
@@ -566,7 +679,7 @@ test('live admission rejects frozen artifact, member, entry, source, runtime, an
       assert.equal(receipt.workflow_verdict, 'not_evaluated', name);
       assert.equal(receipt.terminal.failure_code, code, name);
       assert.equal(receipt.terminal.receipt_count, 1, name);
-    } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    } finally { cleanupLiveFixture(fixture); }
   }
 });
 
@@ -582,7 +695,7 @@ test('live tar reader rejects checksum corruption and bytes after the exact end 
     assert.throws(() => LIVE.liveTarEntries(checksumFile), /checksum/);
     fs.writeFileSync(trailingFile, Buffer.concat([raw, Buffer.from([1])]));
     assert.throws(() => LIVE.liveTarEntries(trailingFile), /exactly two zero tar blocks|trailing/);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('live artifact consumption rechecks the frozen hash and rejects duplicate tar members', () => {
@@ -598,7 +711,7 @@ test('live artifact consumption rechecks the frozen hash and rejects duplicate t
     const packed = cp.spawnSync('tar', ['-cf', duplicate, '-C', fixture.source, 'package/bin/gsdd.mjs', 'package/bin/gsdd.mjs'], { encoding: 'utf8', windowsHide: true });
     assert.equal(packed.status, 0, packed.stderr);
     assert.throws(() => LIVE.liveTarEntries(duplicate), /duplicated/);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('live receipt is exclusive and never overwrites an existing artifact', () => {
@@ -612,7 +725,7 @@ test('live receipt is exclusive and never overwrites an existing artifact', () =
     assert.equal(receipt.provider_invoked, false);
     assert.equal(receipt.terminal.failure_code, 'receipt_exists');
     assert.equal(fs.readFileSync(fixture.receiptFile, 'utf8'), original);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('live provider resolution is direct-only on Windows and preserves exact role argv/budgets', () => {
@@ -628,7 +741,7 @@ test('live provider resolution is direct-only on Windows and preserves exact rol
     assert.deepEqual(argv.slice(-2), ['C:\\isolated\\candidate', 'prompt']);
     assert.ok(argv.includes('-m') && argv[argv.indexOf('-m') + 1] === 'gpt-5.6-luna');
     assert.throws(() => LIVE.realAgentRunProvider({ command: 'codex.cmd', prefix: [], shell: true }, [], { cwd: fixture.root, env: fixture.env }), /directly spawnable/);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('direct synthetic provider timeout is observable without retry or fallback', () => {
@@ -638,7 +751,7 @@ test('direct synthetic provider timeout is observable without retry or fallback'
     const result = LIVE.realAgentRunProvider(descriptor, ['noop'], { cwd: fixture.root, env: fixture.env, timeout: 10 });
     assert.equal(result.timed_out, true);
     assert.equal(result.error.code, 'ETIMEDOUT');
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('live failures preserve provider invocation evidence for output caps and secret redaction', () => {
@@ -661,7 +774,7 @@ test('live failures preserve provider invocation evidence for output caps and se
       assert.ok(receipt.processes[0].invocation.argv.length > 0, item.name);
       assert.ok(receipt.processes[0].output.stdout_sha256, item.name);
       assert.equal(receipt.workflow_verdict, 'not_evaluated', item.name);
-    } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    } finally { cleanupLiveFixture(fixture); }
   }
   const secret = 'fixture-secret-value-should-not-retain';
   const fixture = liveFixture({ secretValue: secret });
@@ -672,7 +785,7 @@ test('live failures preserve provider invocation evidence for output caps and se
     assert.ok(receipt.processes.every((item) => item.invocation.secret_env_names.includes('PHASE16_TEST_SECRET')));
     assert.ok(!JSON.stringify(receipt).includes(secret));
     assert.ok(!JSON.stringify(receipt).includes('PHASE16_TEST_SECRET='));
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('provider-authored network marker without a guard sentinel is not a network violation', () => {
@@ -684,7 +797,7 @@ test('provider-authored network marker without a guard sentinel is not a network
     assert.equal(receipt.terminal.status, 'provider_complete');
     assert.equal(receipt.processes[0].terminal.failure_code, null);
     assert.equal(receipt.processes[0].invocation.network_attempt, null);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('an actual patched network call writes a process-bound sentinel and preserves its exact kind/hash', () => {
@@ -703,7 +816,7 @@ test('an actual patched network call writes a process-bound sentinel and preserv
     assert.equal(receipt.terminal.evidence.network_attempt.sha256, attempt.sha256);
     assert.ok(!JSON.stringify(receipt).includes('example.invalid'));
     assert.ok(receipt.processes[0].invocation.signal || receipt.processes[0].invocation.status !== 0);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('dns.promises calls are blocked with an exact validated sentinel and no external lookup', () => {
@@ -715,7 +828,7 @@ test('dns.promises calls are blocked with an exact validated sentinel and no ext
     assert.equal(receipt.terminal.failure_code, 'network_violation');
     assert.equal(receipt.processes[0].invocation.network_attempt.kind, 'dns.promises.lookup');
     assert.match(receipt.processes[0].invocation.network_attempt.sha256, /^[0-9a-f]{64}$/);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('provider cannot replace, delete, or reset captured process.abort before a blocked call', () => {
@@ -730,7 +843,7 @@ test('provider cannot replace, delete, or reset captured process.abort before a 
     assert.match(attempt.sha256, /^[0-9a-f]{64}$/);
     assert.deepEqual(receipt.terminal.evidence.network_attempt, attempt);
     assert.ok(receipt.processes[0].invocation.signal || receipt.processes[0].invocation.status !== 0);
-  } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  } finally { cleanupLiveFixture(fixture); }
 });
 
 test('network sentinels reject malformed, forged, stale, wrong-process, and overwrite attempts', () => {
