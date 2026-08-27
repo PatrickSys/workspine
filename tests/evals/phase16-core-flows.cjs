@@ -7,6 +7,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const cp = require('node:child_process');
+const zlib = require('node:zlib');
 
 const REPO = fs.realpathSync(path.resolve(__dirname, '..', '..'));
 const PROTECTED_RELATIVE = 'tests/proof/phase05-concurrency.cjs';
@@ -690,6 +691,261 @@ function coreValidateBinding(binding, journeys) {
     need(binding.repetition === 1 || binding.repetition === 2, 'product', 'binding_repetition_invalid', `core binding repetition must be 1 or 2: ${binding.run_id}`);
   } else {
     need(!binding.journey_id && binding.repetition === 1, 'product', 'binding_shape_invalid', `non-core binding has core-only fields: ${binding.run_id}`);
+  }
+}
+
+// The public case seam is intentionally concrete. It is an acquisition and
+// integrity check for one pinned upstream case, not a second evaluator.
+const PUBLIC_CASE_CONTRACT = 'phase16-public-case-v1';
+const PUBLIC_CASE_ID = 'itsdangerous-fips-sha1';
+const PUBLIC_CASE_ARCHIVE_URL = 'https://codeload.github.com/pallets/itsdangerous/tar.gz/93ae366874bbd4f69d90495c45b2cd336387496c';
+const PUBLIC_CASE_REVISION = '93ae366874bbd4f69d90495c45b2cd336387496c';
+const PUBLIC_CASE_ARCHIVE_SHA256 = 'ba5756b3437eddb59b81627b47f412cf0af9db8b06bdfd2cc7c3cf0cd5da6632';
+const PUBLIC_CASE_HOSTS = Object.freeze(['codeload.github.com', 'files.pythonhosted.org']);
+const PUBLIC_CASE_ORACLE_PATH = 'tests/evals/cases/itsdangerous-fips-sha1-oracle.py';
+const PUBLIC_CASE_MAX_ARCHIVE_BYTES = 128 * 1024 * 1024;
+
+function caseFailure(code, message, evidence) { throw new ProofFailure('infrastructure', code, message, evidence); }
+function caseAbsoluteFile(value, code, label) {
+  const file = path.resolve(String(value || ''));
+  need(path.isAbsolute(file) && exists(file), 'infrastructure', `${code}_missing`, `${label} is missing`, { path: slash(file) });
+  const stat = fs.lstatSync(file);
+  need(stat.isFile() && !stat.isSymbolicLink(), 'infrastructure', `${code}_unsafe`, `${label} must be a regular file`, { path: slash(file) });
+  return file;
+}
+function caseSha(value, label) {
+  need(typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value), 'infrastructure', 'case_hash_invalid', `${label} must be a SHA-256`);
+  return value.toLowerCase();
+}
+function caseExactKeys(value, allowed, label) {
+  need(value && typeof value === 'object' && !Array.isArray(value), 'infrastructure', 'case_schema_invalid', `${label} must be an object`);
+  const actual = Object.keys(value).sort(); const expected = [...allowed].sort();
+  need(stableStringify(actual) === stableStringify(expected), 'infrastructure', 'case_schema_invalid', `${label} has unknown or missing keys`, { actual, expected });
+}
+function caseUrl(value, label) {
+  let parsed;
+  try { parsed = new URL(value); } catch (error) { caseFailure('case_url_invalid', `${label} is not an absolute URL`, { message: error.message }); }
+  need(parsed.protocol === 'https:', 'infrastructure', 'case_url_invalid', `${label} must use HTTPS`);
+  return parsed;
+}
+function caseValidate(data, { fixture = false } = {}) {
+  need(data && typeof data === 'object' && !Array.isArray(data), 'infrastructure', 'case_schema_invalid', 'public case must be an object');
+  caseExactKeys(data, ['schema_version', 'contract', 'id', 'source', 'runtime', 'dependencies', 'task', 'oracle', 'acquisition'], 'public case');
+  need(data.schema_version === 1 && data.contract === PUBLIC_CASE_CONTRACT && data.id === PUBLIC_CASE_ID, 'infrastructure', 'case_schema_invalid', 'unsupported public case contract');
+  const source = data.source || {};
+  caseExactKeys(source, ['repository', 'revision', 'archive_url', 'archive_sha256', 'root_prefix', 'candidate_path'], 'case source');
+  need(typeof source.repository === 'string' && /^https:\/\/github\.com\/pallets\/itsdangerous\.git$/.test(source.repository), 'infrastructure', 'case_source_invalid', 'case repository is not the pinned public source');
+  need(typeof source.revision === 'string' && /^[0-9a-f]{40}$/.test(source.revision), 'infrastructure', 'case_revision_invalid', 'case revision is not a commit');
+  need(typeof source.archive_url === 'string', 'infrastructure', 'case_archive_invalid', 'case archive URL is missing');
+  const archiveUrl = caseUrl(source.archive_url, 'case archive URL');
+  const archiveSha = caseSha(source.archive_sha256, 'case archive hash');
+  if (!fixture) {
+    need(source.revision === PUBLIC_CASE_REVISION && source.archive_url === PUBLIC_CASE_ARCHIVE_URL && archiveSha === PUBLIC_CASE_ARCHIVE_SHA256, 'infrastructure', 'case_pin_mismatch', 'case source pin is not the accepted itsdangerous revision');
+    need(source.root_prefix === `itsdangerous-${PUBLIC_CASE_REVISION}`, 'infrastructure', 'case_root_invalid', 'case archive root prefix is not pinned');
+  }
+  need(typeof source.root_prefix === 'string' && /^[A-Za-z0-9._-]+$/.test(source.root_prefix), 'infrastructure', 'case_root_invalid', 'case archive root prefix is unsafe');
+  need(source.candidate_path === 'src/itsdangerous/signer.py', 'infrastructure', 'case_candidate_invalid', 'case candidate path is not the assigned signer module');
+  const runtime = data.runtime || {};
+  caseExactKeys(runtime, ['implementation', 'version_constraint', 'command'], 'case runtime');
+  need(runtime.implementation === 'cpython' && runtime.command === 'python' && /^>=\d+\.\d+,<\d+\.\d+$/.test(runtime.version_constraint), 'infrastructure', 'case_runtime_invalid', 'case runtime pin is incomplete');
+  const deps = data.dependencies || {};
+  caseExactKeys(deps, ['lock_format', 'artifacts'], 'case dependencies');
+  need(deps.lock_format === 'requirements-with-sha256-v1' && Array.isArray(deps.artifacts) && deps.artifacts.length > 0, 'infrastructure', 'case_dependencies_invalid', 'case dependency lock is incomplete');
+  const urls = [source.archive_url];
+  const dependencyNames = new Set(); const dependencyUrls = new Set();
+  for (const artifact of deps.artifacts) {
+    caseExactKeys(artifact, ['name', 'version', 'url', 'sha256'], 'case dependency artifact');
+    need(artifact && typeof artifact.name === 'string' && /^[A-Za-z0-9_.-]+$/.test(artifact.name), 'infrastructure', 'case_dependency_invalid', 'dependency name is unsafe');
+    need(typeof artifact.version === 'string' && artifact.version.length > 0 && typeof artifact.url === 'string', 'infrastructure', 'case_dependency_invalid', 'dependency pin is incomplete');
+    caseUrl(artifact.url, `${artifact.name} URL`); caseSha(artifact.sha256, `${artifact.name} hash`); urls.push(artifact.url);
+    need(!dependencyNames.has(artifact.name) && !dependencyUrls.has(artifact.url), 'infrastructure', 'case_dependency_duplicate', 'dependency names and URLs must be unique', { name: artifact.name, url: artifact.url });
+    dependencyNames.add(artifact.name); dependencyUrls.add(artifact.url);
+  }
+  const acquisition = data.acquisition || {};
+  caseExactKeys(acquisition, ['allowed_hosts', 'allowed_urls'], 'case acquisition');
+  need(Array.isArray(acquisition.allowed_hosts) && acquisition.allowed_hosts.length > 0 && Array.isArray(acquisition.allowed_urls), 'infrastructure', 'case_acquisition_invalid', 'acquisition allowlist is incomplete');
+  need(stableStringify([...acquisition.allowed_hosts].sort()) === stableStringify([...PUBLIC_CASE_HOSTS].sort()), 'infrastructure', 'case_acquisition_invalid', 'acquisition hosts drifted');
+  need(stableStringify(acquisition.allowed_urls) === stableStringify(urls), 'infrastructure', 'case_acquisition_invalid', 'acquisition URLs must exactly match pinned source and dependencies');
+  for (const value of urls) {
+    const parsed = caseUrl(value, 'acquisition URL');
+    need(acquisition.allowed_hosts.includes(parsed.hostname), 'infrastructure', 'case_url_not_allowed', 'acquisition URL host is not allowlisted', { host: parsed.hostname });
+  }
+  const task = data.task || {};
+  caseExactKeys(task, ['goal', 'allowed_paths', 'non_goals', 'verification'], 'case task');
+  need(typeof task.goal === 'string' && task.goal.length >= 40 && Array.isArray(task.allowed_paths) && stableStringify(task.allowed_paths) === stableStringify(['src/itsdangerous/signer.py']), 'infrastructure', 'case_task_invalid', 'case task boundary is incomplete');
+  need(Array.isArray(task.non_goals) && task.non_goals.length > 0 && typeof task.verification === 'string', 'infrastructure', 'case_task_invalid', 'case task non-goals or verification is missing');
+  const oracle = data.oracle || {};
+  caseExactKeys(oracle, ['path', 'sha256', 'contract'], 'case oracle');
+  need(oracle.path === PUBLIC_CASE_ORACLE_PATH && /^[a-f0-9]{64}$/i.test(String(oracle.sha256 || '')) && typeof oracle.contract === 'string', 'infrastructure', 'case_oracle_invalid', 'case oracle pin is incomplete');
+  if (!fixture) need(oracle.sha256.toLowerCase() === shaFile(path.join(REPO, PUBLIC_CASE_ORACLE_PATH)), 'infrastructure', 'case_oracle_hash_mismatch', 'case oracle hash does not match tracked oracle bytes');
+  return { source, runtime, dependencies: deps, acquisition, task, oracle, archiveUrl, archiveSha };
+}
+function caseSafeMember(value) {
+  const member = String(value || '').replaceAll('\\', '/').replace(/\/+$/, '');
+  need(member && !member.startsWith('/') && !/^[A-Za-z]:\//i.test(member), 'infrastructure', 'case_archive_traversal', 'archive contains an absolute member path', { member });
+  const parts = member.split('/');
+  need(parts.every((item) => item && item !== '.' && item !== '..'), 'infrastructure', 'case_archive_traversal', 'archive contains a traversal member', { member });
+  return parts.join('/');
+}
+function caseTarOctal(header, start, length, label, { allowEmpty = false } = {}) {
+  const raw = header.subarray(start, start + length).toString('ascii');
+  need(/^[0-7]+[ \0]*$/.test(raw) || (allowEmpty && /^[ \0]*$/.test(raw)), 'infrastructure', 'case_archive_invalid', `archive ${label} field is not strict octal`);
+  return raw.trim() ? Number.parseInt(raw.trim(), 8) : 0;
+}
+function caseTarEntries(archive) {
+  let bytes;
+  try { bytes = zlib.gunzipSync(archive); } catch (error) { caseFailure('case_archive_invalid', 'source archive is not valid gzip', { message: error.message }); }
+  need(bytes.length % 512 === 0, 'infrastructure', 'case_archive_invalid', 'tar stream has a partial trailing block');
+  const entries = []; let offset = 0; let paxPath = null; let ended = false; let zeroBlocks = 0;
+  while (offset + 512 <= bytes.length) {
+    const header = bytes.subarray(offset, offset + 512); offset += 512;
+    if (header.every((item) => item === 0)) {
+      zeroBlocks += 1; ended = true;
+      while (offset < bytes.length) { const trailing = bytes.subarray(offset, offset + 512); need(trailing.every((item) => item === 0), 'infrastructure', 'case_archive_trailing_data', 'tar stream contains bytes after its terminal zero blocks'); offset += 512; zeroBlocks += 1; }
+      break;
+    }
+    need(!ended, 'infrastructure', 'case_archive_trailing_data', 'tar stream contains data after its terminal zero block');
+    const expectedChecksum = caseTarOctal(header, 148, 8, 'checksum');
+    let actualChecksum = 0; for (let index = 0; index < 512; index += 1) actualChecksum += index >= 148 && index < 156 ? 32 : header[index];
+    need(actualChecksum === expectedChecksum, 'infrastructure', 'case_archive_checksum_mismatch', 'archive header checksum does not match');
+    for (const [start, length, label] of [[100, 8, 'mode'], [108, 8, 'uid'], [116, 8, 'gid'], [136, 12, 'mtime'], [329, 8, 'devmajor'], [337, 8, 'devminor']]) caseTarOctal(header, start, length, label, { allowEmpty: true });
+    const rawName = header.subarray(0, 100).toString('utf8').replace(/\0.*$/, '');
+    const prefix = header.subarray(345, 500).toString('utf8').replace(/\0.*$/, '');
+    const declaredName = prefix ? `${prefix}/${rawName}` : rawName;
+    const size = caseTarOctal(header, 124, 12, 'size');
+    need(Number.isSafeInteger(size) && size >= 0 && offset + size <= bytes.length, 'infrastructure', 'case_archive_invalid', 'archive member size is invalid');
+    const body = bytes.subarray(offset, offset + size); offset += Math.ceil(size / 512) * 512;
+    const type = String.fromCharCode(header[156] || 48);
+    if (type === 'g' || type === 'x') {
+      const text = body.toString('utf8');
+      const pathRecord = text.match(/(?:^|\n)\d+ path=(.*?)(?:\n|$)/);
+      if (pathRecord) paxPath = pathRecord[1];
+      continue;
+    }
+    need(type === '0' || type === '5' || type === '7', 'infrastructure', type === '1' || type === '2' ? 'case_archive_link_refused' : 'case_archive_special_refused', 'archive links and special files are refused', { member: declaredName, type });
+    const member = caseSafeMember(paxPath || declaredName); paxPath = null;
+    entries.push({ member, directory: type === '5', body: Buffer.from(body) });
+  }
+  need(ended && zeroBlocks >= 2 && entries.length > 0, 'infrastructure', 'case_archive_invalid', 'tar stream lacks two terminal zero blocks');
+  return entries;
+}
+function caseWriteFile(file, bytes) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  write(file, bytes);
+}
+async function caseFetch(url, options = {}) {
+  if (options.fetch) return Buffer.from(await options.fetch(url));
+  const controller = new AbortController(); let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, options.timeoutMs || 30000);
+  try {
+    let response;
+    try { response = await fetch(url, { redirect: 'manual', signal: controller.signal }); }
+    catch (error) { if (timedOut || error?.name === 'AbortError') caseFailure('case_download_timeout', 'pinned URL download timed out', { url }); throw error; }
+    need(response.status >= 200 && response.status < 300, 'infrastructure', 'case_download_failed', `pinned URL returned HTTP ${response.status}`, { url });
+    need(response.body && typeof response.body.getReader === 'function', 'infrastructure', 'case_download_failed', 'pinned URL did not provide a readable body', { url });
+    const reader = response.body.getReader(); const chunks = []; let total = 0; const limit = options.maxBytes || PUBLIC_CASE_MAX_ARCHIVE_BYTES;
+    while (true) {
+      const next = await reader.read(); if (next.done) break;
+      total += next.value.byteLength; need(total <= limit, 'infrastructure', 'case_download_too_large', 'download exceeds the bounded acquisition limit', { limit }); chunks.push(Buffer.from(next.value));
+    }
+    return Buffer.concat(chunks, total);
+  } finally { clearTimeout(timeout); }
+}
+function caseCacheRoot(value, { create = true } = {}) {
+  const cache = path.resolve(String(value || ''));
+  need(path.isAbsolute(cache), 'infrastructure', 'case_cache_invalid', 'case cache must be absolute');
+  if (exists(cache)) need(!fs.lstatSync(cache).isSymbolicLink(), 'infrastructure', 'case_cache_unsafe', 'case cache cannot be a symbolic link');
+  else if (create) fs.mkdirSync(cache, { recursive: true });
+  if (!exists(cache)) return cache;
+  need(fs.lstatSync(cache).isDirectory(), 'infrastructure', 'case_cache_unsafe', 'case cache must be a directory');
+  const real = fs.realpathSync(cache); need(real === cache, 'infrastructure', 'case_cache_unsafe', 'case cache must not resolve through a reparse path');
+  return cache;
+}
+function caseContainedPath(file, root, code, label, { directory = false } = {}) {
+  need(exists(file), 'infrastructure', `${code}_missing`, `${label} is missing`, { path: '<CASE_CACHE>' });
+  const stat = fs.lstatSync(file); need(!stat.isSymbolicLink(), 'infrastructure', `${code}_unsafe`, `${label} cannot be a symbolic link`, { path: '<CASE_CACHE>' });
+  const rootReal = fs.realpathSync(root); const fileReal = fs.realpathSync(file);
+  need(inside(rootReal, fileReal), 'infrastructure', `${code}_unsafe`, `${label} escaped the case cache`, { path: '<CASE_CACHE>' });
+  if (directory) need(stat.isDirectory(), 'infrastructure', `${code}_unsafe`, `${label} must be a directory`); else need(stat.isFile(), 'infrastructure', `${code}_unsafe`, `${label} must be a regular file`);
+  return fileReal;
+}
+async function preparePublicCase(caseFile, cacheValue, options = {}) {
+  const file = caseAbsoluteFile(caseFile, 'case_file', 'public case');
+  let data; try { data = json(file); } catch (error) { caseFailure('case_schema_invalid', 'public case is not valid JSON', { message: error.message }); }
+  const checked = caseValidate(data, options);
+  const cache = caseCacheRoot(cacheValue); const destination = path.join(cache, data.id);
+  need(inside(cache, destination), 'infrastructure', 'case_cache_unsafe', 'case destination escaped cache');
+  need(!exists(destination), 'infrastructure', 'case_cache_exists', 'refusing to replace an existing prepared case', { cache: '<CASE_CACHE>' });
+  const stage = path.join(cache, `.${data.id}-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
+  fs.mkdirSync(stage, { recursive: true });
+  try {
+    const sourceArchive = await caseFetch(checked.source.archive_url, options);
+    need(sha(sourceArchive) === checked.archiveSha, 'infrastructure', 'case_archive_hash_mismatch', 'source archive hash does not match the case pin');
+    caseWriteFile(path.join(stage, 'source.tar.gz'), sourceArchive);
+    for (const artifact of checked.dependencies.artifacts) {
+      const bytes = await caseFetch(artifact.url, options);
+      need(sha(bytes) === artifact.sha256.toLowerCase(), 'infrastructure', 'case_dependency_hash_mismatch', `dependency hash does not match: ${artifact.name}`);
+      caseWriteFile(path.join(stage, 'dependencies', path.basename(new URL(artifact.url).pathname)), bytes);
+    }
+    const entries = caseTarEntries(sourceArchive); const sourceRoot = path.join(stage, 'source');
+    for (const entry of entries) {
+      need(entry.member === data.source.root_prefix || entry.member.startsWith(`${data.source.root_prefix}/`), 'infrastructure', 'case_archive_root_invalid', 'archive member escaped the pinned root prefix', { member: entry.member });
+      const relative = entry.member === data.source.root_prefix ? '' : entry.member.slice(data.source.root_prefix.length + 1);
+      if (!relative) { fs.mkdirSync(sourceRoot, { recursive: true }); continue; }
+      const target = path.join(sourceRoot, relative); need(inside(sourceRoot, target), 'infrastructure', 'case_archive_traversal', 'archive extraction escaped source root');
+      if (entry.directory) fs.mkdirSync(target, { recursive: true }); else caseWriteFile(target, entry.body);
+    }
+    const candidate = path.join(sourceRoot, data.source.candidate_path); need(exists(candidate) && fs.lstatSync(candidate).isFile(), 'infrastructure', 'case_candidate_missing', 'pinned candidate path is absent from source archive');
+    const prepared = { schema_version: 1, contract: PUBLIC_CASE_CONTRACT, case_id: data.id, case_sha256: sha(fs.readFileSync(file)), source_archive_sha256: sha(sourceArchive), source_candidate_sha256: shaFile(candidate), dependency_files: checked.dependencies.artifacts.map((item) => ({ name: item.name, version: item.version, url: item.url, filename: path.basename(new URL(item.url).pathname), sha256: item.sha256.toLowerCase() })), oracle_sha256: checked.oracle.sha256.toLowerCase(), prepared_offline: true };
+    caseWriteFile(path.join(stage, 'prepared.json'), Buffer.from(`${JSON.stringify(prepared, null, 2)}\n`));
+    fs.renameSync(stage, destination);
+    return prepared;
+  } catch (error) { try { fs.rmSync(stage, { recursive: true, force: true }); } catch {} throw error; }
+}
+function checkPublicCase(caseFile, cacheValue, { offline = false, fixture = false } = {}) {
+  need(offline === true, 'infrastructure', 'case_offline_required', 'case checking requires explicit --offline');
+  const file = caseAbsoluteFile(caseFile, 'case_file', 'public case'); let data;
+  try { data = json(file); } catch (error) { caseFailure('case_schema_invalid', 'public case is not valid JSON', { message: error.message }); }
+  const checked = caseValidate(data, { fixture }); const cache = caseCacheRoot(cacheValue, { create: false }); const destination = path.join(cache, data.id);
+  need(inside(cache, destination), 'infrastructure', 'case_cache_unsafe', 'case destination escaped cache');
+  need(exists(destination) && fs.statSync(destination).isDirectory(), 'infrastructure', 'case_cache_missing', 'prepared case cache is missing', { cache: '<CASE_CACHE>', case_id: data.id });
+  caseContainedPath(destination, cache, 'case_cache', 'prepared case directory', { directory: true });
+  const preparedFile = path.join(destination, 'prepared.json'); caseContainedPath(preparedFile, destination, 'case_cache', 'prepared case metadata');
+  let prepared; try { prepared = json(preparedFile); } catch (error) { caseFailure('case_cache_invalid', 'prepared case metadata is not valid JSON', { message: error.message }); }
+  caseExactKeys(prepared, ['schema_version', 'contract', 'case_id', 'case_sha256', 'source_archive_sha256', 'source_candidate_sha256', 'dependency_files', 'oracle_sha256', 'prepared_offline'], 'prepared case metadata');
+  need(prepared.contract === PUBLIC_CASE_CONTRACT && prepared.case_id === data.id && prepared.case_sha256 === sha(fs.readFileSync(file)), 'infrastructure', 'case_cache_mismatch', 'prepared case metadata is not bound to the case contract');
+  const archive = path.join(destination, 'source.tar.gz'); caseContainedPath(archive, destination, 'case_cache', 'cached source archive'); need(shaFile(archive) === checked.archiveSha, 'infrastructure', 'case_cache_mismatch', 'cached source archive hash does not match the case pin');
+  const sourceRoot = path.join(destination, 'source'); caseContainedPath(sourceRoot, destination, 'case_cache', 'cached source root', { directory: true });
+  const candidate = path.join(sourceRoot, data.source.candidate_path); caseContainedPath(candidate, sourceRoot, 'case_cache', 'cached candidate'); need(shaFile(candidate) === prepared.source_candidate_sha256, 'infrastructure', 'case_cache_mismatch', 'cached candidate hash does not match preparation metadata');
+  const dependencyRoot = path.join(destination, 'dependencies'); caseContainedPath(dependencyRoot, destination, 'case_cache', 'cached dependency directory', { directory: true });
+  const expectedDependencies = checked.dependencies.artifacts.map((item) => ({ name: item.name, version: item.version, url: item.url, filename: path.basename(new URL(item.url).pathname), sha256: item.sha256.toLowerCase() }));
+  need(stableStringify(prepared.dependency_files) === stableStringify(expectedDependencies), 'infrastructure', 'case_dependency_metadata_mismatch', 'prepared dependency metadata does not match the pinned case');
+  const expectedNames = expectedDependencies.map((item) => item.filename); const actualNames = fs.readdirSync(dependencyRoot);
+  need(stableStringify([...actualNames].sort()) === stableStringify([...expectedNames].sort()), 'infrastructure', 'case_dependency_set_mismatch', 'cached dependency files do not exactly match the pinned set', { expected: expectedNames, actual: actualNames });
+  for (const dependency of expectedDependencies) {
+    const dependencyFile = path.join(dependencyRoot, dependency.filename); caseContainedPath(dependencyFile, dependencyRoot, 'case_dependency', `${dependency.name} dependency`); need(shaFile(dependencyFile) === dependency.sha256, 'infrastructure', 'case_dependency_hash_mismatch', `cached dependency hash does not match: ${dependency.name}`);
+  }
+  need(prepared.oracle_sha256 === checked.oracle.sha256.toLowerCase(), 'infrastructure', 'case_cache_mismatch', 'prepared oracle hash does not match the case contract');
+  return { schema_version: 1, record_type: 'public_case_receipt', mode: 'check-case', provider_invoked: false, network: 'offline', case_id: data.id, source_archive_sha256: checked.archiveSha, candidate_sha256: shaFile(candidate), dependency_count: checked.dependencies.artifacts.length, terminal: { status: 'passed', failure_class: null, failure_code: null, message: 'pinned public case cache rechecked without network' }, claim_limit: 'Case acquisition and cache integrity only; no provider, workflow, product, or benchmark claim.' };
+}
+async function caseMain() {
+  let mode = coreFlag('--prepare-case') ? 'prepare-case' : 'check-case'; let caseFile = coreArg(`--${mode}`); let cache = coreArg('--cache');
+  let result;
+  try {
+    need(caseFile, 'infrastructure', 'case_file_invalid', `${mode} requires a case path`);
+    need(cache, 'infrastructure', 'case_cache_invalid', `${mode} requires --cache`);
+    const allowed = new Set([`--${mode}`, '--cache', ...(mode === 'check-case' ? ['--offline'] : [])]);
+    for (let index = 0; index < args.length; index += 1) {
+      const option = args[index]; need(allowed.has(option), 'infrastructure', 'unknown_flag', `unsupported case option: ${option}`);
+      if (option !== '--offline') { const value = args[++index]; need(value && !value.startsWith('--'), 'infrastructure', 'option_value_missing', `case option requires a value: ${option}`); }
+    }
+    if (mode === 'prepare-case') result = await preparePublicCase(caseFile, cache);
+    else result = checkPublicCase(caseFile, cache, { offline: coreFlag('--offline') });
+    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'public_case_receipt', mode, provider_invoked: false, network: mode === 'check-case' ? 'offline' : 'pinned-https-only', case_id: PUBLIC_CASE_ID, preparation: result, terminal: { status: 'passed', failure_class: null, failure_code: null, message: mode === 'prepare-case' ? 'pinned public case acquired and prepared' : result.terminal.message }, claim_limit: 'Case acquisition and cache integrity only; no provider, workflow, product, or benchmark claim.' }, null, 2)}\n`);
+  } catch (error) {
+    const failure = error instanceof ProofFailure ? error : new ProofFailure('infrastructure', 'case_failure', error.message);
+    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'public_case_receipt', mode, provider_invoked: false, network: mode === 'check-case' ? 'offline' : 'pinned-https-only', case_id: PUBLIC_CASE_ID, terminal: { status: 'failed', failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: 'No case or product claim: public case acquisition/check failed.' }, null, 2)}\n`);
+    process.exitCode = 1;
   }
 }
 
@@ -1980,7 +2236,10 @@ function coreMain() {
   }
 }
 
-if (require.main === module) coreMain();
+if (require.main === module) {
+  if (coreFlag('--prepare-case', '--check-case')) caseMain();
+  else coreMain();
+}
 
 // Pure native parsers are exported for the synthetic live matrix. Requiring
 // this evaluator never runs a provider or campaign command.
@@ -2011,4 +2270,9 @@ module.exports = {
   bindingFlow,
   bindingRequiredSkills,
   liveCaptureCheckpoint,
+  caseValidate,
+  caseTarEntries,
+  caseFetch,
+  preparePublicCase,
+  checkPublicCase,
 };

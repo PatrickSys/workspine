@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const cp = require('node:child_process');
 const zlib = require('node:zlib');
+const http = require('node:http');
 const test = require('node:test');
 
 const REPO = path.resolve(__dirname, '..', '..');
@@ -1122,4 +1123,123 @@ test('disconnected pause IDs fail even when a superficial continuity hash is rec
     assert.notEqual(result.status, 0);
     assert.equal(parse(result.stdout).terminal.failure_code, 'pause_resume_invalid');
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+});
+
+test('itsdangerous public case prepares and rechecks offline', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-public-case-'));
+  const sourceParent = path.join(root, 'source-parent');
+  const prefix = 'fixture-itsdangerous';
+  const sourceRoot = path.join(sourceParent, prefix);
+  fs.mkdirSync(path.join(sourceRoot, 'src', 'itsdangerous'), { recursive: true });
+  fs.writeFileSync(path.join(sourceRoot, 'src', 'itsdangerous', 'signer.py'), 'class Signer: pass\n');
+  const archive = path.join(root, 'source.tar.gz');
+  const packed = cp.spawnSync(process.platform === 'win32' ? 'tar.exe' : 'tar', ['-czf', archive, '-C', sourceParent, prefix], { encoding: 'utf8', windowsHide: true });
+  assert.equal(packed.status, 0, packed.stderr);
+  const archiveBytes = fs.readFileSync(archive);
+  const sourceUrl = 'https://codeload.github.com/pallets/itsdangerous/tar.gz/93ae366874bbd4f69d90495c45b2cd336387496c';
+  const dependencyUrl = 'https://files.pythonhosted.org/packages/4d/7e/c79cecfdb6aa85c6c2e3cf63afc56d0f165f24f5c66c03c695c4d9b84756/pytest-8.1.1-py3-none-any.whl';
+  const dependencyBytes = Buffer.from('fixture dependency\n');
+  const fixture = JSON.parse(fs.readFileSync(path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1.json'), 'utf8'));
+  fixture.source.revision = '0123456789012345678901234567890123456789';
+  fixture.source.archive_url = sourceUrl;
+  fixture.source.archive_sha256 = bytesHash(archiveBytes);
+  fixture.source.root_prefix = prefix;
+  fixture.acquisition.allowed_hosts = ['codeload.github.com', 'files.pythonhosted.org'];
+  fixture.dependencies.artifacts = [{ name: 'pytest', version: '8.1.1', url: dependencyUrl, sha256: bytesHash(dependencyBytes) }];
+  fixture.acquisition.allowed_urls = [sourceUrl, dependencyUrl];
+  const caseFile = path.join(root, 'case.json');
+  fs.writeFileSync(caseFile, JSON.stringify(fixture, null, 2));
+  const cache = path.join(root, 'cache');
+  const downloads = new Map([[sourceUrl, archiveBytes], [dependencyUrl, dependencyBytes]]);
+  try {
+    const prepared = await LIVE.preparePublicCase(caseFile, cache, { fixture: true, fetch: async (url) => downloads.get(url) });
+    assert.equal(prepared.source_archive_sha256, bytesHash(archiveBytes));
+    const checked = LIVE.checkPublicCase(caseFile, cache, { fixture: true, offline: true });
+    assert.equal(checked.terminal.status, 'passed');
+    assert.equal(checked.network, 'offline');
+    assert.deepEqual(fs.readdirSync(cache), [fixture.id]);
+    const dependencyDir = path.join(cache, fixture.id, 'dependencies');
+    const dependencyFile = path.join(dependencyDir, 'pytest-8.1.1-py3-none-any.whl');
+    const dependencyBytesOnDisk = fs.readFileSync(dependencyFile);
+    fs.appendFileSync(dependencyFile, 'tampered');
+    assert.throws(() => LIVE.checkPublicCase(caseFile, cache, { fixture: true, offline: true }), (error) => error.code === 'case_dependency_hash_mismatch');
+    fs.writeFileSync(dependencyFile, dependencyBytesOnDisk);
+    fs.writeFileSync(path.join(dependencyDir, 'unexpected.whl'), 'extra');
+    assert.throws(() => LIVE.checkPublicCase(caseFile, cache, { fixture: true, offline: true }), (error) => error.code === 'case_dependency_set_mismatch');
+    fs.rmSync(path.join(dependencyDir, 'unexpected.whl'));
+    const preparedPath = path.join(cache, fixture.id, 'prepared.json');
+    const preparedBytes = fs.readFileSync(preparedPath);
+    const preparedTamper = JSON.parse(preparedBytes);
+    preparedTamper.dependency_files[0].url = dependencyUrl.replace('/packages/', '/simple/');
+    fs.writeFileSync(preparedPath, JSON.stringify(preparedTamper, null, 2));
+    assert.throws(() => LIVE.checkPublicCase(caseFile, cache, { fixture: true, offline: true }), (error) => error.code === 'case_dependency_metadata_mismatch');
+    fs.writeFileSync(preparedPath, preparedBytes);
+    const tamperedAllowlist = JSON.parse(JSON.stringify(fixture));
+    tamperedAllowlist.acquisition.allowed_urls = [sourceUrl];
+    assert.throws(() => LIVE.caseValidate(tamperedAllowlist, { fixture: true }), (error) => error.code === 'case_acquisition_invalid');
+    const unknownKey = JSON.parse(JSON.stringify(fixture));
+    unknownKey.runtime.extra = true;
+    assert.throws(() => LIVE.caseValidate(unknownKey, { fixture: true }), (error) => error.code === 'case_schema_invalid');
+    const duplicateDependency = JSON.parse(JSON.stringify(fixture));
+    duplicateDependency.dependencies.artifacts.push({ ...duplicateDependency.dependencies.artifacts[0] });
+    duplicateDependency.acquisition.allowed_urls.push(dependencyUrl);
+    assert.throws(() => LIVE.caseValidate(duplicateDependency, { fixture: true }), (error) => error.code === 'case_dependency_duplicate');
+    const tamperedHash = JSON.parse(JSON.stringify(fixture));
+    tamperedHash.source.archive_sha256 = '0'.repeat(64);
+    const hashCaseFile = path.join(root, 'hash-case.json');
+    fs.writeFileSync(hashCaseFile, JSON.stringify(tamperedHash));
+    await assert.rejects(() => LIVE.preparePublicCase(hashCaseFile, path.join(root, 'hash-cache'), { fixture: true, fetch: async () => archiveBytes }), (error) => error.code === 'case_archive_hash_mismatch');
+    assert.throws(() => LIVE.checkPublicCase(caseFile, path.join(root, 'missing-cache'), { fixture: true, offline: true }), (error) => error.code === 'case_cache_missing');
+    const linkedCache = path.join(root, 'linked-cache');
+    fs.symlinkSync(cache, linkedCache, 'junction');
+    assert.throws(() => LIVE.checkPublicCase(caseFile, linkedCache, { fixture: true, offline: true }), (error) => error.code === 'case_cache_unsafe');
+    const traversalTar = Buffer.alloc(1024);
+    Buffer.from('../outside').copy(traversalTar, 0);
+    Buffer.from('0000777\0').copy(traversalTar, 100);
+    Buffer.from('0000000\0').copy(traversalTar, 108);
+    Buffer.from('0000000\0').copy(traversalTar, 116);
+    Buffer.from('00000000000\0').copy(traversalTar, 124);
+    Buffer.from('00000000000\0').copy(traversalTar, 136);
+    traversalTar[156] = 48;
+    let traversalChecksum = 0; for (let index = 0; index < 512; index += 1) traversalChecksum += index >= 148 && index < 156 ? 32 : traversalTar[index];
+    Buffer.from(`${traversalChecksum.toString(8).padStart(6, '0')}\0 `).copy(traversalTar, 148);
+    assert.throws(() => LIVE.caseTarEntries(require('node:zlib').gzipSync(traversalTar)), (error) => error.code === 'case_archive_traversal');
+    const unpacked = zlib.gunzipSync(archiveBytes);
+    const badChecksum = Buffer.from(unpacked); badChecksum[0] ^= 1;
+    assert.throws(() => LIVE.caseTarEntries(zlib.gzipSync(badChecksum)), (error) => error.code === 'case_archive_checksum_mismatch');
+    assert.throws(() => LIVE.caseTarEntries(zlib.gzipSync(Buffer.concat([unpacked, Buffer.alloc(512, 1)]))), (error) => error.code === 'case_archive_trailing_data');
+    assert.ok(LIVE.caseTarEntries(archiveBytes).some((entry) => entry.member.endsWith('/src/itsdangerous/signer.py')));
+    const linkRoot = path.join(root, 'link-source', prefix);
+    fs.mkdirSync(path.join(linkRoot, 'src', 'itsdangerous'), { recursive: true });
+    fs.writeFileSync(path.join(linkRoot, 'src', 'itsdangerous', 'signer.py'), 'class Signer: pass\n');
+    fs.symlinkSync('signer.py', path.join(linkRoot, 'src', 'itsdangerous', 'link.py'));
+    const linkArchive = path.join(root, 'link.tar.gz');
+    const linkPacked = cp.spawnSync(process.platform === 'win32' ? 'tar.exe' : 'tar', ['-czf', linkArchive, '-C', path.dirname(linkRoot), prefix], { encoding: 'utf8', windowsHide: true });
+    assert.equal(linkPacked.status, 0, linkPacked.stderr);
+    assert.throws(() => LIVE.caseTarEntries(fs.readFileSync(linkArchive)), (error) => error.code === 'case_archive_link_refused');
+    const server = http.createServer((request, response) => {
+      if (request.url === '/slow') return setTimeout(() => response.end('slow'), 100);
+      response.end(Buffer.alloc(16, 7));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const port = server.address().port;
+      await assert.rejects(() => LIVE.caseFetch(`http://127.0.0.1:${port}/slow`, { timeoutMs: 20 }), (error) => error.code === 'case_download_timeout');
+      await assert.rejects(() => LIVE.caseFetch(`http://127.0.0.1:${port}/large`, { maxBytes: 8 }), (error) => error.code === 'case_download_too_large');
+    } finally { await new Promise((resolve) => server.close(resolve)); }
+    const publicText = fs.readFileSync(path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1.json'), 'utf8') + fs.readFileSync(path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1-oracle.py'), 'utf8');
+    assert.doesNotMatch(publicText, /(?:\.work|gold(?:en)?|solution[_ -]?patch|private[_ -]?oracle)/i);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('itsdangerous public case acquires the pinned codeload archive when network is enabled', { skip: !process.env.PHASE16_CASE_NETWORK }, () => {
+  const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-public-case-live-'));
+  const caseFile = path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1.json');
+  try {
+    const prepared = run(['--prepare-case', caseFile, '--cache', cache]);
+    assert.equal(prepared.status, 0, prepared.stdout || prepared.stderr);
+    const checked = run(['--check-case', caseFile, '--offline', '--cache', cache]);
+    assert.equal(checked.status, 0, checked.stdout || checked.stderr);
+    assert.equal(parse(checked.stdout).terminal.status, 'passed');
+  } finally { fs.rmSync(cache, { recursive: true, force: true }); }
 });
