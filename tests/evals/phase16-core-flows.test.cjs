@@ -401,13 +401,28 @@ test('synthetic native matrix accepts only complete Codex, Claude, and OpenCode 
     ...items,
     { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1' },
   ].map(JSON.stringify).join('\n');
+  for (const kind of ['agent_message', 'reasoning', 'file_change']) {
+    const completionOnly = { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: `${kind}-completion`, type: kind } };
+    const started = { type: 'item.started', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: `${kind}-paired`, type: kind } };
+    const completed = { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: `${kind}-paired`, type: kind } };
+    const updated = { type: 'item.updated', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: `${kind}-paired`, type: kind } };
+    assert.equal(LIVE.liveParseCodex(codexEnvelope([completionOnly]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']).identity, 'requested-model-accepted');
+    assert.equal(LIVE.liveParseCodex(codexEnvelope([started, completed]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']).identity, 'requested-model-accepted');
+    assert.throws(() => LIVE.liveParseCodex(codexEnvelope([started]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /terminal item lifecycle is incomplete/);
+    assert.throws(() => LIVE.liveParseCodex(codexEnvelope([started, updated, completed]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /open todo_list/);
+  }
+  const terminalStart = { type: 'item.started', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-2', type: 'agent_message' } };
+  const terminalComplete = { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-2', type: 'agent_message', text: 'Completed.' } };
+  assert.equal(LIVE.liveParseCodex(codexEnvelope([terminalStart, terminalComplete]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']).identity, 'requested-model-accepted');
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([terminalStart]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /terminal item lifecycle is incomplete/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([terminalComplete, terminalStart]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /duplicated or follows completion/);
+  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.updated', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-2', type: 'agent_message' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /open todo_list/);
   const commandStart = { type: 'item.started', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'command-1', type: 'command_execution' } };
   const commandComplete = { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'command-1', type: 'command_execution' } };
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { id: 'unknown-1', type: 'unknown_kind' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /unknown item kind/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([commandComplete]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /orphaned/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([commandStart, commandComplete, commandComplete]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /duplicated/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([commandStart]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /incomplete/);
-  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.started', item: { id: 'message-1', type: 'agent_message' } }, { type: 'item.completed', item: { id: 'message-1', type: 'agent_message' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /terminal-only/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.delta', item: { id: 'message-1', type: 'agent_message' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /unknown event/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.updated', item: { id: 'todo-1', type: 'todo_list' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /open todo_list/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.started', item: { id: 'todo-1', type: 'todo_list' } }, { type: 'item.completed', item: { id: 'todo-1', type: 'todo_list' } }, { type: 'item.updated', item: { id: 'todo-1', type: 'todo_list' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /open todo_list/);

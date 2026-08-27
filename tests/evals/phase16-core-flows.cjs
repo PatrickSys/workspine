@@ -1386,7 +1386,6 @@ function liveParseCodex(stdout, requestedModel, argv) {
     const state = lifecycles.get(itemId) || { kind: itemKind, started: false, completed: false };
     need(state.kind === itemKind, 'infrastructure', 'native_linkage_invalid', 'Codex item lifecycle changed kind for one item id');
     if (event.type === 'item.started') {
-      need(pairedKinds.has(itemKind), 'infrastructure', 'native_linkage_invalid', `Codex terminal-only item kind cannot start: ${itemKind}`);
       need(!state.started && !state.completed, 'infrastructure', 'native_linkage_invalid', 'Codex item.started is duplicated or follows completion');
       state.started = true;
     } else if (event.type === 'item.updated') {
@@ -1394,13 +1393,13 @@ function liveParseCodex(stdout, requestedModel, argv) {
     } else {
       need(!state.completed, 'infrastructure', 'native_linkage_invalid', 'Codex item.completed is duplicated');
       if (pairedKinds.has(itemKind)) need(state.started, 'infrastructure', 'native_linkage_invalid', 'Codex paired item.completed is orphaned');
-      else need(!state.started, 'infrastructure', 'native_linkage_invalid', 'Codex terminal-only item was incorrectly started');
       state.completed = true;
     }
     lifecycles.set(itemId, state);
   }
   need(lifecycles.size > 0, 'infrastructure', 'native_linkage_invalid', 'Codex output contains no linked item lifecycle');
   need([...lifecycles.values()].every((state) => !pairedKinds.has(state.kind) || (state.started && state.completed)), 'infrastructure', 'native_linkage_invalid', 'Codex paired item lifecycle is incomplete');
+  need([...lifecycles.values()].every((state) => !terminalKinds.has(state.kind) || !state.started || state.completed), 'infrastructure', 'native_linkage_invalid', 'Codex terminal item lifecycle is incomplete');
   need(argv.includes('-m') && argv[argv.indexOf('-m') + 1] === requestedModel, 'infrastructure', 'requested_model_not_accepted', 'Codex invocation did not carry the requested model flag');
   return { parser: 'codex-jsonl', event_types: types, thread_id: thread.thread_id, turn_id: turnId, identity: 'requested-model-accepted' };
 }
