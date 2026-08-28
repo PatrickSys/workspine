@@ -110,6 +110,7 @@ function run(command, argv, options) {
     cwd: options.cwd,
     env: options.env,
     shell: false,
+    input: options.input,
     encoding: 'utf8',
     windowsHide: true,
     timeout: options.timeout || 120000,
@@ -121,8 +122,8 @@ function run(command, argv, options) {
     command: path.basename(command),
     argv: argv.map(String),
     cwd: options.cwd,
-    status: result.status === null ? -1 : result.status,
-    pid: Number.isInteger(result.pid) ? result.pid : null,
+    status: Number.isInteger(result.status) ? result.status : null,
+    pid: Number.isInteger(result.pid) && result.pid > 0 ? result.pid : null,
     signal: result.signal || null,
     error: result.error ? { code: result.error.code, message: result.error.message } : null,
     timed_out: result.error?.code === 'ETIMEDOUT',
@@ -1847,7 +1848,7 @@ function liveSecretEnv(revision, env) {
   return names;
 }
 
-function liveParseCodex(stdout, requestedModel, argv) {
+function liveParseCodex(stdout, requestedModel, argv, options = {}) {
   const events = String(stdout).split(/\r?\n/).filter(Boolean).map((line) => { try { return JSON.parse(line); } catch { return null; } });
   need(events.length > 0 && events.every(Boolean), 'infrastructure', 'native_parse_invalid', 'Codex output is not valid JSONL');
   const types = events.map((event) => String(event.type || event.event || ''));
@@ -1914,7 +1915,9 @@ function liveParseCodex(stdout, requestedModel, argv) {
   need([...lifecycles.values()].every((state) => !pairedKinds.has(state.kind) || (state.started && state.completed)), 'infrastructure', 'native_linkage_invalid', 'Codex paired item lifecycle is incomplete');
   need([...lifecycles.values()].every((state) => !terminalKinds.has(state.kind) || !state.started || state.completed), 'infrastructure', 'native_linkage_invalid', 'Codex terminal item lifecycle is incomplete');
   need(argv.includes('-m') && argv[argv.indexOf('-m') + 1] === requestedModel, 'infrastructure', 'requested_model_not_accepted', 'Codex invocation did not carry the requested model flag');
-  return { parser: 'codex-jsonl', event_types: types, thread_id: thread.thread_id, turn_id: turnId, identity: 'requested-model-accepted' };
+  const usage = turnComplete.usage;
+  if (options.requireUsage || usage) need(usage && Number.isSafeInteger(usage.input_tokens) && usage.input_tokens >= 0 && Number.isSafeInteger(usage.output_tokens) && usage.output_tokens >= 0, 'infrastructure', 'native_usage_missing', 'Codex turn.completed lacks validated native usage');
+  return { parser: 'codex-jsonl', event_types: types, thread_id: thread.thread_id, turn_id: turnId, identity: 'requested-model-accepted', ...(usage ? { usage: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, total_tokens: usage.input_tokens + usage.output_tokens } } : {}) };
 }
 
 function liveParseClaude(stdout, requestedModel) {
@@ -2532,4 +2535,8 @@ module.exports = {
   caseFetch,
   preparePublicCase,
   checkPublicCase,
+  npmCliPath,
+  sourceSnapshot,
+  snapshotTree,
+  packAndInstall,
 };

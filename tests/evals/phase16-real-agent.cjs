@@ -5,9 +5,11 @@
 // case seam; this file adds the real Git baseline and offline bundle proof.
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const crypto = require('node:crypto');
 const cp = require('node:child_process');
 const CORE = require('./phase16-core-flows.cjs');
+const RECORDER = require('./phase16-codex-recorder.cjs');
 
 const REPO = fs.realpathSync(path.resolve(__dirname, '..', '..'));
 const CASE_ID = 'itsdangerous-fips-sha1';
@@ -315,12 +317,253 @@ function checkPublicCase(caseFile, cacheValue, options = {}) {
   }
 }
 
+const TURN_PLAN = Object.freeze([
+  Object.freeze({ id: 'turn-a-plan', role: 'a-plan', skill: 'work-plan', skills: ['work-plan'], minutes: 12, tokens: 60000, session: 'A', initial: true }),
+  Object.freeze({ id: 'turn-a-pause', role: 'a-pause', skill: 'work-pause', skills: ['work-pause'], minutes: 5, tokens: 20000, session: 'A', initial: false }),
+  Object.freeze({ id: 'turn-b-resume-execute', role: 'b-resume-execute', skill: 'work-resume', skills: ['work-resume', 'work-execute'], minutes: 20, tokens: 100000, session: 'B', initial: true }),
+  Object.freeze({ id: 'turn-b-verify', role: 'b-verify', skill: 'work-verify', skills: ['work-verify'], minutes: 12, tokens: 60000, session: 'B', initial: false }),
+  Object.freeze({ id: 'turn-b-progress', role: 'b-progress', skill: 'work-progress', skills: ['work-progress'], minutes: 5, tokens: 20000, session: 'B', initial: false }),
+]);
+const TURN_TOTAL_MINUTES = 54;
+const TURN_TOTAL_TOKENS = 260000;
+const RETAINED_OUTPUT_BYTES = 1024 * 1024;
+const CODEX_MODEL = 'gpt-5.6-luna';
+const CODEX_EFFORT = 'high';
+const CODEX_VERSION = 'codex-cli 0.149.1';
+function gitText(argv, cwd = REPO) {
+  const result = cp.spawnSync('git', argv, { cwd, encoding: 'utf8', windowsHide: true, shell: false, timeout: 30000 });
+  if (result.status !== 0) fail('git_command_failed', `git ${argv.join(' ')} failed`, { stderr: String(result.stderr || '').slice(-2000) });
+  return String(result.stdout || '').trim();
+}
+function diagnostic(value, root, env) {
+  let text = String(value || '');
+  for (const token of [root, env?.HOME, env?.USERPROFILE, REPO]) if (token) text = text.split(String(token)).join('<REDACTED_PATH>');
+  return text.slice(-2000);
+}
+function codexProvider() {
+  const descriptor = CORE.realAgentResolveProvider('codex', { command: 'codex' }, process.env);
+  if (!descriptor) fail('provider_not_found', 'native Codex executable was not resolved');
+  return descriptor;
+}
+function codexContract(descriptor) {
+  const invoke = (argv) => CORE.realAgentRunProvider(descriptor, argv, { cwd: REPO, env: process.env, timeout: 30000 });
+  const version = invoke(['--version']); const help = invoke(['exec', 'resume', '--help']);
+  if (version.status !== 0 || String(version.stdout).trim() !== CODEX_VERSION || help.status !== 0 || !/SESSION_ID/.test(help.stdout) || !/--ignore-user-config/.test(help.stdout) || !/--json/.test(help.stdout)) fail('provider_contract_mismatch', 'resolved Codex does not match the frozen 0.149.1 resume contract');
+  return { version: CODEX_VERSION, resume_help_sha256: sha(Buffer.from(help.stdout)) };
+}
+function resolvePython(options = {}) {
+  const entries = options.entries || String(cp.spawnSync('where.exe', ['python'], { encoding: 'utf8', windowsHide: true, shell: false }).stdout || '').split(/\r?\n/).filter(Boolean);
+  for (const candidate of entries.map((item) => path.resolve(item.trim())).filter((item) => item && !/[/\\]WindowsApps[/\\]/i.test(item))) {
+    if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) continue;
+    const probe = cp.spawnSync(candidate, ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8', windowsHide: true, shell: false, timeout: 10000 });
+    if (probe.status !== 0) continue;
+    const identity = String(probe.stdout || '').trim();
+    if (!identity || /[/\\]WindowsApps[/\\]/i.test(identity) || !exists(identity) || !fs.statSync(identity).isFile()) continue;
+    return { path: fs.realpathSync(identity), sha256: fileSha(identity), identity: fs.realpathSync(identity), launcher: fs.realpathSync(candidate), probe_output: '<PYTHON>' };
+  }
+  fail('python_resolution_failure', 'no executable Python interpreter passed the identity probe', { candidates: entries });
+}
+function candidatePack(destination) {
+  fs.mkdirSync(destination, { recursive: true });
+  const npm = CORE.npmCliPath();
+  const result = cp.spawnSync(process.execPath, [npm, 'pack', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--pack-destination', destination, '--json'], { cwd: REPO, encoding: 'utf8', windowsHide: true, shell: false, timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+  if (result.status !== 0) fail('pack_failure', 'frozen candidate npm pack failed', { stderr: String(result.stderr || '').slice(-2000) });
+  let rows;
+  try { rows = JSON.parse(result.stdout); } catch (error) { fail('pack_output_failure', 'frozen candidate npm pack output was not JSON', { message: error.message }); }
+  if (!Array.isArray(rows) || rows.length !== 1) fail('pack_identity_failure', 'frozen candidate did not produce one tarball');
+  const file = path.join(destination, path.basename(rows[0].filename));
+  if (!exists(file) || !inside(destination, file)) fail('pack_identity_failure', 'frozen candidate tarball escaped its staging directory');
+  const members = CORE.liveTarEntries(file).filter((item) => item.type === 'file').map((item) => ({ path: item.path, sha256: sha(item.content), bytes: item.size })).sort((a, b) => a.path.localeCompare(b.path));
+  return { path: file, sha256: fileSha(file), members, member_sha256: stableHash(members), npm: fs.realpathSync(npm) };
+}
+function sourceRef() {
+  if (gitText(['branch', '--show-current']) !== 'main') fail('source_ref_mismatch', 'freeze may only be created on main');
+  const head = gitText(['rev-parse', 'HEAD']);
+  const origin = gitText(['rev-parse', 'origin/main']);
+  if (head !== origin) fail('source_ref_mismatch', 'main and origin/main must be equal before freezing', { head, origin });
+  return { head, origin };
+}
+function cacheBinding(caseFile, cacheValue, data, controlsPath) {
+  const cache = absoluteDirectory(cacheValue, 'case cache');
+  const destination = path.join(cache, data.id);
+  const manifestPath = path.join(destination, 'git-manifest.json');
+  const bundle = path.join(destination, 'source.bundle');
+  if (!exists(manifestPath) || !exists(bundle)) fail('cache_manifest_missing', 'prepared public cache lacks its immutable bundle manifest');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (manifest.case_sha256 !== fileSha(caseFile) || manifest.revision !== data.source.revision || fileSha(bundle) !== manifest.bundle_sha256) fail('cache_manifest_mismatch', 'prepared cache is not bound to the public case or pinned bundle');
+  if (!exists(controlsPath) || fileSha(controlsPath) !== manifest.controls_receipt_sha256) fail('controls_mismatch', 'immutable controls receipt does not match the prepared cache');
+  return { cache, destination, manifest, bundle, controls_sha256: fileSha(controlsPath), bundle_sha256: fileSha(bundle), source_archive_sha256: manifest.archive_sha256 };
+}
+function buildFreeze(caseFile, cacheValue, freezeFile, options = {}) {
+  const file = absoluteFile(caseFile, 'public case');
+  const data = readCase(file);
+  const refs = sourceRef();
+  const controlsPath = path.resolve(options.controls || DEFAULT_CONTROLS);
+  const cache = cacheBinding(file, cacheValue, data, controlsPath);
+  const source = CORE.sourceSnapshot();
+  if (source.head !== refs.head) fail('source_ref_mismatch', 'source snapshot changed while freezing');
+  const descriptor = options.provider || codexProvider();
+  const python = options.python || resolvePython();
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-pack-'));
+  try {
+    const candidate = candidatePack(stage);
+    const skillRoot = path.join(stage, 'skill-consumer'); fs.mkdirSync(skillRoot, { recursive: true }); fs.writeFileSync(path.join(skillRoot, 'package.json'), '{"name":"phase16-skill-check","private":true}\n');
+    const install = cp.spawnSync(process.execPath, [candidate.npm, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--no-save', candidate.path], { cwd: skillRoot, encoding: 'utf8', windowsHide: true, shell: false, timeout: 120000 });
+    if (install.status !== 0) fail('skill_prepare_failed', 'frozen candidate could not be installed for skill witnesses');
+    const skillCli = path.join(skillRoot, 'node_modules', 'workspine', 'bin', 'gsdd.mjs'); const init = cp.spawnSync(process.execPath, [skillCli, 'init', '--auto', '--tools', 'agents'], { cwd: skillRoot, encoding: 'utf8', windowsHide: true, shell: false, timeout: 120000 });
+    if (init.status !== 0) fail('skill_prepare_failed', 'frozen candidate could not generate repo-local skills');
+    const skillIds = [...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))]; const skills = Object.fromEntries(skillIds.map((id) => { const file = path.join(skillRoot, '.agents', 'skills', id, 'SKILL.md'); if (!exists(file)) fail('skill_prepare_failed', `generated skill is missing: ${id}`); return [id, fileSha(file)]; }));
+    const freeze = {
+      schema_version: 1, record_type: 'phase16_codex_freeze', contract: 'phase16-rooted-codex-freeze-v1', case_id: data.id,
+      case: { path: `<CHECKOUT>/${slash(path.relative(REPO, file))}`, sha256: fileSha(file), oracle: data.oracle, input_bundle: { contract: data.input_bundle.contract, sha256: stableHash(data.input_bundle.members), members: Object.fromEntries(data.input_bundle.members.map((item) => [item.path, item.sha256])) } },
+      source: { repository: data.source.repository, revision: data.source.revision, main: refs.head, origin_main: refs.origin, files: source.files },
+      bundle: { path: '<PREPARED_CACHE>/source.bundle', sha256: cache.bundle_sha256, manifest_sha256: fileSha(path.join(cache.destination, 'git-manifest.json')), source_archive_sha256: cache.source_archive_sha256 },
+      controls: { path: '<CONTROLS_RECEIPT>', sha256: cache.controls_sha256 },
+      candidate: { sha256: candidate.sha256, member_sha256: candidate.member_sha256, members: candidate.members, package: { name: JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).name, version: JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version } },
+      runtime: { provider: 'codex', model: CODEX_MODEL, effort: CODEX_EFFORT, cli_contract: codexContract(descriptor), executable: CORE.realAgentProviderEvidence(descriptor), python: { path: '<PYTHON>', sha256: python.sha256, identity: '<PYTHON>' }, auth_posture: 'authenticated-native-CODEX_HOME; ignore-user-config; credentials-not-copied' },
+      toolchain: { node: { path: '<NODE>', sha256: fileSha(process.execPath) }, npm: { path: '<NPM>', sha256: fileSha(candidate.npm) }, git: { path: '<GIT>', sha256: fileSha(gitText(['--exec-path']).replace(/\r?\n/g, '') + (process.platform === 'win32' ? '\\git.exe' : '/git')) } },
+      budgets: { turns: TURN_PLAN.map(({ id, role, skill, skills, minutes, tokens, session, initial }) => ({ id, role, skill, skills, wall_minutes: minutes, native_tokens: tokens, session, initial })), total_wall_minutes: TURN_TOTAL_MINUTES, total_native_tokens: TURN_TOTAL_TOKENS, retained_output_bytes: RETAINED_OUTPUT_BYTES },
+      root_map: { run_root: '<RUN_ROOT>', consumer_root: '<RUN_ROOT>/consumer_root', tool_root: '<RUN_ROOT>/tool_root', receipts: '<RECEIPTS>' },
+      sessions: { count: 2, turns: 5, workflow_count: 6, identities: 'native-only-distinct-A-and-B' }, provider_sandbox: 'not_claimed', workflow_verdict: 'not_evaluated', auth: { copied_to_consumer_root: false },
+      skills,
+    };
+    writeExclusive(freezeFile, freeze);
+    return freeze;
+  } finally { fs.rmSync(stage, { recursive: true, force: true }); }
+}
+function readFreeze(file) {
+  const freezeFile = absoluteFile(file, 'freeze');
+  let freeze;
+  try { freeze = JSON.parse(fs.readFileSync(freezeFile, 'utf8')); } catch (error) { fail('freeze_invalid', 'freeze is not valid JSON', { message: error.message }); }
+  if (freeze.contract !== 'phase16-rooted-codex-freeze-v1' || freeze.case_id !== CASE_ID || freeze.workflow_verdict !== 'not_evaluated' || freeze.provider_sandbox !== 'not_claimed' || freeze.auth?.copied_to_consumer_root !== false || freeze.runtime?.provider !== 'codex') fail('freeze_invalid', 'freeze contract or claim posture is invalid');
+  if (stable(freeze.budgets?.turns?.map((item) => [item.id, item.role, item.skill, item.skills, item.wall_minutes, item.native_tokens, item.session, item.initial])) !== stable(TURN_PLAN.map((item) => [item.id, item.role, item.skill, item.skills, item.minutes, item.tokens, item.session, item.initial]))) fail('freeze_budget_mismatch', 'freeze does not carry the fixed five-turn budgets');
+  if (freeze.budgets?.total_wall_minutes !== TURN_TOTAL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_TOKENS || freeze.budgets?.retained_output_bytes !== RETAINED_OUTPUT_BYTES || freeze.sessions?.count !== 2 || freeze.sessions?.turns !== 5 || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root') fail('freeze_invalid', 'freeze fixed totals or root map are invalid');
+  if (!freeze.case?.sha256 || !freeze.case?.input_bundle?.sha256 || !freeze.bundle?.sha256 || !freeze.controls?.sha256 || !freeze.candidate?.sha256 || !freeze.candidate?.member_sha256 || !Array.isArray(freeze.candidate?.members) || !freeze.candidate.package?.name || !freeze.candidate.package?.version || !freeze.source?.main || !freeze.source?.origin_main || !freeze.source?.files || freeze.runtime?.cli_contract?.version !== CODEX_VERSION || !/^[0-9a-f]{64}$/i.test(freeze.runtime?.cli_contract?.resume_help_sha256 || '') || !freeze.runtime?.executable?.source_sha256 || !freeze.runtime?.executable?.target_sha256 || !freeze.toolchain?.node?.sha256 || !freeze.toolchain?.npm?.sha256 || !freeze.toolchain?.git?.sha256 || !freeze.runtime?.python?.sha256 || Object.keys(freeze.skills || {}).length !== 6 || Object.values(freeze.skills || {}).some((hash) => !/^[0-9a-f]{64}$/i.test(hash))) fail('freeze_invalid', 'freeze is missing an immutable case, source, bundle, controls, candidate, runtime, toolchain, or skill binding');
+  return freeze;
+}
+function turnPrompt(context, turn) {
+  const tokens = (turn.skills || [turn.skill]).map((skill) => `$${skill}`).join(' and ');
+  return `${tokens}\nUse the owner TASK.md and BRIEF.md in inputs. This is the bounded brownfield route: plan, pause, fresh resume, execute, verify, progress. Follow the installed skill and leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.`;
+}
+function skillWitness(context, turn) {
+  return (turn.skills || [turn.skill]).map((id) => {
+    const file = path.join(context.consumerRoot, '.agents', 'skills', id, 'SKILL.md');
+    if (!exists(file) || !fs.statSync(file).isFile()) fail('skill_missing', `installed skill is missing: ${id}`);
+    const sha256 = fileSha(file); const expected = context.expectedSkills?.[id] || context.freeze.skills?.[id];
+    if (expected && expected !== sha256) fail('skill_hash_mismatch', `installed skill changed: ${id}`, { expected, actual: sha256 });
+    return { id, path: `<CONSUMER_ROOT>/.agents/skills/${id}/SKILL.md`, sha256, bytes: fs.statSync(file).size };
+  });
+}
+function runTurn(context, turn, sessionId = null, options = {}) {
+  const skills = skillWitness(context, turn);
+  const argv = RECORDER.buildCodexArgv({ cwd: context.consumerRoot, model: context.freeze.runtime.model, effort: context.freeze.runtime.effort, role: turn.role, sessionId });
+  const input = turnPrompt(context, turn);
+  for (const skill of turn.skills || [turn.skill]) if (!input.includes(`$${skill}`)) fail('skill_token_missing', `turn prompt lacks its exact skill token: ${skill}`);
+  context.activeTurn = { skills, argv: argv.map((item) => diagnostic(item, context.runRoot, context.env)), cwd: '<CONSUMER_ROOT>', input_sha256: sha(Buffer.from(input)) };
+  const recorded = RECORDER.recordCodexTurn({ turn, command: context.provider.command, prefix: context.provider.prefix, argv, cwd: context.consumerRoot, root: context.runRoot, env: context.env, prompt: input, skills: skills.map((item) => ({ token: `$${item.id}`, sha256: item.sha256 })), model: context.freeze.runtime.model, effort: context.freeze.runtime.effort, provider: context.provider, expectedSessionId: sessionId, previousCumulativeTokens: context.cumulative[turn.session] || 0, maxCumulativeTokens: turn.tokens, maxOutputBytes: RETAINED_OUTPUT_BYTES, timeout: turn.minutes * 60000, characterizationOnly: Boolean(options.spawn), spawn: options.spawn });
+  context.spawned = context.spawned || recorded.provider_invoked;
+  context.activeReceipt = recorded;
+  if (recorded.terminal.failure_code) { const error = new RunnerFailure(recorded.terminal.failure_code, recorded.terminal.message, { recorder: recorded }); error.receipt = recorded; throw error; }
+  const prior = context.cumulative[turn.session] || 0;
+  const cumulative = recorded.usage.cumulative_tokens;
+  const delta = cumulative - prior;
+  context.cumulative[turn.session] = cumulative;
+  context.totalUsage = (context.totalUsage || 0) + delta;
+  return recorded;
+}
+function changedPaths(before, after) {
+  const left = new Map(before.map((item) => [item.path, stable(item)])); const right = new Map(after.map((item) => [item.path, stable(item)]));
+  return [...new Set([...left.keys(), ...right.keys()])].filter((key) => left.get(key) !== right.get(key));
+}
+function assertPauseScope(before, after) {
+  const changed = changedPaths(before, after);
+  const forbidden = changed.filter((item) => !item.startsWith('.work/') && item !== '.work');
+  if (forbidden.length) fail('pause_product_mutation', 'pause changed product or undeclared consumer bytes', { changed: forbidden });
+}
+function prepareRun(caseFile, cacheValue, freeze, options = {}) {
+  const file = absoluteFile(caseFile, 'public case'); const data = readCase(file);
+  const refs = sourceRef();
+  if (refs.head !== freeze.source.main || refs.origin !== freeze.source.origin_main) fail('source_ref_mismatch', 'current main and origin/main differ from the freeze');
+  const cache = cacheBinding(file, cacheValue, data, options.controls || DEFAULT_CONTROLS);
+  if (cache.bundle_sha256 !== freeze.bundle.sha256 || fileSha(file) !== freeze.case.sha256 || cache.controls_sha256 !== freeze.controls.sha256 || stableHash(data.input_bundle.members) !== freeze.case.input_bundle.sha256) fail('freeze_binding_mismatch', 'run inputs differ from the freeze');
+  const source = CORE.sourceSnapshot();
+  if (source.head !== freeze.source.main || stable(source.files) !== stable(freeze.source.files)) fail('source_ref_mismatch', 'checkout bytes differ from the frozen candidate');
+  const runRoot = options.runRoot || fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-run-'));
+  const consumerRoot = path.join(runRoot, 'consumer_root'); const toolStage = path.join(runRoot, 'tool-stage');
+  fs.mkdirSync(runRoot, { recursive: true });
+  gitText(['-c', 'core.autocrlf=false', 'clone', '--no-checkout', '--no-tags', cache.bundle, consumerRoot], runRoot);
+  gitText(['config', 'core.autocrlf', 'false'], consumerRoot); gitText(['checkout', '--detach', data.source.revision], consumerRoot);
+  if (gitText(['rev-parse', 'HEAD'], consumerRoot) !== data.source.revision || gitText(['status', '--porcelain'], consumerRoot)) fail('consumer_root_invalid', 'prepared consumer root is not the pinned clean checkout');
+  const inputRoot = path.join(consumerRoot, 'inputs'); fs.mkdirSync(path.join(inputRoot, 'owner'), { recursive: true });
+  for (const item of data.input_bundle.members) fs.writeFileSync(path.join(inputRoot, ...item.path.split('/')), item.content, { flag: 'wx' });
+  const provider = options.provider || codexProvider(); const sourceBefore = CORE.sourceSnapshot();
+  const npmPath = CORE.npmCliPath(); const gitPath = process.platform === 'win32' ? path.join(gitText(['--exec-path']), 'git.exe') : path.join(gitText(['--exec-path']), 'git');
+  const toolDirs = [...new Set([path.dirname(process.execPath), path.dirname(npmPath), path.dirname(gitPath), path.dirname(resolvePython().path), path.dirname(provider.command), ...(provider.prefix || []).map((item) => path.dirname(item)), ...(process.platform === 'win32' && process.env.SystemRoot ? [path.join(process.env.SystemRoot, 'System32'), process.env.SystemRoot] : [])].map((item) => path.resolve(item)))];
+  const env = { PATH: toolDirs.join(path.delimiter), CODEX_HOME: process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), HOME: process.env.HOME || os.homedir(), USERPROFILE: process.env.USERPROFILE || os.homedir(), SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP, npm_config_offline: 'true', npm_config_audit: 'false', npm_config_fund: 'false', WORKSPINE_UPDATE_AWARENESS: '0', GSDD_UPDATE_AWARENESS: '0' };
+  if (fileSha(process.execPath) !== freeze.toolchain.node.sha256 || fileSha(npmPath) !== freeze.toolchain.npm.sha256 || fileSha(gitPath) !== freeze.toolchain.git.sha256) fail('toolchain_binding_mismatch', 'verified toolchain bytes differ from the freeze'); const installed = CORE.packAndInstall(toolStage, env, CORE.npmCliPath(), sourceBefore);
+  const candidateHash = installed.tarball.sha256;
+  if (candidateHash !== freeze.candidate.sha256) fail('candidate_hash_mismatch', 'packed candidate changed after freeze', { expected: freeze.candidate.sha256, actual: candidateHash });
+  const packed = CORE.liveTarEntries(path.join(toolStage, 'pack', path.basename(installed.tarball.filename))).filter((item) => item.type === 'file').map((item) => ({ path: item.path, sha256: sha(item.content), bytes: item.size })).sort((a, b) => a.path.localeCompare(b.path));
+  if (stableHash(packed) !== freeze.candidate.member_sha256) fail('candidate_members_mismatch', 'packed candidate members changed after freeze');
+  const cli = path.join(installed.packageRoot, 'bin', 'gsdd.mjs');
+  const init = cp.spawnSync(process.execPath, [cli, 'init', '--auto', '--tools', 'agents'], { cwd: consumerRoot, env, input: '', encoding: 'utf8', windowsHide: true, shell: false, timeout: 120000, maxBuffer: 1024 * 1024 });
+  if (init.status !== 0) fail('generated_skills_setup_failed', 'installed Workspine could not prepare repo-local skills', { stderr: String(init.stderr || '').slice(-2000) });
+  const evidence = CORE.realAgentProviderEvidence(provider);
+  if (stable(evidence) !== stable(freeze.runtime.executable)) fail('provider_binding_mismatch', 'resolved Codex executable differs from the freeze');
+  if (stable(codexContract(provider)) !== stable(freeze.runtime.cli_contract)) fail('provider_contract_mismatch', 'resolved Codex runtime contract differs from the freeze');
+  const python = resolvePython(); if (python.sha256 !== freeze.runtime.python.sha256) fail('python_binding_mismatch', 'resolved Python differs from the freeze');
+  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), receiptDir: options.receiptDir, provider, env, cumulative: {}, totalUsage: 0, sessions: {}, sourceBefore, cache, inputRoot, spawned: false };
+  context.skills = Object.fromEntries([...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, fileSha(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md'))])); context.expectedSkills = freeze.skills || null;
+  return context;
+}
+
+function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
+  const freeze = readFreeze(freezeFile); const dir = path.resolve(receiptDir); fs.mkdirSync(dir, { recursive: true });
+  const characterizationOnly = options.characterizationOnly === true;
+  if ((options.prepareRun || options.spawn) && !characterizationOnly) fail('characterization_only_required', 'injected preparation or provider execution is characterization-only');
+  for (const name of [...TURN_PLAN.map((turn) => `${turn.id}.json`), 'preparation.json', 'handoff.json', 'terminal.json']) if (exists(path.join(dir, name))) fail('receipt_exists', `refusing to overwrite an existing receipt: ${name}`);
+  const turns = []; let current = null; let failure = null; let context = null;
+  try {
+    context = options.prepareRun ? options.prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir }) : prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir });
+    writeExclusive(path.join(dir, 'preparation.json'), { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: CASE_ID, consumer_root: '<CONSUMER_ROOT>', tool_root: '<TOOL_ROOT>', bundle_sha256: freeze.bundle.sha256, candidate_sha256: freeze.candidate.sha256, generated_skills: [...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))], auth_copied: false, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' });
+    let pauseBaseline = null;
+    for (const turn of TURN_PLAN) {
+      current = turn; const before = CORE.snapshotTree(context.consumerRoot, true); if (!pauseBaseline) pauseBaseline = before; const expectedSession = turn.initial ? null : context.sessions[turn.session];
+      if (!turn.initial && !expectedSession) fail('resume_checkpoint_missing', `${turn.id} lacks its prior native session identity`);
+      const recorded = runTurn(context, turn, expectedSession, options); const after = CORE.snapshotTree(context.consumerRoot, true); let gateFailure = null;
+      if (turn.initial) context.sessions[turn.session] = recorded.native.thread_id;
+      if (!turn.initial && recorded.native.thread_id !== expectedSession) gateFailure = new RunnerFailure('resume_session_mismatch', `${turn.id} resumed the wrong native session`);
+      if (context.totalUsage > TURN_TOTAL_TOKENS) gateFailure = new RunnerFailure('cumulative_token_excess', 'native cumulative usage exceeded the total budget');
+      const turnEvidence = { ...recorded.turn, pre_snapshot_sha256: stableHash(before), post_snapshot_sha256: stableHash(after) };
+      if (turn.id === 'turn-a-pause') { turnEvidence.changed_paths = changedPaths(pauseBaseline, after); turnEvidence.allowed_root = '<CONSUMER_ROOT>/.work'; try { turnEvidence.checkpoint = CORE.liveCaptureCheckpoint(context.consumerRoot); assertPauseScope(pauseBaseline, after); } catch (error) { gateFailure = gateFailure || error; turnEvidence.checkpoint = turnEvidence.checkpoint || null; } }
+      const receipt = RECORDER.deepFreeze({ ...recorded, turn: turnEvidence, characterization_only: characterizationOnly });
+      writeExclusive(path.join(dir, `${turn.id}.json`), receipt); turns.push(receipt);
+      if (gateFailure) fail(gateFailure.code || 'turn_gate_failed', gateFailure.message, gateFailure.evidence);
+    }
+    if (new Set(Object.values(context.sessions)).size !== 2) fail('session_identity_invalid', 'A and B native sessions must be distinct');
+    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', terminal: { status: 'provider_complete' } };
+    writeExclusive(path.join(dir, 'terminal.json'), terminal);
+    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), terminal_sha256: fileSha(path.join(dir, 'terminal.json')), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>' };
+    writeExclusive(path.join(dir, 'handoff.json'), handoff);
+    return { preparation: { status: 'passed', characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' }, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, turns, handoff };
+  } catch (error) {
+    if (error instanceof RunnerFailure) failure = error;
+    else { failure = new RunnerFailure(error.code || 'infrastructure', error.message, error.evidence || null); failure.kind = error.kind || 'infrastructure'; }
+    failure.provider_invoked = Boolean(context?.spawned);
+    if (current && !exists(path.join(dir, `${current.id}.json`)) && (error.receipt || context?.activeReceipt)) writeExclusive(path.join(dir, `${current.id}.json`), error.receipt || context.activeReceipt);
+    const sealed = current && exists(path.join(dir, `${current.id}.json`)) ? { turn: current.id, sha256: fileSha(path.join(dir, `${current.id}.json`)) } : null;
+    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length + (current && !turns.some((item) => item.turn === current.id) ? 1 : 0), provider_invoked: Boolean(context?.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', terminal: { status: 'failed', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null, sealed_turn: sealed } };
+    if (!exists(path.join(dir, 'terminal.json'))) writeExclusive(path.join(dir, 'terminal.json'), terminal);
+    throw failure;
+  }
+}
+
 function catalog() {
   return {
     schema_version: 1, record_type: 'phase16_real_agent_catalog', mode: 'catalog', provider_invoked: false,
     case: { id: CASE_ID, contract: CASE_CONTRACT, repository: 'https://github.com/pallets/itsdangerous.git', revision: '93ae366874bbd4f69d90495c45b2cd336387496c', oracle: 'tests/evals/cases/itsdangerous-fips-sha1-oracle.py' },
-    workflows: [...WORKFLOWS], modes: ['--catalog', '--prepare', '--check'], network: { prepare: 'pinned-https-only', check: 'offline-only' },
-    claim_limit: 'Pinned public itsdangerous case acquisition, isolated red/green/red controls, and Git cache integrity only; no provider, workflow, product, benchmark, or release claim.',
+    workflows: [...WORKFLOWS], modes: ['--catalog', '--prepare', '--check', '--freeze', '--run'], network: { prepare: 'pinned-https-only', check: 'offline-only', freeze: 'provider-free', run: 'native-codex-only' },
+    claim_limit: 'Catalog, prepare, check, and freeze are provider-free; run claims native Codex execution evidence only. No provider workflow, product, benchmark, or release claim.',
   };
 }
 
@@ -328,8 +571,8 @@ function parseArgs(argv) {
   const flags = new Map();
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
-    if (!['--catalog', '--prepare', '--check', '--case', '--cache', '--controls', '--offline'].includes(key)) fail('unknown_flag', `unsupported option: ${key}`);
-    if (['--catalog', '--prepare', '--check', '--offline'].includes(key)) { if (flags.has(key)) fail('duplicate_flag', `duplicate option: ${key}`); flags.set(key, true); }
+    if (!['--catalog', '--prepare', '--check', '--freeze', '--run', '--case', '--cache', '--controls', '--offline', '--receipts', '--provider', '--public-result'].includes(key)) fail('unknown_flag', `unsupported option: ${key}`);
+    if (['--catalog', '--prepare', '--check', '--run', '--offline'].includes(key)) { if (flags.has(key)) fail('duplicate_flag', `duplicate option: ${key}`); flags.set(key, true); }
     else { const value = argv[++i]; if (!value || value.startsWith('--')) fail('option_value_missing', `${key} requires a value`); flags.set(key, value); }
   }
   return flags;
@@ -339,28 +582,34 @@ async function main(argv = process.argv.slice(2)) {
   let mode;
   try {
     const flags = parseArgs(argv);
-    const modes = ['--catalog', '--prepare', '--check'].filter((item) => flags.has(item));
+    const modes = flags.has('--run') ? ['--run'] : ['--catalog', '--prepare', '--check', '--freeze'].filter((item) => flags.has(item));
     if (modes.length !== 1) fail('usage', 'choose exactly one of --catalog, --prepare, or --check');
     mode = modes[0];
     if (mode === '--catalog') {
       if (argv.length !== 1) fail('usage', '--catalog takes no other options');
       process.stdout.write(`${JSON.stringify(catalog(), null, 2)}\n`); return 0;
     }
+    if (flags.has('--public-result')) fail('unsupported_until_observer', '--public-result is reserved for the Task 16-08-03 observer');
     if (!flags.has('--case') || !flags.has('--cache')) fail('usage', `${mode} requires --case and --cache`);
     if (mode === '--prepare' && flags.has('--offline')) fail('usage', '--prepare cannot use --offline');
     if (mode === '--check' && !flags.has('--offline')) fail('offline_required', '--check requires --offline');
+    if (mode === '--freeze' && !flags.has('--freeze')) fail('usage', '--freeze requires a destination value');
+    if (mode === '--run' && (!flags.has('--freeze') || !flags.has('--receipts'))) fail('usage', '--run requires --freeze and --receipts');
+    if (mode === '--run' && flags.get('--provider') !== 'codex') fail('usage', '--run requires --provider codex');
     const result = mode === '--prepare'
       ? await preparePublicCase(flags.get('--case'), flags.get('--cache'), { controls: flags.get('--controls') })
-      : checkPublicCase(flags.get('--case'), flags.get('--cache'), { offline: true, controls: flags.get('--controls') });
-    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode.slice(2), provider_invoked: false, network: mode === '--prepare' ? 'pinned-https-only' : 'offline', case_id: CASE_ID, preparation: result, terminal: { status: 'passed', failure_class: null, failure_code: null, message: mode === '--prepare' ? 'pinned upstream Git checkout and controls prepared' : result.terminal.message }, claim_limit: catalog().claim_limit }, null, 2)}\n`);
+      : mode === '--check' ? checkPublicCase(flags.get('--case'), flags.get('--cache'), { offline: true, controls: flags.get('--controls') })
+        : mode === '--freeze' ? buildFreeze(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), { controls: flags.get('--controls') })
+          : runFrozen(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), flags.get('--receipts'), { controls: flags.get('--controls') });
+    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode.slice(2), provider_invoked: mode === '--run' ? Boolean(result?.provider_invoked) : false, network: mode === '--prepare' ? 'pinned-https-only' : mode === '--check' ? 'offline' : mode === '--run' ? 'native-codex-only' : 'provider-free-preparation', case_id: CASE_ID, preparation: result, terminal: { status: mode === '--run' ? 'provider_complete' : 'passed', failure_class: null, failure_code: null, message: mode === '--prepare' ? 'pinned upstream Git checkout and controls prepared' : 'bounded Task 16-08 coordinator completed' }, workflow_verdict: 'not_evaluated', claim_limit: catalog().claim_limit }, null, 2)}\n`);
     return 0;
   } catch (error) {
     const failure = error instanceof RunnerFailure ? error : new RunnerFailure('infrastructure', error.message);
-    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode ? mode.slice(2) : null, provider_invoked: false, network: mode === '--prepare' ? 'pinned-https-only' : mode === '--check' ? 'offline' : null, case_id: CASE_ID, terminal: { status: 'failed', failure_class: 'infrastructure', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, claim_limit: catalog().claim_limit }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode ? mode.slice(2) : null, provider_invoked: Boolean(failure.provider_invoked), network: mode === '--prepare' ? 'pinned-https-only' : mode === '--check' ? 'offline' : mode === '--run' ? 'native-codex-only' : null, case_id: CASE_ID, terminal: { status: 'failed', failure_class: 'infrastructure', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, workflow_verdict: 'not_evaluated', claim_limit: catalog().claim_limit }, null, 2)}\n`);
     return 1;
   }
 }
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
 
-module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS };
+module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, TURN_PLAN, buildFreeze, readFreeze, prepareRun, runTurn, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, resolvePython, candidatePack, changedPaths };
