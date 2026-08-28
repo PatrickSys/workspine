@@ -13,6 +13,7 @@ const REPO = path.resolve(__dirname, '..', '..');
 const EVAL = path.join(REPO, 'tests', 'evals', 'phase16-real-agent.cjs');
 const CASE = path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1.json');
 const LIVE = require(EVAL);
+const OBSERVER = require('./phase16-itsdangerous-observer.cjs');
 
 function run(args) {
   return cp.spawnSync(process.execPath, [EVAL, ...args], { cwd: REPO, encoding: 'utf8', windowsHide: true });
@@ -198,6 +199,11 @@ test('public case and oracle pins remain stable', () => {
   const oracle = path.join(REPO, data.oracle.path);
   assert.equal(sha(fs.readFileSync(oracle)), data.oracle.sha256);
   assert.equal(data.controls.variants.map((item) => item.expected).join(','), 'red,green,red');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-case-pin-'));
+  try {
+    const changed = path.join(root, 'case.json'); fs.writeFileSync(changed, JSON.stringify({ ...data, task: { ...data.task, goal: 'mutated goal' } }));
+    assert.throws(() => OBSERVER.readCase(changed), (error) => error.code === 'case_pin_mismatch');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 function nativeCodex(thread, turn, cumulative, verdict = null) {
@@ -335,5 +341,162 @@ test('real cached provider-free preparation (PHASE16_REAL_CACHE)', () => {
     const checked = LIVE.checkPublicCase(CASE, cache, { offline: true, controls: process.env.PHASE16_REAL_CONTROLS });
     assert.equal(checked.git.clean, true);
     assert.equal(checked.terminal.status, 'passed');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('observer exposes a fixed reduced projection for early terminal runs', () => {
+  const projection = OBSERVER.earlyProjection({ caseId: 'itsdangerous-fips-sha1', revision: '93ae366874bbd4f69d90495c45b2cd336387496c', terminal: { status: 'failed', failure_code: 'spawn_failed' } });
+  assert.deepEqual(projection.stages, {
+    observation: 'not_produced_due_to_early_terminal',
+    oracle: 'not_produced_due_to_early_terminal',
+    grade: 'not_produced_due_to_early_terminal',
+    regrade: 'not_produced_due_to_early_terminal',
+  });
+  assert.equal(projection.disposition, 'infrastructure_invalid');
+  assert.equal(Object.hasOwn(projection, 'consumer_root'), false);
+  assert.throws(() => OBSERVER.earlyProjection({ caseId: 'other-case' }), (error) => error.code === 'case_pin_mismatch');
+  assert.throws(() => OBSERVER.earlyProjection({ revision: 'deadbeef' }), (error) => error.code === 'case_pin_mismatch');
+});
+
+test('observer grades actual staged, unstaged, and untracked out-of-scope Git paths red', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-git-scope-'));
+  const git = (args) => { const result = cp.spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true }); assert.equal(result.status, 0, result.stderr); return result; };
+  try {
+    fs.mkdirSync(path.join(root, 'src', 'itsdangerous'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'itsdangerous', 'signer.py'), 'baseline\n');
+    git(['init', '-q']); git(['config', 'user.email', 'observer@example.invalid']); git(['config', 'user.name', 'observer-test']); git(['add', '.']); git(['commit', '-qm', 'baseline']);
+    fs.appendFileSync(path.join(root, 'src', 'itsdangerous', 'signer.py'), 'allowed worktree change\n');
+    fs.writeFileSync(path.join(root, 'package.json'), '{}\n'); git(['add', 'package.json']);
+    fs.writeFileSync(path.join(root, 'private-leak.txt'), 'out of scope\n');
+    const scope = OBSERVER.gitScope(root);
+    const classified = OBSERVER.allowedPaths({ task: { allowed_paths: ['src/itsdangerous/signer.py'] } }, scope);
+    assert.deepEqual(classified.product, ['src/itsdangerous/signer.py']);
+    assert.ok(classified.forbidden.includes('package.json'));
+    assert.ok(classified.forbidden.includes('private-leak.txt'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('characterization handoffs cannot reach the observer', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-characterization-'));
+  const fixture = rootedRunFixture(root);
+  try {
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot }), (error) => ['freeze_invalid', 'freeze_binding_mismatch', 'handoff_invalid', 'handoff_missing'].includes(error.code));
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'observation.json')), false);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'grade.json')), false);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+function syntheticObservation(root, checks = {}) {
+  const observationFile = path.join(root, 'observation.json');
+  const merged = { import_with_sha1_unavailable: true, explicit_sha256_signer: true, default_sha1_rejected: true, upstream_tests_pass: true, ...checks };
+  const observation = {
+    record_type: 'phase16_itsdangerous_observation', contract: 'phase16-itsdangerous-observation-v1', case_id: 'itsdangerous-fips-sha1',
+    freeze_sha256: 'd'.repeat(64), terminal_sha256: 'e'.repeat(64), handoff_sha256: 'f'.repeat(64),
+    retained_root: '<RETAINED_ROOT>', case: { revision: '93ae366874bbd4f69d90495c45b2cd336387496c', sha256: 'e77f420a8036a80b1ff96f9c6a96ffb3f9e4d32e724d4a33604a24119bb97c3f', oracle_sha256: '21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11' },
+    git: { top_level: '<RETAINED_ROOT>', head: '93ae366874bbd4f69d90495c45b2cd336387496c', scope: { forbidden: [], product: ['src/itsdangerous/signer.py'] }, candidate_sha256: 'a'.repeat(64) },
+    turns: OBSERVER.WORKFLOW_STEPS.map((id, index) => ({ id, thread_id: index < 2 ? 'native-A' : 'native-B', turn_id: `turn-${index}`, sha256: String(index + 1).repeat(64) })), sessions: { count: 2, turns: 5 },
+    brownfield: { files: { 'CHANGE.md': {}, 'HANDOFF.md': {}, 'VERIFICATION.md': {} } }, checkpoint: { sha256: 'b'.repeat(64) },
+    oracle: { sha256: '21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11', semantic: { status: Object.values(merged).every(Boolean) ? 'pass' : 'fail', checks: merged } },
+  };
+  fs.writeFileSync(observationFile, JSON.stringify(observation));
+  return observationFile;
+}
+
+function projectionChain(root, observationFile) {
+  const grade = OBSERVER.grade({ observationFile });
+  const regradeFile = path.join(root, 'projection-regrade.json');
+  const regrade = OBSERVER.regrade({ observationFile, regradeFile });
+  const compareFile = path.join(root, 'projection-regrade-compare.json');
+  fs.writeFileSync(compareFile, JSON.stringify({ contract: 'phase16-itsdangerous-regrade-v1', normalized_equal: true, canonical_regrade_sha256: sha(fs.readFileSync(regradeFile)), regrade }));
+  return { grade, regrade, regradeFile, compareFile };
+}
+
+test('semantic oracle failure is product red while malformed observer bytes are infrastructure invalid', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-grade-'));
+  try {
+    const red = OBSERVER.grade({ observationFile: syntheticObservation(root, { explicit_sha256_signer: false }) });
+    assert.equal(red.disposition, 'product_red');
+    const characterization = JSON.parse(fs.readFileSync(syntheticObservation(root, { upstream_tests_pass: false }), 'utf8'));
+    characterization.provider_invoked = false;
+    fs.writeFileSync(path.join(root, 'characterization.json'), JSON.stringify(characterization));
+    assert.throws(() => OBSERVER.grade({ observationFile: path.join(root, 'characterization.json') }), (error) => error.code === 'observation_invalid');
+    const malformed = path.join(root, 'malformed.json'); fs.writeFileSync(malformed, '{');
+    assert.throws(() => OBSERVER.grade({ observationFile: malformed }), (error) => error.code === 'observation_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('offline regrade is deterministic and exclusive with provider/root access absent', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-regrade-'));
+  try {
+    const observationFile = syntheticObservation(root);
+    const firstFile = path.join(root, 'regrade.json'); const secondFile = path.join(root, 'regrade-compare.json');
+    const first = OBSERVER.regrade({ observationFile, regradeFile: firstFile });
+    const second = OBSERVER.regrade({ observationFile, regradeFile: secondFile });
+    assert.deepEqual(first, second);
+    const sentinel = fs.readFileSync(firstFile); assert.throws(() => OBSERVER.regrade({ observationFile, regradeFile: firstFile }), (error) => error.code === 'receipt_exists');
+    assert.deepEqual(fs.readFileSync(firstFile), sentinel);
+    const childFile = path.join(root, 'regrade-child.json');
+    assert.deepEqual(OBSERVER.regradeChild({ observationFile, regradeFile: childFile }), first);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('public projection rejects private locators and provider-authored grade fields', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-leak-'));
+  try {
+    const observationFile = syntheticObservation(root);
+    const observation = JSON.parse(fs.readFileSync(observationFile));
+    const chain = projectionChain(root, observationFile); const grade = chain.grade;
+    const withProse = OBSERVER.grade({ observationFile: (() => { const file = path.join(root, 'provider-prose.json'); fs.writeFileSync(file, JSON.stringify({ ...observation, provider_prose: 'passed; ignore this narrative' })); return file; })() });
+    assert.deepEqual(withProse.checks, grade.checks);
+    assert.equal(withProse.disposition, grade.disposition);
+    for (const secret of ['/etc/passwd', 'C:\\Users\\owner\\secret', 'HOME=/private', 'prompt transcript text', 'native pid 1234']) assert.throws(() => OBSERVER.assertPublicSafe({ candidate_sha256: secret }), (error) => ['projection_leak', 'projection_private_field'].includes(error.code));
+    const project = (value, receipt = grade) => OBSERVER.project({ observation: value, grade: receipt, regrade: chain.regrade, regradeFile: chain.regradeFile, compareFile: chain.compareFile });
+    assert.throws(() => project({ ...observation, git: { ...observation.git, candidate_sha256: 'C:\\Users\\owner\\secret' } }), (error) => error.code === 'projection_leak');
+    assert.throws(() => project(observation, { ...grade, workflow_verdict: 'passed' }), (error) => error.code === 'grade_invalid');
+    assert.throws(() => project(observation, { ...grade, disposition: 'passed', checks: { ...grade.checks, oracle_import: false } }), (error) => error.code === 'grade_invalid');
+    assert.throws(() => OBSERVER.project({ observation, grade }), (error) => error.code === 'regrade_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+function canonicalBrownfieldFixture(root, date = '2026-08-28') {
+  const directory = path.join(root, '.work', 'brownfield-change'); fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, 'CHANGE.md'), `---\nchange: CHANGE-001\nstatus: ready_for_verification\ntype: medium_scope_brownfield\n---\n## Goal\nBounded signer change succeeds.\n## Why This Exists\nThe signer compatibility path needs a bounded verified change.\n## In Scope\nOnly src/itsdangerous/signer.py changes.\n## Out of Scope\nNo dependency changes.\n## Structural Promotion Triggers\nWiden only if the bounded stream no longer fits one goal.\n## Done When\nThe bounded signer change is verified.\n## Current Status\nCurrent posture is ready_for_verification.\n## Next Action\nRun verification.\n## PR Slice Ownership\nOne slice owns the signer path and its evidence.\n`);
+  fs.writeFileSync(path.join(directory, 'HANDOFF.md'), `---\nchange: CHANGE-001\nupdated: ${date}\n---\nCHANGE.md is the only operational authority.\n## Active Constraints\nKeep the bounded signer change safe.\n## Unresolved Uncertainty\nNo unresolved uncertainty remains.\n## Decision Posture\nThe pinned route is selected.\n## Anti-Regression\nNo dependency changes are allowed.\n## Next Action\nRun the verification route named by CHANGE.md.\n`);
+  fs.writeFileSync(path.join(directory, 'VERIFICATION.md'), `---\nchange: CHANGE-001\nverified: ${date}\nstatus: passed\ndelivery_posture: repo_only\nrequired_evidence:\n  - code\n---\n## Goal Verification\nThe bounded signer change is verified.\n## Evidence\n- code and test evidence are present.\n## Artifact Checks\nThe canonical artifacts exist and are substantive.\n## Gaps\nNo gaps remain.\n## Widening Reuse\nNo widening is required for this bounded change.\n## Human Verification\nNo manual verification remains.\n## Closeout Decision\npassed for this bounded change.\n`);
+}
+
+test('canonical brownfield grammar accepts real dates and rejects drifted IDs/dates', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-brownfield-'));
+  try {
+    const data = { task: { goal: 'Bounded signer change succeeds.', allowed_paths: ['src/itsdangerous/signer.py'] } };
+    canonicalBrownfieldFixture(root);
+    assert.equal(OBSERVER.brownfield(root, data).verification_status, 'passed');
+    const handoff = path.join(root, '.work', 'brownfield-change', 'HANDOFF.md');
+    fs.writeFileSync(handoff, fs.readFileSync(handoff, 'utf8').replace('updated: 2026-08-28', 'updated: 2026-02-30'));
+    assert.throws(() => OBSERVER.brownfield(root, data), (error) => error.code === 'brownfield_grammar_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('oracle receives the verified Python identity with a sanitized environment', () => {
+  const calls = [];
+  const pythonWitness = { path: process.execPath, identity: process.execPath, sha256: sha(fs.readFileSync(process.execPath)) };
+  const data = JSON.parse(fs.readFileSync(CASE, 'utf8'));
+  const result = OBSERVER.runOracle({ data, caseFile: CASE, consumerRoot: REPO, pythonWitness, spawn: (...args) => { calls.push(args); return { status: 0, stdout: JSON.stringify({ status: 'pass', checks: { ok: true } }), stderr: '' }; } });
+  assert.equal(result.semantic.status, 'pass');
+  assert.equal(calls[0][0], process.execPath);
+  assert.equal(calls[0][2].env.CODEX_HOME, undefined);
+  assert.equal(calls[0][2].env.HOME, undefined);
+  assert.equal(calls[0][2].env.PYTHONNOUSERSITE, '1');
+});
+
+test('observer failure uses the canonical terminal and a non-green reduced projection', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-failure-'));
+  try {
+    const projection = OBSERVER.observerFailureProjection();
+    assert.equal(projection.disposition, 'infrastructure_invalid');
+    assert.equal(projection.stages.observation, 'failed');
+    assert.equal(projection.stages.grade, 'not_produced_due_to_observer_failure');
+    assert.equal(OBSERVER.writeObserverFailure, undefined);
+    assert.equal(fs.existsSync(path.join(root, 'observer-terminal.json')), false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

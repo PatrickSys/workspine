@@ -492,7 +492,7 @@ function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   const consumerRoot = path.join(runRoot, 'consumer_root'); const toolStage = path.join(runRoot, 'tool-stage');
   fs.mkdirSync(runRoot, { recursive: true });
   gitText(['-c', 'core.autocrlf=false', 'clone', '--no-checkout', '--no-tags', cache.bundle, consumerRoot], runRoot);
-  gitText(['config', 'core.autocrlf', 'false'], consumerRoot); gitText(['checkout', '--detach', data.source.revision], consumerRoot);
+  gitText(['config', 'core.autocrlf', 'false'], consumerRoot); gitText(['checkout', '--detach', data.source.revision], consumerRoot); gitText(['remote', 'set-url', 'origin', data.source.repository], consumerRoot);
   if (gitText(['rev-parse', 'HEAD'], consumerRoot) !== data.source.revision || gitText(['status', '--porcelain'], consumerRoot)) fail('consumer_root_invalid', 'prepared consumer root is not the pinned clean checkout');
   const inputRoot = path.join(consumerRoot, 'inputs'); fs.mkdirSync(path.join(inputRoot, 'owner'), { recursive: true });
   for (const item of data.input_bundle.members) fs.writeFileSync(path.join(inputRoot, ...item.path.split('/')), item.content, { flag: 'wx' });
@@ -512,20 +512,21 @@ function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   if (stable(evidence) !== stable(freeze.runtime.executable)) fail('provider_binding_mismatch', 'resolved Codex executable differs from the freeze');
   if (stable(codexContract(provider)) !== stable(freeze.runtime.cli_contract)) fail('provider_contract_mismatch', 'resolved Codex runtime contract differs from the freeze');
   const python = resolvePython(); if (python.sha256 !== freeze.runtime.python.sha256) fail('python_binding_mismatch', 'resolved Python differs from the freeze');
-  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), receiptDir: options.receiptDir, provider, env, cumulative: {}, totalUsage: 0, sessions: {}, sourceBefore, cache, inputRoot, spawned: false };
+  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), receiptDir: options.receiptDir, provider, env, python, cumulative: {}, totalUsage: 0, sessions: {}, sourceBefore, cache, inputRoot, spawned: false };
   context.skills = Object.fromEntries([...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, fileSha(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md'))])); context.expectedSkills = freeze.skills || null;
   return context;
 }
 
 function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
+  const OBSERVER = options.observer || require('./phase16-itsdangerous-observer.cjs');
   const freeze = readFreeze(freezeFile); const dir = path.resolve(receiptDir); fs.mkdirSync(dir, { recursive: true });
   const characterizationOnly = options.characterizationOnly === true;
   if ((options.prepareRun || options.spawn) && !characterizationOnly) fail('characterization_only_required', 'injected preparation or provider execution is characterization-only');
-  for (const name of [...TURN_PLAN.map((turn) => `${turn.id}.json`), 'preparation.json', 'handoff.json', 'terminal.json']) if (exists(path.join(dir, name))) fail('receipt_exists', `refusing to overwrite an existing receipt: ${name}`);
+  for (const name of [...TURN_PLAN.map((turn) => `${turn.id}.json`), 'preparation.json', 'handoff.json', 'terminal.json', 'oracle.json', 'observation.json', 'grade.json', 'regrade.json', 'regrade-compare.json']) if (exists(path.join(dir, name))) fail('receipt_exists', `refusing to overwrite an existing receipt: ${name}`);
   const turns = []; let current = null; let failure = null; let context = null;
   try {
     context = options.prepareRun ? options.prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir }) : prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir });
-    writeExclusive(path.join(dir, 'preparation.json'), { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: CASE_ID, consumer_root: '<CONSUMER_ROOT>', tool_root: '<TOOL_ROOT>', bundle_sha256: freeze.bundle.sha256, candidate_sha256: freeze.candidate.sha256, generated_skills: [...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))], auth_copied: false, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' });
+    writeExclusive(path.join(dir, 'preparation.json'), { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: CASE_ID, consumer_root: '<CONSUMER_ROOT>', tool_root: '<TOOL_ROOT>', bundle_sha256: freeze.bundle.sha256, controls_sha256: freeze.controls.sha256, candidate_sha256: freeze.candidate.sha256, generated_skills: [...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))], python: context.python ? { identity: '<PYTHON>', sha256: context.python.sha256 } : null, auth_copied: false, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' });
     let pauseBaseline = null;
     for (const turn of TURN_PLAN) {
       current = turn; const before = CORE.snapshotTree(context.consumerRoot, true); if (!pauseBaseline) pauseBaseline = before; const expectedSession = turn.initial ? null : context.sessions[turn.session];
@@ -542,10 +543,20 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     }
     if (new Set(Object.values(context.sessions)).size !== 2) fail('session_identity_invalid', 'A and B native sessions must be distinct');
     const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', terminal: { status: 'provider_complete' } };
+    const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));
+    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), terminal_sha256: terminalSha, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>' };
+    let observer = null;
+    if (!characterizationOnly && options.observe !== false) {
+      try {
+        observer = OBSERVER.observeAndGrade({ caseFile, freezeFile, receiptDir: dir, consumerRoot: context.consumerRoot, controlsFile: options.controls || DEFAULT_CONTROLS, python: context.python.path, pythonWitness: context.python, publicResult: options.publicResult, terminalValue: terminal, handoffValue: handoff });
+      } catch (error) {
+        if (options.publicResult && !exists(options.publicResult)) OBSERVER.writeExclusive(options.publicResult, OBSERVER.observerFailureProjection({ receiptDir: dir }));
+        throw error;
+      }
+    }
     writeExclusive(path.join(dir, 'terminal.json'), terminal);
-    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), terminal_sha256: fileSha(path.join(dir, 'terminal.json')), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>' };
     writeExclusive(path.join(dir, 'handoff.json'), handoff);
-    return { preparation: { status: 'passed', characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' }, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, turns, handoff };
+    return { preparation: { status: 'passed', characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' }, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, turns, handoff, observer };
   } catch (error) {
     if (error instanceof RunnerFailure) failure = error;
     else { failure = new RunnerFailure(error.code || 'infrastructure', error.message, error.evidence || null); failure.kind = error.kind || 'infrastructure'; }
@@ -554,6 +565,9 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     const sealed = current && exists(path.join(dir, `${current.id}.json`)) ? { turn: current.id, sha256: fileSha(path.join(dir, `${current.id}.json`)) } : null;
     const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length + (current && !turns.some((item) => item.turn === current.id) ? 1 : 0), provider_invoked: Boolean(context?.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', terminal: { status: 'failed', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null, sealed_turn: sealed } };
     if (!exists(path.join(dir, 'terminal.json'))) writeExclusive(path.join(dir, 'terminal.json'), terminal);
+    if (!characterizationOnly && options.publicResult && !exists(options.publicResult) && !exists(path.join(dir, 'handoff.json'))) {
+      OBSERVER.writeEarlyProjection(options.publicResult, { caseId: CASE_ID, revision: freeze.source?.revision || '93ae366874bbd4f69d90495c45b2cd336387496c', terminal });
+    }
     throw failure;
   }
 }
@@ -589,7 +603,7 @@ async function main(argv = process.argv.slice(2)) {
       if (argv.length !== 1) fail('usage', '--catalog takes no other options');
       process.stdout.write(`${JSON.stringify(catalog(), null, 2)}\n`); return 0;
     }
-    if (flags.has('--public-result')) fail('unsupported_until_observer', '--public-result is reserved for the Task 16-08-03 observer');
+    if (flags.has('--public-result') && mode !== '--run') fail('unsupported_until_observer', '--public-result is only available for the complete rooted run');
     if (!flags.has('--case') || !flags.has('--cache')) fail('usage', `${mode} requires --case and --cache`);
     if (mode === '--prepare' && flags.has('--offline')) fail('usage', '--prepare cannot use --offline');
     if (mode === '--check' && !flags.has('--offline')) fail('offline_required', '--check requires --offline');
@@ -600,7 +614,7 @@ async function main(argv = process.argv.slice(2)) {
       ? await preparePublicCase(flags.get('--case'), flags.get('--cache'), { controls: flags.get('--controls') })
       : mode === '--check' ? checkPublicCase(flags.get('--case'), flags.get('--cache'), { offline: true, controls: flags.get('--controls') })
         : mode === '--freeze' ? buildFreeze(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), { controls: flags.get('--controls') })
-          : runFrozen(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), flags.get('--receipts'), { controls: flags.get('--controls') });
+          : runFrozen(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), flags.get('--receipts'), { controls: flags.get('--controls'), publicResult: flags.get('--public-result') });
     process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode.slice(2), provider_invoked: mode === '--run' ? Boolean(result?.provider_invoked) : false, network: mode === '--prepare' ? 'pinned-https-only' : mode === '--check' ? 'offline' : mode === '--run' ? 'native-codex-only' : 'provider-free-preparation', case_id: CASE_ID, preparation: result, terminal: { status: mode === '--run' ? 'provider_complete' : 'passed', failure_class: null, failure_code: null, message: mode === '--prepare' ? 'pinned upstream Git checkout and controls prepared' : 'bounded Task 16-08 coordinator completed' }, workflow_verdict: 'not_evaluated', claim_limit: catalog().claim_limit }, null, 2)}\n`);
     return 0;
   } catch (error) {
