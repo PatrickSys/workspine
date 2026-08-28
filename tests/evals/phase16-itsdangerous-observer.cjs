@@ -242,7 +242,7 @@ function allowedPaths(data, scope) {
   const all = scope.all.map((item) => item.path);
   const forbidden = all.filter((item) => !allowed.includes(item) && !allowedPrefix.some((prefix) => item.startsWith(prefix)));
   const product = all.filter((item) => item === data.task.allowed_paths[0]);
-  return { allowed, all, forbidden, product }; 
+  return { allowed, all, forbidden, product };
 }
 
 function runOracle({ data, caseFile, consumerRoot, python = data.runtime?.command || 'python', pythonWitness = null, oraclePath, spawn = cp.spawnSync }) {
