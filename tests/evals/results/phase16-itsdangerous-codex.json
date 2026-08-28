@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "record_type": "phase16_public_result",
+  "contract": "phase16-itsdangerous-public-result-v1",
+  "case_id": "itsdangerous-fips-sha1",
+  "upstream_revision": "93ae366874bbd4f69d90495c45b2cd336387496c",
+  "candidate_sha256": null,
+  "runtime": {
+    "provider": "codex",
+    "model": "gpt-5.6-luna",
+    "effort": "high"
+  },
+  "workflow": {
+    "sessions": null,
+    "turns": null,
+    "steps": []
+  },
+  "oracle": {
+    "status": "not_produced_due_to_early_terminal",
+    "checks": "not_produced_due_to_early_terminal"
+  },
+  "disposition": "infrastructure_invalid",
+  "stages": {
+    "observation": "not_produced_due_to_early_terminal",
+    "oracle": "not_produced_due_to_early_terminal",
+    "grade": "not_produced_due_to_early_terminal",
+    "regrade": "not_produced_due_to_early_terminal"
+  },
+  "claim_limit": "Early terminal only; no workflow, product, oracle, benchmark, model, or release claim."
+}
