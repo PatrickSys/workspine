@@ -1899,7 +1899,7 @@ function liveParseCodex(stdout, requestedModel, argv, options = {}) {
       if (value != null) need(value === (key === 'thread_id' ? thread.thread_id : turnId), 'infrastructure', 'native_linkage_invalid', `Codex item event is not linked to its ${key}`);
     }
     const position = events.indexOf(event);
-    need(position > turnStartIndex && position < turnCompleteIndex, 'infrastructure', 'native_sequence_invalid', 'Codex item event is outside the turn lifecycle');
+    if (!completionOnlyDiagnostic) need(position > turnStartIndex && position < turnCompleteIndex, 'infrastructure', 'native_sequence_invalid', 'Codex item event is outside the turn lifecycle');
     const state = lifecycles.get(itemId) || { kind: itemKind, started: false, completed: false };
     need(state.kind === itemKind, 'infrastructure', 'native_linkage_invalid', 'Codex item lifecycle changed kind for one item id');
     if (event.type === 'item.started') {

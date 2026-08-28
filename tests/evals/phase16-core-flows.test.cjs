@@ -617,6 +617,23 @@ test('Codex completion-only diagnostic errors are nonfatal, but terminal signals
   const parsed = LIVE.liveParseCodex(envelope([diagnostic]), 'gpt-5.6-luna', argv, { requireUsage: true });
   assert.deepEqual(parsed.usage, { input_tokens: 3, output_tokens: 2, total_tokens: 5 });
 
+  const outsideLifecycle = [
+    { type: 'thread.started', thread_id: 'thread-1' },
+    { type: 'turn.started', thread_id: 'thread-1', turn_id: 'turn-1' },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-1', type: 'agent_message', text: 'Completed.' } },
+    { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1', usage: { input_tokens: 3, output_tokens: 2 } },
+    { type: 'item.completed', item: { id: 'error-after-turn', type: 'error', message: 'diagnostic after completion' } },
+  ].map(JSON.stringify).join('\n');
+  const parsedOutside = LIVE.liveParseCodex(outsideLifecycle, 'gpt-5.6-luna', argv, { requireUsage: true });
+  assert.deepEqual(parsedOutside.usage, { input_tokens: 3, output_tokens: 2, total_tokens: 5 });
+  assert.deepEqual(parsedOutside.item_kinds, ['agent_message', 'error']);
+
+  const normalItemAfterTurn = outsideLifecycle.replace(
+    JSON.stringify({ id: 'error-after-turn', type: 'error', message: 'diagnostic after completion' }),
+    JSON.stringify({ id: 'message-after-turn', type: 'agent_message', text: 'late normal item' }),
+  );
+  assert.throws(() => LIVE.liveParseCodex(normalItemAfterTurn, 'gpt-5.6-luna', argv, { requireUsage: true }), /outside the turn/);
+
   for (const type of ['error', 'reroute', 'redirect', 'turn.failed']) {
     assert.throws(() => LIVE.liveParseCodex(envelope([diagnostic, { type, message: 'ordinary failure' }]), 'gpt-5.6-luna', argv, { requireUsage: true }), /native error|reroute/);
   }
