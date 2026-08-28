@@ -245,7 +245,7 @@ function nativeCodexItems(thread, turn, cumulative, kinds) {
   ].map((event) => JSON.stringify(event)).join('\n') + '\n';
 }
 
-function rootedRunFixture(root, { mutation = null, verdict = null } = {}) {
+function rootedRunFixture(root, { mutation = null, verdict = null, usageByTurn = null } = {}) {
   const consumerRoot = path.join(root, 'consumer_root');
   const receiptDir = path.join(root, 'receipts');
   fs.mkdirSync(path.join(consumerRoot, '.agents', 'skills'), { recursive: true });
@@ -266,7 +266,7 @@ function rootedRunFixture(root, { mutation = null, verdict = null } = {}) {
     skills: Object.fromEntries([...new Set(LIVE.TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, sha(fs.readFileSync(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md')))])),
     root_map: { consumer_root: '<RUN_ROOT>/consumer_root' }, sessions: { count: 2, turns: 5 },
   };
-  freeze.budgets.total_wall_minutes = 54; freeze.budgets.total_native_tokens = 260000; freeze.budgets.retained_output_bytes = 1024 * 1024;
+  freeze.budgets.total_wall_minutes = LIVE.TURN_TOTAL_MINUTES; freeze.budgets.total_native_tokens = LIVE.TURN_TOTAL_TOKENS; freeze.budgets.retained_output_bytes = LIVE.RETAINED_OUTPUT_BYTES;
   const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));
   let calls = 0;
   const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, cumulative: {}, sessions: {}, data: {}, sourceBefore: {} };
@@ -279,7 +279,8 @@ function rootedRunFixture(root, { mutation = null, verdict = null } = {}) {
       fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: bounded brownfield route\nEvidence: native pause receipt\nNext action: fresh resume\n', { flag: 'wx' });
     }
     if (mutation === turn.id) fs.writeFileSync(path.join(consumerRoot, 'product.txt'), 'unexpected\n', { flag: 'wx' });
-    return { status: 0, pid: 1000 + calls, stdout: nativeCodex(session, `${turn.id}-native`, sessionTurn * 10, mutation === 'provider-verdict' ? 'passed' : verdict), stderr: '', timed_out: false };
+    const usage = typeof usageByTurn === 'function' ? usageByTurn(turn, calls) : sessionTurn * 10;
+    return { status: 0, pid: 1000 + calls, stdout: nativeCodex(session, `${turn.id}-native`, usage, mutation === 'provider-verdict' ? 'passed' : verdict), stderr: '', timed_out: false };
   };
   return { freezeFile, receiptDir, context, prepareRun, spawn, get calls() { return calls; } };
 }
@@ -313,7 +314,18 @@ test('Task 16-08-02S keeps exact initial/resume grammar and cumulative usage del
   assert.throws(() => LIVE.readFreeze(path.join(os.tmpdir(), 'missing-16-08-freeze.json')), (error) => error.code === 'case_file_invalid');
 });
 
-function capabilityFixture(root, { mutate = false, itemKinds = ['agent_message'] } = {}) {
+test('native token calibration applies the fixed 25x multiplier without changing wall/output caps', () => {
+  assert.equal(LIVE.NATIVE_TOKEN_MULTIPLIER, 25);
+  assert.equal(LIVE.CAPABILITY_MAX_TOKENS, 500000);
+  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.tokens), [1500000, 500000, 2500000, 1500000, 500000]);
+  assert.equal(LIVE.TURN_TOTAL_TOKENS, 6500000);
+  assert.equal(LIVE.TURN_TOTAL_TOKENS, LIVE.TURN_PLAN.reduce((sum, turn) => sum + turn.tokens, 0));
+  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.minutes), [12, 5, 20, 12, 5]);
+  assert.equal(LIVE.TURN_TOTAL_MINUTES, 54);
+  assert.equal(LIVE.RETAINED_OUTPUT_BYTES, 1024 * 1024);
+});
+
+function capabilityFixture(root, { mutate = false, itemKinds = ['agent_message'], usage = 12 } = {}) {
   const fixture = rootedRunFixture(root);
   const git = (args) => {
     const result = cp.spawnSync('git', args, { cwd: fixture.context.consumerRoot, encoding: 'utf8', windowsHide: true, shell: false });
@@ -331,7 +343,7 @@ function capabilityFixture(root, { mutate = false, itemKinds = ['agent_message']
     if (mutate) fs.writeFileSync(path.join(fixture.context.consumerRoot, 'unexpected.txt'), 'unexpected\n', { flag: 'wx' });
     fs.mkdirSync(path.join(fixture.context.consumerRoot, '.work'), { recursive: true });
     fs.writeFileSync(path.join(fixture.context.consumerRoot, LIVE.CAPABILITY_MARKER_PATH), LIVE.CAPABILITY_MARKER_BYTES, { flag: 'wx' });
-    return { status: 0, pid: 4444, parent_pid: 4443, stdout: nativeCodexItems('native-capability', 'capability-native', 12, itemKinds), stderr: '', timed_out: false };
+    return { status: 0, pid: 4444, parent_pid: 4443, stdout: nativeCodexItems('native-capability', 'capability-native', usage, itemKinds), stderr: '', timed_out: false };
   };
   return fixture;
 }
@@ -380,6 +392,18 @@ test('capability probe rejects collaboration and web-search item kinds with a se
   }
 });
 
+test('capability probe rejects native usage above the calibrated 500000 ceiling', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-capability-budget-'));
+  const fixture = capabilityFixture(root, { usage: LIVE.CAPABILITY_MAX_TOKENS + 1 });
+  try {
+    assert.throws(() => LIVE.runCapability(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, gitText: (args) => args[0] === 'rev-parse' ? CAPABILITY_REVISION : '', characterizationOnly: true }), (error) => error.code === 'usage_excess');
+    const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'capability.json'), 'utf8'));
+    assert.equal(receipt.turn.usage.cumulative_tokens, LIVE.CAPABILITY_MAX_TOKENS + 1);
+    assert.equal(receipt.turn.usage.delta_tokens, LIVE.CAPABILITY_MAX_TOKENS + 1);
+    assert.equal(receipt.terminal.failure_code, 'usage_excess');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('capability probe fails closed on any post-preflight path outside the fixed marker', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-capability-scope-'));
   const fixture = capabilityFixture(root, { mutate: true });
@@ -402,6 +426,20 @@ test('provider-free coordinator runs production-shaped five-turn handoff with tw
     assert.deepEqual(result.handoff.sessions, { A: 'native-A', B: 'native-B' });
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), true);
     for (const turn of LIVE.TURN_PLAN) assert.equal(JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${turn.id}.json`))).workflow_verdict, 'not_evaluated');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('five-turn coordinator rejects a native turn above its calibrated per-turn ceiling', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-five-turn-budget-'));
+  const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.tokens + 1 });
+  try {
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'usage_excess');
+    const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${LIVE.TURN_PLAN[0].id}.json`), 'utf8'));
+    assert.equal(receipt.usage.cumulative_tokens, LIVE.TURN_PLAN[0].tokens + 1);
+    assert.equal(receipt.usage.delta_tokens, LIVE.TURN_PLAN[0].tokens + 1);
+    assert.equal(receipt.terminal.failure_code, 'usage_excess');
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
+    assert.equal(terminal.terminal.failure_code, 'usage_excess');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

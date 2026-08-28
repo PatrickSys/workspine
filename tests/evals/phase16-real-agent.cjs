@@ -317,15 +317,16 @@ function checkPublicCase(caseFile, cacheValue, options = {}) {
   }
 }
 
+const NATIVE_TOKEN_MULTIPLIER = 25;
 const TURN_PLAN = Object.freeze([
-  Object.freeze({ id: 'turn-a-plan', role: 'a-plan', skill: 'work-plan', skills: ['work-plan'], minutes: 12, tokens: 60000, session: 'A', initial: true }),
-  Object.freeze({ id: 'turn-a-pause', role: 'a-pause', skill: 'work-pause', skills: ['work-pause'], minutes: 5, tokens: 20000, session: 'A', initial: false }),
-  Object.freeze({ id: 'turn-b-resume-execute', role: 'b-resume-execute', skill: 'work-resume', skills: ['work-resume', 'work-execute'], minutes: 20, tokens: 100000, session: 'B', initial: true }),
-  Object.freeze({ id: 'turn-b-verify', role: 'b-verify', skill: 'work-verify', skills: ['work-verify'], minutes: 12, tokens: 60000, session: 'B', initial: false }),
-  Object.freeze({ id: 'turn-b-progress', role: 'b-progress', skill: 'work-progress', skills: ['work-progress'], minutes: 5, tokens: 20000, session: 'B', initial: false }),
+  Object.freeze({ id: 'turn-a-plan', role: 'a-plan', skill: 'work-plan', skills: ['work-plan'], minutes: 12, tokens: 60000 * NATIVE_TOKEN_MULTIPLIER, session: 'A', initial: true }),
+  Object.freeze({ id: 'turn-a-pause', role: 'a-pause', skill: 'work-pause', skills: ['work-pause'], minutes: 5, tokens: 20000 * NATIVE_TOKEN_MULTIPLIER, session: 'A', initial: false }),
+  Object.freeze({ id: 'turn-b-resume-execute', role: 'b-resume-execute', skill: 'work-resume', skills: ['work-resume', 'work-execute'], minutes: 20, tokens: 100000 * NATIVE_TOKEN_MULTIPLIER, session: 'B', initial: true }),
+  Object.freeze({ id: 'turn-b-verify', role: 'b-verify', skill: 'work-verify', skills: ['work-verify'], minutes: 12, tokens: 60000 * NATIVE_TOKEN_MULTIPLIER, session: 'B', initial: false }),
+  Object.freeze({ id: 'turn-b-progress', role: 'b-progress', skill: 'work-progress', skills: ['work-progress'], minutes: 5, tokens: 20000 * NATIVE_TOKEN_MULTIPLIER, session: 'B', initial: false }),
 ]);
 const TURN_TOTAL_MINUTES = 54;
-const TURN_TOTAL_TOKENS = 260000;
+const TURN_TOTAL_TOKENS = TURN_PLAN.reduce((total, turn) => total + turn.tokens, 0);
 const RETAINED_OUTPUT_BYTES = 1024 * 1024;
 const CODEX_MODEL = 'gpt-5.6-luna';
 const CODEX_EFFORT = 'high';
@@ -333,7 +334,7 @@ const CODEX_VERSION = 'codex-cli 0.149.1';
 const CAPABILITY_CONTRACT = 'phase16-native-capability-v1';
 const CAPABILITY_MARKER_PATH = '.work/eval-capability.json';
 const CAPABILITY_MARKER_BYTES = Buffer.from('{"schema_version":1,"record_type":"phase16_capability_marker","case_id":"itsdangerous-fips-sha1","capability":"workspace-write","status":"pass"}\n', 'utf8');
-const CAPABILITY_TURN = Object.freeze({ id: 'capability', role: 'capability-probe', skill: null, skills: [], minutes: 5, tokens: 20000, session: 'capability', initial: true });
+const CAPABILITY_TURN = Object.freeze({ id: 'capability', role: 'capability-probe', skill: null, skills: [], minutes: 5, tokens: 20000 * NATIVE_TOKEN_MULTIPLIER, session: 'capability', initial: true });
 const CAPABILITY_MAX_MINUTES = CAPABILITY_TURN.minutes;
 const CAPABILITY_MAX_TOKENS = CAPABILITY_TURN.tokens;
 function gitText(argv, cwd = REPO) {
@@ -767,4 +768,4 @@ async function main(argv = process.argv.slice(2)) {
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
 
-module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, TURN_PLAN, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, buildFreeze, readFreeze, prepareRun, runTurn, runCapability, capabilityProbe: runCapability, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
+module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, buildFreeze, readFreeze, prepareRun, runTurn, runCapability, capabilityProbe: runCapability, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
