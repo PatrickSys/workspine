@@ -1854,7 +1854,7 @@ function liveParseCodex(stdout, requestedModel, argv, options = {}) {
   const types = events.map((event) => String(event.type || event.event || ''));
   const errorEvents = events.filter((event, index) => {
     const type = types[index];
-    return type === 'turn.failed' || type === 'error' || type === 'reroute' || type === 'redirect' || (type === 'item.completed' && event.item?.type === 'error');
+    return type === 'turn.failed' || type === 'error' || type === 'reroute' || type === 'redirect';
   });
   if (errorEvents.length > 0) {
     const errorText = errorEvents.map((event) => JSON.stringify(event)).join('\n');
@@ -1887,7 +1887,8 @@ function liveParseCodex(stdout, requestedModel, argv, options = {}) {
     const itemId = event.item_id || item?.id || event.id;
     const itemKind = event.item_type || event.item_kind || item?.type || item?.kind;
     need(typeof itemId === 'string' && itemId.length > 0, 'infrastructure', 'native_linkage_invalid', 'Codex item event lacks an item id');
-    need(typeof itemKind === 'string' && itemKinds.has(itemKind), 'infrastructure', 'native_linkage_invalid', `Codex item event has an unknown item kind: ${String(itemKind || '<missing>')}`);
+    const completionOnlyDiagnostic = event.type === 'item.completed' && item?.type === 'error';
+    need(typeof itemKind === 'string' && (itemKinds.has(itemKind) || completionOnlyDiagnostic), 'infrastructure', 'native_linkage_invalid', `Codex item event has an unknown item kind: ${String(itemKind || '<missing>')}`);
     for (const key of ['thread_id', 'turn_id']) {
       const eventValue = event[key];
       const itemValue = item?.[key];

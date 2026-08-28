@@ -540,8 +540,8 @@ test('synthetic native matrix accepts only complete Codex, Claude, and OpenCode 
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.started', item: { id: 'todo-1', type: 'todo_list' } }, { type: 'item.completed', item: { id: 'todo-1', type: 'todo_list' } }, { type: 'item.updated', item: { id: 'todo-1', type: 'todo_list' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /open todo_list/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ ...commandStart, item: { id: 'command-1', type: 'command' } }, { ...commandComplete, item: { id: 'command-1', type: 'command' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /unknown item kind/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'error', message: 'ordinary failure' }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /native error/);
-  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { id: 'error-1', type: 'error', message: 'ordinary failure' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /native error/);
-  assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { id: 'error-1', type: 'error', message: 'redirected to fallback' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /reroute/);
+  assert.equal(LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { id: 'error-1', type: 'error', message: 'ordinary failure' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']).identity, 'requested-model-accepted');
+  assert.equal(LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { id: 'error-2', type: 'error', message: 'redirected to fallback' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']).identity, 'requested-model-accepted');
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'turn.failed', message: 'turn failed' }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /native error/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', item: { type: 'agent_message' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /item id/);
   assert.throws(() => LIVE.liveParseCodex(codexEnvelope([{ type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-1', type: 'agent_message', thread_id: 'thread-2', turn_id: 'turn-2' } }]), 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']), /incoherent/);
@@ -600,6 +600,27 @@ test('synthetic native matrix accepts only complete Codex, Claude, and OpenCode 
     { type: 'step_start', sessionID: 'session-1', part: { messageID: 'assistant-1' } },
     { type: 'error', sessionID: 'session-1', part: { messageID: 'assistant-1' } },
   ].map(JSON.stringify).join('\n'), 'openai/gpt-5.6-luna'), /error/);
+});
+
+test('Codex completion-only diagnostic errors are nonfatal, but terminal signals and usage remain strict', () => {
+  const envelope = (items, turn = { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1', usage: { input_tokens: 3, output_tokens: 2 } }) => [
+    { type: 'thread.started', thread_id: 'thread-1' },
+    { type: 'turn.started', thread_id: 'thread-1', turn_id: 'turn-1' },
+    ...items,
+    ...(turn ? [turn] : []),
+  ].map(JSON.stringify).join('\n');
+  const argv = ['exec', '-m', 'gpt-5.6-luna'];
+  const diagnostic = { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'error-1', type: 'error', message: 'redirected to fallback' } };
+
+  const parsed = LIVE.liveParseCodex(envelope([diagnostic]), 'gpt-5.6-luna', argv, { requireUsage: true });
+  assert.deepEqual(parsed.usage, { input_tokens: 3, output_tokens: 2, total_tokens: 5 });
+
+  for (const type of ['error', 'reroute', 'redirect', 'turn.failed']) {
+    assert.throws(() => LIVE.liveParseCodex(envelope([diagnostic, { type, message: 'ordinary failure' }]), 'gpt-5.6-luna', argv, { requireUsage: true }), /native error|reroute/);
+  }
+  assert.throws(() => LIVE.liveParseCodex(envelope([diagnostic], null), 'gpt-5.6-luna', argv, { requireUsage: true }), /normal thread\/turn sequence/);
+  assert.throws(() => LIVE.liveParseCodex(envelope([diagnostic], { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1', usage: { input_tokens: '3', output_tokens: 2 } }), 'gpt-5.6-luna', argv, { requireUsage: true }), /validated native usage/);
+  assert.throws(() => LIVE.liveParseCodex(envelope([diagnostic], { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1' }), 'gpt-5.6-luna', argv, { requireUsage: true }), /validated native usage/);
 });
 
 test('OpenCode executable fixture requires the separate sanitized export invocation', () => {
