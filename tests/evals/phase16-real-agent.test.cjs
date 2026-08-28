@@ -337,7 +337,7 @@ function observerFreezeFixture(root) {
   freeze.sessions = { count: 2, turns: 5 };
   freeze.auth = { copied_to_consumer_root: false };
   freeze.budgets.total_wall_minutes = 54;
-  freeze.budgets.total_native_tokens = 6500000;
+  freeze.budgets.total_native_tokens = 8000000;
   freeze.budgets.retained_output_bytes = 1048576;
   return { ...fixture, freeze };
 }
@@ -374,11 +374,13 @@ test('Task 16-08-02S keeps exact initial/resume grammar and cumulative usage del
 test('native token calibration applies the fixed 25x multiplier without changing wall/output caps', () => {
   assert.equal(LIVE.NATIVE_TOKEN_MULTIPLIER, 25);
   assert.equal(LIVE.CAPABILITY_MAX_TOKENS, 500000);
-  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.tokens), [1500000, 500000, 2500000, 1500000, 500000]);
-  assert.equal(LIVE.TURN_TOTAL_TOKENS, 6500000);
+  assert.equal(LIVE.PLAN_TOKEN_CEILING, 3000000);
+  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.tokens), [3000000, 500000, 2500000, 1500000, 500000]);
+  assert.equal(LIVE.TURN_TOTAL_TOKENS, 8000000);
   assert.equal(LIVE.TURN_TOTAL_TOKENS, LIVE.TURN_PLAN.reduce((sum, turn) => sum + turn.tokens, 0));
-  assert.deepEqual(OBSERVER.TURN_CONTRACT.map((turn) => turn[5]), [1500000, 500000, 2500000, 1500000, 500000]);
-  assert.equal(OBSERVER.TURN_TOTAL_NATIVE_TOKENS, 6500000);
+  assert.deepEqual(OBSERVER.TURN_CONTRACT.map((turn) => turn[5]), [3000000, 500000, 2500000, 1500000, 500000]);
+  assert.equal(OBSERVER.PLAN_TOKEN_CEILING, 3000000);
+  assert.equal(OBSERVER.TURN_TOTAL_NATIVE_TOKENS, 8000000);
   assert.equal(OBSERVER.TURN_TOTAL_WALL_MINUTES, 54);
   assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.minutes), [12, 5, 20, 12, 5]);
   assert.equal(LIVE.TURN_TOTAL_MINUTES, 54);
@@ -686,14 +688,29 @@ test('coordinator approval fails closed before pause on malformed, replayed, mis
   }
 });
 
-test('five-turn coordinator rejects a native turn above its calibrated per-turn ceiling', () => {
+test('five-turn coordinator accepts the sealed plan usage below the calibrated 3000000 ceiling', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-five-turn-plan-usage-'));
+  const observedPlanUsage = 2460932;
+  const fixture = rootedRunFixture(root, { usageByTurn: (turn) => {
+    if (turn.id === 'turn-a-plan') return observedPlanUsage;
+    if (turn.id === 'turn-a-pause') return observedPlanUsage + 10;
+    return turn.id === 'turn-b-resume-execute' ? 10 : turn.id === 'turn-b-verify' ? 20 : 30;
+  } });
+  try {
+    const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
+    assert.equal(result.turns[0].usage.cumulative_tokens, observedPlanUsage);
+    assert.deepEqual(result.turns.map((item) => item.usage.delta_tokens), [observedPlanUsage, 10, 10, 10, 10]);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('five-turn coordinator refuses plan usage above the calibrated 3000000 ceiling', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-five-turn-budget-'));
-  const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.tokens + 1 });
+  const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.id === 'turn-a-plan' ? LIVE.PLAN_TOKEN_CEILING + 1 : 10 });
   try {
     assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'usage_excess');
     const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${LIVE.TURN_PLAN[0].id}.json`), 'utf8'));
-    assert.equal(receipt.usage.cumulative_tokens, LIVE.TURN_PLAN[0].tokens + 1);
-    assert.equal(receipt.usage.delta_tokens, LIVE.TURN_PLAN[0].tokens + 1);
+    assert.equal(receipt.usage.cumulative_tokens, LIVE.PLAN_TOKEN_CEILING + 1);
+    assert.equal(receipt.usage.delta_tokens, LIVE.PLAN_TOKEN_CEILING + 1);
     assert.equal(receipt.terminal.failure_code, 'usage_excess');
     const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
     assert.equal(terminal.terminal.failure_code, 'usage_excess');
