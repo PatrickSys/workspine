@@ -129,6 +129,7 @@ test('receipt preserves byte counts and hashes before native interpretation', ()
   assert.equal(receipt.streams.stderr_sha256, HASH(stderr));
   assert.equal(receipt.native.thread_id, 'native-A');
   assert.deepEqual(receipt.native.event_types, ['thread.started', 'turn.started', 'item.started', 'item.completed', 'turn.completed']);
+  assert.deepEqual(receipt.native.item_kinds, ['agent_message']);
 });
 
 test('invocation records prompt and skill witnesses while redacting sensitive paths', () => {
@@ -154,7 +155,7 @@ test('recorder uses the exact fixed nested schemas', () => {
   const receipt = record();
   assert.deepEqual(Object.keys(receipt.process).sort(), ['child_pid', 'error', 'exit_code', 'parent_pid', 'signal', 'status', 'timed_out'].sort());
   assert.deepEqual(Object.keys(receipt.invocation).sort(), ['argv', 'command', 'cwd', 'prefix', 'prompt_bytes', 'prompt_sha256', 'skills'].sort());
-  assert.deepEqual(Object.keys(receipt.native).sort(), ['event_types', 'parse_error', 'thread_id', 'turn_id'].sort());
+  assert.deepEqual(Object.keys(receipt.native).sort(), ['event_types', 'item_kinds', 'parse_error', 'thread_id', 'turn_id'].sort());
   assert.equal(typeof receipt.process.status, 'string');
   assert.equal(typeof receipt.process.exit_code, 'number');
   assert.equal(receipt.native.parse_error, null);

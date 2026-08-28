@@ -76,7 +76,7 @@ function recordCodexTurn(options = {}) {
     prompt_bytes: bytes(input).length,
     skills: (options.skills || []).map((item) => ({ token: String(item?.token ?? ''), sha256: String(item?.sha256 ?? '') })),
   };
-  const nativeBase = { event_types: [], thread_id: null, turn_id: null, parse_error: null };
+  const nativeBase = { event_types: [], item_kinds: [], thread_id: null, turn_id: null, parse_error: null };
   let native = nativeBase;
   let parsedNative = null;
   let problem = spawnFailure;
@@ -87,7 +87,7 @@ function recordCodexTurn(options = {}) {
     try {
       const parsed = CORE.liveParseCodex(stdout.toString('utf8'), options.model, options.argv, { requireUsage: true });
       parsedNative = parsed;
-      native = { event_types: parsed.event_types, thread_id: parsed.thread_id, turn_id: parsed.turn_id, parse_error: null };
+      native = { event_types: parsed.event_types, item_kinds: parsed.item_kinds || [], thread_id: parsed.thread_id, turn_id: parsed.turn_id, parse_error: null };
     } catch (error) {
       problem = failure(error.code || 'native_parse_failed', error.message);
       native = { ...nativeBase, parse_error: { code: error.code || 'native_parse_failed', message: redact(error.message, options) } };

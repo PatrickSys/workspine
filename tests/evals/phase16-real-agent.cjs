@@ -330,6 +330,12 @@ const RETAINED_OUTPUT_BYTES = 1024 * 1024;
 const CODEX_MODEL = 'gpt-5.6-luna';
 const CODEX_EFFORT = 'high';
 const CODEX_VERSION = 'codex-cli 0.149.1';
+const CAPABILITY_CONTRACT = 'phase16-native-capability-v1';
+const CAPABILITY_MARKER_PATH = '.work/eval-capability.json';
+const CAPABILITY_MARKER_BYTES = Buffer.from('{"schema_version":1,"record_type":"phase16_capability_marker","case_id":"itsdangerous-fips-sha1","capability":"workspace-write","status":"pass"}\n', 'utf8');
+const CAPABILITY_TURN = Object.freeze({ id: 'capability', role: 'capability-probe', skill: null, skills: [], minutes: 5, tokens: 20000, session: 'capability', initial: true });
+const CAPABILITY_MAX_MINUTES = CAPABILITY_TURN.minutes;
+const CAPABILITY_MAX_TOKENS = CAPABILITY_TURN.tokens;
 function gitText(argv, cwd = REPO) {
   const result = cp.spawnSync('git', argv, { cwd, encoding: 'utf8', windowsHide: true, shell: false, timeout: 30000 });
   if (result.status !== 0) fail('git_command_failed', `git ${argv.join(' ')} failed`, { stderr: String(result.stderr || '').slice(-2000) });
@@ -445,6 +451,19 @@ function turnPrompt(context, turn) {
   const tokens = (turn.skills || [turn.skill]).map((skill) => `$${skill}`).join(' and ');
   return `${tokens}\nUse the owner TASK.md and BRIEF.md in inputs. This is the bounded brownfield route: plan, pause, fresh resume, execute, verify, progress. Follow the installed skill and leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.`;
 }
+
+function capabilityPrompt(context, revision) {
+  const marker = CAPABILITY_MARKER_BYTES.toString('utf8').replace(/\n$/, '');
+  return [
+    'Capability probe only. Do not use any skill, subagent, workflow, evaluator, oracle, network, or package operation.',
+    'Read inputs/owner/TASK.md completely.',
+    'Run exactly these repository checks from the consumer root: git rev-parse HEAD and git status --porcelain --untracked-files=all.',
+    `Confirm the pinned HEAD is ${revision}.`,
+    `Then write exactly these UTF-8 bytes to ${CAPABILITY_MARKER_PATH} (including the final LF, with no BOM):`,
+    marker,
+    'Do not create, delete, or modify any other file. End with a normal completed turn.',
+  ].join('\n');
+}
 function skillWitness(context, turn) {
   return (turn.skills || [turn.skill]).map((id) => {
     const file = path.join(context.consumerRoot, '.agents', 'skills', id, 'SKILL.md');
@@ -471,6 +490,124 @@ function runTurn(context, turn, sessionId = null, options = {}) {
   context.totalUsage = (context.totalUsage || 0) + delta;
   return recorded;
 }
+
+function capabilityGitText(argv, cwd, options) {
+  if (typeof options.gitText === 'function') return options.gitText(argv, cwd);
+  return gitText(argv, cwd);
+}
+
+function capabilityReceipt({ caseId, revision, recorded, before, after, changed, head, status, characterizationOnly, failure = null }) {
+  return {
+    schema_version: 1,
+    record_type: 'phase16_capability_receipt',
+    contract: CAPABILITY_CONTRACT,
+    case_id: caseId,
+    capability: 'native-codex-workspace-write',
+    provider_invoked: Boolean(recorded),
+    characterization_only: characterizationOnly,
+    workflow_verdict: 'not_evaluated',
+    turn: recorded,
+    marker: {
+      path: `<CONSUMER_ROOT>/${CAPABILITY_MARKER_PATH}`,
+      bytes: CAPABILITY_MARKER_BYTES.length,
+      sha256: sha(CAPABILITY_MARKER_BYTES),
+      exact: Boolean(after?.markerExact),
+    },
+    git: { expected_head: revision, head: head || null, status: status == null ? null : String(status) },
+    snapshots: { pre_sha256: before ? stableHash(before) : null, post_sha256: after?.tree ? stableHash(after.tree) : null, changed_paths: changed || [] },
+    terminal: failure
+      ? { status: 'failed', failure_code: failure.code, message: failure.message }
+      : { status: 'passed', failure_code: null, message: 'native Codex workspace-write capability probe passed' },
+  };
+}
+
+function runCapability(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
+  const freeze = readFreeze(freezeFile);
+  const dir = path.resolve(receiptDir);
+  fs.mkdirSync(dir, { recursive: true });
+  const characterizationOnly = options.characterizationOnly === true;
+  if ((options.prepareRun || options.spawn || options.gitText) && !characterizationOnly) fail('characterization_only_required', 'injected preparation, provider, or Git execution is characterization-only');
+  const receiptFile = path.join(dir, 'capability.json');
+  if (exists(receiptFile)) fail('receipt_exists', 'refusing to replace an existing create-exclusive capability receipt', { path: slash(receiptFile) });
+
+  let context = null;
+  let recorded = null;
+  let before = null;
+  let after = null;
+  let changed = [];
+  let head = null;
+  let status = null;
+  let data = null;
+  let revision = null;
+  try {
+    context = options.prepareRun
+      ? options.prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir })
+      : prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir });
+    if (!context || !context.consumerRoot || !exists(context.consumerRoot)) fail('consumer_root_invalid', 'capability probe consumer root is missing');
+    // The public case and freeze are the authority for the expected upstream
+    // revision. Never let an injected preparation context redefine that pin.
+    data = readCase(absoluteFile(caseFile, 'public case'));
+    revision = data.source?.revision;
+    if (typeof revision !== 'string' || revision.length === 0) fail('source_ref_mismatch', 'capability probe has no pinned source revision');
+    if (freeze.source?.revision && freeze.source.revision !== revision) fail('freeze_binding_mismatch', 'capability probe freeze is bound to a different upstream revision');
+    const marker = path.join(context.consumerRoot, CAPABILITY_MARKER_PATH);
+    if (!inside(context.consumerRoot, marker)) fail('consumer_root_invalid', 'capability marker escaped the consumer root');
+    if (exists(marker)) fail('marker_exists', 'capability marker already exists in the consumer root');
+    // Keep the parent directory in the pre-turn baseline so the only allowed
+    // post-turn tree delta is the marker file itself.
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    before = CORE.snapshotTree(context.consumerRoot, true);
+    const argv = RECORDER.buildCodexArgv({ cwd: context.consumerRoot, model: freeze.runtime.model, effort: freeze.runtime.effort, role: CAPABILITY_TURN.role, sessionId: null });
+    const input = capabilityPrompt(context, revision);
+    context.activeTurn = { argv: argv.map((item) => diagnostic(item, context.runRoot, context.env)), cwd: '<CONSUMER_ROOT>', input_sha256: sha(Buffer.from(input)), skills: [] };
+    recorded = RECORDER.recordCodexTurn({
+      turn: CAPABILITY_TURN,
+      command: context.provider.command,
+      prefix: context.provider.prefix,
+      argv,
+      cwd: context.consumerRoot,
+      root: context.runRoot,
+      env: context.env,
+      prompt: input,
+      skills: [],
+      model: freeze.runtime.model,
+      effort: freeze.runtime.effort,
+      provider: context.provider,
+      expectedSessionId: null,
+      previousCumulativeTokens: 0,
+      maxCumulativeTokens: CAPABILITY_MAX_TOKENS,
+      maxOutputBytes: RETAINED_OUTPUT_BYTES,
+      timeout: CAPABILITY_MAX_MINUTES * 60000,
+      characterizationOnly,
+      spawn: options.spawn,
+    });
+    context.spawned = context.spawned || recorded.provider_invoked;
+    if (recorded.terminal.failure_code) fail(recorded.terminal.failure_code, recorded.terminal.message);
+    after = { tree: CORE.snapshotTree(context.consumerRoot, true), markerExact: false };
+    changed = changedPaths(before, after.tree);
+    const forbiddenKinds = (recorded.native.item_kinds || []).filter((kind) => kind === 'collab_tool_call' || kind === 'web_search');
+    if (forbiddenKinds.length) fail('capability_forbidden_tool', 'capability probe native evidence contains a forbidden collaboration or web-search item kind', { item_kinds: [...new Set(forbiddenKinds)] });
+    if (changed.length !== 1 || changed[0] !== CAPABILITY_MARKER_PATH) fail('capability_scope_violation', 'capability probe changed a path other than the fixed marker', { changed });
+    const markerBytes = fs.readFileSync(marker);
+    after.markerExact = markerBytes.equals(CAPABILITY_MARKER_BYTES);
+    if (!after.markerExact) fail('capability_marker_mismatch', 'capability marker bytes do not match the fixed contract', { expected_sha256: sha(CAPABILITY_MARKER_BYTES), actual_sha256: sha(markerBytes), expected_bytes: CAPABILITY_MARKER_BYTES.length, actual_bytes: markerBytes.length });
+    head = capabilityGitText(['rev-parse', 'HEAD'], context.consumerRoot, options).trim();
+    if (head !== revision) fail('capability_head_mismatch', 'capability probe consumer HEAD is not the pinned revision', { expected: revision, actual: head });
+    status = capabilityGitText(['status', '--porcelain', '--untracked-files=all'], context.consumerRoot, options).trim();
+    const receipt = capabilityReceipt({ caseId: data.id || CASE_ID, revision, recorded, before, after, changed, head, status, characterizationOnly });
+    writeExclusive(receiptFile, receipt);
+    return receipt;
+  } catch (error) {
+    const failure = error instanceof RunnerFailure ? error : new RunnerFailure(error.code || 'infrastructure', error.message, error.evidence || null);
+    if (!exists(receiptFile)) {
+      const receipt = capabilityReceipt({ caseId: data?.id || CASE_ID, revision: revision || freeze.source?.revision || freeze.source?.main || null, recorded, before, after, changed, head, status, characterizationOnly, failure });
+      try { writeExclusive(receiptFile, receipt); } catch (writeError) { if (writeError.code !== 'receipt_exists') throw writeError; }
+    }
+    failure.provider_invoked = Boolean(context?.spawned || recorded);
+    throw failure;
+  }
+}
+
 function changedPaths(before, after) {
   const left = new Map(before.map((item) => [item.path, stable(item)])); const right = new Map(after.map((item) => [item.path, stable(item)]));
   return [...new Set([...left.keys(), ...right.keys()])].filter((key) => left.get(key) !== right.get(key));
@@ -576,8 +713,8 @@ function catalog() {
   return {
     schema_version: 1, record_type: 'phase16_real_agent_catalog', mode: 'catalog', provider_invoked: false,
     case: { id: CASE_ID, contract: CASE_CONTRACT, repository: 'https://github.com/pallets/itsdangerous.git', revision: '93ae366874bbd4f69d90495c45b2cd336387496c', oracle: 'tests/evals/cases/itsdangerous-fips-sha1-oracle.py' },
-    workflows: [...WORKFLOWS], modes: ['--catalog', '--prepare', '--check', '--freeze', '--run'], network: { prepare: 'pinned-https-only', check: 'offline-only', freeze: 'provider-free', run: 'native-codex-only' },
-    claim_limit: 'Catalog, prepare, check, and freeze are provider-free; run claims native Codex execution evidence only. No provider workflow, product, benchmark, or release claim.',
+    workflows: [...WORKFLOWS], modes: ['--catalog', '--prepare', '--check', '--freeze', '--capability', '--run'], network: { prepare: 'pinned-https-only', check: 'offline-only', freeze: 'provider-free', capability: 'native-codex-only', run: 'native-codex-only' },
+    claim_limit: 'Catalog, prepare, check, and freeze are provider-free; capability claims only one native Codex read/write probe; run claims native Codex execution evidence. No provider workflow, product, benchmark, or release claim.',
   };
 }
 
@@ -585,8 +722,8 @@ function parseArgs(argv) {
   const flags = new Map();
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
-    if (!['--catalog', '--prepare', '--check', '--freeze', '--run', '--case', '--cache', '--controls', '--offline', '--receipts', '--provider', '--public-result'].includes(key)) fail('unknown_flag', `unsupported option: ${key}`);
-    if (['--catalog', '--prepare', '--check', '--run', '--offline'].includes(key)) { if (flags.has(key)) fail('duplicate_flag', `duplicate option: ${key}`); flags.set(key, true); }
+    if (!['--catalog', '--prepare', '--check', '--freeze', '--capability', '--run', '--case', '--cache', '--controls', '--offline', '--receipts', '--provider', '--public-result'].includes(key)) fail('unknown_flag', `unsupported option: ${key}`);
+    if (['--catalog', '--prepare', '--check', '--capability', '--run', '--offline'].includes(key)) { if (flags.has(key)) fail('duplicate_flag', `duplicate option: ${key}`); flags.set(key, true); }
     else { const value = argv[++i]; if (!value || value.startsWith('--')) fail('option_value_missing', `${key} requires a value`); flags.set(key, value); }
   }
   return flags;
@@ -596,8 +733,10 @@ async function main(argv = process.argv.slice(2)) {
   let mode;
   try {
     const flags = parseArgs(argv);
-    const modes = flags.has('--run') ? ['--run'] : ['--catalog', '--prepare', '--check', '--freeze'].filter((item) => flags.has(item));
-    if (modes.length !== 1) fail('usage', 'choose exactly one of --catalog, --prepare, or --check');
+    const modes = (flags.has('--run') || flags.has('--capability')
+      ? ['--run', '--capability']
+      : ['--catalog', '--prepare', '--check', '--freeze']).filter((item) => flags.has(item));
+    if (modes.length !== 1) fail('usage', 'choose exactly one evaluator mode');
     mode = modes[0];
     if (mode === '--catalog') {
       if (argv.length !== 1) fail('usage', '--catalog takes no other options');
@@ -608,22 +747,24 @@ async function main(argv = process.argv.slice(2)) {
     if (mode === '--prepare' && flags.has('--offline')) fail('usage', '--prepare cannot use --offline');
     if (mode === '--check' && !flags.has('--offline')) fail('offline_required', '--check requires --offline');
     if (mode === '--freeze' && !flags.has('--freeze')) fail('usage', '--freeze requires a destination value');
+    if (mode === '--capability' && (!flags.has('--freeze') || !flags.has('--receipts'))) fail('usage', '--capability requires --freeze and --receipts');
     if (mode === '--run' && (!flags.has('--freeze') || !flags.has('--receipts'))) fail('usage', '--run requires --freeze and --receipts');
-    if (mode === '--run' && flags.get('--provider') !== 'codex') fail('usage', '--run requires --provider codex');
+    if ((mode === '--run' || mode === '--capability') && flags.get('--provider') !== 'codex') fail('usage', `${mode} requires --provider codex`);
     const result = mode === '--prepare'
       ? await preparePublicCase(flags.get('--case'), flags.get('--cache'), { controls: flags.get('--controls') })
       : mode === '--check' ? checkPublicCase(flags.get('--case'), flags.get('--cache'), { offline: true, controls: flags.get('--controls') })
         : mode === '--freeze' ? buildFreeze(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), { controls: flags.get('--controls') })
-          : runFrozen(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), flags.get('--receipts'), { controls: flags.get('--controls'), publicResult: flags.get('--public-result') });
-    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode.slice(2), provider_invoked: mode === '--run' ? Boolean(result?.provider_invoked) : false, network: mode === '--prepare' ? 'pinned-https-only' : mode === '--check' ? 'offline' : mode === '--run' ? 'native-codex-only' : 'provider-free-preparation', case_id: CASE_ID, preparation: result, terminal: { status: mode === '--run' ? 'provider_complete' : 'passed', failure_class: null, failure_code: null, message: mode === '--prepare' ? 'pinned upstream Git checkout and controls prepared' : 'bounded Task 16-08 coordinator completed' }, workflow_verdict: 'not_evaluated', claim_limit: catalog().claim_limit }, null, 2)}\n`);
+          : mode === '--capability' ? runCapability(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), flags.get('--receipts'), { controls: flags.get('--controls') })
+            : runFrozen(flags.get('--case'), flags.get('--cache'), flags.get('--freeze'), flags.get('--receipts'), { controls: flags.get('--controls'), publicResult: flags.get('--public-result') });
+    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode.slice(2), provider_invoked: mode === '--run' || mode === '--capability' ? Boolean(result?.provider_invoked) : false, network: mode === '--prepare' ? 'pinned-https-only' : mode === '--check' ? 'offline' : mode === '--run' || mode === '--capability' ? 'native-codex-only' : 'provider-free-preparation', case_id: CASE_ID, preparation: result, terminal: { status: mode === '--run' || mode === '--capability' ? 'provider_complete' : 'passed', failure_class: null, failure_code: null, message: mode === '--prepare' ? 'pinned upstream Git checkout and controls prepared' : mode === '--capability' ? 'native Codex workspace-write capability probe completed' : 'bounded Task 16-08 coordinator completed' }, workflow_verdict: 'not_evaluated', claim_limit: catalog().claim_limit }, null, 2)}\n`);
     return 0;
   } catch (error) {
     const failure = error instanceof RunnerFailure ? error : new RunnerFailure('infrastructure', error.message);
-    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode ? mode.slice(2) : null, provider_invoked: Boolean(failure.provider_invoked), network: mode === '--prepare' ? 'pinned-https-only' : mode === '--check' ? 'offline' : mode === '--run' ? 'native-codex-only' : null, case_id: CASE_ID, terminal: { status: 'failed', failure_class: 'infrastructure', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, workflow_verdict: 'not_evaluated', claim_limit: catalog().claim_limit }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ schema_version: 1, record_type: 'phase16_real_agent_receipt', mode: mode ? mode.slice(2) : null, provider_invoked: Boolean(failure.provider_invoked), network: mode === '--prepare' ? 'pinned-https-only' : mode === '--check' ? 'offline' : mode === '--run' || mode === '--capability' ? 'native-codex-only' : null, case_id: CASE_ID, terminal: { status: 'failed', failure_class: 'infrastructure', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null }, workflow_verdict: 'not_evaluated', claim_limit: catalog().claim_limit }, null, 2)}\n`);
     return 1;
   }
 }
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
 
-module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, TURN_PLAN, buildFreeze, readFreeze, prepareRun, runTurn, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, resolvePython, candidatePack, changedPaths };
+module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, TURN_PLAN, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, buildFreeze, readFreeze, prepareRun, runTurn, runCapability, capabilityProbe: runCapability, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };

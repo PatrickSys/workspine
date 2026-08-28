@@ -505,7 +505,9 @@ test('synthetic native matrix accepts only complete Codex, Claude, and OpenCode 
     { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'file-change-1', type: 'file_change', changes: [] } },
     { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1' },
   ].map(JSON.stringify).join('\n');
-  assert.equal(LIVE.liveParseCodex(codex, 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']).identity, 'requested-model-accepted');
+  const parsedCodex = LIVE.liveParseCodex(codex, 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']);
+  assert.equal(parsedCodex.identity, 'requested-model-accepted');
+  assert.deepEqual(parsedCodex.item_kinds, ['agent_message', 'reasoning', 'command_execution', 'todo_list', 'file_change']);
 
   const codexEnvelope = (items) => [
     { type: 'thread.started', thread_id: 'thread-1' },

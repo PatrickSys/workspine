@@ -14,6 +14,7 @@ const EVAL = path.join(REPO, 'tests', 'evals', 'phase16-real-agent.cjs');
 const CASE = path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1.json');
 const LIVE = require(EVAL);
 const OBSERVER = require('./phase16-itsdangerous-observer.cjs');
+const CAPABILITY_REVISION = JSON.parse(fs.readFileSync(CASE, 'utf8')).source.revision;
 
 function run(args) {
   return cp.spawnSync(process.execPath, [EVAL, ...args], { cwd: REPO, encoding: 'utf8', windowsHide: true });
@@ -49,6 +50,17 @@ test('mode and offline boundaries reject ambiguous or networked checks', () => {
     assert.notEqual(result.status, 0, args.join(' '));
     const receipt = parse(result);
     assert.equal(receipt.provider_invoked, false);
+  }
+});
+
+test('provider modes treat --freeze as its destination and reach their seam boundary', () => {
+  for (const mode of ['--capability', '--run']) {
+    const result = run([mode, '--case', CASE, '--cache', path.join(os.tmpdir(), `missing-${mode.slice(2)}-cache`), '--freeze', path.join(os.tmpdir(), `missing-${mode.slice(2)}-freeze.json`), '--receipts', path.join(os.tmpdir(), `missing-${mode.slice(2)}-receipts`), '--provider', 'codex']);
+    assert.notEqual(result.status, 0, mode);
+    const receipt = parse(result);
+    assert.equal(receipt.provider_invoked, false);
+    assert.notEqual(receipt.terminal.failure_code, 'usage');
+    assert.equal(receipt.terminal.failure_code, 'case_file_invalid');
   }
 });
 
@@ -217,6 +229,22 @@ function nativeCodex(thread, turn, cumulative, verdict = null) {
   ].map((event) => JSON.stringify(event)).join('\n') + '\n';
 }
 
+function nativeCodexItems(thread, turn, cumulative, kinds) {
+  const items = kinds.flatMap((kind, index) => {
+    const item = { type: kind, id: `item-${turn}-${index}` };
+    return [
+      { type: 'item.started', thread_id: thread, turn_id: turn, item },
+      { type: 'item.completed', thread_id: thread, turn_id: turn, item },
+    ];
+  });
+  return [
+    { type: 'thread.started', thread_id: thread },
+    { type: 'turn.started', thread_id: thread, turn_id: turn },
+    ...items,
+    { type: 'turn.completed', thread_id: thread, turn_id: turn, usage: { input_tokens: cumulative - 4, output_tokens: 4 } },
+  ].map((event) => JSON.stringify(event)).join('\n') + '\n';
+}
+
 function rootedRunFixture(root, { mutation = null, verdict = null } = {}) {
   const consumerRoot = path.join(root, 'consumer_root');
   const receiptDir = path.join(root, 'receipts');
@@ -269,6 +297,83 @@ test('Task 16-08-02S keeps exact initial/resume grammar and cumulative usage del
   assert.equal(resumed.includes('--sandbox'), false);
   assert.equal(resumed.includes('--ephemeral'), false);
   assert.throws(() => LIVE.readFreeze(path.join(os.tmpdir(), 'missing-16-08-freeze.json')), (error) => error.code === 'case_file_invalid');
+});
+
+function capabilityFixture(root, { mutate = false, itemKinds = ['agent_message'] } = {}) {
+  const fixture = rootedRunFixture(root);
+  const git = (args) => {
+    const result = cp.spawnSync('git', args, { cwd: fixture.context.consumerRoot, encoding: 'utf8', windowsHide: true, shell: false });
+    assert.equal(result.status, 0, result.stderr);
+    return String(result.stdout || '').trim();
+  };
+  fs.writeFileSync(path.join(fixture.context.consumerRoot, 'package.json'), '{}\n');
+  fs.mkdirSync(path.join(fixture.context.consumerRoot, 'inputs', 'owner'), { recursive: true });
+  fs.writeFileSync(path.join(fixture.context.consumerRoot, 'inputs', 'owner', 'TASK.md'), '# Capability task\n');
+  git(['init', '-q']); git(['config', 'user.email', 'capability@example.invalid']); git(['config', 'user.name', 'capability-test']); git(['add', '.']); git(['commit', '-qm', 'baseline']);
+  git(['rev-parse', 'HEAD']);
+  const revision = CAPABILITY_REVISION;
+  fixture.context.data = { id: 'itsdangerous-fips-sha1', source: { revision } };
+  fixture.spawn = () => {
+    if (mutate) fs.writeFileSync(path.join(fixture.context.consumerRoot, 'unexpected.txt'), 'unexpected\n', { flag: 'wx' });
+    fs.mkdirSync(path.join(fixture.context.consumerRoot, '.work'), { recursive: true });
+    fs.writeFileSync(path.join(fixture.context.consumerRoot, LIVE.CAPABILITY_MARKER_PATH), LIVE.CAPABILITY_MARKER_BYTES, { flag: 'wx' });
+    return { status: 0, pid: 4444, parent_pid: 4443, stdout: nativeCodexItems('native-capability', 'capability-native', 12, itemKinds), stderr: '', timed_out: false };
+  };
+  return fixture;
+}
+
+test('capability probe is one injected characterization turn with an exact marker and scoped delta', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-capability-'));
+  const fixture = capabilityFixture(root);
+  try {
+    const receipt = LIVE.runCapability(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, gitText: (args) => args[0] === 'rev-parse' ? CAPABILITY_REVISION : '', characterizationOnly: true });
+    assert.equal(receipt.contract, 'phase16-native-capability-v1');
+    assert.equal(receipt.provider_invoked, true);
+    assert.deepEqual(receipt.snapshots.changed_paths, [LIVE.CAPABILITY_MARKER_PATH]);
+    assert.equal(receipt.marker.exact, true);
+    assert.equal(receipt.git.head, fixture.context.data.source.revision);
+    assert.deepEqual(receipt.turn.native.item_kinds, ['agent_message']);
+    assert.deepEqual(receipt.turn.invocation.skills, []);
+    assert.match(Buffer.from(receipt.turn.invocation.prompt_sha256, 'hex').toString('hex'), /^[0-9a-f]{64}$/);
+    assert.deepEqual(fs.readFileSync(path.join(fixture.context.consumerRoot, LIVE.CAPABILITY_MARKER_PATH)), LIVE.CAPABILITY_MARKER_BYTES);
+    assert.throws(() => LIVE.runCapability(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, gitText: (args) => args[0] === 'rev-parse' ? CAPABILITY_REVISION : '', characterizationOnly: true }), (error) => error.code === 'receipt_exists');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('capability probe permits ordinary command and file item kinds', () => {
+  for (const itemKind of ['command_execution', 'file_change']) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-capability-${itemKind}-`));
+    const fixture = capabilityFixture(root, { itemKinds: [itemKind] });
+    try {
+      const receipt = LIVE.runCapability(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, gitText: (args) => args[0] === 'rev-parse' ? CAPABILITY_REVISION : '', characterizationOnly: true });
+      assert.deepEqual(receipt.turn.native.item_kinds, [itemKind]);
+      assert.equal(receipt.terminal.status, 'passed');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('capability probe rejects collaboration and web-search item kinds with a sealed receipt', () => {
+  for (const itemKind of ['collab_tool_call', 'web_search']) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-capability-forbidden-${itemKind}-`));
+    const fixture = capabilityFixture(root, { itemKinds: [itemKind] });
+    try {
+      assert.throws(() => LIVE.runCapability(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, gitText: (args) => args[0] === 'rev-parse' ? CAPABILITY_REVISION : '', characterizationOnly: true }), (error) => error.code === 'capability_forbidden_tool');
+      const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'capability.json'), 'utf8'));
+      assert.equal(receipt.terminal.status, 'failed');
+      assert.equal(receipt.terminal.failure_code, 'capability_forbidden_tool');
+      assert.deepEqual(receipt.turn.native.item_kinds, [itemKind]);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('capability probe fails closed on any post-preflight path outside the fixed marker', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-capability-scope-'));
+  const fixture = capabilityFixture(root, { mutate: true });
+  try {
+    assert.throws(() => LIVE.runCapability(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, gitText: (args) => args[0] === 'rev-parse' ? CAPABILITY_REVISION : '', characterizationOnly: true }), (error) => error.code === 'capability_scope_violation');
+    const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'capability.json'), 'utf8'));
+    assert.equal(receipt.terminal.failure_code, 'capability_scope_violation');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('provider-free coordinator runs production-shaped five-turn handoff with two sessions', () => {
