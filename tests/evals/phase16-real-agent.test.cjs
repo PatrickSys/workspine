@@ -27,6 +27,21 @@ function parse(result) {
 
 function sha(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
 
+const EVALUATOR_FILES = [
+  'tests/evals/phase16-real-agent.cjs',
+  'tests/evals/phase16-codex-recorder.cjs',
+  'tests/evals/phase16-core-flows.cjs',
+  'tests/evals/phase16-itsdangerous-observer.cjs',
+];
+
+function currentEvaluatorLedger() {
+  return Object.fromEntries(EVALUATOR_FILES.map((relative) => {
+    const file = path.join(REPO, ...relative.split('/'));
+    const bytes = fs.readFileSync(file);
+    return [relative, { bytes: bytes.length, sha256: sha(bytes) }];
+  }));
+}
+
 test('catalog is provider-free and names the exact public case/workflow limits', () => {
   const result = run(['--catalog']);
   assert.equal(result.status, 0, result.stderr);
@@ -267,6 +282,7 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
     toolchain: { node: { sha256: 'node' }, npm: { sha256: 'npm' }, git: { sha256: 'git' } },
     runtime: { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high', cli_contract: { version: 'codex-cli 0.149.1', resume_help_sha256: 'a'.repeat(64) }, executable: { source_sha256: 'provider', target_sha256: 'provider-target' }, python: { sha256: 'python' } },
     budgets: { turns: LIVE.TURN_PLAN.map((turn) => ({ id: turn.id, role: turn.role, skill: turn.skill, skills: turn.skills, wall_minutes: turn.minutes, native_tokens: turn.tokens, session: turn.session, initial: turn.initial })) },
+    evaluator: { contract: 'phase16-evaluator-ledger-v1', files: currentEvaluatorLedger() },
     skills: Object.fromEntries([...new Set(LIVE.TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, sha(fs.readFileSync(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md')))])),
     root_map: { consumer_root: '<RUN_ROOT>/consumer_root' }, sessions: { count: 2, turns: 5 },
   };
@@ -305,6 +321,27 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
   return { freezeFile, receiptDir, context, prepareRun, spawn, get calls() { return calls; } };
 }
 
+function observerFreezeFixture(root) {
+  const fixture = rootedRunFixture(root);
+  const data = JSON.parse(fs.readFileSync(CASE, 'utf8'));
+  const freeze = JSON.parse(fs.readFileSync(fixture.freezeFile, 'utf8'));
+  freeze.schema_version = 1;
+  freeze.case = { sha256: sha(fs.readFileSync(CASE)), oracle: data.oracle, input_bundle: { contract: data.input_bundle.contract, sha256: 'a'.repeat(64) } };
+  freeze.source = { repository: data.source.repository, revision: data.source.revision, main: data.source.revision, origin_main: data.source.revision, files: {} };
+  freeze.bundle = { sha256: 'b'.repeat(64), manifest_sha256: 'c'.repeat(64) };
+  freeze.controls = { sha256: 'd'.repeat(64) };
+  freeze.candidate = { sha256: 'e'.repeat(64), member_sha256: OBSERVER.stableHash([]), members: [], package: { name: 'workspine', version: '0.0.0' } };
+  freeze.runtime = { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high', cli_contract: { version: 'codex-cli 0.149.1', resume_help_sha256: 'f'.repeat(64) }, executable: { source_sha256: '1'.repeat(64), target_sha256: '2'.repeat(64) }, python: { path: '<PYTHON>', identity: '<PYTHON>', sha256: '3'.repeat(64) }, auth_posture: 'authenticated-native-CODEX_HOME; ignore-user-config; credentials-not-copied' };
+  freeze.toolchain = { node: { sha256: '4'.repeat(64) }, npm: { sha256: '5'.repeat(64) }, git: { sha256: '6'.repeat(64) } };
+  freeze.root_map = { run_root: '<RUN_ROOT>', consumer_root: '<RUN_ROOT>/consumer_root', tool_root: '<RUN_ROOT>/tool_root', receipts: '<RECEIPTS>' };
+  freeze.sessions = { count: 2, turns: 5 };
+  freeze.auth = { copied_to_consumer_root: false };
+  freeze.budgets.total_wall_minutes = 54;
+  freeze.budgets.total_native_tokens = 6500000;
+  freeze.budgets.retained_output_bytes = 1048576;
+  return { ...fixture, freeze };
+}
+
 test('Task 16-08-02S keeps exact initial/resume grammar and cumulative usage deltas', () => {
   const context = { cwd: '<CONSUMER_ROOT>', model: 'gpt-5.6-luna', effort: 'high' };
   const initial = LIVE.codexTurnArgv(context);
@@ -340,9 +377,51 @@ test('native token calibration applies the fixed 25x multiplier without changing
   assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.tokens), [1500000, 500000, 2500000, 1500000, 500000]);
   assert.equal(LIVE.TURN_TOTAL_TOKENS, 6500000);
   assert.equal(LIVE.TURN_TOTAL_TOKENS, LIVE.TURN_PLAN.reduce((sum, turn) => sum + turn.tokens, 0));
+  assert.deepEqual(OBSERVER.TURN_CONTRACT.map((turn) => turn[5]), [1500000, 500000, 2500000, 1500000, 500000]);
+  assert.equal(OBSERVER.TURN_TOTAL_NATIVE_TOKENS, 6500000);
+  assert.equal(OBSERVER.TURN_TOTAL_WALL_MINUTES, 54);
   assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.minutes), [12, 5, 20, 12, 5]);
   assert.equal(LIVE.TURN_TOTAL_MINUTES, 54);
   assert.equal(LIVE.RETAINED_OUTPUT_BYTES, 1024 * 1024);
+});
+
+test('fresh freezes bind evaluator bytes and reject missing or mutated ledger entries before provider', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-evaluator-freeze-'));
+  const fixture = rootedRunFixture(root);
+  const observer = observerFreezeFixture(`${root}-observer`);
+  try {
+    const accepted = LIVE.readFreeze(fixture.freezeFile);
+    assert.deepEqual(Object.keys(accepted.evaluator.files).sort(), EVALUATOR_FILES.slice().sort());
+    assert.deepEqual(accepted.evaluator.files, currentEvaluatorLedger());
+    assert.doesNotThrow(() => OBSERVER.validateEvaluatorLedger(accepted.evaluator));
+    assert.doesNotThrow(() => OBSERVER.validateFreeze(JSON.parse(fs.readFileSync(CASE, 'utf8')), observer.freeze, CASE));
+    const observerBroken = structuredClone(observer.freeze);
+    delete observerBroken.evaluator.files[EVALUATOR_FILES[0]];
+    assert.throws(() => OBSERVER.validateFreeze(JSON.parse(fs.readFileSync(CASE, 'utf8')), observerBroken, CASE), (error) => error.code === 'evaluator_binding_mismatch');
+
+    const baseline = JSON.parse(fs.readFileSync(fixture.freezeFile, 'utf8'));
+    for (const mutation of ['missing', 'mutated']) {
+      const broken = structuredClone(baseline);
+      if (mutation === 'missing') delete broken.evaluator.files[EVALUATOR_FILES[0]];
+      else broken.evaluator.files[EVALUATOR_FILES[0]].sha256 = '0'.repeat(64);
+      fs.writeFileSync(fixture.freezeFile, JSON.stringify(broken));
+      assert.throws(
+        () => LIVE.prepareRun(CASE, path.join(root, 'missing-cache'), broken, { provider: { command: 'must-not-run' } }),
+        (error) => error.code === 'evaluator_binding_mismatch',
+        `${mutation} evaluator ledger was not checked by prepareRun`,
+      );
+      assert.throws(
+        () => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, {
+          prepareRun: () => { throw new Error('provider boundary reached'); },
+          spawn: fixture.spawn,
+          characterizationOnly: true,
+        }),
+        (error) => error.code === 'evaluator_binding_mismatch',
+        mutation,
+      );
+      assert.equal(fixture.calls, 0, `${mutation} evaluator ledger reached provider`);
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(`${root}-observer`, { recursive: true, force: true }); }
 });
 
 test('each rooted turn receives an exact stage-specific lifecycle prompt', () => {
@@ -905,7 +984,7 @@ function makePartialPlanFixture() {
   const freeze = {
     schema_version: 1, contract: 'phase16-rooted-codex-freeze-v1', case_id: 'itsdangerous-fips-sha1', provider_sandbox: 'not_claimed', workflow_verdict: 'not_evaluated',
     case: { sha256: sha(fs.readFileSync(CASE)), oracle: { path: 'tests/evals/cases/itsdangerous-fips-sha1-oracle.py', sha256: JSON.parse(fs.readFileSync(CASE)).oracle.sha256 }, input_bundle: { contract: 'phase16-public-input-bundle-v1', sha256: 'a'.repeat(64) } },
-    source: { repository: 'https://github.com/pallets/itsdangerous.git', revision: CAPABILITY_REVISION, main: CAPABILITY_REVISION, origin_main: CAPABILITY_REVISION },
+    source: { repository: 'https://github.com/pallets/itsdangerous.git', revision: CAPABILITY_REVISION, main: CAPABILITY_REVISION, origin_main: CAPABILITY_REVISION }, evaluator: { contract: 'phase16-evaluator-ledger-v1', files: currentEvaluatorLedger() },
     bundle: { sha256: 'b'.repeat(64) }, controls: { sha256: 'c'.repeat(64) }, candidate: { sha256: 'd'.repeat(64) }, runtime: { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high', python: { sha256: 'e'.repeat(64) } }, skills: { 'work-plan': workPlanHash }, root_map: { consumer_root: '<RUN_ROOT>/consumer_root' },
   };
   const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));

@@ -331,6 +331,13 @@ const TURN_PLAN = Object.freeze([
 const TURN_TOTAL_MINUTES = 54;
 const TURN_TOTAL_TOKENS = TURN_PLAN.reduce((total, turn) => total + turn.tokens, 0);
 const RETAINED_OUTPUT_BYTES = 1024 * 1024;
+const EVALUATOR_LEDGER_CONTRACT = 'phase16-evaluator-ledger-v1';
+const EVALUATOR_FILES = Object.freeze([
+  'tests/evals/phase16-real-agent.cjs',
+  'tests/evals/phase16-codex-recorder.cjs',
+  'tests/evals/phase16-core-flows.cjs',
+  'tests/evals/phase16-itsdangerous-observer.cjs',
+]);
 const CODEX_MODEL = 'gpt-5.6-luna';
 const CODEX_EFFORT = 'high';
 const CODEX_VERSION = 'codex-cli 0.149.1';
@@ -393,6 +400,23 @@ function sourceRef() {
   if (head !== origin) fail('source_ref_mismatch', 'main and origin/main must be equal before freezing', { head, origin });
   return { head, origin };
 }
+function evaluatorFileLedger() {
+  const files = Object.fromEntries(EVALUATOR_FILES.map((relative) => {
+    const file = path.join(REPO, ...relative.split('/'));
+    if (!exists(file) || !fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink()) fail('evaluator_binding_mismatch', `evaluator file is missing or unsafe: ${relative}`);
+    return [relative, { bytes: fs.statSync(file).size, sha256: fileSha(file) }];
+  }));
+  return { contract: EVALUATOR_LEDGER_CONTRACT, files };
+}
+function validateEvaluatorLedger(ledger) {
+  if (ledger?.contract !== EVALUATOR_LEDGER_CONTRACT || !ledger.files || stable(Object.keys(ledger.files).sort()) !== stable(EVALUATOR_FILES.slice().sort())) fail('evaluator_binding_mismatch', 'freeze evaluator ledger is missing or has an unexpected file set');
+  for (const relative of EVALUATOR_FILES) {
+    const expected = ledger.files[relative];
+    const file = path.join(REPO, ...relative.split('/'));
+    if (!expected || !Number.isInteger(expected.bytes) || !/^[0-9a-f]{64}$/i.test(String(expected.sha256 || '')) || !exists(file) || !fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink() || expected.bytes !== fs.statSync(file).size || expected.sha256.toLowerCase() !== fileSha(file)) fail('evaluator_binding_mismatch', `evaluator file bytes differ from the freeze: ${relative}`);
+  }
+  return ledger;
+}
 function cacheBinding(caseFile, cacheValue, data, controlsPath) {
   const cache = absoluteDirectory(cacheValue, 'case cache');
   const destination = path.join(cache, data.id);
@@ -436,6 +460,7 @@ function buildFreeze(caseFile, cacheValue, freezeFile, options = {}) {
       root_map: { run_root: '<RUN_ROOT>', consumer_root: '<RUN_ROOT>/consumer_root', tool_root: '<RUN_ROOT>/tool_root', receipts: '<RECEIPTS>' },
       sessions: { count: 2, turns: 5, workflow_count: 6, identities: 'native-only-distinct-A-and-B' }, provider_sandbox: 'not_claimed', workflow_verdict: 'not_evaluated', auth: { copied_to_consumer_root: false },
       skills,
+      evaluator: evaluatorFileLedger(),
     };
     writeExclusive(freezeFile, freeze);
     return freeze;
@@ -448,6 +473,7 @@ function readFreeze(file) {
   if (freeze.contract !== 'phase16-rooted-codex-freeze-v1' || freeze.case_id !== CASE_ID || freeze.workflow_verdict !== 'not_evaluated' || freeze.provider_sandbox !== 'not_claimed' || freeze.auth?.copied_to_consumer_root !== false || freeze.runtime?.provider !== 'codex') fail('freeze_invalid', 'freeze contract or claim posture is invalid');
   if (stable(freeze.budgets?.turns?.map((item) => [item.id, item.role, item.skill, item.skills, item.wall_minutes, item.native_tokens, item.session, item.initial])) !== stable(TURN_PLAN.map((item) => [item.id, item.role, item.skill, item.skills, item.minutes, item.tokens, item.session, item.initial]))) fail('freeze_budget_mismatch', 'freeze does not carry the fixed five-turn budgets');
   if (freeze.budgets?.total_wall_minutes !== TURN_TOTAL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_TOKENS || freeze.budgets?.retained_output_bytes !== RETAINED_OUTPUT_BYTES || freeze.sessions?.count !== 2 || freeze.sessions?.turns !== 5 || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root') fail('freeze_invalid', 'freeze fixed totals or root map are invalid');
+  validateEvaluatorLedger(freeze.evaluator);
   if (!freeze.case?.sha256 || !freeze.case?.input_bundle?.sha256 || !freeze.bundle?.sha256 || !freeze.controls?.sha256 || !freeze.candidate?.sha256 || !freeze.candidate?.member_sha256 || !Array.isArray(freeze.candidate?.members) || !freeze.candidate.package?.name || !freeze.candidate.package?.version || !freeze.source?.main || !freeze.source?.origin_main || !freeze.source?.files || freeze.runtime?.cli_contract?.version !== CODEX_VERSION || !/^[0-9a-f]{64}$/i.test(freeze.runtime?.cli_contract?.resume_help_sha256 || '') || !freeze.runtime?.executable?.source_sha256 || !freeze.runtime?.executable?.target_sha256 || !freeze.toolchain?.node?.sha256 || !freeze.toolchain?.npm?.sha256 || !freeze.toolchain?.git?.sha256 || !freeze.runtime?.python?.sha256 || Object.keys(freeze.skills || {}).length !== 6 || Object.values(freeze.skills || {}).some((hash) => !/^[0-9a-f]{64}$/i.test(hash))) fail('freeze_invalid', 'freeze is missing an immutable case, source, bundle, controls, candidate, runtime, toolchain, or skill binding');
   return freeze;
 }
@@ -824,6 +850,7 @@ function runCoordinatorApproval(context, options = {}) {
 
 function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   const file = absoluteFile(caseFile, 'public case'); const data = readCase(file);
+  validateEvaluatorLedger(freeze?.evaluator);
   const refs = sourceRef();
   if (refs.head !== freeze.source.main || refs.origin !== freeze.source.origin_main) fail('source_ref_mismatch', 'current main and origin/main differ from the freeze');
   const cache = cacheBinding(file, cacheValue, data, options.controls || DEFAULT_CONTROLS);
@@ -984,4 +1011,4 @@ async function main(argv = process.argv.slice(2)) {
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
 
-module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, buildFreeze, readFreeze, prepareRun, runTurn, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
+module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, evaluatorFileLedger, validateEvaluatorLedger, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, buildFreeze, readFreeze, prepareRun, runTurn, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };

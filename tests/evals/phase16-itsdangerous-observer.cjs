@@ -17,15 +17,25 @@ const ORACLE_CONTRACT = 'phase16-itsdangerous-oracle-v1';
 const GRADE_CONTRACT = 'phase16-itsdangerous-grade-v1';
 const REGRADE_CONTRACT = 'phase16-itsdangerous-regrade-v1';
 const PROJECTION_CONTRACT = 'phase16-itsdangerous-public-result-v1';
+const REPO = fs.realpathSync(path.resolve(__dirname, '..', '..'));
+const EVALUATOR_LEDGER_CONTRACT = 'phase16-evaluator-ledger-v1';
+const EVALUATOR_FILES = Object.freeze([
+  'tests/evals/phase16-real-agent.cjs',
+  'tests/evals/phase16-codex-recorder.cjs',
+  'tests/evals/phase16-core-flows.cjs',
+  'tests/evals/phase16-itsdangerous-observer.cjs',
+]);
 const WORKFLOW_STEPS = Object.freeze(['turn-a-plan', 'turn-a-pause', 'turn-b-resume-execute', 'turn-b-verify', 'turn-b-progress']);
 const DISPOSITIONS = Object.freeze(['passed', 'product_red', 'infrastructure_invalid', 'identity_unknown', 'human_needed']);
 const TURN_CONTRACT = Object.freeze([
-  ['turn-a-plan', 'a-plan', 'work-plan', ['work-plan'], 12, 60000, 'A', true],
-  ['turn-a-pause', 'a-pause', 'work-pause', ['work-pause'], 5, 20000, 'A', false],
-  ['turn-b-resume-execute', 'b-resume-execute', 'work-resume', ['work-resume', 'work-execute'], 20, 100000, 'B', true],
-  ['turn-b-verify', 'b-verify', 'work-verify', ['work-verify'], 12, 60000, 'B', false],
-  ['turn-b-progress', 'b-progress', 'work-progress', ['work-progress'], 5, 20000, 'B', false],
+  ['turn-a-plan', 'a-plan', 'work-plan', ['work-plan'], 12, 1500000, 'A', true],
+  ['turn-a-pause', 'a-pause', 'work-pause', ['work-pause'], 5, 500000, 'A', false],
+  ['turn-b-resume-execute', 'b-resume-execute', 'work-resume', ['work-resume', 'work-execute'], 20, 2500000, 'B', true],
+  ['turn-b-verify', 'b-verify', 'work-verify', ['work-verify'], 12, 1500000, 'B', false],
+  ['turn-b-progress', 'b-progress', 'work-progress', ['work-progress'], 5, 500000, 'B', false],
 ]);
+const TURN_TOTAL_WALL_MINUTES = 54;
+const TURN_TOTAL_NATIVE_TOKENS = 6500000;
 
 class ObserverFailure extends Error {
   constructor(code, message, evidence = null) {
@@ -69,8 +79,19 @@ function readCase(caseFile) {
 
 function validHash(value) { return /^[0-9a-f]{64}$/i.test(String(value || '')); }
 
+function validateEvaluatorLedger(ledger) {
+  if (ledger?.contract !== EVALUATOR_LEDGER_CONTRACT || !ledger.files || stable(Object.keys(ledger.files).sort()) !== stable(EVALUATOR_FILES.slice().sort())) fail('evaluator_binding_mismatch', 'freeze evaluator ledger is missing or has an unexpected file set');
+  for (const relative of EVALUATOR_FILES) {
+    const expected = ledger.files[relative];
+    const file = path.join(REPO, ...relative.split('/'));
+    if (!expected || !Number.isInteger(expected.bytes) || !validHash(expected.sha256) || !exists(file) || !fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink() || expected.bytes !== fs.statSync(file).size || expected.sha256.toLowerCase() !== fileSha(file)) fail('evaluator_binding_mismatch', `evaluator file bytes differ from the freeze: ${relative}`);
+  }
+  return ledger;
+}
+
 function validateFreeze(data, freeze, caseFile, controlsFile = null) {
   if (freeze.schema_version !== 1 || freeze.contract !== 'phase16-rooted-codex-freeze-v1' || freeze.case_id !== CASE_ID || freeze.provider_sandbox !== 'not_claimed' || freeze.workflow_verdict !== 'not_evaluated') fail('freeze_binding_mismatch', 'freeze contract or claim posture is not exact');
+  validateEvaluatorLedger(freeze.evaluator);
   if (freeze.case?.sha256 !== fileSha(caseFile) || freeze.case?.oracle?.path !== data.oracle.path || freeze.case?.oracle?.sha256?.toLowerCase() !== data.oracle.sha256.toLowerCase() || freeze.case?.input_bundle?.contract !== data.input_bundle.contract || !validHash(freeze.case?.input_bundle?.sha256)) fail('freeze_binding_mismatch', 'freeze case, oracle, or input binding drifted');
   if (!validHash(freeze.bundle?.sha256) || !validHash(freeze.bundle?.manifest_sha256) || !validHash(freeze.controls?.sha256) || !validHash(freeze.candidate?.sha256) || !validHash(freeze.candidate?.member_sha256)) fail('freeze_binding_mismatch', 'freeze lacks immutable bundle, controls, or candidate hashes');
   const expectedInputs = Object.fromEntries((data.input_bundle.members || []).map((item) => [item.path, item.sha256.toLowerCase()]));
@@ -80,7 +101,7 @@ function validateFreeze(data, freeze, caseFile, controlsFile = null) {
   if (freeze.runtime?.provider !== 'codex' || freeze.runtime?.model !== 'gpt-5.6-luna' || freeze.runtime?.effort !== 'high' || freeze.runtime?.cli_contract?.version !== 'codex-cli 0.149.1' || !validHash(freeze.runtime?.cli_contract?.resume_help_sha256) || !validHash(freeze.runtime?.python?.sha256) || freeze.runtime?.python?.path !== '<PYTHON>' || freeze.runtime?.python?.identity !== '<PYTHON>' || freeze.runtime?.auth_posture !== 'authenticated-native-CODEX_HOME; ignore-user-config; credentials-not-copied' || freeze.auth?.copied_to_consumer_root !== false) fail('freeze_binding_mismatch', 'freeze runtime or Python binding is incomplete');
   if (freeze.candidate?.package?.name !== 'workspine' || !freeze.candidate.package.version || freeze.toolchain?.node?.sha256 == null || freeze.toolchain?.npm?.sha256 == null || freeze.toolchain?.git?.sha256 == null || !validHash(freeze.toolchain.node.sha256) || !validHash(freeze.toolchain.npm.sha256) || !validHash(freeze.toolchain.git.sha256)) fail('freeze_binding_mismatch', 'freeze toolchain binding is incomplete');
   const turns = freeze.budgets?.turns?.map((item) => [item.id, item.role, item.skill, item.skills, item.wall_minutes, item.native_tokens, item.session, item.initial]);
-  if (stable(turns) !== stable(TURN_CONTRACT) || freeze.budgets?.total_wall_minutes !== 54 || freeze.budgets?.total_native_tokens !== 260000 || freeze.budgets?.retained_output_bytes !== 1048576 || freeze.sessions?.count !== 2 || freeze.sessions?.turns !== 5 || freeze.root_map?.run_root !== '<RUN_ROOT>' || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root' || freeze.root_map?.tool_root !== '<RUN_ROOT>/tool_root' || freeze.root_map?.receipts !== '<RECEIPTS>') fail('freeze_binding_mismatch', 'freeze budgets, root map, or turn contract drifted');
+  if (stable(turns) !== stable(TURN_CONTRACT) || freeze.budgets?.total_wall_minutes !== TURN_TOTAL_WALL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_NATIVE_TOKENS || freeze.budgets?.retained_output_bytes !== 1048576 || freeze.sessions?.count !== 2 || freeze.sessions?.turns !== 5 || freeze.root_map?.run_root !== '<RUN_ROOT>' || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root' || freeze.root_map?.tool_root !== '<RUN_ROOT>/tool_root' || freeze.root_map?.receipts !== '<RECEIPTS>') fail('freeze_binding_mismatch', 'freeze budgets, root map, or turn contract drifted');
   if (controlsFile && (!exists(controlsFile) || fileSha(controlsFile) !== freeze.controls.sha256)) fail('freeze_binding_mismatch', 'freeze controls hash does not match the sealed controls receipt');
 }
 
@@ -394,6 +415,7 @@ function observePartialPlan({ caseFile, freezeFile, receiptDir, consumerRoot, ca
   const data = readCase(caseFile);
   const freeze = readJson(freezeFile, 'freeze_invalid');
   if (freeze.schema_version !== 1 || freeze.contract !== 'phase16-rooted-codex-freeze-v1' || freeze.case_id !== CASE_ID || freeze.provider_sandbox !== 'not_claimed' || freeze.workflow_verdict !== 'not_evaluated') fail('freeze_binding_mismatch', 'partial observer freeze contract is not exact');
+  validateEvaluatorLedger(freeze.evaluator);
   if (freeze.case?.sha256 !== CASE_SHA256 || freeze.source?.repository !== data.source.repository || freeze.source?.revision !== CASE_REVISION || freeze.source?.main !== freeze.source?.origin_main || freeze.runtime?.provider !== 'codex' || freeze.runtime?.model !== 'gpt-5.6-luna' || freeze.runtime?.effort !== 'high' || !validHash(freeze.bundle?.sha256) || !validHash(freeze.controls?.sha256) || !validHash(freeze.candidate?.sha256) || !validHash(freeze.runtime?.python?.sha256) || freeze.skills?.['work-plan'] == null) fail('freeze_binding_mismatch', 'partial observer freeze does not bind the pinned case and runtime');
   if (!exists(consumerRoot) || !fs.statSync(consumerRoot).isDirectory()) fail('consumer_root_invalid', 'partial observer consumer root is missing');
   if (!exists(workPlanFile) || !fs.statSync(workPlanFile).isFile() || fs.lstatSync(workPlanFile).isSymbolicLink() || fileSha(workPlanFile) !== freeze.skills['work-plan']) fail('skill_hash_mismatch', 'installed work-plan skill is not freeze-bound');
@@ -460,5 +482,5 @@ module.exports = {
   observe, observeRun: observe, gradeValue, grade, gradeObservation: grade, regrade,
   regradeObservation: regrade, regradeChild, project, projectPublic: project, earlyProjection,
   writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths,
-  WORKFLOW_STEPS, DISPOSITIONS, observePartialPlan,
+  WORKFLOW_STEPS, DISPOSITIONS, TURN_CONTRACT, TURN_TOTAL_WALL_MINUTES, TURN_TOTAL_NATIVE_TOKENS, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, validateEvaluatorLedger, observePartialPlan,
 };
