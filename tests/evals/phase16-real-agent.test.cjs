@@ -233,18 +233,18 @@ test('public case and oracle pins remain stable', () => {
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-function nativeCodex(thread, turn, cumulative, verdict = null) {
+function nativeCodex(thread, turn, turnTokens, verdict = null) {
   const item = { type: 'agent_message', id: `item-${turn}`, text: verdict ? JSON.stringify({ workflow_verdict: verdict }) : 'bounded response' };
   return [
     { type: 'thread.started', thread_id: thread },
     { type: 'turn.started', thread_id: thread, turn_id: turn },
     { type: 'item.started', thread_id: thread, turn_id: turn, item },
     { type: 'item.completed', thread_id: thread, turn_id: turn, item },
-    { type: 'turn.completed', thread_id: thread, turn_id: turn, usage: { input_tokens: cumulative - 4, output_tokens: 4 } },
+    { type: 'turn.completed', thread_id: thread, turn_id: turn, usage: { input_tokens: turnTokens - 4, output_tokens: 4 } },
   ].map((event) => JSON.stringify(event)).join('\n') + '\n';
 }
 
-function nativeCodexItems(thread, turn, cumulative, kinds) {
+function nativeCodexItems(thread, turn, turnTokens, kinds) {
   const items = kinds.flatMap((kind, index) => {
     const item = { type: kind, id: `item-${turn}-${index}` };
     return [
@@ -256,11 +256,11 @@ function nativeCodexItems(thread, turn, cumulative, kinds) {
     { type: 'thread.started', thread_id: thread },
     { type: 'turn.started', thread_id: thread, turn_id: turn },
     ...items,
-    { type: 'turn.completed', thread_id: thread, turn_id: turn, usage: { input_tokens: cumulative - 4, output_tokens: 4 } },
+    { type: 'turn.completed', thread_id: thread, turn_id: turn, usage: { input_tokens: turnTokens - 4, output_tokens: 4 } },
   ].map((event) => JSON.stringify(event)).join('\n') + '\n';
 }
 
-function rootedRunFixture(root, { mutation = null, planMutation = null, planFailure = null, verdict = null, usageByTurn = null } = {}) {
+function rootedRunFixture(root, { mutation = null, planMutation = null, planFailure = null, verdict = null, usageByTurn = null, initialTotalUsage = 0 } = {}) {
   const consumerRoot = path.join(root, 'consumer_root');
   const receiptDir = path.join(root, 'receipts');
   fs.mkdirSync(path.join(consumerRoot, '.agents', 'skills'), { recursive: true });
@@ -289,7 +289,7 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
   freeze.budgets.total_wall_minutes = LIVE.TURN_TOTAL_MINUTES; freeze.budgets.total_native_tokens = LIVE.TURN_TOTAL_TOKENS; freeze.budgets.retained_output_bytes = LIVE.RETAINED_OUTPUT_BYTES;
   const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));
   let calls = 0;
-  const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, cumulative: {}, sessions: {}, data: {}, sourceBefore: {}, providerInvocations: 0 };
+  const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, totalUsage: initialTotalUsage, sessions: {}, data: {}, sourceBefore: {}, providerInvocations: 0 };
   context.approvePlan = (_context, request) => {
     const state = { schema_version: 1, status: 'active', current_state: 'execute', workflow: { plan: { approved: true, path: request.plan, identity: request.plan }, execution: { status: 'in_progress' }, verification: { status: 'not_started' }, audit: { status: 'not_started' }, dogfood: { status: 'not_started' }, authority: request.authority, current_state: 'execute', approval_ref: request.approvalRef } };
     fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
@@ -342,7 +342,7 @@ function observerFreezeFixture(root) {
   return { ...fixture, freeze };
 }
 
-test('Task 16-08-02S keeps exact initial/resume grammar and cumulative usage deltas', () => {
+test('Task 16-08-02S keeps exact initial/resume grammar and per-turn usage', () => {
   const context = { cwd: '<CONSUMER_ROOT>', model: 'gpt-5.6-luna', effort: 'high' };
   const initial = LIVE.codexTurnArgv(context);
   const resumed = LIVE.codexTurnArgv({ ...context, sessionId: 'native-A' });
@@ -575,8 +575,7 @@ test('capability probe rejects native usage above the calibrated 500000 ceiling'
   try {
     assert.throws(() => LIVE.runCapability(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, gitText: (args) => args[0] === 'rev-parse' ? CAPABILITY_REVISION : '', characterizationOnly: true }), (error) => error.code === 'usage_excess');
     const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'capability.json'), 'utf8'));
-    assert.equal(receipt.turn.usage.cumulative_tokens, LIVE.CAPABILITY_MAX_TOKENS + 1);
-    assert.equal(receipt.turn.usage.delta_tokens, LIVE.CAPABILITY_MAX_TOKENS + 1);
+    assert.equal(receipt.turn.usage.turn_tokens, LIVE.CAPABILITY_MAX_TOKENS + 1);
     assert.equal(receipt.terminal.failure_code, 'usage_excess');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
@@ -608,7 +607,7 @@ test('provider-free coordinator runs production-shaped five-turn handoff with tw
     assert.deepEqual(approvalOrder[0].request, { plan: LIVE.APPROVAL_PLAN, authority: 'owner', approvalRef: LIVE.APPROVAL_REF });
     assert.deepEqual(result.turns.map((item) => item.turn.id), LIVE.TURN_PLAN.map((item) => item.id));
     assert.equal(result.turns[1].turn.checkpoint.path, '<CONSUMER_ROOT>/.work/.continue-here.md');
-    assert.deepEqual(result.turns.map((item) => item.usage.delta_tokens), [10, 10, 10, 10, 10]);
+    assert.deepEqual(result.turns.map((item) => item.usage.turn_tokens), [10, 20, 10, 20, 30]);
     assert.deepEqual(result.handoff.sessions, { A: 'native-A', B: 'native-B' });
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), true);
     const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json')));
@@ -693,13 +692,13 @@ test('five-turn coordinator accepts the sealed plan usage below the calibrated 3
   const observedPlanUsage = 2460932;
   const fixture = rootedRunFixture(root, { usageByTurn: (turn) => {
     if (turn.id === 'turn-a-plan') return observedPlanUsage;
-    if (turn.id === 'turn-a-pause') return observedPlanUsage + 10;
+    if (turn.id === 'turn-a-pause') return 10;
     return turn.id === 'turn-b-resume-execute' ? 10 : turn.id === 'turn-b-verify' ? 20 : 30;
   } });
   try {
     const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
-    assert.equal(result.turns[0].usage.cumulative_tokens, observedPlanUsage);
-    assert.deepEqual(result.turns.map((item) => item.usage.delta_tokens), [observedPlanUsage, 10, 10, 10, 10]);
+    assert.equal(result.turns[0].usage.turn_tokens, observedPlanUsage);
+    assert.deepEqual(result.turns.map((item) => item.usage.turn_tokens), [observedPlanUsage, 10, 10, 20, 30]);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -709,11 +708,25 @@ test('five-turn coordinator refuses plan usage above the calibrated 3000000 ceil
   try {
     assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'usage_excess');
     const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${LIVE.TURN_PLAN[0].id}.json`), 'utf8'));
-    assert.equal(receipt.usage.cumulative_tokens, LIVE.PLAN_TOKEN_CEILING + 1);
-    assert.equal(receipt.usage.delta_tokens, LIVE.PLAN_TOKEN_CEILING + 1);
+    assert.equal(receipt.usage.turn_tokens, LIVE.PLAN_TOKEN_CEILING + 1);
     assert.equal(receipt.terminal.failure_code, 'usage_excess');
     const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
     assert.equal(terminal.terminal.failure_code, 'usage_excess');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('five-turn coordinator rejects aggregate turn usage above the fixed total ceiling', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-five-turn-total-budget-'));
+  const fixture = rootedRunFixture(root, {
+    initialTotalUsage: LIVE.TURN_TOTAL_TOKENS - 5,
+    usageByTurn: () => 10,
+  });
+  try {
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'total_token_excess');
+    const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${LIVE.TURN_PLAN[0].id}.json`), 'utf8'));
+    assert.equal(receipt.usage.turn_tokens, 10);
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
+    assert.equal(terminal.terminal.failure_code, 'total_token_excess');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -738,7 +751,7 @@ test('pause scope refusal seals a terminal and never hands off', () => {
   }
 });
 
-test('missing checkpoint, wrong resume identity, native order, and usage regression fail closed', () => {
+test('missing checkpoint, wrong resume identity, and native order fail closed', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-native-refusal-'));
   const fixture = rootedRunFixture(root);
   try {
@@ -746,8 +759,8 @@ test('missing checkpoint, wrong resume identity, native order, and usage regress
     noCheckpoint.spawn = (_command, _argv, options) => ({ status: 0, pid: 1, stdout: nativeCodex('native-A', 'x', 10), stderr: '', timed_out: false });
     assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), noCheckpoint.freezeFile, noCheckpoint.receiptDir, { prepareRun: noCheckpoint.prepareRun, spawn: noCheckpoint.spawn, characterizationOnly: true }), (error) => String(error.code).startsWith('checkpoint_'));
     assert.throws(() => LIVE.runTurn(fixture.context, LIVE.TURN_PLAN[0], null, { spawn: () => ({ status: 0, pid: 1, stdout: '{}\n', stderr: '', timed_out: false }) }), (error) => error.code === 'native_sequence_invalid');
-    fixture.context.cumulative.A = 20;
-    assert.throws(() => LIVE.runTurn(fixture.context, LIVE.TURN_PLAN[0], null, { spawn: () => ({ status: 0, pid: 1, stdout: nativeCodex('native-A', 'x', 10), stderr: '', timed_out: false }) }), (error) => error.code === 'usage_regression');
+    fixture.context.totalUsage = 20;
+    assert.doesNotThrow(() => LIVE.runTurn(fixture.context, LIVE.TURN_PLAN[0], null, { spawn: () => ({ status: 0, pid: 1, stdout: nativeCodex('native-A', 'x', 10), stderr: '', timed_out: false }) }));
   } finally { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(root + '-checkpoint', { recursive: true, force: true }); }
 });
 

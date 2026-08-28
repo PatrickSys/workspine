@@ -98,18 +98,15 @@ function recordCodexTurn(options = {}) {
     }
   }
   const usageValue = parsedNative?.usage?.total_tokens;
-  const prior = Number(options.previousCumulativeTokens ?? 0);
-  const cumulative = Number.isSafeInteger(usageValue) ? usageValue : null;
-  // Native usage is the current turn's counted usage. The recorder carries
-  // the caller's prior total forward, while still rejecting a raw value that
-  // moves backwards against that prior bound.
-  const delta = cumulative == null ? null : cumulative - prior;
+  // Codex reports usage on each turn.completed event. Treat that value as
+  // this turn's complete count; it is not a process- or session-wide total
+  // and must not be compared with an earlier process.
+  const turnTokens = Number.isSafeInteger(usageValue) && usageValue >= 0 ? usageValue : null;
   if (!problem && options.expectedSessionId != null && native.thread_id !== options.expectedSessionId) problem = failure('identity_mismatch', 'native resume session identity differs from the expected session');
-  if (!problem && cumulative == null) problem = failure('usage_missing', 'native cumulative usage is missing');
-  if (!problem && delta < 0) problem = failure('usage_regression', 'native cumulative usage regressed');
-  if (!problem && delta > Number(options.maxCumulativeTokens ?? Number.MAX_SAFE_INTEGER)) problem = failure('usage_excess', 'native cumulative usage exceeded the turn budget');
+  if (!problem && turnTokens == null) problem = failure('usage_missing', 'native turn usage is missing or invalid');
+  if (!problem && turnTokens > Number(options.maxTurnTokens ?? Number.MAX_SAFE_INTEGER)) problem = failure('usage_excess', 'native turn usage exceeded the turn budget');
   const receipt = {
-    schema_version: 1,
+    schema_version: 2,
     record_type: 'phase16_codex_turn_receipt',
     characterization_only: characterizationOnly,
     invocation,
@@ -119,7 +116,7 @@ function recordCodexTurn(options = {}) {
     streams: { stdout_bytes: stdout.length, stdout_sha256: sha256(stdout), stderr_bytes: stderr.length, stderr_sha256: sha256(stderr) },
     terminal: { status: problem ? 'failed' : 'provider_complete', failure_code: problem?.code || null, message: problem?.message || 'native provider turn completed' },
     turn: options.turn,
-    usage: { cumulative_tokens: cumulative, delta_tokens: delta },
+    usage: { turn_tokens: turnTokens },
     workflow_verdict: 'not_evaluated',
   };
   return deepFreeze(receipt);

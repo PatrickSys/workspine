@@ -522,15 +522,11 @@ function runTurn(context, turn, sessionId = null, options = {}) {
   for (const skill of turn.skills || [turn.skill]) if (!input.includes(`$${skill}`)) fail('skill_token_missing', `turn prompt lacks its exact skill token: ${skill}`);
   context.activeTurn = { skills, argv: argv.map((item) => diagnostic(item, context.runRoot, context.env)), cwd: '<CONSUMER_ROOT>', input_sha256: sha(Buffer.from(input)) };
   context.providerInvocations = (context.providerInvocations || 0) + 1;
-  const recorded = RECORDER.recordCodexTurn({ turn, command: context.provider.command, prefix: context.provider.prefix, argv, cwd: context.consumerRoot, root: context.runRoot, env: context.env, prompt: input, skills: skills.map((item) => ({ token: `$${item.id}`, sha256: item.sha256 })), model: context.freeze.runtime.model, effort: context.freeze.runtime.effort, provider: context.provider, expectedSessionId: sessionId, previousCumulativeTokens: context.cumulative[turn.session] || 0, maxCumulativeTokens: turn.tokens, maxOutputBytes: RETAINED_OUTPUT_BYTES, timeout: turn.minutes * 60000, characterizationOnly: Boolean(options.spawn), spawn: options.spawn });
+  const recorded = RECORDER.recordCodexTurn({ turn, command: context.provider.command, prefix: context.provider.prefix, argv, cwd: context.consumerRoot, root: context.runRoot, env: context.env, prompt: input, skills: skills.map((item) => ({ token: `$${item.id}`, sha256: item.sha256 })), model: context.freeze.runtime.model, effort: context.freeze.runtime.effort, provider: context.provider, expectedSessionId: sessionId, maxTurnTokens: turn.tokens, maxOutputBytes: RETAINED_OUTPUT_BYTES, timeout: turn.minutes * 60000, characterizationOnly: Boolean(options.spawn), spawn: options.spawn });
   context.spawned = context.spawned || recorded.provider_invoked;
   context.activeReceipt = recorded;
   if (recorded.terminal.failure_code) { const error = new RunnerFailure(recorded.terminal.failure_code, recorded.terminal.message, { recorder: recorded }); error.receipt = recorded; throw error; }
-  const prior = context.cumulative[turn.session] || 0;
-  const cumulative = recorded.usage.cumulative_tokens;
-  const delta = cumulative - prior;
-  context.cumulative[turn.session] = cumulative;
-  context.totalUsage = (context.totalUsage || 0) + delta;
+  context.totalUsage = (context.totalUsage || 0) + recorded.usage.turn_tokens;
   return recorded;
 }
 
@@ -617,8 +613,7 @@ function runCapability(caseFile, cacheValue, freezeFile, receiptDir, options = {
       effort: freeze.runtime.effort,
       provider: context.provider,
       expectedSessionId: null,
-      previousCumulativeTokens: 0,
-      maxCumulativeTokens: CAPABILITY_MAX_TOKENS,
+      maxTurnTokens: CAPABILITY_MAX_TOKENS,
       maxOutputBytes: RETAINED_OUTPUT_BYTES,
       timeout: CAPABILITY_MAX_MINUTES * 60000,
       characterizationOnly,
@@ -885,7 +880,7 @@ function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   if (stable(evidence) !== stable(freeze.runtime.executable)) fail('provider_binding_mismatch', 'resolved Codex executable differs from the freeze');
   if (stable(codexContract(provider)) !== stable(freeze.runtime.cli_contract)) fail('provider_contract_mismatch', 'resolved Codex runtime contract differs from the freeze');
   const python = resolvePython(); if (python.sha256 !== freeze.runtime.python.sha256) fail('python_binding_mismatch', 'resolved Python differs from the freeze');
-  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), cli, receiptDir: options.receiptDir, provider, env, python, cumulative: {}, totalUsage: 0, sessions: {}, providerInvocations: 0, spawned: false, sourceBefore, cache, inputRoot };
+  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), cli, receiptDir: options.receiptDir, provider, env, python, totalUsage: 0, sessions: {}, providerInvocations: 0, spawned: false, sourceBefore, cache, inputRoot };
   context.skills = Object.fromEntries([...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, fileSha(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md'))])); context.expectedSkills = freeze.skills || null;
   return context;
 }
@@ -917,7 +912,7 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
       if (turnError) throw turnError;
       if (turn.initial) context.sessions[turn.session] = recorded.native.thread_id;
       if (!turn.initial && recorded.native.thread_id !== expectedSession) gateFailure = new RunnerFailure('resume_session_mismatch', `${turn.id} resumed the wrong native session`);
-      if (context.totalUsage > TURN_TOTAL_TOKENS) gateFailure = new RunnerFailure('cumulative_token_excess', 'native cumulative usage exceeded the total budget');
+      if (context.totalUsage > TURN_TOTAL_TOKENS) gateFailure = new RunnerFailure('total_token_excess', 'native turn usage exceeded the total budget');
       const turnEvidence = { ...recorded.turn, pre_snapshot_sha256: stableHash(before), post_snapshot_sha256: stableHash(after) };
       if (turn.id === 'turn-a-pause') { turnEvidence.changed_paths = changedPaths(pauseBaseline, after); turnEvidence.allowed_root = '<CONSUMER_ROOT>/.work'; try { turnEvidence.checkpoint = CORE.liveCaptureCheckpoint(context.consumerRoot); assertPauseScope(pauseBaseline, after); } catch (error) { gateFailure = gateFailure || error; turnEvidence.checkpoint = turnEvidence.checkpoint || null; } }
       const receipt = RECORDER.deepFreeze({ ...recorded, turn: turnEvidence, characterization_only: characterizationOnly });

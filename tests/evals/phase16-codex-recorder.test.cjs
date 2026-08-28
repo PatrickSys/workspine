@@ -63,8 +63,7 @@ function baseOptions(overrides = {}) {
     model: MODEL,
     effort: EFFORT,
     expectedSessionId: null,
-    previousCumulativeTokens: 0,
-    maxCumulativeTokens: 100,
+    maxTurnTokens: 100,
     maxOutputBytes: 1024 * 1024,
     characterizationOnly: true,
     spawn: () => spawnResult,
@@ -95,7 +94,7 @@ test('recorder has one explicit function and returns the fixed receipt shape', (
     'characterization_only', 'invocation', 'native', 'process', 'provider_invoked',
     'record_type', 'schema_version', 'streams', 'terminal', 'turn', 'usage', 'workflow_verdict',
   ].sort());
-  assert.equal(receipt.schema_version, 1);
+  assert.equal(receipt.schema_version, 2);
   assert.equal(receipt.record_type, 'phase16_codex_turn_receipt');
   assert.equal(typeof receipt.turn, 'object');
   assert.equal(receipt.characterization_only, true);
@@ -113,7 +112,7 @@ test('receipt is deeply immutable and has explicit nulls for unavailable process
   assert.equal(receipt.process.exit_code, 0);
   assert.equal(receipt.process.error, null);
   assert.equal(receipt.native.parse_error, null);
-  assert.equal(receipt.usage.delta_tokens, 12);
+  assert.equal(receipt.usage.turn_tokens, 12);
   assert.throws(() => { receipt.terminal.status = 'failed'; }, TypeError);
   assert.throws(() => { receipt.invocation.argv.push('forged'); }, TypeError);
   assert.equal(receipt.workflow_verdict, 'not_evaluated');
@@ -214,11 +213,17 @@ test('incomplete native JSONL is a failed parse with raw process evidence', () =
   assert.equal(receipt.process.parent_pid, 4241);
 });
 
-test('usage is cumulative, delta-based, monotonic, and bounded', () => {
-  const ok = record({ previousCumulativeTokens: 10, maxCumulativeTokens: 30 });
-  assert.deepEqual(ok.usage, { cumulative_tokens: 12, delta_tokens: 2 });
-  assert.match(String(failureCode({ previousCumulativeTokens: 20, spawn: () => spawned(nativeJson({ usage: { input_tokens: 1, output_tokens: 1 } })) })), /regress|usage/i);
-  assert.match(String(failureCode({ maxCumulativeTokens: 10 })), /excess|budget|usage/i);
+test('usage is per-turn, accepts a lower resumed turn, and enforces the turn ceiling', () => {
+  const ok = record({ maxTurnTokens: 30 });
+  assert.deepEqual(ok.usage, { turn_tokens: 12 });
+  const resumedLower = record({
+    expectedSessionId: 'native-A',
+    maxTurnTokens: 30,
+    spawn: () => spawned(nativeJson({ thread: 'native-A', usage: { input_tokens: 1, output_tokens: 1 } })),
+  });
+  assert.deepEqual(resumedLower.usage, { turn_tokens: 2 });
+  assert.equal(resumedLower.terminal.status, 'provider_complete');
+  assert.match(String(failureCode({ maxTurnTokens: 10 })), /excess|budget|usage/i);
 });
 
 test('wrong resume identity is rejected after native parsing', () => {
