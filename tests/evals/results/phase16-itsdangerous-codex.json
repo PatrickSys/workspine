@@ -4,27 +4,33 @@
   "contract": "phase16-itsdangerous-public-result-v1",
   "case_id": "itsdangerous-fips-sha1",
   "upstream_revision": "93ae366874bbd4f69d90495c45b2cd336387496c",
-  "candidate_sha256": null,
+  "candidate_sha256": "6acf4e292ee5fe6d082d6b53740d1052dd429483727967599f1b1567c346d65c",
   "runtime": {
     "provider": "codex",
-    "model": "gpt-5.6-luna",
-    "effort": "high"
+    "model": "not_claimed",
+    "effort": "not_claimed"
   },
   "workflow": {
-    "sessions": null,
-    "turns": null,
-    "steps": []
+    "sessions": 1,
+    "turns": 1,
+    "steps": [
+      {
+        "id": "turn-a-plan",
+        "disposition": "partial"
+      }
+    ]
   },
   "oracle": {
-    "status": "not_produced_due_to_early_terminal",
-    "checks": "not_produced_due_to_early_terminal"
+    "status": "not_produced_due_to_partial_terminal",
+    "checks": "not_produced_due_to_partial_terminal"
   },
-  "disposition": "infrastructure_invalid",
+  "terminal_fact": "timeout",
+  "disposition": "product_red",
   "stages": {
-    "observation": "not_produced_due_to_early_terminal",
-    "oracle": "not_produced_due_to_early_terminal",
-    "grade": "not_produced_due_to_early_terminal",
-    "regrade": "not_produced_due_to_early_terminal"
+    "observation": "sealed",
+    "oracle": "not_produced_due_to_partial_terminal",
+    "grade": "sealed",
+    "regrade": "not_produced_due_to_partial_terminal"
   },
-  "claim_limit": "Early terminal only; no workflow, product, oracle, benchmark, model, or release claim."
+  "claim_limit": "One partial rooted plan observation only; no oracle, complete workflow, model, benchmark, security, or release claim."
 }
