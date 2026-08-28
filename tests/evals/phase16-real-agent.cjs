@@ -450,7 +450,15 @@ function readFreeze(file) {
 }
 function turnPrompt(context, turn) {
   const tokens = (turn.skills || [turn.skill]).map((skill) => `$${skill}`).join(' and ');
-  return `${tokens}\nUse the owner TASK.md and BRIEF.md in inputs. This is the bounded brownfield route: plan, pause, fresh resume, execute, verify, progress. Follow the installed skill and leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.`;
+  const instructions = {
+    'turn-a-plan': 'Plan only: read the bounded brownfield context and create the plan artifacts required by $work-plan, then stop. Do not modify product or source files. Do not create, consume, delete, or modify the pause checkpoint at .work/.continue-here.md. Do not approve the plan or transition lifecycle state to execute. Do not run $work-pause, $work-resume, $work-execute, $work-verify, or $work-progress.',
+    'turn-a-pause': 'Pause only: write the canonical .work/.continue-here.md checkpoint for the completed plan, then stop. Do not plan, approve, resume, execute, verify, or report progress in this turn. Leave product and source files unchanged.',
+    'turn-b-resume-execute': 'This is fresh process B: resume the retained workspace and execute only the already-approved plan, then stop. Do not plan, pause, approve, verify, or report progress in this turn.',
+    'turn-b-verify': 'Verify only: inspect the completed implementation and record the required verification evidence, then stop. Do not plan, pause, approve, resume, execute, or report progress in this turn.',
+    'turn-b-progress': 'Progress only: perform the read-only progress report and stop. Do not plan, pause, approve, resume, execute, or verify; do not modify any file or lifecycle state.',
+  }[turn.id];
+  if (!instructions) fail('turn_prompt_unknown', `no stage-specific prompt contract exists for ${turn.id}`);
+  return `${tokens}\nUse the owner TASK.md and BRIEF.md in inputs. ${instructions} Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.`;
 }
 
 function capabilityPrompt(context, revision) {
@@ -613,6 +621,77 @@ function changedPaths(before, after) {
   const left = new Map(before.map((item) => [item.path, stable(item)])); const right = new Map(after.map((item) => [item.path, stable(item)]));
   return [...new Set([...left.keys(), ...right.keys()])].filter((key) => left.get(key) !== right.get(key));
 }
+function readPlanBoundaryArtifacts(root) {
+  const statePath = path.join(root, '.work', 'state.json');
+  let state = null;
+  if (exists(statePath)) {
+    try { state = JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch (error) { fail('plan_state_invalid', 'plan lifecycle state is not valid JSON', { message: error.message }); }
+  }
+  const checkpoint = (relative) => {
+    const file = path.join(root, ...relative.split('/'));
+    let stat;
+    try { stat = fs.lstatSync(file); } catch (error) {
+      if (error.code === 'ENOENT') return { exists: false, type: null, bytes: null, sha256: null };
+      fail('plan_checkpoint_invalid', 'plan checkpoint could not be inspected', { path: relative, message: error.message });
+    }
+    const type = stat.isSymbolicLink() ? 'link' : stat.isFile() ? 'file' : stat.isDirectory() ? 'directory' : 'other';
+    return { exists: true, type, bytes: type === 'file' ? stat.size : null, sha256: type === 'file' ? fileSha(file) : null };
+  };
+  const checkpoints = Object.fromEntries(['.work/.continue-here.md', '.work/.continue-here.bak'].map((relative) => {
+    return [relative, checkpoint(relative)];
+  }));
+  return { state, checkpoints };
+}
+function planLifecycleValues(state) {
+  return {
+    root_current_state: state?.current_state,
+    root_phase: state?.phase,
+    root_status: state?.status,
+    workflow_current_state: state?.workflow?.current_state,
+    workflow_phase: state?.workflow?.phase,
+    workflow_status: state?.workflow?.status,
+    workflow_execution_state: state?.workflow?.execution?.state,
+    workflow_execution_status: state?.workflow?.execution?.status,
+  };
+}
+function planApprovalValues(state) {
+  return {
+    root_approved: state?.approved,
+    root_approval_ref: state?.approval_ref,
+    plan_approved: state?.plan?.approved,
+    plan_approval_ref: state?.plan?.approval_ref,
+    workflow_approved: state?.workflow?.approved,
+    workflow_approval_ref: state?.workflow?.approval_ref,
+    workflow_plan_approved: state?.workflow?.plan?.approved,
+    workflow_plan_approval_ref: state?.workflow?.plan?.approval_ref,
+  };
+}
+function assertPlanScope(root, before, after) {
+  const changed = changedPaths(before.tree, after.tree);
+  const product = changed.filter((item) => item !== '.work' && !item.startsWith('.work/'));
+  if (product.length) fail('plan_product_mutation', 'plan changed product or undeclared consumer bytes', { changed: product });
+  const beforeBoundary = before.boundary || readPlanBoundaryArtifacts(root);
+  const afterBoundary = after.boundary || readPlanBoundaryArtifacts(root);
+  const checkpointChanged = Object.keys(afterBoundary.checkpoints).filter((relative) => stable(afterBoundary.checkpoints[relative]) !== stable(beforeBoundary.checkpoints[relative]));
+  if (checkpointChanged.length) fail('plan_checkpoint_mutation', 'plan created, consumed, or modified a pause checkpoint', { changed: checkpointChanged });
+  const beforeApproval = planApprovalValues(beforeBoundary.state);
+  const afterApproval = planApprovalValues(afterBoundary.state);
+  const newlyApproved = Object.keys(afterApproval).filter((key) => {
+    const afterValue = afterApproval[key]; const beforeValue = beforeApproval[key];
+    return (key.endsWith('_approved') ? afterValue === true : typeof afterValue === 'string' && afterValue.trim().length > 0)
+      && !((key.endsWith('_approved') ? beforeValue === true : typeof beforeValue === 'string' && beforeValue.trim().length > 0));
+  });
+  if (newlyApproved.length) fail('plan_owner_approval', 'plan turn self-asserted owner approval', { path: '.work/state.json', fields: newlyApproved });
+  const beforeStates = planLifecycleValues(beforeBoundary.state); const afterStates = planLifecycleValues(afterBoundary.state);
+  const executionStates = new Set(['execute', 'running', 'in_progress']);
+  const newlyExecuting = Object.keys(afterStates).filter((key) => executionStates.has(afterStates[key]) && !executionStates.has(beforeStates[key]));
+  if (newlyExecuting.length) fail('plan_state_transition', 'plan turn transitioned lifecycle state into execution', { path: '.work/state.json', fields: newlyExecuting, values: Object.fromEntries(newlyExecuting.map((key) => [key, afterStates[key]])) });
+  const lifecycleStates = new Set(['plan', 'pause', 'fresh-resume', 'resume', 'execute', 'running', 'in_progress', 'verify', 'progress', 'audit', 'complete']);
+  const rootStates = Object.entries(afterStates).filter(([key, value]) => key.startsWith('root_') && lifecycleStates.has(value));
+  const workflowStates = Object.entries(afterStates).filter(([key, value]) => key.startsWith('workflow_') && lifecycleStates.has(value));
+  if (rootStates.length && workflowStates.length && rootStates.some(([, value]) => workflowStates.some(([, workflowValue]) => workflowValue !== value))) fail('plan_state_transition', 'plan lifecycle state has conflicting root and workflow representations', { path: '.work/state.json', root: Object.fromEntries(rootStates), workflow: Object.fromEntries(workflowStates) });
+  if (Object.values(afterBoundary.checkpoints).some((item) => item.exists && item.type !== 'file')) fail('plan_checkpoint_mutation', 'plan checkpoint evidence is not a regular file', { checkpoints: afterBoundary.checkpoints });
+}
 function assertPauseScope(before, after) {
   const changed = changedPaths(before, after);
   const forbidden = changed.filter((item) => !item.startsWith('.work/') && item !== '.work');
@@ -667,9 +746,19 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     writeExclusive(path.join(dir, 'preparation.json'), { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: CASE_ID, consumer_root: '<CONSUMER_ROOT>', tool_root: '<TOOL_ROOT>', bundle_sha256: freeze.bundle.sha256, controls_sha256: freeze.controls.sha256, candidate_sha256: freeze.candidate.sha256, generated_skills: [...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))], python: context.python ? { identity: '<PYTHON>', sha256: context.python.sha256 } : null, auth_copied: false, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' });
     let pauseBaseline = null;
     for (const turn of TURN_PLAN) {
-      current = turn; const before = CORE.snapshotTree(context.consumerRoot, true); if (!pauseBaseline) pauseBaseline = before; const expectedSession = turn.initial ? null : context.sessions[turn.session];
+      current = turn; const before = CORE.snapshotTree(context.consumerRoot, true); const beforeBoundary = turn.id === 'turn-a-plan' ? readPlanBoundaryArtifacts(context.consumerRoot) : null; if (!pauseBaseline) pauseBaseline = before; const expectedSession = turn.initial ? null : context.sessions[turn.session];
       if (!turn.initial && !expectedSession) fail('resume_checkpoint_missing', `${turn.id} lacks its prior native session identity`);
-      const recorded = runTurn(context, turn, expectedSession, options); const after = CORE.snapshotTree(context.consumerRoot, true); let gateFailure = null;
+      let recorded = null; let turnError = null;
+      try { recorded = runTurn(context, turn, expectedSession, options); } catch (error) { turnError = error; }
+      const after = CORE.snapshotTree(context.consumerRoot, true); const afterBoundary = turn.id === 'turn-a-plan' ? readPlanBoundaryArtifacts(context.consumerRoot) : null; let gateFailure = null;
+      if (turn.id === 'turn-a-plan') {
+        try { assertPlanScope(context.consumerRoot, { tree: before, boundary: beforeBoundary }, { tree: after, boundary: afterBoundary }); }
+        catch (error) {
+          if (turnError) error.receipt = turnError.receipt || context.activeReceipt || null;
+          throw error;
+        }
+      }
+      if (turnError) throw turnError;
       if (turn.initial) context.sessions[turn.session] = recorded.native.thread_id;
       if (!turn.initial && recorded.native.thread_id !== expectedSession) gateFailure = new RunnerFailure('resume_session_mismatch', `${turn.id} resumed the wrong native session`);
       if (context.totalUsage > TURN_TOTAL_TOKENS) gateFailure = new RunnerFailure('cumulative_token_excess', 'native cumulative usage exceeded the total budget');

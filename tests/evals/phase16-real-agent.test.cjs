@@ -245,7 +245,7 @@ function nativeCodexItems(thread, turn, cumulative, kinds) {
   ].map((event) => JSON.stringify(event)).join('\n') + '\n';
 }
 
-function rootedRunFixture(root, { mutation = null, verdict = null, usageByTurn = null } = {}) {
+function rootedRunFixture(root, { mutation = null, planMutation = null, planFailure = null, verdict = null, usageByTurn = null } = {}) {
   const consumerRoot = path.join(root, 'consumer_root');
   const receiptDir = path.join(root, 'receipts');
   fs.mkdirSync(path.join(consumerRoot, '.agents', 'skills'), { recursive: true });
@@ -254,6 +254,10 @@ function rootedRunFixture(root, { mutation = null, verdict = null, usageByTurn =
     const directory = path.join(consumerRoot, '.agents', 'skills', skill);
     fs.mkdirSync(directory, { recursive: true });
     fs.writeFileSync(path.join(directory, 'SKILL.md'), `# ${skill}\n`, { flag: 'wx' });
+  }
+  if (['checkpoint-consume', 'checkpoint-mutate'].includes(planMutation)) {
+    fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
+    fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: pre-existing checkpoint\nEvidence: baseline\nNext action: plan\n', { flag: 'wx' });
   }
   const freeze = {
     contract: 'phase16-rooted-codex-freeze-v1', case_id: 'itsdangerous-fips-sha1', workflow_verdict: 'not_evaluated', provider_sandbox: 'not_claimed',
@@ -278,9 +282,19 @@ function rootedRunFixture(root, { mutation = null, verdict = null, usageByTurn =
       fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
       fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: bounded brownfield route\nEvidence: native pause receipt\nNext action: fresh resume\n', { flag: 'wx' });
     }
+    if (turn.id === 'turn-a-plan' && planMutation) {
+      fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
+      if (planMutation === 'checkpoint-create') fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: plan was incorrectly paused\nEvidence: invalid plan checkpoint\nNext action: execute\n', { flag: 'wx' });
+      if (planMutation === 'checkpoint-mutate') fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: plan modified the checkpoint\nEvidence: invalid plan checkpoint\nNext action: execute\n');
+      if (planMutation === 'checkpoint-consume') fs.rmSync(path.join(consumerRoot, '.work', '.continue-here.md'));
+      if (planMutation === 'state-execute') fs.writeFileSync(path.join(consumerRoot, '.work', 'state.json'), JSON.stringify({ current_state: 'execute', workflow: { plan: { approved: false } } }) + '\n', { flag: 'wx' });
+      if (planMutation === 'state-workflow-execute') fs.writeFileSync(path.join(consumerRoot, '.work', 'state.json'), JSON.stringify({ current_state: 'plan', workflow: { current_state: 'execute', plan: { approved: false } } }) + '\n', { flag: 'wx' });
+      if (planMutation === 'state-approval') fs.writeFileSync(path.join(consumerRoot, '.work', 'state.json'), JSON.stringify({ current_state: 'plan', workflow: { plan: { approved: true } } }) + '\n', { flag: 'wx' });
+      if (planMutation === 'state-approval-ref') fs.writeFileSync(path.join(consumerRoot, '.work', 'state.json'), JSON.stringify({ current_state: 'plan', workflow: { approval_ref: 'owner-self-asserted', plan: { approved: false } } }) + '\n', { flag: 'wx' });
+    }
     if (mutation === turn.id) fs.writeFileSync(path.join(consumerRoot, 'product.txt'), 'unexpected\n', { flag: 'wx' });
     const usage = typeof usageByTurn === 'function' ? usageByTurn(turn, calls) : sessionTurn * 10;
-    return { status: 0, pid: 1000 + calls, stdout: nativeCodex(session, `${turn.id}-native`, usage, mutation === 'provider-verdict' ? 'passed' : verdict), stderr: '', timed_out: false };
+    return { status: 0, pid: 1000 + calls, stdout: nativeCodex(session, `${turn.id}-native`, usage, mutation === 'provider-verdict' ? 'passed' : verdict), stderr: '', timed_out: planFailure === 'timeout' && turn.id === 'turn-a-plan' };
   };
   return { freezeFile, receiptDir, context, prepareRun, spawn, get calls() { return calls; } };
 }
@@ -323,6 +337,82 @@ test('native token calibration applies the fixed 25x multiplier without changing
   assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.minutes), [12, 5, 20, 12, 5]);
   assert.equal(LIVE.TURN_TOTAL_MINUTES, 54);
   assert.equal(LIVE.RETAINED_OUTPUT_BYTES, 1024 * 1024);
+});
+
+test('each rooted turn receives an exact stage-specific lifecycle prompt', () => {
+  const expected = [
+    '$work-plan\nUse the owner TASK.md and BRIEF.md in inputs. Plan only: read the bounded brownfield context and create the plan artifacts required by $work-plan, then stop. Do not modify product or source files. Do not create, consume, delete, or modify the pause checkpoint at .work/.continue-here.md. Do not approve the plan or transition lifecycle state to execute. Do not run $work-pause, $work-resume, $work-execute, $work-verify, or $work-progress. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
+    '$work-pause\nUse the owner TASK.md and BRIEF.md in inputs. Pause only: write the canonical .work/.continue-here.md checkpoint for the completed plan, then stop. Do not plan, approve, resume, execute, verify, or report progress in this turn. Leave product and source files unchanged. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
+    '$work-resume and $work-execute\nUse the owner TASK.md and BRIEF.md in inputs. This is fresh process B: resume the retained workspace and execute only the already-approved plan, then stop. Do not plan, pause, approve, verify, or report progress in this turn. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
+    '$work-verify\nUse the owner TASK.md and BRIEF.md in inputs. Verify only: inspect the completed implementation and record the required verification evidence, then stop. Do not plan, pause, approve, resume, execute, or report progress in this turn. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
+    '$work-progress\nUse the owner TASK.md and BRIEF.md in inputs. Progress only: perform the read-only progress report and stop. Do not plan, pause, approve, resume, execute, or verify; do not modify any file or lifecycle state. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
+  ];
+  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => LIVE.turnPrompt({}, turn)), expected);
+});
+
+test('plan product mutation fails immediately after one provider call without a pause receipt', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-plan-product-mutation-'));
+  const fixture = rootedRunFixture(root, { mutation: 'turn-a-plan' });
+  try {
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'plan_product_mutation');
+    assert.equal(fixture.calls, 1);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-plan.json')), true);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json')));
+    assert.equal(terminal.terminal.failure_code, 'plan_product_mutation');
+    assert.equal(terminal.workflow_verdict, 'not_evaluated');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('plan checkpoint creation, consumption, or mutation fails immediately before pause', () => {
+  for (const planMutation of ['checkpoint-create', 'checkpoint-consume', 'checkpoint-mutate']) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-plan-checkpoint-${planMutation}-`));
+    const fixture = rootedRunFixture(root, { planMutation });
+    try {
+      assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'plan_checkpoint_mutation');
+      assert.equal(fixture.calls, 1);
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('plan lifecycle transition to execute fails immediately for root and workflow state', () => {
+  for (const planMutation of ['state-execute', 'state-workflow-execute']) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-plan-state-transition-${planMutation}-`));
+    const fixture = rootedRunFixture(root, { planMutation });
+    try {
+      assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'plan_state_transition');
+      assert.equal(fixture.calls, 1);
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('plan cannot self-assert owner approval or approval_ref', () => {
+  for (const planMutation of ['state-approval', 'state-approval-ref']) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-plan-owner-approval-${planMutation}-`));
+    const fixture = rootedRunFixture(root, { planMutation });
+    try {
+      assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'plan_owner_approval');
+      assert.equal(fixture.calls, 1);
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('plan mutation still wins over a failed native recorder receipt', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-plan-failed-product-mutation-'));
+  const fixture = rootedRunFixture(root, { mutation: 'turn-a-plan', planFailure: 'timeout' });
+  try {
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'plan_product_mutation');
+    assert.equal(fixture.calls, 1);
+    const turn = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'turn-a-plan.json')));
+    assert.equal(turn.terminal.failure_code, 'timeout');
+    assert.equal(turn.process.timed_out, true);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json')));
+    assert.equal(terminal.terminal.failure_code, 'plan_product_mutation');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 function capabilityFixture(root, { mutate = false, itemKinds = ['agent_message'], usage = 12 } = {}) {
