@@ -288,13 +288,27 @@ test('Task 16-08-02S keeps exact initial/resume grammar and cumulative usage del
   const context = { cwd: '<CONSUMER_ROOT>', model: 'gpt-5.6-luna', effort: 'high' };
   const initial = LIVE.codexTurnArgv(context);
   const resumed = LIVE.codexTurnArgv({ ...context, sessionId: 'native-A' });
-  assert.equal(initial[0], 'exec');
-  assert.equal(initial.includes('--ignore-user-config'), true);
-  assert.deepEqual(initial.slice(initial.indexOf('-C'), initial.indexOf('-C') + 2), ['-C', '<CONSUMER_ROOT>']);
+  assert.deepEqual(initial, [
+    'exec', '--approve-for-me', '-C', '<CONSUMER_ROOT>',
+    '--ignore-user-config', '--json', '--color', 'never',
+    '-m', 'gpt-5.6-luna', '-c', 'model_reasoning_effort="high"', '-',
+  ]);
   assert.equal(initial.at(-1), '-');
-  assert.deepEqual(resumed.slice(0, 3), ['exec', 'resume', 'native-A']);
+  assert.deepEqual(resumed, [
+    'exec', '--approve-for-me', 'resume', 'native-A',
+    '--ignore-user-config', '--json',
+    '-m', 'gpt-5.6-luna', '-c', 'model_reasoning_effort="high"', '-',
+  ]);
+  assert.equal(initial[1], '--approve-for-me');
+  assert.equal(resumed[1], '--approve-for-me');
   assert.equal(resumed.includes('-C'), false);
+  assert.equal(initial.includes('--sandbox'), false);
   assert.equal(resumed.includes('--sandbox'), false);
+  assert.equal(initial.includes('workspace-write'), false);
+  assert.equal(resumed.includes('workspace-write'), false);
+  assert.equal(initial.includes('--dangerously-bypass-approvals-and-sandbox'), false);
+  assert.equal(resumed.includes('--dangerously-bypass-approvals-and-sandbox'), false);
+  assert.equal(initial.includes('--ephemeral'), false);
   assert.equal(resumed.includes('--ephemeral'), false);
   assert.throws(() => LIVE.readFreeze(path.join(os.tmpdir(), 'missing-16-08-freeze.json')), (error) => error.code === 'case_file_invalid');
 });

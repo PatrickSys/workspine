@@ -165,13 +165,27 @@ test('initial and resume argv use supported native grammar and always terminate 
   const build = requiredExport(['buildCodexArgv', 'codexTurnArgv', 'buildArgv']);
   const initial = build({ cwd: ROOT, model: MODEL, effort: EFFORT, role: 'plan', sessionId: null });
   const resume = build({ cwd: ROOT, model: MODEL, effort: EFFORT, role: 'pause', sessionId: 'native-A' });
+  assert.deepEqual(initial, [
+    'exec', '--approve-for-me', '-C', ROOT,
+    '--ignore-user-config', '--json', '--color', 'never',
+    '-m', MODEL, '-c', `model_reasoning_effort="${EFFORT}"`, '-',
+  ]);
+  assert.deepEqual(resume, [
+    'exec', '--approve-for-me', 'resume', 'native-A',
+    '--ignore-user-config', '--json',
+    '-m', MODEL, '-c', `model_reasoning_effort="${EFFORT}"`, '-',
+  ]);
   assert.equal(initial.at(-1), '-');
   assert.equal(resume.at(-1), '-');
-  assert.equal(initial[0], 'exec');
-  assert.deepEqual(resume.slice(0, 3), ['exec', 'resume', 'native-A']);
-  assert.equal(resume.includes('--color'), false);
-  assert.equal(resume.includes('-C'), false);
+  assert.equal(initial[1], '--approve-for-me');
+  assert.equal(resume[1], '--approve-for-me');
+  assert.equal(initial.includes('--sandbox'), false);
   assert.equal(resume.includes('--sandbox'), false);
+  assert.equal(initial.includes('workspace-write'), false);
+  assert.equal(resume.includes('workspace-write'), false);
+  assert.equal(initial.includes('--dangerously-bypass-approvals-and-sandbox'), false);
+  assert.equal(resume.includes('--dangerously-bypass-approvals-and-sandbox'), false);
+  assert.equal(initial.includes('--ephemeral'), false);
   assert.equal(resume.includes('--ephemeral'), false);
 });
 

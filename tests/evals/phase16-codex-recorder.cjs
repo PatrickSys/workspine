@@ -126,7 +126,7 @@ function recordCodexTurn(options = {}) {
 }
 
 function buildCodexArgv({ cwd, model, effort, role, sessionId = null }) {
-  const base = sessionId ? ['exec', 'resume', sessionId] : ['exec', '--sandbox', 'workspace-write', '-C', cwd];
+  const base = sessionId ? ['exec', '--approve-for-me', 'resume', sessionId] : ['exec', '--approve-for-me', '-C', cwd];
   return [...base, '--ignore-user-config', '--json', ...(sessionId ? [] : ['--color', 'never']), '-m', model, '-c', `model_reasoning_effort="${effort}"`, '-'];
 }
 
