@@ -657,3 +657,97 @@ test('observer failure uses the canonical terminal and a non-green reduced proje
     assert.equal(fs.existsSync(path.join(root, 'observer-terminal.json')), false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('observer projects a valid partial plan terminal as product red without workflow or oracle claims', { skip: !process.env.PHASE16_REAL_CACHE }, () => {
+  const root = makePartialPlanFixture();
+  try {
+    const result = OBSERVER.observePartialPlan({ caseFile: CASE, freezeFile: root.freezeFile, receiptDir: root.receiptDir, consumerRoot: root.consumerRoot });
+    assert.equal(result.disposition, 'product_red');
+    assert.equal(result.projection.disposition, 'product_red');
+    assert.deepEqual(result.projection.workflow, { sessions: 1, turns: 1, steps: [{ id: 'turn-a-plan', disposition: 'partial' }] });
+    assert.equal(result.projection.oracle.status, 'not_produced_due_to_partial_terminal');
+    assert.equal(result.projection.terminal_fact, 'timeout');
+    assert.equal(result.projection.runtime.model, 'not_claimed');
+    assert.match(result.projection.claim_limit, /one partial rooted plan observation/i);
+    assert.doesNotMatch(JSON.stringify(result.projection), /C:\\Users|prompt|transcript|session_id/i);
+    assert.equal(fs.existsSync(root.observationFile), true);
+    assert.equal(fs.existsSync(root.gradeFile), true);
+    assert.throws(() => OBSERVER.observePartialPlan({ caseFile: CASE, freezeFile: root.freezeFile, receiptDir: root.receiptDir, consumerRoot: root.consumerRoot }), (error) => error.code === 'receipt_exists');
+  } finally { fs.rmSync(root.root, { recursive: true, force: true }); }
+});
+
+test('partial plan observation fails closed for no-product, setup-only, predecessor, and unbound evidence', { skip: !process.env.PHASE16_REAL_CACHE }, () => {
+  const cases = [
+    ['no-product', (fixture) => {
+      const baseline = cp.spawnSync('git', ['show', 'HEAD:src/itsdangerous/signer.py'], { cwd: fixture.consumerRoot, encoding: 'utf8', windowsHide: true });
+      assert.equal(baseline.status, 0, baseline.stderr);
+      fs.writeFileSync(path.join(fixture.consumerRoot, 'src', 'itsdangerous', 'signer.py'), baseline.stdout);
+    }],
+    ['setup-only', (fixture) => fs.writeFileSync(path.join(fixture.consumerRoot, 'setup-only.txt'), 'setup\n')],
+    ['extra-plan-artifact', (fixture) => fs.writeFileSync(path.join(fixture.consumerRoot, '.work', 'brownfield-change', 'EXTRA.md'), 'unapproved plan output\n')],
+    ['predecessor', (fixture) => fs.writeFileSync(path.join(fixture.receiptDir, 'turn-a-pause.json'), '{}\n')],
+    ['wrong-work-plan', (fixture) => fs.appendFileSync(fixture.workPlanFile, '\nchanged\n')],
+  ];
+  for (const [name, mutate] of cases) {
+    const root = makePartialPlanFixture();
+    try {
+      mutate(root);
+      rewritePartialReceiptFiles(root);
+      const result = OBSERVER.observePartialPlan({ caseFile: CASE, freezeFile: root.freezeFile, receiptDir: root.receiptDir, consumerRoot: root.consumerRoot });
+      assert.fail(`${name} unexpectedly projected: ${JSON.stringify(result)}`);
+    } catch (error) {
+      assert.ok(['candidate_missing', 'git_scope_invalid', 'partial_predecessor', 'skill_hash_mismatch', 'partial_terminal_invalid', 'receipt_invalid'].includes(error.code), `${name}: ${error.code}`);
+    } finally { fs.rmSync(root.root, { recursive: true, force: true }); }
+  }
+});
+
+function makePartialPlanFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-partial-plan-'));
+  const consumerRoot = path.join(root, 'consumer_root');
+  const receiptDir = path.join(root, 'receipts');
+  const cache = process.env.PHASE16_REAL_CACHE;
+  assert.ok(cache, 'PHASE16_REAL_CACHE is required for partial observer tests');
+  const bundle = path.join(cache, 'itsdangerous-fips-sha1', 'source.bundle');
+  const cloned = cp.spawnSync('git', ['clone', '--quiet', bundle, consumerRoot], { encoding: 'utf8', windowsHide: true });
+  assert.equal(cloned.status, 0, cloned.stderr);
+  const checkout = cp.spawnSync('git', ['checkout', '--quiet', '--detach', CAPABILITY_REVISION], { cwd: consumerRoot, encoding: 'utf8', windowsHide: true });
+  assert.equal(checkout.status, 0, checkout.stderr);
+  cp.spawnSync('git', ['remote', 'set-url', 'origin', 'https://github.com/pallets/itsdangerous.git'], { cwd: consumerRoot, encoding: 'utf8', windowsHide: true });
+  fs.mkdirSync(path.join(consumerRoot, '.agents', 'skills', 'work-plan'), { recursive: true });
+  const workPlanFile = path.join(consumerRoot, '.agents', 'skills', 'work-plan', 'SKILL.md');
+  fs.writeFileSync(workPlanFile, '## completion\n**Planning stops here:** `work-plan` ends after the plan artifact is written. Do not start implementation in this same run, and do not treat imperative handoff text as execution authorization.\n');
+  const brownfieldDir = path.join(consumerRoot, '.work', 'brownfield-change');
+  fs.mkdirSync(brownfieldDir, { recursive: true });
+  fs.writeFileSync(path.join(brownfieldDir, 'CHANGE.md'), `---\nchange: CHANGE-001\nstatus: active\ntype: medium_scope_brownfield\n---\n\n# Brownfield Change\n\n## Goal\nMake importing itsdangerous succeed while preserving explicit signing.\n\n## Why This Exists\nImporting itsdangerous must remain safe when the default digest is unavailable.\n\n## In Scope\n- Modify only src/itsdangerous/signer.py.\n\n## Out of Scope\n- Unrelated cryptographic and workflow changes.\n\n## Structural Promotion Triggers\nPromote only if the bounded signer change widens.\n\n## Done When\nThe signer imports and explicit SHA-256 signing remains successful.\n\n## Current Status\nThe plan is active and implementation has not started.\n\n## Next Action\nExecute the approved signer change after the handoff boundary.\n\n## PR Slice Ownership\nThe signer compatibility slice owns src/itsdangerous/signer.py.\n`);
+  fs.writeFileSync(path.join(brownfieldDir, 'HANDOFF.md'), `---\nchange: CHANGE-001\nupdated: 2026-08-28\nruntime: codex-cli\n---\n\n# Brownfield Change Handoff\n\nCHANGE.md is the only operational authority for this plan.\n\n## Active Constraints\nKeep product scope to src/itsdangerous/signer.py.\n\n## Unresolved Uncertainty\nThe exact unavailable-digest error follows the module style.\n\n## Decision Posture\nUse the smallest lazy default-resolution change.\n\n## Anti-Regression\nPreserve explicit SHA-256 behavior and import safety.\n\n## Next Action\nResume from the checkpoint and execute only the active plan.\n`);
+  fs.writeFileSync(path.join(brownfieldDir, 'VERIFICATION.md'), `---\nchange: CHANGE-001\nverified: 2026-08-28\nstatus: pending\ndelivery_posture: repo_only\n---\n\n# Brownfield Change Verification\n\n## Goal Verification\nThe goal is to make importing itsdangerous succeed and preserve explicit signing.\n\n## Evidence\nNo closeout evidence has been collected.\n\n## Artifact Checks\nThe signer artifact exists and remains in scope.\n\n## Gaps\nImplementation and tests are pending.\n\n## Widening Reuse\nPreserve this partial proof if the change widens.\n\n## Human Verification\nNone required unless deterministic checks expose uncertainty.\n\n## Closeout Decision\nPending until every plan condition is evaluated.\n`);
+  fs.mkdirSync(receiptDir, { recursive: true });
+  fs.appendFileSync(path.join(consumerRoot, 'src', 'itsdangerous', 'signer.py'), '\n# partial plan product change\n');
+  const workPlanHash = sha(fs.readFileSync(workPlanFile));
+  const freeze = {
+    schema_version: 1, contract: 'phase16-rooted-codex-freeze-v1', case_id: 'itsdangerous-fips-sha1', provider_sandbox: 'not_claimed', workflow_verdict: 'not_evaluated',
+    case: { sha256: sha(fs.readFileSync(CASE)), oracle: { path: 'tests/evals/cases/itsdangerous-fips-sha1-oracle.py', sha256: JSON.parse(fs.readFileSync(CASE)).oracle.sha256 }, input_bundle: { contract: 'phase16-public-input-bundle-v1', sha256: 'a'.repeat(64) } },
+    source: { repository: 'https://github.com/pallets/itsdangerous.git', revision: CAPABILITY_REVISION, main: CAPABILITY_REVISION, origin_main: CAPABILITY_REVISION },
+    bundle: { sha256: 'b'.repeat(64) }, controls: { sha256: 'c'.repeat(64) }, candidate: { sha256: 'd'.repeat(64) }, runtime: { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high', python: { sha256: 'e'.repeat(64) } }, skills: { 'work-plan': workPlanHash }, root_map: { consumer_root: '<RUN_ROOT>/consumer_root' },
+  };
+  const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));
+  const preparation = { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: 'itsdangerous-fips-sha1', bundle_sha256: freeze.bundle.sha256, controls_sha256: freeze.controls.sha256, candidate_sha256: freeze.candidate.sha256, python: { sha256: freeze.runtime.python.sha256 }, characterization_only: false, workflow_verdict: 'not_evaluated' };
+  const turn = { schema_version: 1, record_type: 'phase16_codex_turn_receipt', provider_invoked: true, characterization_only: false, invocation: { argv: ['exec', '-m', 'gpt-5.6-luna'] }, native: { thread_id: null, turn_id: null }, process: { status: 'exited', timed_out: true }, terminal: { status: 'failed', failure_code: 'turn_timeout' }, turn: { id: 'turn-a-plan', role: 'a-plan', skill: 'work-plan', skills: ['work-plan'], session: 'A', initial: true }, workflow_verdict: 'not_evaluated' };
+  const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: 'itsdangerous-fips-sha1', turn_count: 1, provider_invoked: true, workflow_verdict: 'not_evaluated', terminal: { status: 'failed', failure_code: 'turn_timeout', sealed_turn: { turn: 'turn-a-plan' } } };
+  const capability = {
+    schema_version: 1, record_type: 'phase16_capability_receipt', contract: 'phase16-native-capability-v1', case_id: 'itsdangerous-fips-sha1', capability: 'native-codex-workspace-write', provider_invoked: true, characterization_only: false, workflow_verdict: 'not_evaluated',
+    turn: { provider_invoked: true, characterization_only: false, native: { thread_id: 'capability-thread', parse_error: null }, terminal: { status: 'provider_complete' } },
+    terminal: { status: 'passed', failure_code: null }, marker: { path: '<CONSUMER_ROOT>/.work/eval-capability.json', bytes: 145, sha256: '8f87a7ebd28bfb07868d117a023622405be9eceb23a091cb8e3fe1e3ee38b11c', exact: true },
+    git: { expected_head: CAPABILITY_REVISION, head: CAPABILITY_REVISION, status: '?? .agents/skills/work-plan/SKILL.md\n?? .work/eval-capability.json' }, snapshots: { pre_sha256: 'f'.repeat(64), post_sha256: 'e'.repeat(64), changed_paths: ['.work/eval-capability.json'] },
+  };
+  const files = { capability, preparation, turn, terminal };
+  for (const [name, value] of Object.entries(files)) fs.writeFileSync(path.join(receiptDir, `${name === 'turn' ? 'turn-a-plan' : name}.json`), JSON.stringify(value));
+  return { root, consumerRoot, receiptDir, freezeFile, workPlanFile, observationFile: path.join(receiptDir, 'partial-observation.json'), gradeFile: path.join(receiptDir, 'partial-grade.json'), capability, preparation, turn, terminal };
+}
+
+function rewritePartialReceiptFiles(fixture) {
+  fs.writeFileSync(path.join(fixture.receiptDir, 'capability.json'), JSON.stringify(fixture.capability));
+  fs.writeFileSync(path.join(fixture.receiptDir, 'preparation.json'), JSON.stringify(fixture.preparation));
+  fs.writeFileSync(path.join(fixture.receiptDir, 'turn-a-plan.json'), JSON.stringify(fixture.turn));
+  fs.writeFileSync(path.join(fixture.receiptDir, 'terminal.json'), JSON.stringify(fixture.terminal));
+}

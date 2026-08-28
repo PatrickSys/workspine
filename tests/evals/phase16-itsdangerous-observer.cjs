@@ -100,6 +100,14 @@ function gitScope(root) {
   return { top, head, status, staged: parse(staged), unstaged: parse(unstaged), all: parse(status), status_sha256: sha256(Buffer.from(status)) };
 }
 
+function capabilityStatusPaths(status) {
+  return String(status || '').split(/\r?\n/).filter(Boolean).flatMap((line) => {
+    const match = line.match(/^(?:\?\?|[ MADRCU?!]{1,2})\s+(.*)$/);
+    if (!match) fail('capability_invalid', 'capability Git status contains an unparseable path');
+    return match[1].split(/\s+->\s+/).map((item) => item.replace(/^"(.*)"$/, '$1'));
+  });
+}
+
 function gitBlobSha(root, revision, member) {
   const result = cp.spawnSync('git', ['show', `${revision}:${member}`], { cwd: root, encoding: null, shell: false, windowsHide: true, timeout: 30000 });
   if (result.status !== 0) fail('git_observation_failed', `cannot read Git member: ${member}`);
@@ -321,7 +329,7 @@ function regradeChild({ observationFile, regradeFile }) {
   return readJson(regradeFile, 'regrade_invalid');
 }
 
-const PUBLIC_KEYS = new Set(['schema_version', 'record_type', 'contract', 'case_id', 'upstream_revision', 'candidate_sha256', 'runtime', 'workflow', 'oracle', 'disposition', 'stages', 'claim_limit']);
+const PUBLIC_KEYS = new Set(['schema_version', 'record_type', 'contract', 'case_id', 'upstream_revision', 'candidate_sha256', 'runtime', 'workflow', 'oracle', 'terminal_fact', 'disposition', 'stages', 'claim_limit']);
 function assertPublicSafe(value, key = null) {
   if (key && !PUBLIC_KEYS.has(key) && key !== 'provider' && key !== 'model' && key !== 'effort' && key !== 'sessions' && key !== 'turns' && key !== 'steps' && key !== 'id' && key !== 'disposition' && key !== 'status' && key !== 'checks' && key !== 'import_with_sha1_unavailable' && key !== 'explicit_sha256_signer' && key !== 'default_sha1_rejected' && key !== 'upstream_tests_pass' && key !== 'observation' && key !== 'oracle' && key !== 'grade' && key !== 'regrade') fail('projection_private_field', `public projection contains an unallowlisted field: ${key}`);
   if (typeof value === 'string' && (/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value) || /(?:HOME|USERPROFILE|CODEX_HOME|password|credential|prompt|transcript|pid|session_id|nonce)/i.test(value))) fail('projection_leak', 'public projection contains a private locator or diagnostic value');
@@ -378,6 +386,66 @@ function observeAndGrade(options) {
   return { observation: observed.observationFile, oracle: observed.oracleFile, grade: gradeFile, regrade: regradeFile, regradeCompare: compareFile, projection, disposition: gradeReceipt.disposition };
 }
 
+// Observe only the first plan turn after a provider terminal. This deliberately
+// has no oracle or complete-handoff path: a product red here means that a
+// provider-authored plan turn changed the declared candidate before the run
+// could reach execution, not that the candidate behavior was evaluated.
+function observePartialPlan({ caseFile, freezeFile, receiptDir, consumerRoot, capabilityFile = path.join(receiptDir, 'capability.json'), preparationFile = path.join(receiptDir, 'preparation.json'), turnFile = path.join(receiptDir, 'turn-a-plan.json'), terminalFile = path.join(receiptDir, 'terminal.json'), observationFile = path.join(receiptDir, 'partial-observation.json'), gradeFile = path.join(receiptDir, 'partial-grade.json'), workPlanFile = path.join(consumerRoot, '.agents', 'skills', 'work-plan', 'SKILL.md') }) {
+  const data = readCase(caseFile);
+  const freeze = readJson(freezeFile, 'freeze_invalid');
+  if (freeze.schema_version !== 1 || freeze.contract !== 'phase16-rooted-codex-freeze-v1' || freeze.case_id !== CASE_ID || freeze.provider_sandbox !== 'not_claimed' || freeze.workflow_verdict !== 'not_evaluated') fail('freeze_binding_mismatch', 'partial observer freeze contract is not exact');
+  if (freeze.case?.sha256 !== CASE_SHA256 || freeze.source?.repository !== data.source.repository || freeze.source?.revision !== CASE_REVISION || freeze.source?.main !== freeze.source?.origin_main || freeze.runtime?.provider !== 'codex' || freeze.runtime?.model !== 'gpt-5.6-luna' || freeze.runtime?.effort !== 'high' || !validHash(freeze.bundle?.sha256) || !validHash(freeze.controls?.sha256) || !validHash(freeze.candidate?.sha256) || !validHash(freeze.runtime?.python?.sha256) || freeze.skills?.['work-plan'] == null) fail('freeze_binding_mismatch', 'partial observer freeze does not bind the pinned case and runtime');
+  if (!exists(consumerRoot) || !fs.statSync(consumerRoot).isDirectory()) fail('consumer_root_invalid', 'partial observer consumer root is missing');
+  if (!exists(workPlanFile) || !fs.statSync(workPlanFile).isFile() || fs.lstatSync(workPlanFile).isSymbolicLink() || fileSha(workPlanFile) !== freeze.skills['work-plan']) fail('skill_hash_mismatch', 'installed work-plan skill is not freeze-bound');
+  if (!/\*\*Planning stops here:\*\*\s+`work-plan` ends after the plan artifact is written\./i.test(text(workPlanFile))) fail('plan_contract_invalid', 'installed work-plan contract does not stop before implementation');
+  if (!exists(preparationFile) || !exists(turnFile) || !exists(terminalFile)) fail('partial_receipt_missing', 'partial observer requires preparation, plan-turn, and terminal receipts');
+  if (!exists(capabilityFile)) fail('capability_missing', 'partial observer requires the sealed capability receipt');
+  const capability = readJson(capabilityFile, 'capability_invalid');
+  const markerPath = '.work/eval-capability.json';
+  if (capability.schema_version !== 1 || capability.record_type !== 'phase16_capability_receipt' || capability.contract !== 'phase16-native-capability-v1' || capability.case_id !== CASE_ID || capability.capability !== 'native-codex-workspace-write' || capability.provider_invoked !== true || capability.characterization_only === true || capability.workflow_verdict !== 'not_evaluated' || capability.turn?.provider_invoked !== true || capability.turn?.characterization_only === true || capability.turn?.native?.parse_error !== null || capability.turn?.native?.thread_id == null || capability.turn?.terminal?.status !== 'provider_complete' || capability.terminal?.status !== 'passed' || capability.terminal?.failure_code != null || capability.marker?.exact !== true || capability.marker?.bytes !== 145 || !validHash(capability.marker?.sha256) || capability.snapshots?.pre_sha256 == null || capability.snapshots?.post_sha256 == null || stable(capability.snapshots?.changed_paths) !== stable([markerPath]) || capability.git?.expected_head !== CASE_REVISION || capability.git?.head !== CASE_REVISION || typeof capability.git?.status !== 'string') fail('capability_invalid', 'capability receipt is not an exact passed parser-clean pinned setup witness');
+  const setupPaths = capabilityStatusPaths(capability.git.status);
+  if (!setupPaths.includes(markerPath) || setupPaths.some((item) => item === data.source.candidate_path)) fail('capability_invalid', 'capability setup baseline does not contain the exact marker or is product-tainted');
+  const preparation = readJson(preparationFile); const turn = readJson(turnFile); const terminal = readJson(terminalFile);
+  const terminalFailure = String(terminal.terminal?.failure_code || turn.terminal?.failure_code || 'partial_terminal');
+  const timeout = Boolean(turn.process?.timed_out) || /(?:^|_)(?:timeout|timed_out)(?:$|_)/i.test(terminalFailure);
+  if (preparation.record_type !== 'phase16_preparation_receipt' || preparation.case_id !== CASE_ID || preparation.characterization_only === true || preparation.workflow_verdict !== 'not_evaluated' || preparation.bundle_sha256 !== freeze.bundle.sha256 || preparation.controls_sha256 !== freeze.controls.sha256 || preparation.candidate_sha256 !== freeze.candidate.sha256 || preparation.python?.sha256 !== freeze.runtime.python.sha256) fail('partial_preparation_invalid', 'partial preparation receipt is not bound to the freeze');
+  if (turn.record_type !== 'phase16_codex_turn_receipt' || turn.provider_invoked !== true || turn.characterization_only === true || turn.workflow_verdict !== 'not_evaluated' || turn.turn?.id !== 'turn-a-plan' || turn.turn?.role !== 'a-plan' || turn.turn?.skill !== 'work-plan' || stable(turn.turn?.skills) !== stable(['work-plan']) || turn.turn?.session !== 'A' || turn.turn?.initial !== true || (!turn.native?.thread_id && !timeout) || !Array.isArray(turn.invocation?.argv) || !turn.invocation.argv.includes('-m') || !turn.invocation.argv.includes('gpt-5.6-luna') || turn.terminal?.status !== 'failed') fail('partial_turn_invalid', 'partial plan-turn receipt is not a sealed provider terminal');
+  if (terminal.record_type !== 'phase16_terminal_receipt' || terminal.case_id !== CASE_ID || terminal.provider_invoked !== true || terminal.workflow_verdict !== 'not_evaluated' || terminal.turn_count !== 1 || terminal.terminal?.status !== 'failed' || terminal.terminal?.sealed_turn?.turn !== 'turn-a-plan') fail('partial_terminal_invalid', 'partial terminal receipt does not seal exactly the first plan turn');
+  if (exists(path.join(receiptDir, 'turn-a-pause.json')) || exists(path.join(receiptDir, 'handoff.json')) || exists(path.join(receiptDir, 'turn-b-resume-execute.json')) || exists(path.join(receiptDir, 'turn-b-verify.json')) || exists(path.join(receiptDir, 'turn-b-progress.json'))) fail('partial_predecessor', 'partial observer refuses evidence preceded by pause, resume, or handoff');
+  const planArtifacts = allowedPaths(data, { all: [] }).allowed.filter((item) => item.startsWith('.work/brownfield-change/')).sort();
+  const brownfieldEvidence = brownfield(consumerRoot, data);
+  if (brownfieldEvidence.status !== 'active' || brownfieldEvidence.verification_status !== 'pending') fail('plan_artifact_invalid', 'partial observer requires active planning and pending verification artifacts');
+  const scope = gitScope(consumerRoot);
+  if (scope.top !== fs.realpathSync(consumerRoot) || scope.head !== CASE_REVISION || runGit(consumerRoot, ['remote', 'get-url', 'origin']) !== data.source.repository) fail('consumer_root_invalid', 'partial observer root is not the pinned upstream checkout');
+  const baseline = data.controls?.variants?.find((item) => item.id === 'baseline')?.candidate_sha256;
+  if (!baseline || gitBlobSha(consumerRoot, CASE_REVISION, data.source.candidate_path) !== baseline.toLowerCase()) fail('baseline_binding_mismatch', 'partial observer baseline does not match the pinned case');
+  // gitScope retains the existing observer contract, but its diagnostic
+  // status text is intentionally trimmed. Re-read names through Git's
+  // name-only seams here so a leading porcelain status column cannot drop the
+  // first character of a changed path.
+  const changedNames = [...new Set([
+    ...runGit(consumerRoot, ['diff', '--name-only']).split(/\r?\n/),
+    ...runGit(consumerRoot, ['diff', '--cached', '--name-only']).split(/\r?\n/),
+    ...runGit(consumerRoot, ['ls-files', '--others', '--exclude-standard']).split(/\r?\n/),
+  ].map((item) => item.trim()).filter(Boolean))];
+  const productPath = 'src/itsdangerous/signer.py';
+  const product = changedNames.filter((item) => item === productPath);
+  const plan = changedNames.filter((item) => planArtifacts.includes(item));
+  const newlyIntroduced = changedNames.filter((item) => !setupPaths.includes(item) && !planArtifacts.includes(item));
+  const forbidden = changedNames.filter((item) => !setupPaths.includes(item) && !planArtifacts.includes(item) && item !== productPath);
+  if (forbidden.length || newlyIntroduced.length !== 1 || product.length !== 1) fail('git_scope_invalid', 'partial observer found out-of-scope retained-root changes', { forbidden, setup_paths: setupPaths });
+  if (fileSha(path.join(consumerRoot, data.source.candidate_path)) === baseline.toLowerCase()) fail('candidate_missing', 'partial observer requires one changed declared product candidate');
+  const classified = { allowed: [...setupPaths, ...planArtifacts], all: changedNames, setup: changedNames.filter((item) => setupPaths.includes(item)), plan, newly_introduced: newlyIntroduced, forbidden, product };
+  const disposition = 'product_red';
+  const checks = { case_pin: true, freeze: true, capability: true, preparation: true, provider_plan_terminal: true, no_predecessor: true, work_plan_contract: true, product_mutation: true, timeout_observed: timeout };
+  const observation = { schema_version: 1, record_type: 'phase16_itsdangerous_partial_observation', contract: 'phase16-itsdangerous-partial-observation-v1', case_id: CASE_ID, case: { sha256: fileSha(caseFile), revision: CASE_REVISION }, freeze_sha256: fileSha(freezeFile), capability_sha256: fileSha(capabilityFile), preparation_sha256: fileSha(preparationFile), turn_sha256: fileSha(turnFile), terminal_sha256: fileSha(terminalFile), retained_root: fs.realpathSync(consumerRoot), git: { top_level: scope.top, head: scope.head, status: scope.status, status_sha256: scope.status_sha256, scope: classified, candidate_sha256: fileSha(path.join(consumerRoot, data.source.candidate_path)) }, turn: { id: 'turn-a-plan', ...(turn.native.thread_id ? { thread_id: turn.native.thread_id } : {}) }, terminal: { status: 'failed', timeout, failure_code: terminalFailure }, checks, oracle: { status: 'not_produced_due_to_partial_terminal' }, claim_limit: 'One partial rooted plan observation only; no oracle, complete workflow, model, benchmark, security, or release claim.' };
+  writeExclusive(observationFile, observation);
+  const grade = { schema_version: 1, record_type: 'phase16_itsdangerous_partial_grade', contract: 'phase16-itsdangerous-partial-grade-v1', case_id: CASE_ID, observation_sha256: fileSha(observationFile), checks, disposition, terminal_fact: timeout ? 'timeout' : 'partial_terminal', provider_invoked: false, retained_root_required: false, claim_limit: 'Deterministic grade of one sealed partial plan observation; no oracle or complete workflow claim.' };
+  writeExclusive(gradeFile, grade);
+  const projection = assertPublicSafe({ schema_version: 1, record_type: 'phase16_public_result', contract: PROJECTION_CONTRACT, case_id: CASE_ID, upstream_revision: CASE_REVISION, candidate_sha256: observation.git.candidate_sha256, runtime: { provider: 'codex', model: 'not_claimed', effort: 'not_claimed' }, workflow: { sessions: 1, turns: 1, steps: [{ id: 'turn-a-plan', disposition: 'partial' }] }, oracle: { status: 'not_produced_due_to_partial_terminal', checks: 'not_produced_due_to_partial_terminal' }, terminal_fact: timeout ? 'timeout' : 'partial_terminal', disposition, stages: { observation: 'sealed', oracle: 'not_produced_due_to_partial_terminal', grade: 'sealed', regrade: 'not_produced_due_to_partial_terminal' }, claim_limit: 'One partial rooted plan observation only; no oracle, complete workflow, model, benchmark, security, or release claim.' });
+  return { observationFile, gradeFile, observation, grade, projection, disposition };
+}
+
 if (require.main === module) {
   try {
     const argv = process.argv.slice(2); const mode = argv[0]; const value = (name) => { const index = argv.indexOf(name); return index >= 0 ? argv[index + 1] : null; };
@@ -392,5 +460,5 @@ module.exports = {
   observe, observeRun: observe, gradeValue, grade, gradeObservation: grade, regrade,
   regradeObservation: regrade, regradeChild, project, projectPublic: project, earlyProjection,
   writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths,
-  WORKFLOW_STEPS, DISPOSITIONS,
+  WORKFLOW_STEPS, DISPOSITIONS, observePartialPlan,
 };
