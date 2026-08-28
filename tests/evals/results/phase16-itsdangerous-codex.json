@@ -4,33 +4,53 @@
   "contract": "phase16-itsdangerous-public-result-v1",
   "case_id": "itsdangerous-fips-sha1",
   "upstream_revision": "93ae366874bbd4f69d90495c45b2cd336387496c",
-  "candidate_sha256": "6acf4e292ee5fe6d082d6b53740d1052dd429483727967599f1b1567c346d65c",
+  "candidate_sha256": "07265d7c030018bd4473478848ab53b71b05d73669196f2a1d1848ce7b9e3d2f",
   "runtime": {
     "provider": "codex",
-    "model": "not_claimed",
-    "effort": "not_claimed"
+    "model": "gpt-5.6-luna",
+    "effort": "high"
   },
   "workflow": {
-    "sessions": 1,
-    "turns": 1,
+    "sessions": 4,
+    "turns": 5,
     "steps": [
       {
         "id": "turn-a-plan",
-        "disposition": "partial"
+        "disposition": "observed"
+      },
+      {
+        "id": "turn-a-pause",
+        "disposition": "observed"
+      },
+      {
+        "id": "turn-b-resume-execute",
+        "disposition": "observed"
+      },
+      {
+        "id": "turn-c-verify",
+        "disposition": "observed"
+      },
+      {
+        "id": "turn-d-progress",
+        "disposition": "observed"
       }
     ]
   },
   "oracle": {
-    "status": "not_produced_due_to_partial_terminal",
-    "checks": "not_produced_due_to_partial_terminal"
+    "status": "pass",
+    "checks": {
+      "import_with_sha1_unavailable": true,
+      "explicit_sha256_signer": true,
+      "default_sha1_rejected": true,
+      "upstream_tests_pass": true
+    }
   },
-  "terminal_fact": "timeout",
-  "disposition": "product_red",
+  "disposition": "passed",
   "stages": {
     "observation": "sealed",
-    "oracle": "not_produced_due_to_partial_terminal",
+    "oracle": "sealed",
     "grade": "sealed",
-    "regrade": "not_produced_due_to_partial_terminal"
+    "regrade": "sealed"
   },
-  "claim_limit": "One partial rooted plan observation only; no oracle, complete workflow, model, benchmark, security, or release claim."
+  "claim_limit": "One pinned itsdangerous retained-root direct Workspine journey only; this is not a general benchmark, security, model-performance, or release claim."
 }
