@@ -19,6 +19,9 @@ const BUNDLE_CONTRACT = 'phase16-public-git-bundle-v1';
 const MANIFEST_CONTRACT = 'phase16-public-cache-manifest-v1';
 const DEFAULT_CONTROLS = path.join(REPO, '.work', 'phases', '16-safe-cohesive-first-run', '16-08-receipts', 'controls.json');
 const WORKFLOWS = Object.freeze(['plan', 'pause', 'resume', 'execute', 'verify', 'progress']);
+const APPROVAL_PLAN = '.work/brownfield-change/CHANGE.md';
+const APPROVAL_REF = 'phase16-owner-active-goal-authorization';
+const APPROVAL_CONTRACT = 'phase16-coordinator-approval-v1';
 
 class RunnerFailure extends Error {
   constructor(code, message, evidence = null) {
@@ -488,6 +491,7 @@ function runTurn(context, turn, sessionId = null, options = {}) {
   const input = turnPrompt(context, turn);
   for (const skill of turn.skills || [turn.skill]) if (!input.includes(`$${skill}`)) fail('skill_token_missing', `turn prompt lacks its exact skill token: ${skill}`);
   context.activeTurn = { skills, argv: argv.map((item) => diagnostic(item, context.runRoot, context.env)), cwd: '<CONSUMER_ROOT>', input_sha256: sha(Buffer.from(input)) };
+  context.providerInvocations = (context.providerInvocations || 0) + 1;
   const recorded = RECORDER.recordCodexTurn({ turn, command: context.provider.command, prefix: context.provider.prefix, argv, cwd: context.consumerRoot, root: context.runRoot, env: context.env, prompt: input, skills: skills.map((item) => ({ token: `$${item.id}`, sha256: item.sha256 })), model: context.freeze.runtime.model, effort: context.freeze.runtime.effort, provider: context.provider, expectedSessionId: sessionId, previousCumulativeTokens: context.cumulative[turn.session] || 0, maxCumulativeTokens: turn.tokens, maxOutputBytes: RETAINED_OUTPUT_BYTES, timeout: turn.minutes * 60000, characterizationOnly: Boolean(options.spawn), spawn: options.spawn });
   context.spawned = context.spawned || recorded.provider_invoked;
   context.activeReceipt = recorded;
@@ -697,6 +701,127 @@ function assertPauseScope(before, after) {
   const forbidden = changed.filter((item) => !item.startsWith('.work/') && item !== '.work');
   if (forbidden.length) fail('pause_product_mutation', 'pause changed product or undeclared consumer bytes', { changed: forbidden });
 }
+
+function approvalStateEvidence(state) {
+  return {
+    current_state: state?.current_state ?? null,
+    workflow_current_state: state?.workflow?.current_state ?? null,
+    workflow_authority: state?.workflow?.authority ?? null,
+    workflow_plan_path: state?.workflow?.plan?.path ?? null,
+    workflow_plan_identity: state?.workflow?.plan?.identity ?? null,
+    workflow_plan_approved: state?.workflow?.plan?.approved ?? null,
+    workflow_approval_ref: state?.workflow?.approval_ref ?? null,
+    workflow_execution_status: state?.workflow?.execution?.status ?? null,
+  };
+}
+
+function approvalCommandEvidence() {
+  return {
+    executable: '<NODE>',
+    argv: ['<TOOL_ROOT>/node_modules/workspine/bin/gsdd.mjs', 'lifecycle-transition', 'approve', '--plan', APPROVAL_PLAN, '--authority', 'owner', '--approval-ref', APPROVAL_REF, '--json'],
+    cwd: '<CONSUMER_ROOT>',
+    shell: false,
+  };
+}
+
+function approvalReceipt({ response = null, result = null, before = null, after = null, changed = [], planReceipt = {}, failure = null, characterizationOnly }) {
+  return {
+    schema_version: 1,
+    record_type: 'phase16_coordinator_approval_receipt',
+    contract: APPROVAL_CONTRACT,
+    case_id: CASE_ID,
+    target: 'approve',
+    plan: `<CONSUMER_ROOT>/${APPROVAL_PLAN}`,
+    authority: 'owner',
+    approval_ref: APPROVAL_REF,
+    command: approvalCommandEvidence(),
+    plan_receipt: {
+      path: '<RECEIPTS>/turn-a-plan.json',
+      expected_sha256: planReceipt.expected_sha256 ?? null,
+      observed_sha256: planReceipt.observed_sha256 ?? null,
+    },
+    result: {
+      status: response?.status ?? null,
+      output_status: result?.status ?? null,
+      changed: result?.changed ?? null,
+      target: result?.target ?? null,
+      error_code: result?.error_code ?? null,
+      provider_invoked: result?.provider_invoked === true,
+      failure_code: failure?.code || null,
+    },
+    state: {
+      before: approvalStateEvidence(before?.boundary?.state),
+      after: approvalStateEvidence(after?.boundary?.state),
+      output: approvalStateEvidence(result?.state),
+    },
+    changed_paths: changed,
+    characterization_only: Boolean(characterizationOnly),
+    workflow_verdict: 'not_evaluated',
+  };
+}
+
+function runCoordinatorApproval(context, options = {}) {
+  const receiptFile = path.join(context.receiptDir, 'approval.json');
+  if (typeof options.approvePlan === 'function' && options.characterizationOnly !== true) fail('characterization_only_required', 'injected approval execution is characterization-only');
+  const planReceiptFile = path.join(context.receiptDir, 'turn-a-plan.json');
+  let planReceipt = { expected_sha256: null, observed_sha256: null };
+  const before = { tree: CORE.snapshotTree(context.consumerRoot, true), boundary: readPlanBoundaryArtifacts(context.consumerRoot) };
+  const providerInvocations = context.providerInvocations || 0;
+  let response = null;
+  let result = null;
+  let after = before;
+  let changed = [];
+  try {
+    if (!exists(planReceiptFile) || !fs.lstatSync(planReceiptFile).isFile() || fs.lstatSync(planReceiptFile).isSymbolicLink()) fail('approval_plan_receipt_missing', 'sealed turn-a-plan receipt is missing or unsafe');
+    planReceipt.expected_sha256 = fileSha(planReceiptFile);
+    response = typeof options.approvePlan === 'function'
+      ? options.approvePlan(context, { plan: APPROVAL_PLAN, authority: 'owner', approvalRef: APPROVAL_REF })
+      : (() => {
+        if (!context.cli || typeof context.cli !== 'string') fail('approval_cli_missing', 'installed candidate CLI is missing from the preparation context');
+        return cp.spawnSync(process.execPath, [context.cli, 'lifecycle-transition', 'approve', '--plan', APPROVAL_PLAN, '--authority', 'owner', '--approval-ref', APPROVAL_REF, '--json'], {
+          cwd: context.consumerRoot,
+          env: context.env,
+          encoding: 'utf8',
+          windowsHide: true,
+          shell: false,
+          timeout: 120000,
+          maxBuffer: 4 * 1024 * 1024,
+        });
+      })();
+    after = { tree: CORE.snapshotTree(context.consumerRoot, true), boundary: readPlanBoundaryArtifacts(context.consumerRoot) };
+    planReceipt.observed_sha256 = exists(planReceiptFile) && fs.lstatSync(planReceiptFile).isFile() && !fs.lstatSync(planReceiptFile).isSymbolicLink() ? fileSha(planReceiptFile) : null;
+    if (planReceipt.observed_sha256 !== planReceipt.expected_sha256) fail('approval_plan_receipt_mutation', 'coordinator approval rewrote or deleted the sealed plan receipt', { expected_sha256: planReceipt.expected_sha256, observed_sha256: planReceipt.observed_sha256 });
+    changed = changedPaths(before.tree, after.tree);
+    const product = changed.filter((item) => item !== '.work' && !item.startsWith('.work/'));
+    if (product.length) fail('approval_product_mutation', 'coordinator approval changed product or undeclared consumer bytes', { changed: product });
+    const checkpointChanged = Object.keys(after.boundary.checkpoints).filter((relative) => stable(after.boundary.checkpoints[relative]) !== stable(before.boundary.checkpoints[relative]));
+    if (checkpointChanged.length) fail('approval_checkpoint_mutation', 'coordinator approval created, consumed, or modified a pause checkpoint', { changed: checkpointChanged });
+    if ((context.providerInvocations || 0) !== providerInvocations || response?.provider_invoked === true) fail('approval_provider_invoked', 'coordinator approval invoked the provider or reported provider execution');
+    if (!response || typeof response.status !== 'number' || response.status !== 0) fail('approval_command_failed', 'coordinator approval command failed', { status: response?.status ?? null });
+    if (typeof response.stdout !== 'string') fail('approval_output_malformed', 'coordinator approval did not return JSON stdout');
+    try { result = JSON.parse(response.stdout); } catch (error) { fail('approval_output_malformed', 'coordinator approval stdout was not valid JSON', { message: error.message }); }
+    if (!result || Array.isArray(result) || result.operation !== 'lifecycle-transition' || result.target !== 'approve' || result.status !== 'ok' || result.changed !== true) fail('approval_result_invalid', 'coordinator approval result was not a fresh successful approve transition', { status: result?.status ?? null, changed: result?.changed ?? null, target: result?.target ?? null });
+    const outputState = approvalStateEvidence(result.state);
+    const state = approvalStateEvidence(after.boundary.state);
+    if (outputState.current_state !== state.current_state || outputState.workflow_current_state !== state.workflow_current_state || outputState.workflow_authority !== state.workflow_authority || outputState.workflow_plan_path !== state.workflow_plan_path || outputState.workflow_plan_identity !== state.workflow_plan_identity || outputState.workflow_plan_approved !== state.workflow_plan_approved || outputState.workflow_approval_ref !== state.workflow_approval_ref || outputState.workflow_execution_status !== state.workflow_execution_status) fail('approval_state_mismatch', 'coordinator approval output state differs from the retained workspace state');
+    if (state.current_state !== 'execute' || state.workflow_current_state !== 'execute' || state.workflow_authority !== 'owner' || state.workflow_plan_path !== APPROVAL_PLAN || state.workflow_plan_identity !== APPROVAL_PLAN || state.workflow_plan_approved !== true || state.workflow_approval_ref !== APPROVAL_REF || state.workflow_execution_status !== 'in_progress') fail('approval_state_invalid', 'coordinator approval did not record the expected owner approval state, plan identity, reference, and execution status');
+    const receipt = approvalReceipt({ response, result, before, after, changed, planReceipt, characterizationOnly: options.characterizationOnly });
+    writeExclusive(receiptFile, receipt);
+    context.approval = receipt;
+    return receipt;
+  } catch (error) {
+    const failure = error instanceof RunnerFailure ? error : new RunnerFailure(error.code || 'approval_failed', error.message, error.evidence || null);
+    if (planReceipt.expected_sha256) planReceipt.observed_sha256 = exists(planReceiptFile) && fs.lstatSync(planReceiptFile).isFile() && !fs.lstatSync(planReceiptFile).isSymbolicLink() ? fileSha(planReceiptFile) : null;
+    if (!exists(receiptFile)) {
+      const receipt = approvalReceipt({ response, result, before, after, changed, planReceipt, failure, characterizationOnly: options.characterizationOnly });
+      writeExclusive(receiptFile, receipt);
+      context.approval = receipt;
+    }
+    failure.receipt = context.approval || null;
+    throw failure;
+  }
+}
+
 function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   const file = absoluteFile(caseFile, 'public case'); const data = readCase(file);
   const refs = sourceRef();
@@ -729,7 +854,7 @@ function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   if (stable(evidence) !== stable(freeze.runtime.executable)) fail('provider_binding_mismatch', 'resolved Codex executable differs from the freeze');
   if (stable(codexContract(provider)) !== stable(freeze.runtime.cli_contract)) fail('provider_contract_mismatch', 'resolved Codex runtime contract differs from the freeze');
   const python = resolvePython(); if (python.sha256 !== freeze.runtime.python.sha256) fail('python_binding_mismatch', 'resolved Python differs from the freeze');
-  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), receiptDir: options.receiptDir, provider, env, python, cumulative: {}, totalUsage: 0, sessions: {}, sourceBefore, cache, inputRoot, spawned: false };
+  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), cli, receiptDir: options.receiptDir, provider, env, python, cumulative: {}, totalUsage: 0, sessions: {}, providerInvocations: 0, spawned: false, sourceBefore, cache, inputRoot };
   context.skills = Object.fromEntries([...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, fileSha(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md'))])); context.expectedSkills = freeze.skills || null;
   return context;
 }
@@ -738,8 +863,8 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
   const OBSERVER = options.observer || require('./phase16-itsdangerous-observer.cjs');
   const freeze = readFreeze(freezeFile); const dir = path.resolve(receiptDir); fs.mkdirSync(dir, { recursive: true });
   const characterizationOnly = options.characterizationOnly === true;
-  if ((options.prepareRun || options.spawn) && !characterizationOnly) fail('characterization_only_required', 'injected preparation or provider execution is characterization-only');
-  for (const name of [...TURN_PLAN.map((turn) => `${turn.id}.json`), 'preparation.json', 'handoff.json', 'terminal.json', 'oracle.json', 'observation.json', 'grade.json', 'regrade.json', 'regrade-compare.json']) if (exists(path.join(dir, name))) fail('receipt_exists', `refusing to overwrite an existing receipt: ${name}`);
+  if ((options.prepareRun || options.spawn || options.approvePlan) && !characterizationOnly) fail('characterization_only_required', 'injected preparation, provider, or approval execution is characterization-only');
+  for (const name of [...TURN_PLAN.map((turn) => `${turn.id}.json`), 'preparation.json', 'approval.json', 'handoff.json', 'terminal.json', 'oracle.json', 'observation.json', 'grade.json', 'regrade.json', 'regrade-compare.json']) if (exists(path.join(dir, name))) fail('receipt_exists', `refusing to overwrite an existing receipt: ${name}`);
   const turns = []; let current = null; let failure = null; let context = null;
   try {
     context = options.prepareRun ? options.prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir }) : prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir });
@@ -767,11 +892,13 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
       const receipt = RECORDER.deepFreeze({ ...recorded, turn: turnEvidence, characterization_only: characterizationOnly });
       writeExclusive(path.join(dir, `${turn.id}.json`), receipt); turns.push(receipt);
       if (gateFailure) fail(gateFailure.code || 'turn_gate_failed', gateFailure.message, gateFailure.evidence);
+      if (turn.id === 'turn-a-plan') runCoordinatorApproval(context, { ...options, approvePlan: options.approvePlan || context.approvePlan, characterizationOnly });
     }
     if (new Set(Object.values(context.sessions)).size !== 2) fail('session_identity_invalid', 'A and B native sessions must be distinct');
-    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', terminal: { status: 'provider_complete' } };
+    const approvalSha = fileSha(path.join(dir, 'approval.json'));
+    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: approvalSha, terminal: { status: 'provider_complete' } };
     const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));
-    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), terminal_sha256: terminalSha, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>' };
+    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), approval_sha256: approvalSha, terminal_sha256: terminalSha, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>' };
     let observer = null;
     if (!characterizationOnly && options.observe !== false) {
       try {
@@ -790,7 +917,7 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     failure.provider_invoked = Boolean(context?.spawned);
     if (current && !exists(path.join(dir, `${current.id}.json`)) && (error.receipt || context?.activeReceipt)) writeExclusive(path.join(dir, `${current.id}.json`), error.receipt || context.activeReceipt);
     const sealed = current && exists(path.join(dir, `${current.id}.json`)) ? { turn: current.id, sha256: fileSha(path.join(dir, `${current.id}.json`)) } : null;
-    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length + (current && !turns.some((item) => item.turn === current.id) ? 1 : 0), provider_invoked: Boolean(context?.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', terminal: { status: 'failed', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null, sealed_turn: sealed } };
+    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length + (current && !turns.some((item) => item.turn === current.id) ? 1 : 0), provider_invoked: Boolean(context?.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: exists(path.join(dir, 'approval.json')) ? fileSha(path.join(dir, 'approval.json')) : null, terminal: { status: 'failed', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null, sealed_turn: sealed } };
     if (!exists(path.join(dir, 'terminal.json'))) writeExclusive(path.join(dir, 'terminal.json'), terminal);
     if (!characterizationOnly && options.publicResult && !exists(options.publicResult) && !exists(path.join(dir, 'handoff.json'))) {
       OBSERVER.writeEarlyProjection(options.publicResult, { caseId: CASE_ID, revision: freeze.source?.revision || '93ae366874bbd4f69d90495c45b2cd336387496c', terminal });
@@ -857,4 +984,4 @@ async function main(argv = process.argv.slice(2)) {
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
 
-module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, buildFreeze, readFreeze, prepareRun, runTurn, runCapability, capabilityProbe: runCapability, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
+module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, buildFreeze, readFreeze, prepareRun, runTurn, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };

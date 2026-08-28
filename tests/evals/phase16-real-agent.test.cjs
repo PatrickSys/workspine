@@ -273,7 +273,13 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
   freeze.budgets.total_wall_minutes = LIVE.TURN_TOTAL_MINUTES; freeze.budgets.total_native_tokens = LIVE.TURN_TOTAL_TOKENS; freeze.budgets.retained_output_bytes = LIVE.RETAINED_OUTPUT_BYTES;
   const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));
   let calls = 0;
-  const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, cumulative: {}, sessions: {}, data: {}, sourceBefore: {} };
+  const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, cumulative: {}, sessions: {}, data: {}, sourceBefore: {}, providerInvocations: 0 };
+  context.approvePlan = (_context, request) => {
+    const state = { schema_version: 1, status: 'active', current_state: 'execute', workflow: { plan: { approved: true, path: request.plan, identity: request.plan }, execution: { status: 'in_progress' }, verification: { status: 'not_started' }, audit: { status: 'not_started' }, dogfood: { status: 'not_started' }, authority: request.authority, current_state: 'execute', approval_ref: request.approvalRef } };
+    fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
+    fs.writeFileSync(path.join(consumerRoot, '.work', 'state.json'), `${JSON.stringify(state)}\n`, { flag: 'wx' });
+    return { status: 0, stdout: JSON.stringify({ schema_version: 1, operation: 'lifecycle-transition', target: 'approve', status: 'ok', changed: true, state }), stderr: '' };
+  };
   const prepareRun = () => context;
   const spawn = (_command, _argv, spawnOptions) => {
     const turn = LIVE.TURN_PLAN[calls]; const session = turn.session === 'A' ? 'native-A' : 'native-B'; calls += 1;
@@ -507,16 +513,98 @@ test('capability probe fails closed on any post-preflight path outside the fixed
 test('provider-free coordinator runs production-shaped five-turn handoff with two sessions', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-five-turn-'));
   const fixture = rootedRunFixture(root);
+  const approvalOrder = [];
+  const approvePlan = fixture.context.approvePlan;
+  fixture.context.approvePlan = (context, request) => {
+    approvalOrder.push({ planReceipt: fs.existsSync(path.join(fixture.receiptDir, 'turn-a-plan.json')), request });
+    return approvePlan(context, request);
+  };
   try {
     const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
     assert.equal(fixture.calls, 5);
+    assert.equal(approvalOrder.length, 1);
+    assert.equal(approvalOrder[0].planReceipt, true);
+    assert.deepEqual(approvalOrder[0].request, { plan: LIVE.APPROVAL_PLAN, authority: 'owner', approvalRef: LIVE.APPROVAL_REF });
     assert.deepEqual(result.turns.map((item) => item.turn.id), LIVE.TURN_PLAN.map((item) => item.id));
     assert.equal(result.turns[1].turn.checkpoint.path, '<CONSUMER_ROOT>/.work/.continue-here.md');
     assert.deepEqual(result.turns.map((item) => item.usage.delta_tokens), [10, 10, 10, 10, 10]);
     assert.deepEqual(result.handoff.sessions, { A: 'native-A', B: 'native-B' });
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), true);
+    const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json')));
+    assert.deepEqual(Object.keys(approval).sort(), ['approval_ref', 'authority', 'case_id', 'changed_paths', 'characterization_only', 'command', 'contract', 'plan', 'plan_receipt', 'record_type', 'result', 'schema_version', 'state', 'target', 'workflow_verdict'].sort());
+    assert.equal(approval.command.shell, false);
+    assert.deepEqual(approval.command.argv.slice(1), ['lifecycle-transition', 'approve', '--plan', LIVE.APPROVAL_PLAN, '--authority', 'owner', '--approval-ref', LIVE.APPROVAL_REF, '--json']);
+    assert.equal(approval.result.status, 0);
+    assert.equal(approval.result.output_status, 'ok');
+    assert.equal(approval.result.changed, true);
+    assert.equal(approval.state.after.workflow_plan_approved, true);
+    assert.equal(approval.state.after.workflow_approval_ref, LIVE.APPROVAL_REF);
+    assert.equal(approval.plan_receipt.expected_sha256, sha(fs.readFileSync(path.join(fixture.receiptDir, 'turn-a-plan.json'))));
+    assert.equal(approval.plan_receipt.observed_sha256, approval.plan_receipt.expected_sha256);
+    assert.equal(approval.workflow_verdict, 'not_evaluated');
+    assert.equal(result.handoff.approval_sha256, sha(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json'))));
     for (const turn of LIVE.TURN_PLAN) assert.equal(JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${turn.id}.json`))).workflow_verdict, 'not_evaluated');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('coordinator approval fails closed before pause on malformed, replayed, mismatched, or mutating handoffs', () => {
+  const cases = [
+    ['malformed', (_context) => ({ status: 0, stdout: '{', stderr: '' }), 'approval_output_malformed'],
+    ['replayed', (context, request) => ({ status: 0, stdout: JSON.stringify({ operation: 'lifecycle-transition', target: 'approve', status: 'replayed', changed: false, state: {} }), stderr: '' }), 'approval_result_invalid'],
+    ['mismatched', (context, request, fallback) => {
+      const result = fallback(context, request);
+      const value = JSON.parse(result.stdout); value.state.workflow.approval_ref = 'wrong-ref';
+      fs.writeFileSync(path.join(context.consumerRoot, '.work', 'state.json'), `${JSON.stringify(value.state)}\n`);
+      return result;
+    }, 'approval_state_mismatch'],
+    ['execution-status-mismatch', (context, request, fallback) => {
+      const result = fallback(context, request);
+      const value = JSON.parse(result.stdout); value.state.workflow.execution.status = 'complete';
+      return { ...result, stdout: JSON.stringify(value) };
+    }, 'approval_state_mismatch'],
+    ['plan-identity-mismatch', (context, request, fallback) => {
+      const result = fallback(context, request);
+      const value = JSON.parse(result.stdout); value.state.workflow.plan.identity = '.work/other-change/CHANGE.md';
+      return { ...result, stdout: JSON.stringify(value) };
+    }, 'approval_state_mismatch'],
+    ['plan-receipt', (context, request, fallback) => {
+      const result = fallback(context, request);
+      context.approvalPlanReceiptExpected = sha(fs.readFileSync(path.join(context.receiptDir, 'turn-a-plan.json')));
+      fs.writeFileSync(path.join(context.receiptDir, 'turn-a-plan.json'), 'rewritten plan receipt\n');
+      return result;
+    }, 'approval_plan_receipt_mutation'],
+    ['product', (context, request, fallback) => {
+      const result = fallback(context, request);
+      fs.writeFileSync(path.join(context.consumerRoot, 'unexpected.txt'), 'unexpected\n', { flag: 'wx' });
+      return result;
+    }, 'approval_product_mutation'],
+    ['checkpoint', (context, request, fallback) => {
+      const result = fallback(context, request);
+      fs.writeFileSync(path.join(context.consumerRoot, '.work', '.continue-here.md'), 'unexpected checkpoint\n', { flag: 'wx' });
+      return result;
+    }, 'approval_checkpoint_mutation'],
+    ['provider', (context, request, fallback) => {
+      context.providerInvocations += 1;
+      return fallback(context, request);
+    }, 'approval_provider_invoked'],
+  ];
+  for (const [name, approvePlan, code] of cases) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-approval-${name}-`));
+    const fixture = rootedRunFixture(root);
+    try {
+      const defaultApprovePlan = fixture.context.approvePlan;
+      fixture.context.approvePlan = (context, request) => approvePlan(context, request, defaultApprovePlan);
+      assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === code);
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
+      const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json')));
+      assert.equal(approval.workflow_verdict, 'not_evaluated');
+      assert.equal(approval.result.failure_code, code);
+      if (name === 'plan-receipt') {
+        assert.equal(approval.plan_receipt.expected_sha256, fixture.context.approvalPlanReceiptExpected);
+        assert.equal(approval.plan_receipt.observed_sha256, sha(Buffer.from('rewritten plan receipt\n')));
+      }
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
 });
 
 test('five-turn coordinator rejects a native turn above its calibrated per-turn ceiling', () => {
