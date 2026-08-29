@@ -337,7 +337,7 @@ function observerFreezeFixture(root) {
   freeze.root_map = { run_root: '<RUN_ROOT>', consumer_root: '<RUN_ROOT>/consumer_root', tool_root: '<RUN_ROOT>/tool_root', receipts: '<RECEIPTS>' };
   freeze.sessions = { count: 3, turns: 5 };
   freeze.auth = { copied_to_consumer_root: false };
-  freeze.budgets.total_wall_minutes = 54;
+  freeze.budgets.total_wall_minutes = 57;
   freeze.budgets.total_native_tokens = 8000000;
   freeze.budgets.retained_output_bytes = 1048576;
   return { ...fixture, freeze };
@@ -415,10 +415,20 @@ test('native token calibration applies the fixed 25x multiplier without changing
   assert.deepEqual(OBSERVER.TURN_CONTRACT.map((turn) => turn[5]), [3000000, 500000, 2500000, 1500000, 500000]);
   assert.equal(OBSERVER.PLAN_TOKEN_CEILING, 3000000);
   assert.equal(OBSERVER.TURN_TOTAL_NATIVE_TOKENS, 8000000);
-  assert.equal(OBSERVER.TURN_TOTAL_WALL_MINUTES, 54);
-  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.minutes), [12, 5, 20, 12, 5]);
-  assert.equal(LIVE.TURN_TOTAL_MINUTES, 54);
+  assert.equal(OBSERVER.TURN_TOTAL_WALL_MINUTES, 57);
+  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.minutes), [15, 5, 20, 12, 5]);
+  assert.equal(LIVE.TURN_TOTAL_MINUTES, 57);
   assert.equal(LIVE.RETAINED_OUTPUT_BYTES, 1024 * 1024);
+});
+
+test('plan turn has a grounded completion margin after the recorded 12-minute timeout', () => {
+  // Attempt one produced the substantive 13,189-byte plan about 16 seconds
+  // before the 12-minute wall expired. Preserve three minutes of bounded
+  // completion margin without changing any token ceiling.
+  assert.equal(LIVE.TURN_PLAN[0].minutes, 15);
+  assert.equal(LIVE.TURN_TOTAL_MINUTES, 57);
+  assert.equal(OBSERVER.TURN_CONTRACT[0][4], 15);
+  assert.equal(OBSERVER.TURN_TOTAL_WALL_MINUTES, 57);
 });
 
 test('fresh freezes bind evaluator bytes and reject missing or mutated ledger entries before provider', () => {

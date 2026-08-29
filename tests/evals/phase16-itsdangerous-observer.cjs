@@ -29,13 +29,13 @@ const WORKFLOW_STEPS = Object.freeze(['turn-a-plan', 'turn-a-pause', 'turn-b-res
 const DISPOSITIONS = Object.freeze(['passed', 'product_red', 'infrastructure_invalid', 'identity_unknown', 'human_needed']);
 const PLAN_TOKEN_CEILING = 3000000;
 const TURN_CONTRACT = Object.freeze([
-  ['turn-a-plan', 'a-plan', 'work-plan', ['work-plan'], 12, PLAN_TOKEN_CEILING, 'A', true],
+  ['turn-a-plan', 'a-plan', 'work-plan', ['work-plan'], 15, PLAN_TOKEN_CEILING, 'A', true],
   ['turn-a-pause', 'a-pause', 'work-pause', ['work-pause'], 5, 500000, 'A', false],
   ['turn-b-resume-execute', 'b-resume-execute', 'work-resume', ['work-resume', 'work-execute'], 20, 2500000, 'B', true],
   ['turn-c-verify', 'c-verify', 'work-verify', ['work-verify'], 12, 1500000, 'C', true],
   ['turn-c-progress', 'c-progress', 'work-progress', ['work-progress'], 5, 500000, 'C', false],
 ]);
-const TURN_TOTAL_WALL_MINUTES = 54;
+const TURN_TOTAL_WALL_MINUTES = 57;
 const TURN_TOTAL_NATIVE_TOKENS = 8000000;
 
 function expectedNativeArgv(turn, sessionId = null) {
