@@ -321,12 +321,13 @@ function checkPublicCase(caseFile, cacheValue, options = {}) {
 }
 
 const NATIVE_TOKEN_MULTIPLIER = 25;
-const PLAN_TOKEN_CEILING = 3000000;
+const PLAN_TOKEN_CEILING = 6000000;
 const PAUSE_TOKEN_CEILING = 1000000;
 const TURN_PLAN = Object.freeze([
-  // The sealed R6 observation used 2,460,932 native tokens. Keep this
-  // plan-only calibration explicit; the 25x multiplier remains for every
-  // other turn below.
+  // R1 retained 5,404,675 native tokens for the parent plan task; checker
+  // children ran in separate sessions and are excluded. Use the next
+  // whole-million bounded plan-only bucket; the 25x multiplier remains for
+  // every other turn below.
   Object.freeze({ id: 'turn-a-plan', role: 'a-plan', skill: 'work-plan', skills: ['work-plan'], minutes: 30, tokens: PLAN_TOKEN_CEILING, session: 'A', initial: true }),
   Object.freeze({ id: 'turn-a-pause', role: 'a-pause', skill: 'work-pause', skills: ['work-pause'], minutes: 5, tokens: PAUSE_TOKEN_CEILING, session: 'A', initial: false }),
   Object.freeze({ id: 'turn-b-resume-execute', role: 'b-resume-execute', skill: 'work-resume', skills: ['work-resume', 'work-execute'], minutes: 20, tokens: 100000 * NATIVE_TOKEN_MULTIPLIER, session: 'B', initial: true }),

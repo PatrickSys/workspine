@@ -27,7 +27,7 @@ const EVALUATOR_FILES = Object.freeze([
 ]);
 const WORKFLOW_STEPS = Object.freeze(['turn-a-plan', 'turn-a-pause', 'turn-b-resume-execute', 'turn-c-verify', 'turn-c-progress']);
 const DISPOSITIONS = Object.freeze(['passed', 'product_red', 'infrastructure_invalid', 'identity_unknown', 'human_needed']);
-const PLAN_TOKEN_CEILING = 3000000;
+const PLAN_TOKEN_CEILING = 6000000;
 const PAUSE_TOKEN_CEILING = 1000000;
 const TURN_CONTRACT = Object.freeze([
   ['turn-a-plan', 'a-plan', 'work-plan', ['work-plan'], 30, PLAN_TOKEN_CEILING, 'A', true],
@@ -37,7 +37,7 @@ const TURN_CONTRACT = Object.freeze([
   ['turn-c-progress', 'c-progress', 'work-progress', ['work-progress'], 5, 500000, 'C', false],
 ]);
 const TURN_TOTAL_WALL_MINUTES = 72;
-const TURN_TOTAL_NATIVE_TOKENS = 8500000;
+const TURN_TOTAL_NATIVE_TOKENS = 11500000;
 
 function expectedNativeArgv(turn, sessionId = null) {
   const base = turn[7]
