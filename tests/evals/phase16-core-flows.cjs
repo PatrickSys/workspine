@@ -2052,11 +2052,45 @@ function liveIdentityKey(runtime, native) {
 
 function liveCaptureCheckpoint(workspace) {
   const file = path.join(workspace, '.work', '.continue-here.md');
-  need(exists(file) && fs.statSync(file).isFile(), 'infrastructure', 'checkpoint_missing', 'brownfield process A did not leave .work/.continue-here.md');
+  const helper = path.join(workspace, '.work', 'bin', 'gsdd.mjs');
+  let helperStat;
+  try { helperStat = fs.lstatSync(helper); } catch (error) {
+    need(false, 'infrastructure', 'checkpoint_helper_missing', 'brownfield process A did not leave .work/bin/gsdd.mjs', { code: error.code });
+  }
+  need(helperStat.isFile() && !helperStat.isSymbolicLink(), 'infrastructure', 'checkpoint_helper_invalid', 'brownfield checkpoint helper must be a regular non-symlink file');
+  let fileStat;
+  try { fileStat = fs.lstatSync(file); } catch (error) {
+    need(false, 'infrastructure', 'checkpoint_missing', 'brownfield process A did not leave .work/.continue-here.md', { code: error.code });
+  }
+  need(fileStat.isFile() && !fileStat.isSymbolicLink(), 'infrastructure', 'checkpoint_invalid', 'brownfield checkpoint must be a regular non-symlink file');
+  const before = snapshotTree(workspace);
+  let result;
+  try {
+    result = cp.spawnSync(process.execPath, [helper, 'next', '--json', '--no-update-notice'], {
+      cwd: workspace, shell: false, encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 256 * 1024,
+    });
+  } catch (error) {
+    need(false, 'infrastructure', 'checkpoint_helper_spawn_failed', 'checkpoint helper could not be invoked', { code: error.code });
+  }
+  need(same(before, snapshotTree(workspace)), 'infrastructure', 'checkpoint_helper_mutation', 'checkpoint helper mutated the consumer workspace during readback');
+  if (result.error?.code === 'ETIMEDOUT') need(false, 'infrastructure', 'checkpoint_helper_timeout', 'checkpoint helper exceeded its bounded readback timeout');
+  if (result.error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' || result.error?.code === 'ENOBUFS') need(false, 'infrastructure', 'checkpoint_helper_output_limit', 'checkpoint helper exceeded its bounded output limit');
+  if (result.error) need(false, 'infrastructure', 'checkpoint_helper_spawn_failed', 'checkpoint helper could not be invoked', { code: result.error.code });
+  need(result.status === 0, 'infrastructure', 'checkpoint_candidate_invalid', 'checkpoint helper returned a nonzero status', { status: result.status });
+  const output = String(result.stdout || '');
+  try { result = JSON.parse(output); } catch (error) {
+    need(false, 'infrastructure', 'checkpoint_candidate_invalid', 'checkpoint helper did not emit exactly one JSON document', { message: error.message });
+  }
+  const readback = result?.continuity?.checkpoint;
+  const required = ['current_state', 'completed_work', 'remaining_work', 'decisions', 'blockers', 'next_action'];
+  need(readback && typeof readback === 'object' && !Array.isArray(readback), 'infrastructure', 'checkpoint_candidate_invalid', 'checkpoint helper JSON lacks continuity.checkpoint');
+  need(readback.path === '.work/.continue-here.md', 'infrastructure', 'checkpoint_candidate_invalid', 'checkpoint helper returned a non-canonical checkpoint path');
+  need(readback.status === 'valid', 'infrastructure', 'checkpoint_candidate_invalid', 'checkpoint helper did not validate the checkpoint');
+  need(Array.isArray(readback.errors) && readback.errors.length === 0, 'infrastructure', 'checkpoint_candidate_invalid', 'checkpoint helper reported checkpoint parser errors');
+  need(readback.sections && typeof readback.sections === 'object' && !Array.isArray(readback.sections), 'infrastructure', 'checkpoint_candidate_invalid', 'checkpoint helper omitted checkpoint sections');
+  for (const section of required) need(typeof readback.sections[section] === 'string' && readback.sections[section].trim().length > 0, 'infrastructure', 'checkpoint_candidate_invalid', `checkpoint helper returned an empty or missing section: ${section}`);
   const bytes = fs.readFileSync(file);
-  const text = bytes.toString('utf8');
-  need(bytes.length >= 64 && /current\s+task/i.test(text) && /evidence/i.test(text) && /next\s+action/i.test(text), 'infrastructure', 'checkpoint_not_substantive', 'brownfield pause checkpoint lacks the required substantive sections');
-  return { path: '<CONSUMER_ROOT>/.work/' + path.basename(file), bytes: bytes.length, sha256: sha(bytes) };
+  return { path: '<CONSUMER_ROOT>/.work/.continue-here.md', bytes: bytes.length, sha256: sha(bytes), parser: { status: readback.status, errors: [], required_sections: required } };
 }
 
 function liveInputBundle(revision, binding, destination) {

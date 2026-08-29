@@ -221,10 +221,35 @@ function brownfield(root, data = null) {
 
 function checkpoint(root) {
   const file = path.join(root, '.work', '.continue-here.md');
-  if (!exists(file) || fs.statSync(file).size < 64) fail('checkpoint_missing', 'complete handoff lacks a substantive checkpoint');
-  const value = text(file);
-  if (!/current\s+task/i.test(value) || !/evidence/i.test(value) || !/next\s+action/i.test(value)) fail('checkpoint_invalid', 'checkpoint lacks current task, evidence, or next action');
-  return { bytes: Buffer.byteLength(value), sha256: fileSha(file) };
+  const helper = path.join(root, '.work', 'bin', 'gsdd.mjs');
+  let helperStat;
+  try { helperStat = fs.lstatSync(helper); } catch (error) { fail('checkpoint_helper_missing', 'observer cannot read .work/bin/gsdd.mjs', { code: error.code }); }
+  if (!helperStat.isFile() || helperStat.isSymbolicLink()) fail('checkpoint_helper_invalid', 'observer checkpoint helper must be a regular non-symlink file');
+  let fileStat;
+  try { fileStat = fs.lstatSync(file); } catch (error) { fail('checkpoint_missing', 'complete handoff lacks a checkpoint', { code: error.code }); }
+  if (!fileStat.isFile() || fileStat.isSymbolicLink()) fail('checkpoint_invalid', 'observer checkpoint must be a regular non-symlink file');
+  const before = snapshotFiles(root);
+  const result = cp.spawnSync(process.execPath, [helper, 'next', '--json', '--no-update-notice'], {
+    cwd: root, shell: false, encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 256 * 1024,
+  });
+  if (stable(before) !== stable(snapshotFiles(root))) fail('checkpoint_helper_mutation', 'observer checkpoint helper mutated the consumer workspace during readback');
+  if (result.error?.code === 'ETIMEDOUT') fail('checkpoint_helper_timeout', 'observer checkpoint helper exceeded its bounded readback timeout');
+  if (result.error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' || result.error?.code === 'ENOBUFS') fail('checkpoint_helper_output_limit', 'observer checkpoint helper exceeded its output limit');
+  if (result.error) fail('checkpoint_helper_spawn_failed', 'observer could not invoke checkpoint helper', { code: result.error.code });
+  if (result.status !== 0) fail('checkpoint_candidate_invalid', 'observer checkpoint helper returned a nonzero status', { status: result.status });
+  let value;
+  try { value = JSON.parse(String(result.stdout || '')); } catch (error) { fail('checkpoint_candidate_invalid', 'observer checkpoint helper did not emit exactly one JSON document', { message: error.message }); }
+  const readback = value?.continuity?.checkpoint;
+  const required = ['current_state', 'completed_work', 'remaining_work', 'decisions', 'blockers', 'next_action'];
+  if (!readback || typeof readback !== 'object' || Array.isArray(readback)) fail('checkpoint_candidate_invalid', 'observer checkpoint JSON lacks continuity.checkpoint');
+  if (readback.path !== '.work/.continue-here.md') fail('checkpoint_candidate_invalid', 'observer checkpoint path is not canonical');
+  if (readback.status !== 'valid') fail('checkpoint_candidate_invalid', 'observer checkpoint status is not valid');
+  if (!Array.isArray(readback.errors) || readback.errors.length !== 0) fail('checkpoint_candidate_invalid', 'observer checkpoint parser reported errors');
+  if (!readback.sections || typeof readback.sections !== 'object' || Array.isArray(readback.sections)) fail('checkpoint_candidate_invalid', 'observer checkpoint sections are missing');
+  for (const section of required) if (typeof readback.sections[section] !== 'string' || !readback.sections[section].trim()) fail('checkpoint_candidate_invalid', `observer checkpoint section is missing or empty: ${section}`);
+  const finalStat = fs.lstatSync(file);
+  if (!finalStat.isFile() || finalStat.isSymbolicLink()) fail('checkpoint_invalid', 'observer checkpoint changed into an unsafe file during readback');
+  return { path: '<CONSUMER_ROOT>/.work/.continue-here.md', bytes: finalStat.size, sha256: fileSha(file), parser: { status: readback.status, errors: [], required_sections: required } };
 }
 
 function inputBundle(root, data) {
@@ -496,7 +521,7 @@ if (require.main === module) {
 
 module.exports = {
   ObserverFailure, writeExclusive, readCase, validateFreeze, gitScope, gitBlobSha, brownfield, completeHandoff, runOracle,
-  observe, observeRun: observe, gradeValue, grade, gradeObservation: grade, regrade,
+  observe, observeRun: observe, checkpoint, gradeValue, grade, gradeObservation: grade, regrade,
   regradeObservation: regrade, regradeChild, project, projectPublic: project, earlyProjection,
   writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths,
   WORKFLOW_STEPS, DISPOSITIONS, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_CONTRACT, TURN_TOTAL_WALL_MINUTES, TURN_TOTAL_NATIVE_TOKENS, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, validateEvaluatorLedger, observePartialPlan,

@@ -266,6 +266,8 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
   fs.mkdirSync(path.join(consumerRoot, '.agents', 'skills'), { recursive: true });
   fs.mkdirSync(receiptDir, { recursive: true });
   fs.mkdirSync(path.join(consumerRoot, '.work', 'brownfield-change'), { recursive: true });
+  fs.mkdirSync(path.join(consumerRoot, '.work', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(consumerRoot, '.work', 'bin', 'gsdd.mjs'), `const sections = Object.fromEntries(['current_state', 'completed_work', 'remaining_work', 'decisions', 'blockers', 'next_action'].map((name) => [name, 'fixture evidence'])); process.stdout.write(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: [], sections } } }) + '\\n');\n`, { flag: 'wx' });
   fs.writeFileSync(path.join(consumerRoot, '.work', 'brownfield-change', 'CHANGE.md'), '# bounded brownfield plan\n', { flag: 'wx' });
   for (const skill of [...new Set(LIVE.TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))]) {
     const directory = path.join(consumerRoot, '.agents', 'skills', skill);
@@ -305,7 +307,7 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
     const sessionTurn = ++sessionTurns[turn.session];
     if (turn.id === 'turn-a-pause') {
       fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
-      fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: bounded brownfield route\nEvidence: native pause receipt\nNext action: fresh resume\n', { flag: 'wx' });
+      fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), '---\nworkflow: phase\nphase: 16\ntimestamp: 2026-08-29T00:00:00Z\nruntime: codex\n---\n<current_state>Bounded brownfield route.</current_state>\n<completed_work>Native pause receipt.</completed_work>\n<remaining_work>Fresh resume.</remaining_work>\n<decisions>Proceed.</decisions>\n<blockers>None.</blockers>\n<next_action>Fresh resume.</next_action>\n', { flag: 'wx' });
     }
     if (turn.id === 'turn-a-plan' && planMutation) {
       fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
@@ -1186,6 +1188,24 @@ test('canonical brownfield grammar accepts real dates and rejects drifted IDs/da
     const handoff = path.join(root, '.work', 'brownfield-change', 'HANDOFF.md');
     fs.writeFileSync(handoff, fs.readFileSync(handoff, 'utf8').replace('updated: 2026-08-28', 'updated: 2026-02-30'));
     assert.throws(() => OBSERVER.brownfield(root, data), (error) => error.code === 'brownfield_grammar_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('observer checkpoint readback uses the installed next contract independently', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-checkpoint-'));
+  const helper = path.join(root, '.work', 'bin', 'gsdd.mjs');
+  try {
+    fs.mkdirSync(path.dirname(helper), { recursive: true });
+    fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), '---\nworkflow: phase\nphase: 16\ntimestamp: 2026-08-29T00:00:00Z\nruntime: codex\n---\n<current_state>State.</current_state>\n<completed_work>Done.</completed_work>\n<remaining_work>Resume.</remaining_work>\n<decisions>Proceed.</decisions>\n<blockers>None.</blockers>\n<next_action>Resume.</next_action>\n');
+    const sections = Object.fromEntries(['current_state', 'completed_work', 'remaining_work', 'decisions', 'blockers', 'next_action'].map((name) => [name, 'observer fixture evidence']));
+    fs.writeFileSync(helper, `process.stdout.write(${JSON.stringify(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: [], sections } } }) + '\n')});\n`);
+    const result = OBSERVER.checkpoint(root);
+    assert.equal(result.path, '<CONSUMER_ROOT>/.work/.continue-here.md');
+    assert.deepEqual(result.parser.required_sections, Object.keys(sections));
+    fs.writeFileSync(helper, `import fs from 'node:fs'; import path from 'node:path'; fs.appendFileSync(path.join(process.cwd(), '.work', '.continue-here.md'), 'mutated\\n'); process.stdout.write(${JSON.stringify(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: [], sections } } }) + '\n')});\n`);
+    assert.throws(() => OBSERVER.checkpoint(root), (error) => error.code === 'checkpoint_helper_mutation');
+    fs.writeFileSync(helper, `process.stdout.write(${JSON.stringify(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: ['forged'], sections } } }) + '\n')});\n`);
+    assert.throws(() => OBSERVER.checkpoint(root), (error) => error.code === 'checkpoint_candidate_invalid');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

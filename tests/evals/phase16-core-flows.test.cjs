@@ -67,7 +67,12 @@ function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, sec
   fs.mkdirSync(path.join(packageRoot, 'bin'), { recursive: true });
   fs.mkdirSync(path.dirname(providerTarget), { recursive: true });
   fs.mkdirSync(providerBin, { recursive: true });
-  fs.writeFileSync(path.join(packageRoot, 'bin', 'gsdd.mjs'), 'export default true;\n');
+  fs.writeFileSync(path.join(packageRoot, 'bin', 'gsdd.mjs'), `import fs from 'node:fs';
+if (process.argv.includes('next') && process.argv.includes('--json')) {
+  const sections = Object.fromEntries(['current_state', 'completed_work', 'remaining_work', 'decisions', 'blockers', 'next_action'].map((name) => [name, 'fixture evidence']));
+  process.stdout.write(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: [], sections } } }) + '\\n');
+} else { fs.accessSync('.'); }
+`);
   fs.writeFileSync(path.join(packageRoot, 'package.json'), '{"name":"workspine","version":"1.0.0","bin":{"gsdd":"bin/gsdd.mjs"}}\n');
   fs.writeFileSync(configFile, '{"fixture":true}\n');
   fs.writeFileSync(authFile, '{"auth":"fixture-only"}\n');
@@ -87,7 +92,7 @@ function liveFixture({ output, exitCode = 0, runtime = 'codex', sleepMs = 0, sec
   const markerCode = marker ? "process.stderr.write('PHASE16_NETWORK_BLOCKED\\n');" : '';
   const abortTamperCode = tamperAbort ? "try { process.abort = () => {}; } catch {} try { delete process.abort; } catch {} try { Object.defineProperty(process, 'abort', { value: () => {}, writable: true, configurable: true }); } catch {}" : '';
   const networkCode = networkKind === 'net.connect' ? "require('node:net').connect();" : networkKind === 'dns.lookup' ? "require('node:dns').lookup('example.invalid', () => {});" : networkKind === 'dns.promises.lookup' ? "require('node:dns').promises.lookup('example.invalid');" : networkKind === 'fetch' ? "globalThis.fetch('https://example.invalid');" : '';
-  fs.writeFileSync(providerTarget, `if (process.argv.includes('--version')) { process.stdout.write(${JSON.stringify(`${version}\n`)}); process.exitCode=0; } else if (${Number(sleepMs)} > 0) { setTimeout(() => { process.stdout.write(${JSON.stringify(encodedOutput)}); process.exitCode=${exitCode}; }, ${Number(sleepMs)}); } else { const index = process.env.PHASE16_PROCESS_INDEX || '0'; const fs = require('node:fs'); ${markerCode} ${abortTamperCode} ${networkCode} if (process.argv.join(' ').includes('packed-readme')) { const cp = require('node:child_process'); const install = cp.spawnSync(process.execPath, [process.env.PHASE16_NPM_CLI, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--no-save', process.env.PHASE16_PACKED_ARTIFACT], { cwd: process.env.PHASE16_WORKSPACE_ROOT, env: process.env, encoding: 'utf8' }); if (install.status !== 0) { process.stderr.write(install.stderr || 'packed install failed'); process.exitCode = install.status || 1; } } const output = ${JSON.stringify(encodedOutput)}.replaceAll('thread-fixture', 'thread-fixture-' + index).replaceAll('turn-fixture', 'turn-fixture-' + index).replaceAll('item-fixture', 'item-fixture-' + index); if (index === '1' && process.argv.join(' ').includes('brownfield-plan')) { fs.mkdirSync('.work', { recursive: true }); fs.writeFileSync('.work/.continue-here.md', '# Current task\\nBounded brownfield task.\\n\\n## Evidence\\nPlan paused with frozen inputs.\\n\\n## Next action\\nResume process B and execute only the approved plan.\\n', { flag: 'w' }); } process.stdout.write(output); process.exitCode=${exitCode}; }\n`);
+  fs.writeFileSync(providerTarget, `if (process.argv.includes('--version')) { process.stdout.write(${JSON.stringify(`${version}\n`)}); process.exitCode=0; } else if (${Number(sleepMs)} > 0) { setTimeout(() => { process.stdout.write(${JSON.stringify(encodedOutput)}); process.exitCode=${exitCode}; }, ${Number(sleepMs)}); } else { const index = process.env.PHASE16_PROCESS_INDEX || '0'; const fs = require('node:fs'); const path = require('node:path'); ${markerCode} ${abortTamperCode} ${networkCode} if (process.argv.join(' ').includes('packed-readme')) { const cp = require('node:child_process'); const install = cp.spawnSync(process.execPath, [process.env.PHASE16_NPM_CLI, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', '--no-save', process.env.PHASE16_PACKED_ARTIFACT], { cwd: process.env.PHASE16_WORKSPACE_ROOT, env: process.env, encoding: 'utf8' }); if (install.status !== 0) { process.stderr.write(install.stderr || 'packed install failed'); process.exitCode = install.status || 1; } } const output = ${JSON.stringify(encodedOutput)}.replaceAll('thread-fixture', 'thread-fixture-' + index).replaceAll('turn-fixture', 'turn-fixture-' + index).replaceAll('item-fixture', 'item-fixture-' + index); if (index === '1' && process.argv.join(' ').includes('brownfield-plan')) { fs.mkdirSync('.work/bin', { recursive: true }); fs.copyFileSync(path.join(process.cwd(), 'node_modules', 'workspine', 'bin', 'gsdd.mjs'), path.join(process.cwd(), '.work', 'bin', 'gsdd.mjs')); fs.writeFileSync('.work/.continue-here.md', '---\\nworkflow: phase\\nphase: 16\\ntimestamp: 2026-08-29T00:00:00Z\\nruntime: codex\\n---\\n<current_state>Bounded brownfield task.</current_state>\\n<completed_work>Plan paused with frozen inputs.</completed_work>\\n<remaining_work>Resume process B.</remaining_work>\\n<decisions>Owner approved the bounded task.</decisions>\\n<blockers>None.</blockers>\\n<next_action>Resume process B and execute only the approved plan.</next_action>\\n<judgment><active_constraints>Bounded.</active_constraints><unresolved_uncertainty>None.</unresolved_uncertainty><decision_posture>Proceed.</decision_posture><anti_regression>Preserve behavior.</anti_regression></judgment>\\n', { flag: 'w' }); } process.stdout.write(output); process.exitCode=${exitCode}; }\n`);
   const command = runtime === 'claude' ? 'claude' : 'codex';
   const shim = path.join(providerBin, `${command}.cmd`);
   fs.writeFileSync(shim, `@echo off\r\n"%~dp0\\${targetRelative.replaceAll('/', '\\')}" %*\r\n`);
@@ -437,11 +442,82 @@ test('brownfield checkpoint accepts only substantive .work/.continue-here.md', (
   try {
     fs.mkdirSync(path.join(root, '.work'), { recursive: true });
     fs.writeFileSync(path.join(root, '.work', 'state.json'), '{}\n');
+    const helper = path.join(root, '.work', 'bin', 'gsdd.mjs');
+    const sections = Object.fromEntries(['current_state', 'completed_work', 'remaining_work', 'decisions', 'blockers', 'next_action'].map((name) => [name, 'substantive fixture evidence']));
+    const writeHelper = (value, exitCode = 0) => {
+      fs.mkdirSync(path.dirname(helper), { recursive: true });
+      fs.writeFileSync(helper, `process.stdout.write(${JSON.stringify(value)}); process.exitCode = ${exitCode};\n`);
+    };
+    writeHelper(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: [], sections } } }) + '\n');
     assert.throws(() => LIVE.liveCaptureCheckpoint(root), /did not leave/);
-    fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), '# Current task\nshort\n');
-    assert.throws(() => LIVE.liveCaptureCheckpoint(root), /substantive/);
     fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), '# Current task\nBounded task.\n\n## Evidence\nObserved.\n\n## Next action\nResume process B.\n');
-    assert.ok(LIVE.liveCaptureCheckpoint(root).sha256);
+    writeHelper(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'malformed', errors: ['missing frontmatter'], sections: {} } } }) + '\n');
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_candidate_invalid');
+    fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), '---\nworkflow: phase\nphase: 16\ntimestamp: 2026-08-29T00:00:00Z\nruntime: codex\n---\n<current_state>Bounded task.</current_state>\n<completed_work>Observed.</completed_work>\n<remaining_work>Resume process B.</remaining_work>\n<decisions>Proceed.</decisions>\n<blockers>None.</blockers>\n<next_action>Resume process B.</next_action>\n');
+    writeHelper(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: [], sections } } }) + '\n');
+    const captured = LIVE.liveCaptureCheckpoint(root);
+    assert.deepEqual(captured.parser.required_sections, Object.keys(sections));
+    assert.equal(captured.path, '<CONSUMER_ROOT>/.work/.continue-here.md');
+    assert.equal(captured.bytes, fs.statSync(path.join(root, '.work', '.continue-here.md')).size);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('brownfield checkpoint readback rejects unsafe helper and candidate output shapes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-checkpoint-contract-'));
+  const helper = path.join(root, '.work', 'bin', 'gsdd.mjs');
+  const file = path.join(root, '.work', '.continue-here.md');
+  const sections = Object.fromEntries(['current_state', 'completed_work', 'remaining_work', 'decisions', 'blockers', 'next_action'].map((name) => [name, 'fixture evidence']));
+  const valid = JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: [], sections } } }) + '\n';
+  const writeHelper = (body) => { fs.mkdirSync(path.dirname(helper), { recursive: true }); fs.writeFileSync(helper, body); };
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'canonical checkpoint bytes\n');
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_helper_missing');
+    writeHelper(`process.stdout.write(${JSON.stringify(valid)});`); fs.rmSync(file); fs.writeFileSync(file, 'canonical checkpoint bytes\n');
+    const first = LIVE.liveCaptureCheckpoint(root); assert.equal(first.parser.status, 'valid');
+    writeHelper(`import fs from 'node:fs'; import path from 'node:path'; fs.appendFileSync(path.join(process.cwd(), '.work', '.continue-here.md'), 'mutated\\n'); process.stdout.write(${JSON.stringify(valid)});`);
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_helper_mutation');
+    writeHelper(`process.stdout.write(${JSON.stringify(valid + '{}\n')});`);
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_candidate_invalid');
+    writeHelper(`process.stdout.write(${JSON.stringify(JSON.stringify({ continuity: { checkpoint: { path: '.work/other.md', status: 'valid', errors: [], sections } } }) + '\n')});`);
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_candidate_invalid');
+    writeHelper(`process.stdout.write(${JSON.stringify(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'malformed', errors: ['bad'], sections } } }) + '\n')});`);
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_candidate_invalid');
+    const emptySections = { ...sections, blockers: '' };
+    writeHelper(`process.stdout.write(${JSON.stringify(JSON.stringify({ continuity: { checkpoint: { path: '.work/.continue-here.md', status: 'valid', errors: [], sections: emptySections } } }) + '\n')});`);
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_candidate_invalid');
+    writeHelper("process.stdout.write('x'.repeat(300 * 1024));");
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_helper_output_limit');
+    writeHelper(`process.exitCode = 7;`);
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_candidate_invalid');
+    writeHelper(`setTimeout(() => {}, 60000);`);
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_helper_timeout');
+    fs.rmSync(helper);
+    fs.mkdirSync(helper);
+    assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_helper_invalid');
+    fs.rmSync(helper, { recursive: true, force: true });
+    if (process.platform === 'win32') {
+      try { fs.symlinkSync(file, helper, 'file'); assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_helper_invalid'); } catch (error) { if (error.code !== 'EPERM') throw error; }
+    } else {
+      fs.symlinkSync(file, helper); assert.throws(() => LIVE.liveCaptureCheckpoint(root), (error) => error.code === 'checkpoint_helper_invalid');
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('brownfield checkpoint readback uses the real generated helper without mutating the workspace', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-checkpoint-real-'));
+  try {
+    const init = cp.spawnSync(process.execPath, [path.join(REPO, 'bin', 'gsdd.mjs'), 'init', '--auto', '--tools', 'agents', '--no-update-notice'], { cwd: root, encoding: 'utf8', windowsHide: true, shell: false, timeout: 120000, maxBuffer: 1024 * 1024 });
+    assert.equal(init.status, 0, `${init.stdout}\n${init.stderr}`);
+    const helper = path.join(root, '.work', 'bin', 'gsdd.mjs');
+    const helperStat = fs.lstatSync(helper);
+    assert.equal(helperStat.isFile(), true);
+    assert.equal(helperStat.isSymbolicLink(), false);
+    fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), '---\nworkflow: phase\nphase: 16\ntimestamp: 2026-08-29T00:00:00Z\nruntime: codex\n---\n<current_state>Bounded task.</current_state>\n<completed_work>Plan paused.</completed_work>\n<remaining_work>Resume.</remaining_work>\n<decisions>Proceed.</decisions>\n<blockers>None.</blockers>\n<next_action>Resume.</next_action>\n');
+    const before = LIVE.snapshotTree(root);
+    const captured = LIVE.liveCaptureCheckpoint(root);
+    assert.equal(captured.parser.status, 'valid');
+    assert.equal(captured.parser.required_sections.length, 6);
+    assert.deepEqual(LIVE.snapshotTree(root), before);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -460,11 +536,12 @@ test('provider and toolchain targets must be inside the declared PATH allowlist'
 test('live run ignores mutable checkout/source drift after the frozen artifact is sealed', () => {
   const fixture = liveFixture();
   try {
+    const frozenEntrySha256 = JSON.parse(fs.readFileSync(fixture.revisionFile, 'utf8')).candidate.entry.sha256;
     fs.writeFileSync(path.join(fixture.source, 'package', 'bin', 'gsdd.mjs'), 'export default false;\n');
     const result = runWithEnv(['--run', 'core-treesnap-codex-1', '--campaign', CAMPAIGN, '--campaign-revision', fixture.revisionFile, '--receipt', fixture.receiptFile], fixture.env);
     assert.equal(result.status, 0, result.stderr || result.stdout);
     const receipt = parse(result.stdout);
-    assert.equal(receipt.candidate.entry_sha256, bytesHash(Buffer.from('export default true;\n')));
+    assert.equal(receipt.candidate.entry_sha256, frozenEntrySha256);
     assert.equal(receipt.workflow_verdict, 'not_evaluated');
   } finally { cleanupLiveFixture(fixture); }
 });
