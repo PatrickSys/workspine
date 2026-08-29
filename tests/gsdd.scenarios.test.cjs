@@ -55,6 +55,9 @@ function tryRead(filePath) {
   return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null;
 }
 
+const PAUSE_BYTE_ONE_INSTRUCTION = 'The file must begin with the opening YAML delimiter (`---`) as byte one; do not put a comment, blank line, or BOM before it.';
+const PAUSE_AUTHORITY_NOTICE = '<!-- Historical pause checkpoint, not authority. On conflict, current Git, PLAN.md, SPEC.md, lifecycle artifacts, and current owner instructions outrank this file. -->';
+
 // --- Init helper: runs init with given flags ---
 
 async function initProject(tmpDir, ...flags) {
@@ -1101,6 +1104,22 @@ describe('S7 — Provenance Propagation', () => {
       'generated pause skill must preserve draft-first checkpointing.');
     assert.match(content, /Ask at most 3 high-signal questions total/i,
       'generated pause skill must preserve the three-question cap.');
+  });
+
+  test('generated pause skill places the authority notice after byte-one YAML frontmatter', () => {
+    const content = readSkill(tmpDir, 'work-pause');
+    assert.ok(content.includes(PAUSE_BYTE_ONE_INSTRUCTION),
+      'generated pause skill must state the byte-one YAML contract.');
+
+    const templateStart = content.indexOf('```markdown\n---\nworkflow:');
+    assert.notStrictEqual(templateStart, -1, 'generated pause skill must show the checkpoint template.');
+    const closingDelimiter = content.indexOf('\n---\n', templateStart + 14);
+    const notice = content.indexOf(PAUSE_AUTHORITY_NOTICE, templateStart);
+    const firstSection = content.indexOf('<current_state>', templateStart);
+
+    assert.ok(closingDelimiter > templateStart, 'checkpoint template must close frontmatter.');
+    assert.ok(notice > closingDelimiter, 'authority notice must follow the closing YAML delimiter.');
+    assert.ok(firstSection > notice, 'authority notice must precede the checkpoint sections.');
   });
 
   test('resume skill preserves provenance truth split and mismatch acknowledgement', () => {

@@ -67,7 +67,7 @@ Before writing the new checkpoint, run `node .work/bin/gsdd.mjs file-op delete .
 
 When the current branch/worktree is known to be evidence-only, stale/spent, or otherwise not the next intended execution surface, say that explicitly in `<current_state>`, `<remaining_work>`, and `<anti_regression>`. Do not flatten evidence-only local state into the same continuity story as the next execution surface.
 
-The checkpoint records historical notes, not authority. State in the checkpoint header comment: on any conflict, PLAN.md, SPEC.md, lifecycle artifacts, and repo state outrank this file. Writing this file is an explicit pause action; it is not an automatic compaction or context-transfer hook.
+The checkpoint records historical notes, not authority. The file must begin with the opening YAML delimiter (`---`) as byte one; do not put a comment, blank line, or BOM before it. Immediately after the closing `---`, before the sections, include this exact authority notice: `<!-- Historical pause checkpoint, not authority. On conflict, current Git, PLAN.md, SPEC.md, lifecycle artifacts, and current owner instructions outrank this file. -->`. Writing this file is an explicit pause action; it is not an automatic compaction or context-transfer hook.
 
 Write `.work/.continue-here.md` with the following structure:
 
@@ -78,6 +78,8 @@ phase: $PHASE_NAME_OR_NULL
 timestamp: $ISO_8601_TIMESTAMP
 runtime: $INFERRED_RUNTIME
 ---
+
+<!-- Historical pause checkpoint, not authority. On conflict, current Git, PLAN.md, SPEC.md, lifecycle artifacts, and current owner instructions outrank this file. -->
 
 <current_state>
 [Where exactly are we? Phase, task, what's in progress]

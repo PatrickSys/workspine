@@ -207,6 +207,57 @@ const VALID_CHECKPOINT = [
   '</next_action>',
 ].join('\n');
 
+const CHECKPOINT_AUTHORITY_NOTICE = '<!-- Historical pause checkpoint, not authority. On conflict, current Git, PLAN.md, SPEC.md, lifecycle artifacts, and current owner instructions outrank this file. -->';
+const R3_STYLE_CHECKPOINT = [
+  '---',
+  'workflow: phase',
+  'phase: 16-safe-cohesive-first-run',
+  'timestamp: 2026-08-29T23:45:00+02:00',
+  'runtime: codex-cli',
+  '---',
+  '',
+  CHECKPOINT_AUTHORITY_NOTICE,
+  '',
+  '<current_state>',
+  'The bounded recovery task is paused after the current turn.',
+  '</current_state>',
+  '',
+  '<completed_work>',
+  'The current task produced retained evidence.',
+  '</completed_work>',
+  '',
+  '<remaining_work>',
+  'Resume the bounded recovery task.',
+  '</remaining_work>',
+  '',
+  '<decisions>',
+  'Keep the recovery evaluator-only until product evidence exists.',
+  '</decisions>',
+  '',
+  '<blockers>',
+  'The current turn ended before the product verdict.',
+  '</blockers>',
+  '',
+  '<next_action>',
+  'Run the authorized next recovery step.',
+  '</next_action>',
+  '',
+  '<judgment>',
+  '<active_constraints>',
+  'Preserve fail-closed authority and the pinned journey.',
+  '</active_constraints>',
+  '<unresolved_uncertainty>',
+  'The next provider result is not yet known.',
+  '</unresolved_uncertainty>',
+  '<decision_posture>',
+  'Use the narrowest existing seam.',
+  '</decision_posture>',
+  '<anti_regression>',
+  'Do not weaken parser or product semantics.',
+  '</anti_regression>',
+  '</judgment>',
+].join('\n');
+
 describe('next command bootstrap', () => {
   test('next projects a valid explicit checkpoint without changing the workspace', async () => {
     await initWork();
@@ -238,6 +289,31 @@ describe('next command bootstrap', () => {
     assert.strictEqual(packet.continuity.posture.approval.value, 'not_approved');
     assert.match(packet.continuity.posture.approval.source, /\.work\/state\.json#workflow\.plan\.approved|structured_state_or_lifecycle/);
     assert.deepStrictEqual(snapshotTree(tmpDir), before, 'next must preserve malformed checkpoint bytes for repair');
+  });
+
+  test('checkpoint authority notice must follow byte-one YAML frontmatter', async () => {
+    const beforeYaml = `${CHECKPOINT_AUTHORITY_NOTICE}\n\n${R3_STYLE_CHECKPOINT}`;
+    writeCheckpoint(beforeYaml);
+    let checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('checkpoint must begin with a YAML frontmatter delimiter'));
+
+    writeCheckpoint(`\uFEFF${R3_STYLE_CHECKPOINT}`);
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('checkpoint must begin with a YAML frontmatter delimiter'));
+
+    writeCheckpoint(R3_STYLE_CHECKPOINT);
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid');
+    assert.strictEqual(checkpoint.sections.current_state, 'The bounded recovery task is paused after the current turn.');
+    assert.strictEqual(checkpoint.sections.next_action, 'Run the authorized next recovery step.');
+    assert.deepStrictEqual(checkpoint.judgment, {
+      active_constraints: 'Preserve fail-closed authority and the pinned journey.',
+      unresolved_uncertainty: 'The next provider result is not yet known.',
+      decision_posture: 'Use the narrowest existing seam.',
+      anti_regression: 'Do not weaken parser or product semantics.',
+    });
   });
 
   test('checkpoint parser classifies absent, CRLF-valid, duplicate, unreadable, and oversized inputs without leaking content', async () => {
