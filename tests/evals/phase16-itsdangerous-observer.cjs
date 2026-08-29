@@ -28,15 +28,16 @@ const EVALUATOR_FILES = Object.freeze([
 const WORKFLOW_STEPS = Object.freeze(['turn-a-plan', 'turn-a-pause', 'turn-b-resume-execute', 'turn-c-verify', 'turn-c-progress']);
 const DISPOSITIONS = Object.freeze(['passed', 'product_red', 'infrastructure_invalid', 'identity_unknown', 'human_needed']);
 const PLAN_TOKEN_CEILING = 3000000;
+const PAUSE_TOKEN_CEILING = 1000000;
 const TURN_CONTRACT = Object.freeze([
   ['turn-a-plan', 'a-plan', 'work-plan', ['work-plan'], 15, PLAN_TOKEN_CEILING, 'A', true],
-  ['turn-a-pause', 'a-pause', 'work-pause', ['work-pause'], 5, 500000, 'A', false],
+  ['turn-a-pause', 'a-pause', 'work-pause', ['work-pause'], 5, PAUSE_TOKEN_CEILING, 'A', false],
   ['turn-b-resume-execute', 'b-resume-execute', 'work-resume', ['work-resume', 'work-execute'], 20, 2500000, 'B', true],
   ['turn-c-verify', 'c-verify', 'work-verify', ['work-verify'], 12, 1500000, 'C', true],
   ['turn-c-progress', 'c-progress', 'work-progress', ['work-progress'], 5, 500000, 'C', false],
 ]);
 const TURN_TOTAL_WALL_MINUTES = 57;
-const TURN_TOTAL_NATIVE_TOKENS = 8000000;
+const TURN_TOTAL_NATIVE_TOKENS = 8500000;
 
 function expectedNativeArgv(turn, sessionId = null) {
   const base = turn[7]
@@ -498,5 +499,5 @@ module.exports = {
   observe, observeRun: observe, gradeValue, grade, gradeObservation: grade, regrade,
   regradeObservation: regrade, regradeChild, project, projectPublic: project, earlyProjection,
   writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths,
-  WORKFLOW_STEPS, DISPOSITIONS, PLAN_TOKEN_CEILING, TURN_CONTRACT, TURN_TOTAL_WALL_MINUTES, TURN_TOTAL_NATIVE_TOKENS, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, validateEvaluatorLedger, observePartialPlan,
+  WORKFLOW_STEPS, DISPOSITIONS, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_CONTRACT, TURN_TOTAL_WALL_MINUTES, TURN_TOTAL_NATIVE_TOKENS, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, validateEvaluatorLedger, observePartialPlan,
 };

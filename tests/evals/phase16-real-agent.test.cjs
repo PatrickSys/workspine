@@ -338,7 +338,7 @@ function observerFreezeFixture(root) {
   freeze.sessions = { count: 3, turns: 5 };
   freeze.auth = { copied_to_consumer_root: false };
   freeze.budgets.total_wall_minutes = 57;
-  freeze.budgets.total_native_tokens = 8000000;
+  freeze.budgets.total_native_tokens = 8500000;
   freeze.budgets.retained_output_bytes = 1048576;
   return { ...fixture, freeze };
 }
@@ -409,16 +409,47 @@ test('native token calibration applies the fixed 25x multiplier without changing
   assert.equal(LIVE.NATIVE_TOKEN_MULTIPLIER, 25);
   assert.equal(LIVE.CAPABILITY_MAX_TOKENS, 500000);
   assert.equal(LIVE.PLAN_TOKEN_CEILING, 3000000);
-  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.tokens), [3000000, 500000, 2500000, 1500000, 500000]);
-  assert.equal(LIVE.TURN_TOTAL_TOKENS, 8000000);
+  assert.equal(LIVE.PAUSE_TOKEN_CEILING, 1000000);
+  assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.tokens), [3000000, 1000000, 2500000, 1500000, 500000]);
+  assert.equal(LIVE.TURN_TOTAL_TOKENS, 8500000);
   assert.equal(LIVE.TURN_TOTAL_TOKENS, LIVE.TURN_PLAN.reduce((sum, turn) => sum + turn.tokens, 0));
-  assert.deepEqual(OBSERVER.TURN_CONTRACT.map((turn) => turn[5]), [3000000, 500000, 2500000, 1500000, 500000]);
+  assert.equal(OBSERVER.PAUSE_TOKEN_CEILING, 1000000);
+  assert.deepEqual(OBSERVER.TURN_CONTRACT.map((turn) => turn[5]), [3000000, 1000000, 2500000, 1500000, 500000]);
   assert.equal(OBSERVER.PLAN_TOKEN_CEILING, 3000000);
-  assert.equal(OBSERVER.TURN_TOTAL_NATIVE_TOKENS, 8000000);
+  assert.equal(OBSERVER.TURN_TOTAL_NATIVE_TOKENS, 8500000);
   assert.equal(OBSERVER.TURN_TOTAL_WALL_MINUTES, 57);
   assert.deepEqual(LIVE.TURN_PLAN.map((turn) => turn.minutes), [15, 5, 20, 12, 5]);
   assert.equal(LIVE.TURN_TOTAL_MINUTES, 57);
   assert.equal(LIVE.RETAINED_OUTPUT_BYTES, 1024 * 1024);
+});
+
+test('pause measurement admits both retained observations and rejects overage before B/C', () => {
+  for (const observedPauseUsage of [646668, 892765]) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-pause-calibration-${observedPauseUsage}-`));
+    const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.id === 'turn-a-pause' ? observedPauseUsage : 10 });
+    try {
+      const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
+      assert.equal(result.turns[1].usage.turn_tokens, observedPauseUsage);
+      assert.equal(fixture.calls, 5);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-pause-calibration-overage-'));
+  const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.id === 'turn-a-pause' ? 1000001 : 10 });
+  try {
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'usage_excess');
+    assert.equal(fixture.calls, 2);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), true);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-b-resume-execute.json')), false);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-c-verify.json')), false);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-c-progress.json')), false);
+    const pause = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'turn-a-pause.json'), 'utf8'));
+    assert.equal(pause.usage.turn_tokens, 1000001);
+    assert.equal(pause.terminal.failure_code, 'usage_excess');
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
+    assert.equal(terminal.terminal.failure_code, 'usage_excess');
+    assert.equal(terminal.terminal.sealed_turn.turn, 'turn-a-pause');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('plan turn has a grounded completion margin after the recorded 12-minute timeout', () => {
