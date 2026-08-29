@@ -1,5 +1,7 @@
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const crypto = require('crypto');
+const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -67,6 +69,55 @@ async function runWizardInit(tmpDir, { selectedRuntimes = ['claude'], adapterTar
   return { callLog, config: readJson(path.join(tmpDir, '.work', 'config.json')) };
 }
 
+function sha256(bytes) {
+  return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+function runProcess(command, args, cwd) {
+  const result = childProcess.spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.error) throw result.error;
+  return {
+    command,
+    args,
+    cwd,
+    exitCode: result.status === null ? -1 : result.status,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+  };
+}
+
+function writePlanPathBaseline(filePath, receipt) {
+  if (fs.existsSync(filePath)) return;
+  const lines = [
+    '---',
+    `head: ${receipt.head}`,
+    `package_sha256: ${receipt.package_sha256}`,
+    `generated_skill_sha256: ${receipt.generated_skill_sha256}`,
+    `command: ${JSON.stringify(receipt.command)}`,
+    `exit: ${receipt.exit}`,
+    `disposition: ${receipt.disposition}`,
+    ...(receipt.failure_code ? [`failure_code: ${receipt.failure_code}`] : []),
+    `output_sha256: ${receipt.output_sha256}`,
+    '---',
+    '',
+    '# Plan path characterization baseline',
+    '',
+    'The receipt is retained from the first packed-candidate run and is not rewritten by reruns.',
+    '',
+    '```text',
+    receipt.output,
+    '```',
+    '',
+  ];
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, lines.join('\n'), { flag: 'wx' });
+}
+
 describe('consumer ceremony reduction', () => {
   let tmpDir;
 
@@ -100,6 +151,122 @@ describe('consumer ceremony reduction', () => {
     assert.strictEqual(config.workflow.discuss, true);
     assert.strictEqual(config.modelProfile, 'budget');
     assert.strictEqual(config.parallelization, false);
+  });
+
+  test('packed work-execute plan identity characterization', () => {
+    const packageRoot = path.join(__dirname, '..');
+    const packDir = path.join(tmpDir, 'pack');
+    const consumerRoot = path.join(tmpDir, 'packed-consumer');
+    fs.mkdirSync(packDir, { recursive: true });
+    fs.mkdirSync(consumerRoot, { recursive: true });
+
+    const npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    const npmCommand = process.platform === 'win32' ? process.execPath : 'npm';
+    const npmArgs = process.platform === 'win32' ? [npmCli] : [];
+    const pack = runProcess(npmCommand, [
+      ...npmArgs,
+      'pack', '--json', '--ignore-scripts', '--pack-destination', packDir,
+    ], packageRoot);
+    assert.strictEqual(pack.exitCode, 0, pack.stderr || pack.stdout);
+    const packRecords = JSON.parse(pack.stdout);
+    assert.strictEqual(packRecords.length, 1);
+    const tarballPath = path.join(packDir, packRecords[0].filename);
+    const packageSha256 = sha256(fs.readFileSync(tarballPath));
+
+    const install = runProcess(npmCommand, [
+      ...npmArgs,
+      'install', '--prefix', consumerRoot, tarballPath,
+      '--ignore-scripts', '--no-package-lock', '--no-audit', '--no-fund',
+    ], packageRoot);
+    assert.strictEqual(install.exitCode, 0, install.stderr || install.stdout);
+    assert.strictEqual(runProcess('git', ['init', '--quiet'], consumerRoot).exitCode, 0);
+
+    const initEntry = path.join(consumerRoot, 'node_modules', 'workspine', 'bin', 'gsdd.mjs');
+    const init = runProcess(process.execPath, [initEntry, 'init', '--auto', '--tools', 'agents'], consumerRoot);
+    assert.strictEqual(init.exitCode, 0, init.stderr || init.stdout);
+
+    const phaseDir = path.join(consumerRoot, '.work', 'phases', '16-packed-consumer');
+    const planPath = path.join(phaseDir, '16-10-01-PLAN.md');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(planPath, [
+      '---',
+      'phase: 16',
+      'plan: 10-01',
+      'status: approved',
+      '---',
+      '',
+      '# Packed consumer plan',
+      '',
+      'A real plan artifact used to characterize generated execute guidance.',
+      '',
+    ].join('\n'));
+
+    const skillPath = path.join(consumerRoot, '.agents', 'skills', 'work-execute', 'SKILL.md');
+    const skill = fs.readFileSync(skillPath, 'utf8');
+    assert.ok(skill.includes('lifecycle-preflight execute {phase_num} --expects-mutation phase-status'),
+      'generated execute skill must retain the positional execute preflight command');
+    assert.ok(skill.includes('emitted positional `phases/{phase_dir}` selector'),
+      'generated execute skill must retain the emitted positional phase selector guidance');
+    assert.doesNotMatch(skill, /--plan phases\//, 'generated execute skill must not emit bare plan paths');
+    assert.doesNotMatch(skill, /--artifact phases\//, 'generated execute skill must not emit bare artifact paths');
+    const commandMatch = skill.match(/node \.work\/bin\/gsdd\.mjs lifecycle-transition execute --plan \.work\/phases\/\{phase_dir\}\/\{plan_id\}-PLAN\.md --authority workflow --json/);
+    assert.ok(commandMatch, 'generated work-execute skill must contain the lifecycle transition command');
+    const commandText = commandMatch[0]
+      .replace('.work/phases/{phase_dir}/{plan_id}-PLAN.md', '.work/phases/16-packed-consumer/16-10-01-PLAN.md');
+    const commandParts = commandText.split(' ');
+    const transition = runProcess(process.execPath, [
+      path.join(consumerRoot, '.work', 'bin', 'gsdd.mjs'),
+      ...commandParts.slice(2),
+    ], consumerRoot);
+    const summaryPath = path.join(phaseDir, '16-10-01-SUMMARY.md');
+    fs.writeFileSync(summaryPath, [
+      '---',
+      'status: complete',
+      '---',
+      '',
+      '# Packed consumer execution summary',
+      '',
+      'A substantive execution artifact used to prove the generated verify transition.',
+      '',
+    ].join('\n'));
+    const verifyCommandMatch = skill.match(/node \.work\/bin\/gsdd\.mjs lifecycle-transition verify --plan \.work\/phases\/\{phase_dir\}\/\{plan_id\}-PLAN\.md --artifact \.work\/phases\/\{phase_dir\}\/\{plan_id\}-SUMMARY\.md --authority workflow --json/);
+    assert.ok(verifyCommandMatch, 'generated work-execute skill must contain the verify transition command');
+    const verifyCommandText = verifyCommandMatch[0]
+      .replace('.work/phases/{phase_dir}/{plan_id}-PLAN.md', '.work/phases/16-packed-consumer/16-10-01-PLAN.md')
+      .replace('.work/phases/{phase_dir}/{plan_id}-SUMMARY.md', '.work/phases/16-packed-consumer/16-10-01-SUMMARY.md');
+    const verifyParts = verifyCommandText.split(' ');
+    const verifyTransition = runProcess(process.execPath, [
+      path.join(consumerRoot, '.work', 'bin', 'gsdd.mjs'),
+      ...verifyParts.slice(2),
+    ], consumerRoot);
+    assert.strictEqual(verifyTransition.exitCode, 0, `${verifyTransition.stdout}${verifyTransition.stderr}`);
+
+    const output = `${transition.stdout}${transition.stderr}`;
+    let parsedOutput = null;
+    try {
+      parsedOutput = JSON.parse(transition.stdout);
+    } catch {
+      // The receipt retains the raw output; the assertion below reports malformed output.
+    }
+    const head = runProcess('git', ['-C', packageRoot, 'rev-parse', 'HEAD'], packageRoot).stdout.trim();
+    const receipt = {
+      head,
+      package_sha256: packageSha256,
+      generated_skill_sha256: sha256(Buffer.from(skill)),
+      command: commandText,
+      exit: transition.exitCode,
+      disposition: transition.exitCode === 0 ? 'no_change' : 'reproduced_red',
+      ...(parsedOutput?.error_code ? { failure_code: parsedOutput.error_code } : {}),
+      output_sha256: sha256(Buffer.from(output)),
+      output,
+    };
+    writePlanPathBaseline(
+      path.join(packageRoot, '.work', 'phases', '16-safe-cohesive-first-run', '16-10-01-PLAN-PATH-BASELINE.md'),
+      receipt,
+    );
+
+    assert.strictEqual(transition.exitCode, 0, output);
+    assert.ok(!parsedOutput?.error_code, output);
   });
 
   test('rigor show exposes the production requested/effective receipt policy', async () => {

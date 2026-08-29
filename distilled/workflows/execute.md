@@ -26,7 +26,7 @@ All `node .work/bin/gsdd.mjs ...` helper commands below assume the current worki
 <lifecycle_preflight>
 Before implementing or mutating any lifecycle artifact, run:
 - `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`
-On `ambiguous_phase_selector`, use the emitted `phases/{phase_dir}` identity; for one plan, retain `--plan phases/{phase_dir}/{plan_id}-PLAN.md` through preflight and summary creation.
+On `ambiguous_phase_selector`, rerun preflight with the emitted positional `phases/{phase_dir}` selector; keep the selected PLAN filesystem identity as `.work/phases/{phase_dir}/{plan_id}-PLAN.md` for reading and the lifecycle-transition commands below.
 If the preflight result is `blocked`, STOP and surface the blocker instead of inferring eligibility from workflow-local prose.
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject execution
@@ -95,7 +95,7 @@ For each task in the plan, follow this loop:
 ```text
 1. Read the plan frontmatter and current task.
 2. Read the task_scoped files and focused references needed for that task.
-3. Before implementation, run `node .work/bin/gsdd.mjs lifecycle-transition execute --plan phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`; stop if it refuses, then implement the task action. Do not pass `--approved` or `--approval-ref` here: explicit approval is an owner-only transition, and workflow execution consumes the plan's already-durable approval.
+3. Before implementation, run `node .work/bin/gsdd.mjs lifecycle-transition execute --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`; stop if it refuses, then implement the task action. Do not pass `--approved` or `--approval-ref` here: explicit approval is an owner-only transition, and workflow execution consumes the plan's already-durable approval.
 4. Run the task's verify steps.
 5. Handle any git actions using repo or user conventions.
 6. Re-read the plan's Objective and `non_goals`. Confirm the work just completed serves the objective and crossed no boundary; if not, record a deviation before continuing.
@@ -375,7 +375,7 @@ Summary-driven progress tracking avoids silent drift between the plan contract a
 **MANDATORY: You MUST write SUMMARY.md to disk at `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`. Output to conversation alone is NOT sufficient. If this file is not written to disk, execution is NOT complete.**
 
 After the SUMMARY artifact is durable and marked complete, record the execution-to-verification transition:
-`node .work/bin/gsdd.mjs lifecycle-transition verify --plan phases/{phase_dir}/{plan_id}-PLAN.md --artifact phases/{phase_dir}/{plan_id}-SUMMARY.md --authority workflow --json`.
+`node .work/bin/gsdd.mjs lifecycle-transition verify --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --artifact .work/phases/{phase_dir}/{plan_id}-SUMMARY.md --authority workflow --json`.
 The helper validates the exact artifact chain and updates only existing `.work/state.json`; do not hand-edit
 lifecycle state or call this before the SUMMARY exists.
 </state_updates>
