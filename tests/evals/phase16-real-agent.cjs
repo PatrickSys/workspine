@@ -329,8 +329,8 @@ const TURN_PLAN = Object.freeze([
   Object.freeze({ id: 'turn-a-plan', role: 'a-plan', skill: 'work-plan', skills: ['work-plan'], minutes: 12, tokens: PLAN_TOKEN_CEILING, session: 'A', initial: true }),
   Object.freeze({ id: 'turn-a-pause', role: 'a-pause', skill: 'work-pause', skills: ['work-pause'], minutes: 5, tokens: 20000 * NATIVE_TOKEN_MULTIPLIER, session: 'A', initial: false }),
   Object.freeze({ id: 'turn-b-resume-execute', role: 'b-resume-execute', skill: 'work-resume', skills: ['work-resume', 'work-execute'], minutes: 20, tokens: 100000 * NATIVE_TOKEN_MULTIPLIER, session: 'B', initial: true }),
-  Object.freeze({ id: 'turn-b-verify', role: 'b-verify', skill: 'work-verify', skills: ['work-verify'], minutes: 12, tokens: 60000 * NATIVE_TOKEN_MULTIPLIER, session: 'B', initial: false }),
-  Object.freeze({ id: 'turn-b-progress', role: 'b-progress', skill: 'work-progress', skills: ['work-progress'], minutes: 5, tokens: 20000 * NATIVE_TOKEN_MULTIPLIER, session: 'B', initial: false }),
+  Object.freeze({ id: 'turn-c-verify', role: 'c-verify', skill: 'work-verify', skills: ['work-verify'], minutes: 12, tokens: 60000 * NATIVE_TOKEN_MULTIPLIER, session: 'C', initial: true }),
+  Object.freeze({ id: 'turn-c-progress', role: 'c-progress', skill: 'work-progress', skills: ['work-progress'], minutes: 5, tokens: 20000 * NATIVE_TOKEN_MULTIPLIER, session: 'C', initial: false }),
 ]);
 const TURN_TOTAL_MINUTES = 54;
 const TURN_TOTAL_TOKENS = TURN_PLAN.reduce((total, turn) => total + turn.tokens, 0);
@@ -462,7 +462,7 @@ function buildFreeze(caseFile, cacheValue, freezeFile, options = {}) {
       toolchain: { node: { path: '<NODE>', sha256: fileSha(process.execPath) }, npm: { path: '<NPM>', sha256: fileSha(candidate.npm) }, git: { path: '<GIT>', sha256: fileSha(gitText(['--exec-path']).replace(/\r?\n/g, '') + (process.platform === 'win32' ? '\\git.exe' : '/git')) } },
       budgets: { turns: TURN_PLAN.map(({ id, role, skill, skills, minutes, tokens, session, initial }) => ({ id, role, skill, skills, wall_minutes: minutes, native_tokens: tokens, session, initial })), total_wall_minutes: TURN_TOTAL_MINUTES, total_native_tokens: TURN_TOTAL_TOKENS, retained_output_bytes: RETAINED_OUTPUT_BYTES },
       root_map: { run_root: '<RUN_ROOT>', consumer_root: '<RUN_ROOT>/consumer_root', tool_root: '<RUN_ROOT>/tool_root', receipts: '<RECEIPTS>' },
-      sessions: { count: 2, turns: 5, workflow_count: 6, identities: 'native-only-distinct-A-and-B' }, provider_sandbox: 'not_claimed', workflow_verdict: 'not_evaluated', auth: { copied_to_consumer_root: false },
+      sessions: { count: 3, turns: 5, workflow_count: 6, identities: 'native-only-distinct-A-B-and-C' }, provider_sandbox: 'not_claimed', workflow_verdict: 'not_evaluated', auth: { copied_to_consumer_root: false },
       skills,
       evaluator: evaluatorFileLedger(),
     };
@@ -476,7 +476,7 @@ function readFreeze(file) {
   try { freeze = JSON.parse(fs.readFileSync(freezeFile, 'utf8')); } catch (error) { fail('freeze_invalid', 'freeze is not valid JSON', { message: error.message }); }
   if (freeze.contract !== 'phase16-rooted-codex-freeze-v1' || freeze.case_id !== CASE_ID || freeze.workflow_verdict !== 'not_evaluated' || freeze.provider_sandbox !== 'not_claimed' || freeze.auth?.copied_to_consumer_root !== false || freeze.runtime?.provider !== 'codex') fail('freeze_invalid', 'freeze contract or claim posture is invalid');
   if (stable(freeze.budgets?.turns?.map((item) => [item.id, item.role, item.skill, item.skills, item.wall_minutes, item.native_tokens, item.session, item.initial])) !== stable(TURN_PLAN.map((item) => [item.id, item.role, item.skill, item.skills, item.minutes, item.tokens, item.session, item.initial]))) fail('freeze_budget_mismatch', 'freeze does not carry the fixed five-turn budgets');
-  if (freeze.budgets?.total_wall_minutes !== TURN_TOTAL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_TOKENS || freeze.budgets?.retained_output_bytes !== RETAINED_OUTPUT_BYTES || freeze.sessions?.count !== 2 || freeze.sessions?.turns !== 5 || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root') fail('freeze_invalid', 'freeze fixed totals or root map are invalid');
+  if (freeze.budgets?.total_wall_minutes !== TURN_TOTAL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_TOKENS || freeze.budgets?.retained_output_bytes !== RETAINED_OUTPUT_BYTES || freeze.sessions?.count !== 3 || freeze.sessions?.turns !== 5 || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root') fail('freeze_invalid', 'freeze fixed totals or root map are invalid');
   validateEvaluatorLedger(freeze.evaluator);
   if (!freeze.case?.sha256 || !freeze.case?.input_bundle?.sha256 || !freeze.bundle?.sha256 || !freeze.controls?.sha256 || !freeze.candidate?.sha256 || !freeze.candidate?.member_sha256 || !Array.isArray(freeze.candidate?.members) || !freeze.candidate.package?.name || !freeze.candidate.package?.version || !freeze.source?.main || !freeze.source?.origin_main || !freeze.source?.files || freeze.runtime?.cli_contract?.version !== CODEX_VERSION || !/^[0-9a-f]{64}$/i.test(freeze.runtime?.cli_contract?.resume_help_sha256 || '') || !freeze.runtime?.executable?.source_sha256 || !freeze.runtime?.executable?.target_sha256 || !freeze.toolchain?.node?.sha256 || !freeze.toolchain?.npm?.sha256 || !freeze.toolchain?.git?.sha256 || !freeze.runtime?.python?.sha256 || Object.keys(freeze.skills || {}).length !== 6 || Object.values(freeze.skills || {}).some((hash) => !/^[0-9a-f]{64}$/i.test(hash))) fail('freeze_invalid', 'freeze is missing an immutable case, source, bundle, controls, candidate, runtime, toolchain, or skill binding');
   return freeze;
@@ -487,8 +487,8 @@ function turnPrompt(context, turn) {
     'turn-a-plan': 'Plan only: read the bounded brownfield context and create the plan artifacts required by $work-plan, then stop. Do not modify product or source files. Do not create, consume, delete, or modify the pause checkpoint at .work/.continue-here.md. Do not approve the plan or transition lifecycle state to execute. Do not run $work-pause, $work-resume, $work-execute, $work-verify, or $work-progress.',
     'turn-a-pause': 'Pause only: write the canonical .work/.continue-here.md checkpoint for the completed plan, then stop. Do not plan, approve, resume, execute, verify, or report progress in this turn. Leave product and source files unchanged.',
     'turn-b-resume-execute': 'This is fresh process B: resume the retained workspace and execute only the already-approved plan, then stop. Do not plan, pause, approve, verify, or report progress in this turn.',
-    'turn-b-verify': 'Verify only: inspect the completed implementation and record the required verification evidence, then stop. Do not plan, pause, approve, resume, execute, or report progress in this turn.',
-    'turn-b-progress': 'Progress only: perform the read-only progress report and stop. Do not plan, pause, approve, resume, execute, or verify; do not modify any file or lifecycle state.',
+    'turn-c-verify': 'This is fresh process C: verify only the completed implementation and record the required verification evidence, then stop. Do not plan, pause, approve, resume, execute, or report progress in this turn.',
+    'turn-c-progress': 'Progress only: perform the read-only progress report and stop. Do not plan, pause, approve, resume, execute, or verify; do not modify any file or lifecycle state.',
   }[turn.id];
   if (!instructions) fail('turn_prompt_unknown', `no stage-specific prompt contract exists for ${turn.id}`);
   return `${tokens}\nUse the owner TASK.md and BRIEF.md in inputs. ${instructions} Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.`;
@@ -910,7 +910,10 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
         }
       }
       if (turnError) throw turnError;
-      if (turn.initial) context.sessions[turn.session] = recorded.native.thread_id;
+      if (turn.initial) {
+        if (!recorded.native.thread_id || Object.values(context.sessions).includes(recorded.native.thread_id)) gateFailure = new RunnerFailure('session_identity_collision', `${turn.id} introduced a native identity already used by an earlier top-level process`);
+        else context.sessions[turn.session] = recorded.native.thread_id;
+      }
       if (!turn.initial && recorded.native.thread_id !== expectedSession) gateFailure = new RunnerFailure('resume_session_mismatch', `${turn.id} resumed the wrong native session`);
       if (context.totalUsage > TURN_TOTAL_TOKENS) gateFailure = new RunnerFailure('total_token_excess', 'native turn usage exceeded the total budget');
       const turnEvidence = { ...recorded.turn, pre_snapshot_sha256: stableHash(before), post_snapshot_sha256: stableHash(after) };
@@ -920,7 +923,7 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
       if (gateFailure) fail(gateFailure.code || 'turn_gate_failed', gateFailure.message, gateFailure.evidence);
       if (turn.id === 'turn-a-plan') runCoordinatorApproval(context, { ...options, approvePlan: options.approvePlan || context.approvePlan, characterizationOnly });
     }
-    if (new Set(Object.values(context.sessions)).size !== 2) fail('session_identity_invalid', 'A and B native sessions must be distinct');
+    if (new Set(Object.values(context.sessions)).size !== 3) fail('session_identity_invalid', 'A, B, and C native sessions must be distinct');
     const approvalSha = fileSha(path.join(dir, 'approval.json'));
     const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: approvalSha, terminal: { status: 'provider_complete' } };
     const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));

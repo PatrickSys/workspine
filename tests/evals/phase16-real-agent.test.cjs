@@ -284,11 +284,12 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
     budgets: { turns: LIVE.TURN_PLAN.map((turn) => ({ id: turn.id, role: turn.role, skill: turn.skill, skills: turn.skills, wall_minutes: turn.minutes, native_tokens: turn.tokens, session: turn.session, initial: turn.initial })) },
     evaluator: { contract: 'phase16-evaluator-ledger-v1', files: currentEvaluatorLedger() },
     skills: Object.fromEntries([...new Set(LIVE.TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, sha(fs.readFileSync(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md')))])),
-    root_map: { consumer_root: '<RUN_ROOT>/consumer_root' }, sessions: { count: 2, turns: 5 },
+    root_map: { consumer_root: '<RUN_ROOT>/consumer_root' }, sessions: { count: 3, turns: 5 },
   };
   freeze.budgets.total_wall_minutes = LIVE.TURN_TOTAL_MINUTES; freeze.budgets.total_native_tokens = LIVE.TURN_TOTAL_TOKENS; freeze.budgets.retained_output_bytes = LIVE.RETAINED_OUTPUT_BYTES;
   const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));
   let calls = 0;
+  const sessionTurns = { A: 0, B: 0, C: 0 };
   const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, totalUsage: initialTotalUsage, sessions: {}, data: {}, sourceBefore: {}, providerInvocations: 0 };
   context.approvePlan = (_context, request) => {
     const state = { schema_version: 1, status: 'active', current_state: 'execute', workflow: { plan: { approved: true, path: request.plan, identity: request.plan }, execution: { status: 'in_progress' }, verification: { status: 'not_started' }, audit: { status: 'not_started' }, dogfood: { status: 'not_started' }, authority: request.authority, current_state: 'execute', approval_ref: request.approvalRef } };
@@ -298,8 +299,8 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
   };
   const prepareRun = () => context;
   const spawn = (_command, _argv, spawnOptions) => {
-    const turn = LIVE.TURN_PLAN[calls]; const session = turn.session === 'A' ? 'native-A' : 'native-B'; calls += 1;
-    const sessionTurn = turn.session === 'A' ? (turn.id === 'turn-a-plan' ? 1 : 2) : (turn.id === 'turn-b-resume-execute' ? 1 : turn.id === 'turn-b-verify' ? 2 : 3);
+    const turn = LIVE.TURN_PLAN[calls]; const session = `native-${turn.session}`; calls += 1;
+    const sessionTurn = ++sessionTurns[turn.session];
     if (turn.id === 'turn-a-pause') {
       fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
       fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: bounded brownfield route\nEvidence: native pause receipt\nNext action: fresh resume\n', { flag: 'wx' });
@@ -334,12 +335,45 @@ function observerFreezeFixture(root) {
   freeze.runtime = { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high', cli_contract: { version: 'codex-cli 0.149.1', resume_help_sha256: 'f'.repeat(64) }, executable: { source_sha256: '1'.repeat(64), target_sha256: '2'.repeat(64) }, python: { path: '<PYTHON>', identity: '<PYTHON>', sha256: '3'.repeat(64) }, auth_posture: 'authenticated-native-CODEX_HOME; ignore-user-config; credentials-not-copied' };
   freeze.toolchain = { node: { sha256: '4'.repeat(64) }, npm: { sha256: '5'.repeat(64) }, git: { sha256: '6'.repeat(64) } };
   freeze.root_map = { run_root: '<RUN_ROOT>', consumer_root: '<RUN_ROOT>/consumer_root', tool_root: '<RUN_ROOT>/tool_root', receipts: '<RECEIPTS>' };
-  freeze.sessions = { count: 2, turns: 5 };
+  freeze.sessions = { count: 3, turns: 5 };
   freeze.auth = { copied_to_consumer_root: false };
   freeze.budgets.total_wall_minutes = 54;
   freeze.budgets.total_native_tokens = 8000000;
   freeze.budgets.retained_output_bytes = 1048576;
   return { ...fixture, freeze };
+}
+
+function observerHandoffFixture(root, mutateArgv = null) {
+  const fixture = observerFreezeFixture(root);
+  fs.writeFileSync(fixture.freezeFile, JSON.stringify(fixture.freeze));
+  const preparation = {
+    record_type: 'phase16_preparation_receipt', case_id: 'itsdangerous-fips-sha1',
+    bundle_sha256: fixture.freeze.bundle.sha256, controls_sha256: fixture.freeze.controls.sha256,
+    candidate_sha256: fixture.freeze.candidate.sha256, python: { sha256: fixture.freeze.runtime.python.sha256 },
+    characterization_only: false, workflow_verdict: 'not_evaluated',
+  };
+  fs.writeFileSync(path.join(fixture.receiptDir, 'preparation.json'), JSON.stringify(preparation));
+  const sessions = { A: 'native-A', B: 'native-B', C: 'native-C' };
+  const argv = (turn) => turn.initial
+    ? ['exec', '--approve-for-me', '-C', '<REDACTED_PATH>', '--ignore-user-config', '--json', '--color', 'never', '-m', 'gpt-5.6-luna', '-c', 'model_reasoning_effort="high"', '-']
+    : ['exec', '--approve-for-me', 'resume', sessions[turn.session], '--ignore-user-config', '--json', '-m', 'gpt-5.6-luna', '-c', 'model_reasoning_effort="high"', '-'];
+  const turns = LIVE.TURN_PLAN.map((turn, index) => {
+    const receiptArgv = argv(turn);
+    if (mutateArgv) mutateArgv(receiptArgv, turn, index, sessions);
+    const receipt = {
+      record_type: 'phase16_codex_turn_receipt', characterization_only: false, workflow_verdict: 'not_evaluated',
+      terminal: { status: 'provider_complete' }, native: { thread_id: sessions[turn.session], turn_id: `native-turn-${index}` },
+      turn: { id: turn.id, role: turn.role, skill: turn.skill, skills: turn.skills, session: turn.session, initial: turn.initial, ...(turn.id === 'turn-a-pause' ? { checkpoint: { path: '<CONSUMER_ROOT>/.work/.continue-here.md' } } : {}) },
+      invocation: { argv: receiptArgv },
+    };
+    const file = path.join(fixture.receiptDir, `${turn.id}.json`);
+    fs.writeFileSync(file, JSON.stringify(receipt));
+    return { id: turn.id, sha256: sha(fs.readFileSync(file)) };
+  });
+  const terminal = { record_type: 'phase16_terminal_receipt', terminal: { status: 'provider_complete' }, turn_count: 5, workflow_verdict: 'not_evaluated', provider_invoked: true };
+  const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));
+  const handoff = { record_type: 'phase16_codex_handoff', case_id: 'itsdangerous-fips-sha1', workflow_verdict: 'not_evaluated', characterization_only: false, retained_root: '<CONSUMER_ROOT>', sessions, turns, terminal_sha256: terminalSha };
+  return { ...fixture, terminal, handoff };
 }
 
 test('Task 16-08-02S keeps exact initial/resume grammar and per-turn usage', () => {
@@ -431,13 +465,13 @@ test('each rooted turn receives an exact stage-specific lifecycle prompt', () =>
     '$work-plan\nUse the owner TASK.md and BRIEF.md in inputs. Plan only: read the bounded brownfield context and create the plan artifacts required by $work-plan, then stop. Do not modify product or source files. Do not create, consume, delete, or modify the pause checkpoint at .work/.continue-here.md. Do not approve the plan or transition lifecycle state to execute. Do not run $work-pause, $work-resume, $work-execute, $work-verify, or $work-progress. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
     '$work-pause\nUse the owner TASK.md and BRIEF.md in inputs. Pause only: write the canonical .work/.continue-here.md checkpoint for the completed plan, then stop. Do not plan, approve, resume, execute, verify, or report progress in this turn. Leave product and source files unchanged. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
     '$work-resume and $work-execute\nUse the owner TASK.md and BRIEF.md in inputs. This is fresh process B: resume the retained workspace and execute only the already-approved plan, then stop. Do not plan, pause, approve, verify, or report progress in this turn. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
-    '$work-verify\nUse the owner TASK.md and BRIEF.md in inputs. Verify only: inspect the completed implementation and record the required verification evidence, then stop. Do not plan, pause, approve, resume, execute, or report progress in this turn. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
+    '$work-verify\nUse the owner TASK.md and BRIEF.md in inputs. This is fresh process C: verify only the completed implementation and record the required verification evidence, then stop. Do not plan, pause, approve, resume, execute, or report progress in this turn. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
     '$work-progress\nUse the owner TASK.md and BRIEF.md in inputs. Progress only: perform the read-only progress report and stop. Do not plan, pause, approve, resume, execute, or verify; do not modify any file or lifecycle state. Leave workflow_verdict untouched. Do not inspect evaluator internals or oracle material.',
   ];
   assert.deepEqual(LIVE.TURN_PLAN.map((turn) => LIVE.turnPrompt({}, turn)), expected);
 });
 
-test('plan product mutation fails immediately after one provider call without a pause receipt', () => {
+test('plan product mutation fails immediately after one provider call without a separate pause receipt', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-plan-product-mutation-'));
   const fixture = rootedRunFixture(root, { mutation: 'turn-a-plan' });
   try {
@@ -451,7 +485,7 @@ test('plan product mutation fails immediately after one provider call without a 
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('plan checkpoint creation, consumption, or mutation fails immediately before pause', () => {
+test('plan checkpoint creation, consumption, or mutation fails immediately before handoff', () => {
   for (const planMutation of ['checkpoint-create', 'checkpoint-consume', 'checkpoint-mutate']) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-plan-checkpoint-${planMutation}-`));
     const fixture = rootedRunFixture(root, { planMutation });
@@ -590,7 +624,7 @@ test('capability probe fails closed on any post-preflight path outside the fixed
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('provider-free coordinator runs production-shaped five-turn handoff with two sessions', () => {
+test('provider-free coordinator runs production-shaped five-turn handoff with three sessions', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-five-turn-'));
   const fixture = rootedRunFixture(root);
   const approvalOrder = [];
@@ -606,9 +640,9 @@ test('provider-free coordinator runs production-shaped five-turn handoff with tw
     assert.equal(approvalOrder[0].planReceipt, true);
     assert.deepEqual(approvalOrder[0].request, { plan: LIVE.APPROVAL_PLAN, authority: 'owner', approvalRef: LIVE.APPROVAL_REF });
     assert.deepEqual(result.turns.map((item) => item.turn.id), LIVE.TURN_PLAN.map((item) => item.id));
+    assert.deepEqual(result.turns.map((item) => item.usage.turn_tokens), [10, 20, 10, 10, 20]);
+    assert.deepEqual(result.handoff.sessions, { A: 'native-A', B: 'native-B', C: 'native-C' });
     assert.equal(result.turns[1].turn.checkpoint.path, '<CONSUMER_ROOT>/.work/.continue-here.md');
-    assert.deepEqual(result.turns.map((item) => item.usage.turn_tokens), [10, 20, 10, 20, 30]);
-    assert.deepEqual(result.handoff.sessions, { A: 'native-A', B: 'native-B' });
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), true);
     const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json')));
     assert.deepEqual(Object.keys(approval).sort(), ['approval_ref', 'authority', 'case_id', 'changed_paths', 'characterization_only', 'command', 'contract', 'plan', 'plan_receipt', 'record_type', 'result', 'schema_version', 'state', 'target', 'workflow_verdict'].sort());
@@ -627,7 +661,7 @@ test('provider-free coordinator runs production-shaped five-turn handoff with tw
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('coordinator approval fails closed before pause on malformed, replayed, mismatched, or mutating handoffs', () => {
+test('coordinator approval fails closed before handoff on malformed, replayed, mismatched, or mutating handoffs', () => {
   const cases = [
     ['malformed', (_context) => ({ status: 0, stdout: '{', stderr: '' }), 'approval_output_malformed'],
     ['replayed', (context, request) => ({ status: 0, stdout: JSON.stringify({ operation: 'lifecycle-transition', target: 'approve', status: 'replayed', changed: false, state: {} }), stderr: '' }), 'approval_result_invalid'],
@@ -675,7 +709,6 @@ test('coordinator approval fails closed before pause on malformed, replayed, mis
       const defaultApprovePlan = fixture.context.approvePlan;
       fixture.context.approvePlan = (context, request) => approvePlan(context, request, defaultApprovePlan);
       assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === code);
-      assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
       const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json')));
       assert.equal(approval.workflow_verdict, 'not_evaluated');
       assert.equal(approval.result.failure_code, code);
@@ -693,7 +726,7 @@ test('five-turn coordinator accepts the sealed plan usage below the calibrated 3
   const fixture = rootedRunFixture(root, { usageByTurn: (turn) => {
     if (turn.id === 'turn-a-plan') return observedPlanUsage;
     if (turn.id === 'turn-a-pause') return 10;
-    return turn.id === 'turn-b-resume-execute' ? 10 : turn.id === 'turn-b-verify' ? 20 : 30;
+    return turn.id === 'turn-b-resume-execute' ? 10 : turn.id === 'turn-c-verify' ? 20 : 30;
   } });
   try {
     const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
@@ -738,30 +771,79 @@ test('injected coordinator seams are rejected unless explicitly characterization
 });
 
 test('pause scope refusal seals a terminal and never hands off', () => {
-  for (const mutation of ['turn-a-pause']) {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-refusal-${mutation}-`));
-    const fixture = rootedRunFixture(root, { mutation });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-refusal-turn-a-pause-'));
+  const fixture = rootedRunFixture(root, { mutation: 'turn-a-pause' });
+  try {
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => ['pause_product_mutation', 'provider_authored_verdict'].includes(error.code));
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'terminal.json')), true);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), false);
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json')));
+    assert.equal(terminal.workflow_verdict, 'not_evaluated');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('fresh verifier identity is retained for progress and provider verdict stays unevaluated', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-verification-progress-'));
+  const fixture = rootedRunFixture(root, { verdict: 'passed' });
+  try {
+    const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
+    assert.equal(fixture.calls, 5);
+    assert.deepEqual(result.handoff.sessions, { A: 'native-A', B: 'native-B', C: 'native-C' });
+    assert.equal(result.turns[3].native.thread_id, 'native-C');
+    assert.equal(result.turns[4].native.thread_id, 'native-C');
+    for (const turn of result.turns) assert.equal(turn.workflow_verdict, 'not_evaluated');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('top-level identity collisions seal the failing receipt before dependent turns', () => {
+  for (const [label, targetIndex, sealedTurn] of [['B', 2, 'turn-b-resume-execute'], ['C', 3, 'turn-c-verify']]) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-identity-collision-${label}-`));
+    const fixture = rootedRunFixture(root);
+    const normalSpawn = fixture.spawn;
+    fixture.spawn = (...args) => {
+      const result = normalSpawn(...args);
+      return fixture.calls - 1 === targetIndex ? { ...result, stdout: nativeCodex('native-A', 'collision', 10) } : result;
+    };
     try {
-      assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => ['pause_product_mutation', 'provider_authored_verdict'].includes(error.code));
+      assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'session_identity_collision');
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, `${sealedTurn}.json`)), true);
       assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'terminal.json')), true);
-      assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), false);
       const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json')));
-      assert.equal(terminal.workflow_verdict, 'not_evaluated');
+      assert.equal(terminal.terminal.failure_code, 'session_identity_collision');
+      assert.equal(terminal.terminal.sealed_turn.turn, sealedTurn);
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, targetIndex === 2 ? 'turn-c-verify.json' : 'turn-c-progress.json')), false);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   }
 });
 
-test('missing checkpoint, wrong resume identity, and native order fail closed', () => {
+test('wrong fresh identity, wrong resume identity, and native order fail closed', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-native-refusal-'));
   const fixture = rootedRunFixture(root);
   try {
     const noCheckpoint = rootedRunFixture(root + '-checkpoint');
     noCheckpoint.spawn = (_command, _argv, options) => ({ status: 0, pid: 1, stdout: nativeCodex('native-A', 'x', 10), stderr: '', timed_out: false });
     assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), noCheckpoint.freezeFile, noCheckpoint.receiptDir, { prepareRun: noCheckpoint.prepareRun, spawn: noCheckpoint.spawn, characterizationOnly: true }), (error) => String(error.code).startsWith('checkpoint_'));
+    const wrongFreshIdentity = rootedRunFixture(root + '-fresh-identity');
+    const normalSpawn = wrongFreshIdentity.spawn;
+    wrongFreshIdentity.spawn = (command, argv, options) => { const result = normalSpawn(command, argv, options); return { ...result, stdout: nativeCodex('native-A', 'x', 10) }; };
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), wrongFreshIdentity.freezeFile, wrongFreshIdentity.receiptDir, { prepareRun: wrongFreshIdentity.prepareRun, spawn: wrongFreshIdentity.spawn, characterizationOnly: true }), (error) => ['session_identity_collision', 'session_identity_invalid'].includes(error.code));
+    const wrongResumeIdentity = rootedRunFixture(root + '-resume-mismatch');
+    const resumeSpawn = wrongResumeIdentity.spawn;
+    wrongResumeIdentity.spawn = (...args) => {
+      const result = resumeSpawn(...args);
+      return wrongResumeIdentity.calls === 2 ? { ...result, stdout: nativeCodex('native-B', 'wrong-resume', 10) } : result;
+    };
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), wrongResumeIdentity.freezeFile, wrongResumeIdentity.receiptDir, { prepareRun: wrongResumeIdentity.prepareRun, spawn: wrongResumeIdentity.spawn, characterizationOnly: true }), (error) => error.code === 'identity_mismatch');
+    assert.equal(wrongResumeIdentity.calls, 2);
+    const failedResume = JSON.parse(fs.readFileSync(path.join(wrongResumeIdentity.receiptDir, 'turn-a-pause.json')));
+    assert.equal(failedResume.terminal.failure_code, 'identity_mismatch');
+    const failedTerminal = JSON.parse(fs.readFileSync(path.join(wrongResumeIdentity.receiptDir, 'terminal.json')));
+    assert.equal(failedTerminal.terminal.sealed_turn.turn, 'turn-a-pause');
+    assert.equal(fs.existsSync(path.join(wrongResumeIdentity.receiptDir, 'turn-b-resume-execute.json')), false);
     assert.throws(() => LIVE.runTurn(fixture.context, LIVE.TURN_PLAN[0], null, { spawn: () => ({ status: 0, pid: 1, stdout: '{}\n', stderr: '', timed_out: false }) }), (error) => error.code === 'native_sequence_invalid');
     fixture.context.totalUsage = 20;
     assert.doesNotThrow(() => LIVE.runTurn(fixture.context, LIVE.TURN_PLAN[0], null, { spawn: () => ({ status: 0, pid: 1, stdout: nativeCodex('native-A', 'x', 10), stderr: '', timed_out: false }) }));
-  } finally { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(root + '-checkpoint', { recursive: true, force: true }); }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(root + '-checkpoint', { recursive: true, force: true }); fs.rmSync(root + '-fresh-identity', { recursive: true, force: true }); fs.rmSync(root + '-resume-mismatch', { recursive: true, force: true }); }
 });
 
 test('real Python resolver rejects WindowsApps aliases and requires executable identity', () => {
@@ -830,6 +912,28 @@ test('characterization handoffs cannot reach the observer', () => {
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test('observer rejects every wrong native initial or resumed argv grammar', () => {
+  const validRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-argv-valid-'));
+  const valid = observerHandoffFixture(validRoot);
+  try {
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: valid.freezeFile, receiptDir: valid.receiptDir, consumerRoot: valid.consumerRoot, terminalValue: valid.terminal, handoffValue: valid.handoff }), (error) => error.code === 'upstream_origin_mismatch');
+  } finally { fs.rmSync(validRoot, { recursive: true, force: true }); }
+  const cases = [
+    ['a-plan', (argv) => { argv[2] = 'resume'; argv[3] = 'native-A'; }],
+    ['a-pause', (argv) => { argv[3] = 'native-B'; }],
+    ['b-resume-execute', (argv) => { argv[2] = 'resume'; argv[3] = 'native-A'; }],
+    ['c-verify', (argv) => { argv[2] = 'resume'; argv[3] = 'native-B'; }],
+    ['c-progress', (argv) => { argv[3] = 'native-A'; }],
+  ];
+  for (const [name, mutateArgv] of cases) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-observer-argv-${name}-`));
+    const fixture = observerHandoffFixture(root, (argv, turn) => { if (turn.id === `turn-${name}`) mutateArgv(argv); });
+    try {
+      assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: fixture.terminal, handoffValue: fixture.handoff }), (error) => error.code === 'turn_argv_invalid');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
 function syntheticObservation(root, checks = {}) {
   const observationFile = path.join(root, 'observation.json');
   const merged = { import_with_sha1_unavailable: true, explicit_sha256_signer: true, default_sha1_rejected: true, upstream_tests_pass: true, ...checks };
@@ -838,7 +942,7 @@ function syntheticObservation(root, checks = {}) {
     freeze_sha256: 'd'.repeat(64), terminal_sha256: 'e'.repeat(64), handoff_sha256: 'f'.repeat(64),
     retained_root: '<RETAINED_ROOT>', case: { revision: '93ae366874bbd4f69d90495c45b2cd336387496c', sha256: 'e77f420a8036a80b1ff96f9c6a96ffb3f9e4d32e724d4a33604a24119bb97c3f', oracle_sha256: '21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11' },
     git: { top_level: '<RETAINED_ROOT>', head: '93ae366874bbd4f69d90495c45b2cd336387496c', scope: { forbidden: [], product: ['src/itsdangerous/signer.py'] }, candidate_sha256: 'a'.repeat(64) },
-    turns: OBSERVER.WORKFLOW_STEPS.map((id, index) => ({ id, thread_id: index < 2 ? 'native-A' : 'native-B', turn_id: `turn-${index}`, sha256: String(index + 1).repeat(64) })), sessions: { count: 2, turns: 5 },
+    turns: OBSERVER.WORKFLOW_STEPS.map((id, index) => ({ id, thread_id: index < 2 ? 'native-A' : index === 2 ? 'native-B' : 'native-C', turn_id: `turn-${index}`, sha256: String(index + 1).repeat(64) })), sessions: { count: 3, turns: 5 },
     brownfield: { files: { 'CHANGE.md': {}, 'HANDOFF.md': {}, 'VERIFICATION.md': {} } }, checkpoint: { sha256: 'b'.repeat(64) },
     oracle: { sha256: '21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11', semantic: { status: Object.values(merged).every(Boolean) ? 'pass' : 'fail', checks: merged } },
   };
@@ -972,7 +1076,7 @@ test('partial plan observation fails closed for no-product, setup-only, predeces
     }],
     ['setup-only', (fixture) => fs.writeFileSync(path.join(fixture.consumerRoot, 'setup-only.txt'), 'setup\n')],
     ['extra-plan-artifact', (fixture) => fs.writeFileSync(path.join(fixture.consumerRoot, '.work', 'brownfield-change', 'EXTRA.md'), 'unapproved plan output\n')],
-    ['predecessor', (fixture) => fs.writeFileSync(path.join(fixture.receiptDir, 'turn-a-pause.json'), '{}\n')],
+    ['predecessor', (fixture) => fs.writeFileSync(path.join(fixture.receiptDir, 'turn-b-resume-execute.json'), '{}\n')],
     ['wrong-work-plan', (fixture) => fs.appendFileSync(fixture.workPlanFile, '\nchanged\n')],
   ];
   for (const [name, mutate] of cases) {

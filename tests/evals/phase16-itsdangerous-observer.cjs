@@ -25,18 +25,31 @@ const EVALUATOR_FILES = Object.freeze([
   'tests/evals/phase16-core-flows.cjs',
   'tests/evals/phase16-itsdangerous-observer.cjs',
 ]);
-const WORKFLOW_STEPS = Object.freeze(['turn-a-plan', 'turn-a-pause', 'turn-b-resume-execute', 'turn-b-verify', 'turn-b-progress']);
+const WORKFLOW_STEPS = Object.freeze(['turn-a-plan', 'turn-a-pause', 'turn-b-resume-execute', 'turn-c-verify', 'turn-c-progress']);
 const DISPOSITIONS = Object.freeze(['passed', 'product_red', 'infrastructure_invalid', 'identity_unknown', 'human_needed']);
 const PLAN_TOKEN_CEILING = 3000000;
 const TURN_CONTRACT = Object.freeze([
   ['turn-a-plan', 'a-plan', 'work-plan', ['work-plan'], 12, PLAN_TOKEN_CEILING, 'A', true],
   ['turn-a-pause', 'a-pause', 'work-pause', ['work-pause'], 5, 500000, 'A', false],
   ['turn-b-resume-execute', 'b-resume-execute', 'work-resume', ['work-resume', 'work-execute'], 20, 2500000, 'B', true],
-  ['turn-b-verify', 'b-verify', 'work-verify', ['work-verify'], 12, 1500000, 'B', false],
-  ['turn-b-progress', 'b-progress', 'work-progress', ['work-progress'], 5, 500000, 'B', false],
+  ['turn-c-verify', 'c-verify', 'work-verify', ['work-verify'], 12, 1500000, 'C', true],
+  ['turn-c-progress', 'c-progress', 'work-progress', ['work-progress'], 5, 500000, 'C', false],
 ]);
 const TURN_TOTAL_WALL_MINUTES = 54;
 const TURN_TOTAL_NATIVE_TOKENS = 8000000;
+
+function expectedNativeArgv(turn, sessionId = null) {
+  const base = turn[7]
+    ? ['exec', '--approve-for-me', '-C', '<REDACTED_PATH>']
+    : ['exec', '--approve-for-me', 'resume', sessionId];
+  return [...base, '--ignore-user-config', '--json', ...(turn[7] ? ['--color', 'never'] : []), '-m', 'gpt-5.6-luna', '-c', 'model_reasoning_effort="high"', '-'];
+}
+
+function validateNativeArgv(receipt, expectedTurn, sessions) {
+  const expectedSession = expectedTurn[7] ? null : sessions?.[expectedTurn[6]];
+  if (!expectedTurn[7] && !expectedSession) fail('turn_argv_invalid', `resumed turn lacks its declared session: ${expectedTurn[0]}`);
+  if (!Array.isArray(receipt.invocation?.argv) || stable(receipt.invocation.argv) !== stable(expectedNativeArgv(expectedTurn, expectedSession))) fail('turn_argv_invalid', `native argv does not match the fixed ${expectedTurn[0]} grammar`);
+}
 
 class ObserverFailure extends Error {
   constructor(code, message, evidence = null) {
@@ -102,7 +115,7 @@ function validateFreeze(data, freeze, caseFile, controlsFile = null) {
   if (freeze.runtime?.provider !== 'codex' || freeze.runtime?.model !== 'gpt-5.6-luna' || freeze.runtime?.effort !== 'high' || freeze.runtime?.cli_contract?.version !== 'codex-cli 0.149.1' || !validHash(freeze.runtime?.cli_contract?.resume_help_sha256) || !validHash(freeze.runtime?.python?.sha256) || freeze.runtime?.python?.path !== '<PYTHON>' || freeze.runtime?.python?.identity !== '<PYTHON>' || freeze.runtime?.auth_posture !== 'authenticated-native-CODEX_HOME; ignore-user-config; credentials-not-copied' || freeze.auth?.copied_to_consumer_root !== false) fail('freeze_binding_mismatch', 'freeze runtime or Python binding is incomplete');
   if (freeze.candidate?.package?.name !== 'workspine' || !freeze.candidate.package.version || freeze.toolchain?.node?.sha256 == null || freeze.toolchain?.npm?.sha256 == null || freeze.toolchain?.git?.sha256 == null || !validHash(freeze.toolchain.node.sha256) || !validHash(freeze.toolchain.npm.sha256) || !validHash(freeze.toolchain.git.sha256)) fail('freeze_binding_mismatch', 'freeze toolchain binding is incomplete');
   const turns = freeze.budgets?.turns?.map((item) => [item.id, item.role, item.skill, item.skills, item.wall_minutes, item.native_tokens, item.session, item.initial]);
-  if (stable(turns) !== stable(TURN_CONTRACT) || freeze.budgets?.total_wall_minutes !== TURN_TOTAL_WALL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_NATIVE_TOKENS || freeze.budgets?.retained_output_bytes !== 1048576 || freeze.sessions?.count !== 2 || freeze.sessions?.turns !== 5 || freeze.root_map?.run_root !== '<RUN_ROOT>' || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root' || freeze.root_map?.tool_root !== '<RUN_ROOT>/tool_root' || freeze.root_map?.receipts !== '<RECEIPTS>') fail('freeze_binding_mismatch', 'freeze budgets, root map, or turn contract drifted');
+  if (stable(turns) !== stable(TURN_CONTRACT) || freeze.budgets?.total_wall_minutes !== TURN_TOTAL_WALL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_NATIVE_TOKENS || freeze.budgets?.retained_output_bytes !== 1048576 || freeze.sessions?.count !== 3 || freeze.sessions?.turns !== 5 || freeze.root_map?.run_root !== '<RUN_ROOT>' || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root' || freeze.root_map?.tool_root !== '<RUN_ROOT>/tool_root' || freeze.root_map?.receipts !== '<RECEIPTS>') fail('freeze_binding_mismatch', 'freeze budgets, root map, or turn contract drifted');
   if (controlsFile && (!exists(controlsFile) || fileSha(controlsFile) !== freeze.controls.sha256)) fail('freeze_binding_mismatch', 'freeze controls hash does not match the sealed controls receipt');
 }
 
@@ -243,7 +256,7 @@ function completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, contr
   const terminalSha = terminalValue ? sha256(Buffer.from(`${JSON.stringify(terminalValue, null, 2)}\n`)) : fileSha(terminalFile);
   const handoffSha = handoffValue ? sha256(Buffer.from(`${JSON.stringify(handoffValue, null, 2)}\n`)) : fileSha(handoffFile);
   if (handoff.terminal_sha256 !== terminalSha || handoff.retained_root !== '<CONSUMER_ROOT>') fail('handoff_binding_mismatch', 'handoff is not bound to terminal and retained-root witness');
-  if (stable(handoff.sessions) !== stable({ A: handoff.sessions?.A, B: handoff.sessions?.B }) || !handoff.sessions?.A || !handoff.sessions?.B || handoff.sessions.A === handoff.sessions.B) fail('handoff_identity_invalid', 'handoff lacks two distinct native sessions');
+  if (stable(handoff.sessions) !== stable({ A: handoff.sessions?.A, B: handoff.sessions?.B, C: handoff.sessions?.C }) || !handoff.sessions?.A || !handoff.sessions?.B || !handoff.sessions?.C || new Set([handoff.sessions.A, handoff.sessions.B, handoff.sessions.C]).size !== 3) fail('handoff_identity_invalid', 'handoff lacks three distinct native sessions');
   if (!Array.isArray(handoff.turns) || handoff.turns.length !== 5 || stable(handoff.turns.map((item) => item.id)) !== stable(WORKFLOW_STEPS)) fail('handoff_turns_invalid', 'handoff does not contain the exact five ordered turns');
   const turns = handoff.turns.map((item, index) => {
     const file = path.join(receiptDir, `${WORKFLOW_STEPS[index]}.json`);
@@ -252,9 +265,11 @@ function completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, contr
     if (receipt.characterization_only === true || receipt.workflow_verdict !== 'not_evaluated' || receipt.terminal?.status !== 'provider_complete' || !receipt.native?.thread_id || !receipt.native?.turn_id) fail('turn_receipt_invalid', `turn receipt is not a complete native receipt: ${WORKFLOW_STEPS[index]}`);
     const expectedTurn = TURN_CONTRACT[index];
     if (receipt.turn?.id !== expectedTurn[0] || receipt.turn?.role !== expectedTurn[1] || receipt.turn?.skill !== expectedTurn[2] || stable(receipt.turn?.skills) !== stable(expectedTurn[3]) || receipt.turn?.session !== expectedTurn[6] || receipt.turn?.initial !== expectedTurn[7] || !receipt.invocation?.argv?.includes('-m') || !receipt.invocation.argv.includes('gpt-5.6-luna')) fail('turn_receipt_invalid', `turn receipt is not bound to the fixed turn contract: ${WORKFLOW_STEPS[index]}`);
+    validateNativeArgv(receipt, expectedTurn, handoff.sessions);
+    if (expectedTurn[0] === 'turn-a-pause' && receipt.turn?.checkpoint?.path !== '<CONSUMER_ROOT>/.work/.continue-here.md') fail('checkpoint_invalid', 'pause receipt does not carry the canonical checkpoint path');
     return { id: WORKFLOW_STEPS[index], thread_id: receipt.native.thread_id, turn_id: receipt.native.turn_id, sha256: item.sha256 };
   });
-  if (turns[0].thread_id !== handoff.sessions.A || turns[1].thread_id !== handoff.sessions.A || turns.slice(2).some((item) => item.thread_id !== handoff.sessions.B)) fail('handoff_identity_invalid', 'turn receipts do not link to the declared sessions');
+  if (turns[0].thread_id !== handoff.sessions.A || turns[1].thread_id !== handoff.sessions.A || turns[2].thread_id !== handoff.sessions.B || turns[3].thread_id !== handoff.sessions.C || turns[4].thread_id !== handoff.sessions.C) fail('handoff_identity_invalid', 'turn receipts do not link to the declared sessions');
   const origin = runGit(consumerRoot, ['remote', 'get-url', 'origin']);
   if (origin !== data.source.repository) fail('upstream_origin_mismatch', 'retained Git root origin is not the pinned public upstream', { expected: data.source.repository, actual: origin });
   const scope = gitScope(consumerRoot);
@@ -309,7 +324,7 @@ function observe({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile 
     case: { sha256: fileSha(caseFile), revision: handoff.data.source.revision, oracle_sha256: oracle.oracle_sha256 },
     freeze_sha256: fileSha(freezeFile), terminal_sha256: handoff.terminal_sha256, handoff_sha256: handoff.handoff_sha256,
     retained_root: fs.realpathSync(consumerRoot), git: { top_level: handoff.scope.top, head: handoff.scope.head, status: handoff.scope.status, status_sha256: handoff.scope.status_sha256, staged: handoff.scope.staged, unstaged: handoff.scope.unstaged, scope, candidate_sha256: exists(candidatePath) ? fileSha(candidatePath) : null },
-    turns: handoff.turns, sessions: { count: 2, turns: 5 }, checkpoint: check, inputs, brownfield: artifact,
+    turns: handoff.turns, sessions: { count: 3, turns: 5 }, checkpoint: check, inputs, brownfield: artifact,
     oracle: { path: oracleFile, sha256: fileSha(oracleFile), semantic: oracle.semantic },
     claim_limit: 'Actual retained-root Git scope, canonical brownfield artifacts, and the pinned itsdangerous oracle only; no broader benchmark, model, or release claim.',
   };
@@ -320,7 +335,7 @@ function observe({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile 
 
 function gradeValue(observation) {
   if (observation.record_type !== 'phase16_itsdangerous_observation' || observation.contract !== OBSERVATION_CONTRACT || observation.case_id !== CASE_ID) fail('observation_invalid', 'observation contract is invalid');
-  if (observation.case?.revision !== CASE_REVISION || observation.case?.sha256 !== CASE_SHA256 || !validHash(observation.freeze_sha256) || !validHash(observation.terminal_sha256) || !validHash(observation.handoff_sha256) || typeof observation.retained_root !== 'string' || observation.git?.top_level !== observation.retained_root || !observation.git.scope || !observation.brownfield?.files || !observation.checkpoint?.sha256 || stable(observation.turns?.map((item) => item.id)) !== stable(WORKFLOW_STEPS) || observation.turns?.some((item) => !validHash(item.sha256) || !item.thread_id || !item.turn_id) || stable(observation.sessions) !== stable({ count: 2, turns: 5 }) || !observation.oracle?.semantic?.checks || !validHash(observation.oracle?.sha256) || observation.case.oracle_sha256 !== ORACLE_SHA256 || !['pass', 'fail'].includes(observation.oracle.semantic.status)) fail('observation_invalid', 'observation is missing immutable grading inputs');
+  if (observation.case?.revision !== CASE_REVISION || observation.case?.sha256 !== CASE_SHA256 || !validHash(observation.freeze_sha256) || !validHash(observation.terminal_sha256) || !validHash(observation.handoff_sha256) || typeof observation.retained_root !== 'string' || observation.git?.top_level !== observation.retained_root || !observation.git.scope || !observation.brownfield?.files || !observation.checkpoint?.sha256 || stable(observation.turns?.map((item) => item.id)) !== stable(WORKFLOW_STEPS) || observation.turns?.some((item) => !validHash(item.sha256) || !item.thread_id || !item.turn_id) || stable(observation.sessions) !== stable({ count: 3, turns: 5 }) || !observation.oracle?.semantic?.checks || !validHash(observation.oracle?.sha256) || observation.case.oracle_sha256 !== ORACLE_SHA256 || !['pass', 'fail'].includes(observation.oracle.semantic.status)) fail('observation_invalid', 'observation is missing immutable grading inputs');
   const checks = { git_root: observation.git?.top_level === observation.retained_root, pinned_head: observation.git?.head === observation.case?.revision, git_scope: observation.git?.scope?.forbidden?.length === 0, brownfield: Boolean(observation.brownfield?.files?.['CHANGE.md'] && observation.brownfield?.files?.['HANDOFF.md'] && observation.brownfield?.files?.['VERIFICATION.md']), checkpoint: Boolean(observation.checkpoint?.sha256), oracle_import: observation.oracle?.semantic?.checks?.import_with_sha1_unavailable === true, oracle_explicit_sha256: observation.oracle?.semantic?.checks?.explicit_sha256_signer === true, oracle_default_rejected: observation.oracle?.semantic?.checks?.default_sha1_rejected === true, oracle_tests: observation.oracle?.semantic?.checks?.upstream_tests_pass === true };
   const productChecks = ['oracle_import', 'oracle_explicit_sha256', 'oracle_default_rejected', 'oracle_tests'];
   const disposition = observation.identity?.status === 'unknown' ? 'identity_unknown' : observation.human_needed === true ? 'human_needed' : checks.git_root && checks.pinned_head && checks.git_scope && checks.brownfield && checks.checkpoint ? (productChecks.every((key) => checks[key]) ? 'passed' : 'product_red') : 'infrastructure_invalid';
@@ -372,7 +387,7 @@ function project({ observation, grade: gradeReceipt, regrade: regradeReceipt, ou
   const compared = compareFile && exists(compareFile) ? readJson(compareFile, 'regrade_invalid') : null;
   if (!compared || compared.contract !== REGRADE_CONTRACT || compared.normalized_equal !== true || compared.canonical_regrade_sha256 !== fileSha(regradeFile) || stable(compared.regrade) !== stable(regradeReceipt)) fail('regrade_invalid', 'public projection requires the sealed deterministic regrade comparison');
   const freezeValue = freeze || null;
-  const result = { schema_version: 1, record_type: 'phase16_public_result', contract: PROJECTION_CONTRACT, case_id: CASE_ID, upstream_revision: observation.case.revision, candidate_sha256: observation.git.candidate_sha256 || null, runtime: { provider: 'codex', model: freezeValue?.runtime?.model || 'gpt-5.6-luna', effort: freezeValue?.runtime?.effort || 'high' }, workflow: { sessions: 2, turns: 5, steps: WORKFLOW_STEPS.map((id) => ({ id, disposition: 'observed' })) }, oracle: { status: observation.oracle.semantic.status, checks: observation.oracle.semantic.checks }, disposition: gradeReceipt.disposition, stages: { observation: 'sealed', oracle: 'sealed', grade: 'sealed', regrade: 'sealed' }, claim_limit: 'One pinned itsdangerous retained-root Codex vertical only; this projection is not a general benchmark, model-identity, security, or release claim.' };
+  const result = { schema_version: 1, record_type: 'phase16_public_result', contract: PROJECTION_CONTRACT, case_id: CASE_ID, upstream_revision: observation.case.revision, candidate_sha256: observation.git.candidate_sha256 || null, runtime: { provider: 'codex', model: freezeValue?.runtime?.model || 'gpt-5.6-luna', effort: freezeValue?.runtime?.effort || 'high' }, workflow: { sessions: 3, turns: 5, steps: WORKFLOW_STEPS.map((id) => ({ id, disposition: 'observed' })) }, oracle: { status: observation.oracle.semantic.status, checks: observation.oracle.semantic.checks }, disposition: gradeReceipt.disposition, stages: { observation: 'sealed', oracle: 'sealed', grade: 'sealed', regrade: 'sealed' }, claim_limit: 'One pinned itsdangerous retained-root Codex vertical only; this projection is not a general benchmark, model-identity, security, or release claim.' };
   assertPublicSafe(result);
   if (outputFile) writeExclusive(outputFile, result);
   return result;
@@ -389,7 +404,7 @@ function writeEarlyProjection(file, details) { writeExclusive(file, earlyProject
 
 function observerFailureProjection({ receiptDir = null } = {}) {
   const stage = (name, missing) => receiptDir && exists(path.join(receiptDir, `${name}.json`)) ? 'sealed' : missing;
-  return assertPublicSafe({ schema_version: 1, record_type: 'phase16_public_result', contract: PROJECTION_CONTRACT, case_id: CASE_ID, upstream_revision: '93ae366874bbd4f69d90495c45b2cd336387496c', candidate_sha256: null, runtime: { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high' }, workflow: { sessions: 2, turns: 5, steps: [] }, oracle: { status: stage('oracle', 'not_produced_due_to_observer_failure'), checks: stage('oracle', 'not_produced_due_to_observer_failure') }, disposition: 'infrastructure_invalid', stages: { observation: stage('observation', 'failed'), oracle: stage('oracle', 'not_produced_due_to_observer_failure'), grade: stage('grade', 'not_produced_due_to_observer_failure'), regrade: stage('regrade', 'not_produced_due_to_observer_failure') }, claim_limit: 'Observer failure only; no workflow, product, oracle, benchmark, model, or release claim.' });
+  return assertPublicSafe({ schema_version: 1, record_type: 'phase16_public_result', contract: PROJECTION_CONTRACT, case_id: CASE_ID, upstream_revision: '93ae366874bbd4f69d90495c45b2cd336387496c', candidate_sha256: null, runtime: { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high' }, workflow: { sessions: 3, turns: 5, steps: [] }, oracle: { status: stage('oracle', 'not_produced_due_to_observer_failure'), checks: stage('oracle', 'not_produced_due_to_observer_failure') }, disposition: 'infrastructure_invalid', stages: { observation: stage('observation', 'failed'), oracle: stage('oracle', 'not_produced_due_to_observer_failure'), grade: stage('grade', 'not_produced_due_to_observer_failure'), regrade: stage('regrade', 'not_produced_due_to_observer_failure') }, claim_limit: 'Observer failure only; no workflow, product, oracle, benchmark, model, or release claim.' });
 }
 
 function observeAndGrade(options) {
@@ -434,7 +449,7 @@ function observePartialPlan({ caseFile, freezeFile, receiptDir, consumerRoot, ca
   if (preparation.record_type !== 'phase16_preparation_receipt' || preparation.case_id !== CASE_ID || preparation.characterization_only === true || preparation.workflow_verdict !== 'not_evaluated' || preparation.bundle_sha256 !== freeze.bundle.sha256 || preparation.controls_sha256 !== freeze.controls.sha256 || preparation.candidate_sha256 !== freeze.candidate.sha256 || preparation.python?.sha256 !== freeze.runtime.python.sha256) fail('partial_preparation_invalid', 'partial preparation receipt is not bound to the freeze');
   if (turn.record_type !== 'phase16_codex_turn_receipt' || turn.provider_invoked !== true || turn.characterization_only === true || turn.workflow_verdict !== 'not_evaluated' || turn.turn?.id !== 'turn-a-plan' || turn.turn?.role !== 'a-plan' || turn.turn?.skill !== 'work-plan' || stable(turn.turn?.skills) !== stable(['work-plan']) || turn.turn?.session !== 'A' || turn.turn?.initial !== true || (!turn.native?.thread_id && !timeout) || !Array.isArray(turn.invocation?.argv) || !turn.invocation.argv.includes('-m') || !turn.invocation.argv.includes('gpt-5.6-luna') || turn.terminal?.status !== 'failed') fail('partial_turn_invalid', 'partial plan-turn receipt is not a sealed provider terminal');
   if (terminal.record_type !== 'phase16_terminal_receipt' || terminal.case_id !== CASE_ID || terminal.provider_invoked !== true || terminal.workflow_verdict !== 'not_evaluated' || terminal.turn_count !== 1 || terminal.terminal?.status !== 'failed' || terminal.terminal?.sealed_turn?.turn !== 'turn-a-plan') fail('partial_terminal_invalid', 'partial terminal receipt does not seal exactly the first plan turn');
-  if (exists(path.join(receiptDir, 'turn-a-pause.json')) || exists(path.join(receiptDir, 'handoff.json')) || exists(path.join(receiptDir, 'turn-b-resume-execute.json')) || exists(path.join(receiptDir, 'turn-b-verify.json')) || exists(path.join(receiptDir, 'turn-b-progress.json'))) fail('partial_predecessor', 'partial observer refuses evidence preceded by pause, resume, or handoff');
+  if (exists(path.join(receiptDir, 'turn-a-pause.json')) || exists(path.join(receiptDir, 'handoff.json')) || exists(path.join(receiptDir, 'turn-b-resume-execute.json')) || exists(path.join(receiptDir, 'turn-c-verify.json')) || exists(path.join(receiptDir, 'turn-c-progress.json'))) fail('partial_predecessor', 'partial observer refuses evidence preceded by pause, resume, verify, progress, or handoff');
   const planArtifacts = allowedPaths(data, { all: [] }).allowed.filter((item) => item.startsWith('.work/brownfield-change/')).sort();
   const brownfieldEvidence = brownfield(consumerRoot, data);
   if (brownfieldEvidence.status !== 'active' || brownfieldEvidence.verification_status !== 'pending') fail('plan_artifact_invalid', 'partial observer requires active planning and pending verification artifacts');
