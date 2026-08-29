@@ -750,7 +750,24 @@ function approvalCommandEvidence() {
   };
 }
 
-function approvalReceipt({ response = null, result = null, before = null, after = null, changed = [], planReceipt = {}, failure = null, characterizationOnly }) {
+function regularFileShaOrNull(file) {
+  try {
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    return fileSha(file);
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return null;
+    throw error;
+  }
+}
+
+function requireRegularFileSha(file, label) {
+  const digest = regularFileShaOrNull(file);
+  if (!digest) fail('approval_plan_artifact_missing', `${label} must be an existing regular non-symlink file`, { path: `<CONSUMER_ROOT>/${APPROVAL_PLAN}` });
+  return digest;
+}
+
+function approvalReceipt({ response = null, result = null, before = null, after = null, changed = [], planReceipt = {}, planArtifact = {}, failure = null, characterizationOnly }) {
   return {
     schema_version: 1,
     record_type: 'phase16_coordinator_approval_receipt',
@@ -765,6 +782,11 @@ function approvalReceipt({ response = null, result = null, before = null, after 
       path: '<RECEIPTS>/turn-a-plan.json',
       expected_sha256: planReceipt.expected_sha256 ?? null,
       observed_sha256: planReceipt.observed_sha256 ?? null,
+    },
+    plan_artifact: {
+      path: `<CONSUMER_ROOT>/${APPROVAL_PLAN}`,
+      expected_sha256: planArtifact.expected_sha256 ?? null,
+      observed_sha256: planArtifact.observed_sha256 ?? null,
     },
     result: {
       status: response?.status ?? null,
@@ -791,6 +813,8 @@ function runCoordinatorApproval(context, options = {}) {
   if (typeof options.approvePlan === 'function' && options.characterizationOnly !== true) fail('characterization_only_required', 'injected approval execution is characterization-only');
   const planReceiptFile = path.join(context.receiptDir, 'turn-a-plan.json');
   let planReceipt = { expected_sha256: null, observed_sha256: null };
+  const planArtifactFile = path.join(context.consumerRoot, ...APPROVAL_PLAN.split('/'));
+  let planArtifact = { expected_sha256: null, observed_sha256: null };
   const before = { tree: CORE.snapshotTree(context.consumerRoot, true), boundary: readPlanBoundaryArtifacts(context.consumerRoot) };
   const providerInvocations = context.providerInvocations || 0;
   let response = null;
@@ -800,6 +824,7 @@ function runCoordinatorApproval(context, options = {}) {
   try {
     if (!exists(planReceiptFile) || !fs.lstatSync(planReceiptFile).isFile() || fs.lstatSync(planReceiptFile).isSymbolicLink()) fail('approval_plan_receipt_missing', 'sealed turn-a-plan receipt is missing or unsafe');
     planReceipt.expected_sha256 = fileSha(planReceiptFile);
+    planArtifact.expected_sha256 = requireRegularFileSha(planArtifactFile, 'generated brownfield CHANGE.md');
     response = typeof options.approvePlan === 'function'
       ? options.approvePlan(context, { plan: APPROVAL_PLAN, authority: 'owner', approvalRef: APPROVAL_REF })
       : (() => {
@@ -816,7 +841,9 @@ function runCoordinatorApproval(context, options = {}) {
       })();
     after = { tree: CORE.snapshotTree(context.consumerRoot, true), boundary: readPlanBoundaryArtifacts(context.consumerRoot) };
     planReceipt.observed_sha256 = exists(planReceiptFile) && fs.lstatSync(planReceiptFile).isFile() && !fs.lstatSync(planReceiptFile).isSymbolicLink() ? fileSha(planReceiptFile) : null;
+    planArtifact.observed_sha256 = regularFileShaOrNull(planArtifactFile);
     if (planReceipt.observed_sha256 !== planReceipt.expected_sha256) fail('approval_plan_receipt_mutation', 'coordinator approval rewrote or deleted the sealed plan receipt', { expected_sha256: planReceipt.expected_sha256, observed_sha256: planReceipt.observed_sha256 });
+    if (planArtifact.observed_sha256 !== planArtifact.expected_sha256) fail('approval_plan_artifact_mutation', 'coordinator approval rewrote, deleted, or replaced the generated brownfield plan artifact', { expected_sha256: planArtifact.expected_sha256, observed_sha256: planArtifact.observed_sha256 });
     changed = changedPaths(before.tree, after.tree);
     const product = changed.filter((item) => item !== '.work' && !item.startsWith('.work/'));
     if (product.length) fail('approval_product_mutation', 'coordinator approval changed product or undeclared consumer bytes', { changed: product });
@@ -831,15 +858,16 @@ function runCoordinatorApproval(context, options = {}) {
     const state = approvalStateEvidence(after.boundary.state);
     if (outputState.current_state !== state.current_state || outputState.workflow_current_state !== state.workflow_current_state || outputState.workflow_authority !== state.workflow_authority || outputState.workflow_plan_path !== state.workflow_plan_path || outputState.workflow_plan_identity !== state.workflow_plan_identity || outputState.workflow_plan_approved !== state.workflow_plan_approved || outputState.workflow_approval_ref !== state.workflow_approval_ref || outputState.workflow_execution_status !== state.workflow_execution_status) fail('approval_state_mismatch', 'coordinator approval output state differs from the retained workspace state');
     if (state.current_state !== 'execute' || state.workflow_current_state !== 'execute' || state.workflow_authority !== 'owner' || state.workflow_plan_path !== APPROVAL_PLAN || state.workflow_plan_identity !== APPROVAL_PLAN || state.workflow_plan_approved !== true || state.workflow_approval_ref !== APPROVAL_REF || state.workflow_execution_status !== 'in_progress') fail('approval_state_invalid', 'coordinator approval did not record the expected owner approval state, plan identity, reference, and execution status');
-    const receipt = approvalReceipt({ response, result, before, after, changed, planReceipt, characterizationOnly: options.characterizationOnly });
+    const receipt = approvalReceipt({ response, result, before, after, changed, planReceipt, planArtifact, characterizationOnly: options.characterizationOnly });
     writeExclusive(receiptFile, receipt);
     context.approval = receipt;
     return receipt;
   } catch (error) {
     const failure = error instanceof RunnerFailure ? error : new RunnerFailure(error.code || 'approval_failed', error.message, error.evidence || null);
     if (planReceipt.expected_sha256) planReceipt.observed_sha256 = exists(planReceiptFile) && fs.lstatSync(planReceiptFile).isFile() && !fs.lstatSync(planReceiptFile).isSymbolicLink() ? fileSha(planReceiptFile) : null;
+    if (planArtifact.expected_sha256) planArtifact.observed_sha256 = regularFileShaOrNull(planArtifactFile);
     if (!exists(receiptFile)) {
-      const receipt = approvalReceipt({ response, result, before, after, changed, planReceipt, failure, characterizationOnly: options.characterizationOnly });
+      const receipt = approvalReceipt({ response, result, before, after, changed, planReceipt, planArtifact, failure, characterizationOnly: options.characterizationOnly });
       writeExclusive(receiptFile, receipt);
       context.approval = receipt;
     }

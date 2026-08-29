@@ -265,6 +265,8 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
   const receiptDir = path.join(root, 'receipts');
   fs.mkdirSync(path.join(consumerRoot, '.agents', 'skills'), { recursive: true });
   fs.mkdirSync(receiptDir, { recursive: true });
+  fs.mkdirSync(path.join(consumerRoot, '.work', 'brownfield-change'), { recursive: true });
+  fs.writeFileSync(path.join(consumerRoot, '.work', 'brownfield-change', 'CHANGE.md'), '# bounded brownfield plan\n', { flag: 'wx' });
   for (const skill of [...new Set(LIVE.TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))]) {
     const directory = path.join(consumerRoot, '.agents', 'skills', skill);
     fs.mkdirSync(directory, { recursive: true });
@@ -310,6 +312,14 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
       if (planMutation === 'checkpoint-create') fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: plan was incorrectly paused\nEvidence: invalid plan checkpoint\nNext action: execute\n', { flag: 'wx' });
       if (planMutation === 'checkpoint-mutate') fs.writeFileSync(path.join(consumerRoot, '.work', '.continue-here.md'), 'Current task: plan modified the checkpoint\nEvidence: invalid plan checkpoint\nNext action: execute\n');
       if (planMutation === 'checkpoint-consume') fs.rmSync(path.join(consumerRoot, '.work', '.continue-here.md'));
+      if (planMutation === 'plan-artifact-missing-before-approval') fs.rmSync(path.join(consumerRoot, '.work', 'brownfield-change', 'CHANGE.md'));
+      if (planMutation === 'plan-artifact-symlink-before-approval') {
+        const planArtifact = path.join(consumerRoot, '.work', 'brownfield-change', 'CHANGE.md');
+        const replacement = path.join(root, 'pre-approval-replacement.md');
+        fs.writeFileSync(replacement, '# replacement plan artifact\n', { flag: 'wx' });
+        fs.rmSync(planArtifact);
+        fs.symlinkSync(replacement, planArtifact, 'file');
+      }
       if (planMutation === 'state-execute') fs.writeFileSync(path.join(consumerRoot, '.work', 'state.json'), JSON.stringify({ current_state: 'execute', workflow: { plan: { approved: false } } }) + '\n', { flag: 'wx' });
       if (planMutation === 'state-workflow-execute') fs.writeFileSync(path.join(consumerRoot, '.work', 'state.json'), JSON.stringify({ current_state: 'plan', workflow: { current_state: 'execute', plan: { approved: false } } }) + '\n', { flag: 'wx' });
       if (planMutation === 'state-approval') fs.writeFileSync(path.join(consumerRoot, '.work', 'state.json'), JSON.stringify({ current_state: 'plan', workflow: { plan: { approved: true } } }) + '\n', { flag: 'wx' });
@@ -686,7 +696,7 @@ test('provider-free coordinator runs production-shaped five-turn handoff with th
     assert.equal(result.turns[1].turn.checkpoint.path, '<CONSUMER_ROOT>/.work/.continue-here.md');
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), true);
     const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json')));
-    assert.deepEqual(Object.keys(approval).sort(), ['approval_ref', 'authority', 'case_id', 'changed_paths', 'characterization_only', 'command', 'contract', 'plan', 'plan_receipt', 'record_type', 'result', 'schema_version', 'state', 'target', 'workflow_verdict'].sort());
+    assert.deepEqual(Object.keys(approval).sort(), ['approval_ref', 'authority', 'case_id', 'changed_paths', 'characterization_only', 'command', 'contract', 'plan', 'plan_artifact', 'plan_receipt', 'record_type', 'result', 'schema_version', 'state', 'target', 'workflow_verdict'].sort());
     assert.equal(approval.command.shell, false);
     assert.deepEqual(approval.command.argv.slice(1), ['lifecycle-transition', 'approve', '--plan', LIVE.APPROVAL_PLAN, '--authority', 'owner', '--approval-ref', LIVE.APPROVAL_REF, '--json']);
     assert.equal(approval.result.status, 0);
@@ -696,6 +706,8 @@ test('provider-free coordinator runs production-shaped five-turn handoff with th
     assert.equal(approval.state.after.workflow_approval_ref, LIVE.APPROVAL_REF);
     assert.equal(approval.plan_receipt.expected_sha256, sha(fs.readFileSync(path.join(fixture.receiptDir, 'turn-a-plan.json'))));
     assert.equal(approval.plan_receipt.observed_sha256, approval.plan_receipt.expected_sha256);
+    assert.equal(approval.plan_artifact.expected_sha256, sha(fs.readFileSync(path.join(fixture.context.consumerRoot, '.work', 'brownfield-change', 'CHANGE.md'))));
+    assert.equal(approval.plan_artifact.observed_sha256, approval.plan_artifact.expected_sha256);
     assert.equal(approval.workflow_verdict, 'not_evaluated');
     assert.equal(result.handoff.approval_sha256, sha(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json'))));
     for (const turn of LIVE.TURN_PLAN) assert.equal(JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${turn.id}.json`))).workflow_verdict, 'not_evaluated');
@@ -728,6 +740,21 @@ test('coordinator approval fails closed before handoff on malformed, replayed, m
       fs.writeFileSync(path.join(context.receiptDir, 'turn-a-plan.json'), 'rewritten plan receipt\n');
       return result;
     }, 'approval_plan_receipt_mutation'],
+    ['plan-artifact', (context, request, fallback) => {
+      const result = fallback(context, request);
+      fs.appendFileSync(path.join(context.consumerRoot, '.work', 'brownfield-change', 'CHANGE.md'), 'rewritten plan artifact\n');
+      return result;
+    }, 'approval_plan_artifact_mutation'],
+    ['plan-artifact-substitution', (context, request, fallback) => {
+      const result = fallback(context, request);
+      fs.writeFileSync(path.join(context.consumerRoot, '.work', 'brownfield-change', 'CHANGE.md'), '# substituted plan artifact\n');
+      return result;
+    }, 'approval_plan_artifact_mutation'],
+    ['plan-artifact-deletion', (context, request, fallback) => {
+      const result = fallback(context, request);
+      fs.rmSync(path.join(context.consumerRoot, '.work', 'brownfield-change', 'CHANGE.md'));
+      return result;
+    }, 'approval_plan_artifact_mutation'],
     ['product', (context, request, fallback) => {
       const result = fallback(context, request);
       fs.writeFileSync(path.join(context.consumerRoot, 'unexpected.txt'), 'unexpected\n', { flag: 'wx' });
@@ -753,12 +780,101 @@ test('coordinator approval fails closed before handoff on malformed, replayed, m
       const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json')));
       assert.equal(approval.workflow_verdict, 'not_evaluated');
       assert.equal(approval.result.failure_code, code);
+      assert.equal(typeof approval.plan_artifact.expected_sha256, 'string');
       if (name === 'plan-receipt') {
         assert.equal(approval.plan_receipt.expected_sha256, fixture.context.approvalPlanReceiptExpected);
         assert.equal(approval.plan_receipt.observed_sha256, sha(Buffer.from('rewritten plan receipt\n')));
       }
+      if (name === 'plan-artifact') assert.notEqual(approval.plan_artifact.observed_sha256, approval.plan_artifact.expected_sha256);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   }
+});
+
+test('coordinator approval fails closed when the generated plan artifact becomes a symlink', { skip: (() => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-symlink-probe-'));
+  const target = path.join(root, 'target.md'); const link = path.join(root, 'link.md');
+  try {
+    fs.writeFileSync(target, 'probe\n');
+    fs.symlinkSync(target, link, 'file');
+    return false;
+  } catch (error) {
+    return true;
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+})() }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-approval-plan-symlink-'));
+  const fixture = rootedRunFixture(root);
+  const planArtifact = path.join(fixture.context.consumerRoot, '.work', 'brownfield-change', 'CHANGE.md');
+  const replacement = path.join(root, 'replacement.md');
+  try {
+    fs.writeFileSync(replacement, '# replacement\n');
+    const fallback = fixture.context.approvePlan;
+    fixture.context.approvePlan = (context, request) => {
+      const result = fallback(context, request);
+      fs.rmSync(planArtifact);
+      fs.symlinkSync(replacement, planArtifact, 'file');
+      return result;
+    };
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'approval_plan_artifact_mutation');
+    const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json')));
+    assert.equal(approval.result.failure_code, 'approval_plan_artifact_mutation');
+    assert.equal(approval.plan_artifact.observed_sha256, null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('pre-approval missing plan artifact seals redacted evidence and never runs B/C', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-approval-plan-missing-before-approval-'));
+  const fixture = rootedRunFixture(root, { planMutation: 'plan-artifact-missing-before-approval' });
+  try {
+    let thrown;
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => {
+      thrown = error;
+      return error.code === 'approval_plan_artifact_missing';
+    });
+    assert.equal(fixture.calls, 1);
+    const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json'), 'utf8'));
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
+    assert.equal(thrown.evidence.path, '<CONSUMER_ROOT>/.work/brownfield-change/CHANGE.md');
+    assert.equal(approval.result.failure_code, 'approval_plan_artifact_missing');
+    assert.equal(terminal.terminal.failure_code, 'approval_plan_artifact_missing');
+    assert.equal(JSON.stringify(approval).includes(fixture.context.consumerRoot), false);
+    assert.equal(JSON.stringify(terminal).includes(fixture.context.consumerRoot), false);
+    for (const dependent of ['turn-a-pause.json', 'turn-b-resume-execute.json', 'turn-c-verify.json', 'turn-c-progress.json']) {
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, dependent)), false, dependent);
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('pre-approval symlinked plan artifact seals redacted evidence and never runs B/C', { skip: (() => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-pre-approval-symlink-probe-'));
+  const target = path.join(root, 'target.md'); const link = path.join(root, 'link.md');
+  try {
+    fs.writeFileSync(target, 'probe\n');
+    fs.symlinkSync(target, link, 'file');
+    return false;
+  } catch (error) {
+    return true;
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+})() }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-approval-plan-symlink-before-approval-'));
+  const fixture = rootedRunFixture(root, { planMutation: 'plan-artifact-symlink-before-approval' });
+  try {
+    let thrown;
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => {
+      thrown = error;
+      return error.code === 'approval_plan_artifact_missing';
+    });
+    assert.equal(fixture.calls, 1);
+    const approval = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'approval.json'), 'utf8'));
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
+    assert.equal(thrown.evidence.path, '<CONSUMER_ROOT>/.work/brownfield-change/CHANGE.md');
+    assert.equal(approval.result.failure_code, 'approval_plan_artifact_missing');
+    assert.equal(terminal.terminal.failure_code, 'approval_plan_artifact_missing');
+    assert.equal(JSON.stringify(approval).includes(fixture.context.consumerRoot), false);
+    assert.equal(JSON.stringify(terminal).includes(fixture.context.consumerRoot), false);
+    for (const dependent of ['turn-a-pause.json', 'turn-b-resume-execute.json', 'turn-c-verify.json', 'turn-c-progress.json']) {
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, dependent)), false, dependent);
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('five-turn coordinator accepts the sealed plan usage below the calibrated 3000000 ceiling', () => {
