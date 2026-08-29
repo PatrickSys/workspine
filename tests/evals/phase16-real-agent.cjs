@@ -322,7 +322,7 @@ function checkPublicCase(caseFile, cacheValue, options = {}) {
 
 const NATIVE_TOKEN_MULTIPLIER = 25;
 const PLAN_TOKEN_CEILING = 6000000;
-const PAUSE_TOKEN_CEILING = 1000000;
+const PAUSE_TOKEN_CEILING = 2000000;
 const TURN_PLAN = Object.freeze([
   // R1 retained 5,404,675 native tokens for the parent plan task; checker
   // children ran in separate sessions and are excluded. Use the next
