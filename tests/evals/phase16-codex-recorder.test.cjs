@@ -203,6 +203,44 @@ test('failure precedence is stable when lower-level evidence is also invalid', (
   assert.match(String(failureCode({ spawn: () => spawned('invalid', { timed_out: true, status: null }) })), /timeout/i);
 });
 
+test('Node timeout shapes are typed timeout and never authorize partial or complete-looking JSONL', () => {
+  for (const stdout of [
+    `${JSON.stringify({ type: 'thread.started', thread_id: 'native-A' })}\n`,
+    nativeJson(),
+  ]) {
+    const receipt = record({ spawn: () => spawned(stdout, { timed_out: true, status: null, error: { code: 'ETIMEDOUT', message: 'spawnSync timed out' } }) });
+    assert.equal(receipt.terminal.failure_code, 'timeout');
+    assert.equal(receipt.process.status, 'timed_out');
+    assert.equal(receipt.process.timed_out, true);
+    assert.equal(receipt.native.thread_id, null);
+    assert.equal(receipt.native.turn_id, null);
+    assert.equal(receipt.native.parse_error, null);
+    assert.equal(receipt.usage.turn_tokens, null);
+    assert.equal(receipt.workflow_verdict, 'not_evaluated');
+  }
+
+  const thrown = record({ spawn: () => { throw Object.assign(new Error('spawnSync timed out'), { code: 'ETIMEDOUT' }); } });
+  assert.equal(thrown.terminal.failure_code, 'timeout');
+  assert.equal(thrown.process.status, 'timed_out');
+  assert.equal(thrown.process.timed_out, true);
+  assert.equal(thrown.process.error.code, 'ETIMEDOUT');
+  assert.equal(thrown.native.thread_id, null);
+  assert.equal(thrown.usage.turn_tokens, null);
+  assert.equal(thrown.workflow_verdict, 'not_evaluated');
+});
+
+test('non-timeout returned and thrown process errors remain spawn_failed', () => {
+  const returned = record({ spawn: () => spawned('', { status: null, error: { code: 'EACCES', message: 'access denied' } }) });
+  assert.equal(returned.terminal.failure_code, 'spawn_failed');
+  assert.equal(returned.process.status, 'spawn_error');
+  assert.equal(returned.process.timed_out, false);
+  const thrown = record({ spawn: () => { throw Object.assign(new Error('access denied'), { code: 'EACCES' }); } });
+  assert.equal(thrown.terminal.failure_code, 'spawn_failed');
+  assert.equal(thrown.process.status, 'spawn_error');
+  assert.equal(thrown.process.timed_out, false);
+  assert.equal(thrown.process.error.code, 'EACCES');
+});
+
 test('incomplete native JSONL is a failed parse with raw process evidence', () => {
   const stdout = `${JSON.stringify({ type: 'thread.started', thread_id: 'native-A' })}\n${JSON.stringify({ type: 'turn.started', thread_id: 'native-A', turn_id: 'turn-A' })}\n`;
   const receipt = record({ spawn: () => spawned(stdout) });

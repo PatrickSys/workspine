@@ -58,10 +58,14 @@ function recordCodexTurn(options = {}) {
       ? options.spawn(options.command, options.argv, { cwd: options.cwd, env: options.env, input, timeout: options.timeout, shell: false })
       : CORE.realAgentRunProvider(options.provider, options.argv, { cwd: options.cwd, env: options.env, input, timeout: options.timeout, shell: false });
   } catch (error) {
-    spawnFailure = failure('spawn_failed', error.message);
-    result = { status: null, signal: null, timed_out: false, pid: null, parent_pid: null, stdout: stdoutEmpty, stderr: stderrEmpty, error: { code: error.code || 'SPAWN_FAILED', message: error.message } };
+    const timedOut = error?.code === 'ETIMEDOUT';
+    spawnFailure = failure(timedOut ? 'timeout' : 'spawn_failed', timedOut ? 'native provider turn timed out' : error.message);
+    result = { status: null, signal: null, timed_out: timedOut, pid: null, parent_pid: null, stdout: stdoutEmpty, stderr: stderrEmpty, error: { code: error.code || 'SPAWN_FAILED', message: error.message } };
   }
-  if (!spawnFailure && result?.error) spawnFailure = failure('spawn_failed', result.error.message);
+  if (!spawnFailure && result?.error) {
+    const timedOut = result.timed_out === true || result.error.code === 'ETIMEDOUT';
+    spawnFailure = failure(timedOut ? 'timeout' : 'spawn_failed', timedOut ? 'native provider turn timed out' : result.error.message);
+  }
   // Normalize and hash streams immediately after spawn, before interpreting
   // native JSON. This preserves evidence for every attempted provider turn.
   const stdout = bytes(result?.stdout);
