@@ -21,6 +21,7 @@ import {
   resolveActiveMilestoneDir,
   isValidApprovalReference,
   normalizeApprovalReference,
+  hasDurableWorkflowApproval,
   transitionWorkflowState,
 } from './work-context.mjs';
 import { parsePlanFrontmatter } from './phase.mjs';
@@ -1057,17 +1058,7 @@ function readBrownfieldContractForTransition(planPath) {
   return { status: posture, errors, wideningRequested };
 }
 
-function hasDurableWorkflowApproval(planningDir, normalizedPlan) {
-  const state = readJsonIfExists(join(planningDir, 'state.json'));
-  if (!state.exists || !state.ok || !state.value || typeof state.value !== 'object') return false;
-  const recordedPlan = state.value.workflow?.plan;
-  if (!recordedPlan || recordedPlan.approved !== true) return false;
-  const recordedPath = normalizeLifecyclePath(recordedPlan.path);
-  const recordedIdentity = normalizeLifecyclePath(recordedPlan.identity);
-  return recordedPath === normalizedPlan && recordedIdentity === normalizedPlan;
-}
-
-function validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approved = false, approvalRequested = false }) {
+function validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approvalRefProvided = false, approved = false, approvalRequested = false }) {
   const workspaceRoot = resolve(planningDir, '..');
   const stateLabel = createStateLabeler(planningDir);
   if (!planArg && !['blocked', 'ask_user'].includes(target)) {
@@ -1120,6 +1111,9 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
     ? hasDurableWorkflowApproval(planningDir, plan.relative)
     : false;
   const normalizedApprovalRef = normalizeApprovalReference(approvalRef);
+  if (target === 'execute' && approvalRefProvided) {
+    throw transitionErrorForCli('approval_ref_not_allowed', 'Execute cannot supply or replace the owner-recorded approval reference.', ['--approval-ref']);
+  }
   if (approvalRequested && (authority !== 'owner' || !isValidApprovalReference(normalizedApprovalRef))) {
     throw transitionErrorForCli('owner_approval_required', 'Explicit approval requires --authority owner and a valid non-sensitive --approval-ref.', ['--authority owner', '--approval-ref']);
   }
@@ -1147,7 +1141,14 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
       }
     }
   }
-  if ((target === 'execute' || target === 'approve') && !['approved', 'accepted', 'complete'].includes(planStatus) && artifactStatus !== 'approved' && !durableWorkflowApproval && !(approved === true && authority && approvalRef)) {
+  const explicitOwnerApproval = target === 'approve'
+    && approved === true
+    && authority === 'owner'
+    && isValidApprovalReference(normalizedApprovalRef);
+  if (target === 'execute' && !durableWorkflowApproval && !explicitOwnerApproval) {
+    throw transitionErrorForCli('not_approved', 'The supplied PLAN is durable but has no owner-recorded approval for this exact plan identity.', [plan.relative]);
+  }
+  if (target === 'approve' && !['approved', 'accepted', 'complete'].includes(planStatus) && artifactStatus !== 'approved' && !durableWorkflowApproval && !explicitOwnerApproval) {
     throw transitionErrorForCli('not_approved', 'The supplied PLAN is durable but not approved; record approval before execution.', [plan.relative]);
   }
   if (target === 'verify' && !['complete', 'completed', 'done', 'passed', 'pass'].includes(artifactStatus)) {
@@ -1208,11 +1209,12 @@ export function cmdLifecycleTransition(...args) {
     const artifactArg = flag('--artifact');
     const authority = flag('--authority');
     const approvalRef = flag('--approval-ref');
+    const approvalRefProvided = normalizedArgs.includes('--approval-ref');
     const reason = flag('--reason');
     const question = flag('--question');
     const approved = String(flag('--approved') || '').toLowerCase() === 'true' || target === 'approve';
     const approvalRequested = target === 'approve' || String(flag('--approved') || '').toLowerCase() === 'true';
-    const validated = validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approved, approvalRequested });
+    const validated = validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approvalRefProvided, approved, approvalRequested });
     const result = transitionWorkflowState(getWorkPaths(validated.workspaceRoot).workDir, {
       target,
       planPath: validated.plan?.relative || null,
@@ -1224,7 +1226,6 @@ export function cmdLifecycleTransition(...args) {
       reason,
       question,
       approved,
-      durablePlanApproved: target === 'execute',
     });
     respond({ schema_version: 1, operation: 'lifecycle-transition', target, ...result, evidence: [validated.plan?.relative, validated.artifact?.relative].filter(Boolean) });
     if (result.status === 'error') process.exitCode = 1;

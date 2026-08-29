@@ -11,6 +11,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const ROOT = path.join(__dirname, '..');
 const AGENTS_DIR = path.join(__dirname, '..', 'agents');
@@ -86,6 +87,76 @@ const HARDENED_ROLES = [
   'synthesizer.md',
   'verifier.md',
 ];
+
+describe('Approval characterization', () => {
+  test('approval characterization rejects a caller/lower-writer durable approval mismatch', async () => {
+    const workContext = await import(pathToFileURL(path.join(ROOT, 'bin', 'lib', 'work-context.mjs')).href);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-approval-lower-writer-'));
+    const workDir = path.join(root, '.work');
+    fs.mkdirSync(workDir, { recursive: true });
+    const plan = '.work/phases/01-approval/01-PLAN.md';
+    fs.writeFileSync(path.join(workDir, 'state.json'), `${JSON.stringify({
+      schema_version: 1,
+      status: 'active',
+      current_state: 'plan',
+      workflow: {
+        plan: { approved: false, path: plan, identity: plan },
+        execution: { status: 'not_started' },
+        verification: { status: 'not_started' },
+        audit: { status: 'not_started' },
+        dogfood: { status: 'not_started' },
+        authority: 'workflow',
+      },
+    })}\n`);
+    try {
+      assert.throws(() => workContext.transitionWorkflowState(workDir, {
+        target: 'execute',
+        planPath: plan,
+        planIdentity: plan,
+        authority: 'workflow',
+        durablePlanApproved: true,
+      }), (error) => error.code === 'not_approved');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('approval characterization rejects lower-writer approval-reference substitution without writing', async () => {
+    const workContext = await import(pathToFileURL(path.join(ROOT, 'bin', 'lib', 'work-context.mjs')).href);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-approval-ref-substitution-'));
+    const workDir = path.join(root, '.work');
+    fs.mkdirSync(workDir, { recursive: true });
+    const plan = '.work/phases/01-approval/01-PLAN.md';
+    fs.writeFileSync(path.join(workDir, 'state.json'), `${JSON.stringify({
+      schema_version: 1,
+      status: 'active',
+      current_state: 'plan',
+      workflow: {
+        plan: { approved: true, path: plan, identity: plan },
+        execution: { status: 'not_started' },
+        verification: { status: 'not_started' },
+        audit: { status: 'not_started' },
+        dogfood: { status: 'not_started' },
+        authority: 'owner',
+        approval_ref: 'original-ref',
+      },
+    })}\n`);
+    try {
+      const statePath = path.join(workDir, 'state.json');
+      const before = fs.readFileSync(statePath);
+      assert.throws(() => workContext.transitionWorkflowState(workDir, {
+        target: 'execute',
+        planPath: plan,
+        planIdentity: plan,
+        authority: 'workflow',
+        approvalRef: 'replacement-ref',
+      }), (error) => error.code === 'approval_ref_not_allowed');
+      assert.deepStrictEqual(fs.readFileSync(statePath), before);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('Superseded PLAN contract parity', () => {
   test('authored execute and verify sources share the honest historical-plan refusal contract', () => {

@@ -1834,8 +1834,15 @@ describe('next command routing', () => {
 
     writeFile('.work/phases/01-transition/01-PLAN.md', '---\nstatus: approved\n---\n# plan\n');
     result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'approve', '--plan', '.work/phases/01-transition/01-PLAN.md',
+      '--authority', 'owner', '--approval-ref', 'owner-loop-review', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
+
+    result = await runCliAsMain(tmpDir, [
       'lifecycle-transition', 'execute', '--plan', '.work/phases/01-transition/01-PLAN.md',
-      '--authority', 'owner', '--json', '--no-update-notice',
+      '--authority', 'workflow', '--json', '--no-update-notice',
     ]);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
@@ -1885,6 +1892,12 @@ describe('next command routing', () => {
     }
 
     result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'approve', '--plan', planPath,
+      '--authority', 'owner', '--approval-ref', 'owner-plan-review', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    result = await runCliAsMain(tmpDir, [
       'lifecycle-transition', 'execute', '--plan', planPath,
       '--authority', 'workflow', '--json', '--no-update-notice',
     ]);
@@ -1928,7 +1941,7 @@ describe('next command routing', () => {
     await freshPlan('approved');
     await assertNoWrite([
       'lifecycle-transition', 'execute', '--plan', planPath, '--approved', 'true', '--approval-ref', 'auto', '--authority', 'workflow', '--json', '--no-update-notice',
-    ], 'owner_approval_required');
+    ], 'approval_ref_not_allowed');
 
     await freshPlan();
     await assertNoWrite([
@@ -1973,13 +1986,23 @@ describe('next command routing', () => {
     assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
 
     await freshPlan('approved');
+    await assertNoWrite([
+      'lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json', '--no-update-notice',
+    ], 'not_approved');
+
+    await freshPlan('approved');
+    result = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'approve', '--plan', planPath,
+      '--authority', 'owner', '--approval-ref', 'owner-review-2026-08-26', '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual(result.exitCode, 0, result.output);
     result = await runCliAsMain(tmpDir, [
       'lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json', '--no-update-notice',
     ]);
     assert.strictEqual(result.exitCode, 0, result.output);
     const workflowState = JSON.parse(result.output).state;
     assert.strictEqual(workflowState.current_state, 'execute');
-    assert.ok(!Object.hasOwn(workflowState.workflow, 'approval_ref'), 'workflow execution must not manufacture approval provenance');
+    assert.strictEqual(workflowState.workflow.approval_ref, 'owner-review-2026-08-26');
   });
 
   test('lifecycle-transition blocks missing terminal artifacts before dereference and without writing', async () => {

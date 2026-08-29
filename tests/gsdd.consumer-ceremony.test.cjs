@@ -201,6 +201,19 @@ describe('consumer ceremony reduction', () => {
       '',
     ].join('\n'));
 
+    const approval = runProcess(process.execPath, [
+      path.join(consumerRoot, '.work', 'bin', 'gsdd.mjs'),
+      'lifecycle-transition', 'approve', '--plan', '.work/phases/16-packed-consumer/16-10-01-PLAN.md',
+      '--authority', 'owner', '--approval-ref', 'owner-test-approval', '--json', '--no-update-notice',
+    ], consumerRoot);
+    assert.strictEqual(approval.exitCode, 0, `${approval.stdout}${approval.stderr}`);
+    const approvalReceipt = JSON.parse(approval.stdout);
+    assert.strictEqual(approvalReceipt.state.workflow.authority, 'owner');
+    assert.strictEqual(approvalReceipt.state.workflow.approval_ref, 'owner-test-approval');
+    assert.strictEqual(approvalReceipt.state.workflow.plan.path, '.work/phases/16-packed-consumer/16-10-01-PLAN.md');
+    assert.strictEqual(approvalReceipt.state.workflow.plan.identity, '.work/phases/16-packed-consumer/16-10-01-PLAN.md');
+    assert.strictEqual(approvalReceipt.state.workflow.plan.approved, true);
+
     const skillPath = path.join(consumerRoot, '.agents', 'skills', 'work-execute', 'SKILL.md');
     const skill = fs.readFileSync(skillPath, 'utf8');
     assert.ok(skill.includes('lifecycle-preflight execute {phase_num} --expects-mutation phase-status'),
@@ -267,6 +280,7 @@ describe('consumer ceremony reduction', () => {
 
     assert.strictEqual(transition.exitCode, 0, output);
     assert.ok(!parsedOutput?.error_code, output);
+    assert.ok(['ok', 'replayed'].includes(parsedOutput?.status), output);
   });
 
   test('rigor show exposes the production requested/effective receipt policy', async () => {

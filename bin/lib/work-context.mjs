@@ -214,6 +214,27 @@ function workflowStateWithDefaults(workflow = {}) {
   return merged;
 }
 
+/**
+ * Return true only for an owner-recorded approval that is bound to this exact
+ * plan path and identity. The execute caller may be a workflow actor, but it
+ * must consume the durable owner assertion rather than PLAN frontmatter or a
+ * caller-provided approval boolean.
+ */
+export function hasDurableWorkflowApproval(workDir, normalizedPlan) {
+  const current = readJsonIfExists(join(workDir, 'state.json'));
+  if (!current.exists || !current.ok || !current.value || typeof current.value !== 'object' || Array.isArray(current.value)) return false;
+  const workflow = workflowStateWithDefaults(current.value.workflow);
+  const recordedPlan = workflow.plan;
+  const expected = normalizeSlashes(String(normalizedPlan || '')).replace(/^\.\//, '');
+  const recordedPath = normalizeSlashes(String(recordedPlan.path || '')).replace(/^\.\//, '');
+  const recordedIdentity = normalizeSlashes(String(recordedPlan.identity || '')).replace(/^\.\//, '');
+  return recordedPlan.approved === true
+    && recordedPath === expected
+    && recordedIdentity === expected
+    && workflow.authority === 'owner'
+    && isValidApprovalReference(workflow.approval_ref);
+}
+
 function transitionError(code, message, evidence = []) {
   const error = new Error(message);
   error.code = code;
@@ -237,7 +258,6 @@ export function transitionWorkflowState(workDir, {
   reason = null,
   question = null,
   approved = null,
-  durablePlanApproved = false,
   now = new Date(),
 } = {}) {
   const statePath = join(workDir, 'state.json');
@@ -251,6 +271,9 @@ export function transitionWorkflowState(workDir, {
   const normalizedTarget = String(target || '').trim().toLowerCase();
   const allowed = new Set(['plan', 'execute', 'verify', 'audit', 'next', 'fix_gaps', 'blocked', 'ask_user', 'approve']);
   if (!allowed.has(normalizedTarget)) throw transitionError('unsupported_transition', `Unsupported lifecycle transition: ${target}.`);
+  if (normalizedTarget === 'execute' && approvalRef !== null && approvalRef !== undefined) {
+    throw transitionError('approval_ref_not_allowed', 'Execute cannot supply or replace the owner-recorded approval reference.', ['--approval-ref']);
+  }
 
   const approvalRequested = normalizedTarget === 'approve' || approved === true;
   if (approvalRequested && (authority !== 'owner' || !isValidApprovalReference(approvalRef))) {
@@ -283,11 +306,20 @@ export function transitionWorkflowState(workDir, {
   next.workflow.dogfood = { ...workflow.dogfood };
   const normalizedPlan = planPath || planIdentity || null;
   const normalizedArtifact = artifactPath || artifactIdentity || null;
+  const explicitOwnerApproval = normalizedTarget === 'approve'
+    && approved === true
+    && authority === 'owner'
+    && isValidApprovalReference(approvalRef);
+  const durableOwnerApproval = normalizedTarget === 'execute' && normalizedPlan
+    ? hasDurableWorkflowApproval(workDir, normalizedPlan)
+    : false;
   if (normalizedPlan) {
     next.workflow.plan.path = planPath || workflow.plan.path || null;
     next.workflow.plan.identity = planIdentity || workflow.plan.identity || normalizedPlan;
   }
-  if (authority) next.workflow.authority = authority;
+  if (authority && !(normalizedTarget === 'execute' && durableOwnerApproval && workflow.authority === 'owner')) {
+    next.workflow.authority = authority;
+  }
   if (approvalRef) next.workflow.approval_ref = approvalRef;
 
   const effectiveTarget = normalizedTarget === 'approve' ? 'execute' : normalizedTarget === 'next' ? 'audit' : normalizedTarget;
@@ -309,7 +341,7 @@ export function transitionWorkflowState(workDir, {
     next.workflow.execution.status = 'not_started';
     next.workflow.current_state = 'plan';
   } else if (effectiveTarget === 'execute') {
-    if (next.workflow.plan.approved !== true && !durablePlanApproved && approved !== true) {
+    if (!explicitOwnerApproval && !durableOwnerApproval) {
       throw transitionError('not_approved', 'The plan artifact is not approved; approve the plan before execution.', [normalizedPlan || '.work/state.json']);
     }
     next.workflow.plan.approved = true;
