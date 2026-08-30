@@ -82,7 +82,9 @@ At plan time, research is about the implementation approach, not the product dom
 - What do people consistently get wrong with this technology?
 - What should not be hand-rolled because a well-tested library already exists?
 ### Output
-Write to `.work/research/{phase_number}-RESEARCH.md` with sections:
+For a roadmap phase, write to `.work/research/{phase_number}-RESEARCH.md`.
+For `brownfield-change`, write to `.work/research/brownfield-change-RESEARCH.md`.
+Use these sections:
 - **Standard Stack** - specific libraries and versions to use
 - **Architecture Patterns** - how to structure the implementation
 - **Don't Hand-Roll** - problems with existing library solutions

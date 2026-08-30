@@ -71,6 +71,7 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /work-approach-explorer[\s\S]{0,240}\.work\/config\.json[\s\S]{0,100}workflow\.discuss/i);
     assert.match(claudePlanSkill, /workflow\.planCheck: false[\s\S]{0,260}does not skip[\s\S]{0,160}alignment-proof gate/i);
     assert.match(claudePlanSkill, /\.work\/config\.json[\s\S]{0,120}workflow\.discuss[\s\S]{0,80}workflow\.planCheck/i);
+    assert.match(portablePlanSkill, /For `brownfield-change`, write to `\.work\/research\/brownfield-change-RESEARCH\.md`/);
     assert.match(claudeNewProjectSkill, /first_turn_hard_gate/);
     assert.match(claudeNewProjectSkill, /implementation arguments are context only/i);
     assert.match(claudeNewProjectSkill, /stops before any candidate write/i);

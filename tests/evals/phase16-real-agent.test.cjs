@@ -1361,11 +1361,11 @@ test('exact brownfield lifecycle allowlist rejects broad prefixes and duplicate 
 test('frozen brownfield research identity matches workflow authority exactly', () => {
   const baseline = { contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [], sha256: OBSERVER.stableHash({ contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [] }) };
   const data = { source: { candidate_path: 'src/itsdangerous/signer.py' }, task: { allowed_paths: ['src/itsdangerous/signer.py'] } };
-  const canonical = '.work/research/CHANGE-001-RESEARCH.md';
+  const canonical = '.work/research/brownfield-change-RESEARCH.md';
   const accepted = OBSERVER.allowedPaths(data, { all: [{ path: canonical }, { path: 'src/itsdangerous/signer.py' }] }, baseline);
   assert.deepEqual(accepted.plan, [canonical]);
   assert.deepEqual(accepted.forbidden, []);
-  for (const stale of ['.work/research/brownfield-change-RESEARCH.md', '.work/research/CHANGE-002-RESEARCH.md', '.work/research/CHANGE-001-extra-RESEARCH.md']) {
+  for (const stale of ['.work/research/CHANGE-001-RESEARCH.md', '.work/research/CHANGE-002-RESEARCH.md', '.work/research/brownfield-change-extra-RESEARCH.md']) {
     const rejected = OBSERVER.allowedPaths(data, { all: [{ path: stale }, { path: 'src/itsdangerous/signer.py' }] }, baseline);
     assert.deepEqual(rejected.plan, []);
     assert.deepEqual(rejected.forbidden, [stale]);

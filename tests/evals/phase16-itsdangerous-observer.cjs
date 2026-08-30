@@ -550,7 +550,7 @@ function completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, contr
 }
 
 function allowedPaths(data, scope, baseline = null, extraAllowed = []) {
-  const lifecycle = ['.work/brownfield-change/CHANGE.md', '.work/brownfield-change/HANDOFF.md', '.work/brownfield-change/VERIFICATION.md', '.work/research/CHANGE-001-RESEARCH.md', '.work/.continue-here.md'];
+  const lifecycle = ['.work/brownfield-change/CHANGE.md', '.work/brownfield-change/HANDOFF.md', '.work/brownfield-change/VERIFICATION.md', '.work/research/brownfield-change-RESEARCH.md', '.work/.continue-here.md'];
   const candidatePath = data.source?.candidate_path || data.task?.allowed_paths?.[0];
   const all = (scope.all || []).map((item) => typeof item === 'string' ? item : item.path);
   if (!baseline) {
