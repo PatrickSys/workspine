@@ -24,24 +24,24 @@ export function classifyProviderResult(result, expectedSession = null) {
   else if (expectedSession && result.sessionId !== expectedSession) [outcome, failure_code] = ['protocol_invalid', 'session_identity_mismatch'];
   return { outcome, failure_code, usage: { total_tokens: Number.isFinite(result.totalTokens) ? result.totalTokens : 'not_observable' } };
 }
-function productChange(item) {
-  if (!['fileChange', 'file_change'].includes(item?.type)) return false;
-  const paths = (item.changes || item.files || []).map(change => toPosix(change.path || change.file || change));
+function productChange(event) {
+  const item = event?.params?.item;
+  const paths = ['fileChange', 'file_change'].includes(item?.type) ? (item.changes || item.files || []).map(change => toPosix(change.path || change.file || change))
+    : event?.method === 'turn/diff/updated' ? [...String(event.params?.diff || '').matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].flatMap(([, before, after]) => [toPosix(before), toPosix(after)]) : [];
   return paths.some(file => file && !file.startsWith('.work/') && !file.startsWith('.agents/')
     && !file.startsWith('inputs/') && !['AGENTS.md', 'goal.md'].includes(file));
 }
 export function findCheckpointWitness(rows, { consumerRoot, checkpointSha256 }) {
-  const root = path.resolve(consumerRoot);
+  const root = path.resolve(consumerRoot), candidates = [];
   let firstProductChange = Infinity;
-  const candidates = [];
   rows.forEach((row, eventIndex) => {
     const event = row?.parsed || row;
     const item = event?.params?.item;
-    if (productChange(item)) firstProductChange = Math.min(firstProductChange, eventIndex);
+    if (productChange(event)) firstProductChange = Math.min(firstProductChange, eventIndex);
     if (event?.method !== 'item/completed' || item?.type !== 'commandExecution'
       || item.status !== 'completed' || path.resolve(item.cwd || '') !== root) return;
     if (!String(item.command || '').replaceAll('\\', '/').includes('.work/.continue-here.md')) return;
-    const outputSha = sha256(String(item.aggregatedOutput || ''));
+    const outputSha = sha256(String(item.aggregatedOutput || '').replaceAll('\r\n', '\n'));
     if (outputSha !== checkpointSha256) return;
     candidates.push({ ok: true, event_index: eventIndex, item_id: item.id || null,
       cwd: '<CONSUMER_ROOT>', command_sha256: sha256(String(item.command || '')),

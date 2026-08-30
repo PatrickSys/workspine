@@ -223,6 +223,17 @@ function productChange() {
   };
 }
 
+function turnDiffUpdated(file) {
+  return {
+    method: 'turn/diff/updated',
+    params: {
+      threadId: 'thread-b',
+      turnId: 'turn-b',
+      diff: `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1 +1 @@\n-old\n+new\n`,
+    },
+  };
+}
+
 test('checkpoint witness binds exact output before product mutation', t => {
   const root = tempRoot(t);
   const checkpoint = 'checkpoint bytes\n';
@@ -234,6 +245,30 @@ test('checkpoint witness binds exact output before product mutation', t => {
   assert.equal(witness.event_index, 0);
   assert.equal(witness.product_change_event_index, 1);
   assert.equal(witness.output_sha256, sha256(checkpoint));
+});
+
+test('checkpoint witness normalizes Windows CRLF output before hashing', t => {
+  const root = tempRoot(t);
+  const checkpoint = 'checkpoint\nbytes\n';
+  const witness = findCheckpointWitness([
+    completedRead(root, checkpoint.replaceAll('\n', '\r\n')),
+    productChange(),
+  ], { consumerRoot: root, checkpointSha256: sha256(checkpoint) });
+  assert.equal(witness.ok, true);
+  assert.equal(witness.output_sha256, sha256(checkpoint));
+});
+
+test('checkpoint witness orders the read before a real Codex turn diff', t => {
+  const root = tempRoot(t);
+  const checkpoint = 'checkpoint bytes\n';
+  const options = { consumerRoot: root, checkpointSha256: sha256(checkpoint) };
+  const setupDiff = turnDiffUpdated('.work/setup.json');
+  const productDiff = turnDiffUpdated('src/example.js');
+  const witness = findCheckpointWitness([setupDiff, completedRead(root, checkpoint), productDiff], options);
+  assert.equal(witness.ok, true);
+  assert.equal(witness.event_index, 1);
+  assert.equal(witness.product_change_event_index, 2);
+  assert.equal(findCheckpointWitness([productDiff, completedRead(root, checkpoint)], options).ok, false);
 });
 
 test('checkpoint witness fails closed when read is late, wrong, or ambiguous', t => {
