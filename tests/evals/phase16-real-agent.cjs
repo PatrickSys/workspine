@@ -538,6 +538,29 @@ function runTurn(context, turn, sessionId = null, options = {}) {
   return recorded;
 }
 
+function workflowUsage(totalTurnTokens) {
+  if (!Number.isSafeInteger(totalTurnTokens) || totalTurnTokens < 0) return null;
+  return { total_turn_tokens: totalTurnTokens, limit_tokens: TURN_TOTAL_TOKENS, overage_tokens: Math.max(0, totalTurnTokens - TURN_TOTAL_TOKENS), over_limit: totalTurnTokens > TURN_TOTAL_TOKENS, policy_contract: RECORDER.WORKFLOW_USAGE_POLICY.contract, policy_sha256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256 };
+}
+
+function failureTerminal({ failure, current, turns, dir, context, characterizationOnly, failureStage = 'turn' }) {
+  const currentFile = current ? path.join(dir, `${current.id}.json`) : null;
+  const sealed = failureStage === 'observer' && turns.length === TURN_PLAN.length
+    ? null
+    : currentFile && exists(currentFile)
+      ? { turn: current.id, sha256: fileSha(currentFile) }
+      : null;
+  const turnCount = turns.length + (sealed && !turns.some((item) => item.turn?.id === current?.id) ? 1 : 0);
+  const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turnCount, provider_invoked: Boolean(context?.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: exists(path.join(dir, 'approval.json')) ? fileSha(path.join(dir, 'approval.json')) : null, terminal: { status: 'failed', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null, failure_stage: failureStage, sealed_turn: sealed } };
+  const usage = workflowUsage(context?.totalUsage);
+  if (usage) terminal.usage = usage;
+  if (context?.runRoot && exists(context.runRoot)) {
+    terminal.run_root = '<RUN_ROOT>';
+    terminal.run_root_sha256 = sha(Buffer.from(fs.realpathSync(context.runRoot), 'utf8'));
+  }
+  return terminal;
+}
+
 function capabilityGitText(argv, cwd, options) {
   if (typeof options.gitText === 'function') return options.gitText(argv, cwd);
   return gitText(argv, cwd);
@@ -976,17 +999,18 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     }
     if (new Set(Object.values(context.sessions)).size !== 3) fail('session_identity_invalid', 'A, B, and C native sessions must be distinct');
     const approvalSha = fileSha(path.join(dir, 'approval.json'));
-    const usage = { total_turn_tokens: context.totalUsage, limit_tokens: TURN_TOTAL_TOKENS, overage_tokens: Math.max(0, context.totalUsage - TURN_TOTAL_TOKENS), over_limit: context.totalUsage > TURN_TOTAL_TOKENS, policy_contract: RECORDER.WORKFLOW_USAGE_POLICY.contract, policy_sha256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256 };
+    const usage = workflowUsage(context.totalUsage);
     const runRootSha256 = sha(Buffer.from(fs.realpathSync(context.runRoot), 'utf8'));
     const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: approvalSha, usage, run_root: '<RUN_ROOT>', run_root_sha256: runRootSha256, terminal: { status: 'provider_complete' } };
     const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));
     const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), approval_sha256: approvalSha, preparation_sha256: preparationSha, setup_baseline_sha256: context.setupBaseline?.sha256 || null, terminal_sha256: terminalSha, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>', run_root: '<RUN_ROOT>', run_root_sha256: runRootSha256, usage };
     let observer = null;
-    if (!characterizationOnly && options.observe !== false) {
+    if ((!characterizationOnly || options.observeCharacterization === true) && options.observe !== false) {
       try {
         observer = OBSERVER.observeAndGrade({ caseFile, freezeFile, receiptDir: dir, consumerRoot: context.consumerRoot, controlsFile: options.controls || DEFAULT_CONTROLS, python: context.python.path, pythonWitness: context.python, publicResult: options.publicResult, terminalValue: terminal, handoffValue: handoff });
       } catch (error) {
         if (options.publicResult && !exists(options.publicResult)) OBSERVER.writeExclusive(options.publicResult, OBSERVER.observerFailureProjection({ receiptDir: dir }));
+        error.phase16FailureStage = 'observer';
         throw error;
       }
     }
@@ -998,8 +1022,7 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     else { failure = new RunnerFailure(error.code || 'infrastructure', error.message, error.evidence || null); failure.kind = error.kind || 'infrastructure'; }
     failure.provider_invoked = Boolean(context?.spawned);
     if (current && !exists(path.join(dir, `${current.id}.json`)) && (error.receipt || context?.activeReceipt)) writeExclusive(path.join(dir, `${current.id}.json`), error.receipt || context.activeReceipt);
-    const sealed = current && exists(path.join(dir, `${current.id}.json`)) ? { turn: current.id, sha256: fileSha(path.join(dir, `${current.id}.json`)) } : null;
-    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length + (current && !turns.some((item) => item.turn === current.id) ? 1 : 0), provider_invoked: Boolean(context?.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: exists(path.join(dir, 'approval.json')) ? fileSha(path.join(dir, 'approval.json')) : null, terminal: { status: 'failed', failure_code: failure.code, message: failure.message, evidence: failure.evidence || null, sealed_turn: sealed } };
+    const terminal = failureTerminal({ failure, current, turns, dir, context, characterizationOnly, failureStage: error.phase16FailureStage || 'turn' });
     if (!exists(path.join(dir, 'terminal.json'))) writeExclusive(path.join(dir, 'terminal.json'), terminal);
     if (!characterizationOnly && options.publicResult && !exists(options.publicResult) && !exists(path.join(dir, 'handoff.json'))) {
       OBSERVER.writeEarlyProjection(options.publicResult, { caseId: CASE_ID, revision: freeze.source?.revision || '93ae366874bbd4f69d90495c45b2cd336387496c', terminal });
@@ -1066,4 +1089,4 @@ async function main(argv = process.argv.slice(2)) {
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
 
-module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, WORKFLOW_USAGE_POLICY: RECORDER.WORKFLOW_USAGE_POLICY, WORKFLOW_USAGE_POLICY_SHA256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, evaluatorFileLedger, validateEvaluatorLedger, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, buildFreeze, readFreeze, prepareRun, createRunRoot, runTurn, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
+module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, WORKFLOW_USAGE_POLICY: RECORDER.WORKFLOW_USAGE_POLICY, WORKFLOW_USAGE_POLICY_SHA256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, evaluatorFileLedger, validateEvaluatorLedger, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, buildFreeze, readFreeze, prepareRun, createRunRoot, runTurn, workflowUsage, failureTerminal, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };

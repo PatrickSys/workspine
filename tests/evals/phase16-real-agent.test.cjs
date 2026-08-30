@@ -1013,6 +1013,27 @@ test('non-usage hard failure still stops before dependent workflow evidence', ()
     assert.equal(fixture.calls, 1);
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), false);
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json')));
+    assert.equal(terminal.turn_count, 1);
+    assert.equal(terminal.terminal.sealed_turn.turn, 'turn-a-plan');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('post-five-turn observer failure seals exactly five turns without a handoff', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-terminal-'));
+  const fixture = rootedRunFixture(root);
+  try {
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, {
+      prepareRun: fixture.prepareRun, spawn: fixture.spawn, observer: { observeAndGrade() { throw new Error('observer fixture failure'); } },
+      characterizationOnly: true, observeCharacterization: true,
+    }), (error) => error.code === 'infrastructure');
+    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json')));
+    assert.equal(terminal.turn_count, 5);
+    assert.equal(terminal.terminal.sealed_turn, null);
+    assert.equal(terminal.terminal.failure_stage, 'observer');
+    assert.equal(terminal.run_root_sha256, sha(Buffer.from(fs.realpathSync(root), 'utf8')));
+    assert.equal(terminal.usage.total_turn_tokens, 70);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -1084,6 +1105,7 @@ test('top-level identity collisions seal the failing receipt before dependent tu
       const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json')));
       assert.equal(terminal.terminal.failure_code, 'session_identity_collision');
       assert.equal(terminal.terminal.sealed_turn.turn, sealedTurn);
+      assert.equal(terminal.turn_count, targetIndex + 1);
       assert.equal(fs.existsSync(path.join(fixture.receiptDir, targetIndex === 2 ? 'turn-c-verify.json' : 'turn-c-progress.json')), false);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   }
@@ -1458,7 +1480,7 @@ function syntheticObservation(root, checks = {}) {
     retained_root: '<RETAINED_ROOT>', case: { revision: '93ae366874bbd4f69d90495c45b2cd336387496c', sha256: 'e77f420a8036a80b1ff96f9c6a96ffb3f9e4d32e724d4a33604a24119bb97c3f', oracle_sha256: '21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11' },
     git: { top_level: '<RETAINED_ROOT>', head: '93ae366874bbd4f69d90495c45b2cd336387496c', scope: { forbidden: [], product: ['src/itsdangerous/signer.py'] }, candidate_sha256: 'a'.repeat(64) },
     turns: OBSERVER.WORKFLOW_STEPS.map((id, index) => ({ id, thread_id: index < 2 ? 'native-A' : index === 2 ? 'native-B' : 'native-C', turn_id: `turn-${index}`, sha256: String(index + 1).repeat(64) })), sessions: { count: 3, turns: 5 },
-    brownfield: { files: { 'CHANGE.md': {}, 'HANDOFF.md': {}, 'VERIFICATION.md': {} } }, checkpoint: { sha256: 'b'.repeat(64) },
+    brownfield: { files: { 'CHANGE.md': {}, 'HANDOFF.md': {}, 'VERIFICATION.md': {} }, semantic_checks: { artifact_ids: true, authority_binding: true, authority_split: true, sections_change: true, sections_handoff: true, sections_verification: true, task_binding: true } }, lifecycle_state: { path: '<CONSUMER_ROOT>/.work/state.json', root: '<CONSUMER_ROOT>', sha256: 'c'.repeat(64), checks: { all: true } }, checkpoint: { sha256: 'b'.repeat(64) },
     oracle: { sha256: '21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11', semantic: { status: Object.values(merged).every(Boolean) ? 'pass' : 'fail', checks: merged } },
   };
   fs.writeFileSync(observationFile, JSON.stringify(observation));
@@ -1485,6 +1507,21 @@ test('semantic oracle failure is product red while malformed observer bytes are 
     assert.throws(() => OBSERVER.grade({ observationFile: path.join(root, 'characterization.json') }), (error) => error.code === 'observation_invalid');
     const malformed = path.join(root, 'malformed.json'); fs.writeFileSync(malformed, '{');
     assert.throws(() => OBSERVER.grade({ observationFile: malformed }), (error) => error.code === 'observation_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('grade rejects incomplete brownfield semantic checks instead of treating them as green', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-semantic-schema-'));
+  try {
+    const observation = JSON.parse(fs.readFileSync(syntheticObservation(root), 'utf8'));
+    delete observation.brownfield.semantic_checks.sections_handoff;
+    const omittedFile = path.join(root, 'omitted.json');
+    fs.writeFileSync(omittedFile, JSON.stringify(observation));
+    assert.throws(() => OBSERVER.grade({ observationFile: omittedFile }), (error) => error.code === 'observation_invalid');
+    observation.brownfield.semantic_checks.extra = true;
+    const extraFile = path.join(root, 'extra.json');
+    fs.writeFileSync(extraFile, JSON.stringify(observation));
+    assert.throws(() => OBSERVER.grade({ observationFile: extraFile }), (error) => error.code === 'observation_invalid');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -1550,6 +1587,90 @@ test('canonical brownfield grammar accepts real dates and rejects drifted IDs/da
     const handoff = path.join(root, '.work', 'brownfield-change', 'HANDOFF.md');
     fs.writeFileSync(handoff, fs.readFileSync(handoff, 'utf8').replace('updated: 2026-08-28', 'updated: 2026-02-30'));
     assert.throws(() => OBSERVER.brownfield(root, data), (error) => error.code === 'brownfield_grammar_invalid');
+    fs.writeFileSync(handoff, fs.readFileSync(handoff, 'utf8').replace('updated: 2026-02-30', 'updated: 2024-02-29'));
+    assert.equal(OBSERVER.brownfield(root, data).verification_status, 'passed');
+    fs.writeFileSync(handoff, fs.readFileSync(handoff, 'utf8').replace('updated: 2024-02-29', 'updated: 2023-02-29'));
+    assert.throws(() => OBSERVER.brownfield(root, data), (error) => error.code === 'brownfield_grammar_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('brownfield temporal fields use strict field-specific date contracts', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-dates-'));
+  try {
+    const data = { task: { goal: 'Bounded signer change succeeds.', allowed_paths: ['src/itsdangerous/signer.py'] } };
+    canonicalBrownfieldFixture(root);
+    fs.writeFileSync(path.join(root, '.work', 'brownfield-change', 'VERIFICATION.md'), fs.readFileSync(path.join(root, '.work', 'brownfield-change', 'VERIFICATION.md'), 'utf8').replace('verified: 2026-08-28', 'verified: 2026-08-28T10:20:30+02:00'));
+    assert.equal(OBSERVER.brownfield(root, data).verification_status, 'passed');
+    for (const value of ['2026-08-28 10:20:30', '08/28/2026', '2026-02-30T10:20:30Z', '2026-08-28T10:20:30']) {
+      const file = path.join(root, '.work', 'brownfield-change', 'VERIFICATION.md');
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/verified: .*/, `verified: ${value}`));
+      assert.throws(() => OBSERVER.brownfield(root, data), (error) => error.code === 'brownfield_grammar_invalid', value);
+      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/verified: .*/, 'verified: 2026-08-28'));
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('observer lifecycle state separates bound semantic failure from integrity failure', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-state-'));
+  const stateFile = path.join(root, '.work', 'state.json');
+  try {
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    const state = { status: 'active', current_state: 'fix_gaps', updated_at: '2026-08-29T10:20:30Z', progress: 'fix_gaps', next: 'fix_gaps', workflow: { current_state: 'fix_gaps', authority: 'owner', approval_ref: 'owner-ref', plan: { approved: true, path: '.work/phases/brownfield-change/01-PLAN.md', identity: '.work/phases/brownfield-change/01-PLAN.md' }, execution: { status: 'complete' }, verification: { status: 'gaps_found', artifact: '.work/brownfield-change/VERIFICATION.md', identity: '.work/brownfield-change/VERIFICATION.md' } } };
+    fs.writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
+    const valid = OBSERVER.lifecycleState(root);
+    assert.equal(valid.checks.all, true);
+    state.workflow.execution.status = 'in_progress';
+    fs.writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
+    const red = OBSERVER.lifecycleState(root);
+    assert.equal(red.checks.all, false);
+    assert.equal(red.checks.execution_status, false);
+    state.workflow.execution.status = 'complete';
+    state.updated_at = '2026-02-30T10:20:30Z';
+    fs.writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
+    assert.throws(() => OBSERVER.lifecycleState(root), (error) => error.code === 'lifecycle_invalid');
+    state.updated_at = '2026-08-29T10:20:30Z';
+    fs.writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
+    fs.rmSync(stateFile, { recursive: true });
+    assert.throws(() => OBSERVER.lifecycleState(root), (error) => error.code === 'lifecycle_invalid');
+    fs.writeFileSync(stateFile, '{\n');
+    assert.throws(() => OBSERVER.lifecycleState(root), (error) => error.code === 'lifecycle_invalid');
+    fs.rmSync(stateFile, { recursive: true });
+    fs.mkdirSync(stateFile);
+    assert.throws(() => OBSERVER.lifecycleState(root), (error) => error.code === 'lifecycle_invalid');
+    const target = path.join(root, 'state-target.json');
+    fs.writeFileSync(target, JSON.stringify(state));
+    try {
+      fs.rmSync(stateFile, { recursive: true });
+      fs.symlinkSync(target, stateFile, 'file');
+      assert.throws(() => OBSERVER.lifecycleState(root), (error) => error.code === 'lifecycle_invalid');
+    } catch (error) {
+      if (!['EPERM', 'EACCES'].includes(error.code)) throw error;
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('bound parseable brownfield cross-binding failures are product checks', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-brownfield-red-'));
+  try {
+    const data = { task: { goal: 'Bounded signer change succeeds.', allowed_paths: ['src/itsdangerous/signer.py'] } };
+    canonicalBrownfieldFixture(root);
+    const handoff = path.join(root, '.work', 'brownfield-change', 'HANDOFF.md');
+    fs.writeFileSync(handoff, fs.readFileSync(handoff, 'utf8').replace('change: CHANGE-001', 'change: CHANGE-002'));
+    const result = OBSERVER.brownfield(root, data);
+    assert.equal(result.semantic_checks.artifact_ids, false);
+    assert.equal(result.files['HANDOFF.md'].bytes > 0, true);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('bound readable missing brownfield headings remain semantic product checks', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-heading-red-'));
+  try {
+    const data = { task: { goal: 'Bounded signer change succeeds.', allowed_paths: ['src/itsdangerous/signer.py'] } };
+    canonicalBrownfieldFixture(root);
+    const file = path.join(root, '.work', 'brownfield-change', 'HANDOFF.md');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('## Anti-Regression\nNo dependency changes are allowed.\n', ''));
+    const result = OBSERVER.brownfield(root, data);
+    assert.equal(result.semantic_checks.sections_handoff, false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

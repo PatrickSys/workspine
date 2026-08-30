@@ -42,6 +42,10 @@ const TURN_TOTAL_WALL_MINUTES = 72;
 const TURN_TOTAL_NATIVE_TOKENS = 13500000;
 const WORKFLOW_USAGE_POLICY = RECORDER.WORKFLOW_USAGE_POLICY;
 const WORKFLOW_USAGE_POLICY_SHA256 = RECORDER.WORKFLOW_USAGE_POLICY_SHA256;
+const BROWNFIELD_SEMANTIC_KEYS = Object.freeze([
+  'artifact_ids', 'authority_binding', 'authority_split', 'sections_change',
+  'sections_handoff', 'sections_verification', 'task_binding',
+]);
 
 function expectedNativeArgv(turn, sessionId = null) {
   const base = turn[7]
@@ -331,16 +335,71 @@ function validDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function validRFC3339(value) {
+  const textValue = String(value || '');
+  const match = textValue.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-](\d{2}):(\d{2}))$/);
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second, zone, offsetHour, offsetMinute] = match;
+  const daysInMonth = new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate();
+  if (Number(month) < 1 || Number(month) > 12 || Number(day) < 1 || Number(day) > daysInMonth || Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return false;
+  if (zone !== 'Z' && (Number(offsetHour) > 23 || Number(offsetMinute) > 59)) return false;
+  const date = new Date(textValue);
+  return !Number.isNaN(date.getTime()) && date.toISOString() !== 'Invalid Date';
+}
+
+function lifecycleState(root) {
+  const file = path.join(root, '.work', 'state.json');
+  let first;
+  try { first = fs.lstatSync(file); } catch (error) { fail('lifecycle_invalid', 'observer cannot read .work/state.json', { code: error.code }); }
+  if (!first.isFile() || first.isSymbolicLink()) fail('lifecycle_invalid', 'observer state must be a regular non-symlink file');
+  const bytes = fs.readFileSync(file);
+  let state;
+  try { state = JSON.parse(bytes.toString('utf8')); } catch (error) { fail('lifecycle_invalid', 'observer state is not valid JSON', { message: error.message }); }
+  if (!state || typeof state !== 'object' || Array.isArray(state)) fail('lifecycle_invalid', 'observer state must be a JSON object');
+  const fields = {
+    status: state.status,
+    current_state: state.current_state,
+    workflow_current_state: state.workflow?.current_state,
+    plan_approved: state.workflow?.plan?.approved,
+    plan_path: state.workflow?.plan?.path,
+    plan_identity: state.workflow?.plan?.identity,
+    execution_status: state.workflow?.execution?.status,
+    verification_status: state.workflow?.verification?.status,
+    verification_artifact: state.workflow?.verification?.artifact,
+    verification_identity: state.workflow?.verification?.identity,
+    authority: state.workflow?.authority,
+    approval_ref: state.workflow?.approval_ref,
+    updated_at: state.updated_at,
+    progress: state.progress,
+    next: state.next,
+  };
+  const schema = Object.entries(fields).every(([key, value]) => key === 'approval_ref' ? typeof value === 'string' && value.length > 0 : value !== undefined && value !== null);
+  if (!schema || typeof fields.plan_approved !== 'boolean' || !validRFC3339(fields.updated_at)) fail('lifecycle_invalid', 'observer state lacks the required schema or strict RFC3339 timestamp');
+  const checks = {
+    status: fields.status === 'active', current_state: fields.current_state === 'fix_gaps', workflow_current_state: fields.workflow_current_state === 'fix_gaps', plan_approved: fields.plan_approved === true,
+    plan_path: fields.plan_path === '.work/phases/brownfield-change/01-PLAN.md', plan_identity: fields.plan_identity === '.work/phases/brownfield-change/01-PLAN.md', execution_status: fields.execution_status === 'complete', verification_status: fields.verification_status === 'gaps_found',
+    verification_artifact: fields.verification_artifact === '.work/brownfield-change/VERIFICATION.md', verification_identity: fields.verification_identity === '.work/brownfield-change/VERIFICATION.md', authority: fields.authority === 'owner', approval_ref: typeof fields.approval_ref === 'string' && fields.approval_ref.length > 0, updated_at: validRFC3339(fields.updated_at), progress: fields.progress === 'fix_gaps', next: fields.next === 'fix_gaps',
+  };
+  checks.all = Object.values(checks).every(Boolean);
+  const final = fs.lstatSync(file);
+  if (!final.isFile() || final.isSymbolicLink()) fail('lifecycle_invalid', 'observer state changed into an unsafe file during readback');
+  const finalBytes = fs.readFileSync(file);
+  if (!finalBytes.equals(bytes)) fail('lifecycle_invalid', 'observer state changed during readback');
+  return { path: '<CONSUMER_ROOT>/.work/state.json', root: '<CONSUMER_ROOT>', bytes: bytes.length, sha256: sha256(bytes), fields, checks };
+}
+
 function requireSections(content, label, sections) {
+  let valid = true;
   for (const section of sections) {
     const heading = new RegExp(`^##\\s+${section.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\s*$`, 'im').exec(content);
-    if (!heading) fail('brownfield_grammar_invalid', `${label} lacks its ${section} section`);
+    if (!heading) { valid = false; continue; }
     const tail = content.slice(heading.index + heading[0].length);
     const nextHeading = /^##\s+/im.exec(tail);
     const body = tail.slice(0, nextHeading ? nextHeading.index : tail.length);
-    if (body.replace(/[-*\s\[\]]/g, '').length < 12) fail('brownfield_grammar_invalid', `${label} has no substantive ${section} section`);
+    if (body.replace(/[-*\s\[\]]/g, '').length < 12) valid = false;
   }
-  if (/\[Short Title\]|\[path\]|\[notes\]|\[What this slice does\]|\[Disjoint write set\]|State the single cohesive outcome|Boundaries that the next session must keep|Open questions that still affect/i.test(content)) fail('brownfield_grammar_invalid', `${label} still contains template placeholders`);
+  if (/\[Short Title\]|\[path\]|\[notes\]|\[What this slice does\]|\[Disjoint write set\]|State the single cohesive outcome|Boundaries that the next session must keep|Open questions that still affect/i.test(content)) valid = false;
+  return valid;
 }
 
 function brownfield(root, data = null) {
@@ -358,19 +417,30 @@ function brownfield(root, data = null) {
   const handoffFm = parseFrontmatter(handoff, 'HANDOFF.md');
   const verificationFm = parseFrontmatter(verification, 'VERIFICATION.md');
   if (!/^CHANGE-\d+$/.test(changeFm.change || '') || !['active', 'ready_for_verification', 'closed'].includes(changeFm.status) || changeFm.type !== 'medium_scope_brownfield') fail('brownfield_grammar_invalid', 'CHANGE.md has invalid operational frontmatter');
-  if (handoffFm.status || handoffFm.type || /^##\s+Current Status/m.test(handoff) || /^##\s+Done When/m.test(handoff)) fail('brownfield_authority_split', 'HANDOFF.md introduces competing operational authority');
-  if (handoffFm.change !== changeFm.change || verificationFm.change !== changeFm.change || !validDate(handoffFm.updated) || !validDate(verificationFm.verified)) fail('brownfield_grammar_invalid', 'brownfield artifact IDs or calendar dates do not cross-bind');
+  const authority_split = !(handoffFm.status || handoffFm.type || /^##\s+Current Status/m.test(handoff) || /^##\s+Done When/m.test(handoff));
+  if (!validDate(handoffFm.updated) || !(validDate(verificationFm.verified) || validRFC3339(verificationFm.verified))) fail('brownfield_grammar_invalid', 'brownfield artifact dates are not strict date-only or RFC3339 values');
   if (!['pending', 'passed', 'gaps_found', 'human_needed'].includes(verificationFm.status)) fail('brownfield_grammar_invalid', 'VERIFICATION.md has invalid status');
-  requireSections(change, 'CHANGE.md', ['Goal', 'Why This Exists', 'In Scope', 'Out of Scope', 'Structural Promotion Triggers', 'Done When', 'Current Status', 'Next Action', 'PR Slice Ownership']);
-  requireSections(handoff, 'HANDOFF.md', ['Active Constraints', 'Unresolved Uncertainty', 'Decision Posture', 'Anti-Regression', 'Next Action']);
-  requireSections(verification, 'VERIFICATION.md', ['Goal Verification', 'Evidence', 'Artifact Checks', 'Gaps', 'Widening Reuse', 'Human Verification', 'Closeout Decision']);
-  if (!/CHANGE\.md.{0,120}(?:only )?operational authority/i.test(handoff) && !/CHANGE\.md.{0,120}operational continuity/i.test(handoff)) fail('brownfield_authority_split', 'brownfield authority split is not explicit');
+  const section_checks = {
+    change: requireSections(change, 'CHANGE.md', ['Goal', 'Why This Exists', 'In Scope', 'Out of Scope', 'Structural Promotion Triggers', 'Done When', 'Current Status', 'Next Action', 'PR Slice Ownership']),
+    handoff: requireSections(handoff, 'HANDOFF.md', ['Active Constraints', 'Unresolved Uncertainty', 'Decision Posture', 'Anti-Regression', 'Next Action']),
+    verification: requireSections(verification, 'VERIFICATION.md', ['Goal Verification', 'Evidence', 'Artifact Checks', 'Gaps', 'Widening Reuse', 'Human Verification', 'Closeout Decision']),
+  };
+  const authority_binding = /CHANGE\.md.{0,120}(?:only )?operational authority/i.test(handoff) || /CHANGE\.md.{0,120}operational continuity/i.test(handoff);
+  const semantic_checks = {
+    artifact_ids: handoffFm.change === changeFm.change && verificationFm.change === changeFm.change,
+    task_binding: true,
+    authority_split,
+    authority_binding,
+    sections_change: section_checks.change,
+    sections_handoff: section_checks.handoff,
+    sections_verification: section_checks.verification,
+  };
   if (data) {
     const goalTerms = String(data.task?.goal || '').toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length >= 5).slice(0, 3);
     const combined = `${change}\n${handoff}\n${verification}`.toLowerCase();
-    if (goalTerms.some((term) => !combined.includes(term)) || !(data.task?.allowed_paths || []).every((item) => change.includes(item))) fail('brownfield_binding_mismatch', 'brownfield artifacts do not bind the pinned task goal and scope');
+    semantic_checks.task_binding = !goalTerms.some((term) => !combined.includes(term)) && (data.task?.allowed_paths || []).every((item) => change.includes(item));
   }
-  return { files, status: changeFm.status, verification_status: verificationFm.status };
+  return { files, status: changeFm.status, verification_status: verificationFm.status, semantic_checks };
 }
 
 function checkpoint(root) {
@@ -534,7 +604,7 @@ function observe({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile 
      try { stat = fs.lstatSync(file); } catch (error) { fail('lifecycle_invalid', `allowlisted lifecycle path is missing: ${relative}`, { code: error.code }); }
      if (!stat.isFile() || stat.isSymbolicLink()) fail('lifecycle_invalid', `allowlisted lifecycle path is not a regular non-symlink file: ${relative}`);
    }
-  const artifact = brownfield(consumerRoot, handoff.data); const check = checkpoint(consumerRoot); const inputs = inputBundle(consumerRoot, handoff.data);
+  const artifact = brownfield(consumerRoot, handoff.data); const state = lifecycleState(consumerRoot); const check = checkpoint(consumerRoot); const inputs = inputBundle(consumerRoot, handoff.data);
   const oracle = runOracle({ data: handoff.data, caseFile, consumerRoot, python, pythonWitness, oraclePath, spawn });
   const oracleFile = path.join(receiptDir, 'oracle.json');
   writeExclusive(oracleFile, oracle);
@@ -544,7 +614,7 @@ function observe({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile 
     case: { sha256: fileSha(caseFile), revision: handoff.data.source.revision, oracle_sha256: oracle.oracle_sha256 },
      freeze_sha256: fileSha(freezeFile), terminal_sha256: handoff.terminal_sha256, handoff_sha256: handoff.handoff_sha256, setup_baseline_sha256: handoff.setupBaseline.sha256,
     retained_root: fs.realpathSync(consumerRoot), git: { top_level: handoff.scope.top, head: handoff.scope.head, status: handoff.scope.status, status_sha256: handoff.scope.status_sha256, staged: handoff.scope.staged, unstaged: handoff.scope.unstaged, scope, candidate_sha256: exists(candidatePath) ? fileSha(candidatePath) : null },
-    turns: handoff.turns, sessions: { count: 3, turns: 5 }, checkpoint: check, inputs, brownfield: artifact,
+    turns: handoff.turns, sessions: { count: 3, turns: 5 }, checkpoint: check, inputs, brownfield: artifact, lifecycle_state: state,
     oracle: { path: oracleFile, sha256: fileSha(oracleFile), semantic: oracle.semantic },
     claim_limit: 'Actual retained-root Git scope, canonical brownfield artifacts, and the pinned itsdangerous oracle only; no broader benchmark, model, or release claim.',
   };
@@ -555,9 +625,11 @@ function observe({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile 
 
 function gradeValue(observation) {
   if (observation.record_type !== 'phase16_itsdangerous_observation' || observation.contract !== OBSERVATION_CONTRACT || observation.case_id !== CASE_ID) fail('observation_invalid', 'observation contract is invalid');
-  if (observation.case?.revision !== CASE_REVISION || observation.case?.sha256 !== CASE_SHA256 || !validHash(observation.freeze_sha256) || !validHash(observation.terminal_sha256) || !validHash(observation.handoff_sha256) || !validHash(observation.setup_baseline_sha256) || typeof observation.retained_root !== 'string' || observation.git?.top_level !== observation.retained_root || !observation.git.scope || !observation.brownfield?.files || !observation.checkpoint?.sha256 || stable(observation.turns?.map((item) => item.id)) !== stable(WORKFLOW_STEPS) || observation.turns?.some((item) => !validHash(item.sha256) || !item.thread_id || !Object.hasOwn(item, 'turn_id') || (item.turn_id !== null && (typeof item.turn_id !== 'string' || item.turn_id.length === 0))) || stable(observation.sessions) !== stable({ count: 3, turns: 5 }) || !observation.oracle?.semantic?.checks || !validHash(observation.oracle?.sha256) || observation.case.oracle_sha256 !== ORACLE_SHA256 || !['pass', 'fail'].includes(observation.oracle.semantic.status)) fail('observation_invalid', 'observation is missing immutable grading inputs');
-  const checks = { git_root: observation.git?.top_level === observation.retained_root, pinned_head: observation.git?.head === observation.case?.revision, git_scope: observation.git?.scope?.forbidden?.length === 0, brownfield: Boolean(observation.brownfield?.files?.['CHANGE.md'] && observation.brownfield?.files?.['HANDOFF.md'] && observation.brownfield?.files?.['VERIFICATION.md']), checkpoint: Boolean(observation.checkpoint?.sha256), oracle_import: observation.oracle?.semantic?.checks?.import_with_sha1_unavailable === true, oracle_explicit_sha256: observation.oracle?.semantic?.checks?.explicit_sha256_signer === true, oracle_default_rejected: observation.oracle?.semantic?.checks?.default_sha1_rejected === true, oracle_tests: observation.oracle?.semantic?.checks?.upstream_tests_pass === true };
-  const productChecks = ['oracle_import', 'oracle_explicit_sha256', 'oracle_default_rejected', 'oracle_tests'];
+  if (observation.case?.revision !== CASE_REVISION || observation.case?.sha256 !== CASE_SHA256 || !validHash(observation.freeze_sha256) || !validHash(observation.terminal_sha256) || !validHash(observation.handoff_sha256) || !validHash(observation.setup_baseline_sha256) || typeof observation.retained_root !== 'string' || observation.git?.top_level !== observation.retained_root || !observation.git.scope || !observation.brownfield?.files || !observation.lifecycle_state || observation.lifecycle_state.path !== '<CONSUMER_ROOT>/.work/state.json' || observation.lifecycle_state.root !== '<CONSUMER_ROOT>' || !validHash(observation.lifecycle_state.sha256) || !observation.lifecycle_state.checks || !observation.checkpoint?.sha256 || stable(observation.turns?.map((item) => item.id)) !== stable(WORKFLOW_STEPS) || observation.turns?.some((item) => !validHash(item.sha256) || !item.thread_id || !Object.hasOwn(item, 'turn_id') || (item.turn_id !== null && (typeof item.turn_id !== 'string' || item.turn_id.length === 0))) || stable(observation.sessions) !== stable({ count: 3, turns: 5 }) || !observation.oracle?.semantic?.checks || !validHash(observation.oracle?.sha256) || observation.case.oracle_sha256 !== ORACLE_SHA256 || !['pass', 'fail'].includes(observation.oracle.semantic.status)) fail('observation_invalid', 'observation is missing immutable grading inputs');
+  const semanticChecks = observation.brownfield?.semantic_checks;
+  if (!semanticChecks || stable(Object.keys(semanticChecks).sort()) !== stable([...BROWNFIELD_SEMANTIC_KEYS].sort()) || Object.values(semanticChecks).some((value) => typeof value !== 'boolean')) fail('observation_invalid', 'brownfield semantic checks do not match the live contract');
+  const checks = { git_root: observation.git?.top_level === observation.retained_root, pinned_head: observation.git?.head === observation.case?.revision, git_scope: observation.git?.scope?.forbidden?.length === 0, brownfield: Boolean(observation.brownfield?.files?.['CHANGE.md'] && observation.brownfield?.files?.['HANDOFF.md'] && observation.brownfield?.files?.['VERIFICATION.md']), brownfield_contract: BROWNFIELD_SEMANTIC_KEYS.every((key) => semanticChecks[key] === true), lifecycle_state: observation.lifecycle_state?.checks?.all === true, checkpoint: Boolean(observation.checkpoint?.sha256), oracle_import: observation.oracle?.semantic?.checks?.import_with_sha1_unavailable === true, oracle_explicit_sha256: observation.oracle?.semantic?.checks?.explicit_sha256_signer === true, oracle_default_rejected: observation.oracle?.semantic?.checks?.default_sha1_rejected === true, oracle_tests: observation.oracle?.semantic?.checks?.upstream_tests_pass === true };
+  const productChecks = ['brownfield_contract', 'lifecycle_state', 'oracle_import', 'oracle_explicit_sha256', 'oracle_default_rejected', 'oracle_tests'];
   const disposition = observation.identity?.status === 'unknown' ? 'identity_unknown' : observation.human_needed === true ? 'human_needed' : checks.git_root && checks.pinned_head && checks.git_scope && checks.brownfield && checks.checkpoint ? (productChecks.every((key) => checks[key]) ? 'passed' : 'product_red') : 'infrastructure_invalid';
   return { checks, disposition };
 }
@@ -715,7 +787,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  ObserverFailure, writeExclusive, readCase, validateFreeze, validateNativeReceipt, runGitRaw, parseGitNameOnly, gitVisiblePaths, captureSetupBaseline, validateSetupBaseline, gitScope, gitBlobSha, brownfield, completeHandoff, runOracle,
+  ObserverFailure, writeExclusive, readCase, validateFreeze, validateNativeReceipt, runGitRaw, parseGitNameOnly, gitVisiblePaths, captureSetupBaseline, validateSetupBaseline, gitScope, gitBlobSha, brownfield, lifecycleState, validDate, validRFC3339, completeHandoff, runOracle,
   observe, observeRun: observe, checkpoint, gradeValue, grade, gradeObservation: grade, regrade,
   regradeObservation: regrade, regradeChild, project, projectPublic: project, earlyProjection,
   writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths, scopeGate,
