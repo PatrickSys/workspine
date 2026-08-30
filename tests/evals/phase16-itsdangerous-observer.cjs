@@ -17,6 +17,7 @@ const ORACLE_CONTRACT = 'phase16-itsdangerous-oracle-v1';
 const GRADE_CONTRACT = 'phase16-itsdangerous-grade-v1';
 const REGRADE_CONTRACT = 'phase16-itsdangerous-regrade-v1';
 const PROJECTION_CONTRACT = 'phase16-itsdangerous-public-result-v1';
+const SETUP_BASELINE_CONTRACT = 'phase16-setup-baseline-v1';
 const REPO = fs.realpathSync(path.resolve(__dirname, '..', '..'));
 const EVALUATOR_LEDGER_CONTRACT = 'phase16-evaluator-ledger-v1';
 const EVALUATOR_FILES = Object.freeze([
@@ -164,14 +165,70 @@ function runGit(root, argv) {
   return String(result.stdout || '').trim();
 }
 
+function runGitRaw(root, argv) {
+  const result = cp.spawnSync('git', argv, { cwd: root, encoding: null, shell: false, windowsHide: true, timeout: 30000, maxBuffer: 32 * 1024 * 1024 });
+  if (result.status !== 0) fail('git_observation_failed', `git ${argv.join(' ')} failed`, { stderr: Buffer.from(result.stderr || '').toString('utf8').slice(-2000) });
+  return Buffer.from(result.stdout || '');
+}
+
+function validateGitPath(raw) {
+  if (!raw || raw.includes('\\') || raw.startsWith('/') || /^[A-Za-z]:/.test(raw) || raw.includes('\0')) fail('git_path_invalid', 'Git path is not a canonical relative UTF-8 path', { path: raw });
+  const segments = raw.split('/');
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) fail('git_path_invalid', 'Git path contains an empty, dot, or traversal segment', { path: raw });
+  if (path.posix.normalize(raw) !== raw) fail('git_path_invalid', 'Git path is not canonically separated', { path: raw });
+  return raw;
+}
+
+function parseGitNameOnly(raw, label = 'Git path output') {
+  const buffer = Buffer.from(raw || '');
+  const parts = buffer.length ? buffer.toString('binary').split('\0').map((item) => Buffer.from(item, 'binary')) : [];
+  if (parts.length && parts.at(-1).length === 0) parts.pop();
+  const seen = new Set(); const normalizedSeen = new Set();
+  return parts.map((part) => {
+    if (!part.length) fail('git_path_invalid', `${label} contains an empty path segment`);
+    const value = part.toString('utf8');
+    if (!Buffer.from(value, 'utf8').equals(part)) fail('git_path_invalid', `${label} contains malformed UTF-8`);
+    const canonical = validateGitPath(value);
+    if (seen.has(canonical)) fail('git_path_invalid', `${label} contains a duplicate path`, { path: canonical });
+    const normalized = canonical.normalize('NFC');
+    if (normalizedSeen.has(normalized)) fail('git_path_invalid', `${label} contains a normalized-path collision`, { path: canonical });
+    seen.add(canonical);
+    normalizedSeen.add(normalized);
+    return canonical;
+  });
+}
+
+function gitVisiblePaths(root) {
+  const commands = {
+    staged: ['diff', '--cached', '--name-only', '-z', '--no-renames', '--diff-filter=ACDMRTUXB'],
+    unstaged: ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=ACDMRTUXB'],
+    untracked: ['ls-files', '--others', '--exclude-standard', '-z'],
+  };
+  const parsed = Object.fromEntries(Object.entries(commands).map(([name, argv]) => [name, parseGitNameOnly(runGitRaw(root, argv), `git ${argv.join(' ')}`)]));
+  const all = [];
+  const seen = new Set();
+  for (const name of ['staged', 'unstaged', 'untracked']) for (const item of parsed[name]) {
+    if (seen.has(item)) fail('git_path_invalid', 'Git path is present in more than one name-only stream', { path: item });
+    seen.add(item); all.push(item);
+  }
+  all.sort((left, right) => left.localeCompare(right));
+  return { ...parsed, all };
+}
+
+function pathRecord(root, relative, source) {
+  const file = path.join(root, ...relative.split('/'));
+  let stat = null;
+  try { stat = fs.lstatSync(file); } catch (error) { if (error.code !== 'ENOENT') fail('git_observation_failed', `cannot inspect Git path: ${relative}`, { code: error.code }); }
+  const type = !stat ? 'missing' : stat.isSymbolicLink() ? 'link' : stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : 'other';
+  return { status: source, path: relative, type, bytes: type === 'file' ? stat.size : null, sha256: type === 'file' ? fileSha(file) : null };
+}
+
 function gitScope(root) {
   const top = fs.realpathSync(runGit(root, ['rev-parse', '--show-toplevel']));
   const head = runGit(root, ['rev-parse', 'HEAD']);
   const status = runGit(root, ['status', '--porcelain=v1', '--untracked-files=all']);
-  const staged = runGit(root, ['diff', '--cached', '--name-status']);
-  const unstaged = runGit(root, ['diff', '--name-status']);
-  const parse = (value) => value.split(/\r?\n/).filter(Boolean).map((line) => { const relative = line.slice(3); const file = path.join(root, relative); const stat = exists(file) ? fs.lstatSync(file) : null; return { status: line.slice(0, 2).trim(), path: relative, bytes: stat?.isFile() ? stat.size : null, sha256: stat?.isFile() ? fileSha(file) : null }; });
-  return { top, head, status, staged: parse(staged), unstaged: parse(unstaged), all: parse(status), status_sha256: sha256(Buffer.from(status)) };
+  const visible = gitVisiblePaths(root);
+  return { top, head, status, staged: visible.staged.map((item) => pathRecord(root, item, 'staged')), unstaged: visible.unstaged.map((item) => pathRecord(root, item, 'unstaged')), untracked: visible.untracked.map((item) => pathRecord(root, item, 'untracked')), all: visible.all.map((item) => pathRecord(root, item, 'visible')), status_sha256: sha256(Buffer.from(status)) };
 }
 
 function capabilityStatusPaths(status) {
@@ -196,6 +253,56 @@ function snapshotFiles(root, relative = '') {
   const result = [{ path: name, type: stat.isSymbolicLink() ? 'link' : stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : 'other', bytes: stat.isFile() ? stat.size : null, sha256: stat.isFile() ? fileSha(full) : null }];
   if (stat.isDirectory()) for (const entry of fs.readdirSync(full).sort()) result.push(...snapshotFiles(root, path.join(relative, entry)));
   return result;
+}
+
+function setupBoundaryPath(relative) {
+  return relative === '.gitignore' || relative === 'AGENTS.md' || relative === 'goal.md' || relative === 'inputs' || relative.startsWith('inputs/') || relative === '.agents' || relative.startsWith('.agents/') || relative === '.work' || relative.startsWith('.work/');
+}
+
+function setupBaselineValue(members) {
+  const canonical = members.map((member) => {
+    if (!member || typeof member !== 'object' || Array.isArray(member)) fail('setup_baseline_invalid', 'setup baseline member is not an object');
+    if (stable(Object.keys(member).sort()) !== stable(['bytes', 'path', 'sha256', 'type'])) fail('setup_baseline_invalid', 'setup baseline member has unknown or missing fields');
+    if (typeof member.path !== 'string') fail('setup_baseline_invalid', 'setup baseline member path is not a string');
+    const pathValue = validateGitPath(member.path);
+    if (!setupBoundaryPath(pathValue)) fail('setup_baseline_invalid', `setup baseline member escaped the setup boundary: ${pathValue}`);
+    return { path: pathValue, type: member.type, bytes: member.bytes, sha256: String(member.sha256 || '').toLowerCase() };
+  });
+  const sorted = canonical.slice().sort((left, right) => left.path.localeCompare(right.path));
+  if (stable(canonical) !== stable(sorted) || new Set(sorted.map((item) => item.path)).size !== sorted.length) fail('setup_baseline_invalid', 'setup baseline members must be sorted and unique');
+  return { contract: SETUP_BASELINE_CONTRACT, members: sorted, sha256: stableHash({ contract: SETUP_BASELINE_CONTRACT, members: sorted }) };
+}
+
+function captureSetupBaseline(root) {
+  const visiblePaths = gitVisiblePaths(root);
+  const visible = visiblePaths.all.filter(setupBoundaryPath);
+  const members = visible.map((relative) => {
+    const file = path.join(root, ...relative.split('/'));
+    let stat;
+    try { stat = fs.lstatSync(file); } catch (error) { fail('setup_baseline_invalid', `setup path disappeared during capture: ${relative}`, { code: error.code }); }
+    if (!stat.isFile() || stat.isSymbolicLink()) fail('setup_baseline_invalid', `setup path is not a regular non-symlink file: ${relative}`);
+    const bytes = fs.readFileSync(file);
+    return { path: relative, type: 'file', bytes: bytes.length, sha256: sha256(bytes) };
+  });
+  const unexpected = visiblePaths.all.filter((relative) => !setupBoundaryPath(relative));
+  if (unexpected.length) fail('setup_baseline_invalid', 'post-init Git-visible paths escaped the setup boundary', { paths: unexpected });
+  return setupBaselineValue(members);
+}
+
+function validateSetupBaseline(root, baseline) {
+  if (!baseline || stable(Object.keys(baseline).sort()) !== stable(['contract', 'members', 'sha256']) || baseline.contract !== SETUP_BASELINE_CONTRACT || !Array.isArray(baseline.members) || !validHash(baseline.sha256)) fail('setup_baseline_invalid', 'preparation receipt lacks a valid setup baseline ledger');
+  const expected = setupBaselineValue(baseline.members);
+  if (expected.sha256 !== baseline.sha256) fail('setup_baseline_tampered', 'setup baseline ledger hash does not match its canonical members');
+  for (const member of expected.members) {
+    if (member.type !== 'file' || !Number.isInteger(member.bytes) || member.bytes < 0 || !validHash(member.sha256)) fail('setup_baseline_invalid', `setup baseline member is not an exact regular-file witness: ${member.path}`);
+    const file = path.join(root, ...member.path.split('/'));
+    let stat;
+    try { stat = fs.lstatSync(file); } catch (error) { fail('setup_baseline_tampered', `setup baseline member is missing: ${member.path}`, { code: error.code }); }
+    if (!stat.isFile() || stat.isSymbolicLink()) fail('setup_baseline_tampered', `setup baseline member changed type: ${member.path}`);
+    const bytes = fs.readFileSync(file);
+    if (bytes.length !== member.bytes || sha256(bytes) !== member.sha256) fail('setup_baseline_tampered', `setup baseline member bytes changed: ${member.path}`);
+  }
+  return expected;
 }
 
 function parseFrontmatter(content, label) {
@@ -315,11 +422,12 @@ function completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, contr
   if (!exists(preparationFile) || (!terminalValue && !exists(terminalFile)) || (!handoffValue && !exists(handoffFile))) fail('handoff_missing', 'complete handoff receipts are missing');
   const preparation = readJson(preparationFile); const terminal = terminalValue || readJson(terminalFile); const handoff = handoffValue || readJson(handoffFile);
   if (preparation.record_type !== 'phase16_preparation_receipt' || preparation.case_id !== CASE_ID || preparation.workflow_verdict !== 'not_evaluated' || preparation.characterization_only === true || preparation.bundle_sha256 !== freeze.bundle.sha256 || preparation.controls_sha256 !== freeze.controls.sha256 || preparation.candidate_sha256 !== freeze.candidate.sha256 || preparation.python?.sha256 !== freeze.runtime.python.sha256) fail('preparation_invalid', 'preparation receipt is not bound to the frozen candidate, controls, and Python witness');
+  const setupBaseline = validateSetupBaseline(consumerRoot, preparation.setup_baseline);
   if (terminal.record_type !== 'phase16_terminal_receipt' || terminal.terminal?.status !== 'provider_complete' || terminal.turn_count !== 5 || terminal.workflow_verdict !== 'not_evaluated' || terminal.provider_invoked !== true) fail('handoff_incomplete', 'terminal receipt does not prove complete provider handoff');
   if (handoff.record_type !== 'phase16_codex_handoff' || handoff.case_id !== CASE_ID || handoff.workflow_verdict !== 'not_evaluated' || handoff.characterization_only === true) fail('handoff_invalid', 'handoff is missing its non-characterization contract');
   const terminalSha = terminalValue ? sha256(Buffer.from(`${JSON.stringify(terminalValue, null, 2)}\n`)) : fileSha(terminalFile);
   const handoffSha = handoffValue ? sha256(Buffer.from(`${JSON.stringify(handoffValue, null, 2)}\n`)) : fileSha(handoffFile);
-  if (handoff.terminal_sha256 !== terminalSha || handoff.retained_root !== '<CONSUMER_ROOT>') fail('handoff_binding_mismatch', 'handoff is not bound to terminal and retained-root witness');
+  if (handoff.terminal_sha256 !== terminalSha || handoff.retained_root !== '<CONSUMER_ROOT>' || handoff.preparation_sha256 !== fileSha(preparationFile) || handoff.setup_baseline_sha256 !== setupBaseline.sha256) fail('handoff_binding_mismatch', 'handoff is not bound to preparation, setup baseline, terminal, and retained-root witnesses');
   if (stable(handoff.sessions) !== stable({ A: handoff.sessions?.A, B: handoff.sessions?.B, C: handoff.sessions?.C }) || !handoff.sessions?.A || !handoff.sessions?.B || !handoff.sessions?.C || new Set([handoff.sessions.A, handoff.sessions.B, handoff.sessions.C]).size !== 3) fail('handoff_identity_invalid', 'handoff lacks three distinct native sessions');
   if (!Array.isArray(handoff.turns) || handoff.turns.length !== 5 || stable(handoff.turns.map((item) => item.id)) !== stable(WORKFLOW_STEPS)) fail('handoff_turns_invalid', 'handoff does not contain the exact five ordered turns');
   const turns = handoff.turns.map((item, index) => {
@@ -335,24 +443,51 @@ function completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, contr
     return { id: WORKFLOW_STEPS[index], thread_id: receipt.native.thread_id, turn_id: receipt.native.turn_id, sha256: item.sha256 };
   });
   if (turns[0].thread_id !== handoff.sessions.A || turns[1].thread_id !== handoff.sessions.A || turns[2].thread_id !== handoff.sessions.B || turns[3].thread_id !== handoff.sessions.C || turns[4].thread_id !== handoff.sessions.C) fail('handoff_identity_invalid', 'turn receipts do not link to the declared sessions');
-  const origin = runGit(consumerRoot, ['remote', 'get-url', 'origin']);
+  let origin;
+  try { origin = runGit(consumerRoot, ['remote', 'get-url', 'origin']); }
+  catch (error) { if (error.code === 'git_observation_failed') fail('upstream_origin_mismatch', 'retained Git root has no pinned public upstream origin'); throw error; }
   if (origin !== data.source.repository) fail('upstream_origin_mismatch', 'retained Git root origin is not the pinned public upstream', { expected: data.source.repository, actual: origin });
   const scope = gitScope(consumerRoot);
   if (scope.top !== fs.realpathSync(consumerRoot) || scope.head !== data.source.revision) fail('consumer_root_invalid', 'retained root is not the pinned public Git checkout');
   const candidatePath = data.source.candidate_path;
   const baseline = data.controls?.variants?.find((item) => item.id === 'baseline')?.candidate_sha256;
   if (!baseline || gitBlobSha(consumerRoot, data.source.revision, candidatePath) !== baseline.toLowerCase()) fail('baseline_binding_mismatch', 'retained Git baseline candidate does not match the public case pin');
+  const candidate = path.join(consumerRoot, ...candidatePath.split('/'));
+  let candidateStat;
+  try { candidateStat = fs.lstatSync(candidate); } catch (error) { fail('candidate_missing', 'retained Git candidate is missing', { code: error.code }); }
+  if (!candidateStat.isFile() || candidateStat.isSymbolicLink()) fail('candidate_missing', 'retained Git candidate is not a regular non-symlink file');
+  if (fileSha(candidate) === baseline.toLowerCase()) fail('candidate_missing', 'retained Git candidate is unchanged from the frozen baseline');
   for (const required of data.source.source_root?.required_paths || []) if (!exists(path.join(consumerRoot, required.replace(/^project\//, '')))) fail('required_path_missing', `retained Git root lacks required path: ${required}`);
-  return { data, freeze, preparation, terminal, handoff, turns, scope, baseline_candidate_sha256: baseline.toLowerCase(), terminal_sha256: terminalSha, handoff_sha256: handoffSha };
+   return { data, freeze, preparation, setupBaseline, terminal, handoff, turns, scope, baseline_candidate_sha256: baseline.toLowerCase(), terminal_sha256: terminalSha, handoff_sha256: handoffSha };
 }
 
-function allowedPaths(data, scope) {
-  const allowed = [...data.task.allowed_paths, 'inputs/owner/TASK.md', 'inputs/owner/BRIEF.md', '.work/.continue-here.md', '.work/brownfield-change/CHANGE.md', '.work/brownfield-change/HANDOFF.md', '.work/brownfield-change/VERIFICATION.md'];
-  const allowedPrefix = ['.agents/skills/'];
-  const all = scope.all.map((item) => item.path);
-  const forbidden = all.filter((item) => !allowed.includes(item) && !allowedPrefix.some((prefix) => item.startsWith(prefix)));
-  const product = all.filter((item) => item === data.task.allowed_paths[0]);
-  return { allowed, all, forbidden, product };
+function allowedPaths(data, scope, baseline = null, extraAllowed = []) {
+  const lifecycle = ['.work/brownfield-change/CHANGE.md', '.work/brownfield-change/HANDOFF.md', '.work/brownfield-change/VERIFICATION.md', '.work/phases/brownfield-change/01-PLAN.md', '.work/research/brownfield-change-RESEARCH.md', '.work/.continue-here.md'];
+  const candidatePath = data.source?.candidate_path || data.task?.allowed_paths?.[0];
+  const all = (scope.all || []).map((item) => typeof item === 'string' ? item : item.path);
+  if (!baseline) {
+    const allowed = [...(data.task?.allowed_paths || []), 'inputs/owner/TASK.md', 'inputs/owner/BRIEF.md', ...lifecycle];
+    const forbidden = all.filter((item) => !allowed.includes(item));
+    return { allowed, all, forbidden, product: all.filter((item) => item === candidatePath) };
+  }
+  const members = new Map(baseline.members.map((item) => [item.path, item]));
+  const exactExtra = new Set(extraAllowed);
+  const setup = []; const plan = []; const capability = []; const product = []; const forbidden = [];
+  for (const item of all) {
+    if (members.has(item)) setup.push(item);
+    else if (lifecycle.includes(item)) plan.push(item);
+    else if (item === candidatePath) product.push(item);
+    else if (exactExtra.has(item)) capability.push(item);
+    else forbidden.push(item);
+  }
+  return { allowed: [...members.keys(), ...lifecycle, candidatePath, ...exactExtra], all, setup, plan, capability, newly_introduced: [...plan, ...product], forbidden, product };
+}
+
+function scopeGate(data, scope, baseline, extraAllowed = []) {
+  const classified = allowedPaths(data, scope, baseline, extraAllowed);
+  if (classified.forbidden.length) fail('git_scope_invalid', 'retained root contains out-of-scope Git changes', { forbidden: classified.forbidden });
+  if (classified.product.length !== 1) fail('candidate_missing', 'retained root does not expose exactly one allowed product change');
+  return classified;
 }
 
 function runOracle({ data, caseFile, consumerRoot, python = data.runtime?.command || 'python', pythonWitness = null, oraclePath, spawn = cp.spawnSync }) {
@@ -375,19 +510,21 @@ function runOracle({ data, caseFile, consumerRoot, python = data.runtime?.comman
 function observe({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile = null, python, pythonWitness, oraclePath, spawn = cp.spawnSync, terminalValue = null, handoffValue = null }) {
   const handoff = completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile, terminalValue, handoffValue });
   if (!pythonWitness || pythonWitness.sha256 !== handoff.freeze.runtime.python.sha256 || !pythonWitness.path || fs.realpathSync(pythonWitness.path) !== fs.realpathSync(pythonWitness.identity || pythonWitness.path)) fail('python_binding_mismatch', 'observer did not receive the verified prepareRun Python identity');
-  const scope = allowedPaths(handoff.data, handoff.scope);
-  if (scope.forbidden.length) fail('git_scope_invalid', 'retained root contains out-of-scope Git changes', { forbidden: scope.forbidden });
-  if (scope.product.length !== 1) fail('candidate_missing', 'retained root does not expose exactly one allowed product change');
+   const scope = scopeGate(handoff.data, handoff.scope, handoff.setupBaseline);
+   for (const relative of scope.plan) {
+     const file = path.join(consumerRoot, ...relative.split('/')); let stat;
+     try { stat = fs.lstatSync(file); } catch (error) { fail('lifecycle_invalid', `allowlisted lifecycle path is missing: ${relative}`, { code: error.code }); }
+     if (!stat.isFile() || stat.isSymbolicLink()) fail('lifecycle_invalid', `allowlisted lifecycle path is not a regular non-symlink file: ${relative}`);
+   }
   const artifact = brownfield(consumerRoot, handoff.data); const check = checkpoint(consumerRoot); const inputs = inputBundle(consumerRoot, handoff.data);
   const oracle = runOracle({ data: handoff.data, caseFile, consumerRoot, python, pythonWitness, oraclePath, spawn });
   const oracleFile = path.join(receiptDir, 'oracle.json');
   writeExclusive(oracleFile, oracle);
-  const candidatePath = path.join(consumerRoot, handoff.data.task.allowed_paths[0]);
-  if (!exists(candidatePath) || !fs.lstatSync(candidatePath).isFile() || fs.lstatSync(candidatePath).isSymbolicLink()) fail('candidate_missing', 'retained root candidate is missing or unsafe');
+   const candidatePath = path.join(consumerRoot, ...handoff.data.source.candidate_path.split('/'));
   const observation = {
     schema_version: 1, record_type: 'phase16_itsdangerous_observation', contract: OBSERVATION_CONTRACT, case_id: CASE_ID,
     case: { sha256: fileSha(caseFile), revision: handoff.data.source.revision, oracle_sha256: oracle.oracle_sha256 },
-    freeze_sha256: fileSha(freezeFile), terminal_sha256: handoff.terminal_sha256, handoff_sha256: handoff.handoff_sha256,
+     freeze_sha256: fileSha(freezeFile), terminal_sha256: handoff.terminal_sha256, handoff_sha256: handoff.handoff_sha256, setup_baseline_sha256: handoff.setupBaseline.sha256,
     retained_root: fs.realpathSync(consumerRoot), git: { top_level: handoff.scope.top, head: handoff.scope.head, status: handoff.scope.status, status_sha256: handoff.scope.status_sha256, staged: handoff.scope.staged, unstaged: handoff.scope.unstaged, scope, candidate_sha256: exists(candidatePath) ? fileSha(candidatePath) : null },
     turns: handoff.turns, sessions: { count: 3, turns: 5 }, checkpoint: check, inputs, brownfield: artifact,
     oracle: { path: oracleFile, sha256: fileSha(oracleFile), semantic: oracle.semantic },
@@ -400,7 +537,7 @@ function observe({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile 
 
 function gradeValue(observation) {
   if (observation.record_type !== 'phase16_itsdangerous_observation' || observation.contract !== OBSERVATION_CONTRACT || observation.case_id !== CASE_ID) fail('observation_invalid', 'observation contract is invalid');
-  if (observation.case?.revision !== CASE_REVISION || observation.case?.sha256 !== CASE_SHA256 || !validHash(observation.freeze_sha256) || !validHash(observation.terminal_sha256) || !validHash(observation.handoff_sha256) || typeof observation.retained_root !== 'string' || observation.git?.top_level !== observation.retained_root || !observation.git.scope || !observation.brownfield?.files || !observation.checkpoint?.sha256 || stable(observation.turns?.map((item) => item.id)) !== stable(WORKFLOW_STEPS) || observation.turns?.some((item) => !validHash(item.sha256) || !item.thread_id || !Object.hasOwn(item, 'turn_id') || (item.turn_id !== null && (typeof item.turn_id !== 'string' || item.turn_id.length === 0))) || stable(observation.sessions) !== stable({ count: 3, turns: 5 }) || !observation.oracle?.semantic?.checks || !validHash(observation.oracle?.sha256) || observation.case.oracle_sha256 !== ORACLE_SHA256 || !['pass', 'fail'].includes(observation.oracle.semantic.status)) fail('observation_invalid', 'observation is missing immutable grading inputs');
+  if (observation.case?.revision !== CASE_REVISION || observation.case?.sha256 !== CASE_SHA256 || !validHash(observation.freeze_sha256) || !validHash(observation.terminal_sha256) || !validHash(observation.handoff_sha256) || !validHash(observation.setup_baseline_sha256) || typeof observation.retained_root !== 'string' || observation.git?.top_level !== observation.retained_root || !observation.git.scope || !observation.brownfield?.files || !observation.checkpoint?.sha256 || stable(observation.turns?.map((item) => item.id)) !== stable(WORKFLOW_STEPS) || observation.turns?.some((item) => !validHash(item.sha256) || !item.thread_id || !Object.hasOwn(item, 'turn_id') || (item.turn_id !== null && (typeof item.turn_id !== 'string' || item.turn_id.length === 0))) || stable(observation.sessions) !== stable({ count: 3, turns: 5 }) || !observation.oracle?.semantic?.checks || !validHash(observation.oracle?.sha256) || observation.case.oracle_sha256 !== ORACLE_SHA256 || !['pass', 'fail'].includes(observation.oracle.semantic.status)) fail('observation_invalid', 'observation is missing immutable grading inputs');
   const checks = { git_root: observation.git?.top_level === observation.retained_root, pinned_head: observation.git?.head === observation.case?.revision, git_scope: observation.git?.scope?.forbidden?.length === 0, brownfield: Boolean(observation.brownfield?.files?.['CHANGE.md'] && observation.brownfield?.files?.['HANDOFF.md'] && observation.brownfield?.files?.['VERIFICATION.md']), checkpoint: Boolean(observation.checkpoint?.sha256), oracle_import: observation.oracle?.semantic?.checks?.import_with_sha1_unavailable === true, oracle_explicit_sha256: observation.oracle?.semantic?.checks?.explicit_sha256_signer === true, oracle_default_rejected: observation.oracle?.semantic?.checks?.default_sha1_rejected === true, oracle_tests: observation.oracle?.semantic?.checks?.upstream_tests_pass === true };
   const productChecks = ['oracle_import', 'oracle_explicit_sha256', 'oracle_default_rejected', 'oracle_tests'];
   const disposition = observation.identity?.status === 'unknown' ? 'identity_unknown' : observation.human_needed === true ? 'human_needed' : checks.git_root && checks.pinned_head && checks.git_scope && checks.brownfield && checks.checkpoint ? (productChecks.every((key) => checks[key]) ? 'passed' : 'product_red') : 'infrastructure_invalid';
@@ -506,42 +643,42 @@ function observePartialPlan({ caseFile, freezeFile, receiptDir, consumerRoot, ca
   const capability = readJson(capabilityFile, 'capability_invalid');
   const markerPath = '.work/eval-capability.json';
   if (capability.schema_version !== 1 || capability.record_type !== 'phase16_capability_receipt' || capability.contract !== 'phase16-native-capability-v1' || capability.case_id !== CASE_ID || capability.capability !== 'native-codex-workspace-write' || capability.provider_invoked !== true || capability.characterization_only === true || capability.workflow_verdict !== 'not_evaluated' || capability.turn?.provider_invoked !== true || capability.turn?.characterization_only === true || capability.turn?.native?.parse_error !== null || capability.turn?.native?.thread_id == null || capability.turn?.terminal?.status !== 'provider_complete' || capability.terminal?.status !== 'passed' || capability.terminal?.failure_code != null || capability.marker?.exact !== true || capability.marker?.bytes !== 145 || !validHash(capability.marker?.sha256) || capability.snapshots?.pre_sha256 == null || capability.snapshots?.post_sha256 == null || stable(capability.snapshots?.changed_paths) !== stable([markerPath]) || capability.git?.expected_head !== CASE_REVISION || capability.git?.head !== CASE_REVISION || typeof capability.git?.status !== 'string') fail('capability_invalid', 'capability receipt is not an exact passed parser-clean pinned setup witness');
-  const setupPaths = capabilityStatusPaths(capability.git.status);
-  if (!setupPaths.includes(markerPath) || setupPaths.some((item) => item === data.source.candidate_path)) fail('capability_invalid', 'capability setup baseline does not contain the exact marker or is product-tainted');
   const preparation = readJson(preparationFile); const turn = readJson(turnFile); const terminal = readJson(terminalFile);
   const terminalFailure = String(terminal.terminal?.failure_code || turn.terminal?.failure_code || 'partial_terminal');
   const timeout = Boolean(turn.process?.timed_out) || /(?:^|_)(?:timeout|timed_out)(?:$|_)/i.test(terminalFailure);
   if (preparation.record_type !== 'phase16_preparation_receipt' || preparation.case_id !== CASE_ID || preparation.characterization_only === true || preparation.workflow_verdict !== 'not_evaluated' || preparation.bundle_sha256 !== freeze.bundle.sha256 || preparation.controls_sha256 !== freeze.controls.sha256 || preparation.candidate_sha256 !== freeze.candidate.sha256 || preparation.python?.sha256 !== freeze.runtime.python.sha256) fail('partial_preparation_invalid', 'partial preparation receipt is not bound to the freeze');
+  const setupBaseline = validateSetupBaseline(consumerRoot, preparation.setup_baseline);
+  if (setupBaseline.members.some((item) => item.path === markerPath) || setupBaseline.members.some((item) => item.path === data.source.candidate_path)) fail('capability_invalid', 'capability marker or product candidate was incorrectly included in the setup baseline');
+  const markerFile = path.join(consumerRoot, ...markerPath.split('/'));
+  let markerStat;
+  try { markerStat = fs.lstatSync(markerFile); } catch (error) { fail('capability_invalid', 'capability marker output is missing', { code: error.code }); }
+  if (!markerStat.isFile() || markerStat.isSymbolicLink() || markerStat.size !== capability.marker.bytes || fileSha(markerFile) !== capability.marker.sha256) fail('capability_invalid', 'capability marker output is not the exact sealed regular file');
+  if (!/(?:^|\r?\n)\?\? \.work\/eval-capability\.json(?:\r?\n|$)/.test(String(capability.git.status || ''))) fail('capability_invalid', 'capability Git status does not expose the exact marker output path');
   if (turn.record_type !== 'phase16_codex_turn_receipt' || turn.provider_invoked !== true || turn.characterization_only === true || turn.workflow_verdict !== 'not_evaluated' || turn.turn?.id !== 'turn-a-plan' || turn.turn?.role !== 'a-plan' || turn.turn?.skill !== 'work-plan' || stable(turn.turn?.skills) !== stable(['work-plan']) || turn.turn?.session !== 'A' || turn.turn?.initial !== true || (!turn.native?.thread_id && !timeout) || !Array.isArray(turn.invocation?.argv) || !turn.invocation.argv.includes('-m') || !turn.invocation.argv.includes('gpt-5.6-luna') || turn.terminal?.status !== 'failed') fail('partial_turn_invalid', 'partial plan-turn receipt is not a sealed provider terminal');
   if (terminal.record_type !== 'phase16_terminal_receipt' || terminal.case_id !== CASE_ID || terminal.provider_invoked !== true || terminal.workflow_verdict !== 'not_evaluated' || terminal.turn_count !== 1 || terminal.terminal?.status !== 'failed' || terminal.terminal?.sealed_turn?.turn !== 'turn-a-plan') fail('partial_terminal_invalid', 'partial terminal receipt does not seal exactly the first plan turn');
   if (exists(path.join(receiptDir, 'turn-a-pause.json')) || exists(path.join(receiptDir, 'handoff.json')) || exists(path.join(receiptDir, 'turn-b-resume-execute.json')) || exists(path.join(receiptDir, 'turn-c-verify.json')) || exists(path.join(receiptDir, 'turn-c-progress.json'))) fail('partial_predecessor', 'partial observer refuses evidence preceded by pause, resume, verify, progress, or handoff');
-  const planArtifacts = allowedPaths(data, { all: [] }).allowed.filter((item) => item.startsWith('.work/brownfield-change/')).sort();
   const brownfieldEvidence = brownfield(consumerRoot, data);
   if (brownfieldEvidence.status !== 'active' || brownfieldEvidence.verification_status !== 'pending') fail('plan_artifact_invalid', 'partial observer requires active planning and pending verification artifacts');
   const scope = gitScope(consumerRoot);
   if (scope.top !== fs.realpathSync(consumerRoot) || scope.head !== CASE_REVISION || runGit(consumerRoot, ['remote', 'get-url', 'origin']) !== data.source.repository) fail('consumer_root_invalid', 'partial observer root is not the pinned upstream checkout');
   const baseline = data.controls?.variants?.find((item) => item.id === 'baseline')?.candidate_sha256;
   if (!baseline || gitBlobSha(consumerRoot, CASE_REVISION, data.source.candidate_path) !== baseline.toLowerCase()) fail('baseline_binding_mismatch', 'partial observer baseline does not match the pinned case');
-  // gitScope retains the existing observer contract, but its diagnostic
-  // status text is intentionally trimmed. Re-read names through Git's
-  // name-only seams here so a leading porcelain status column cannot drop the
-  // first character of a changed path.
-  const changedNames = [...new Set([
-    ...runGit(consumerRoot, ['diff', '--name-only']).split(/\r?\n/),
-    ...runGit(consumerRoot, ['diff', '--cached', '--name-only']).split(/\r?\n/),
-    ...runGit(consumerRoot, ['ls-files', '--others', '--exclude-standard']).split(/\r?\n/),
-  ].map((item) => item.trim()).filter(Boolean))];
-  const productPath = 'src/itsdangerous/signer.py';
-  const product = changedNames.filter((item) => item === productPath);
-  const plan = changedNames.filter((item) => planArtifacts.includes(item));
-  const newlyIntroduced = changedNames.filter((item) => !setupPaths.includes(item) && !planArtifacts.includes(item));
-  const forbidden = changedNames.filter((item) => !setupPaths.includes(item) && !planArtifacts.includes(item) && item !== productPath);
-  if (forbidden.length || newlyIntroduced.length !== 1 || product.length !== 1) fail('git_scope_invalid', 'partial observer found out-of-scope retained-root changes', { forbidden, setup_paths: setupPaths });
-  if (fileSha(path.join(consumerRoot, data.source.candidate_path)) === baseline.toLowerCase()) fail('candidate_missing', 'partial observer requires one changed declared product candidate');
-  const classified = { allowed: [...setupPaths, ...planArtifacts], all: changedNames, setup: changedNames.filter((item) => setupPaths.includes(item)), plan, newly_introduced: newlyIntroduced, forbidden, product };
+  const classified = allowedPaths(data, scope, setupBaseline, [markerPath]);
+  const plan = classified.plan;
+  const product = classified.product;
+  const newlyIntroduced = classified.newly_introduced;
+  const forbidden = classified.forbidden;
+  if (forbidden.length) fail('git_scope_invalid', 'partial observer found out-of-scope retained-root changes', { forbidden, setup_paths: classified.setup });
+  if (product.length !== 1) fail('candidate_missing', 'partial observer requires exactly one pinned product candidate change');
+  const candidateFile = path.join(consumerRoot, ...data.source.candidate_path.split('/'));
+  let candidateStat;
+  try { candidateStat = fs.lstatSync(candidateFile); } catch (error) { fail('candidate_missing', 'partial observer candidate is missing', { code: error.code }); }
+  if (!candidateStat.isFile() || candidateStat.isSymbolicLink()) fail('candidate_missing', 'partial observer candidate is not a regular non-symlink file');
+  if (fileSha(candidateFile) === baseline.toLowerCase()) fail('candidate_missing', 'partial observer candidate is unchanged from the frozen baseline');
+  if (plan.length === 0 || newlyIntroduced.length !== plan.length + 1 || newlyIntroduced.some((item) => !plan.includes(item) && item !== data.source.candidate_path)) fail('git_scope_invalid', 'partial observer introduced a path outside the exact lifecycle additions and pinned candidate');
   const disposition = 'product_red';
   const checks = { case_pin: true, freeze: true, capability: true, preparation: true, provider_plan_terminal: true, no_predecessor: true, work_plan_contract: true, product_mutation: true, timeout_observed: timeout };
-  const observation = { schema_version: 1, record_type: 'phase16_itsdangerous_partial_observation', contract: 'phase16-itsdangerous-partial-observation-v1', case_id: CASE_ID, case: { sha256: fileSha(caseFile), revision: CASE_REVISION }, freeze_sha256: fileSha(freezeFile), capability_sha256: fileSha(capabilityFile), preparation_sha256: fileSha(preparationFile), turn_sha256: fileSha(turnFile), terminal_sha256: fileSha(terminalFile), retained_root: fs.realpathSync(consumerRoot), git: { top_level: scope.top, head: scope.head, status: scope.status, status_sha256: scope.status_sha256, scope: classified, candidate_sha256: fileSha(path.join(consumerRoot, data.source.candidate_path)) }, turn: { id: 'turn-a-plan', ...(turn.native.thread_id ? { thread_id: turn.native.thread_id } : {}) }, terminal: { status: 'failed', timeout, failure_code: terminalFailure }, checks, oracle: { status: 'not_produced_due_to_partial_terminal' }, claim_limit: 'One partial rooted plan observation only; no oracle, complete workflow, model, benchmark, security, or release claim.' };
+  const observation = { schema_version: 1, record_type: 'phase16_itsdangerous_partial_observation', contract: 'phase16-itsdangerous-partial-observation-v1', case_id: CASE_ID, case: { sha256: fileSha(caseFile), revision: CASE_REVISION }, freeze_sha256: fileSha(freezeFile), capability_sha256: fileSha(capabilityFile), preparation_sha256: fileSha(preparationFile), setup_baseline_sha256: setupBaseline.sha256, turn_sha256: fileSha(turnFile), terminal_sha256: fileSha(terminalFile), retained_root: fs.realpathSync(consumerRoot), git: { top_level: scope.top, head: scope.head, status: scope.status, status_sha256: scope.status_sha256, scope: classified, candidate_sha256: fileSha(candidateFile) }, turn: { id: 'turn-a-plan', ...(turn.native.thread_id ? { thread_id: turn.native.thread_id } : {}) }, terminal: { status: 'failed', timeout, failure_code: terminalFailure }, checks, oracle: { status: 'not_produced_due_to_partial_terminal' }, claim_limit: 'One partial rooted plan observation only; no oracle, complete workflow, model, benchmark, security, or release claim.' };
   writeExclusive(observationFile, observation);
   const grade = { schema_version: 1, record_type: 'phase16_itsdangerous_partial_grade', contract: 'phase16-itsdangerous-partial-grade-v1', case_id: CASE_ID, observation_sha256: fileSha(observationFile), checks, disposition, terminal_fact: timeout ? 'timeout' : 'partial_terminal', provider_invoked: false, retained_root_required: false, claim_limit: 'Deterministic grade of one sealed partial plan observation; no oracle or complete workflow claim.' };
   writeExclusive(gradeFile, grade);
@@ -559,9 +696,9 @@ if (require.main === module) {
 }
 
 module.exports = {
-  ObserverFailure, writeExclusive, readCase, validateFreeze, validateNativeReceipt, gitScope, gitBlobSha, brownfield, completeHandoff, runOracle,
+  ObserverFailure, writeExclusive, readCase, validateFreeze, validateNativeReceipt, runGitRaw, parseGitNameOnly, gitVisiblePaths, captureSetupBaseline, validateSetupBaseline, gitScope, gitBlobSha, brownfield, completeHandoff, runOracle,
   observe, observeRun: observe, checkpoint, gradeValue, grade, gradeObservation: grade, regrade,
   regradeObservation: regrade, regradeChild, project, projectPublic: project, earlyProjection,
-  writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths,
-  WORKFLOW_STEPS, DISPOSITIONS, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_CONTRACT, TURN_TOTAL_WALL_MINUTES, TURN_TOTAL_NATIVE_TOKENS, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, validateEvaluatorLedger, observePartialPlan,
+  writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths, scopeGate,
+  WORKFLOW_STEPS, DISPOSITIONS, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_CONTRACT, TURN_TOTAL_WALL_MINUTES, TURN_TOTAL_NATIVE_TOKENS, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, SETUP_BASELINE_CONTRACT, validateEvaluatorLedger, observePartialPlan,
 };

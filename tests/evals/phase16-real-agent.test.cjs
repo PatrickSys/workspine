@@ -295,6 +295,15 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
   let calls = 0;
   const sessionTurns = { A: 0, B: 0, C: 0 };
   const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, totalUsage: initialTotalUsage, sessions: {}, data: {}, sourceBefore: {}, providerInvocations: 0 };
+  const setupMembers = [
+    '.work/bin/gsdd.mjs',
+    '.work/brownfield-change/CHANGE.md',
+    ...[...new Set(LIVE.TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => `.agents/skills/${skill}/SKILL.md`),
+  ].map((relative) => {
+    const bytes = fs.readFileSync(path.join(consumerRoot, ...relative.split('/')));
+    return { path: relative, type: 'file', bytes: bytes.length, sha256: sha(bytes) };
+  }).sort((left, right) => left.path.localeCompare(right.path));
+  context.setupBaseline = { contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: setupMembers, sha256: OBSERVER.stableHash({ contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: setupMembers }) };
   context.approvePlan = (_context, request) => {
     const state = { schema_version: 1, status: 'active', current_state: 'execute', workflow: { plan: { approved: true, path: request.plan, identity: request.plan }, execution: { status: 'in_progress' }, verification: { status: 'not_started' }, audit: { status: 'not_started' }, dogfood: { status: 'not_started' }, authority: request.authority, current_state: 'execute', approval_ref: request.approvalRef } };
     fs.mkdirSync(path.join(consumerRoot, '.work'), { recursive: true });
@@ -331,7 +340,7 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
     const usage = typeof usageByTurn === 'function' ? usageByTurn(turn, calls) : sessionTurn * 10;
     return { status: 0, pid: 1000 + calls, stdout: nativeCodex(session, `${turn.id}-native`, usage, mutation === 'provider-verdict' ? 'passed' : verdict), stderr: '', timed_out: planFailure === 'timeout' && turn.id === 'turn-a-plan' };
   };
-  return { freezeFile, receiptDir, context, prepareRun, spawn, get calls() { return calls; } };
+  return { freezeFile, receiptDir, consumerRoot, context, prepareRun, spawn, get calls() { return calls; } };
 }
 
 function observerFreezeFixture(root) {
@@ -362,6 +371,7 @@ function observerHandoffFixture(root, mutateArgv = null, mutateReceipt = null) {
     record_type: 'phase16_preparation_receipt', case_id: 'itsdangerous-fips-sha1',
     bundle_sha256: fixture.freeze.bundle.sha256, controls_sha256: fixture.freeze.controls.sha256,
     candidate_sha256: fixture.freeze.candidate.sha256, python: { sha256: fixture.freeze.runtime.python.sha256 },
+    setup_baseline: fixture.context.setupBaseline,
     characterization_only: false, workflow_verdict: 'not_evaluated',
   };
   fs.writeFileSync(path.join(fixture.receiptDir, 'preparation.json'), JSON.stringify(preparation));
@@ -388,7 +398,8 @@ function observerHandoffFixture(root, mutateArgv = null, mutateReceipt = null) {
   });
   const terminal = { record_type: 'phase16_terminal_receipt', terminal: { status: 'provider_complete' }, turn_count: 5, workflow_verdict: 'not_evaluated', provider_invoked: true };
   const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));
-  const handoff = { record_type: 'phase16_codex_handoff', case_id: 'itsdangerous-fips-sha1', workflow_verdict: 'not_evaluated', characterization_only: false, retained_root: '<CONSUMER_ROOT>', sessions, turns, terminal_sha256: terminalSha };
+  const preparationSha = sha(fs.readFileSync(path.join(fixture.receiptDir, 'preparation.json')));
+  const handoff = { record_type: 'phase16_codex_handoff', case_id: 'itsdangerous-fips-sha1', workflow_verdict: 'not_evaluated', characterization_only: false, retained_root: '<CONSUMER_ROOT>', sessions, turns, preparation_sha256: preparationSha, setup_baseline_sha256: fixture.context.setupBaseline.sha256, terminal_sha256: terminalSha };
   return { ...fixture, terminal, handoff };
 }
 
@@ -1072,6 +1083,134 @@ test('observer grades actual staged, unstaged, and untracked out-of-scope Git pa
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+function makeGitRepo(root, files = {}) {
+  const git = (args) => {
+    const result = cp.spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true, shell: false });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  fs.mkdirSync(root, { recursive: true });
+  for (const [relative, content] of Object.entries(files)) {
+    const file = path.join(root, ...relative.split('/')); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content);
+  }
+  git(['init', '-q']); git(['config', 'user.email', 'phase16@example.invalid']); git(['config', 'user.name', 'phase16-test']); git(['add', '.']); git(['commit', '-qm', 'baseline']);
+  return git;
+}
+
+test('setup ledger records exact path type bytes and hash at the post-init boundary', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-setup-ledger-'));
+  try {
+    const git = makeGitRepo(root, { 'tracked.txt': 'tracked\n' });
+    for (const [relative, content] of Object.entries({
+      'inputs/owner/TASK.md': 'task\n', '.gitignore': 'ignored\n', 'AGENTS.md': 'agents\n', 'goal.md': 'goal\n',
+      '.agents/skills/work-plan/SKILL.md': 'skill\n', '.work/bin/gsdd.mjs': 'helper\n',
+    })) { const file = path.join(root, ...relative.split('/')); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); }
+    const ledger = OBSERVER.captureSetupBaseline(root);
+    assert.equal(ledger.contract, OBSERVER.SETUP_BASELINE_CONTRACT);
+    assert.deepEqual(ledger.members.map((item) => item.path), ledger.members.map((item) => item.path).slice().sort((a, b) => a.localeCompare(b)));
+    assert.ok(ledger.members.every((item) => item.type === 'file' && Number.isInteger(item.bytes) && item.sha256 === sha(fs.readFileSync(path.join(root, ...item.path.split('/'))))));
+    assert.equal(ledger.sha256, OBSERVER.stableHash({ contract: ledger.contract, members: ledger.members }));
+    assert.deepEqual(OBSERVER.gitVisiblePaths(root).all, ledger.members.map((item) => item.path).sort((a, b) => a.localeCompare(b)));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('observer subtracts only unchanged regular non-symlink setup entries', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-setup-subtract-'));
+  try {
+    const git = makeGitRepo(root, { 'src/itsdangerous/signer.py': 'baseline\n' });
+    fs.mkdirSync(path.join(root, '.work', 'bin'), { recursive: true }); fs.writeFileSync(path.join(root, '.work', 'bin', 'gsdd.mjs'), 'helper\n');
+    const baseline = OBSERVER.captureSetupBaseline(root);
+    fs.appendFileSync(path.join(root, 'src/itsdangerous/signer.py'), 'candidate\n');
+    const scope = OBSERVER.gitScope(root);
+    const classified = OBSERVER.allowedPaths({ source: { candidate_path: 'src/itsdangerous/signer.py' }, task: { allowed_paths: ['src/itsdangerous/signer.py'] } }, scope, baseline);
+    assert.deepEqual(classified.setup, ['.work/bin/gsdd.mjs']);
+    assert.deepEqual(classified.product, ['src/itsdangerous/signer.py']);
+    assert.deepEqual(classified.forbidden, []);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('baseline tamper blocks checkpoint and oracle before observation', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-baseline-tamper-'));
+  const fixture = observerHandoffFixture(root);
+  try {
+    fs.appendFileSync(path.join(fixture.consumerRoot, '.work', 'bin', 'gsdd.mjs'), 'tampered\n');
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: fixture.terminal, handoffValue: fixture.handoff }), (error) => error.code === 'setup_baseline_tampered');
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'observation.json')), false);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'oracle.json')), false);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('setup mutation deletion replacement symlink directory and extra path fail closed', () => {
+  const mutations = ['changed', 'missing', 'directory', 'symlink', 'extra'];
+  for (const mutation of mutations) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-setup-${mutation}-`));
+    try {
+      makeGitRepo(root, { 'tracked.txt': 'tracked\n' });
+      fs.mkdirSync(path.join(root, '.work', 'bin'), { recursive: true }); fs.writeFileSync(path.join(root, '.work', 'bin', 'gsdd.mjs'), 'helper\n');
+      const baseline = OBSERVER.captureSetupBaseline(root);
+      const target = path.join(root, '.work', 'bin', 'gsdd.mjs');
+      if (mutation === 'changed') fs.appendFileSync(target, 'changed\n');
+      if (mutation === 'missing') fs.rmSync(target);
+      if (mutation === 'directory') { fs.rmSync(target); fs.mkdirSync(target); }
+      if (mutation === 'symlink') { const replacement = path.join(root, 'replacement.txt'); fs.writeFileSync(replacement, 'replacement\n'); fs.rmSync(target); fs.symlinkSync(replacement, target, 'file'); }
+      if (mutation === 'extra') fs.writeFileSync(path.join(root, '.work', 'extra.txt'), 'extra\n');
+      if (mutation === 'extra') {
+        const scope = OBSERVER.gitScope(root); const classified = OBSERVER.allowedPaths({ source: { candidate_path: 'candidate.py' }, task: { allowed_paths: ['candidate.py'] } }, scope, baseline);
+        assert.ok(classified.forbidden.includes('.work/extra.txt'));
+      } else assert.throws(() => OBSERVER.validateSetupBaseline(root, baseline), (error) => error.code === 'setup_baseline_tampered');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('exact brownfield lifecycle allowlist rejects broad prefixes and duplicate candidates', () => {
+  const baseline = { contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [], sha256: OBSERVER.stableHash({ contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [] }) };
+  const data = { source: { candidate_path: 'src/itsdangerous/signer.py' }, task: { allowed_paths: ['src/itsdangerous/signer.py'] } };
+  const accepted = OBSERVER.allowedPaths(data, { all: [{ path: '.work/brownfield-change/CHANGE.md' }, { path: '.work/.continue-here.md' }, { path: 'src/itsdangerous/signer.py' }] }, baseline);
+  assert.deepEqual(accepted.plan, ['.work/brownfield-change/CHANGE.md', '.work/.continue-here.md']);
+  assert.deepEqual(accepted.product, ['src/itsdangerous/signer.py']);
+  const rejected = OBSERVER.allowedPaths(data, { all: [{ path: '.work/brownfield-change/OTHER.md' }, { path: 'src/itsdangerous/signer.py' }, { path: 'src/itsdangerous/signer.py' }] }, baseline);
+  assert.ok(rejected.forbidden.includes('.work/brownfield-change/OTHER.md'));
+  assert.equal(rejected.product.length, 2);
+});
+
+test('sole product path must equal pinned candidate and differ from frozen baseline', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-sole-product-'));
+  try {
+    makeGitRepo(root, { 'src/itsdangerous/signer.py': 'baseline\n' });
+    fs.appendFileSync(path.join(root, 'src/itsdangerous/signer.py'), 'changed\n');
+    const scope = OBSERVER.gitScope(root);
+    const classified = OBSERVER.allowedPaths({ source: { candidate_path: 'src/itsdangerous/signer.py' }, task: { allowed_paths: ['src/itsdangerous/signer.py'] } }, scope, { contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [], sha256: OBSERVER.stableHash({ contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [] }) });
+    assert.deepEqual(classified.product, ['src/itsdangerous/signer.py']);
+    assert.equal(fs.readFileSync(path.join(root, 'src/itsdangerous/signer.py'), 'utf8'), 'baseline\nchanged\n');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('full and partial scope share NUL-safe name-only Git path parsing', () => {
+  const raw = Buffer.from('space name.txt\0quote"tab\tname.txt\0', 'utf8');
+  assert.deepEqual(OBSERVER.parseGitNameOnly(raw), ['space name.txt', 'quote"tab\tname.txt']);
+  for (const invalid of [Buffer.from('a\0\0', 'utf8'), Buffer.from('/absolute\0', 'utf8'), Buffer.from('../escape\0', 'utf8'), Buffer.from('a\\b\0', 'utf8'), Buffer.from('dup\0dup\0', 'utf8'), Buffer.from([0xff, 0x00])]) assert.throws(() => OBSERVER.parseGitNameOnly(invalid), (error) => error.code === 'git_path_invalid');
+});
+
+test('tracked rename into candidate exposes source deletion and fails closed', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-rename-candidate-'));
+  try {
+    const git = makeGitRepo(root, { 'src/itsdangerous/original.py': 'baseline\n' });
+    git(['mv', 'src/itsdangerous/original.py', 'src/itsdangerous/signer.py']);
+    const scope = OBSERVER.gitScope(root);
+    assert.ok(scope.all.some((item) => item.path === 'src/itsdangerous/original.py'));
+    assert.ok(scope.all.some((item) => item.path === 'src/itsdangerous/signer.py'));
+    const data = { source: { candidate_path: 'src/itsdangerous/signer.py' }, task: { allowed_paths: ['src/itsdangerous/signer.py'] } };
+    const baseline = { contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [], sha256: OBSERVER.stableHash({ contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [] }) };
+    let checkpointReached = false; let oracleReached = false;
+    assert.throws(() => {
+      const classified = OBSERVER.scopeGate(data, scope, baseline);
+      checkpointReached = true; oracleReached = true;
+      return classified;
+    }, (error) => error.code === 'git_scope_invalid');
+    assert.equal(checkpointReached, false);
+    assert.equal(oracleReached, false);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('characterization handoffs cannot reach the observer', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-characterization-'));
   const fixture = rootedRunFixture(root);
@@ -1187,7 +1326,7 @@ function syntheticObservation(root, checks = {}) {
   const merged = { import_with_sha1_unavailable: true, explicit_sha256_signer: true, default_sha1_rejected: true, upstream_tests_pass: true, ...checks };
   const observation = {
     record_type: 'phase16_itsdangerous_observation', contract: 'phase16-itsdangerous-observation-v1', case_id: 'itsdangerous-fips-sha1',
-    freeze_sha256: 'd'.repeat(64), terminal_sha256: 'e'.repeat(64), handoff_sha256: 'f'.repeat(64),
+    freeze_sha256: 'd'.repeat(64), terminal_sha256: 'e'.repeat(64), handoff_sha256: 'f'.repeat(64), setup_baseline_sha256: 'a'.repeat(64),
     retained_root: '<RETAINED_ROOT>', case: { revision: '93ae366874bbd4f69d90495c45b2cd336387496c', sha256: 'e77f420a8036a80b1ff96f9c6a96ffb3f9e4d32e724d4a33604a24119bb97c3f', oracle_sha256: '21a66bfd5b2d00c0199a5b4fbba75af507c112ff4f8717f7f13e3ee498ca1a11' },
     git: { top_level: '<RETAINED_ROOT>', head: '93ae366874bbd4f69d90495c45b2cd336387496c', scope: { forbidden: [], product: ['src/itsdangerous/signer.py'] }, candidate_sha256: 'a'.repeat(64) },
     turns: OBSERVER.WORKFLOW_STEPS.map((id, index) => ({ id, thread_id: index < 2 ? 'native-A' : index === 2 ? 'native-B' : 'native-C', turn_id: `turn-${index}`, sha256: String(index + 1).repeat(64) })), sessions: { count: 3, turns: 5 },
@@ -1392,6 +1531,7 @@ function makePartialPlanFixture() {
   fs.writeFileSync(path.join(brownfieldDir, 'HANDOFF.md'), `---\nchange: CHANGE-001\nupdated: 2026-08-28\nruntime: codex-cli\n---\n\n# Brownfield Change Handoff\n\nCHANGE.md is the only operational authority for this plan.\n\n## Active Constraints\nKeep product scope to src/itsdangerous/signer.py.\n\n## Unresolved Uncertainty\nThe exact unavailable-digest error follows the module style.\n\n## Decision Posture\nUse the smallest lazy default-resolution change.\n\n## Anti-Regression\nPreserve explicit SHA-256 behavior and import safety.\n\n## Next Action\nResume from the checkpoint and execute only the active plan.\n`);
   fs.writeFileSync(path.join(brownfieldDir, 'VERIFICATION.md'), `---\nchange: CHANGE-001\nverified: 2026-08-28\nstatus: pending\ndelivery_posture: repo_only\n---\n\n# Brownfield Change Verification\n\n## Goal Verification\nThe goal is to make importing itsdangerous succeed and preserve explicit signing.\n\n## Evidence\nNo closeout evidence has been collected.\n\n## Artifact Checks\nThe signer artifact exists and remains in scope.\n\n## Gaps\nImplementation and tests are pending.\n\n## Widening Reuse\nPreserve this partial proof if the change widens.\n\n## Human Verification\nNone required unless deterministic checks expose uncertainty.\n\n## Closeout Decision\nPending until every plan condition is evaluated.\n`);
   fs.mkdirSync(receiptDir, { recursive: true });
+  fs.writeFileSync(path.join(consumerRoot, '.work', 'eval-capability.json'), LIVE.CAPABILITY_MARKER_BYTES);
   fs.appendFileSync(path.join(consumerRoot, 'src', 'itsdangerous', 'signer.py'), '\n# partial plan product change\n');
   const workPlanHash = sha(fs.readFileSync(workPlanFile));
   const freeze = {
@@ -1401,7 +1541,9 @@ function makePartialPlanFixture() {
     bundle: { sha256: 'b'.repeat(64) }, controls: { sha256: 'c'.repeat(64) }, candidate: { sha256: 'd'.repeat(64) }, runtime: { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high', python: { sha256: 'e'.repeat(64) } }, skills: { 'work-plan': workPlanHash }, root_map: { consumer_root: '<RUN_ROOT>/consumer_root' },
   };
   const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));
-  const preparation = { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: 'itsdangerous-fips-sha1', bundle_sha256: freeze.bundle.sha256, controls_sha256: freeze.controls.sha256, candidate_sha256: freeze.candidate.sha256, python: { sha256: freeze.runtime.python.sha256 }, characterization_only: false, workflow_verdict: 'not_evaluated' };
+  const setupMembers = [{ path: '.agents/skills/work-plan/SKILL.md', type: 'file', bytes: fs.statSync(workPlanFile).size, sha256: workPlanHash }];
+  const setupBaseline = { contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: setupMembers, sha256: OBSERVER.stableHash({ contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: setupMembers }) };
+  const preparation = { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: 'itsdangerous-fips-sha1', bundle_sha256: freeze.bundle.sha256, controls_sha256: freeze.controls.sha256, candidate_sha256: freeze.candidate.sha256, python: { sha256: freeze.runtime.python.sha256 }, setup_baseline: setupBaseline, characterization_only: false, workflow_verdict: 'not_evaluated' };
   const turn = { schema_version: 1, record_type: 'phase16_codex_turn_receipt', provider_invoked: true, characterization_only: false, invocation: { argv: ['exec', '-m', 'gpt-5.6-luna'] }, native: { thread_id: null, turn_id: null }, process: { status: 'exited', timed_out: true }, terminal: { status: 'failed', failure_code: 'turn_timeout' }, turn: { id: 'turn-a-plan', role: 'a-plan', skill: 'work-plan', skills: ['work-plan'], session: 'A', initial: true }, workflow_verdict: 'not_evaluated' };
   const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: 'itsdangerous-fips-sha1', turn_count: 1, provider_invoked: true, workflow_verdict: 'not_evaluated', terminal: { status: 'failed', failure_code: 'turn_timeout', sealed_turn: { turn: 'turn-a-plan' } } };
   const capability = {

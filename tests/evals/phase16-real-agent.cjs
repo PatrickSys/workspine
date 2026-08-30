@@ -10,6 +10,7 @@ const crypto = require('node:crypto');
 const cp = require('node:child_process');
 const CORE = require('./phase16-core-flows.cjs');
 const RECORDER = require('./phase16-codex-recorder.cjs');
+const OBSERVER = require('./phase16-itsdangerous-observer.cjs');
 
 const REPO = fs.realpathSync(path.resolve(__dirname, '..', '..'));
 const CASE_ID = 'itsdangerous-fips-sha1';
@@ -906,11 +907,12 @@ function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   const cli = path.join(installed.packageRoot, 'bin', 'gsdd.mjs');
   const init = cp.spawnSync(process.execPath, [cli, 'init', '--auto', '--tools', 'agents'], { cwd: consumerRoot, env, input: '', encoding: 'utf8', windowsHide: true, shell: false, timeout: 120000, maxBuffer: 1024 * 1024 });
   if (init.status !== 0) fail('generated_skills_setup_failed', 'installed Workspine could not prepare repo-local skills', { stderr: String(init.stderr || '').slice(-2000) });
+  const setupBaseline = OBSERVER.captureSetupBaseline(consumerRoot);
   const evidence = CORE.realAgentProviderEvidence(provider);
   if (stable(evidence) !== stable(freeze.runtime.executable)) fail('provider_binding_mismatch', 'resolved Codex executable differs from the freeze');
   if (stable(codexContract(provider)) !== stable(freeze.runtime.cli_contract)) fail('provider_contract_mismatch', 'resolved Codex runtime contract differs from the freeze');
   const python = resolvePython(); if (python.sha256 !== freeze.runtime.python.sha256) fail('python_binding_mismatch', 'resolved Python differs from the freeze');
-  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), cli, receiptDir: options.receiptDir, provider, env, python, totalUsage: 0, sessions: {}, providerInvocations: 0, spawned: false, sourceBefore, cache, inputRoot };
+  const context = { freeze, data, runRoot, consumerRoot, toolRoot: path.join(toolStage, 'install'), cli, receiptDir: options.receiptDir, provider, env, python, totalUsage: 0, sessions: {}, providerInvocations: 0, spawned: false, sourceBefore, cache, inputRoot, setupBaseline };
   context.skills = Object.fromEntries([...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, fileSha(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md'))])); context.expectedSkills = freeze.skills || null;
   return context;
 }
@@ -924,7 +926,10 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
   const turns = []; let current = null; let failure = null; let context = null;
   try {
     context = options.prepareRun ? options.prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir }) : prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir });
-    writeExclusive(path.join(dir, 'preparation.json'), { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: CASE_ID, consumer_root: '<CONSUMER_ROOT>', tool_root: '<TOOL_ROOT>', bundle_sha256: freeze.bundle.sha256, controls_sha256: freeze.controls.sha256, candidate_sha256: freeze.candidate.sha256, generated_skills: [...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))], python: context.python ? { identity: '<PYTHON>', sha256: context.python.sha256 } : null, auth_copied: false, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' });
+    if (!context.setupBaseline) fail('setup_baseline_missing', 'post-init preparation did not return a setup baseline ledger');
+    const preparation = { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: CASE_ID, consumer_root: '<CONSUMER_ROOT>', tool_root: '<TOOL_ROOT>', bundle_sha256: freeze.bundle.sha256, controls_sha256: freeze.controls.sha256, candidate_sha256: freeze.candidate.sha256, generated_skills: [...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))], python: context.python ? { identity: '<PYTHON>', sha256: context.python.sha256 } : null, setup_baseline: context.setupBaseline || null, auth_copied: false, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' };
+    writeExclusive(path.join(dir, 'preparation.json'), preparation);
+    const preparationSha = fileSha(path.join(dir, 'preparation.json'));
     let pauseBaseline = null;
     for (const turn of TURN_PLAN) {
       current = turn; const before = CORE.snapshotTree(context.consumerRoot, true); const beforeBoundary = turn.id === 'turn-a-plan' ? readPlanBoundaryArtifacts(context.consumerRoot) : null; if (!pauseBaseline) pauseBaseline = before; const expectedSession = turn.initial ? null : context.sessions[turn.session];
@@ -957,7 +962,7 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     const approvalSha = fileSha(path.join(dir, 'approval.json'));
     const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: approvalSha, terminal: { status: 'provider_complete' } };
     const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));
-    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), approval_sha256: approvalSha, terminal_sha256: terminalSha, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>' };
+    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), approval_sha256: approvalSha, preparation_sha256: preparationSha, setup_baseline_sha256: context.setupBaseline?.sha256 || null, terminal_sha256: terminalSha, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>' };
     let observer = null;
     if (!characterizationOnly && options.observe !== false) {
       try {
@@ -969,7 +974,7 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     }
     writeExclusive(path.join(dir, 'terminal.json'), terminal);
     writeExclusive(path.join(dir, 'handoff.json'), handoff);
-    return { preparation: { status: 'passed', characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' }, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, turns, handoff, observer };
+    return { preparation: { status: 'passed', setup_baseline: context.setupBaseline, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' }, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, turns, handoff, observer };
   } catch (error) {
     if (error instanceof RunnerFailure) failure = error;
     else { failure = new RunnerFailure(error.code || 'infrastructure', error.message, error.evidence || null); failure.kind = error.kind || 'infrastructure'; }
