@@ -244,6 +244,20 @@ function turnDiffUpdated(file) {
   };
 }
 
+function continuityPacket(root, checkpoint) {
+  const sections = Object.fromEntries(['current_state', 'work_completed', 'work_remaining', 'next_action', 'decisions', 'risks'].map(key => [key, `${key} value`]));
+  return { method: 'item/completed', params: { item: { id: 'next-packet', type: 'commandExecution', status: 'completed', exitCode: 0,
+    cwd: root, command: 'node .work/bin/gsdd.mjs next --json', aggregatedOutput: `${JSON.stringify({ continuity: { checkpoint: {
+      path: '.work/.continue-here.md', status: 'valid', frontmatter: { workflow: 'phase' }, sections, errors: [],
+    } } })}\n--- TASK.md ---\nextra output` } } };
+}
+
+function nativeApplyPatch(root, file = 'lib/index.js') {
+  return { method: 'item/completed', params: { item: { id: 'native-patch', type: 'commandExecution', status: 'completed', exitCode: 0,
+    cwd: root, source: 'unifiedExecStartup', processId: '123', commandActions: [{ type: 'unknown',
+      command: `$patchText = @'\n*** Begin Patch\n*** Update File: ${file}\n@@\n-old\n+new\n*** End Patch\n'@; & 'C:\\tools\\@openai\\codex\\vendor\\codex.exe' --codex-run-as-apply-patch $patchText` }] } } };
+}
+
 test('checkpoint witness binds exact output before product mutation', t => {
   const root = tempRoot(t);
   const checkpoint = 'checkpoint bytes\n';
@@ -279,6 +293,23 @@ test('checkpoint witness orders the read before a real Codex turn diff', t => {
   assert.equal(witness.event_index, 1);
   assert.equal(witness.product_change_event_index, 2);
   assert.equal(findCheckpointWitness([productDiff, completedRead(root, checkpoint)], options).ok, false);
+});
+
+test('checkpoint witness accepts the real continuity packet before native apply-patch', t => {
+  const root = tempRoot(t), checkpoint = `---\nworkflow: phase\n---\n\n${['current_state', 'work_completed', 'work_remaining', 'next_action', 'decisions', 'risks'].map(key => `<${key}>\n${key} value\n</${key}>`).join('\n')}\n`;
+  const witness = findCheckpointWitness([continuityPacket(root, checkpoint), nativeApplyPatch(root)], {
+    consumerRoot: root, checkpointSha256: sha256(checkpoint), checkpointText: checkpoint,
+  });
+  assert.equal(witness.ok, true);
+  assert.equal(witness.event_index, 0);
+  assert.equal(witness.product_change_event_index, 1);
+  const fake = nativeApplyPatch(root); fake.params.item.commandActions[0].command = `Write-Output --codex-run-as-apply-patch\n*** Update File: lib/index.js`;
+  assert.equal(findCheckpointWitness([continuityPacket(root, checkpoint), fake], {
+    consumerRoot: root, checkpointSha256: sha256(checkpoint), checkpointText: checkpoint,
+  }).reason, 'product_change_event_not_observed');
+  assert.equal(findCheckpointWitness([continuityPacket(root, checkpoint), nativeApplyPatch(root)], {
+    consumerRoot: root, checkpointSha256: sha256(checkpoint), checkpointText: 'different',
+  }).ok, false);
 });
 
 test('checkpoint witness fails closed when read is late, wrong, or ambiguous', t => {

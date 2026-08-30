@@ -14,7 +14,7 @@ export function buildPrompts() {
 export function captureCheckpoint(consumerRoot) {
   const file = path.join(path.resolve(consumerRoot), '.work', '.continue-here.md'), stat = fs.lstatSync(file, { throwIfNoEntry: false });
   if (!stat?.isFile() || stat.isSymbolicLink()) throw new EvalError('protocol_invalid', 'canonical checkpoint is missing');
-  return { path: '.work/.continue-here.md', sha256: fileSha256(file), bytes: stat.size };
+  return { path: '.work/.continue-here.md', sha256: fileSha256(file), bytes: stat.size, text: fs.readFileSync(file, 'utf8') };
 }
 export function approvePlan({ consumerRoot, checkpoint, approvalRef }) {
   const root = path.resolve(consumerRoot), planRelative = '.work/brownfield-change/CHANGE.md';
@@ -59,7 +59,7 @@ export async function runJourney(options) {
   const approve = options.approve || (input => approvePlan({ consumerRoot: options.consumerRoot,
     approvalRef: options.approvalRef, ...input }));
   const witness = options.checkpointWitness || ((result, checkpoint) => findCheckpointWitness(result.events || [], {
-    consumerRoot: options.consumerRoot, checkpointSha256: checkpoint.sha256,
+    consumerRoot: options.consumerRoot, checkpointSha256: checkpoint.sha256, checkpointText: checkpoint.text,
   }));
   const turns = {};
   const run = async (id, sessionId = null) => {

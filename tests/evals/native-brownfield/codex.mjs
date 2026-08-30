@@ -23,21 +23,22 @@ export function classifyProviderResult(result, expectedSession = null) {
   return { outcome, failure_code, usage: { total_tokens: Number.isFinite(result.totalTokens) ? result.totalTokens : 'not_observable' } };
 }
 function productChange(event) {
-  const item = event?.params?.item;
-  const paths = ['fileChange', 'file_change'].includes(item?.type) ? (item.changes || item.files || []).map(change => toPosix(change.path || change.file || change))
-    : event?.method === 'turn/diff/updated' ? [...String(event.params?.diff || '').matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].flatMap(([, before, after]) => [toPosix(before), toPosix(after)]) : [];
-  return paths.some(file => file && !file.startsWith('.work/') && !file.startsWith('.agents/')
-    && !file.startsWith('inputs/') && !['AGENTS.md', 'goal.md'].includes(file));
+  const item = event?.params?.item, command = (item?.commandActions || []).map(action => action.command).join('\n') || String(item?.command || '');
+  const paths = ['fileChange', 'file_change'].includes(item?.type) ? (item.changes || item.files || []).map(change => toPosix(change.path || change.file || change)) : event?.method === 'turn/diff/updated' ? [...String(event.params?.diff || '').matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].flatMap(([, before, after]) => [toPosix(before), toPosix(after)]) : event?.method === 'item/completed' && item?.type === 'commandExecution' && item.status === 'completed' && item.exitCode === 0 && item.source === 'unifiedExecStartup' && item.processId && /&\s+['"][^'"\r\n]*[\\/]codex\.exe['"]\s+--codex-run-as-apply-patch\s+\$[A-Za-z_]\w*/i.test(command) ? [...command.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)].map(([, file]) => toPosix(file)) : [];
+  return paths.some(file => file && !file.startsWith('.work/') && !file.startsWith('.agents/') && !file.startsWith('inputs/') && !['AGENTS.md', 'goal.md'].includes(file));
 }
-export function findCheckpointWitness(rows, { consumerRoot, checkpointSha256 }) {
+function workspaceKey(value) { const resolved = toPosix(path.resolve(value)); return process.platform === 'win32' ? resolved.replace(/\/AppData\/Local\/Packages\/OpenAI\.Codex_[^/]+\/LocalCache\/Local\//i, '/AppData/Local/').toLowerCase() : resolved; } function firstJson(value) { const source = String(value || '').trimStart(); let depth = 0, quoted = false, escaped = false; for (let index = 0; index < source.length; index++) { const character = source[index]; if (quoted) { if (escaped) escaped = false; else if (character === '\\') escaped = true; else if (character === '"') quoted = false; } else if (character === '"') quoted = true; else if ('{['.includes(character)) depth++; else if ('}]'.includes(character) && --depth === 0) return JSON.parse(source.slice(0, index + 1)); } throw new Error('leading JSON object is incomplete'); }
+function continuityPacket(item, checkpointText, checkpointSha256) { try { const command = (item?.commandActions || []).map(action => action.command).join('\n') || String(item?.command || ''), checkpoint = firstJson(item?.aggregatedOutput).continuity?.checkpoint; return item?.type === 'commandExecution' && item.status === 'completed' && item.exitCode === 0 && command.replaceAll('\\', '/').includes('.work/bin/gsdd.mjs next --json') && sha256(checkpointText || '') === checkpointSha256 && checkpoint?.path === '.work/.continue-here.md' && checkpoint.status === 'valid' && !checkpoint.errors?.length && Object.entries(checkpoint.frontmatter || {}).every(([key, value]) => checkpointText.includes(`\n${key}: ${value}\n`)) && Object.keys(checkpoint.sections || {}).length >= 6 && Object.entries(checkpoint.sections).every(([key, value]) => checkpointText.includes(`<${key}>\n${value}\n</${key}>`)); } catch { return false; } }
+export function findCheckpointWitness(rows, { consumerRoot, checkpointSha256, checkpointText = null }) {
   const root = path.resolve(consumerRoot), candidates = [];
   let firstProductChange = Infinity;
   rows.forEach((row, eventIndex) => {
     const event = row?.parsed || row;
     const item = event?.params?.item;
     if (productChange(event)) firstProductChange = Math.min(firstProductChange, eventIndex);
+    if (event?.method === 'item/completed' && workspaceKey(item?.cwd || '') === workspaceKey(root) && continuityPacket(item, checkpointText, checkpointSha256)) candidates.push({ ok: true, event_index: eventIndex, item_id: item.id || null, cwd: '<CONSUMER_ROOT>', command_sha256: sha256(String(item.command || '')), output_sha256: sha256(String(item.aggregatedOutput || '').replaceAll('\r\n', '\n')), checkpoint_sha256: checkpointSha256 });
     if (event?.method !== 'item/completed' || item?.type !== 'commandExecution'
-      || item.status !== 'completed' || path.resolve(item.cwd || '') !== root) return;
+      || item.status !== 'completed' || workspaceKey(item.cwd || '') !== workspaceKey(root)) return;
     if (!String(item.command || '').replaceAll('\\', '/').includes('.work/.continue-here.md')) return;
     const outputSha = sha256(String(item.aggregatedOutput || '').replaceAll('\r\n', '\n'));
     if (outputSha !== checkpointSha256) return;
