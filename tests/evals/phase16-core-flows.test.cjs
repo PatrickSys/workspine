@@ -585,6 +585,7 @@ test('synthetic native matrix accepts only complete Codex, Claude, and OpenCode 
   const parsedCodex = LIVE.liveParseCodex(codex, 'gpt-5.6-luna', ['exec', '-m', 'gpt-5.6-luna']);
   assert.equal(parsedCodex.identity, 'requested-model-accepted');
   assert.deepEqual(parsedCodex.item_kinds, ['agent_message', 'reasoning', 'command_execution', 'todo_list', 'file_change']);
+  assert.deepEqual(parsedCodex.completion_only_diagnostics, []);
 
   const codexEnvelope = (items) => [
     { type: 'thread.started', thread_id: 'thread-1' },
@@ -693,6 +694,7 @@ test('Codex completion-only diagnostic errors are nonfatal, but terminal signals
 
   const parsed = LIVE.liveParseCodex(envelope([diagnostic]), 'gpt-5.6-luna', argv, { requireUsage: true });
   assert.deepEqual(parsed.usage, { input_tokens: 3, output_tokens: 2, total_tokens: 5 });
+  assert.deepEqual(parsed.completion_only_diagnostics, []);
 
   const outsideLifecycle = [
     { type: 'thread.started', thread_id: 'thread-1' },
@@ -704,6 +706,39 @@ test('Codex completion-only diagnostic errors are nonfatal, but terminal signals
   const parsedOutside = LIVE.liveParseCodex(outsideLifecycle, 'gpt-5.6-luna', argv, { requireUsage: true });
   assert.deepEqual(parsedOutside.usage, { input_tokens: 3, output_tokens: 2, total_tokens: 5 });
   assert.deepEqual(parsedOutside.item_kinds, ['agent_message', 'error']);
+  assert.deepEqual(parsedOutside.completion_only_diagnostics, [{ event_index: 4, item_kind: 'error' }]);
+
+  const beforeLifecycle = [
+    { type: 'thread.started', thread_id: 'thread-1' },
+    { type: 'item.completed', thread_id: 'thread-1', item: { id: 'error-before-turn', type: 'error', message: 'startup diagnostic' } },
+    { type: 'turn.started', thread_id: 'thread-1', turn_id: 'turn-1' },
+    { type: 'item.completed', thread_id: 'thread-1', turn_id: 'turn-1', item: { id: 'message-before-turn', type: 'agent_message', text: 'Plan complete.' } },
+    { type: 'turn.completed', thread_id: 'thread-1', turn_id: 'turn-1', usage: { input_tokens: 3, output_tokens: 2 } },
+  ].map(JSON.stringify).join('\n');
+  const parsedBefore = LIVE.liveParseCodex(beforeLifecycle, 'gpt-5.6-luna', argv, { requireUsage: true });
+  assert.deepEqual(parsedBefore.completion_only_diagnostics, [{ event_index: 1, item_kind: 'error' }]);
+
+  const conflictingDiagnosticEvents = beforeLifecycle.split('\n').map((line) => JSON.parse(line));
+  conflictingDiagnosticEvents[1].item_type = 'agent_message';
+  const conflictingDiagnostic = conflictingDiagnosticEvents.map(JSON.stringify).join('\n');
+  assert.throws(
+    () => LIVE.liveParseCodex(conflictingDiagnostic, 'gpt-5.6-luna', argv, { requireUsage: true }),
+    (error) => error.code === 'native_linkage_invalid' && /conflicting item kind declarations/.test(error.message),
+  );
+
+  for (const declaration of ['item_kind', 'nested_kind']) {
+    const eventOnlyDiagnosticEvents = beforeLifecycle.split('\n').map((line) => JSON.parse(line));
+    const diagnosticEvent = eventOnlyDiagnosticEvents[1];
+    delete diagnosticEvent.item.type;
+    if (declaration === 'item_kind') diagnosticEvent.item_kind = 'error';
+    else diagnosticEvent.item.kind = 'error';
+    const eventOnlyDiagnostic = eventOnlyDiagnosticEvents.map(JSON.stringify).join('\n');
+    assert.throws(
+      () => LIVE.liveParseCodex(eventOnlyDiagnostic, 'gpt-5.6-luna', argv, { requireUsage: true }),
+      (error) => error.code === 'native_linkage_invalid',
+      declaration,
+    );
+  }
 
   const normalItemAfterTurn = outsideLifecycle.replace(
     JSON.stringify({ id: 'error-after-turn', type: 'error', message: 'diagnostic after completion' }),

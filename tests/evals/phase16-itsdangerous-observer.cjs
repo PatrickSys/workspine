@@ -68,7 +68,20 @@ function validateNativeReceipt(receipt, expectedTurn, expectedThread) {
   const turnCompleteIndex = types.indexOf('turn.completed');
   if (threadIndex !== 0 || turnStartIndex <= threadIndex || turnCompleteIndex <= turnStartIndex || types.filter((type) => type === 'thread.started').length !== 1 || types.filter((type) => type === 'turn.started').length !== 1 || types.filter((type) => type === 'turn.completed').length !== 1) fail('turn_receipt_invalid', `native lifecycle is not exactly one ordered thread and turn: ${expectedTurn[0]}`);
   const itemTypes = types.filter((type) => type.startsWith('item.'));
-  if (itemTypes.length === 0 || types.some((type, index) => type.startsWith('item.') && (index <= turnStartIndex || index >= turnCompleteIndex))) fail('turn_receipt_invalid', `native item lifecycle is not inside the turn: ${expectedTurn[0]}`);
+  const itemIndexes = types.flatMap((type, index) => type.startsWith('item.') ? [index] : []);
+  const outOfTurnItemIndexes = itemIndexes.filter((index) => index <= turnStartIndex || index >= turnCompleteIndex);
+  if (itemTypes.length === 0) fail('turn_receipt_invalid', `native item lifecycle is missing: ${expectedTurn[0]}`);
+  if (outOfTurnItemIndexes.some((index) => types[index] !== 'item.completed')) fail('turn_receipt_invalid', `native out-of-turn item is not a completion-only diagnostic: ${expectedTurn[0]}`);
+  const diagnostics = native.completion_only_diagnostics;
+  if (!Array.isArray(diagnostics)) fail('turn_receipt_invalid', `native diagnostic witness is missing: ${expectedTurn[0]}`);
+  let previousIndex = -1;
+  for (const entry of diagnostics) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || Object.keys(entry).length !== 2 || !Object.hasOwn(entry, 'event_index') || !Object.hasOwn(entry, 'item_kind') || !Number.isSafeInteger(entry.event_index) || entry.event_index < 0 || entry.item_kind !== 'error') fail('turn_receipt_invalid', `native diagnostic witness shape is invalid: ${expectedTurn[0]}`);
+    if (entry.event_index <= previousIndex || entry.event_index >= types.length || types[entry.event_index] !== 'item.completed' || entry.event_index > turnStartIndex && entry.event_index < turnCompleteIndex) fail('turn_receipt_invalid', `native diagnostic witness ordering or event binding is invalid: ${expectedTurn[0]}`);
+    previousIndex = entry.event_index;
+  }
+  if (stable(diagnostics.map((entry) => entry.event_index)) !== stable(outOfTurnItemIndexes)) fail('turn_receipt_invalid', `native diagnostic witness does not exactly cover out-of-turn items: ${expectedTurn[0]}`);
+  if (outOfTurnItemIndexes.length > 0 && (!Array.isArray(native.item_kinds) || !native.item_kinds.includes('error'))) fail('turn_receipt_invalid', `native diagnostic witness lacks an error item kind: ${expectedTurn[0]}`);
   const process = receipt.process;
   if (!process || process.status !== 'exited' || process.exit_code !== 0 || process.timed_out !== false || process.error !== null) fail('turn_process_invalid', `native process did not exit cleanly: ${expectedTurn[0]}`);
   const usage = receipt.usage?.turn_tokens;

@@ -374,7 +374,7 @@ function observerHandoffFixture(root, mutateArgv = null, mutateReceipt = null) {
     if (mutateArgv) mutateArgv(receiptArgv, turn, index, sessions);
     const receipt = {
       record_type: 'phase16_codex_turn_receipt', provider_invoked: true, characterization_only: false, workflow_verdict: 'not_evaluated',
-      terminal: { status: 'provider_complete', failure_code: null }, native: { event_types: ['thread.started', 'turn.started', 'item.started', 'item.completed', 'turn.completed'], item_kinds: ['agent_message'], thread_id: sessions[turn.session], turn_id: null, parse_error: null },
+      terminal: { status: 'provider_complete', failure_code: null }, native: { event_types: ['thread.started', 'turn.started', 'item.started', 'item.completed', 'turn.completed'], item_kinds: ['agent_message'], completion_only_diagnostics: [], thread_id: sessions[turn.session], turn_id: null, parse_error: null },
       process: { status: 'exited', exit_code: 0, signal: null, timed_out: false, error: null },
       usage: { turn_tokens: 10 },
       streams: { stdout_bytes: Buffer.byteLength(`native-stdout-${index}`), stdout_sha256: sha(Buffer.from(`native-stdout-${index}`)), stderr_bytes: 0, stderr_sha256: sha(Buffer.alloc(0)) },
@@ -1111,6 +1111,19 @@ test('observer accepts parser-clean null turn identity and refuses malformed nat
     assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: valid.freezeFile, receiptDir: valid.receiptDir, consumerRoot: valid.consumerRoot, terminalValue: valid.terminal, handoffValue: valid.handoff }), (error) => error.code === 'upstream_origin_mismatch');
   } finally { fs.rmSync(validRoot, { recursive: true, force: true }); }
 
+  const mismatchRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-diagnostic-hash-mismatch-'));
+  const mismatch = observerHandoffFixture(mismatchRoot, null, (receipt, turn) => {
+    if (turn.id === 'turn-a-plan') {
+      receipt.native.event_types = ['thread.started', 'item.completed', 'turn.started', 'item.started', 'item.completed', 'turn.completed'];
+      receipt.native.item_kinds = ['error', 'agent_message'];
+      receipt.native.completion_only_diagnostics = [{ event_index: 1, item_kind: 'error' }];
+    }
+  });
+  mismatch.handoff.turns[0].sha256 = '0'.repeat(64);
+  try {
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: mismatch.freezeFile, receiptDir: mismatch.receiptDir, consumerRoot: mismatch.consumerRoot, terminalValue: mismatch.terminal, handoffValue: mismatch.handoff }), (error) => error.code === 'turn_receipt_invalid');
+  } finally { fs.rmSync(mismatchRoot, { recursive: true, force: true }); }
+
   const cases = [
     ['provider-not-invoked', (receipt) => { receipt.provider_invoked = false; }, 'turn_receipt_invalid'],
     ['missing-thread', (receipt) => { receipt.native.thread_id = null; }, 'turn_receipt_invalid'],
@@ -1130,6 +1143,41 @@ test('observer accepts parser-clean null turn identity and refuses malformed nat
     const fixture = observerHandoffFixture(root, null, (receipt, turn) => { if (turn.id === 'turn-a-plan') mutateReceipt(receipt); });
     try {
       assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: fixture.terminal, handoffValue: fixture.handoff }), (error) => error.code === code, name);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('observer accepts only exact indexed completion-only diagnostic witnesses', () => {
+  const validRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-diagnostic-valid-'));
+  const valid = observerHandoffFixture(validRoot, null, (receipt, turn) => {
+    if (turn.id !== 'turn-a-plan') return;
+    receipt.native.event_types = ['thread.started', 'item.completed', 'turn.started', 'item.started', 'item.completed', 'turn.completed', 'item.completed'];
+    receipt.native.item_kinds = ['error', 'agent_message'];
+    receipt.native.completion_only_diagnostics = [{ event_index: 1, item_kind: 'error' }, { event_index: 6, item_kind: 'error' }];
+  });
+  try {
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: valid.freezeFile, receiptDir: valid.receiptDir, consumerRoot: valid.consumerRoot, terminalValue: valid.terminal, handoffValue: valid.handoff }), (error) => error.code === 'upstream_origin_mismatch');
+  } finally { fs.rmSync(validRoot, { recursive: true, force: true }); }
+
+  const cases = [
+    ['missing', (receipt) => { delete receipt.native.completion_only_diagnostics; }],
+    ['partial', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 1, item_kind: 'error' }]; }],
+    ['extra', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 99, item_kind: 'error' }]; }],
+    ['duplicate', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 1, item_kind: 'error' }, { event_index: 1, item_kind: 'error' }]; }],
+    ['unsorted', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 6, item_kind: 'error' }, { event_index: 1, item_kind: 'error' }]; }],
+    ['noninteger', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 1.5, item_kind: 'error' }]; }],
+    ['out-of-range', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 100, item_kind: 'error' }]; }],
+    ['extra-field', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 1, item_kind: 'error', message: 'not retained' }]; }],
+    ['wrong-kind', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 1, item_kind: 'agent_message' }]; }],
+    ['wrong-event', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 2, item_kind: 'error' }]; }],
+    ['in-turn', (receipt) => { receipt.native.completion_only_diagnostics = [{ event_index: 3, item_kind: 'error' }]; }],
+    ['ordinary-out-of-turn', (receipt) => { receipt.native.event_types.push('item.started'); }],
+  ];
+  for (const [name, mutate] of cases) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-observer-diagnostic-${name}-`));
+    const fixture = observerHandoffFixture(root, null, (receipt, turn) => { if (turn.id === 'turn-a-plan') { receipt.native.event_types = ['thread.started', 'item.completed', 'turn.started', 'item.started', 'item.completed', 'turn.completed', 'item.completed']; receipt.native.item_kinds = ['error', 'agent_message']; receipt.native.completion_only_diagnostics = [{ event_index: 1, item_kind: 'error' }, { event_index: 6, item_kind: 'error' }]; mutate(receipt); } });
+    try {
+      assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: fixture.terminal, handoffValue: fixture.handoff }), (error) => error.code === 'turn_receipt_invalid', name);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   }
 });

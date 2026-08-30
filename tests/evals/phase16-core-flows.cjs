@@ -1876,20 +1876,26 @@ function liveParseCodex(stdout, requestedModel, argv, options = {}) {
   if (turnComplete.thread_id != null) need(turnComplete.thread_id === thread.thread_id, 'infrastructure', 'native_linkage_invalid', 'Codex turn.completed is not linked to its thread');
   const turnId = turnStart.turn_id || turnStart.id || turnComplete.turn_id || turnComplete.id || null;
   if (turnStart.turn_id != null || turnComplete.turn_id != null || turnStart.id != null || turnComplete.id != null) need(turnId && (!turnStart.turn_id || turnStart.turn_id === turnId) && (!turnComplete.turn_id || turnComplete.turn_id === turnId), 'infrastructure', 'native_linkage_invalid', 'Codex turn lifecycle ids are not coherent');
-  const itemEvents = events.filter((event) => /^item\./.test(String(event.type || '')));
+  const itemEvents = [];
+  const completionOnlyDiagnostics = [];
+  for (let eventIndex = 0; eventIndex < events.length; eventIndex += 1) {
+    if (/^item\./.test(String(events[eventIndex].type || ''))) itemEvents.push({ event: events[eventIndex], eventIndex });
+  }
   need(itemEvents.length > 0, 'infrastructure', 'native_linkage_invalid', 'Codex output contains no linked item events');
   const terminalKinds = new Set(['agent_message', 'reasoning', 'file_change']);
   const pairedKinds = new Set(['command_execution', 'mcp_tool_call', 'collab_tool_call', 'web_search', 'todo_list']);
   const allowedItemKinds = new Set([...terminalKinds, ...pairedKinds]);
   const observedItemKinds = new Set();
   const lifecycles = new Map();
-  for (const event of itemEvents) {
+  for (const { event, eventIndex } of itemEvents) {
     const item = event.item && typeof event.item === 'object' ? event.item : null;
     const itemId = event.item_id || item?.id || event.id;
     const itemKind = event.item_type || event.item_kind || item?.type || item?.kind;
     need(typeof itemId === 'string' && itemId.length > 0, 'infrastructure', 'native_linkage_invalid', 'Codex item event lacks an item id');
+    const declaredItemKinds = [event.item_type, event.item_kind, item?.type, item?.kind].filter((value) => value != null);
+    need(declaredItemKinds.every((value) => value === itemKind), 'infrastructure', 'native_linkage_invalid', 'Codex item event has conflicting item kind declarations');
     const completionOnlyDiagnostic = event.type === 'item.completed' && item?.type === 'error';
-    need(typeof itemKind === 'string' && (allowedItemKinds.has(itemKind) || completionOnlyDiagnostic), 'infrastructure', 'native_linkage_invalid', `Codex item event has an unknown item kind: ${String(itemKind || '<missing>')}`);
+    need(typeof itemKind === 'string' && (allowedItemKinds.has(itemKind) || (completionOnlyDiagnostic && itemKind === 'error')), 'infrastructure', 'native_linkage_invalid', `Codex item event has an unknown item kind: ${String(itemKind || '<missing>')}`);
     observedItemKinds.add(String(itemKind));
     for (const key of ['thread_id', 'turn_id']) {
       const eventValue = event[key];
@@ -1898,7 +1904,8 @@ function liveParseCodex(stdout, requestedModel, argv, options = {}) {
       const value = eventValue ?? itemValue;
       if (value != null) need(value === (key === 'thread_id' ? thread.thread_id : turnId), 'infrastructure', 'native_linkage_invalid', `Codex item event is not linked to its ${key}`);
     }
-    const position = events.indexOf(event);
+    const position = eventIndex;
+    if (completionOnlyDiagnostic && (position <= turnStartIndex || position >= turnCompleteIndex)) completionOnlyDiagnostics.push({ event_index: position, item_kind: 'error' });
     if (!completionOnlyDiagnostic) need(position > turnStartIndex && position < turnCompleteIndex, 'infrastructure', 'native_sequence_invalid', 'Codex item event is outside the turn lifecycle');
     const state = lifecycles.get(itemId) || { kind: itemKind, started: false, completed: false };
     need(state.kind === itemKind, 'infrastructure', 'native_linkage_invalid', 'Codex item lifecycle changed kind for one item id');
@@ -1920,7 +1927,7 @@ function liveParseCodex(stdout, requestedModel, argv, options = {}) {
   need(argv.includes('-m') && argv[argv.indexOf('-m') + 1] === requestedModel, 'infrastructure', 'requested_model_not_accepted', 'Codex invocation did not carry the requested model flag');
   const usage = turnComplete.usage;
   if (options.requireUsage || usage) need(usage && Number.isSafeInteger(usage.input_tokens) && usage.input_tokens >= 0 && Number.isSafeInteger(usage.output_tokens) && usage.output_tokens >= 0, 'infrastructure', 'native_usage_missing', 'Codex turn.completed lacks validated native usage');
-  return { parser: 'codex-jsonl', event_types: types, item_kinds: [...observedItemKinds], thread_id: thread.thread_id, turn_id: turnId, identity: 'requested-model-accepted', ...(usage ? { usage: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, total_tokens: usage.input_tokens + usage.output_tokens } } : {}) };
+  return { parser: 'codex-jsonl', event_types: types, item_kinds: [...observedItemKinds], completion_only_diagnostics: completionOnlyDiagnostics, thread_id: thread.thread_id, turn_id: turnId, identity: 'requested-model-accepted', ...(usage ? { usage: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, total_tokens: usage.input_tokens + usage.output_tokens } } : {}) };
 }
 
 function liveParseClaude(stdout, requestedModel) {

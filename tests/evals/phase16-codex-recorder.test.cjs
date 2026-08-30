@@ -129,6 +129,7 @@ test('receipt preserves byte counts and hashes before native interpretation', ()
   assert.equal(receipt.native.thread_id, 'native-A');
   assert.deepEqual(receipt.native.event_types, ['thread.started', 'turn.started', 'item.started', 'item.completed', 'turn.completed']);
   assert.deepEqual(receipt.native.item_kinds, ['agent_message']);
+  assert.deepEqual(receipt.native.completion_only_diagnostics, []);
 });
 
 test('invocation records prompt and skill witnesses while redacting sensitive paths', () => {
@@ -154,10 +155,29 @@ test('recorder uses the exact fixed nested schemas', () => {
   const receipt = record();
   assert.deepEqual(Object.keys(receipt.process).sort(), ['child_pid', 'error', 'exit_code', 'parent_pid', 'signal', 'status', 'timed_out'].sort());
   assert.deepEqual(Object.keys(receipt.invocation).sort(), ['argv', 'command', 'cwd', 'prefix', 'prompt_bytes', 'prompt_sha256', 'skills'].sort());
-  assert.deepEqual(Object.keys(receipt.native).sort(), ['event_types', 'item_kinds', 'parse_error', 'thread_id', 'turn_id'].sort());
+  assert.deepEqual(Object.keys(receipt.native).sort(), ['completion_only_diagnostics', 'event_types', 'item_kinds', 'parse_error', 'thread_id', 'turn_id'].sort());
   assert.equal(typeof receipt.process.status, 'string');
   assert.equal(typeof receipt.process.exit_code, 'number');
   assert.equal(receipt.native.parse_error, null);
+});
+
+test('recorder propagates indexed completion-only diagnostics as a frozen structural copy', () => {
+  const events = [
+    { type: 'thread.started', thread_id: 'native-A' },
+    { type: 'item.completed', thread_id: 'native-A', item: { id: 'error-before', type: 'error', message: 'startup diagnostic' } },
+    { type: 'turn.started', thread_id: 'native-A', turn_id: 'turn-A' },
+    { type: 'item.completed', thread_id: 'native-A', turn_id: 'turn-A', item: { id: 'item-1', type: 'agent_message', text: 'done' } },
+    { type: 'turn.completed', thread_id: 'native-A', turn_id: 'turn-A', usage: { input_tokens: 7, output_tokens: 5 } },
+    { type: 'item.completed', thread_id: 'native-A', item: { id: 'error-after', type: 'error', message: 'post-turn diagnostic' } },
+  ];
+  const receipt = record({ spawn: () => spawned(`${events.map((event) => JSON.stringify(event)).join('\n')}\n`) });
+  assert.deepEqual(receipt.native.completion_only_diagnostics, [
+    { event_index: 1, item_kind: 'error' },
+    { event_index: 5, item_kind: 'error' },
+  ]);
+  assert.equal(Object.isFrozen(receipt.native.completion_only_diagnostics), true);
+  assert.equal(Object.isFrozen(receipt.native.completion_only_diagnostics[0]), true);
+  assert.throws(() => receipt.native.completion_only_diagnostics.push({ event_index: 99, item_kind: 'error' }), TypeError);
 });
 
 test('initial and resume argv use supported native grammar and always terminate stdin with -', () => {
