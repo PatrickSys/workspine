@@ -52,6 +52,31 @@ function validateNativeArgv(receipt, expectedTurn, sessions) {
   if (!Array.isArray(receipt.invocation?.argv) || stable(receipt.invocation.argv) !== stable(expectedNativeArgv(expectedTurn, expectedSession))) fail('turn_argv_invalid', `native argv does not match the fixed ${expectedTurn[0]} grammar`);
 }
 
+function validateNativeReceipt(receipt, expectedTurn, expectedThread) {
+  if (receipt.provider_invoked !== true || receipt.characterization_only === true || receipt.workflow_verdict !== 'not_evaluated') fail('turn_receipt_invalid', `native receipt is not a provider-only handoff: ${expectedTurn[0]}`);
+  if (receipt.terminal?.status !== 'provider_complete' || receipt.terminal?.failure_code !== null) fail('turn_receipt_invalid', `native receipt is not parser-clean: ${expectedTurn[0]}`);
+  const native = receipt.native;
+  if (!native || !Object.hasOwn(native, 'parse_error') || native.parse_error !== null) fail('turn_receipt_invalid', `native parser did not produce an explicit clean result: ${expectedTurn[0]}`);
+  if (typeof native.thread_id !== 'string' || native.thread_id.length === 0 || native.thread_id !== expectedThread) fail('turn_receipt_invalid', `native thread identity is missing or mismatched: ${expectedTurn[0]}`);
+  if (!Object.hasOwn(native, 'turn_id') || (native.turn_id !== null && (typeof native.turn_id !== 'string' || native.turn_id.length === 0))) fail('turn_receipt_invalid', `native turn identity must be an explicit null or nonempty string: ${expectedTurn[0]}`);
+  const types = native.event_types;
+  if (!Array.isArray(types) || types.length === 0 || types.some((type) => typeof type !== 'string')) fail('turn_receipt_invalid', `native lifecycle evidence is missing: ${expectedTurn[0]}`);
+  const allowed = new Set(['thread.started', 'turn.started', 'turn.completed', 'item.started', 'item.updated', 'item.completed']);
+  if (types.some((type) => !allowed.has(type))) fail('turn_receipt_invalid', `native lifecycle contains an unknown event: ${expectedTurn[0]}`);
+  const threadIndex = types.indexOf('thread.started');
+  const turnStartIndex = types.indexOf('turn.started');
+  const turnCompleteIndex = types.indexOf('turn.completed');
+  if (threadIndex !== 0 || turnStartIndex <= threadIndex || turnCompleteIndex <= turnStartIndex || types.filter((type) => type === 'thread.started').length !== 1 || types.filter((type) => type === 'turn.started').length !== 1 || types.filter((type) => type === 'turn.completed').length !== 1) fail('turn_receipt_invalid', `native lifecycle is not exactly one ordered thread and turn: ${expectedTurn[0]}`);
+  const itemTypes = types.filter((type) => type.startsWith('item.'));
+  if (itemTypes.length === 0 || types.some((type, index) => type.startsWith('item.') && (index <= turnStartIndex || index >= turnCompleteIndex))) fail('turn_receipt_invalid', `native item lifecycle is not inside the turn: ${expectedTurn[0]}`);
+  const process = receipt.process;
+  if (!process || process.status !== 'exited' || process.exit_code !== 0 || process.timed_out !== false || process.error !== null) fail('turn_process_invalid', `native process did not exit cleanly: ${expectedTurn[0]}`);
+  const usage = receipt.usage?.turn_tokens;
+  if (!Number.isSafeInteger(usage) || usage < 0 || usage > expectedTurn[5]) fail('turn_usage_invalid', `native usage is missing, unsafe, or over budget: ${expectedTurn[0]}`);
+  const streams = receipt.streams;
+  if (!streams || !Number.isSafeInteger(streams.stdout_bytes) || streams.stdout_bytes <= 0 || !Number.isSafeInteger(streams.stderr_bytes) || streams.stderr_bytes < 0 || streams.stdout_bytes + streams.stderr_bytes > 1048576 || !validHash(streams.stdout_sha256) || !validHash(streams.stderr_sha256)) fail('turn_stream_invalid', `native stream evidence is missing or unbounded: ${expectedTurn[0]}`);
+}
+
 class ObserverFailure extends Error {
   constructor(code, message, evidence = null) {
     super(message);
@@ -288,8 +313,9 @@ function completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, contr
     const file = path.join(receiptDir, `${WORKFLOW_STEPS[index]}.json`);
     if (!exists(file) || item.sha256 !== fileSha(file)) fail('turn_receipt_invalid', `turn receipt is missing or not hash-bound: ${WORKFLOW_STEPS[index]}`);
     const receipt = readJson(file);
-    if (receipt.characterization_only === true || receipt.workflow_verdict !== 'not_evaluated' || receipt.terminal?.status !== 'provider_complete' || !receipt.native?.thread_id || !receipt.native?.turn_id) fail('turn_receipt_invalid', `turn receipt is not a complete native receipt: ${WORKFLOW_STEPS[index]}`);
     const expectedTurn = TURN_CONTRACT[index];
+    if (receipt.turn?.session !== expectedTurn[6]) fail('turn_receipt_invalid', `turn receipt session is not bound to the fixed ${WORKFLOW_STEPS[index]} contract`);
+    validateNativeReceipt(receipt, expectedTurn, handoff.sessions[expectedTurn[6]]);
     if (receipt.turn?.id !== expectedTurn[0] || receipt.turn?.role !== expectedTurn[1] || receipt.turn?.skill !== expectedTurn[2] || stable(receipt.turn?.skills) !== stable(expectedTurn[3]) || receipt.turn?.session !== expectedTurn[6] || receipt.turn?.initial !== expectedTurn[7] || !receipt.invocation?.argv?.includes('-m') || !receipt.invocation.argv.includes('gpt-5.6-luna')) fail('turn_receipt_invalid', `turn receipt is not bound to the fixed turn contract: ${WORKFLOW_STEPS[index]}`);
     validateNativeArgv(receipt, expectedTurn, handoff.sessions);
     if (expectedTurn[0] === 'turn-a-pause' && receipt.turn?.checkpoint?.path !== '<CONSUMER_ROOT>/.work/.continue-here.md') fail('checkpoint_invalid', 'pause receipt does not carry the canonical checkpoint path');
@@ -361,7 +387,7 @@ function observe({ caseFile, freezeFile, receiptDir, consumerRoot, controlsFile 
 
 function gradeValue(observation) {
   if (observation.record_type !== 'phase16_itsdangerous_observation' || observation.contract !== OBSERVATION_CONTRACT || observation.case_id !== CASE_ID) fail('observation_invalid', 'observation contract is invalid');
-  if (observation.case?.revision !== CASE_REVISION || observation.case?.sha256 !== CASE_SHA256 || !validHash(observation.freeze_sha256) || !validHash(observation.terminal_sha256) || !validHash(observation.handoff_sha256) || typeof observation.retained_root !== 'string' || observation.git?.top_level !== observation.retained_root || !observation.git.scope || !observation.brownfield?.files || !observation.checkpoint?.sha256 || stable(observation.turns?.map((item) => item.id)) !== stable(WORKFLOW_STEPS) || observation.turns?.some((item) => !validHash(item.sha256) || !item.thread_id || !item.turn_id) || stable(observation.sessions) !== stable({ count: 3, turns: 5 }) || !observation.oracle?.semantic?.checks || !validHash(observation.oracle?.sha256) || observation.case.oracle_sha256 !== ORACLE_SHA256 || !['pass', 'fail'].includes(observation.oracle.semantic.status)) fail('observation_invalid', 'observation is missing immutable grading inputs');
+  if (observation.case?.revision !== CASE_REVISION || observation.case?.sha256 !== CASE_SHA256 || !validHash(observation.freeze_sha256) || !validHash(observation.terminal_sha256) || !validHash(observation.handoff_sha256) || typeof observation.retained_root !== 'string' || observation.git?.top_level !== observation.retained_root || !observation.git.scope || !observation.brownfield?.files || !observation.checkpoint?.sha256 || stable(observation.turns?.map((item) => item.id)) !== stable(WORKFLOW_STEPS) || observation.turns?.some((item) => !validHash(item.sha256) || !item.thread_id || !Object.hasOwn(item, 'turn_id') || (item.turn_id !== null && (typeof item.turn_id !== 'string' || item.turn_id.length === 0))) || stable(observation.sessions) !== stable({ count: 3, turns: 5 }) || !observation.oracle?.semantic?.checks || !validHash(observation.oracle?.sha256) || observation.case.oracle_sha256 !== ORACLE_SHA256 || !['pass', 'fail'].includes(observation.oracle.semantic.status)) fail('observation_invalid', 'observation is missing immutable grading inputs');
   const checks = { git_root: observation.git?.top_level === observation.retained_root, pinned_head: observation.git?.head === observation.case?.revision, git_scope: observation.git?.scope?.forbidden?.length === 0, brownfield: Boolean(observation.brownfield?.files?.['CHANGE.md'] && observation.brownfield?.files?.['HANDOFF.md'] && observation.brownfield?.files?.['VERIFICATION.md']), checkpoint: Boolean(observation.checkpoint?.sha256), oracle_import: observation.oracle?.semantic?.checks?.import_with_sha1_unavailable === true, oracle_explicit_sha256: observation.oracle?.semantic?.checks?.explicit_sha256_signer === true, oracle_default_rejected: observation.oracle?.semantic?.checks?.default_sha1_rejected === true, oracle_tests: observation.oracle?.semantic?.checks?.upstream_tests_pass === true };
   const productChecks = ['oracle_import', 'oracle_explicit_sha256', 'oracle_default_rejected', 'oracle_tests'];
   const disposition = observation.identity?.status === 'unknown' ? 'identity_unknown' : observation.human_needed === true ? 'human_needed' : checks.git_root && checks.pinned_head && checks.git_scope && checks.brownfield && checks.checkpoint ? (productChecks.every((key) => checks[key]) ? 'passed' : 'product_red') : 'infrastructure_invalid';
@@ -520,7 +546,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  ObserverFailure, writeExclusive, readCase, validateFreeze, gitScope, gitBlobSha, brownfield, completeHandoff, runOracle,
+  ObserverFailure, writeExclusive, readCase, validateFreeze, validateNativeReceipt, gitScope, gitBlobSha, brownfield, completeHandoff, runOracle,
   observe, observeRun: observe, checkpoint, gradeValue, grade, gradeObservation: grade, regrade,
   regradeObservation: regrade, regradeChild, project, projectPublic: project, earlyProjection,
   writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths,

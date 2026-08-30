@@ -355,7 +355,7 @@ function observerFreezeFixture(root) {
   return { ...fixture, freeze };
 }
 
-function observerHandoffFixture(root, mutateArgv = null) {
+function observerHandoffFixture(root, mutateArgv = null, mutateReceipt = null) {
   const fixture = observerFreezeFixture(root);
   fs.writeFileSync(fixture.freezeFile, JSON.stringify(fixture.freeze));
   const preparation = {
@@ -373,11 +373,15 @@ function observerHandoffFixture(root, mutateArgv = null) {
     const receiptArgv = argv(turn);
     if (mutateArgv) mutateArgv(receiptArgv, turn, index, sessions);
     const receipt = {
-      record_type: 'phase16_codex_turn_receipt', characterization_only: false, workflow_verdict: 'not_evaluated',
-      terminal: { status: 'provider_complete' }, native: { thread_id: sessions[turn.session], turn_id: `native-turn-${index}` },
+      record_type: 'phase16_codex_turn_receipt', provider_invoked: true, characterization_only: false, workflow_verdict: 'not_evaluated',
+      terminal: { status: 'provider_complete', failure_code: null }, native: { event_types: ['thread.started', 'turn.started', 'item.started', 'item.completed', 'turn.completed'], item_kinds: ['agent_message'], thread_id: sessions[turn.session], turn_id: null, parse_error: null },
+      process: { status: 'exited', exit_code: 0, signal: null, timed_out: false, error: null },
+      usage: { turn_tokens: 10 },
+      streams: { stdout_bytes: Buffer.byteLength(`native-stdout-${index}`), stdout_sha256: sha(Buffer.from(`native-stdout-${index}`)), stderr_bytes: 0, stderr_sha256: sha(Buffer.alloc(0)) },
       turn: { id: turn.id, role: turn.role, skill: turn.skill, skills: turn.skills, session: turn.session, initial: turn.initial, ...(turn.id === 'turn-a-pause' ? { checkpoint: { path: '<CONSUMER_ROOT>/.work/.continue-here.md' } } : {}) },
       invocation: { argv: receiptArgv },
     };
+    if (mutateReceipt) mutateReceipt(receipt, turn, index, sessions);
     const file = path.join(fixture.receiptDir, `${turn.id}.json`);
     fs.writeFileSync(file, JSON.stringify(receipt));
     return { id: turn.id, sha256: sha(fs.readFileSync(file)) };
@@ -1100,6 +1104,36 @@ test('observer rejects every wrong native initial or resumed argv grammar', () =
   }
 });
 
+test('observer accepts parser-clean null turn identity and refuses malformed native evidence', () => {
+  const validRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-null-turn-'));
+  const valid = observerHandoffFixture(validRoot);
+  try {
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: valid.freezeFile, receiptDir: valid.receiptDir, consumerRoot: valid.consumerRoot, terminalValue: valid.terminal, handoffValue: valid.handoff }), (error) => error.code === 'upstream_origin_mismatch');
+  } finally { fs.rmSync(validRoot, { recursive: true, force: true }); }
+
+  const cases = [
+    ['provider-not-invoked', (receipt) => { receipt.provider_invoked = false; }, 'turn_receipt_invalid'],
+    ['missing-thread', (receipt) => { receipt.native.thread_id = null; }, 'turn_receipt_invalid'],
+    ['omitted-turn-id', (receipt) => { delete receipt.native.turn_id; }, 'turn_receipt_invalid'],
+    ['invalid-turn-id', (receipt) => { receipt.native.turn_id = 42; }, 'turn_receipt_invalid'],
+    ['parse-error', (receipt) => { receipt.native.parse_error = { code: 'native_error' }; }, 'turn_receipt_invalid'],
+    ['duplicate-turn', (receipt) => { receipt.native.event_types.splice(2, 0, 'turn.started'); }, 'turn_receipt_invalid'],
+    ['bad-order', (receipt) => { receipt.native.event_types = ['turn.started', 'thread.started', 'item.started', 'item.completed', 'turn.completed']; }, 'turn_receipt_invalid'],
+    ['missing-turn-complete', (receipt) => { receipt.native.event_types = ['thread.started', 'turn.started', 'item.started', 'item.completed']; }, 'turn_receipt_invalid'],
+    ['partial-lifecycle', (receipt) => { receipt.native.event_types = ['thread.started', 'turn.started', 'turn.completed']; }, 'turn_receipt_invalid'],
+    ['process-failure', (receipt) => { receipt.process.timed_out = true; receipt.process.status = 'timed_out'; }, 'turn_process_invalid'],
+    ['usage-failure', (receipt) => { receipt.usage.turn_tokens = Number.MAX_SAFE_INTEGER; }, 'turn_usage_invalid'],
+    ['stream-failure', (receipt) => { receipt.streams.stdout_sha256 = 'not-a-hash'; }, 'turn_stream_invalid'],
+  ];
+  for (const [name, mutateReceipt, code] of cases) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-observer-native-${name}-`));
+    const fixture = observerHandoffFixture(root, null, (receipt, turn) => { if (turn.id === 'turn-a-plan') mutateReceipt(receipt); });
+    try {
+      assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: fixture.terminal, handoffValue: fixture.handoff }), (error) => error.code === code, name);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
 function syntheticObservation(root, checks = {}) {
   const observationFile = path.join(root, 'observation.json');
   const merged = { import_with_sha1_unavailable: true, explicit_sha256_signer: true, default_sha1_rejected: true, upstream_tests_pass: true, ...checks };
@@ -1136,6 +1170,19 @@ test('semantic oracle failure is product red while malformed observer bytes are 
     assert.throws(() => OBSERVER.grade({ observationFile: path.join(root, 'characterization.json') }), (error) => error.code === 'observation_invalid');
     const malformed = path.join(root, 'malformed.json'); fs.writeFileSync(malformed, '{');
     assert.throws(() => OBSERVER.grade({ observationFile: malformed }), (error) => error.code === 'observation_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('gradeValue requires explicit native turn identity nulls in observation rows', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-turn-id-grade-'));
+  try {
+    const observation = JSON.parse(fs.readFileSync(syntheticObservation(root), 'utf8'));
+    for (const turn of observation.turns) turn.turn_id = null;
+    assert.doesNotThrow(() => OBSERVER.gradeValue(observation));
+    const omitted = structuredClone(observation); delete omitted.turns[0].turn_id;
+    assert.throws(() => OBSERVER.gradeValue(omitted), (error) => error.code === 'observation_invalid');
+    const invalid = structuredClone(observation); invalid.turns[0].turn_id = 42;
+    assert.throws(() => OBSERVER.gradeValue(invalid), (error) => error.code === 'observation_invalid');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
