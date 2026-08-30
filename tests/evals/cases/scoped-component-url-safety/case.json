@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "id": "scoped-component-url-safety",
+  "source": {
+    "repository_url": "https://github.com/npm/validate-npm-package-name",
+    "revision": "f63469d58278635630681c2506f05176ff18a7cb",
+    "archive_url": "https://codeload.github.com/npm/validate-npm-package-name/tar.gz/f63469d58278635630681c2506f05176ff18a7cb",
+    "archive_sha256": "2ca1c55e1cff83791e21c87b3cf5451697b65dbbc420b3b192cc749ec7b5d4da",
+    "archive_cache": ".work/evals/native-brownfield/sources/validate-npm-package-name-f63469d58278635630681c2506f05176ff18a7cb.tar.gz"
+  },
+  "mutation": {
+    "description": "accepts a scoped name when either component is URL-friendly instead of requiring both",
+    "patch": "mutation.patch",
+    "sha256": "ec2d2d2e99ae98ccef9e549ae3b9d5f814d664bc57bc7c26bc5c13ca89dd9192"
+  },
+  "owner_inputs": {
+    "task": "TASK.md",
+    "brief": "BRIEF.md"
+  },
+  "allowed_paths": ["lib/index.js"],
+  "environment": {
+    "node": "24.14.1",
+    "dependency_install": "none_required",
+    "consumer_network": false
+  },
+  "oracle": {
+    "script": "oracle.mjs",
+    "timeout_ms": 120000,
+    "kind": "black_box_behavior_and_scope"
+  },
+  "calibration": {
+    "executable": "node",
+    "args": ["oracle.mjs", "calibrate", "{case}"]
+  },
+  "controls": {
+    "witness": "witness.patch",
+    "mutants": ["mutants/package-only.patch", "mutants/scope-only.patch"]
+  },
+  "bindings": {
+    "TASK.md": "a392e02cf7e4f8ffa55b8b1f525e0e1865ea2c01af35fbe483e51a91c80b0cea",
+    "BRIEF.md": "51ce1a79836dc4810ab03135564a50bf93d88d20544fb7cf1020aaec26dd38bc",
+    "mutation.patch": "ec2d2d2e99ae98ccef9e549ae3b9d5f814d664bc57bc7c26bc5c13ca89dd9192",
+    "witness.patch": "ee98075a5de289db540f12a37f6e9528669551157c590e4efbb5afc60ee06fe8",
+    "mutants/package-only.patch": "83951e6e62e7b92cb323000228176000992fe4d6a93bf21e59f886d822e069a6",
+    "mutants/scope-only.patch": "893fb15b1805bf46cf50d9f655a5452aeec8b832a36c9f6ac6dff1d02a925a35",
+    "oracle.mjs": "78dc295080b3fadb678d996574c805eb8bc14fd06119db5e517c769e6436da69"
+  }
+}
