@@ -6,6 +6,12 @@ const crypto = require('node:crypto');
 const CORE = require('./phase16-core-flows.cjs');
 
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const stableStringify = (value) => {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+  return JSON.stringify(value);
+};
+const stableHash = (value) => sha256(Buffer.from(stableStringify(value), 'utf8'));
 const bytes = (value) => Buffer.isBuffer(value) ? Buffer.from(value) : Buffer.from(String(value ?? ''), 'utf8');
 const deepFreeze = (value) => {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
@@ -13,6 +19,42 @@ const deepFreeze = (value) => {
   for (const child of Object.values(value)) deepFreeze(child);
   return value;
 };
+
+const WORKFLOW_USAGE_POLICY = deepFreeze({
+  contract: 'phase16-workflow-native-usage-v1',
+  mode: 'diagnostic',
+  numeric_usage_required: true,
+  per_turn_overage_terminal: false,
+  aggregate_overage_terminal: false,
+  fixed: {
+    turn_limits: {
+      'turn-a-plan': 7000000,
+      'turn-a-pause': 2000000,
+      'turn-b-resume-execute': 2500000,
+      'turn-c-verify': 1500000,
+      'turn-c-progress': 500000,
+    },
+    total_limit_tokens: 13500000,
+  },
+});
+const WORKFLOW_USAGE_POLICY_SHA256 = stableHash(WORKFLOW_USAGE_POLICY);
+
+function workflowPolicy(options) {
+  if (!Object.hasOwn(options, 'usagePolicy')) return null;
+  const supplied = options.usagePolicy;
+  const suppliedHash = (() => {
+    try { return stableHash(supplied); } catch { return null; }
+  })();
+  if (!supplied || typeof supplied !== 'object' || Array.isArray(supplied) || suppliedHash !== WORKFLOW_USAGE_POLICY_SHA256 || stableStringify(supplied) !== stableStringify(WORKFLOW_USAGE_POLICY)) {
+    return { failure: failure('usage_policy_invalid', 'workflow usage policy does not match the canonical diagnostic contract') };
+  }
+  const turnId = options.turn?.id;
+  const limit = supplied.fixed.turn_limits[turnId];
+  if (!Number.isSafeInteger(limit) || limit < 0 || !Number.isSafeInteger(options.maxTurnTokens) || options.maxTurnTokens !== limit) {
+    return { failure: failure('usage_policy_invalid', 'workflow usage policy limit does not match the current turn ceiling') };
+  }
+  return { policy: supplied, policyHash: suppliedHash, limit };
+}
 
 function redact(value, options) {
   let text = String(value ?? '');
@@ -50,6 +92,7 @@ function recordCodexTurn(options = {}) {
   for (const item of options.skills || []) if (!/^\$work-[a-z0-9-]+$/.test(String(item?.token ?? ''))) throw new Error('invalid skill witness token');
   const stdoutEmpty = Buffer.alloc(0);
   const stderrEmpty = Buffer.alloc(0);
+  const policy = workflowPolicy(options);
   let result;
   let spawnFailure = null;
   const input = String(options.prompt ?? '');
@@ -100,7 +143,8 @@ function recordCodexTurn(options = {}) {
         parse_error: null,
       };
     } catch (error) {
-      problem = failure(error.code || 'native_parse_failed', error.message);
+      const parseCode = error.code === 'native_usage_missing' ? 'usage_missing' : (error.code || 'native_parse_failed');
+      problem = failure(parseCode, error.message);
       native = { ...nativeBase, parse_error: { code: error.code || 'native_parse_failed', message: redact(error.message, options) } };
       try {
         const parsed = JSON.parse(stdout.toString('utf8').split(/\r?\n/).find(Boolean) || '{}');
@@ -113,9 +157,20 @@ function recordCodexTurn(options = {}) {
   // this turn's complete count; it is not a process- or session-wide total
   // and must not be compared with an earlier process.
   const turnTokens = Number.isSafeInteger(usageValue) && usageValue >= 0 ? usageValue : null;
+  if (!problem && policy?.failure) problem = policy.failure;
   if (!problem && options.expectedSessionId != null && native.thread_id !== options.expectedSessionId) problem = failure('identity_mismatch', 'native resume session identity differs from the expected session');
   if (!problem && turnTokens == null) problem = failure('usage_missing', 'native turn usage is missing or invalid');
-  if (!problem && turnTokens > Number(options.maxTurnTokens ?? Number.MAX_SAFE_INTEGER)) problem = failure('usage_excess', 'native turn usage exceeded the turn budget');
+  if (!problem && !policy && turnTokens > Number(options.maxTurnTokens ?? Number.MAX_SAFE_INTEGER)) problem = failure('usage_excess', 'native turn usage exceeded the turn budget');
+  const usage = policy?.policy
+    ? {
+        turn_tokens: turnTokens,
+        limit_tokens: policy.limit,
+        overage_tokens: turnTokens == null ? null : Math.max(0, turnTokens - policy.limit),
+        over_limit: turnTokens == null ? false : turnTokens > policy.limit,
+        policy_contract: policy.policy.contract,
+        policy_sha256: policy.policyHash,
+      }
+    : { turn_tokens: turnTokens };
   const receipt = {
     schema_version: 2,
     record_type: 'phase16_codex_turn_receipt',
@@ -127,7 +182,7 @@ function recordCodexTurn(options = {}) {
     streams: { stdout_bytes: stdout.length, stdout_sha256: sha256(stdout), stderr_bytes: stderr.length, stderr_sha256: sha256(stderr) },
     terminal: { status: problem ? 'failed' : 'provider_complete', failure_code: problem?.code || null, message: problem?.message || 'native provider turn completed' },
     turn: options.turn,
-    usage: { turn_tokens: turnTokens },
+    usage,
     workflow_verdict: 'not_evaluated',
   };
   return deepFreeze(receipt);
@@ -138,4 +193,4 @@ function buildCodexArgv({ cwd, model, effort, role, sessionId = null }) {
   return [...base, '--ignore-user-config', '--json', ...(sessionId ? [] : ['--color', 'never']), '-m', model, '-c', `model_reasoning_effort="${effort}"`, '-'];
 }
 
-module.exports = { recordCodexTurn, buildCodexArgv, deepFreeze };
+module.exports = { recordCodexTurn, buildCodexArgv, deepFreeze, stableStringify, stableHash, WORKFLOW_USAGE_POLICY, WORKFLOW_USAGE_POLICY_SHA256 };

@@ -16,6 +16,28 @@ const EFFORT = 'high';
 const ROOT = 'C:\\private\\phase16-consumer';
 const HASH = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const SKILL_HASH = 'a'.repeat(64);
+const STABLE = (value) => {
+  if (Array.isArray(value)) return `[${value.map(STABLE).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${STABLE(value[key])}`).join(',')}}`;
+  return JSON.stringify(value);
+};
+const WORKFLOW_USAGE_POLICY = {
+  contract: 'phase16-workflow-native-usage-v1',
+  mode: 'diagnostic',
+  numeric_usage_required: true,
+  per_turn_overage_terminal: false,
+  aggregate_overage_terminal: false,
+  fixed: {
+    turn_limits: {
+      'turn-a-plan': 7000000,
+      'turn-a-pause': 2000000,
+      'turn-b-resume-execute': 2500000,
+      'turn-c-verify': 1500000,
+      'turn-c-progress': 500000,
+    },
+    total_limit_tokens: 13500000,
+  },
+};
 
 function requiredExport(names) {
   assert.ok(RECORDER, `recorder module is required (${LOAD_ERROR?.message || 'missing'})`);
@@ -282,6 +304,71 @@ test('usage is per-turn, accepts a lower resumed turn, and enforces the turn cei
   assert.deepEqual(resumedLower.usage, { turn_tokens: 2 });
   assert.equal(resumedLower.terminal.status, 'provider_complete');
   assert.match(String(failureCode({ maxTurnTokens: 10 })), /excess|budget|usage/i);
+});
+
+test('explicit workflow diagnostic mode retains policy-bound overage while malformed usage fails closed in both modes', () => {
+  const diagnostic = record({
+    turn: { id: 'turn-a-plan', role: 'a-plan', session: 'A' },
+    maxTurnTokens: 7000000,
+    usagePolicy: WORKFLOW_USAGE_POLICY,
+    spawn: () => spawned(nativeJson({ usage: { input_tokens: 7000001, output_tokens: 0 } })),
+  });
+  const policyHash = HASH(Buffer.from(STABLE(WORKFLOW_USAGE_POLICY)));
+  assert.equal(diagnostic.terminal.status, 'provider_complete');
+  assert.deepEqual(diagnostic.usage, {
+    turn_tokens: 7000001,
+    limit_tokens: 7000000,
+    overage_tokens: 1,
+    over_limit: true,
+    policy_contract: WORKFLOW_USAGE_POLICY.contract,
+    policy_sha256: policyHash,
+  });
+  assert.equal(Object.isFrozen(diagnostic.usage), true);
+  assert.equal(Object.isFrozen(diagnostic.usage.policy_contract), true);
+  assert.throws(() => { diagnostic.usage.overage_tokens = 99; }, TypeError);
+
+  for (const usage of [null, undefined, '12', -1, Number.MAX_SAFE_INTEGER + 1]) {
+    for (const mode of ['strict', 'diagnostic']) {
+      const receipt = record({
+        turn: { id: 'turn-a-plan', role: 'a-plan', session: 'A' },
+        maxTurnTokens: 7000000,
+        ...(mode === 'diagnostic' ? { usagePolicy: WORKFLOW_USAGE_POLICY } : {}),
+        spawn: () => spawned(nativeJson({ usage })),
+      });
+      assert.equal(receipt.terminal.failure_code, 'usage_missing');
+      assert.equal(receipt.provider_invoked, true);
+      assert.equal(deepFrozen(receipt), true);
+      assert.equal(receipt.workflow_verdict, 'not_evaluated');
+    }
+  }
+});
+
+test('diagnostic mode rejects a changed policy contract, mode, or current-turn fixed limit', () => {
+  const cases = [
+    (policy) => { policy.contract = 'other-contract'; },
+    (policy) => { policy.mode = 'strict'; },
+    (policy) => { policy.fixed.turn_limits['turn-a-plan'] = 7000001; },
+  ];
+  for (const mutate of cases) {
+    const policy = JSON.parse(JSON.stringify(WORKFLOW_USAGE_POLICY));
+    mutate(policy);
+    const receipt = record({
+      turn: { id: 'turn-a-plan', role: 'a-plan', session: 'A' },
+      maxTurnTokens: 7000000,
+      usagePolicy: policy,
+    });
+    assert.equal(receipt.terminal.failure_code, 'usage_policy_invalid');
+    assert.equal(receipt.provider_invoked, true);
+    assert.equal(receipt.characterization_only, true);
+    assert.equal(deepFrozen(receipt), true);
+  }
+  const mismatchedLimit = record({
+    turn: { id: 'turn-a-plan', role: 'a-plan', session: 'A' },
+    maxTurnTokens: 6999999,
+    usagePolicy: WORKFLOW_USAGE_POLICY,
+  });
+  assert.equal(mismatchedLimit.terminal.failure_code, 'usage_policy_invalid');
+  assert.equal(deepFrozen(mismatchedLimit), true);
 });
 
 test('wrong resume identity is rejected after native parsing', () => {
