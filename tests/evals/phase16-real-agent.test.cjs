@@ -300,6 +300,7 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
     budgets: { turns: LIVE.TURN_PLAN.map((turn) => ({ id: turn.id, role: turn.role, skill: turn.skill, skills: turn.skills, wall_minutes: turn.minutes, native_tokens: turn.tokens, session: turn.session, initial: turn.initial })) },
     evaluator: { contract: 'phase16-evaluator-ledger-v1', files: currentEvaluatorLedger() },
     skills: Object.fromEntries([...new Set(LIVE.TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, sha(fs.readFileSync(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md')))])),
+    owner_authority: { path: LIVE.OWNER_AUTHORITY_BINDING_PATH, sha256: LIVE.OWNER_AUTHORITY_SHA256 },
     root_map: { consumer_root: '<RUN_ROOT>/consumer_root' }, sessions: { count: 3, turns: 5 },
   };
   freeze.usage_policy = RECORDER.WORKFLOW_USAGE_POLICY;
@@ -553,6 +554,41 @@ test('fresh freezes bind evaluator bytes and reject missing or mutated ledger en
       assert.equal(fixture.calls, 0, `${mutation} evaluator ledger reached provider`);
     }
   } finally { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(`${root}-observer`, { recursive: true, force: true }); }
+});
+
+test('fresh freezes bind exact owner authority bytes before any provider boundary', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-owner-authority-'));
+  const fixture = rootedRunFixture(root);
+  const authority = path.join(root, 'owner-authority.md');
+  const source = path.join(REPO, ...LIVE.OWNER_AUTHORITY_PATH.split('/'));
+  fs.copyFileSync(source, authority);
+  try {
+    const accepted = LIVE.readFreeze(fixture.freezeFile, { ownerAuthorityFile: authority });
+    assert.deepEqual(accepted.owner_authority, { path: LIVE.OWNER_AUTHORITY_BINDING_PATH, sha256: LIVE.OWNER_AUTHORITY_SHA256 });
+    const missingField = JSON.parse(fs.readFileSync(fixture.freezeFile, 'utf8'));
+    delete missingField.owner_authority;
+    fs.writeFileSync(fixture.freezeFile, JSON.stringify(missingField));
+    assert.throws(() => LIVE.readFreeze(fixture.freezeFile, { ownerAuthorityFile: authority }), (error) => error.code === 'owner_authority_mismatch');
+
+    const wrongHash = JSON.parse(fs.readFileSync(fixture.freezeFile, 'utf8'));
+    wrongHash.owner_authority = { path: LIVE.OWNER_AUTHORITY_BINDING_PATH, sha256: '0'.repeat(64) };
+    fs.writeFileSync(fixture.freezeFile, JSON.stringify(wrongHash));
+    assert.throws(() => LIVE.readFreeze(fixture.freezeFile, { ownerAuthorityFile: authority }), (error) => error.code === 'owner_authority_mismatch');
+
+    const validFreeze = JSON.parse(fs.readFileSync(fixture.freezeFile, 'utf8'));
+    validFreeze.owner_authority.sha256 = LIVE.OWNER_AUTHORITY_SHA256;
+    fs.writeFileSync(fixture.freezeFile, JSON.stringify(validFreeze));
+    fs.appendFileSync(authority, '\nmutated\n');
+    assert.throws(() => LIVE.readFreeze(fixture.freezeFile, { ownerAuthorityFile: authority }), (error) => error.code === 'owner_authority_mismatch');
+    fs.rmSync(authority);
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, {
+      ownerAuthorityFile: authority,
+      prepareRun: () => { throw new Error('provider boundary reached'); },
+      spawn: fixture.spawn,
+      characterizationOnly: true,
+    }), (error) => error.code === 'owner_authority_invalid');
+    assert.equal(fixture.calls, 0);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('each rooted turn receives an exact stage-specific lifecycle prompt', () => {

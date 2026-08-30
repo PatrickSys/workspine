@@ -23,6 +23,10 @@ const WORKFLOWS = Object.freeze(['plan', 'pause', 'resume', 'execute', 'verify',
 const APPROVAL_PLAN = '.work/brownfield-change/CHANGE.md';
 const APPROVAL_REF = 'phase16-owner-active-goal-authorization';
 const APPROVAL_CONTRACT = 'phase16-coordinator-approval-v1';
+const OWNER_AUTHORITY_PATH = '.work/phases/16-safe-cohesive-first-run/16-19-OWNER-AUTHORITY.md';
+const OWNER_AUTHORITY_SHA256 = '77f706400056bc57468bef3dacdf8cf03ad34f65c775fe389439aa4e141c1ff4';
+const OWNER_AUTHORITY_FILE = path.join(REPO, ...OWNER_AUTHORITY_PATH.split('/'));
+const OWNER_AUTHORITY_BINDING_PATH = `<CHECKOUT>/${OWNER_AUTHORITY_PATH}`;
 
 class RunnerFailure extends Error {
   constructor(code, message, evidence = null) {
@@ -415,6 +419,15 @@ function evaluatorFileLedger() {
   }));
   return { contract: EVALUATOR_LEDGER_CONTRACT, files };
 }
+function ownerAuthorityBinding(file = OWNER_AUTHORITY_FILE) {
+  const authorityFile = path.resolve(file);
+  let stat;
+  try { stat = fs.lstatSync(authorityFile); } catch (error) { fail('owner_authority_invalid', 'owner authority file is missing', { path: slash(authorityFile), code: error.code }); }
+  if (!stat.isFile() || stat.isSymbolicLink()) fail('owner_authority_invalid', 'owner authority file must be a regular non-symlink file', { path: slash(authorityFile) });
+  const sha256 = fileSha(authorityFile);
+  if (sha256 !== OWNER_AUTHORITY_SHA256) fail('owner_authority_mismatch', 'owner authority file does not match the approved bytes', { path: slash(authorityFile), expected: OWNER_AUTHORITY_SHA256, actual: sha256 });
+  return { path: OWNER_AUTHORITY_BINDING_PATH, sha256: OWNER_AUTHORITY_SHA256 };
+}
 function validateEvaluatorLedger(ledger) {
   if (ledger?.contract !== EVALUATOR_LEDGER_CONTRACT || !ledger.files || stable(Object.keys(ledger.files).sort()) !== stable(EVALUATOR_FILES.slice().sort())) fail('evaluator_binding_mismatch', 'freeze evaluator ledger is missing or has an unexpected file set');
   for (const relative of EVALUATOR_FILES) {
@@ -439,6 +452,7 @@ function buildFreeze(caseFile, cacheValue, freezeFile, options = {}) {
   const file = absoluteFile(caseFile, 'public case');
   const data = readCase(file);
   const refs = sourceRef();
+  const ownerAuthority = ownerAuthorityBinding(options.ownerAuthorityFile);
   const controlsPath = path.resolve(options.controls || DEFAULT_CONTROLS);
   const cache = cacheBinding(file, cacheValue, data, controlsPath);
   const source = CORE.sourceSnapshot();
@@ -466,6 +480,7 @@ function buildFreeze(caseFile, cacheValue, freezeFile, options = {}) {
       budgets: { turns: TURN_PLAN.map(({ id, role, skill, skills, minutes, tokens, session, initial }) => ({ id, role, skill, skills, wall_minutes: minutes, native_tokens: tokens, session, initial })), total_wall_minutes: TURN_TOTAL_MINUTES, total_native_tokens: TURN_TOTAL_TOKENS, retained_output_bytes: RETAINED_OUTPUT_BYTES },
       usage_policy: RECORDER.WORKFLOW_USAGE_POLICY,
       policy_sha256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256,
+      owner_authority: ownerAuthority,
       root_map: { run_root: '<RUN_ROOT>', consumer_root: '<RUN_ROOT>/consumer_root', tool_root: '<RUN_ROOT>/tool_root', receipts: '<RECEIPTS>' },
       sessions: { count: 3, turns: 5, workflow_count: 6, identities: 'native-only-distinct-A-B-and-C' }, provider_sandbox: 'not_claimed', workflow_verdict: 'not_evaluated', auth: { copied_to_consumer_root: false },
       skills,
@@ -475,7 +490,7 @@ function buildFreeze(caseFile, cacheValue, freezeFile, options = {}) {
     return freeze;
   } finally { fs.rmSync(stage, { recursive: true, force: true }); }
 }
-function readFreeze(file) {
+function readFreeze(file, options = {}) {
   const freezeFile = absoluteFile(file, 'freeze');
   let freeze;
   try { freeze = JSON.parse(fs.readFileSync(freezeFile, 'utf8')); } catch (error) { fail('freeze_invalid', 'freeze is not valid JSON', { message: error.message }); }
@@ -483,6 +498,9 @@ function readFreeze(file) {
   if (stable(freeze.budgets?.turns?.map((item) => [item.id, item.role, item.skill, item.skills, item.wall_minutes, item.native_tokens, item.session, item.initial])) !== stable(TURN_PLAN.map((item) => [item.id, item.role, item.skill, item.skills, item.minutes, item.tokens, item.session, item.initial]))) fail('freeze_budget_mismatch', 'freeze does not carry the fixed five-turn budgets');
   if (freeze.budgets?.total_wall_minutes !== TURN_TOTAL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_TOKENS || freeze.budgets?.retained_output_bytes !== RETAINED_OUTPUT_BYTES || freeze.sessions?.count !== 3 || freeze.sessions?.turns !== 5 || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root') fail('freeze_invalid', 'freeze fixed totals or root map are invalid');
   if (stable(freeze.usage_policy) !== stable(RECORDER.WORKFLOW_USAGE_POLICY) || freeze.policy_sha256 !== RECORDER.WORKFLOW_USAGE_POLICY_SHA256 || stableHash(freeze.usage_policy) !== freeze.policy_sha256) fail('freeze_usage_policy_invalid', 'freeze usage policy does not match the canonical diagnostic contract');
+  if (freeze.owner_authority?.path !== OWNER_AUTHORITY_BINDING_PATH || String(freeze.owner_authority?.sha256 || '').toLowerCase() !== OWNER_AUTHORITY_SHA256) fail('owner_authority_mismatch', 'freeze does not carry the exact owner authority binding');
+  const localAuthority = ownerAuthorityBinding(options.ownerAuthorityFile);
+  if (localAuthority.path !== freeze.owner_authority.path || localAuthority.sha256 !== String(freeze.owner_authority.sha256).toLowerCase()) fail('owner_authority_mismatch', 'local owner authority bytes differ from the freeze binding');
   validateEvaluatorLedger(freeze.evaluator);
   if (!freeze.case?.sha256 || !freeze.case?.input_bundle?.sha256 || !freeze.bundle?.sha256 || !freeze.controls?.sha256 || !freeze.candidate?.sha256 || !freeze.candidate?.member_sha256 || !Array.isArray(freeze.candidate?.members) || !freeze.candidate.package?.name || !freeze.candidate.package?.version || !freeze.source?.main || !freeze.source?.origin_main || !freeze.source?.files || freeze.runtime?.cli_contract?.version !== CODEX_VERSION || !/^[0-9a-f]{64}$/i.test(freeze.runtime?.cli_contract?.resume_help_sha256 || '') || !freeze.runtime?.executable?.source_sha256 || !freeze.runtime?.executable?.target_sha256 || !freeze.toolchain?.node?.sha256 || !freeze.toolchain?.npm?.sha256 || !freeze.toolchain?.git?.sha256 || !freeze.runtime?.python?.sha256 || Object.keys(freeze.skills || {}).length !== 6 || Object.values(freeze.skills || {}).some((hash) => !/^[0-9a-f]{64}$/i.test(hash))) fail('freeze_invalid', 'freeze is missing an immutable case, source, bundle, controls, candidate, runtime, toolchain, or skill binding');
   return freeze;
@@ -592,7 +610,7 @@ function capabilityReceipt({ caseId, revision, recorded, before, after, changed,
 }
 
 function runCapability(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
-  const freeze = readFreeze(freezeFile);
+  const freeze = readFreeze(freezeFile, options);
   const dir = path.resolve(receiptDir);
   fs.mkdirSync(dir, { recursive: true });
   const characterizationOnly = options.characterizationOnly === true;
@@ -957,7 +975,7 @@ function createRunRoot(options = {}) {
 
 function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
   const OBSERVER = options.observer || require('./phase16-itsdangerous-observer.cjs');
-  const freeze = readFreeze(freezeFile); const dir = path.resolve(receiptDir); fs.mkdirSync(dir, { recursive: true });
+  const freeze = readFreeze(freezeFile, options); const dir = path.resolve(receiptDir); fs.mkdirSync(dir, { recursive: true });
   const characterizationOnly = options.characterizationOnly === true;
   if ((options.prepareRun || options.spawn || options.approvePlan) && !characterizationOnly) fail('characterization_only_required', 'injected preparation, provider, or approval execution is characterization-only');
   for (const name of [...TURN_PLAN.map((turn) => `${turn.id}.json`), 'preparation.json', 'approval.json', 'handoff.json', 'terminal.json', 'oracle.json', 'observation.json', 'grade.json', 'regrade.json', 'regrade-compare.json']) if (exists(path.join(dir, name))) fail('receipt_exists', `refusing to overwrite an existing receipt: ${name}`);
@@ -1089,4 +1107,4 @@ async function main(argv = process.argv.slice(2)) {
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
 
-module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, WORKFLOW_USAGE_POLICY: RECORDER.WORKFLOW_USAGE_POLICY, WORKFLOW_USAGE_POLICY_SHA256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, evaluatorFileLedger, validateEvaluatorLedger, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, buildFreeze, readFreeze, prepareRun, createRunRoot, runTurn, workflowUsage, failureTerminal, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
+module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, OWNER_AUTHORITY_PATH, OWNER_AUTHORITY_SHA256, OWNER_AUTHORITY_BINDING_PATH, NATIVE_TOKEN_MULTIPLIER, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, WORKFLOW_USAGE_POLICY: RECORDER.WORKFLOW_USAGE_POLICY, WORKFLOW_USAGE_POLICY_SHA256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, evaluatorFileLedger, validateEvaluatorLedger, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, ownerAuthorityBinding, buildFreeze, readFreeze, prepareRun, createRunRoot, runTurn, workflowUsage, failureTerminal, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
