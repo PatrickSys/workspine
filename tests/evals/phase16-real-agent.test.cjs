@@ -14,6 +14,7 @@ const EVAL = path.join(REPO, 'tests', 'evals', 'phase16-real-agent.cjs');
 const CASE = path.join(REPO, 'tests', 'evals', 'cases', 'itsdangerous-fips-sha1.json');
 const LIVE = require(EVAL);
 const OBSERVER = require('./phase16-itsdangerous-observer.cjs');
+const RECORDER = require('./phase16-codex-recorder.cjs');
 const CAPABILITY_REVISION = JSON.parse(fs.readFileSync(CASE, 'utf8')).source.revision;
 
 function run(args) {
@@ -260,7 +261,18 @@ function nativeCodexItems(thread, turn, turnTokens, kinds) {
   ].map((event) => JSON.stringify(event)).join('\n') + '\n';
 }
 
-function rootedRunFixture(root, { mutation = null, planMutation = null, planFailure = null, verdict = null, usageByTurn = null, initialTotalUsage = 0 } = {}) {
+function nativeCodexMalformedUsage(thread, turn, usage) {
+  const events = [
+    { type: 'thread.started', thread_id: thread },
+    { type: 'turn.started', thread_id: thread, turn_id: turn },
+    { type: 'item.started', thread_id: thread, turn_id: turn, item: { type: 'agent_message', id: `item-${turn}` } },
+    { type: 'item.completed', thread_id: thread, turn_id: turn, item: { type: 'agent_message', id: `item-${turn}` } },
+    { type: 'turn.completed', thread_id: thread, turn_id: turn, ...(usage === undefined ? {} : { usage }) },
+  ];
+  return events.map((event) => JSON.stringify(event)).join('\n') + '\n';
+}
+
+function rootedRunFixture(root, { mutation = null, planMutation = null, planFailure = null, verdict = null, usageByTurn = null } = {}) {
   const consumerRoot = path.join(root, 'consumer_root');
   const receiptDir = path.join(root, 'receipts');
   fs.mkdirSync(path.join(consumerRoot, '.agents', 'skills'), { recursive: true });
@@ -290,11 +302,13 @@ function rootedRunFixture(root, { mutation = null, planMutation = null, planFail
     skills: Object.fromEntries([...new Set(LIVE.TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))].map((skill) => [skill, sha(fs.readFileSync(path.join(consumerRoot, '.agents', 'skills', skill, 'SKILL.md')))])),
     root_map: { consumer_root: '<RUN_ROOT>/consumer_root' }, sessions: { count: 3, turns: 5 },
   };
+  freeze.usage_policy = RECORDER.WORKFLOW_USAGE_POLICY;
+  freeze.policy_sha256 = RECORDER.WORKFLOW_USAGE_POLICY_SHA256;
   freeze.budgets.total_wall_minutes = LIVE.TURN_TOTAL_MINUTES; freeze.budgets.total_native_tokens = LIVE.TURN_TOTAL_TOKENS; freeze.budgets.retained_output_bytes = LIVE.RETAINED_OUTPUT_BYTES;
   const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));
   let calls = 0;
   const sessionTurns = { A: 0, B: 0, C: 0 };
-  const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, totalUsage: initialTotalUsage, sessions: {}, data: {}, sourceBefore: {}, providerInvocations: 0 };
+  const context = { freeze, consumerRoot, runRoot: root, receiptDir, provider: { command: 'codex', prefix: [] }, env: {}, totalUsage: 0, sessions: {}, data: {}, sourceBefore: {}, providerInvocations: 0 };
   const setupMembers = [
     '.work/bin/gsdd.mjs',
     '.work/brownfield-change/CHANGE.md',
@@ -386,7 +400,7 @@ function observerHandoffFixture(root, mutateArgv = null, mutateReceipt = null) {
       record_type: 'phase16_codex_turn_receipt', provider_invoked: true, characterization_only: false, workflow_verdict: 'not_evaluated',
       terminal: { status: 'provider_complete', failure_code: null }, native: { event_types: ['thread.started', 'turn.started', 'item.started', 'item.completed', 'turn.completed'], item_kinds: ['agent_message'], completion_only_diagnostics: [], thread_id: sessions[turn.session], turn_id: null, parse_error: null },
       process: { status: 'exited', exit_code: 0, signal: null, timed_out: false, error: null },
-      usage: { turn_tokens: 10 },
+      usage: { turn_tokens: 10, limit_tokens: turn.tokens, overage_tokens: 0, over_limit: false, policy_contract: RECORDER.WORKFLOW_USAGE_POLICY.contract, policy_sha256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256 },
       streams: { stdout_bytes: Buffer.byteLength(`native-stdout-${index}`), stdout_sha256: sha(Buffer.from(`native-stdout-${index}`)), stderr_bytes: 0, stderr_sha256: sha(Buffer.alloc(0)) },
       turn: { id: turn.id, role: turn.role, skill: turn.skill, skills: turn.skills, session: turn.session, initial: turn.initial, ...(turn.id === 'turn-a-pause' ? { checkpoint: { path: '<CONSUMER_ROOT>/.work/.continue-here.md' } } : {}) },
       invocation: { argv: receiptArgv },
@@ -396,10 +410,13 @@ function observerHandoffFixture(root, mutateArgv = null, mutateReceipt = null) {
     fs.writeFileSync(file, JSON.stringify(receipt));
     return { id: turn.id, sha256: sha(fs.readFileSync(file)) };
   });
-  const terminal = { record_type: 'phase16_terminal_receipt', terminal: { status: 'provider_complete' }, turn_count: 5, workflow_verdict: 'not_evaluated', provider_invoked: true };
+  const totalTurnTokens = turns.reduce((sum, item) => sum + JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${item.id}.json`), 'utf8')).usage.turn_tokens, 0);
+  const usage = { total_turn_tokens: totalTurnTokens, limit_tokens: LIVE.TURN_TOTAL_TOKENS, overage_tokens: Math.max(0, totalTurnTokens - LIVE.TURN_TOTAL_TOKENS), over_limit: totalTurnTokens > LIVE.TURN_TOTAL_TOKENS, policy_contract: RECORDER.WORKFLOW_USAGE_POLICY.contract, policy_sha256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256 };
+  const runRootSha256 = sha(Buffer.from(fs.realpathSync(path.dirname(fixture.consumerRoot)), 'utf8'));
+  const terminal = { record_type: 'phase16_terminal_receipt', terminal: { status: 'provider_complete' }, turn_count: 5, workflow_verdict: 'not_evaluated', provider_invoked: true, run_root: '<RUN_ROOT>', run_root_sha256: runRootSha256, usage };
   const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));
   const preparationSha = sha(fs.readFileSync(path.join(fixture.receiptDir, 'preparation.json')));
-  const handoff = { record_type: 'phase16_codex_handoff', case_id: 'itsdangerous-fips-sha1', workflow_verdict: 'not_evaluated', characterization_only: false, retained_root: '<CONSUMER_ROOT>', sessions, turns, preparation_sha256: preparationSha, setup_baseline_sha256: fixture.context.setupBaseline.sha256, terminal_sha256: terminalSha };
+  const handoff = { record_type: 'phase16_codex_handoff', case_id: 'itsdangerous-fips-sha1', workflow_verdict: 'not_evaluated', characterization_only: false, retained_root: '<CONSUMER_ROOT>', run_root: '<RUN_ROOT>', run_root_sha256: runRootSha256, usage, sessions, turns, preparation_sha256: preparationSha, setup_baseline_sha256: fixture.context.setupBaseline.sha256, terminal_sha256: terminalSha };
   return { ...fixture, terminal, handoff };
 }
 
@@ -459,7 +476,7 @@ test('native token calibration applies the fixed 25x multiplier without changing
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('pause measurement admits the retained R2 observation and rejects overage before B/C', () => {
+test('pause measurement admits retained observations and keeps overage diagnostic', () => {
   for (const observedPauseUsage of [646668, 892765, 1230042]) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), `workspine-phase16-pause-calibration-${observedPauseUsage}-`));
     const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.id === 'turn-a-pause' ? observedPauseUsage : 10 });
@@ -473,20 +490,19 @@ test('pause measurement admits the retained R2 observation and rejects overage b
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-pause-calibration-overage-'));
   const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.id === 'turn-a-pause' ? 2000001 : 10 });
   try {
-    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'usage_excess');
-    assert.equal(fixture.calls, 2);
+    const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
+    assert.equal(fixture.calls, 5);
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'approval.json')), true);
     assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), true);
-    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-b-resume-execute.json')), false);
-    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-c-verify.json')), false);
-    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-c-progress.json')), false);
-    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), false);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-b-resume-execute.json')), true);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-c-verify.json')), true);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-c-progress.json')), true);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), true);
     const pause = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'turn-a-pause.json'), 'utf8'));
     assert.equal(pause.usage.turn_tokens, 2000001);
-    assert.equal(pause.terminal.failure_code, 'usage_excess');
-    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
-    assert.equal(terminal.terminal.failure_code, 'usage_excess');
-    assert.equal(terminal.terminal.sealed_turn.turn, 'turn-a-pause');
+    assert.equal(pause.usage.overage_tokens, 1);
+    assert.equal(pause.terminal.failure_code, null);
+    assert.equal(result.turns.length, 5);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -920,36 +936,103 @@ test('five-turn coordinator accepts the retained 6361031 R1 plan usage below the
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('five-turn coordinator refuses 7000001 plan usage before approval or B/C', () => {
+test('five-turn coordinator retains 7000001 plan usage and continues to B/C', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-five-turn-budget-'));
   const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.id === 'turn-a-plan' ? 7000001 : 10 });
   try {
-    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'usage_excess');
-    assert.equal(fixture.calls, 1);
+    const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
+    assert.equal(fixture.calls, 5);
     const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${LIVE.TURN_PLAN[0].id}.json`), 'utf8'));
     assert.equal(receipt.usage.turn_tokens, 7000001);
-    assert.equal(receipt.terminal.failure_code, 'usage_excess');
-    const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
-    assert.equal(terminal.terminal.failure_code, 'usage_excess');
-    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'approval.json')), false);
+    assert.equal(receipt.terminal.failure_code, null);
+    assert.equal(receipt.usage.overage_tokens, 1);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'approval.json')), true);
     for (const dependent of ['turn-a-pause.json', 'turn-b-resume-execute.json', 'turn-c-verify.json', 'turn-c-progress.json']) {
-      assert.equal(fs.existsSync(path.join(fixture.receiptDir, dependent)), false, dependent);
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, dependent)), true, dependent);
     }
+    assert.equal(result.handoff.usage.overage_tokens, 0);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('five-turn coordinator rejects aggregate turn usage above the fixed total ceiling', () => {
+test('Task 16-18 workflow diagnostics retain per-turn overage and continue', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-workflow-overage-red-'));
+  const fixture = rootedRunFixture(root, { usageByTurn: (turn) => turn.id === 'turn-a-plan' ? 7000001 : 10 });
+  try {
+    const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
+    assert.equal(fixture.calls, 5);
+    assert.equal(result.turns[0].usage.turn_tokens, 7000001);
+    assert.equal(result.turns[0].usage.limit_tokens, 7000000);
+    assert.equal(result.turns[0].usage.overage_tokens, 1);
+    assert.equal(result.turns[0].usage.over_limit, true);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('workflow diagnostic mode rejects malformed usage without a dependent turn or handoff', () => {
+  const malformed = [null, undefined, { input_tokens: '12', output_tokens: 4 }, { input_tokens: -1, output_tokens: 4 }, { input_tokens: Number.MAX_SAFE_INTEGER, output_tokens: 4 }];
+  for (const usage of malformed) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-malformed-usage-'));
+    const fixture = rootedRunFixture(root);
+    const spawn = (_command, _argv, _options) => ({ status: 0, pid: 1001, stdout: nativeCodexMalformedUsage('native-A', 'turn-a-plan-native', usage), stderr: '', timed_out: false });
+    try {
+      let thrown;
+      assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn, characterizationOnly: true }), (error) => { thrown = error; return error.code === 'usage_missing'; });
+      const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'turn-a-plan.json'), 'utf8'));
+      assert.equal(receipt.terminal.failure_code, 'usage_missing');
+      assert.equal(Object.isFrozen(thrown.receipt), true);
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
+      assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('workflow policy and receipt hashes are bound and mismatches fail closed', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-policy-binding-'));
+  const fixture = rootedRunFixture(root);
+  try {
+    const freeze = JSON.parse(fs.readFileSync(fixture.freezeFile, 'utf8'));
+    freeze.policy_sha256 = '0'.repeat(64);
+    fs.writeFileSync(fixture.freezeFile, JSON.stringify(freeze));
+    assert.throws(() => LIVE.readFreeze(fixture.freezeFile), (error) => error.code === 'freeze_usage_policy_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+
+  const observerRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-policy-receipt-'));
+  try {
+    const fixture = observerHandoffFixture(observerRoot, null, (receipt) => { receipt.usage.policy_sha256 = '0'.repeat(64); });
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: fixture.terminal, handoffValue: fixture.handoff }), (error) => error.code === 'turn_usage_invalid');
+    const freeze = JSON.parse(fs.readFileSync(fixture.freezeFile, 'utf8'));
+    freeze.policy_sha256 = '0'.repeat(64);
+    assert.throws(() => OBSERVER.validateFreeze(JSON.parse(fs.readFileSync(CASE, 'utf8')), freeze, CASE), (error) => error.code === 'freeze_binding_mismatch');
+  } finally { fs.rmSync(observerRoot, { recursive: true, force: true }); }
+});
+
+test('non-usage hard failure still stops before dependent workflow evidence', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-hard-failure-'));
+  const fixture = rootedRunFixture(root, { planFailure: 'timeout' });
+  try {
+    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'timeout');
+    assert.equal(fixture.calls, 1);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'turn-a-pause.json')), false);
+    assert.equal(fs.existsSync(path.join(fixture.receiptDir, 'handoff.json')), false);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('five-turn coordinator retains aggregate usage above the fixed total ceiling as diagnostic', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-five-turn-total-budget-'));
   const fixture = rootedRunFixture(root, {
-    initialTotalUsage: LIVE.TURN_TOTAL_TOKENS - 5,
-    usageByTurn: () => 10,
+    usageByTurn: (turn) => ({ 'turn-a-plan': 7000000, 'turn-a-pause': 2000000, 'turn-b-resume-execute': 2500000, 'turn-c-verify': 1500000, 'turn-c-progress': 500001 }[turn.id]),
   });
   try {
-    assert.throws(() => LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true }), (error) => error.code === 'total_token_excess');
+    const result = LIVE.runFrozen(CASE, path.join(root, 'unused-cache'), fixture.freezeFile, fixture.receiptDir, { prepareRun: fixture.prepareRun, spawn: fixture.spawn, characterizationOnly: true });
     const receipt = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, `${LIVE.TURN_PLAN[0].id}.json`), 'utf8'));
-    assert.equal(receipt.usage.turn_tokens, 10);
+    assert.equal(receipt.usage.turn_tokens, 7000000);
     const terminal = JSON.parse(fs.readFileSync(path.join(fixture.receiptDir, 'terminal.json'), 'utf8'));
-    assert.equal(terminal.terminal.failure_code, 'total_token_excess');
+    assert.equal(terminal.usage.total_turn_tokens, 13500001);
+    assert.equal(terminal.usage.limit_tokens, 13500000);
+    assert.equal(terminal.usage.overage_tokens, 1);
+    assert.equal(terminal.usage.over_limit, true);
+    assert.equal(terminal.usage.policy_contract, RECORDER.WORKFLOW_USAGE_POLICY.contract);
+    assert.equal(terminal.usage.policy_sha256, RECORDER.WORKFLOW_USAGE_POLICY_SHA256);
+    assert.deepEqual(result.handoff.usage, terminal.usage);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -1004,6 +1087,42 @@ test('top-level identity collisions seal the failing receipt before dependent tu
       assert.equal(fs.existsSync(path.join(fixture.receiptDir, targetIndex === 2 ? 'turn-c-verify.json' : 'turn-c-progress.json')), false);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   }
+});
+
+test('sealed runs reject supplied roots while generated roots are fresh and disposable', () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-root-guard-'));
+  const supplied = path.join(parent, 'supplied');
+  fs.mkdirSync(supplied);
+  try {
+    assert.throws(() => LIVE.createRunRoot({ runRoot: supplied }), (error) => error.code === 'run_root_reused');
+    const generated = LIVE.createRunRoot();
+    assert.notEqual(generated, supplied);
+    assert.equal(fs.lstatSync(generated).isDirectory(), true);
+    fs.rmSync(generated, { recursive: true, force: false });
+    assert.equal(fs.existsSync(generated), false);
+    const characterized = LIVE.createRunRoot({ runRoot: path.join(parent, 'characterized'), characterizationOnly: true });
+    assert.equal(fs.lstatSync(characterized).isDirectory(), true);
+  } finally { fs.rmSync(parent, { recursive: true, force: true }); }
+});
+
+test('observer accepts policy-bound per-turn and aggregate usage overage before later root gates', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-overage-'));
+  try {
+    const fixture = observerHandoffFixture(root, null, (receipt, turn) => {
+      const turnTokens = turn.id === 'turn-c-progress' ? 500001 : turn.tokens;
+      receipt.usage = { turn_tokens: turnTokens, limit_tokens: turn.tokens, overage_tokens: Math.max(0, turnTokens - turn.tokens), over_limit: turnTokens > turn.tokens, policy_contract: RECORDER.WORKFLOW_USAGE_POLICY.contract, policy_sha256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256 };
+    });
+    const expectedRootHash = sha(Buffer.from(fs.realpathSync(path.dirname(fixture.consumerRoot)), 'utf8'));
+    assert.equal(fixture.terminal.run_root_sha256, expectedRootHash);
+    assert.equal(fixture.handoff.run_root_sha256, expectedRootHash);
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: fixture.terminal, handoffValue: fixture.handoff }), (error) => error.code === 'upstream_origin_mismatch');
+    const tamperedRootTerminal = { ...fixture.terminal, run_root_sha256: '0'.repeat(64) };
+    const tamperedRootHandoff = { ...fixture.handoff, terminal_sha256: sha(Buffer.from(`${JSON.stringify(tamperedRootTerminal, null, 2)}\n`)) };
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: tamperedRootTerminal, handoffValue: tamperedRootHandoff }), (error) => error.code === 'handoff_usage_invalid');
+    const tamperedTerminal = { ...fixture.terminal, usage: { ...fixture.terminal.usage, overage_tokens: 2 } };
+    const tamperedHandoff = { ...fixture.handoff, terminal_sha256: sha(Buffer.from(`${JSON.stringify(tamperedTerminal, null, 2)}\n`)) };
+    assert.throws(() => OBSERVER.completeHandoff({ caseFile: CASE, freezeFile: fixture.freezeFile, receiptDir: fixture.receiptDir, consumerRoot: fixture.consumerRoot, terminalValue: tamperedTerminal, handoffValue: tamperedHandoff }), (error) => error.code === 'handoff_usage_invalid');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('wrong fresh identity, wrong resume identity, and native order fail closed', () => {
@@ -1494,6 +1613,16 @@ test('observer projects a valid partial plan terminal as product red without wor
   } finally { fs.rmSync(root.root, { recursive: true, force: true }); }
 });
 
+test('observer shared usage-policy freeze seam accepts only the exact canonical object and hash', () => {
+  const canonical = { usage_policy: OBSERVER.WORKFLOW_USAGE_POLICY, policy_sha256: OBSERVER.WORKFLOW_USAGE_POLICY_SHA256 };
+  assert.doesNotThrow(() => OBSERVER.validateUsagePolicy(canonical));
+  for (const freeze of [
+    {},
+    { ...canonical, usage_policy: { ...canonical.usage_policy, mode: 'strict' } },
+    { ...canonical, policy_sha256: '0'.repeat(64) },
+  ]) assert.throws(() => OBSERVER.validateUsagePolicy(freeze, 'freeze_binding_mismatch'), (error) => error.code === 'freeze_binding_mismatch');
+});
+
 test('partial plan observation fails closed for no-product, setup-only, predecessor, and unbound evidence', { skip: !process.env.PHASE16_REAL_CACHE }, () => {
   const cases = [
     ['no-product', (fixture) => {
@@ -1549,6 +1678,8 @@ function makePartialPlanFixture() {
     source: { repository: 'https://github.com/pallets/itsdangerous.git', revision: CAPABILITY_REVISION, main: CAPABILITY_REVISION, origin_main: CAPABILITY_REVISION }, evaluator: { contract: 'phase16-evaluator-ledger-v1', files: currentEvaluatorLedger() },
     bundle: { sha256: 'b'.repeat(64) }, controls: { sha256: 'c'.repeat(64) }, candidate: { sha256: 'd'.repeat(64) }, runtime: { provider: 'codex', model: 'gpt-5.6-luna', effort: 'high', python: { sha256: 'e'.repeat(64) } }, skills: { 'work-plan': workPlanHash }, root_map: { consumer_root: '<RUN_ROOT>/consumer_root' },
   };
+  freeze.usage_policy = RECORDER.WORKFLOW_USAGE_POLICY;
+  freeze.policy_sha256 = RECORDER.WORKFLOW_USAGE_POLICY_SHA256;
   const freezeFile = path.join(root, 'freeze.json'); fs.writeFileSync(freezeFile, JSON.stringify(freeze));
   const setupMembers = [{ path: '.agents/skills/work-plan/SKILL.md', type: 'file', bytes: fs.statSync(workPlanFile).size, sha256: workPlanHash }];
   const setupBaseline = { contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: setupMembers, sha256: OBSERVER.stableHash({ contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: setupMembers }) };

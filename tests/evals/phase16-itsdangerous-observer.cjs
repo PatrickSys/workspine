@@ -6,6 +6,7 @@ const cp = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const RECORDER = require('./phase16-codex-recorder.cjs');
 
 const CASE_ID = 'itsdangerous-fips-sha1';
 const CASE_REVISION = '93ae366874bbd4f69d90495c45b2cd336387496c';
@@ -39,6 +40,8 @@ const TURN_CONTRACT = Object.freeze([
 ]);
 const TURN_TOTAL_WALL_MINUTES = 72;
 const TURN_TOTAL_NATIVE_TOKENS = 13500000;
+const WORKFLOW_USAGE_POLICY = RECORDER.WORKFLOW_USAGE_POLICY;
+const WORKFLOW_USAGE_POLICY_SHA256 = RECORDER.WORKFLOW_USAGE_POLICY_SHA256;
 
 function expectedNativeArgv(turn, sessionId = null) {
   const base = turn[7]
@@ -85,8 +88,8 @@ function validateNativeReceipt(receipt, expectedTurn, expectedThread) {
   if (outOfTurnItemIndexes.length > 0 && (!Array.isArray(native.item_kinds) || !native.item_kinds.includes('error'))) fail('turn_receipt_invalid', `native diagnostic witness lacks an error item kind: ${expectedTurn[0]}`);
   const process = receipt.process;
   if (!process || process.status !== 'exited' || process.exit_code !== 0 || process.timed_out !== false || process.error !== null) fail('turn_process_invalid', `native process did not exit cleanly: ${expectedTurn[0]}`);
-  const usage = receipt.usage?.turn_tokens;
-  if (!Number.isSafeInteger(usage) || usage < 0 || usage > expectedTurn[5]) fail('turn_usage_invalid', `native usage is missing, unsafe, or over budget: ${expectedTurn[0]}`);
+  const usage = receipt.usage;
+  if (!usage || !Number.isSafeInteger(usage.turn_tokens) || usage.turn_tokens < 0 || !Number.isSafeInteger(usage.limit_tokens) || usage.limit_tokens !== expectedTurn[5] || !Number.isSafeInteger(usage.overage_tokens) || usage.overage_tokens !== Math.max(0, usage.turn_tokens - expectedTurn[5]) || typeof usage.over_limit !== 'boolean' || usage.over_limit !== (usage.turn_tokens > expectedTurn[5]) || usage.policy_contract !== WORKFLOW_USAGE_POLICY.contract || usage.policy_sha256 !== WORKFLOW_USAGE_POLICY_SHA256) fail('turn_usage_invalid', `native usage diagnostic is missing, unsafe, or mismatched: ${expectedTurn[0]}`);
   const streams = receipt.streams;
   if (!streams || !Number.isSafeInteger(streams.stdout_bytes) || streams.stdout_bytes <= 0 || !Number.isSafeInteger(streams.stderr_bytes) || streams.stderr_bytes < 0 || streams.stdout_bytes + streams.stderr_bytes > 1048576 || !validHash(streams.stdout_sha256) || !validHash(streams.stderr_sha256)) fail('turn_stream_invalid', `native stream evidence is missing or unbounded: ${expectedTurn[0]}`);
 }
@@ -111,6 +114,11 @@ const stable = (value) => {
   return JSON.stringify(value);
 };
 const stableHash = (value) => sha256(Buffer.from(stable(value), 'utf8'));
+
+function validateUsagePolicy(freeze, code = 'freeze_binding_mismatch') {
+  if (stable(freeze?.usage_policy) !== stable(WORKFLOW_USAGE_POLICY) || freeze?.policy_sha256 !== WORKFLOW_USAGE_POLICY_SHA256 || stableHash(freeze?.usage_policy) !== freeze?.policy_sha256) fail(code, 'freeze usage policy is missing or does not match the canonical diagnostic contract');
+  return freeze.usage_policy;
+}
 
 function writeExclusive(file, value) {
   if (exists(file)) fail('receipt_exists', 'refusing to replace an existing observer receipt', { path: slash(file) });
@@ -156,6 +164,7 @@ function validateFreeze(data, freeze, caseFile, controlsFile = null) {
   if (freeze.candidate?.package?.name !== 'workspine' || !freeze.candidate.package.version || freeze.toolchain?.node?.sha256 == null || freeze.toolchain?.npm?.sha256 == null || freeze.toolchain?.git?.sha256 == null || !validHash(freeze.toolchain.node.sha256) || !validHash(freeze.toolchain.npm.sha256) || !validHash(freeze.toolchain.git.sha256)) fail('freeze_binding_mismatch', 'freeze toolchain binding is incomplete');
   const turns = freeze.budgets?.turns?.map((item) => [item.id, item.role, item.skill, item.skills, item.wall_minutes, item.native_tokens, item.session, item.initial]);
   if (stable(turns) !== stable(TURN_CONTRACT) || freeze.budgets?.total_wall_minutes !== TURN_TOTAL_WALL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_NATIVE_TOKENS || freeze.budgets?.retained_output_bytes !== 1048576 || freeze.sessions?.count !== 3 || freeze.sessions?.turns !== 5 || freeze.root_map?.run_root !== '<RUN_ROOT>' || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root' || freeze.root_map?.tool_root !== '<RUN_ROOT>/tool_root' || freeze.root_map?.receipts !== '<RECEIPTS>') fail('freeze_binding_mismatch', 'freeze budgets, root map, or turn contract drifted');
+  validateUsagePolicy(freeze);
   if (controlsFile && (!exists(controlsFile) || fileSha(controlsFile) !== freeze.controls.sha256)) fail('freeze_binding_mismatch', 'freeze controls hash does not match the sealed controls receipt');
 }
 
@@ -442,6 +451,15 @@ function completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, contr
     if (expectedTurn[0] === 'turn-a-pause' && receipt.turn?.checkpoint?.path !== '<CONSUMER_ROOT>/.work/.continue-here.md') fail('checkpoint_invalid', 'pause receipt does not carry the canonical checkpoint path');
     return { id: WORKFLOW_STEPS[index], thread_id: receipt.native.thread_id, turn_id: receipt.native.turn_id, sha256: item.sha256 };
   });
+  const totalTurnTokens = WORKFLOW_STEPS.reduce((sum, id) => sum + readJson(path.join(receiptDir, `${id}.json`)).usage.turn_tokens, 0);
+  const aggregate = (value, label) => {
+    if (!value || !Number.isSafeInteger(value.total_turn_tokens) || value.total_turn_tokens < 0 || !Number.isSafeInteger(value.limit_tokens) || value.limit_tokens !== TURN_TOTAL_NATIVE_TOKENS || !Number.isSafeInteger(value.overage_tokens) || value.overage_tokens !== Math.max(0, value.total_turn_tokens - TURN_TOTAL_NATIVE_TOKENS) || typeof value.over_limit !== 'boolean' || value.over_limit !== (value.total_turn_tokens > TURN_TOTAL_NATIVE_TOKENS) || value.policy_contract !== WORKFLOW_USAGE_POLICY.contract || value.policy_sha256 !== WORKFLOW_USAGE_POLICY_SHA256 || value.total_turn_tokens !== totalTurnTokens) fail('handoff_usage_invalid', `${label} aggregate usage is missing, unsafe, or mismatched`);
+    return value;
+  };
+  aggregate(terminal.usage, 'terminal');
+  aggregate(handoff.usage, 'handoff');
+  const runRootSha256 = sha256(Buffer.from(fs.realpathSync(path.dirname(consumerRoot)), 'utf8'));
+  if (!validHash(terminal.run_root_sha256) || terminal.run_root_sha256 !== runRootSha256 || !validHash(handoff.run_root_sha256) || handoff.run_root_sha256 !== runRootSha256 || stable(terminal.usage) !== stable(handoff.usage) || terminal.run_root !== '<RUN_ROOT>' || handoff.run_root !== '<RUN_ROOT>') fail('handoff_usage_invalid', 'terminal and handoff aggregate usage or root witness differs');
   if (turns[0].thread_id !== handoff.sessions.A || turns[1].thread_id !== handoff.sessions.A || turns[2].thread_id !== handoff.sessions.B || turns[3].thread_id !== handoff.sessions.C || turns[4].thread_id !== handoff.sessions.C) fail('handoff_identity_invalid', 'turn receipts do not link to the declared sessions');
   let origin;
   try { origin = runGit(consumerRoot, ['remote', 'get-url', 'origin']); }
@@ -633,6 +651,7 @@ function observePartialPlan({ caseFile, freezeFile, receiptDir, consumerRoot, ca
   const data = readCase(caseFile);
   const freeze = readJson(freezeFile, 'freeze_invalid');
   if (freeze.schema_version !== 1 || freeze.contract !== 'phase16-rooted-codex-freeze-v1' || freeze.case_id !== CASE_ID || freeze.provider_sandbox !== 'not_claimed' || freeze.workflow_verdict !== 'not_evaluated') fail('freeze_binding_mismatch', 'partial observer freeze contract is not exact');
+  validateUsagePolicy(freeze);
   validateEvaluatorLedger(freeze.evaluator);
   if (freeze.case?.sha256 !== CASE_SHA256 || freeze.source?.repository !== data.source.repository || freeze.source?.revision !== CASE_REVISION || freeze.source?.main !== freeze.source?.origin_main || freeze.runtime?.provider !== 'codex' || freeze.runtime?.model !== 'gpt-5.6-luna' || freeze.runtime?.effort !== 'high' || !validHash(freeze.bundle?.sha256) || !validHash(freeze.controls?.sha256) || !validHash(freeze.candidate?.sha256) || !validHash(freeze.runtime?.python?.sha256) || freeze.skills?.['work-plan'] == null) fail('freeze_binding_mismatch', 'partial observer freeze does not bind the pinned case and runtime');
   if (!exists(consumerRoot) || !fs.statSync(consumerRoot).isDirectory()) fail('consumer_root_invalid', 'partial observer consumer root is missing');
@@ -700,5 +719,5 @@ module.exports = {
   observe, observeRun: observe, checkpoint, gradeValue, grade, gradeObservation: grade, regrade,
   regradeObservation: regrade, regradeChild, project, projectPublic: project, earlyProjection,
   writeEarlyProjection, observerFailureProjection, observeAndGrade, stable, stableHash, assertPublicSafe, allowedPaths, scopeGate,
-  WORKFLOW_STEPS, DISPOSITIONS, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_CONTRACT, TURN_TOTAL_WALL_MINUTES, TURN_TOTAL_NATIVE_TOKENS, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, SETUP_BASELINE_CONTRACT, validateEvaluatorLedger, observePartialPlan,
+  WORKFLOW_STEPS, DISPOSITIONS, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_CONTRACT, TURN_TOTAL_WALL_MINUTES, TURN_TOTAL_NATIVE_TOKENS, WORKFLOW_USAGE_POLICY, WORKFLOW_USAGE_POLICY_SHA256, validateUsagePolicy, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, SETUP_BASELINE_CONTRACT, validateEvaluatorLedger, observePartialPlan,
 };

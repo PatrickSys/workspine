@@ -464,6 +464,8 @@ function buildFreeze(caseFile, cacheValue, freezeFile, options = {}) {
       runtime: { provider: 'codex', model: CODEX_MODEL, effort: CODEX_EFFORT, cli_contract: codexContract(descriptor), executable: CORE.realAgentProviderEvidence(descriptor), python: { path: '<PYTHON>', sha256: python.sha256, identity: '<PYTHON>' }, auth_posture: 'authenticated-native-CODEX_HOME; ignore-user-config; credentials-not-copied' },
       toolchain: { node: { path: '<NODE>', sha256: fileSha(process.execPath) }, npm: { path: '<NPM>', sha256: fileSha(candidate.npm) }, git: { path: '<GIT>', sha256: fileSha(gitText(['--exec-path']).replace(/\r?\n/g, '') + (process.platform === 'win32' ? '\\git.exe' : '/git')) } },
       budgets: { turns: TURN_PLAN.map(({ id, role, skill, skills, minutes, tokens, session, initial }) => ({ id, role, skill, skills, wall_minutes: minutes, native_tokens: tokens, session, initial })), total_wall_minutes: TURN_TOTAL_MINUTES, total_native_tokens: TURN_TOTAL_TOKENS, retained_output_bytes: RETAINED_OUTPUT_BYTES },
+      usage_policy: RECORDER.WORKFLOW_USAGE_POLICY,
+      policy_sha256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256,
       root_map: { run_root: '<RUN_ROOT>', consumer_root: '<RUN_ROOT>/consumer_root', tool_root: '<RUN_ROOT>/tool_root', receipts: '<RECEIPTS>' },
       sessions: { count: 3, turns: 5, workflow_count: 6, identities: 'native-only-distinct-A-B-and-C' }, provider_sandbox: 'not_claimed', workflow_verdict: 'not_evaluated', auth: { copied_to_consumer_root: false },
       skills,
@@ -480,6 +482,7 @@ function readFreeze(file) {
   if (freeze.contract !== 'phase16-rooted-codex-freeze-v1' || freeze.case_id !== CASE_ID || freeze.workflow_verdict !== 'not_evaluated' || freeze.provider_sandbox !== 'not_claimed' || freeze.auth?.copied_to_consumer_root !== false || freeze.runtime?.provider !== 'codex') fail('freeze_invalid', 'freeze contract or claim posture is invalid');
   if (stable(freeze.budgets?.turns?.map((item) => [item.id, item.role, item.skill, item.skills, item.wall_minutes, item.native_tokens, item.session, item.initial])) !== stable(TURN_PLAN.map((item) => [item.id, item.role, item.skill, item.skills, item.minutes, item.tokens, item.session, item.initial]))) fail('freeze_budget_mismatch', 'freeze does not carry the fixed five-turn budgets');
   if (freeze.budgets?.total_wall_minutes !== TURN_TOTAL_MINUTES || freeze.budgets?.total_native_tokens !== TURN_TOTAL_TOKENS || freeze.budgets?.retained_output_bytes !== RETAINED_OUTPUT_BYTES || freeze.sessions?.count !== 3 || freeze.sessions?.turns !== 5 || freeze.root_map?.consumer_root !== '<RUN_ROOT>/consumer_root') fail('freeze_invalid', 'freeze fixed totals or root map are invalid');
+  if (stable(freeze.usage_policy) !== stable(RECORDER.WORKFLOW_USAGE_POLICY) || freeze.policy_sha256 !== RECORDER.WORKFLOW_USAGE_POLICY_SHA256 || stableHash(freeze.usage_policy) !== freeze.policy_sha256) fail('freeze_usage_policy_invalid', 'freeze usage policy does not match the canonical diagnostic contract');
   validateEvaluatorLedger(freeze.evaluator);
   if (!freeze.case?.sha256 || !freeze.case?.input_bundle?.sha256 || !freeze.bundle?.sha256 || !freeze.controls?.sha256 || !freeze.candidate?.sha256 || !freeze.candidate?.member_sha256 || !Array.isArray(freeze.candidate?.members) || !freeze.candidate.package?.name || !freeze.candidate.package?.version || !freeze.source?.main || !freeze.source?.origin_main || !freeze.source?.files || freeze.runtime?.cli_contract?.version !== CODEX_VERSION || !/^[0-9a-f]{64}$/i.test(freeze.runtime?.cli_contract?.resume_help_sha256 || '') || !freeze.runtime?.executable?.source_sha256 || !freeze.runtime?.executable?.target_sha256 || !freeze.toolchain?.node?.sha256 || !freeze.toolchain?.npm?.sha256 || !freeze.toolchain?.git?.sha256 || !freeze.runtime?.python?.sha256 || Object.keys(freeze.skills || {}).length !== 6 || Object.values(freeze.skills || {}).some((hash) => !/^[0-9a-f]{64}$/i.test(hash))) fail('freeze_invalid', 'freeze is missing an immutable case, source, bundle, controls, candidate, runtime, toolchain, or skill binding');
   return freeze;
@@ -525,11 +528,13 @@ function runTurn(context, turn, sessionId = null, options = {}) {
   for (const skill of turn.skills || [turn.skill]) if (!input.includes(`$${skill}`)) fail('skill_token_missing', `turn prompt lacks its exact skill token: ${skill}`);
   context.activeTurn = { skills, argv: argv.map((item) => diagnostic(item, context.runRoot, context.env)), cwd: '<CONSUMER_ROOT>', input_sha256: sha(Buffer.from(input)) };
   context.providerInvocations = (context.providerInvocations || 0) + 1;
-  const recorded = RECORDER.recordCodexTurn({ turn, command: context.provider.command, prefix: context.provider.prefix, argv, cwd: context.consumerRoot, root: context.runRoot, env: context.env, prompt: input, skills: skills.map((item) => ({ token: `$${item.id}`, sha256: item.sha256 })), model: context.freeze.runtime.model, effort: context.freeze.runtime.effort, provider: context.provider, expectedSessionId: sessionId, maxTurnTokens: turn.tokens, maxOutputBytes: RETAINED_OUTPUT_BYTES, timeout: turn.minutes * 60000, characterizationOnly: Boolean(options.spawn), spawn: options.spawn });
+  const recorded = RECORDER.recordCodexTurn({ turn, command: context.provider.command, prefix: context.provider.prefix, argv, cwd: context.consumerRoot, root: context.runRoot, env: context.env, prompt: input, skills: skills.map((item) => ({ token: `$${item.id}`, sha256: item.sha256 })), model: context.freeze.runtime.model, effort: context.freeze.runtime.effort, provider: context.provider, expectedSessionId: sessionId, maxTurnTokens: turn.tokens, usagePolicy: RECORDER.WORKFLOW_USAGE_POLICY, maxOutputBytes: RETAINED_OUTPUT_BYTES, timeout: turn.minutes * 60000, characterizationOnly: Boolean(options.spawn), spawn: options.spawn });
   context.spawned = context.spawned || recorded.provider_invoked;
   context.activeReceipt = recorded;
   if (recorded.terminal.failure_code) { const error = new RunnerFailure(recorded.terminal.failure_code, recorded.terminal.message, { recorder: recorded }); error.receipt = recorded; throw error; }
-  context.totalUsage = (context.totalUsage || 0) + recorded.usage.turn_tokens;
+  const totalUsage = (context.totalUsage || 0) + recorded.usage.turn_tokens;
+  if (!Number.isSafeInteger(totalUsage) || totalUsage < 0) { const error = new RunnerFailure('usage_total_invalid', 'native workflow usage aggregate is not a safe nonnegative integer'); error.receipt = recorded; throw error; }
+  context.totalUsage = totalUsage;
   return recorded;
 }
 
@@ -887,7 +892,7 @@ function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   if (cache.bundle_sha256 !== freeze.bundle.sha256 || fileSha(file) !== freeze.case.sha256 || cache.controls_sha256 !== freeze.controls.sha256 || stableHash(data.input_bundle.members) !== freeze.case.input_bundle.sha256) fail('freeze_binding_mismatch', 'run inputs differ from the freeze');
   const source = CORE.sourceSnapshot();
   if (source.head !== freeze.source.main || stable(source.files) !== stable(freeze.source.files)) fail('source_ref_mismatch', 'checkout bytes differ from the frozen candidate');
-  const runRoot = options.runRoot || fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-run-'));
+  const runRoot = createRunRoot(options);
   const consumerRoot = path.join(runRoot, 'consumer_root'); const toolStage = path.join(runRoot, 'tool-stage');
   fs.mkdirSync(runRoot, { recursive: true });
   gitText(['-c', 'core.autocrlf=false', 'clone', '--no-checkout', '--no-tags', cache.bundle, consumerRoot], runRoot);
@@ -917,6 +922,16 @@ function prepareRun(caseFile, cacheValue, freeze, options = {}) {
   return context;
 }
 
+function createRunRoot(options = {}) {
+  if (options.runRoot) {
+    if (options.characterizationOnly !== true) fail('run_root_reused', 'sealed execution requires a fresh generated run root');
+    const suppliedRoot = path.resolve(String(options.runRoot));
+    fs.mkdirSync(suppliedRoot, { recursive: true });
+    return fs.realpathSync(suppliedRoot);
+  }
+  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-run-')));
+}
+
 function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
   const OBSERVER = options.observer || require('./phase16-itsdangerous-observer.cjs');
   const freeze = readFreeze(freezeFile); const dir = path.resolve(receiptDir); fs.mkdirSync(dir, { recursive: true });
@@ -927,6 +942,8 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
   try {
     context = options.prepareRun ? options.prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir }) : prepareRun(caseFile, cacheValue, freeze, { ...options, receiptDir: dir });
     if (!context.setupBaseline) fail('setup_baseline_missing', 'post-init preparation did not return a setup baseline ledger');
+    // Aggregate usage is defined as the exact sum of this run's retained turn receipts.
+    context.totalUsage = 0;
     const preparation = { schema_version: 1, record_type: 'phase16_preparation_receipt', case_id: CASE_ID, consumer_root: '<CONSUMER_ROOT>', tool_root: '<TOOL_ROOT>', bundle_sha256: freeze.bundle.sha256, controls_sha256: freeze.controls.sha256, candidate_sha256: freeze.candidate.sha256, generated_skills: [...new Set(TURN_PLAN.flatMap((turn) => turn.skills || [turn.skill]))], python: context.python ? { identity: '<PYTHON>', sha256: context.python.sha256 } : null, setup_baseline: context.setupBaseline || null, auth_copied: false, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated' };
     writeExclusive(path.join(dir, 'preparation.json'), preparation);
     const preparationSha = fileSha(path.join(dir, 'preparation.json'));
@@ -950,7 +967,6 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
         else context.sessions[turn.session] = recorded.native.thread_id;
       }
       if (!turn.initial && recorded.native.thread_id !== expectedSession) gateFailure = new RunnerFailure('resume_session_mismatch', `${turn.id} resumed the wrong native session`);
-      if (context.totalUsage > TURN_TOTAL_TOKENS) gateFailure = new RunnerFailure('total_token_excess', 'native turn usage exceeded the total budget');
       const turnEvidence = { ...recorded.turn, pre_snapshot_sha256: stableHash(before), post_snapshot_sha256: stableHash(after) };
       if (turn.id === 'turn-a-pause') { turnEvidence.changed_paths = changedPaths(pauseBaseline, after); turnEvidence.allowed_root = '<CONSUMER_ROOT>/.work'; try { turnEvidence.checkpoint = CORE.liveCaptureCheckpoint(context.consumerRoot); assertPauseScope(pauseBaseline, after); } catch (error) { gateFailure = gateFailure || error; turnEvidence.checkpoint = turnEvidence.checkpoint || null; } }
       const receipt = RECORDER.deepFreeze({ ...recorded, turn: turnEvidence, characterization_only: characterizationOnly });
@@ -960,9 +976,11 @@ function runFrozen(caseFile, cacheValue, freezeFile, receiptDir, options = {}) {
     }
     if (new Set(Object.values(context.sessions)).size !== 3) fail('session_identity_invalid', 'A, B, and C native sessions must be distinct');
     const approvalSha = fileSha(path.join(dir, 'approval.json'));
-    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: approvalSha, terminal: { status: 'provider_complete' } };
+    const usage = { total_turn_tokens: context.totalUsage, limit_tokens: TURN_TOTAL_TOKENS, overage_tokens: Math.max(0, context.totalUsage - TURN_TOTAL_TOKENS), over_limit: context.totalUsage > TURN_TOTAL_TOKENS, policy_contract: RECORDER.WORKFLOW_USAGE_POLICY.contract, policy_sha256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256 };
+    const runRootSha256 = sha(Buffer.from(fs.realpathSync(context.runRoot), 'utf8'));
+    const terminal = { schema_version: 1, record_type: 'phase16_terminal_receipt', case_id: CASE_ID, turn_count: turns.length, provider_invoked: Boolean(context.spawned), characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', approval_sha256: approvalSha, usage, run_root: '<RUN_ROOT>', run_root_sha256: runRootSha256, terminal: { status: 'provider_complete' } };
     const terminalSha = sha(Buffer.from(`${JSON.stringify(terminal, null, 2)}\n`));
-    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), approval_sha256: approvalSha, preparation_sha256: preparationSha, setup_baseline_sha256: context.setupBaseline?.sha256 || null, terminal_sha256: terminalSha, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>' };
+    const handoff = { schema_version: 1, record_type: 'phase16_codex_handoff', case_id: CASE_ID, sessions: context.sessions, turns: turns.map((item) => ({ id: item.turn.id, sha256: fileSha(path.join(dir, `${item.turn.id}.json`)) })), approval_sha256: approvalSha, preparation_sha256: preparationSha, setup_baseline_sha256: context.setupBaseline?.sha256 || null, terminal_sha256: terminalSha, characterization_only: characterizationOnly, workflow_verdict: 'not_evaluated', retained_root: '<CONSUMER_ROOT>', run_root: '<RUN_ROOT>', run_root_sha256: runRootSha256, usage };
     let observer = null;
     if (!characterizationOnly && options.observe !== false) {
       try {
@@ -1048,4 +1066,4 @@ async function main(argv = process.argv.slice(2)) {
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
 
-module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, evaluatorFileLedger, validateEvaluatorLedger, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, buildFreeze, readFreeze, prepareRun, runTurn, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
+module.exports = { catalog, preparePublicCase, checkPublicCase, archiveLedger, gitLedger, verifyGitRoot, assertPreparedArchiveBinding, validateControlsReceipt, removeDisposableRoot, cleanupPreparationOutputs, writeExclusive, stableHash, RunnerFailure, DEFAULT_CONTROLS, NATIVE_TOKEN_MULTIPLIER, PLAN_TOKEN_CEILING, PAUSE_TOKEN_CEILING, TURN_PLAN, TURN_TOTAL_MINUTES, TURN_TOTAL_TOKENS, RETAINED_OUTPUT_BYTES, WORKFLOW_USAGE_POLICY: RECORDER.WORKFLOW_USAGE_POLICY, WORKFLOW_USAGE_POLICY_SHA256: RECORDER.WORKFLOW_USAGE_POLICY_SHA256, EVALUATOR_LEDGER_CONTRACT, EVALUATOR_FILES, evaluatorFileLedger, validateEvaluatorLedger, CAPABILITY_TURN, CAPABILITY_CONTRACT, CAPABILITY_MARKER_PATH, CAPABILITY_MARKER_BYTES, CAPABILITY_MAX_MINUTES, CAPABILITY_MAX_TOKENS, APPROVAL_PLAN, APPROVAL_REF, APPROVAL_CONTRACT, buildFreeze, readFreeze, prepareRun, createRunRoot, runTurn, runCapability, capabilityProbe: runCapability, runCoordinatorApproval, runFrozen, codexTurnArgv: RECORDER.buildCodexArgv, turnPrompt, capabilityPrompt, resolvePython, candidatePack, changedPaths };
