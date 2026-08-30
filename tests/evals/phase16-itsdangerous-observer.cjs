@@ -377,7 +377,7 @@ function lifecycleState(root) {
   if (!schema || typeof fields.plan_approved !== 'boolean' || !validRFC3339(fields.updated_at)) fail('lifecycle_invalid', 'observer state lacks the required schema or strict RFC3339 timestamp');
   const checks = {
     status: fields.status === 'active', current_state: fields.current_state === 'fix_gaps', workflow_current_state: fields.workflow_current_state === 'fix_gaps', plan_approved: fields.plan_approved === true,
-    plan_path: fields.plan_path === '.work/phases/brownfield-change/01-PLAN.md', plan_identity: fields.plan_identity === '.work/phases/brownfield-change/01-PLAN.md', execution_status: fields.execution_status === 'complete', verification_status: fields.verification_status === 'gaps_found',
+    plan_path: fields.plan_path === '.work/brownfield-change/CHANGE.md', plan_identity: fields.plan_identity === '.work/brownfield-change/CHANGE.md', execution_status: fields.execution_status === 'complete', verification_status: fields.verification_status === 'gaps_found',
     verification_artifact: fields.verification_artifact === '.work/brownfield-change/VERIFICATION.md', verification_identity: fields.verification_identity === '.work/brownfield-change/VERIFICATION.md', authority: fields.authority === 'owner', approval_ref: typeof fields.approval_ref === 'string' && fields.approval_ref.length > 0, updated_at: validRFC3339(fields.updated_at), progress: fields.progress === 'fix_gaps', next: fields.next === 'fix_gaps',
   };
   checks.all = Object.values(checks).every(Boolean);
@@ -550,7 +550,7 @@ function completeHandoff({ caseFile, freezeFile, receiptDir, consumerRoot, contr
 }
 
 function allowedPaths(data, scope, baseline = null, extraAllowed = []) {
-  const lifecycle = ['.work/brownfield-change/CHANGE.md', '.work/brownfield-change/HANDOFF.md', '.work/brownfield-change/VERIFICATION.md', '.work/phases/brownfield-change/01-PLAN.md', '.work/research/brownfield-change-RESEARCH.md', '.work/.continue-here.md'];
+  const lifecycle = ['.work/brownfield-change/CHANGE.md', '.work/brownfield-change/HANDOFF.md', '.work/brownfield-change/VERIFICATION.md', '.work/research/CHANGE-001-RESEARCH.md', '.work/.continue-here.md'];
   const candidatePath = data.source?.candidate_path || data.task?.allowed_paths?.[0];
   const all = (scope.all || []).map((item) => typeof item === 'string' ? item : item.path);
   if (!baseline) {

@@ -1358,6 +1358,20 @@ test('exact brownfield lifecycle allowlist rejects broad prefixes and duplicate 
   assert.equal(rejected.product.length, 2);
 });
 
+test('frozen brownfield research identity matches workflow authority exactly', () => {
+  const baseline = { contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [], sha256: OBSERVER.stableHash({ contract: OBSERVER.SETUP_BASELINE_CONTRACT, members: [] }) };
+  const data = { source: { candidate_path: 'src/itsdangerous/signer.py' }, task: { allowed_paths: ['src/itsdangerous/signer.py'] } };
+  const canonical = '.work/research/CHANGE-001-RESEARCH.md';
+  const accepted = OBSERVER.allowedPaths(data, { all: [{ path: canonical }, { path: 'src/itsdangerous/signer.py' }] }, baseline);
+  assert.deepEqual(accepted.plan, [canonical]);
+  assert.deepEqual(accepted.forbidden, []);
+  for (const stale of ['.work/research/brownfield-change-RESEARCH.md', '.work/research/CHANGE-002-RESEARCH.md', '.work/research/CHANGE-001-extra-RESEARCH.md']) {
+    const rejected = OBSERVER.allowedPaths(data, { all: [{ path: stale }, { path: 'src/itsdangerous/signer.py' }] }, baseline);
+    assert.deepEqual(rejected.plan, []);
+    assert.deepEqual(rejected.forbidden, [stale]);
+  }
+});
+
 test('sole product path must equal pinned candidate and differ from frozen baseline', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-sole-product-'));
   try {
@@ -1646,12 +1660,27 @@ test('brownfield temporal fields use strict field-specific date contracts', () =
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test('frozen brownfield plan identity matches workflow authority exactly', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-plan-identity-'));
+  const stateFile = path.join(root, '.work', 'state.json');
+  try {
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    const plan = '.work/brownfield-change/CHANGE.md';
+    const state = { status: 'active', current_state: 'fix_gaps', updated_at: '2026-08-29T10:20:30Z', progress: 'fix_gaps', next: 'fix_gaps', workflow: { current_state: 'fix_gaps', authority: 'owner', approval_ref: 'owner-ref', plan: { approved: true, path: plan, identity: plan }, execution: { status: 'complete' }, verification: { status: 'gaps_found', artifact: '.work/brownfield-change/VERIFICATION.md', identity: '.work/brownfield-change/VERIFICATION.md' } } };
+    fs.writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
+    const observed = OBSERVER.lifecycleState(root);
+    assert.equal(observed.checks.plan_path, true);
+    assert.equal(observed.checks.plan_identity, true);
+    assert.equal(observed.checks.all, true);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('observer lifecycle state separates bound semantic failure from integrity failure', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-phase16-observer-state-'));
   const stateFile = path.join(root, '.work', 'state.json');
   try {
     fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-    const state = { status: 'active', current_state: 'fix_gaps', updated_at: '2026-08-29T10:20:30Z', progress: 'fix_gaps', next: 'fix_gaps', workflow: { current_state: 'fix_gaps', authority: 'owner', approval_ref: 'owner-ref', plan: { approved: true, path: '.work/phases/brownfield-change/01-PLAN.md', identity: '.work/phases/brownfield-change/01-PLAN.md' }, execution: { status: 'complete' }, verification: { status: 'gaps_found', artifact: '.work/brownfield-change/VERIFICATION.md', identity: '.work/brownfield-change/VERIFICATION.md' } } };
+    const state = { status: 'active', current_state: 'fix_gaps', updated_at: '2026-08-29T10:20:30Z', progress: 'fix_gaps', next: 'fix_gaps', workflow: { current_state: 'fix_gaps', authority: 'owner', approval_ref: 'owner-ref', plan: { approved: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md' }, execution: { status: 'complete' }, verification: { status: 'gaps_found', artifact: '.work/brownfield-change/VERIFICATION.md', identity: '.work/brownfield-change/VERIFICATION.md' } } };
     fs.writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
     const valid = OBSERVER.lifecycleState(root);
     assert.equal(valid.checks.all, true);
