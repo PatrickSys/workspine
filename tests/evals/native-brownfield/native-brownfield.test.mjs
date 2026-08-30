@@ -343,6 +343,25 @@ test('isolated Codex home contains auth only and never reports auth hash', t => 
   assert.equal(JSON.stringify(result.posture).includes(sha256('{"secret":"never record"}\n')), false);
 });
 
+test('qualification restores auth-only posture after Codex runtime temp files', async t => {
+  const root = tempRoot(t);
+  const source = path.join(root, 'source');
+  const parent = path.join(root, 'isolated');
+  fs.mkdirSync(source);
+  fs.writeFileSync(path.join(source, 'auth.json'), '{}\n');
+  const result = createIsolatedCodexHome({ sourceHome: source, parent, runId: 'run-1', allowTempForTest: true });
+  const runtimeTemp = path.join(result.home, 'tmp', 'arg0', 'codex-arg0');
+  fs.mkdirSync(runtimeTemp, { recursive: true });
+  fs.writeFileSync(path.join(runtimeTemp, 'apply_patch.bat'), 'runtime helper');
+  const prepare = await import('./prepare.mjs');
+
+  assert.equal(typeof prepare.restoreIsolatedCodexHomePosture, 'function');
+  assert.equal(prepare.restoreIsolatedCodexHomePosture(result.home), true);
+  assert.deepEqual(fs.readdirSync(result.home), ['auth.json']);
+  fs.writeFileSync(path.join(result.home, 'tmp'), 'not a runtime temp directory');
+  assert.throws(() => prepare.restoreIsolatedCodexHomePosture(result.home), /runtime temp path/);
+});
+
 test('claim Codex home refuses the system Temp tree', t => {
   const root = tempRoot(t);
   fs.writeFileSync(path.join(root, 'auth.json'), '{}\n');

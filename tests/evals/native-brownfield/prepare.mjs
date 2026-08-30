@@ -48,16 +48,18 @@ export function createIsolatedCodexHome({ sourceHome, parent, runId, allowTempFo
     scope: allowTempForTest ? 'isolated_test' : 'isolated_outside_temp',
   } };
 }
+export function restoreIsolatedCodexHomePosture(home) {
+  const root = path.resolve(home), runtimeTemp = path.resolve(root, 'tmp'), stat = fs.lstatSync(runtimeTemp, { throwIfNoEntry: false }); if (path.dirname(runtimeTemp) !== root || (stat && (!stat.isDirectory() || stat.isSymbolicLink()))) throw new EvalError('environment_invalid', 'Codex runtime temp path is unsafe');
+  if (stat) fs.rmSync(runtimeTemp, { recursive: true, force: true }); const files = fs.readdirSync(root); return files.length === 1 && files[0] === 'auth.json';
+}
 export function cleanupIsolatedCodexHome(home, parent) {
-  const resolved = path.resolve(home);
-  if (path.dirname(resolved) !== path.resolve(parent) || !path.basename(resolved).startsWith('workspine-codex-'))
+  const resolved = path.resolve(home); if (path.dirname(resolved) !== path.resolve(parent) || !path.basename(resolved).startsWith('workspine-codex-'))
     throw new EvalError('environment_invalid', 'refusing unsafe CODEX_HOME cleanup');
   fs.rmSync(resolved, { recursive: true, force: true });
 }
 export function packageCandidate({ repoRoot, outputDir }) {
   const root = path.resolve(repoRoot);
-  for (const args of [['diff', '--quiet'], ['diff', '--cached', '--quiet']])
-    if (command('git', args, { cwd: root, allowFailure: true }).status !== 0) throw new EvalError('evaluator_invalid', 'tracked candidate source is dirty');
+  for (const args of [['diff', '--quiet'], ['diff', '--cached', '--quiet']]) if (command('git', args, { cwd: root, allowFailure: true }).status !== 0) throw new EvalError('evaluator_invalid', 'tracked candidate source is dirty');
   mkdirp(outputDir);
   const packed = command('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', path.resolve(outputDir)], { cwd: root });
   const rows = JSON.parse(packed.stdout);
@@ -78,8 +80,7 @@ export function packageCandidate({ repoRoot, outputDir }) {
 }
 export function verifyFrozenCandidate({ repoRoot, tarball, expected }) {
   const root = path.resolve(repoRoot);
-  for (const args of [['diff', '--quiet'], ['diff', '--cached', '--quiet']])
-    if (command('git', args, { cwd: root, allowFailure: true }).status !== 0) throw new EvalError('evaluator_invalid', 'tracked candidate source is dirty');
+  for (const args of [['diff', '--quiet'], ['diff', '--cached', '--quiet']]) if (command('git', args, { cwd: root, allowFailure: true }).status !== 0) throw new EvalError('evaluator_invalid', 'tracked candidate source is dirty');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   return assertCandidateBinding({
     head: command('git', ['rev-parse', 'HEAD'], { cwd: root }).stdout.trim(),

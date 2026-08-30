@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { CodexTransport } from './codex.mjs';
 import { gradeWorkspace } from './grade.mjs';
 import { buildPrompts, runJourney } from './journey.mjs';
-import { cleanupIsolatedCodexHome, createIsolatedCodexHome, verifyFrozenCandidate } from './prepare.mjs';
+import { cleanupIsolatedCodexHome, createIsolatedCodexHome, restoreIsolatedCodexHomePosture, verifyFrozenCandidate } from './prepare.mjs';
 import { ReceiptChain, verifySeal } from './seal.mjs';
 import { canonicalStringify, command, EvalError, fileSha256, readJson, sha256 } from './util.mjs';
 const SOURCE_FILES = ['cli.mjs', 'util.mjs', 'prepare.mjs', 'codex.mjs', 'journey.mjs', 'grade.mjs', 'seal.mjs'];
@@ -51,7 +51,7 @@ function qualify(freezeFile, runRoot) {
     const env = { ...process.env, CODEX_HOME: isolated.home };
     const login = command('codex', ['login', 'status'], { env, allowFailure: true, timeoutMs: 30_000 });
     const version = command('codex', ['--version'], { env, allowFailure: true, timeoutMs: 30_000 });
-    const isolatedFiles = fs.readdirSync(isolated.home), isolatedOk = isolatedFiles.length === 1 && isolatedFiles[0] === 'auth.json';
+    const isolatedOk = restoreIsolatedCodexHomePosture(isolated.home);
     const ok = login.status === 0 && version.status === 0 && isolatedOk;
     chain.append(10, 'qualification', 'qualification', { ok, provider_invoked: false, posture: isolated.posture,
       codex_version: version.stdout.trim(), login_status: login.status, isolated_home_unchanged: isolatedOk });
