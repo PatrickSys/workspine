@@ -895,6 +895,29 @@ describe('S18 — Deterministic mechanics workflow surface', () => {
     }
   });
 
+  test('fresh bounded brownfield planning creates continuity before its lifecycle preflight', () => {
+    const content = readSkill(tmpDir, 'work-plan');
+    const createInstruction = 'instantiate `CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` from the shipped templates with create-if-missing semantics';
+    const populateInstruction = 'populate only the bounded `CHANGE.md` contract fields needed for preflight from the owner request';
+    const preflightCommand = 'node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change';
+    const createIndex = content.indexOf(createInstruction);
+    const populateIndex = content.indexOf(populateInstruction);
+    const preflightIndex = content.indexOf(preflightCommand);
+
+    assert.notStrictEqual(createIndex, -1,
+      'work-plan must explain how a fresh bounded change creates its continuity artifacts.');
+    assert.notStrictEqual(preflightIndex, -1,
+      'work-plan must retain the fail-closed brownfield lifecycle preflight.');
+    assert.notStrictEqual(populateIndex, -1,
+      'work-plan must populate the bounded contract before preflight validates it.');
+    assert.ok(createIndex < populateIndex && populateIndex < preflightIndex,
+      'work-plan must create and populate missing brownfield continuity before preflight validates it.');
+    assert.match(content, /no competing active `brownfield-change\*` stream or milestone\/work authority/,
+      'work-plan must reject competing authority before creating the canonical lane.');
+    assert.ok(content.includes('If the preflight result is `blocked`, STOP'),
+      'work-plan must still stop on a blocked preflight after template bootstrap.');
+  });
+
   test('progress portable skill preserves the read-only lifecycle boundary', () => {
     const content = readSkill(tmpDir, 'work-progress');
     assert.ok(content.includes('progress` stays read-only.') || content.includes('progress stays read-only.'),

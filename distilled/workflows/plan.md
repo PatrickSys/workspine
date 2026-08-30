@@ -19,7 +19,7 @@ Before starting, read these files:
 9. **Session-boundary fallback:** If no prior completed phase SUMMARY.md with a `<judgment>` section was found in step 8, check whether `.work/.continue-here.bak` exists. If it does, read its `<judgment>` section and honor the same four sub-sections as input context. After reading, run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok` (auto-clean: the judgment has been absorbed into this session's context).
 10. `.work/*-MILESTONE-AUDIT.md`, `.work/milestone/AUDIT.md`, `.work/evidence/manifest.json`, and recent `*-VERIFICATION.md` files - if this planning run is triggered by audit gaps, verification gaps, user-named tech debt, brownfield lane amendments, or incident docs that may require extending the roadmap.
 Classify the target before preflight:
-- If `.work/brownfield-change/CHANGE.md` exists and the requested work fits its single active goal, scope, done-when, next action, or declared write scope, select `brownfield-change`; if it no longer fits one active stream, stop and route widening through `/work-new-project` or `/work-new-milestone` using the brownfield artifact family as preserved input.
+- For an explicitly chosen planned standalone change, select `brownfield-change`. If canonical `CHANGE.md` is absent, first confirm there is no competing active `brownfield-change*` stream or milestone/work authority, then instantiate `CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` from the shipped templates with create-if-missing semantics and populate only the bounded `CHANGE.md` contract fields needed for preflight from the owner request. Run brownfield lifecycle preflight next; never overwrite user content or create another lane folder. If an existing active change fits its single goal, scope, done-when, next action, or declared write scope, reuse that lane; if it no longer fits one active stream, stop and route widening through `/work-new-project` or `/work-new-milestone` using the brownfield artifact family as preserved input.
 - If audit gaps, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` require adding new roadmap work, select `amend` as the planning target before normal phase selection.
 - Otherwise identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>
@@ -27,7 +27,7 @@ Classify the target before preflight:
 All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 <lifecycle_preflight>
-Before writing or rewriting planning artifacts, run the preflight for the selected authority:
+Before writing or rewriting substantive planning content beyond the bounded target contract, run the preflight for the selected authority. The only exception is the fresh brownfield bootstrap above; create its canonical family, populate the bounded `CHANGE.md` contract from the owner request, then run preflight before research or broader planning:
 - Phase: `node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`; bounded brownfield: `node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`; amend/extend before roadmap append: `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift. Do not run phase preflight before target classification; an unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
@@ -132,13 +132,12 @@ If the selected target is `brownfield-change`, do not require ROADMAP phase memb
 Also verify that `HANDOFF.md` is judgment-only context and does not contradict the operational status, scope, or next action in `CHANGE.md`. If any brownfield contract field is missing or contradictory, STOP and repair the brownfield contract before planning.
 
 <brownfield_change_plan>
-For an explicitly chosen planned standalone change, use the existing `.work/brownfield-change/`
-family as the single stream. If no compatible active `CHANGE.md` exists, instantiate `CHANGE.md`,
-`HANDOFF.md`, and `VERIFICATION.md` from the shipped templates with create-if-missing semantics;
-never overwrite user content or create another lane folder. A second active stream, a conflicting
-milestone/work authority, a missing Done When section, or a request that is already milestone-sized
-is a fail-closed planning result. Record the plan transition only after all three artifacts are
-durable, using `CHANGE.md` as the plan identity and keeping `HANDOFF.md` context-only.
+For an explicitly chosen planned standalone change, use the existing `.work/brownfield-change/` family as the single stream. The create-if-missing step occurs during target classification, before
+brownfield lifecycle preflight. After an allowed preflight, require all three artifacts to be
+durable and keep `CHANGE.md` as the plan identity with `HANDOFF.md` context-only. A second active
+stream, a conflicting milestone/work authority, a missing Done When section, or a request that is
+already milestone-sized is a fail-closed planning result. Record the plan transition only after
+those checks pass.
 </brownfield_change_plan>
 </phase_contract_gate>
 <browser_proof_planning>
