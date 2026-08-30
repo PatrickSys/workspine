@@ -60,8 +60,8 @@ export function findNetworkViolation(rows) {
   }
   return null;
 }
-function directCodexCommand() {
-  const command = resolveDirectCommand('codex', ['app-server', '--stdio']);
+export function buildCodexCommand() {
+  const command = resolveDirectCommand('codex', ['-c', 'windows.sandbox="unelevated"', '--disable', 'apps', '--disable', 'plugins', 'app-server', '--stdio']);
   if (!fs.existsSync(command.executable)) throw new EvalError('environment_invalid', 'Codex CLI executable is missing');
   return command;
 }
@@ -91,7 +91,7 @@ export class CodexTransport {
     mkdirp(path.dirname(eventsFile));
     fs.writeFileSync(eventsFile, '', { flag: 'wx' });
     fs.writeFileSync(stderrFile, '', { flag: 'wx' });
-    const command = directCodexCommand();
+    const command = buildCodexCommand();
     const child = spawn(command.executable, command.args, {
       cwd, env: this.env, shell: false, windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32',

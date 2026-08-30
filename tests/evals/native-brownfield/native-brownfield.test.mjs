@@ -10,6 +10,7 @@ import { ReceiptChain, projectOutcome, verifySeal } from './seal.mjs';
 import {
   classifyProviderResult,
   closeCodexChild,
+  buildCodexCommand,
   codexTurnPolicy,
   findCheckpointWitness,
   findNetworkViolation,
@@ -152,6 +153,17 @@ test('Codex sandbox disables consumer network and limits writable roots', () => 
     excludeTmpdirEnvVar: true,
     excludeSlashTmp: true,
   });
+});
+
+test('Codex app-server command is posture-isolated before provider launch', () => {
+  const command = buildCodexCommand();
+  const args = process.platform === 'win32' ? command.args.slice(1) : command.args;
+  assert.deepEqual(args, [
+    '-c', 'windows.sandbox="unelevated"',
+    '--disable', 'apps', '--disable', 'plugins',
+    'app-server', '--stdio',
+  ]);
+  assert.equal(command.executable, process.platform === 'win32' ? process.execPath : 'codex');
 });
 
 test('provider results preserve typed invalid domains and null usage', () => {
