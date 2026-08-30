@@ -215,6 +215,7 @@ function completedRead(root, output) {
       id: 'read-checkpoint',
       type: 'commandExecution',
       status: 'completed',
+      exitCode: 0,
       cwd: root,
       command: 'cmd.exe /c "type .work\\.continue-here.md"',
       commandActions: [{ type: 'read', command: 'type .work\\.continue-here.md', path: path.join(root, '.work', '.continue-here.md') }],
@@ -329,6 +330,10 @@ test('checkpoint witness accepts the real continuity packet before native apply-
   assert.equal(findCheckpointWitness([continuityPacket(root), relative], {
     consumerRoot: root, checkpointSha256: sha256(checkpoint),
   }).reason, 'product_change_event_not_observed');
+  const mismatchedOutput = nativeApplyPatch(root); mismatchedOutput.params.item.aggregatedOutput = 'Success. Updated the following files:\nM other.js\n';
+  assert.equal(findCheckpointWitness([continuityPacket(root), mismatchedOutput], {
+    consumerRoot: root, checkpointSha256: sha256(checkpoint),
+  }).reason, 'product_change_event_not_observed');
 });
 
 test('checkpoint packet reconstruction rejects invalid schema, hash, order, and ambiguity', t => {
@@ -379,9 +384,12 @@ test('checkpoint witness fails closed when read is late, wrong, or ambiguous', t
   assert.equal(findCheckpointWitness([malformedCwd, productChange()], options).ok, false);
   const malformedActions = completedRead(root, checkpoint); malformedActions.params.item.commandActions = { forged: true };
   assert.equal(findCheckpointWitness([malformedActions, productChange()], options).ok, false);
+  const failedRead = completedRead(root, checkpoint); failedRead.params.item.exitCode = 1;
+  assert.equal(findCheckpointWitness([failedRead, productChange()], options).ok, false);
   for (const changes of [{ forged: true }, 'forged']) {
     assert.equal(findCheckpointWitness([{ method: 'item/completed', params: { item: { type: 'fileChange', changes } } }], options).reason, 'product_change_event_not_observed');
   }
+  assert.equal(findCheckpointWitness([{ method: 'item/completed', params: { item: { type: 'fileChange', changes: [{}] } } }], options).reason, 'product_change_event_not_observed');
 });
 
 test('journey order is plan, pause, approval, fresh B, verify, progress', async () => {
