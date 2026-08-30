@@ -12,6 +12,7 @@ import {
   closeCodexChild,
   buildCodexCommand,
   codexTurnPolicy,
+  scanWindowsSandboxRefusal,
   findCheckpointWitness,
   findNetworkViolation,
 } from './codex.mjs';
@@ -155,11 +156,20 @@ test('Codex sandbox disables consumer network and limits writable roots', () => 
   });
 });
 
+test('Codex split-root refusal is an environment failure, not a completed turn', () => {
+  const marker = 'windows unelevated restricted-token sandbox cannot enforce split writable root sets directly; refusing to run unsandboxed';
+  const scan = { tail: '', found: false };
+  scanWindowsSandboxRefusal(scan, `UnsupportedOperation("${marker.slice(0, 50)}`);
+  scanWindowsSandboxRefusal(scan, `${marker.slice(50)}")${'noise'.repeat(2000)}`);
+  assert.equal(scan.found, true);
+  assert.equal(classifyProviderResult({ exitCode: 0, sessionId: 'A', sandboxEnvironmentFailure: true }).outcome, 'environment_invalid');
+});
+
 test('Codex app-server command is posture-isolated before provider launch', () => {
   const command = buildCodexCommand();
   const args = process.platform === 'win32' ? command.args.slice(1) : command.args;
   assert.deepEqual(args, [
-    '-c', 'windows.sandbox="unelevated"',
+    '-c', 'windows.sandbox="elevated"',
     '--disable', 'apps', '--disable', 'plugins',
     'app-server', '--stdio',
   ]);

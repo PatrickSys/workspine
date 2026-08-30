@@ -2,12 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { EvalError, mkdirp, resolveDirectCommand, sha256, toPosix } from './util.mjs';
-export function codexTurnPolicy(cwd) {
-  return {
-    type: 'workspaceWrite', writableRoots: [path.resolve(cwd)], networkAccess: false,
-    excludeTmpdirEnvVar: true, excludeSlashTmp: true,
-  };
-}
+export function codexTurnPolicy(cwd) { return { type: 'workspaceWrite', writableRoots: [path.resolve(cwd)], networkAccess: false, excludeTmpdirEnvVar: true, excludeSlashTmp: true }; }
+const WINDOWS_SANDBOX_REFUSAL = 'windows unelevated restricted-token sandbox cannot enforce split writable root sets directly; refusing to run unsandboxed';
+export function scanWindowsSandboxRefusal(state, chunk) { const combined = state.tail + String(chunk); state.found ||= combined.includes(WINDOWS_SANDBOX_REFUSAL); state.tail = combined.slice(1 - WINDOWS_SANDBOX_REFUSAL.length); return state; }
 export function classifyProviderResult(result, expectedSession = null) {
   let outcome = 'completed';
   let failure_code = null;
@@ -16,6 +13,7 @@ export function classifyProviderResult(result, expectedSession = null) {
   else if (result.outputExcess) [outcome, failure_code] = ['provider_invalid', 'output_excess'];
   else if (result.closeTimedOut) [outcome, failure_code] = ['provider_invalid', 'post_turn_close_timeout'];
   else if (result.networkViolation) [outcome, failure_code] = ['environment_invalid', 'native_network_event'];
+  else if (result.sandboxEnvironmentFailure) [outcome, failure_code] = ['environment_invalid', 'windows_sandbox_unavailable'];
   else if (result.protocolError?.code === 'provider_invalid') [outcome, failure_code] = ['provider_invalid', 'native_provider_failure'];
   else if (result.protocolError) [outcome, failure_code] = ['protocol_invalid', result.protocolError.code || 'app_server_protocol_error'];
   else if (result.malformedEvents) [outcome, failure_code] = ['protocol_invalid', 'malformed_native_event'];
@@ -61,7 +59,7 @@ export function findNetworkViolation(rows) {
   return null;
 }
 export function buildCodexCommand() {
-  const command = resolveDirectCommand('codex', ['-c', 'windows.sandbox="unelevated"', '--disable', 'apps', '--disable', 'plugins', 'app-server', '--stdio']);
+  const command = resolveDirectCommand('codex', ['-c', 'windows.sandbox="elevated"', '--disable', 'apps', '--disable', 'plugins', 'app-server', '--stdio']);
   if (!fs.existsSync(command.executable)) throw new EvalError('environment_invalid', 'Codex CLI executable is missing');
   return command;
 }
@@ -97,6 +95,7 @@ export class CodexTransport {
       stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32',
     });
     let buffer = '', stdoutBytes = 0, stderrBytes = 0, malformedEvents = 0, eventCount = 0;
+    const sandboxScan = { tail: '', found: false };
     let threadId = sessionId, turnId = null, totalTokens = null, timedOut = false, outputExcess = false, spawnError = null, protocolError = null, networkViolation = null;
     let nextId = 1, complete, fail;
     const completion = new Promise((resolve, reject) => { complete = resolve; fail = reject; });
@@ -135,7 +134,7 @@ export class CodexTransport {
       buffer += chunk.toString('utf8');
       while (buffer.includes('\n')) { const index = buffer.indexOf('\n'); record(buffer.slice(0, index)); buffer = buffer.slice(index + 1); }
     });
-    child.stderr.on('data', chunk => { stderrBytes += chunk.length; fs.appendFileSync(stderrFile, chunk); });
+    child.stderr.on('data', chunk => { stderrBytes += chunk.length; scanWindowsSandboxRefusal(sandboxScan, chunk.toString('utf8')); fs.appendFileSync(stderrFile, chunk); });
     child.on('error', error => { spawnError = { code: error.code || null, message: error.message }; fail(error); });
     const request = (method, params) => new Promise((resolve, reject) => {
       const requestId = nextId++; pending.set(requestId, { resolve, reject });
@@ -164,7 +163,7 @@ export class CodexTransport {
       clearTimeout(timer);
       if (buffer.trim()) record(buffer);
     }
-    const base = { pid: child.pid, ...exit, timedOut, outputExcess, spawnError, protocolError, networkViolation, stdoutBytes, stderrBytes, malformedEvents, eventCount, sessionId: threadId, turnId, totalTokens };
+    const base = { pid: child.pid, ...exit, timedOut, outputExcess, spawnError, protocolError, networkViolation, sandboxEnvironmentFailure: sandboxScan.found, stdoutBytes, stderrBytes, malformedEvents, eventCount, sessionId: threadId, turnId, totalTokens };
     return { id, ...base, ...classifyProviderResult(base, sessionId), eventsFile, stderrFile, events: parsedEvents };
   }
 }
