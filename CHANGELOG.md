@@ -3,8 +3,8 @@
 Every release listed below, up to and including 0.32.0, was published to npm as
 `gsdd-cli`. From the next release the npm package name is `workspine`. It still
 installs the `gsdd` command as a transitional alias next to the new `workspine`
-command so existing installs keep working; that alias is removed at the next
-minor release. The workspace directory stays `.work/` and the entrypoint stays
+command so existing installs keep working; that alias remains through 0.35 and
+is removed at the next minor release, 0.36. The workspace directory stays `.work/` and the entrypoint stays
 `bin/gsdd.mjs`. The workflow command IDs moved off the `gsdd-` prefix to `work-`
 (`work-plan`, `work-execute`, `work-verify`, and the rest).
 
@@ -16,6 +16,47 @@ list of paths allowed to keep pre-rename text.
 Upgrading an existing local install leaves the previously generated `gsdd-*`
 files in place alongside the new `work-*` ones; local generation has no pruning
 pass. Delete the stale `gsdd-*` files by hand after upgrading.
+
+# [0.35.0](https://github.com/PatrickSys/workspine/compare/v0.34.0...v0.35.0) (2026-08-31)
+
+### Bug Fixes
+
+* bind final workflow approval evidence ([4943bba](https://github.com/PatrickSys/workspine/commit/4943bba39fd4aeb3c9c399d922abd7adcf63ed49))
+* close native witness edge cases ([dad75c0](https://github.com/PatrickSys/workspine/commit/dad75c0cacc3c31edd99e907b4a057839a8ffea1))
+* harden native checkpoint witness ([87d89bd](https://github.com/PatrickSys/workspine/commit/87d89bdbeb1cbd251ca4af7ff7742750df3fd78f))
+* recognize native workflow witnesses ([c8b4c7c](https://github.com/PatrickSys/workspine/commit/c8b4c7c08090df5fc04860b1836221d748ec26bc))
+* use working Windows sandbox posture ([d46238f](https://github.com/PatrickSys/workspine/commit/d46238f5eab2355624e88e7db69f85b01e2f8939))
+* harden native checkpoint witnessing ([8189d16](https://github.com/PatrickSys/workspine/commit/8189d161cee108db34e69d6e6c4e8165e8bb17fd))
+* isolate native Codex transport ([b8845b9](https://github.com/PatrickSys/workspine/commit/b8845b9745f21632f5efd7ed65a366ef99311d4f))
+* restore isolated Codex qualification ([0bff575](https://github.com/PatrickSys/workspine/commit/0bff575bfe28e52f1f83ab4e83009f54525d81e6))
+* bootstrap fresh brownfield planning ([068f95c](https://github.com/PatrickSys/workspine/commit/068f95cd2a3562176a064f009d8e1ae8a8c45211))
+* canonicalize brownfield research output ([8731c9f](https://github.com/PatrickSys/workspine/commit/8731c9f2ab4dbbbd90c51dde08610d998da7df5f))
+* keep pause checkpoints resume-valid ([a5f0ebd](https://github.com/PatrickSys/workspine/commit/a5f0ebd7dbc4260a5aadedda80e48574caf1b85a))
+* bind execution to owner approval ([f4c4574](https://github.com/PatrickSys/workspine/commit/f4c45749dd0470b3d8fc3541c2801751b30e011e))
+* use canonical work plan paths ([d499c75](https://github.com/PatrickSys/workspine/commit/d499c7552fae7af602444480af54ac77ae59345f))
+* admit out-of-band Codex diagnostics ([214e1b8](https://github.com/PatrickSys/workspine/commit/214e1b8060fcade76b9972e17b8883c80271f6a5))
+* use reviewed Codex workspace approval ([65ad913](https://github.com/PatrickSys/workspine/commit/65ad913519deeb9c1c2cbe803da77b4350901275))
+* accept nonfatal Codex diagnostics ([7f66141](https://github.com/PatrickSys/workspine/commit/7f661412f645ad3523855ad4c07cb55134d6cde2))
+* isolate retained evaluator workspaces ([30363c9](https://github.com/PatrickSys/workspine/commit/30363c94bf3ebdaefff16318eecd3723070ac01e))
+* accept native optional item lifecycles ([85e2d87](https://github.com/PatrickSys/workspine/commit/85e2d8735cf6801a91bf7b10523f287d3ea7f25f))
+* parse native Codex item lifecycles ([fdd8a43](https://github.com/PatrickSys/workspine/commit/fdd8a43160021a63022370eda2dcd08ff4246a7d))
+* preserve exact network guard evidence ([4b2b0ab](https://github.com/PatrickSys/workspine/commit/4b2b0ab2b700a3628c4654cab2332514de40f74a))
+* require owner-bound plan approval ([a7f9e92](https://github.com/PatrickSys/workspine/commit/a7f9e92f555c4e5ee1334b953c4e8806f28abf11))
+* enforce core workflow ordering ([0613e9c](https://github.com/PatrickSys/workspine/commit/0613e9c74fd3c8a0a98947f13d7a6801682aa92b))
+* contain malformed question state ([211ffbd](https://github.com/PatrickSys/workspine/commit/211ffbd0bb75492b8612e9e5d163928fe938bdd7))
+* preserve brownfield flow authority ([ab817ce](https://github.com/PatrickSys/workspine/commit/ab817ce9dd274aa267ae8c0ee3b6cfcd50b1196d))
+* preserve lifecycle preflight json ([1cf196d](https://github.com/PatrickSys/workspine/commit/1cf196d228052284c8d651d46bf0e9b6c29b212f))
+* reject malformed mutator commands ([f6e4a0d](https://github.com/PatrickSys/workspine/commit/f6e4a0d0bfbbb8973fd22bd30a892c74a4cbac92))
+* reconcile all owned local adapters ([f3090d0](https://github.com/PatrickSys/workspine/commit/f3090d0a56b9879c4d7cffc205fabe9a22486a16))
+* fail closed on invalid lifecycle state ([1e60b70](https://github.com/PatrickSys/workspine/commit/1e60b70a0b72d269a9f3ab0fd5c51184805b6c99))
+* validate release dispatch sha ([82f5c4c](https://github.com/PatrickSys/workspine/commit/82f5c4ce300380e993bdff9e95fec61c37fee243))
+* contain workspace root admission ([62381c1](https://github.com/PatrickSys/workspine/commit/62381c12c9747804d6e9f70f2cb3b67c4452538d))
+* reject invalid mutating flags and make help and version zero-write ([3faafb1](https://github.com/PatrickSys/workspine/commit/3faafb159a30543840d57a1049330b38262001cf))
+
+### Features
+
+* add global update and health ([5310fe3](https://github.com/PatrickSys/workspine/commit/5310fe3042c39fe5fd3177bc4d28b6ed7b3a8869))
+* add first-time setup command ([4949d4a](https://github.com/PatrickSys/workspine/commit/4949d4ae1413d4809a08acee72760b91560d6c0a))
 
 # [0.32.0](https://github.com/PatrickSys/workspine/compare/v0.31.2...v0.32.0) (2026-07-12)
 

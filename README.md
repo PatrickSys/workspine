@@ -15,7 +15,7 @@ One end-to-end run is recorded, on Codex CLI: plan, execute, a verification catc
 npx -y workspine init
 ```
 
-Needs Node >=22. The npm package is `workspine`, and it installs two equivalent commands, `workspine` and `gsdd`. The workflows are `work-*` and the workspace is `.work/`; Workspine kept the `gsdd` command and the `.work/` workspace so existing installs keep working. Releases up to 0.32.0 shipped under a different, now-retired npm package name; see CHANGELOG.md for that history. The `gsdd` binary alias is removed at the next minor release, so new scripts should call `workspine` directly.
+Needs Node >=22. The npm package is `workspine`, and it installs two equivalent commands, `workspine` and `gsdd`. The workflows are `work-*` and the workspace is `.work/`; Workspine kept the `gsdd` command and the `.work/` workspace so existing installs keep working. Releases up to 0.32.0 shipped under a different, now-retired npm package name; see CHANGELOG.md for that history. The `gsdd` binary alias remains through 0.35 and is removed at the next minor release, 0.36, so new scripts should call `workspine` directly.
 
 </div>
 

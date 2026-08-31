@@ -272,8 +272,8 @@ describe('public surface language gate', () => {
     const updateAwareness = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'lib', 'update-awareness.mjs')).href}?surface-policy=${Date.now()}`);
     assert.deepStrictEqual(updateAwareness.stripUpdateNoticeFlag(['--json', '--no-update-notice', '1', '--no-update-notice']), ['--json', '1']);
     const launcher = (await loadRenderer()).renderPlanningCliLauncher({ packageName: PACKAGE.name, packageVersion: PACKAGE.version });
-    assert.match(launcher, /const PACKAGE_VERSION = "0\.32\.0";/);
-    assert.doesNotMatch(launcher, /const PACKAGE_VERSION = '0\.32\.0';/);
+    assert.match(launcher, /const PACKAGE_VERSION = "0\.35\.0";/);
+    assert.doesNotMatch(launcher, /const PACKAGE_VERSION = '0\.35\.0';/);
     for (const command of ['control-map', 'decisions', 'file-op', 'git-identity', 'lifecycle-preflight', 'phase-status', 'remember', 'verify', 'next']) {
       assert.match(launcher, new RegExp(command.replace('-', '\\-')));
     }

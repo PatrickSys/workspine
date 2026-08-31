@@ -1,6 +1,6 @@
 {
   "name": "workspine",
-  "version": "0.32.0",
+  "version": "0.35.0",
   "description": "Workspine is a harness for AI coding agents: it runs a spec-driven plan, execute, verify loop and keeps plans, decisions, and proof as files in your repo. Published as workspine.",
   "type": "module",
   "bin": {
@@ -21,8 +21,9 @@
     "bin/adapters/",
     "bin/lib/",
     "bin/gsdd.mjs",
+    "assets/",
+    "CHANGELOG.md",
     "distilled/DESIGN.md",
-    "distilled/EVIDENCE-INDEX.md",
     "distilled/README.md",
     "distilled/SKILL.md",
     "distilled/references/",

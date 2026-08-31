@@ -18,6 +18,9 @@ const {
 const ROOT = path.join(__dirname, '..');
 const ENDPOINT = 'https://registry.npmjs.org/workspine/latest';
 const CACHE_RELATIVE = path.join('.work', '.local', 'update-awareness.json');
+const PACKAGE_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+const [PACKAGE_MAJOR, PACKAGE_MINOR] = PACKAGE_VERSION.split('.').map(Number);
+const NEWER_PACKAGE_VERSION = `${PACKAGE_MAJOR}.${PACKAGE_MINOR + 1}.0`;
 
 function runGeneratedHelper(cwd, args) {
   const result = spawnSync(process.execPath, [path.join(cwd, '.work', 'bin', 'gsdd.mjs'), ...args], {
@@ -413,7 +416,7 @@ describe('bounded update awareness', () => {
     const lines = [];
     try {
       process.chdir(tmpDir);
-      globalThis.fetch = async (url) => { assert.equal(url, ENDPOINT); return fakeResponse(JSON.stringify({ version: '0.33.0' })); };
+      globalThis.fetch = async (url) => { assert.equal(url, ENDPOINT); return fakeResponse(JSON.stringify({ version: NEWER_PACKAGE_VERSION })); };
       console.error = (line) => lines.push(line);
       const cli = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'gsdd.mjs')).href}?dispatch=${Date.now()}-${Math.random()}`);
       await cli.runCli('remember', 'candidate');
@@ -521,7 +524,7 @@ describe('bounded update awareness', () => {
     const sourceBytes = fs.readFileSync(sourcePath);
     assert.deepEqual(fs.readFileSync(helperPath), sourceBytes);
     assert.equal(readJson(manifestPath).runtimeHelpers['bin/lib/update-awareness.mjs'], sha256(sourceBytes));
-    assert.match(fs.readFileSync(launcherPath, 'utf8'), /const PACKAGE_VERSION = "0\.32\.0";/);
+    assert.ok(fs.readFileSync(launcherPath, 'utf8').includes(`const PACKAGE_VERSION = "${PACKAGE_VERSION}";`));
     assert.match(fs.readFileSync(launcherPath, 'utf8'), /--no-update-notice/);
     fs.rmSync(helperPath);
     const repaired = await runCliAsMain(tmpDir, ['update']);
