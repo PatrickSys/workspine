@@ -659,7 +659,7 @@ ${renderGlobalInstallTargetHelp()}
 Notes:
   - use \`npx -y workspine setup\` for first-time onboarding; it defaults to this repo and always installs portable skills
   - use \`npx -y workspine setup --global --agent claude\` for one personal agent home; setup never installs an npm package globally
-  - use \`npx -y workspine init\` for repo-local setup; for a fresh global install choose targets interactively or pass \`--tools <targets>\`
+  - use \`npx -y workspine setup\` for normal repo-local setup; \`init\` remains the compatibility and advanced scripted path
   - init always generates open-standard skills at .agents/skills/work-*; this is the shared workflow entry surface
   - init also generates a local .work/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
   - install --global never creates .work/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
@@ -683,7 +683,7 @@ Notes:
   - --tools remains the advanced/manual path for init/install and preserves legacy runtime aliases for backward compatibility
   - --tools codex generates .codex/agents/work-plan-checker.toml and .codex/agents/work-approach-explorer.toml (portable skill is the entry surface; $work-plan is plan-only until explicit $work-execute)
   - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
-  - normal repo path: npx -y workspine init -> run /work-* or $work-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed
+  - normal repo path: npx -y workspine setup -> run /work-* or $work-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed
   - post-init, choose one goal: quick for a bounded change, plan for a standalone change that needs plan -> execute -> verify, or new-project to start/extend a project; use map-codebase first only when a risky or unfamiliar brownfield repo needs deeper orientation
 
 Examples:

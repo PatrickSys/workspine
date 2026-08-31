@@ -957,15 +957,32 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must contain a Quickstart section. FIX: Add ### Quickstart section after Getting Started.');
   });
 
-  test('User Guide keeps advanced init and global-install boundaries out of the quick surface', () => {
+  test('User Guide keeps advanced init and global-install boundaries out of the quick surface', async () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    const runtimeSupport = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    const { getHelpText } = await import(`${pathToFileURL(INIT_RUNTIME_MODULE).href}?firstUse=${Date.now()}`);
+    const helpText = getHelpText();
     const normalFlow = guide.match(/Normal user flow:\s*\n\s*1\.\s+([^\n]+)/)?.[1] || '';
     assert.match(readme, /^npx -y workspine setup$/m, 'README must keep setup as the first-use CTA.');
     assert.match(normalFlow, /npx -y workspine setup/i, 'The User Guide normal flow must begin with the same first-use setup command.');
+    assert.match(runtimeSupport, /normal first use[^\n]*npx -y workspine setup/i, 'Runtime support must identify setup as the normal first-use command.');
+    assert.match(runtimeSupport, /init[^\n]*compatib/i, 'Runtime support must keep init explicitly labeled as compatibility guidance.');
+    assert.match(helpText, /normal repo path: npx -y workspine setup/i, 'Executable help must route the normal repo path through setup.');
+    assert.doesNotMatch(helpText, /normal repo path: npx -y workspine init/i, 'Executable help must not present init as the normal repo path.');
     assert.match(guide, /npx -y workspine init/i);
     assert.match(guide, /npx -y workspine install --global/i);
     assert.match(guide, /global install never creates `.work\/`/i);
+  });
+
+  test('first-user friction form records outcome and time without adding an optional field', () => {
+    const form = fs.readFileSync(path.join(ROOT, '.github', 'ISSUE_TEMPLATE', 'friction.yml'), 'utf-8');
+    assert.match(form, /id: first-workflow-outcome\b/);
+    assert.match(form, /Completed one real change/);
+    assert.match(form, /Stopped during setup/);
+    assert.match(form, /Stopped during first workflow/);
+    assert.match(form, /id: actual[\s\S]*approximate time to first useful result[\s\S]*required: true/i);
+    assert.doesNotMatch(form, /id: time-to-first-result\b/);
   });
 
   test('global install help and public guidance match the shared supported-target metadata', async () => {

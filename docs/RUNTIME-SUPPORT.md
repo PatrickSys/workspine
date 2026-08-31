@@ -8,6 +8,8 @@ The package runtime floor is Node >=22. Update awareness is limited to the suppo
 
 Human repo setup and repair commands in this document use `npx -y workspine ...` because that works without a global install. If you installed `workspine` globally, the equivalent bare `gsdd ...` command is fine. For fresh cross-repo setup, run `npx -y workspine install --global` interactively or pass `--tools <targets>`; use `--auto` to refresh detected existing agent homes.
 
+Normal first use starts with `npx -y workspine setup`. The lower-level `npx -y workspine init` command remains available for compatibility and scripted advanced setup.
+
 The install contract is deliberately skills-first: `npx -y workspine init` always creates `.agents/skills/work-*` and `.work/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
 
 Global install is separate from repo bootstrap. It does not create `.work/`; it writes selected runtime surfaces under user-level agent homes and records Workspine ownership in per-runtime manifests.

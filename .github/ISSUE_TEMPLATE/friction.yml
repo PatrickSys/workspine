@@ -54,6 +54,18 @@ body:
         - other
     validations:
       required: true
+  - type: dropdown
+    id: first-workflow-outcome
+    attributes:
+      label: How far did you get?
+      options:
+        - Completed one real change
+        - Completed setup only
+        - Stopped during setup
+        - Stopped during first workflow
+        - Not applicable
+    validations:
+      required: true
   - type: textarea
     id: command
     attributes:
@@ -72,6 +84,7 @@ body:
     id: actual
     attributes:
       label: What got in the way?
+      description: Include the approximate time to first useful result, or write "not reached".
     validations:
       required: true
   - type: textarea
