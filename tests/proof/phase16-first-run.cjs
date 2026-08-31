@@ -234,11 +234,12 @@ function sealReceipt(receipt, candidateKey) {
   };
   const normalizedJson = stableStringify(normalizedReceipt(receipt));
   const normalizedHash = sha(normalizedJson);
-  const sidecar = path.join(os.tmpdir(), `workspine-phase16-first-run-${SEED}-${candidateKey}.json`);
+  const sidecar = path.join(os.tmpdir(), `workspine-phase16-first-run-${SEED}-${NORMALIZATION_CONTRACT_VERSION}-${candidateKey}.json`);
   let comparison;
   if (exists(sidecar)) {
     let previous;
     try { previous = json(sidecar); } catch (error) { infrastructureFailure('reproducibility_state_failure', 'durable reproducibility state is malformed', { sidecar, message: error.message }); }
+    need(previous.contract_version === NORMALIZATION_CONTRACT_VERSION, 'infrastructure', 'reproducibility_state_failure', 'durable reproducibility state uses another normalization contract', previous);
     need(previous.candidate_key === candidateKey, 'infrastructure', 'reproducibility_state_failure', 'durable reproducibility state belongs to another candidate', previous);
     if (previous.normalized_receipt_sha256 !== normalizedHash || previous.normalized_receipt_json !== normalizedJson) {
       need(false, 'product', 'reproducibility_mismatch', 'second deterministic receipt differs from the first', { previous_hash: previous.normalized_receipt_sha256, current_hash: normalizedHash });
