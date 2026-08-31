@@ -156,6 +156,35 @@ describe('Approval characterization', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
+
+  test('approval characterization rejects lower-writer approved plan transitions outside approve', async () => {
+    const workContext = await import(pathToFileURL(path.join(ROOT, 'bin', 'lib', 'work-context.mjs')).href);
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-approval-target-'));
+    const workDir = path.join(root, '.work');
+    const plan = '.work/phases/01-approval/01-PLAN.md';
+    fs.mkdirSync(path.join(workDir, 'phases', '01-approval'), { recursive: true });
+    fs.writeFileSync(path.join(root, plan), '---\nstatus: approved\n---\n# Plan\n');
+    fs.writeFileSync(path.join(workDir, 'state.json'), `${JSON.stringify({
+      schema_version: 1,
+      status: 'active',
+      current_state: 'plan',
+      workflow: { plan: { approved: false }, execution: { status: 'not_started' } },
+    })}\n`);
+    try {
+      const before = fs.readFileSync(path.join(workDir, 'state.json'));
+      assert.throws(() => workContext.transitionWorkflowState(workDir, {
+        target: 'plan',
+        planPath: plan,
+        planIdentity: plan,
+        authority: 'owner',
+        approvalRef: 'owner-review',
+        approved: true,
+      }), (error) => error.code === 'approval_target_required');
+      assert.deepStrictEqual(fs.readFileSync(path.join(workDir, 'state.json')), before);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('Superseded PLAN contract parity', () => {
@@ -1364,6 +1393,10 @@ describe('I3-gate — New-project.md Approval Gates', () => {
     for (const field of ['status: approved', 'approved_by', 'approved_at', 'approval_ref']) {
       assert.ok(planContent.includes(field), `plan.md must require durable approval metadata: ${field}`);
     }
+    assert.match(planContent, /lifecycle-transition approve --plan \.work\/phases\/\{phase_dir\}\/\{plan_id\}-PLAN\.md --authority owner --approval-ref \{approval_ref\}/,
+      'plan.md must record the owner decision against the actual workspace-relative PLAN path');
+    assert.doesNotMatch(planContent, /lifecycle-transition plan --plan phases\//,
+      'plan.md must not reset approval through the stale root-relative plan transition');
     const transition = executeContent.indexOf('lifecycle-transition execute');
     const implementation = executeContent.indexOf('implement the task action');
     assert.ok(transition !== -1 && implementation !== -1 && transition < implementation,

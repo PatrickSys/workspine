@@ -13,6 +13,7 @@ import {
   captureDogfoodFinding,
   buildDecisionsDigest,
   getWorkPaths,
+  hasDurableWorkflowApproval,
   inspectWorkContext,
   readJsonIfExists,
   rebuildGraphIndex,
@@ -200,10 +201,16 @@ function isBoundBrownfieldLifecycle(context) {
   return /(?:^|[/\\])\.work[/\\]brownfield-change[/\\]CHANGE\.md$/i.test(String(plan));
 }
 
+function hasCurrentPlanApproval(context, workflow = context.state?.value?.workflow || {}) {
+  const plan = workflow?.plan?.path || workflow?.plan?.identity || null;
+  return Boolean(plan && hasDurableWorkflowApproval(context.paths.workDir, plan, context.state?.value));
+}
+
 function brownfieldLifecycleRoute(context) {
   if (!context.planning.has_brownfield_change || !isBoundBrownfieldLifecycle(context)) return null;
   const change = context.planning.brownfield_change;
   const workflow = context.state?.value?.workflow || {};
+  const currentPlanApproval = hasCurrentPlanApproval(context, workflow);
   const evidence = [statePath(context, 'brownfield-change/CHANGE.md'), statePath(context, 'brownfield-change/HANDOFF.md')];
   if (context.milestone?.exists) {
     return {
@@ -273,7 +280,7 @@ function brownfieldLifecycleRoute(context) {
       artifacts_to_write: [statePath(context, 'brownfield-change/VERIFICATION.md'), statePath(context, 'brownfield-change/CHANGE.md')], requires_user: false,
     };
   }
-  if (workflow.plan?.approved === true || workflow.execution?.status === 'in_progress') {
+  if (currentPlanApproval) {
     return {
       state: 'execute', reason: 'The bounded brownfield plan is approved and execution is not complete.',
       authority: 'brownfield_change', route_kind: 'brownfield_change_execute', blocked_by: [],
@@ -281,10 +288,18 @@ function brownfieldLifecycleRoute(context) {
       artifacts_to_read: evidence, artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md'), statePath(context, 'brownfield-change/HANDOFF.md')], requires_user: false,
     };
   }
+  if (workflow.plan?.approved === true || workflow.execution?.status === 'in_progress') {
+    return {
+      state: 'plan', reason: 'The bounded brownfield approval is missing or no longer matches the current CHANGE.md bytes.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_approval_stale', blocked_by: ['plan_approval'],
+      next_command: workflowId('plan'), next_action: workflowAction(workflowId('plan'), 'Review and reapprove the current bounded CHANGE.md contract.'),
+      artifacts_to_read: evidence, artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md')], requires_user: true,
+    };
+  }
   return null;
 }
 
-function routeFromStateObject(stateValue) {
+function routeFromStateObject(stateValue, workDir) {
   const state = stateValue || {};
   const workflow = state.workflow || state.milestone || state;
   if (workflow.status === 'paused') return { state: 'pause', reason: 'Local `.work/state.json` marks work as paused.' };
@@ -296,8 +311,13 @@ function routeFromStateObject(stateValue) {
       questions: workflow.human_gate.question ? [workflow.human_gate] : [],
     };
   }
-  if (workflow.plan?.approved === true && workflow.execution?.status !== 'complete') {
+  const plan = workflow.plan?.path || workflow.plan?.identity || null;
+  const currentPlanApproval = Boolean(plan && workDir && hasDurableWorkflowApproval(workDir, plan, stateValue));
+  if (currentPlanApproval && workflow.execution?.status !== 'complete') {
     return { state: 'execute', reason: 'A plan is approved and execution is not complete.' };
+  }
+  if ((workflow.plan?.approved === true || workflow.execution?.status === 'in_progress') && workflow.execution?.status !== 'complete') {
+    return { state: 'plan', reason: 'The recorded approval is missing or no longer matches the current PLAN bytes; review and reapprove it.' };
   }
   if (workflow.execution?.status === 'complete' && workflow.verification?.status !== 'passed') {
     return { state: 'verify', reason: 'Execution is complete and verification has not passed.' };
@@ -592,7 +612,7 @@ function routeNext(ctx) {
   const hasDurableLifecycleTruth = context.planning.has_roadmap
     || context.milestone?.has_roadmap
     || context.planning.phases.some((phase) => phase.plans?.length || phase.summaries?.length || phase.verifications?.length);
-  const stateRoute = routeFromStateObject(context.state.value);
+  const stateRoute = routeFromStateObject(context.state.value, context.paths.workDir);
   if (stateRoute && !hasDurableLifecycleTruth) {
     return enrichRoute(stateRoute, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
   }
@@ -865,9 +885,6 @@ function inspectWorkflowStateContradiction(context) {
   if (executionError) return { reason: executionError, evidence };
   const verificationError = checkPointer(workflow.verification?.artifact || workflow.verification?.identity, 'Verification state');
   if (verificationError) return { reason: verificationError, evidence };
-  if (workflow.current_state === 'execute' && workflow.plan?.approved !== true) {
-    return { reason: 'Recorded state requests execution, but the plan is not approved.', evidence: ['.work/state.json'] };
-  }
   return null;
 }
 
@@ -886,12 +903,13 @@ function continuityProjection(context, route) {
   const stateSource = state?.workflow ? 'workflow' : state?.milestone ? 'milestone' : 'root';
   const trustGates = Array.isArray(manifest?.trust_gates) ? manifest.trust_gates : [];
   const unresolvedTrustGate = trustGates.find((gate) => gate?.approved !== true);
+  const currentPlanApproval = Boolean(state?.workflow && hasCurrentPlanApproval(context, stateWorkflow));
   const approval = unresolvedTrustGate
     ? { value: 'pending', source: `${stateDirName(context)}/evidence/manifest.json#trust_gates` }
     : stateWorkflow?.human_gate && Object.hasOwn(stateWorkflow.human_gate, 'approved')
       ? { value: stateWorkflow.human_gate.approved === true ? 'approved' : 'pending', source: `${stateDirName(context)}/state.json#${stateSource}.human_gate` }
       : stateWorkflow?.plan && Object.hasOwn(stateWorkflow.plan, 'approved')
-        ? { value: stateWorkflow.plan.approved === true ? 'approved' : 'not_approved', source: `${stateDirName(context)}/state.json#${stateSource}.plan.approved` }
+        ? { value: currentPlanApproval ? 'approved' : 'not_approved', source: `${stateDirName(context)}/state.json#${stateSource}.plan.approved` }
         : { value: 'not_recorded', source: 'structured_state_or_lifecycle_not_recorded' };
   const result = typeof stateWorkflow?.execution?.status === 'string'
     ? { value: stateWorkflow.execution.status, source: `${stateDirName(context)}/state.json#${stateSource}.execution.status` }

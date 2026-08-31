@@ -4,6 +4,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const { createHash } = require('node:crypto');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -413,6 +414,38 @@ describe('next command bootstrap', () => {
     });
     assert.deepStrictEqual(packet.continuity.checkpoint.narrative_identity, {
       workflow: 'phase', phase: '04-continuity', authority: 'non_authoritative_checkpoint_prose',
+    });
+  });
+
+  test('continuity does not report approval after the approved PLAN bytes change', async () => {
+    await initWork();
+    const plan = '.work/fixture-PLAN.md';
+    writeFile(plan, '# Approved plan\n');
+    writeJson('.work/state.json', {
+      schema_version: 1,
+      status: 'active',
+      current_state: 'execute',
+      workflow: {
+        current_state: 'execute',
+        authority: 'owner',
+        approval_ref: 'owner-continuity-test',
+        plan: {
+          approved: true,
+          path: plan,
+          identity: plan,
+          approved_sha256: createHash('sha256').update(fs.readFileSync(path.join(tmpDir, plan))).digest('hex'),
+        },
+        execution: { status: 'in_progress' },
+      },
+    });
+    fs.appendFileSync(path.join(tmpDir, plan), 'Changed after approval.\n');
+
+    const packet = await runJson(['next', '--json']);
+
+    assert.strictEqual(packet.state, 'plan');
+    assert.deepStrictEqual(packet.continuity.posture.approval, {
+      value: 'not_approved',
+      source: '.work/state.json#workflow.plan.approved',
     });
   });
 
@@ -1391,6 +1424,10 @@ describe('next command routing', () => {
 
     result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'approve', '--plan', changePath, '--approval-ref', 'test-approval', '--authority', 'owner', '--json']);
     assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'plan');
+    result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'execute');
+    assert.strictEqual(result.route_kind, 'brownfield_change_execute');
     result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
@@ -1409,6 +1446,27 @@ describe('next command routing', () => {
     assert.strictEqual(result.state, 'complete');
     assert.strictEqual(result.route_kind, 'brownfield_change_closed');
     assert.strictEqual(result.next_command, null);
+  });
+
+  test('next does not advertise execution after approved brownfield bytes change', async () => {
+    await initWork();
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    writeFile(changePath, brownfieldChange());
+    writeFile('.work/brownfield-change/HANDOFF.md', '# Context only\n');
+    writeFile('.work/brownfield-change/VERIFICATION.md', brownfieldVerification('complete'));
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'approve', '--plan', changePath, '--approval-ref', 'test-approval', '--authority', 'owner', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'execute');
+
+    fs.appendFileSync(path.join(tmpDir, changePath), '\nUnapproved scope change.\n');
+    result = await runJson(['next', '--json']);
+    assert.strictEqual(result.state, 'plan');
+    assert.strictEqual(result.route_kind, 'brownfield_change_approval_stale');
+    assert.match(result.reason, /no longer matches/i);
   });
 
   test('brownfield lifecycle fails closed for missing Done When, second stream, widening, and authority conflict', async () => {
@@ -1874,7 +1932,7 @@ describe('next command routing', () => {
       { name: 'ask_user', state: { human_gate: { question: 'Approve?', approved: false } }, expected: 'ask_user' },
       { name: 'research', state: { current_state: 'research' }, expected: 'research' },
       { name: 'plan', state: { current_state: 'plan' }, expected: 'plan' },
-      { name: 'execute', state: { workflow: { plan: { approved: true }, execution: { status: 'not_started' } } }, expected: 'execute' },
+      { name: 'execute', state: { workflow: { plan: { approved: true }, execution: { status: 'not_started' }, authority: 'owner', approval_ref: 'owner-fixture' } }, expected: 'execute' },
       { name: 'verify', state: { workflow: { execution: { status: 'complete' }, verification: { status: 'not_started' } } }, expected: 'verify' },
       { name: 'audit', state: { workflow: { verification: { status: 'passed' }, audit: { status: 'not_started' } } }, expected: 'audit' },
       { name: 'fix_gaps', state: { workflow: { verification: { status: 'gaps_found' } } }, expected: 'fix_gaps' },
@@ -1888,6 +1946,15 @@ describe('next command routing', () => {
       cleanup(tmpDir);
       tmpDir = createTempProject();
       await initWork();
+      if (fixture.name === 'execute') {
+        const plan = '.work/fixture-PLAN.md';
+        writeFile(plan, '---\nstatus: approved\n---\n# Fixture plan\n');
+        fixture.state.workflow.plan.path = plan;
+        fixture.state.workflow.plan.identity = plan;
+        fixture.state.workflow.plan.approved_sha256 = createHash('sha256')
+          .update(fs.readFileSync(path.join(tmpDir, plan)))
+          .digest('hex');
+      }
       writeJson('.work/state.json', { schema_version: 1, ...fixture.state });
       const result = await runJson(['next', '--json']);
       assert.strictEqual(result.state, fixture.expected, fixture.name);
@@ -1914,7 +1981,7 @@ describe('next command routing', () => {
       '--authority', 'owner', '--approval-ref', 'owner-loop-review', '--json', '--no-update-notice',
     ]);
     assert.strictEqual(result.exitCode, 0, result.output);
-    assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'plan');
 
     result = await runCliAsMain(tmpDir, [
       'lifecycle-transition', 'execute', '--plan', '.work/phases/01-transition/01-PLAN.md',
@@ -2059,7 +2126,7 @@ describe('next command routing', () => {
       'lifecycle-transition', 'approve', '--plan', planPath, '--approval-ref', 'owner-review-2026-08-26', '--authority', 'owner', '--json', '--no-update-notice',
     ]);
     assert.strictEqual(result.exitCode, 0, result.output);
-    assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
+    assert.strictEqual(JSON.parse(result.output).state.current_state, 'plan');
 
     await freshPlan('approved');
     await assertNoWrite([

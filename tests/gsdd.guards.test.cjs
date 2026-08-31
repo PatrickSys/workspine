@@ -5,6 +5,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -189,6 +190,13 @@ describe('Approval characterization', () => {
         '--authority', 'owner', '--approval-ref', 'owner-review', '--json', '--no-update-notice',
       ], { cwd: fixture.root, encoding: 'utf8' });
       assert.strictEqual(approved.status, 0, approved.stdout || approved.stderr);
+      const approvedReceipt = JSON.parse(approved.stdout);
+      const approvedPlanHash = createHash('sha256')
+        .update(fs.readFileSync(path.join(fixture.root, fixture.plan)))
+        .digest('hex');
+      assert.strictEqual(approvedReceipt.state.workflow.plan.approved_sha256, approvedPlanHash);
+      assert.strictEqual(approvedReceipt.state.current_state, 'plan');
+      assert.strictEqual(approvedReceipt.state.workflow.execution.status, 'not_started');
       const result = runExecute(fixture.root, fixture.plan);
       assert.strictEqual(result.status, 0, result.stdout || result.stderr);
       const executeReceipt = JSON.parse(result.stdout);
@@ -205,6 +213,75 @@ describe('Approval characterization', () => {
       assert.strictEqual(replayReceipt.state.workflow.authority, 'owner');
       assert.strictEqual(replayReceipt.state.workflow.approval_ref, 'owner-review');
       assert.deepStrictEqual(fs.readFileSync(statePath), beforeReplay);
+    } finally {
+      fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test('approval characterization rejects PLAN files reached through a symlinked ancestor', () => {
+    const fixture = makeApprovalFixture();
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-approval-external-'));
+    try {
+      const phases = path.join(fixture.root, '.work', 'phases');
+      fs.rmSync(phases, { recursive: true, force: true });
+      fs.mkdirSync(path.join(external, '01-approval'), { recursive: true });
+      fs.writeFileSync(path.join(external, '01-approval', '01-PLAN.md'), '---\nstatus: approved\n---\n# External plan\n');
+      fs.symlinkSync(external, phases, process.platform === 'win32' ? 'junction' : 'dir');
+      const statePath = path.join(fixture.root, '.work', 'state.json');
+      const before = fs.readFileSync(statePath);
+
+      const result = spawnSync(process.execPath, [
+        GSDD_PATH,
+        'lifecycle-transition', 'approve', '--plan', fixture.plan,
+        '--authority', 'owner', '--approval-ref', 'owner-review', '--json', '--no-update-notice',
+      ], { cwd: fixture.root, encoding: 'utf8' });
+
+      assert.notStrictEqual(result.status, 0, result.stdout || result.stderr);
+      assert.strictEqual(JSON.parse(result.stdout).error_code, 'approval_plan_unreadable');
+      assert.deepStrictEqual(fs.readFileSync(statePath), before);
+    } finally {
+      fs.rmSync(fixture.root, { recursive: true, force: true });
+      fs.rmSync(external, { recursive: true, force: true });
+    }
+  });
+
+  test('approval characterization rejects approved plan transitions outside the approve command', () => {
+    const fixture = makeApprovalFixture();
+    try {
+      const statePath = path.join(fixture.root, '.work', 'state.json');
+      const before = fs.readFileSync(statePath);
+      const result = spawnSync(process.execPath, [
+        GSDD_PATH,
+        'lifecycle-transition', 'plan', '--plan', fixture.plan,
+        '--authority', 'owner', '--approved', 'true', '--approval-ref', 'owner-review', '--json', '--no-update-notice',
+      ], { cwd: fixture.root, encoding: 'utf8' });
+
+      assert.notStrictEqual(result.status, 0, result.stdout || result.stderr);
+      assert.strictEqual(JSON.parse(result.stdout).error_code, 'invalid_arguments');
+      assert.deepStrictEqual(fs.readFileSync(statePath), before);
+    } finally {
+      fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test('approval characterization rejects plan bytes changed after owner approval without writing', () => {
+    const fixture = makeApprovalFixture();
+    try {
+      const approved = spawnSync(process.execPath, [
+        GSDD_PATH,
+        'lifecycle-transition', 'approve', '--plan', fixture.plan,
+        '--authority', 'owner', '--approval-ref', 'owner-review', '--json', '--no-update-notice',
+      ], { cwd: fixture.root, encoding: 'utf8' });
+      assert.strictEqual(approved.status, 0, approved.stdout || approved.stderr);
+
+      const statePath = path.join(fixture.root, '.work', 'state.json');
+      fs.appendFileSync(path.join(fixture.root, fixture.plan), '\nUnapproved change.\n');
+      const beforeRejectedExecute = fs.readFileSync(statePath);
+      const result = runExecute(fixture.root, fixture.plan);
+
+      assert.notStrictEqual(result.status, 0, result.stdout || result.stderr);
+      assert.strictEqual(JSON.parse(result.stdout).error_code, 'not_approved');
+      assert.deepStrictEqual(fs.readFileSync(statePath), beforeRejectedExecute);
     } finally {
       fs.rmSync(fixture.root, { recursive: true, force: true });
     }

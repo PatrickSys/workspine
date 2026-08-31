@@ -5,6 +5,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   lstatSync,
   writeFileSync,
@@ -12,7 +13,7 @@ import {
 } from 'fs';
 import { execFileSync } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
-import { basename, dirname, join, relative, resolve } from 'path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { collectNativePhaseArtifacts, evaluateLifecycleState, partitionPlanChains } from './lifecycle-state.mjs';
 import { resolveStateDir, stateAuthorityGate, STATE_DIR_NAME } from './state-dir.mjs';
 import { writeFileAtomic as replaceFileAtomically } from './atomic-write.mjs';
@@ -220,17 +221,44 @@ function workflowStateWithDefaults(workflow = {}) {
  * must consume the durable owner assertion rather than PLAN frontmatter or a
  * caller-provided approval boolean.
  */
-export function hasDurableWorkflowApproval(workDir, normalizedPlan) {
-  const current = readJsonIfExists(join(workDir, 'state.json'));
+function planArtifactSha256(workDir, normalizedPlan) {
+  const workspaceRoot = resolve(workDir, '..');
+  const expected = normalizeSlashes(String(normalizedPlan || '')).replace(/^\.\//, '');
+  const planPath = resolve(workspaceRoot, expected);
+  const relativePath = normalizeSlashes(relative(workspaceRoot, planPath));
+  if (!expected || !relativePath || relativePath.startsWith('../') || relativePath === '..' || isAbsolute(relativePath)) return null;
+  try {
+    const workspaceReal = realpathSync(workspaceRoot);
+    const workDirReal = realpathSync(workDir);
+    const planReal = realpathSync(planPath);
+    const physicalStateRoot = normalizeSlashes(relative(workspaceReal, workDirReal));
+    const physicalPlan = normalizeSlashes(relative(workDirReal, planReal));
+    if (!physicalStateRoot || physicalStateRoot.startsWith('../') || physicalStateRoot === '..' || isAbsolute(physicalStateRoot)) return null;
+    if (!physicalPlan || physicalPlan.startsWith('../') || physicalPlan === '..' || isAbsolute(physicalPlan)) return null;
+    const stat = lstatSync(planPath);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    return createHash('sha256').update(readFileSync(planPath)).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+export function hasDurableWorkflowApproval(workDir, normalizedPlan, stateValue = null) {
+  const current = stateValue === null
+    ? readJsonIfExists(join(workDir, 'state.json'))
+    : { exists: true, ok: true, value: stateValue };
   if (!current.exists || !current.ok || !current.value || typeof current.value !== 'object' || Array.isArray(current.value)) return false;
   const workflow = workflowStateWithDefaults(current.value.workflow);
   const recordedPlan = workflow.plan;
   const expected = normalizeSlashes(String(normalizedPlan || '')).replace(/^\.\//, '');
   const recordedPath = normalizeSlashes(String(recordedPlan.path || '')).replace(/^\.\//, '');
   const recordedIdentity = normalizeSlashes(String(recordedPlan.identity || '')).replace(/^\.\//, '');
+  const currentPlanSha256 = planArtifactSha256(workDir, expected);
   return recordedPlan.approved === true
     && recordedPath === expected
     && recordedIdentity === expected
+    && typeof recordedPlan.approved_sha256 === 'string'
+    && recordedPlan.approved_sha256 === currentPlanSha256
     && workflow.authority === 'owner'
     && isValidApprovalReference(workflow.approval_ref);
 }
@@ -261,12 +289,21 @@ export function transitionWorkflowState(workDir, {
   now = new Date(),
 } = {}) {
   const statePath = join(workDir, 'state.json');
-  const current = readJsonIfExists(statePath);
-  if (!current.exists) throw transitionError('missing_state', '`.work/state.json` is missing.', ['.work/state.json']);
-  if (!current.ok || !current.value || typeof current.value !== 'object' || Array.isArray(current.value)) {
+  let stateBytes;
+  try {
+    stateBytes = readFileSync(statePath);
+  } catch {
+    throw transitionError('missing_state', '`.work/state.json` is missing.', ['.work/state.json']);
+  }
+  let state;
+  try {
+    state = JSON.parse(stateBytes.toString('utf8'));
+  } catch {
+    state = null;
+  }
+  if (!state || typeof state !== 'object' || Array.isArray(state)) {
     throw transitionError('unparseable_state', '`.work/state.json` is not a JSON object.', ['.work/state.json']);
   }
-  const state = current.value;
   const workflow = workflowStateWithDefaults(state.workflow);
   const normalizedTarget = String(target || '').trim().toLowerCase();
   const allowed = new Set(['plan', 'execute', 'verify', 'audit', 'next', 'fix_gaps', 'blocked', 'ask_user', 'approve']);
@@ -281,6 +318,9 @@ export function transitionWorkflowState(workDir, {
   }
   if (authority !== 'owner' && approvalRef) {
     throw transitionError('approval_ref_authority_mismatch', 'Only owner authority may carry an approval reference.', ['--authority owner', '--approval-ref']);
+  }
+  if (approved === true && normalizedTarget !== 'approve') {
+    throw transitionError('approval_target_required', 'Owner approval must use the explicit approve transition.', ['lifecycle-transition approve']);
   }
 
   const expectedPlan = planPath || planIdentity;
@@ -310,9 +350,20 @@ export function transitionWorkflowState(workDir, {
     && approved === true
     && authority === 'owner'
     && isValidApprovalReference(approvalRef);
+  const approvedPlanSha256 = explicitOwnerApproval && normalizedPlan
+    ? planArtifactSha256(workDir, normalizedPlan)
+    : null;
+  if (explicitOwnerApproval && !approvedPlanSha256) {
+    throw transitionError('approval_plan_unreadable', 'Owner approval requires a readable regular PLAN artifact.', [String(normalizedPlan || '')]);
+  }
   const durableOwnerApproval = normalizedTarget === 'execute' && normalizedPlan
-    ? hasDurableWorkflowApproval(workDir, normalizedPlan)
+    ? hasDurableWorkflowApproval(workDir, normalizedPlan, state)
     : false;
+  const validatedPlanSha256 = explicitOwnerApproval
+    ? approvedPlanSha256
+    : durableOwnerApproval
+      ? workflow.plan.approved_sha256
+      : null;
   if (normalizedPlan) {
     next.workflow.plan.path = planPath || workflow.plan.path || null;
     next.workflow.plan.identity = planIdentity || workflow.plan.identity || normalizedPlan;
@@ -322,10 +373,11 @@ export function transitionWorkflowState(workDir, {
   }
   if (approvalRef) next.workflow.approval_ref = approvalRef;
 
-  const effectiveTarget = normalizedTarget === 'approve' ? 'execute' : normalizedTarget === 'next' ? 'audit' : normalizedTarget;
+  const effectiveTarget = normalizedTarget === 'next' ? 'audit' : normalizedTarget;
   const currentState = workflow.current_state || state.current_state || 'plan';
   const allowedPredecessors = {
     plan: ['plan', 'fix_gaps', 'blocked', 'ask_user'],
+    approve: ['plan'],
     execute: ['plan', 'execute'],
     verify: ['execute', 'verify'],
     audit: ['verify', 'audit'],
@@ -336,8 +388,14 @@ export function transitionWorkflowState(workDir, {
   if (allowedPredecessors[effectiveTarget] && !allowedPredecessors[effectiveTarget].includes(currentState)) {
     throw transitionError('out_of_order', `Cannot transition from ${currentState} to ${effectiveTarget}; resolve the recorded lifecycle posture first.`, ['.work/state.json']);
   }
-  if (effectiveTarget === 'plan') {
-    next.workflow.plan.approved = approved === true;
+  if (effectiveTarget === 'approve') {
+    next.workflow.plan.approved = true;
+    next.workflow.plan.approved_sha256 = approvedPlanSha256;
+    next.workflow.execution.status = 'not_started';
+    next.workflow.current_state = 'plan';
+  } else if (effectiveTarget === 'plan') {
+    next.workflow.plan.approved = false;
+    delete next.workflow.plan.approved_sha256;
     next.workflow.execution.status = 'not_started';
     next.workflow.current_state = 'plan';
   } else if (effectiveTarget === 'execute') {
@@ -387,6 +445,18 @@ export function transitionWorkflowState(workDir, {
   next.status = next.workflow.status === 'blocked' ? 'blocked' : (next.status || 'active');
   const beforeComparable = { ...state, updated_at: null };
   const nextComparable = { ...next, updated_at: null };
+  let currentStateBytes;
+  try {
+    currentStateBytes = readFileSync(statePath);
+  } catch {
+    throw transitionError('stale_state', 'Lifecycle state changed while the transition was being validated.', ['.work/state.json']);
+  }
+  if (!stateBytes.equals(currentStateBytes)) {
+    throw transitionError('stale_state', 'Lifecycle state changed while the transition was being validated.', ['.work/state.json']);
+  }
+  if (validatedPlanSha256 && planArtifactSha256(workDir, normalizedPlan) !== validatedPlanSha256) {
+    throw transitionError('stale_plan', 'The approved PLAN changed while the transition was being validated.', [String(normalizedPlan)]);
+  }
   if (JSON.stringify(beforeComparable) === JSON.stringify(nextComparable)) {
     return { status: 'replayed', changed: false, state };
   }
