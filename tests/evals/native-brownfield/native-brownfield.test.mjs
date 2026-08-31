@@ -224,12 +224,14 @@ function completedRead(root, output) {
   };
 }
 
-function productChange() {
+function productChange(root) {
   return {
     method: 'item/completed',
     params: { item: {
       id: 'change-product',
       type: 'fileChange',
+      status: 'completed',
+      cwd: root,
       changes: [{ path: 'src/example.js' }],
     } },
   };
@@ -266,16 +268,22 @@ function continuityPacket(root, overrides = {}) {
     } } })}\n--- TASK.md ---\nextra output` } } };
 }
 
-function nativeApplyPatch(root, file = 'lib/index.js') {
+const nativeCodexExecutable = 'C:\\tools\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe';
+function nativeApplyPatchResolution(root, executable = nativeCodexExecutable) {
+  return { method: 'item/completed', params: { item: { id: 'resolve-patch', type: 'commandExecution', status: 'completed', exitCode: 0,
+    cwd: root, source: 'unifiedExecStartup', processId: '122', commandActions: [{ type: 'unknown', command: 'Get-Content -Raw (Get-Command apply_patch).Source' }],
+    aggregatedOutput: `@echo off\n"${executable}" --codex-run-as-apply-patch %*\n` } } };
+}
+function nativeApplyPatch(root, file = 'lib/index.js', executable = nativeCodexExecutable) {
   return { method: 'item/completed', params: { item: { id: 'native-patch', type: 'commandExecution', status: 'completed', exitCode: 0,
     cwd: root, source: 'unifiedExecStartup', processId: '123', commandActions: [{ type: 'unknown',
-      command: `$patchText = @'\n*** Begin Patch\n*** Update File: ${file}\n@@\n-old\n+new\n*** End Patch\n'@; & 'C:\\tools\\@openai\\codex\\vendor\\codex.exe' --codex-run-as-apply-patch $patchText` }], aggregatedOutput: `Success. Updated the following files:\nM ${file}\n` } } };
+      command: `$patchText = @'\n*** Begin Patch\n*** Update File: ${file}\n@@\n-old\n+new\n*** End Patch\n'@; & '${executable}' --codex-run-as-apply-patch $patchText` }], aggregatedOutput: `Success. Updated the following files:\nM ${file}\n` } } };
 }
 
 test('checkpoint witness binds exact output before product mutation', t => {
   const root = tempRoot(t);
   const checkpoint = 'checkpoint bytes\n';
-  const witness = findCheckpointWitness([completedRead(root, checkpoint), productChange()], {
+  const witness = findCheckpointWitness([completedRead(root, checkpoint), productChange(root)], {
     consumerRoot: root,
     checkpointSha256: sha256(checkpoint),
   });
@@ -290,7 +298,7 @@ test('checkpoint witness normalizes Windows CRLF output before hashing', t => {
   const checkpoint = 'checkpoint\nbytes\n';
   const witness = findCheckpointWitness([
     completedRead(root, checkpoint.replaceAll('\n', '\r\n')),
-    productChange(),
+    productChange(root),
   ], { consumerRoot: root, checkpointSha256: sha256(checkpoint) });
   assert.equal(witness.ok, true);
   assert.equal(witness.output_sha256, sha256(checkpoint));
@@ -299,7 +307,7 @@ test('checkpoint witness normalizes Windows CRLF output before hashing', t => {
 test('checkpoint witness orders the read before a real Codex turn diff', t => {
   const root = tempRoot(t);
   const checkpoint = 'checkpoint bytes\n';
-  const options = { consumerRoot: root, checkpointSha256: sha256(checkpoint) };
+  const options = { consumerRoot: root, checkpointSha256: sha256(checkpoint), sessionId: 'thread-b' };
   const setupDiff = turnDiffUpdated('.work/setup.json');
   const productDiff = turnDiffUpdated('src/example.js');
   const witness = findCheckpointWitness([setupDiff, completedRead(root, checkpoint), productDiff], options);
@@ -308,84 +316,104 @@ test('checkpoint witness orders the read before a real Codex turn diff', t => {
   assert.equal(witness.product_change_event_index, 2);
   assert.equal(findCheckpointWitness([productDiff, completedRead(root, checkpoint)], options).ok, false);
   assert.equal(findCheckpointWitness([turnDiffUpdated('.work/../src/example.js'), completedRead(root, checkpoint)], options).ok, false);
+  const foreignDiff = turnDiffUpdated('src/example.js'); foreignDiff.params.threadId = 'thread-other';
+  assert.equal(findCheckpointWitness([completedRead(root, checkpoint), foreignDiff], options).reason, 'product_change_event_not_observed');
+  const foreignItem = productChange(root); foreignItem.params.threadId = 'thread-other';
+  assert.equal(findCheckpointWitness([completedRead(root, checkpoint), foreignItem], options).reason, 'product_change_event_not_observed');
 });
 
 test('checkpoint witness accepts the real continuity packet before native apply-patch', t => {
   const root = tempRoot(t), checkpoint = canonicalCheckpoint();
-  const witness = findCheckpointWitness([continuityPacket(root), nativeApplyPatch(root)], {
+  const witness = findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), nativeApplyPatch(root)], {
     consumerRoot: root, checkpointSha256: sha256(checkpoint),
   });
   assert.equal(witness.ok, true);
   assert.equal(witness.event_index, 0);
-  assert.equal(witness.product_change_event_index, 1);
+  assert.equal(witness.product_change_event_index, 2);
   const fake = nativeApplyPatch(root); fake.params.item.commandActions[0].command = `Write-Output --codex-run-as-apply-patch\n*** Update File: lib/index.js`;
-  assert.equal(findCheckpointWitness([continuityPacket(root), fake], {
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), fake], {
     consumerRoot: root, checkpointSha256: sha256(checkpoint),
   }).reason, 'product_change_event_not_observed');
   const spoof = nativeApplyPatch(root); spoof.params.item.commandActions[0].command = `Write-Output "& 'C:\\tools\\codex.exe' --codex-run-as-apply-patch $patchText\n*** Update File: lib/index.js"`;
-  assert.equal(findCheckpointWitness([continuityPacket(root), spoof], {
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), spoof], {
     consumerRoot: root, checkpointSha256: sha256(checkpoint),
   }).reason, 'product_change_event_not_observed');
-  const relative = nativeApplyPatch(root); relative.params.item.commandActions[0].command = relative.params.item.commandActions[0].command.replace('C:\\tools\\', 'tools\\');
-  assert.equal(findCheckpointWitness([continuityPacket(root), relative], {
+  const relative = nativeApplyPatch(root, 'lib/index.js', 'tools\\codex.exe');
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), relative], {
     consumerRoot: root, checkpointSha256: sha256(checkpoint),
   }).reason, 'product_change_event_not_observed');
   const mismatchedOutput = nativeApplyPatch(root); mismatchedOutput.params.item.aggregatedOutput = 'Success. Updated the following files:\nM other.js\n';
-  assert.equal(findCheckpointWitness([continuityPacket(root), mismatchedOutput], {
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), mismatchedOutput], {
     consumerRoot: root, checkpointSha256: sha256(checkpoint),
   }).reason, 'product_change_event_not_observed');
+  const fakeBinary = nativeApplyPatch(root, 'lib/index.js', 'C:\\evil\\codex.exe');
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), fakeBinary], { consumerRoot: root, checkpointSha256: sha256(checkpoint) }).reason, 'product_change_event_not_observed');
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root, 'C:\\evil\\codex.exe'), nativeApplyPatch(root)], { consumerRoot: root, checkpointSha256: sha256(checkpoint) }).reason, 'product_change_event_not_observed');
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root, 'tools\\codex.exe'), nativeApplyPatch(root, 'lib/index.js', 'tools\\codex.exe')], { consumerRoot: root, checkpointSha256: sha256(checkpoint) }).reason, 'product_change_event_not_observed');
+  const fakeResolutionPid = nativeApplyPatchResolution(root); fakeResolutionPid.params.item.processId = 'not-a-pid';
+  assert.equal(findCheckpointWitness([continuityPacket(root), fakeResolutionPid, nativeApplyPatch(root)], { consumerRoot: root, checkpointSha256: sha256(checkpoint) }).reason, 'product_change_event_not_observed');
+  const fakePid = nativeApplyPatch(root); fakePid.params.item.processId = 'not-a-pid';
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), fakePid], { consumerRoot: root, checkpointSha256: sha256(checkpoint) }).reason, 'product_change_event_not_observed');
 });
 
 test('checkpoint packet reconstruction rejects invalid schema, hash, order, and ambiguity', t => {
   const root = tempRoot(t), checkpoint = canonicalCheckpoint();
   const options = { consumerRoot: root, checkpointSha256: sha256(checkpoint) };
   const wrongNames = Object.fromEntries(['current_state', 'work_completed', 'work_remaining', 'next_action', 'decisions', 'risks'].map(key => [key, `${key} value`]));
-  assert.equal(findCheckpointWitness([continuityPacket(root, { sections: wrongNames }), nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([continuityPacket(root, { sections: wrongNames }), nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
   const missing = Object.fromEntries(checkpointSections.filter(key => key !== 'blockers').map(key => [key, `${key} value`]));
-  assert.equal(findCheckpointWitness([continuityPacket(root, { sections: missing }), nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([continuityPacket(root, { sections: missing }), nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
   const extra = Object.fromEntries([...checkpointSections, 'extra'].map(key => [key, `${key} value`]));
-  assert.equal(findCheckpointWitness([continuityPacket(root, { sections: extra }), nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([continuityPacket(root, { sections: extra }), nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
   for (const frontmatter of [{ workflow: 'phase' }, { workflow: 'phase', phase: 'brownfield-change', timestamp: 'bad', runtime: 'codex-cli' }])
-    assert.equal(findCheckpointWitness([continuityPacket(root, { frontmatter }), nativeApplyPatch(root)], options).ok, false);
+    assert.equal(findCheckpointWitness([continuityPacket(root, { frontmatter }), nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
   const missingJudgment = Object.fromEntries(checkpointJudgment.filter(key => key !== 'anti_regression').map(key => [key, `${key} value`]));
-  assert.equal(findCheckpointWitness([continuityPacket(root, { judgment: missingJudgment }), nativeApplyPatch(root)], options).ok, false);
-  assert.equal(findCheckpointWitness([continuityPacket(root, { judgment: null }), nativeApplyPatch(root)], options).ok, false);
-  assert.equal(findCheckpointWitness([continuityPacket(root, { errors: ['bad'] }), nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([continuityPacket(root, { judgment: missingJudgment }), nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([continuityPacket(root, { judgment: null }), nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([continuityPacket(root, { errors: ['bad'] }), nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
   const malformed = continuityPacket(root); malformed.params.item.aggregatedOutput = '{"continuity":';
-  assert.equal(findCheckpointWitness([malformed, nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([malformed, nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
   const fakeNext = continuityPacket(root); fakeNext.params.item.commandActions = [{ type: 'unknown', command: 'Write-Output ".work/bin/gsdd.mjs next --json"' }];
-  assert.equal(findCheckpointWitness([fakeNext, nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([fakeNext, nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
+  const forgedAction = continuityPacket(root); forgedAction.params.item.command = 'Write-Output ".work/bin/gsdd.mjs next --json"';
+  assert.equal(findCheckpointWitness([forgedAction, nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
   const compoundNext = continuityPacket(root); compoundNext.params.item.commandActions.unshift({ type: 'unknown', command: 'Write-Output forged' });
-  assert.equal(findCheckpointWitness([compoundNext, nativeApplyPatch(root)], options).ok, false);
-  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatch(root)], { consumerRoot: root, checkpointSha256: sha256('wrong') }).ok, false);
-  assert.equal(findCheckpointWitness([nativeApplyPatch(root), continuityPacket(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([compoundNext, nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).ok, false);
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), nativeApplyPatch(root)], { consumerRoot: root, checkpointSha256: sha256('wrong') }).ok, false);
+  assert.equal(findCheckpointWitness([nativeApplyPatchResolution(root), nativeApplyPatch(root), continuityPacket(root)], options).ok, false);
   const failed = nativeApplyPatch(root); Object.assign(failed.params.item, { status: 'failed', exitCode: 1 });
-  assert.equal(findCheckpointWitness([continuityPacket(root), failed], options).reason, 'product_change_event_not_observed');
-  assert.equal(findCheckpointWitness([continuityPacket(root), continuityPacket(root), nativeApplyPatch(root)], options).reason, 'ambiguous_checkpoint_read');
+  assert.equal(findCheckpointWitness([continuityPacket(root), nativeApplyPatchResolution(root), failed], options).reason, 'product_change_event_not_observed');
+  assert.equal(findCheckpointWitness([continuityPacket(root), continuityPacket(root), nativeApplyPatchResolution(root), nativeApplyPatch(root)], options).reason, 'ambiguous_checkpoint_read');
 });
 
 test('checkpoint witness fails closed when read is late, wrong, or ambiguous', t => {
   const root = tempRoot(t);
   const checkpoint = 'checkpoint bytes\n';
   const options = { consumerRoot: root, checkpointSha256: sha256(checkpoint) };
-  assert.equal(findCheckpointWitness([productChange(), completedRead(root, checkpoint)], options).ok, false);
+  assert.equal(findCheckpointWitness([productChange(root), completedRead(root, checkpoint)], options).ok, false);
   assert.equal(findCheckpointWitness([completedRead(root, 'wrong')], options).ok, false);
   assert.equal(findCheckpointWitness([completedRead(root, checkpoint), completedRead(root, checkpoint)], options).ok, false);
   assert.equal(findCheckpointWitness([completedRead(root, checkpoint)], options).reason, 'product_change_event_not_observed');
+  const failedChange = productChange(root); failedChange.params.item.status = 'failed';
+  assert.equal(findCheckpointWitness([completedRead(root, checkpoint), failedChange], options).reason, 'product_change_event_not_observed');
+  const startedChange = productChange(root); startedChange.method = 'item/started'; startedChange.params.item.status = 'inProgress';
+  assert.equal(findCheckpointWitness([completedRead(root, checkpoint), startedChange], options).reason, 'product_change_event_not_observed');
+  const foreignChange = productChange(path.join(root, 'foreign'));
+  assert.equal(findCheckpointWitness([completedRead(root, checkpoint), foreignChange], options).reason, 'product_change_event_not_observed');
   const fakeRead = completedRead(root, checkpoint); fakeRead.params.item.commandActions = [{ type: 'unknown', command: 'Write-Output .work/.continue-here.md' }];
-  assert.equal(findCheckpointWitness([fakeRead, productChange()], options).ok, false);
+  assert.equal(findCheckpointWitness([fakeRead, productChange(root)], options).ok, false);
   const taggedFakeRead = completedRead(root, checkpoint); taggedFakeRead.params.item.commandActions[0].command = 'Write-Output checkpoint';
-  assert.equal(findCheckpointWitness([taggedFakeRead, productChange()], options).ok, false);
+  assert.equal(findCheckpointWitness([taggedFakeRead, productChange(root)], options).ok, false);
   const compoundRead = completedRead(root, checkpoint); compoundRead.params.item.commandActions.unshift({ type: 'unknown', command: 'Write-Output checkpoint' });
-  assert.equal(findCheckpointWitness([compoundRead, productChange()], options).ok, false);
+  assert.equal(findCheckpointWitness([compoundRead, productChange(root)], options).ok, false);
   const missingCwd = completedRead(root, checkpoint); delete missingCwd.params.item.cwd;
-  assert.equal(findCheckpointWitness([missingCwd, productChange()], { ...options, consumerRoot: process.cwd() }).ok, false);
+  assert.equal(findCheckpointWitness([missingCwd, productChange(root)], { ...options, consumerRoot: process.cwd() }).ok, false);
   const malformedCwd = completedRead(root, checkpoint); malformedCwd.params.item.cwd = { forged: true };
-  assert.equal(findCheckpointWitness([malformedCwd, productChange()], options).ok, false);
+  assert.equal(findCheckpointWitness([malformedCwd, productChange(root)], options).ok, false);
   const malformedActions = completedRead(root, checkpoint); malformedActions.params.item.commandActions = { forged: true };
-  assert.equal(findCheckpointWitness([malformedActions, productChange()], options).ok, false);
+  assert.equal(findCheckpointWitness([malformedActions, productChange(root)], options).ok, false);
   const failedRead = completedRead(root, checkpoint); failedRead.params.item.exitCode = 1;
-  assert.equal(findCheckpointWitness([failedRead, productChange()], options).ok, false);
+  assert.equal(findCheckpointWitness([failedRead, productChange(root)], options).ok, false);
   for (const changes of [{ forged: true }, 'forged']) {
     assert.equal(findCheckpointWitness([{ method: 'item/completed', params: { item: { type: 'fileChange', changes } } }], options).reason, 'product_change_event_not_observed');
   }

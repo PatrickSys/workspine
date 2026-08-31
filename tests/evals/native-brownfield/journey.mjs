@@ -59,7 +59,7 @@ export async function runJourney(options) {
   const approve = options.approve || (input => approvePlan({ consumerRoot: options.consumerRoot,
     approvalRef: options.approvalRef, ...input }));
   const witness = options.checkpointWitness || ((result, checkpoint) => findCheckpointWitness(result.events || [], {
-    consumerRoot: options.consumerRoot, checkpointSha256: checkpoint.sha256,
+    consumerRoot: options.consumerRoot, checkpointSha256: checkpoint.sha256, sessionId: result.sessionId,
   }));
   const turns = {};
   const run = async (id, sessionId = null) => {
