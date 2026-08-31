@@ -581,15 +581,33 @@ test('provider-free grade is deterministic for a second declared artifact layout
   for (const name of ['CHANGE.md', 'HANDOFF.md', 'VERIFICATION.md']) {
     fs.writeFileSync(path.join(root, '.work', 'brownfield-change', name), `${name}\n`);
   }
-  fs.writeFileSync(path.join(root, '.work', 'state.json'), JSON.stringify({ workflow: {
-    authority: 'owner', plan: { approved: true }, execution: { status: 'complete' }, verification: { status: 'passed' },
+  const plan = '.work/brownfield-change/CHANGE.md', verification = '.work/brownfield-change/VERIFICATION.md';
+  fs.writeFileSync(path.join(root, '.work', 'state.json'), JSON.stringify({ current_state: 'audit', workflow: {
+    current_state: 'audit', authority: 'workflow', approval_ref: 'owner-test-approval',
+    plan: { approved: true, path: plan, identity: plan },
+    execution: { status: 'complete', artifact: verification, identity: verification },
+    verification: { status: 'passed', artifact: verification, identity: verification },
   } }));
   const input = { consumerRoot: root, baselineManifest: baseline, allowedPaths: ['docs/result.md'],
-    oracle: { executable: process.execPath, args: ['-e', 'process.exit(0)'] } };
+    oracle: { executable: process.execPath, args: ['-e', 'process.exit(0)'] }, approvalRef: 'owner-test-approval' };
   const first = gradeWorkspace(input);
   const second = gradeWorkspace(input);
   assert.equal(first.outcome, 'product_green');
   assert.equal(second.grade_sha256, first.grade_sha256);
+  assert.equal(first.workflow.state_projection.approval_ref, input.approvalRef);
+  const stateFile = path.join(root, '.work', 'state.json'), state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  for (const mutate of [
+    value => { value.workflow.approval_ref = 'forged-approval'; },
+    value => { value.workflow.authority = 'owner'; },
+    value => { value.workflow.plan.identity = '.work/brownfield-change/OTHER.md'; },
+    value => { value.workflow.execution.artifact = '.work/brownfield-change/OTHER.md'; },
+  ]) {
+    const invalid = structuredClone(state); mutate(invalid);
+    fs.writeFileSync(stateFile, JSON.stringify(invalid));
+    assert.equal(gradeWorkspace(input).workflow.ok, false);
+  }
+  fs.writeFileSync(stateFile, JSON.stringify(state));
+  assert.equal(gradeWorkspace({ ...input, approvalRef: '' }).workflow.ok, false);
 });
 
 test('calibration accepts only baseline-red witness-green mutant-red controls', async t => {

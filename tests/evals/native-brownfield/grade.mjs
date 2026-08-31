@@ -34,7 +34,7 @@ export function classifyGrade({ oraclePassed, scopePassed, workflowPassed, gener
   if (oraclePassed && scopePassed && !workflowPassed && genericReproduction?.[VALID_REPRODUCTION] === true) return 'workspine_red';
   return 'task_red';
 }
-export function observeWorkflow(consumerRoot) {
+export function observeWorkflow(consumerRoot, approvalRef) {
   const root = path.resolve(consumerRoot);
   const required = ['.work/brownfield-change/CHANGE.md', '.work/brownfield-change/HANDOFF.md',
     '.work/brownfield-change/VERIFICATION.md', '.work/state.json'];
@@ -45,12 +45,13 @@ export function observeWorkflow(consumerRoot) {
   }));
   let state = null;
   try { state = JSON.parse(fs.readFileSync(path.join(root, '.work', 'state.json'), 'utf8')); } catch {}
-  const workflow = state?.workflow;
-  const ok = Object.values(artifacts).every(Boolean) && workflow?.plan?.approved === true
-    && workflow?.authority === 'owner' && workflow?.execution?.status === 'complete'
-    && workflow?.verification?.status === 'passed';
+  const workflow = state?.workflow, plan = '.work/brownfield-change/CHANGE.md', verification = '.work/brownfield-change/VERIFICATION.md', ok = Object.values(artifacts).every(Boolean) && state?.current_state === 'audit' && workflow?.current_state === 'audit'
+    && workflow?.authority === 'workflow' && typeof approvalRef === 'string' && Boolean(approvalRef.trim()) && workflow?.approval_ref === approvalRef
+    && workflow?.plan?.approved === true && workflow.plan.path === plan && workflow.plan.identity === plan
+    && workflow?.execution?.status === 'complete' && workflow.execution.artifact === verification && workflow.execution.identity === verification
+    && workflow?.verification?.status === 'passed' && workflow.verification.artifact === verification && workflow.verification.identity === verification;
   return { ok, artifacts, state_projection: state ? {
-    current_state: state.current_state, authority: workflow?.authority || null,
+    current_state: state.current_state, authority: workflow?.authority || null, approval_ref: workflow?.approval_ref || null,
     plan_approved: workflow?.plan?.approved ?? null, execution_status: workflow?.execution?.status || null,
     verification_status: workflow?.verification?.status || null,
   } : null };
@@ -63,11 +64,11 @@ export function runOracle(consumerRoot, oracle) {
   return { passed: result.status === 0, exit_code: result.status,
     stdout_sha256: sha256(result.stdout), stderr_sha256: sha256(result.stderr) };
 }
-export function gradeWorkspace({ consumerRoot, baselineManifest, allowedPaths, oracle, genericReproduction: binding }) {
+export function gradeWorkspace({ consumerRoot, baselineManifest, allowedPaths, oracle, approvalRef, genericReproduction: binding }) {
   const finalManifest = treeManifest(path.resolve(consumerRoot), relative => SETUP_PREFIXES.some(prefix => relative.startsWith(prefix)) || relative === '.git');
   const scope = evaluateScope(changedPaths(baselineManifest, finalManifest), allowedPaths);
   const oracleResult = runOracle(consumerRoot, oracle);
-  const workflow = observeWorkflow(consumerRoot);
+  const workflow = observeWorkflow(consumerRoot, approvalRef);
   const patch = command('git', ['diff', '--binary', 'HEAD', '--'], { cwd: path.resolve(consumerRoot), allowFailure: true });
   const genericReproduction = validateGenericReproduction(binding);
   const outcome = classifyGrade({ oraclePassed: oracleResult.passed, scopePassed: scope.ok,

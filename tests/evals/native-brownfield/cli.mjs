@@ -97,11 +97,11 @@ async function run(freezeFile, runRoot) {
       approvalRef: freeze.approval_ref, prompts: freeze.prompts || buildPrompts(), record: (id, value) => appendTurn(chain, id, value) });
     if (result.outcome !== 'completed') return chain.terminal(result.outcome, { failure_code: result.failure_code || null });
     const grade = gradeWorkspace({ consumerRoot: freeze.consumer_root, baselineManifest: freeze.baseline_manifest,
-      allowedPaths: freeze.allowed_paths, oracle: freeze.oracle, genericReproduction: freeze.generic_reproduction });
+      allowedPaths: freeze.allowed_paths, oracle: freeze.oracle, approvalRef: freeze.approval_ref, genericReproduction: freeze.generic_reproduction });
     chain.append(400, 'oracle', 'oracle', grade.oracle);
     chain.append(410, 'grade', 'grade', grade);
     const regrade = gradeWorkspace({ consumerRoot: freeze.consumer_root, baselineManifest: freeze.baseline_manifest,
-      allowedPaths: freeze.allowed_paths, oracle: freeze.oracle, genericReproduction: freeze.generic_reproduction });
+      allowedPaths: freeze.allowed_paths, oracle: freeze.oracle, approvalRef: freeze.approval_ref, genericReproduction: freeze.generic_reproduction });
     chain.append(420, 'regrade', 'regrade', { grade_sha256: regrade.grade_sha256, matches: regrade.grade_sha256 === grade.grade_sha256 });
     if (regrade.grade_sha256 !== grade.grade_sha256) return chain.terminal('evaluator_invalid', { failure_code: 'regrade_mismatch' });
     return chain.terminal(grade.outcome, { grade_sha256: grade.grade_sha256, final_tree_sha256: grade.final_manifest.sha256,
@@ -136,7 +136,7 @@ function regrade(runRoot) {
   const manifest = readJson(path.join(path.resolve(runRoot), 'receipts', '000-manifest.json'));
   const freeze = manifest.payload.freeze;
   const grade = gradeWorkspace({ consumerRoot: freeze.consumer_root, baselineManifest: freeze.baseline_manifest,
-    allowedPaths: freeze.allowed_paths, oracle: freeze.oracle, genericReproduction: freeze.generic_reproduction });
+    allowedPaths: freeze.allowed_paths, oracle: freeze.oracle, approvalRef: freeze.approval_ref, genericReproduction: freeze.generic_reproduction });
   const sealed = readJson(path.join(path.resolve(runRoot), 'receipts', '410-grade.json'));
   if (grade.grade_sha256 !== sealed.payload.grade_sha256) throw new EvalError('evaluator_invalid', 'offline regrade mismatch');
   return { ok: true, provider_invoked: false, grade_sha256: grade.grade_sha256 };
