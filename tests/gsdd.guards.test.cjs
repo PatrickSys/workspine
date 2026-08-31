@@ -28,10 +28,26 @@ const DESIGN_MD = path.join(ROOT, 'distilled', 'DESIGN.md');
 const PLANNING_SPEC_MD = path.join(ROOT, '.planning', 'SPEC.md');
 const PLANNING_ROADMAP_MD = path.join(ROOT, '.planning', 'ROADMAP.md');
 const INTERNAL_TODO_MD = path.join(ROOT, '.internal-research', 'TODO.md');
+const PHASE08_PROOF = path.join(ROOT, 'tests', 'proof', 'phase08-flow-eval.cjs');
 
 function lineCount(filePath) {
   return fs.readFileSync(filePath, 'utf-8').split('\n').length;
 }
+
+test('Phase 08 greenfield proof records approval before workflow execute', () => {
+  const source = fs.readFileSync(PHASE08_PROOF, 'utf8');
+  const greenfield = source.slice(source.indexOf('function greenfield('), source.indexOf('function quick('));
+  assert.ok(greenfield.includes("'lifecycle-transition', 'approve'"),
+    'greenfield proof must use the owner approval transition');
+  assert.match(greenfield, /approve[\s\S]*(?:(?:--approval-ref[\s\S]*--authority', 'owner')|(?:--authority', 'owner'[\s\S]*--approval-ref))/,
+    'greenfield proof must record an owner approval reference');
+  assert.match(greenfield, /'lifecycle-transition', 'execute'[\s\S]*--authority', 'workflow'/,
+    'greenfield execute must run as workflow authority');
+  const execute = greenfield.match(/'lifecycle-transition', 'execute'[\s\S]*?\], candidate\.isolated/);
+  assert.ok(execute, 'greenfield proof execute invocation must be present');
+  assert.doesNotMatch(execute[0], /--approval-ref/,
+    'greenfield execute must not replace the owner-recorded approval reference');
+});
 
 function isGitTracked(relativePath) {
   try {
