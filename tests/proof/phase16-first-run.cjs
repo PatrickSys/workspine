@@ -29,6 +29,7 @@ const SOURCE_FILES = Object.freeze([
 ]);
 const LIMIT = 12000;
 const NORMALIZATION_CONTRACT_VERSION = 'phase16.receipt-normalization.v1';
+const APPROVED_SEEDS = new Set(['1602', '170002', '170003', '170004']);
 const args = process.argv.slice(2);
 const SEED = args.includes('--seed') ? String(args[args.indexOf('--seed') + 1] || '') : '';
 
@@ -421,7 +422,8 @@ function main() {
   let receipt;
   try {
     need(args.includes('--offline'), 'infrastructure', 'offline_required', 'phase16 proof requires --offline');
-    need(SEED === '1602', 'infrastructure', 'seed_required', 'phase16 proof requires --seed 1602', { seed: SEED });
+    need(APPROVED_SEEDS.has(SEED), 'infrastructure', 'seed_required',
+      `packed proof requires one approved seed: ${[...APPROVED_SEEDS].join(', ')}`, { seed: SEED });
     const npm = npmCliPath();
     const sourceBefore = sourceSnapshot();
     const protectedBefore = protectedSnapshot();
