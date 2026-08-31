@@ -275,7 +275,7 @@ close through direct verification.
 
 Normal user flow:
 
-1. Run `npx -y workspine init`.
+1. Run `npx -y workspine setup`.
 2. Enter workflows through your runtime surface: `/work-*` or `$work-*`.
 3. Use `npx -y workspine health` to check repo-local generated surfaces.
 4. Use `npx -y workspine update` when repo-local generated surfaces drift or you want the latest shipped output.

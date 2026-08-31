@@ -960,7 +960,9 @@ describe('G19 - Consumer First-Run Accuracy', () => {
   test('User Guide keeps advanced init and global-install boundaries out of the quick surface', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    const normalFlow = guide.match(/Normal user flow:\s*\n\s*1\.\s+([^\n]+)/)?.[1] || '';
     assert.match(readme, /^npx -y workspine setup$/m, 'README must keep setup as the first-use CTA.');
+    assert.match(normalFlow, /npx -y workspine setup/i, 'The User Guide normal flow must begin with the same first-use setup command.');
     assert.match(guide, /npx -y workspine init/i);
     assert.match(guide, /npx -y workspine install --global/i);
     assert.match(guide, /global install never creates `.work\/`/i);
