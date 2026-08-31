@@ -1,0 +1,98 @@
+name: Friction report
+description: Tell us where setup or your first workflow became unclear or failed.
+title: "[Friction] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying Workspine. Please remove secrets, tokens, private paths, and customer data before submitting.
+  - type: input
+    id: workspine-version
+    attributes:
+      label: Workspine version
+      placeholder: 0.35.0
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      placeholder: v22.14.0
+    validations:
+      required: true
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, macOS 15, Ubuntu 24.04
+    validations:
+      required: true
+  - type: dropdown
+    id: agent-runtime
+    attributes:
+      label: Agent or runtime
+      options:
+        - Claude Code
+        - Codex CLI
+        - OpenCode
+        - Cursor
+        - Copilot
+        - Gemini
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: route
+    attributes:
+      label: Workspine route
+      options:
+        - work-quick
+        - work-plan
+        - work-new-project
+        - setup or install
+        - health or update
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Sanitized command or prompt used
+      description: Remove secrets, tokens, private paths, and personal data before pasting.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What were you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What got in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: 1. ...\n2. ...\n3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized logs or evidence
+      description: Paste relevant output only after removing secrets and sensitive paths.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, tokens, private paths, and personal data.
+          required: true
