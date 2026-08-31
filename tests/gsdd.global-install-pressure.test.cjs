@@ -150,10 +150,10 @@ function snapshotTree(rootDir) {
 }
 
 describe('global install pressure loop', () => {
-  test('README-driven first-time user loop works through the public CLI surface', async () => {
-    const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf-8');
-    assert.match(readme, /npx -y workspine init/);
-    assert.match(readme, /npx -y workspine install --global --tools claude,opencode,codex,copilot/);
+  test('User Guide advanced-install loop works through the public CLI surface', async () => {
+    const guide = fs.readFileSync(path.join(__dirname, '..', 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /npx -y workspine init/);
+    assert.match(guide, /npx -y workspine install --global --tools claude,opencode,codex,copilot/);
 
     const homeDir = createTempProject();
     const { parent, repos } = createFixtureRepos();

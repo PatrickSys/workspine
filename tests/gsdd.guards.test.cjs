@@ -316,12 +316,15 @@ describe('G10 - CLI Module Boundary', () => {
 });
 
 describe('G11 - Codex Doc Contract', () => {
-  test('README describes Codex as portable-skill entry plus native checker agent', () => {
+  test('runtime reference describes Codex without burdening the README', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.doesNotMatch(readme, /overrides work-plan skill/i,
-      'README.md must not claim that Codex overrides the shared work-plan skill.');
-    assert.match(readme, /portable .*work-plan.*\.codex\/agents/i,
-      'README.md must describe Codex as the portable work-plan entry plus the native checker agent.');
+    const runtimeSupport = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    assert.doesNotMatch(readme, /Codex CLI|\.codex\/agents/i,
+      'README must keep runtime implementation detail behind the runtime reference.');
+    assert.doesNotMatch(runtimeSupport, /overrides work-plan skill/i,
+      'Runtime support must not claim that Codex overrides the shared work-plan skill.');
+    assert.match(runtimeSupport, /\.codex\/agents/i,
+      'Runtime support must document the generated Codex checker agent.');
   });
 
   test('distilled README no longer describes Codex as deprecated', () => {
@@ -865,10 +868,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must not contain custom_command_aware. FIX: Replace custom_command_aware with governance_only in adapter tables.');
   });
 
-  test('README qualifies Cursor/Copilot/Gemini slash guidance', () => {
+  test('README qualifies invocation guidance by actual skill discovery', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers `.agents\/skills`; if it does not, open `.agents\/skills\/work-<workflow>\/SKILL\.md`/i,
-      'README must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording plus SKILL.md fallback.');
+    assert.match(readme, /when it discovers the installed skills[\s\S]*If discovery is unavailable, open/i,
+      'README must qualify invocation by discovery and include the direct SKILL.md fallback.');
   });
 
   test('README contains a Quickstart section', () => {
@@ -877,16 +880,13 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'README.md must contain a Quickstart section. FIX: Add ### Quickstart section after Getting Started.');
   });
 
-  test('README describes npx init as a guided install wizard', () => {
+  test('User Guide keeps advanced init and global-install boundaries out of the quick surface', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /guided install wizard/i,
-      'README.md must describe the init command as a guided install wizard. FIX: Update the Platform Adapters or Getting Started section.');
-    assert.match(readme, /npx -y workspine init/i,
-      'README.md must prefer an npx -y workspine init form for humans. FIX: Replace primary bare gsdd init guidance.');
-    assert.match(readme, /npx -y workspine install --global/i,
-      'README.md must describe the global agent install path. FIX: Add explicit global/local install contract text.');
-    assert.match(readme, /does not create `.work\/`/i,
-      'README.md must state that global install does not bootstrap repo-local planning state. FIX: Add global install boundary wording.');
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(readme, /^npx -y workspine setup$/m, 'README must keep setup as the first-use CTA.');
+    assert.match(guide, /npx -y workspine init/i);
+    assert.match(guide, /npx -y workspine install --global/i);
+    assert.match(guide, /global install never creates `.work\/`/i);
   });
 
   test('global install help and public guidance match the shared supported-target metadata', async () => {
@@ -901,7 +901,6 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
     const explicitList = targetIds.join(',');
     const publicGuides = [
-      README_MD,
       path.join(ROOT, 'docs', 'USER-GUIDE.md'),
       path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'),
     ];
@@ -988,7 +987,7 @@ describe('G19 - Consumer First-Run Accuracy', () => {
 
   test('README quickstart mentions all 3 platform invocation patterns', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    const quickstart = sectionByHeading(readme, '### Quickstart (after init)');
+    const quickstart = sectionByHeading(readme, '### Quickstart');
     assert.match(quickstart, /slash command/i,
       'Quickstart must mention slash commands. FIX: Add slash command invocation pattern to Quickstart.');
     assert.match(quickstart, /skill reference/i,
@@ -997,12 +996,12 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'Quickstart must mention opening SKILL.md. FIX: Add SKILL.md invocation pattern to Quickstart.');
   });
 
-  test('README quickstart qualifies Cursor/Copilot/Gemini slash guidance before SKILL.md fallback', () => {
+  test('README quickstart qualifies skill discovery before the SKILL.md fallback', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    const quickstart = sectionByHeading(readme, '### Quickstart (after init)');
-    assert.match(quickstart, /Cursor \/ Copilot \/ Gemini.*Use slash commands if your tool discovers/i,
-      'Quickstart must qualify Cursor/Copilot/Gemini slash-command guidance. FIX: Use discovery-available wording.');
-    assert.match(quickstart, /if it does not, open `.agents\/skills\/work-<workflow>\/SKILL\.md`/i,
+    const quickstart = sectionByHeading(readme, '### Quickstart');
+    assert.match(quickstart, /when it discovers the installed skills/i,
+      'Quickstart must qualify command guidance by actual skill discovery.');
+    assert.match(quickstart, /If discovery is unavailable, open\s+`.agents\/skills\/work-<workflow>\/SKILL\.md`/i,
       'Quickstart must include SKILL.md fallback only when discovery is unavailable. FIX: Add fallback wording after slash guidance.');
   });
 
@@ -1046,18 +1045,16 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'agents.block.md must not restate launch proof posture. FIX: Keep the generated governance block focused on invocation and behavior rules.');
   });
 
-  test('README adapter architecture table does NOT contain skill_aware', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    const archSection = readme.slice(readme.indexOf('### Adapter Architecture'));
-    assert.doesNotMatch(archSection, /`skill_aware`/,
-      'README adapter architecture table must not contain skill_aware. FIX: Replace with governance_only.');
+  test('runtime reference does NOT contain skill_aware', () => {
+    const runtimeSupport = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    assert.doesNotMatch(runtimeSupport, /`skill_aware`/,
+      'Runtime support must not expose the retired skill_aware tier.');
   });
 
-  test('README adapter architecture table does NOT contain custom_command_aware', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    const archSection = readme.slice(readme.indexOf('### Adapter Architecture'));
-    assert.doesNotMatch(archSection, /`custom_command_aware`/,
-      'README adapter architecture table must not contain custom_command_aware. FIX: Replace with governance_only.');
+  test('runtime reference does NOT contain custom_command_aware', () => {
+    const runtimeSupport = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    assert.doesNotMatch(runtimeSupport, /`custom_command_aware`/,
+      'Runtime support must not expose the retired custom_command_aware tier.');
   });
 
   test('DESIGN.md contains D25 entry', () => {
@@ -1424,60 +1421,42 @@ describe('G20 - Session Continuity Contracts', () => {
 describe('G21 - Consumer Surface Completeness', () => {
   const DESIGN_PATH = path.join(ROOT, 'distilled', 'DESIGN.md');
 
-  test('README has Troubleshooting section', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /## Troubleshooting/,
-      'README.md must have a ## Troubleshooting section. FIX: Add ## Troubleshooting section to README.');
+  test('User Guide owns detailed troubleshooting', () => {
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /## Common Problems/,
+      'User Guide must retain detailed troubleshooting.');
   });
 
   test('Troubleshooting mentions health as first step', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    const tsStart = readme.indexOf('## Troubleshooting');
-    const tsEnd = readme.indexOf('\n## ', tsStart + 1);
-    const section = readme.slice(tsStart, tsEnd > -1 ? tsEnd : tsStart + 1000);
-    assert.match(section, /npx -y workspine health|gsdd health/,
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /npx -y workspine health|gsdd health/,
       'Troubleshooting must mention health as first step. FIX: Add an npx -y <package> health as first troubleshooting step.');
   });
 
   test('Troubleshooting links to User Guide', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
-    const tsStart = readme.indexOf('## Troubleshooting');
-    const tsEnd = readme.indexOf('\n## ', tsStart + 1);
-    const section = readme.slice(tsStart, tsEnd > -1 ? tsEnd : tsStart + 1000);
-    assert.match(section, /USER-GUIDE\.md/,
-      'Troubleshooting must link to docs/USER-GUIDE.md. FIX: Add User Guide link to Troubleshooting.');
+    assert.match(readme, /\[User Guide\]\(docs\/USER-GUIDE\.md\)/,
+      'README must route detailed troubleshooting to the User Guide.');
   });
 
-  test('README mentions --auto headless mode in Getting Started', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    const gsStart = readme.indexOf('## Getting Started');
-    const gsEnd = readme.indexOf('\n## ', gsStart + 1);
-    const section = readme.slice(gsStart, gsEnd > -1 ? gsEnd : gsStart + 3000);
-    assert.match(section, /--auto/,
-      'Getting Started must mention --auto flag. FIX: Add Headless Mode section with --auto to Getting Started.');
+  test('User Guide documents --auto headless mode', () => {
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /--auto/, 'User Guide must document --auto.');
   });
 
-  test('README mentions --brief in Getting Started', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    const gsStart = readme.indexOf('## Getting Started');
-    const gsEnd = readme.indexOf('\n## ', gsStart + 1);
-    const section = readme.slice(gsStart, gsEnd > -1 ? gsEnd : gsStart + 3000);
-    assert.match(section, /--brief/,
-      'Getting Started must mention --brief flag. FIX: Add --brief to Headless Mode section.');
+  test('User Guide documents --brief', () => {
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /--brief/, 'User Guide must document --brief.');
   });
 
-  test('README has Team Use section', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /### Team Use/,
-      'README.md must have a ### Team Use section. FIX: Add ### Team Use section to Getting Started.');
+  test('User Guide owns team configuration detail', () => {
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /## Configuration Reference/);
   });
 
   test('Team Use references commitDocs', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    const tuStart = readme.indexOf('### Team Use');
-    const tuEnd = readme.indexOf('\n### ', tuStart + 1);
-    const section = readme.slice(tuStart, tuEnd > -1 ? tuEnd : tuStart + 800);
-    assert.match(section, /commitDocs/,
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /commitDocs/,
       'Team Use must reference commitDocs setting. FIX: Mention commitDocs in Team Use section.');
   });
 
@@ -1487,21 +1466,18 @@ describe('G21 - Consumer Surface Completeness', () => {
       'README must link to docs/USER-GUIDE.md. FIX: Add [User Guide](docs/USER-GUIDE.md) link.');
   });
 
-  test('README Configuration explains model profile strategy (quality/balanced/budget guidance)', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    const cfgStart = readme.indexOf('## Configuration');
-    const cfgEnd = readme.indexOf('\n## ', cfgStart + 1);
-    const section = readme.slice(cfgStart, cfgEnd > -1 ? cfgEnd : cfgStart + 3000);
-    assert.match(section, /quality.*maximize|maximize.*rigor/i,
+  test('User Guide explains model profile strategy (quality/balanced/budget guidance)', () => {
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /quality.*maximize|maximize.*rigor/i,
       'Configuration must explain quality profile. FIX: Add model profile guidance to Configuration.');
-    assert.match(section, /budget.*minimize|minimize.*cost/i,
+    assert.match(guide, /budget.*minimize|minimize.*cost/i,
       'Configuration must explain budget profile. FIX: Add model profile guidance to Configuration.');
   });
 
-  test('README has What to Track in Git section', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
-    assert.match(readme, /### What to Track in Git/,
-      'README.md must have a ### What to Track in Git section. FIX: Add ### What to Track in Git section.');
+  test('User Guide documents the tracked .work configuration', () => {
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /Track `.work\/` in git/,
+      'User Guide must explain the commitDocs tracking contract.');
   });
 
   test('DESIGN.md contains D27 entry', () => {
@@ -2784,7 +2760,7 @@ describe('G29 - Outcome-Based Verification Contracts', () => {
 });
 
 describe('G11b - Launch Claim Hardening', () => {
-  test('README uses proof-split wording instead of broad all-runtime parity copy', () => {
+  test('README avoids broad or runtime-specific reliability claims', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     assert.doesNotMatch(readme, /\*\*Works with Claude Code, OpenCode, Codex CLI, Cursor, Copilot, and Gemini CLI\.\*\*/i,
       'README.md must not use the old broad all-runtime top-line claim. FIX: Replace it with proof-split wording.');
@@ -2792,16 +2768,8 @@ describe('G11b - Launch Claim Hardening', () => {
     // The disclaimer elsewhere in the file does not make it true.
     assert.doesNotMatch(readme, /\bworks? with\b[^\n]*\b(Cursor|Copilot|Gemini)\b/i,
       'README.md must not claim it works with Cursor, Copilot or Gemini. FIX: They can read the skill files, but no run of theirs is recorded. Say that instead.');
-    for (const runtime of ['Claude Code', 'OpenCode', 'Codex CLI']) {
-      assert.ok(readme.includes(runtime),
-        `README.md must name ${runtime} as a runtime with a recorded run. FIX: Name the three runtimes that actually have one.`);
-    }
-    for (const runtime of ['Cursor', 'Copilot', 'Gemini']) {
-      assert.ok(readme.includes(runtime),
-        `README.md must name ${runtime} as a runtime without a recorded run. FIX: Name it, and say no run of theirs is recorded.`);
-    }
-    assert.match(readme, /no run of theirs is recorded|no recorded run|not recorded/i,
-      'README.md must say plainly that Cursor, Copilot and Gemini have no recorded run. FIX: Keep proven and unproven runtimes distinguishable in plain English.');
+    assert.doesNotMatch(readme, /\b(?:Claude Code|OpenCode|Codex CLI|Cursor|Copilot|Gemini)\b/i,
+      'README must leave runtime-specific support detail to the runtime reference.');
   });
 
   test('README adapter tables avoid internal runtime taxonomy jargon', () => {
@@ -3012,7 +2980,7 @@ describe('Phase 18 deterministic CLI guards', () => {
   test('public configuration surfaces describe only active rigor behavior', () => {
     const prompts = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init-prompts.mjs'), 'utf-8');
     const help = fs.readFileSync(INIT_RUNTIME_MODULE, 'utf-8');
-    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const userGuide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
     const design = fs.readFileSync(DESIGN_MD, 'utf-8');
     const newProject = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'new-project.md'), 'utf-8');
 
@@ -3020,10 +2988,10 @@ describe('Phase 18 deterministic CLI guards', () => {
       'Guided setup must offer low, medium, and high rigor. FIX: Keep the wizard aligned with implemented gates.');
     assert.doesNotMatch(prompts, /value: 'max'/,
       'Guided setup must not offer the compatibility-only max input. FIX: Remove max from prompt choices.');
-    assert.match(readme, /Model profiles.*cost.*quality[\s\S]*rigor.*alignment.*quality gates/i,
-      'README must keep model cost/quality separate from rigor gates. FIX: Rewrite the configuration introduction.');
-    assert.match(readme, /gsdd rigor.*Inspect or update configuration|gsdd rigor.*inspect.*configuration/i,
-      'README must describe rigor as configuration inspection/update. FIX: Correct the CLI reference.');
+    assert.match(userGuide, /Model profiles.*cost.*quality[\s\S]*rigor.*alignment.*quality gates/i,
+      'User Guide must keep model cost/quality separate from rigor gates.');
+    assert.match(userGuide, /(?:gsdd rigor|npx -y workspine rigor)[\s\S]{0,160}inspect or update configuration/i,
+      'User Guide must describe rigor as configuration inspection/update.');
     assert.match(design, /\.work\/config\.json[\s\S]*brief-driven[\s\S]*SPEC\.md \+ ROADMAP\.md/i,
       'DESIGN must use the current .work bootstrap paths and bounded outcome. FIX: Correct the headless-mode decision.');
     assert.match(newProject, /brief-driven.*SPEC\.md.*ROADMAP\.md|SPEC\.md.*ROADMAP\.md.*brief/i,
@@ -3032,7 +3000,7 @@ describe('Phase 18 deterministic CLI guards', () => {
     for (const [label, content] of [
       ['guided setup', prompts],
       ['help', help],
-      ['README', readme],
+      ['User Guide', userGuide],
       ['DESIGN', design],
       ['new-project workflow', newProject],
     ]) {
@@ -3529,10 +3497,9 @@ describe('G37 - Launch Surface Consistency', () => {
     // CHANGELOG.md for that history instead. docs/USER-GUIDE.md is fully renamed as of
     // Phase 14 step 9, so it names the current `workspine` package alongside the retained
     // `gsdd`/.work/ contracts instead.
-    assert.match(rootReadme, /0\.32\.0[\s\S]{0,160}CHANGELOG\.md/i,
-      'README.md must point to CHANGELOG.md for the retired npm package-name history. FIX: Reference CHANGELOG.md in the release-history note near the 0.32.0 boundary.');
+    assert.match(rootReadme, /\[Changelog\]\(CHANGELOG\.md\)/i,
+      'README.md must route compatibility history to CHANGELOG.md.');
     for (const [label, content, names] of [
-      ['README.md', rootReadme, ['`gsdd`', '.work/']],
       ['docs/USER-GUIDE.md', userGuide, ['`workspine`', '`gsdd`', '.work/']],
     ]) {
       for (const name of names) {
@@ -3544,8 +3511,6 @@ describe('G37 - Launch Surface Consistency', () => {
       assert.match(content, /`gsdd`[^`]{0,160}removed at the next minor|removed at the next minor[^`]{0,160}`gsdd`/i,
         `${label} must record that the gsdd binary alias is removed at the next minor. FIX: Add the deprecation note next to the retained-names explanation.`);
     }
-    assert.match(rootReadme, /began as a fork of.*Get Shit Done/i,
-      'README.md must keep one brief appreciative lineage note. FIX: Add a concise lineage note that acknowledges GSD/GSDD without making it the active product identity.');
     assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
       'distilled/README.md must keep the same brief appreciative lineage note. FIX: Mirror the concise lineage note in the distilled public surface.');
     assert.match(helpText, /Workspine is the public product name and the npm package; the retained command and workspace contracts stay gsdd and \.work\/, and the workflows are work-\*; legacy planning workspaces are still read/i,
@@ -3567,11 +3532,11 @@ describe('G37 - Launch Surface Consistency', () => {
       'distilled/README.md must say plainly that Cursor, Copilot and Gemini have no recorded run. FIX: Keep proven and unproven runtimes distinguishable in plain English.');
   });
 
-  test('README install command and package metadata stay aligned', () => {
+  test('README setup command and package metadata stay aligned', () => {
     const rootReadme = fs.readFileSync(README_MD, 'utf-8');
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
-    assert.match(rootReadme, /npx -y workspine init/,
-      'README.md must document the published package entrypoint. FIX: Keep npx -y workspine init in the install examples.');
+    assert.match(rootReadme, /^npx -y workspine setup$/m,
+      'README.md must document the first-use package entrypoint.');
     assert.strictEqual(pkg.name, 'workspine',
       'package.json name must be workspine. FIX: Keep the package name aligned with README install commands.');
     assert.strictEqual(pkg.bin.workspine, 'bin/gsdd.mjs',
@@ -4385,8 +4350,6 @@ describe('G45 - Runtime Surface Freshness Contract', () => {
     const helpSource = fs.readFileSync(INIT_RUNTIME_MODULE, 'utf-8');
     const planWorkflow = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'plan.md'), 'utf-8');
 
-    assert.match(readme, /gsdd health.*render output|current render output/i,
-      'README.md must explain that generated runtime surfaces are checked against current render output. FIX: Add the runtime-surface freshness note.');
     assert.match(readme, /npx -y workspine update|gsdd update/i,
       'README.md must include deterministic repair guidance through an npx -y <package> update or global gsdd update. FIX: Add the repair path.');
     assert.match(support, /Generated-surface freshness/i,
@@ -4421,8 +4384,9 @@ describe('G40 - Provenance And Write-Gate Contracts', () => {
       'resume.md must consume the shared continuity readback. FIX: Add next --json before artifact reconciliation.');
     assert.match(progress, /next --json.*deterministic, read-only continuity packet/i,
       'progress.md must consume the shared continuity readback. FIX: Add next --json before status derivation.');
-    assert.match(rootReadme, /never creates a background compaction or automatic context-transfer hook/i,
-      'README.md must not imply automatic session transfer. FIX: State the explicit file-backed boundary.');
+    const userGuide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(userGuide, /does not copy context automatically/i,
+      'User Guide must state the explicit file-backed continuity boundary.');
     assert.match(distilledReadme, /no background compaction or automatic context transfer is implied/i,
       'distilled README must retain the explicit no-automation claim limit. FIX: State the boundary.');
   });
@@ -4486,15 +4450,15 @@ describe('G40 - Provenance And Write-Gate Contracts', () => {
 
 describe('G56 - Cooperative Decision Authority Contract', () => {
   test('public authority surfaces keep approval record-local and non-authenticated', () => {
-    const readme = fs.readFileSync(README_MD, 'utf-8');
+    const userGuide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
     const design = fs.readFileSync(DESIGN_MD, 'utf-8');
     const help = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs'), 'utf-8');
     const grammar = /decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>/;
 
-    assert.match(readme, grammar);
+    assert.match(userGuide, grammar);
     assert.match(design, grammar);
     assert.match(help, grammar);
-    assert.match(readme, /cooperative.*owner assertion.*human authentication/i);
+    assert.match(userGuide, /cooperative.*owner assertion.*human authentication/i);
     assert.match(design, /unreceipted_active|malformed_assertion/);
     assert.doesNotMatch(help, /promote <id>\s+Promote a candidate decision to active authority/);
 

@@ -140,6 +140,34 @@ function initializeFreshFixture() {
 }
 
 describe('public surface language gate', () => {
+  test('README keeps the settled relaunch surface concise and problem-first', () => {
+    const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+    const setupCtas = readme.match(/^npx -y workspine setup$/gm) || [];
+    const routeSection = readme.match(/Setup adds Workspine[\s\S]*?(?=\n## |$)/)?.[0] || '';
+    const problemIndex = readme.indexOf('A coding agent can move fast');
+    const descriptorIndex = readme.indexOf('An AI development harness for coding agents.');
+
+    assert.match(readme, /An AI development harness for coding agents\./);
+    assert.match(readme, /It brings decisions to you and keeps development consistent across agents and sessions\./);
+    assert.ok(problemIndex !== -1 && problemIndex < descriptorIndex, 'README must lead with the user problem');
+    assert.match(readme, /!\[[^\]]+\]\(assets\/workspine-hero\.webp\)/,
+      'README must show the relaunch hero from the packed asset path');
+    assert.strictEqual(setupCtas.length, 1, 'README must have one exact setup CTA');
+    for (const route of ['work-quick', 'work-plan', 'work-new-project']) {
+      assert.match(routeSection, new RegExp(`\\b${route}\\b`), `README route section must include ${route}`);
+    }
+    assert.match(readme, /migrat/i, 'README must explain the migration path');
+    assert.match(readme, /The chat can end\. The decisions stay with the work\./,
+      'README must keep the approved continuity line');
+    assert.match(readme, /https:\/\/github\.com\/PatrickSys\/workspine\/issues\/new\?template=friction\.yml/,
+      'README friction CTA must open the canonical GitHub form');
+    assert.doesNotMatch(readme, /\b(?:evaluator|oracle|regrade|receipt|provider-free|campaign|matrix|sealed)\b/i,
+      'README must not expose internal evaluation language');
+    assert.doesNotMatch(readme, /\b(?:Claude Code|OpenCode|Codex CLI)\b/,
+      'README must not imply runtime outcomes that the relaunch has not established');
+    assert.doesNotMatch(readme, /—/, 'README must not contain em dashes');
+  });
+
   test('help output has no banned terms or legacy state folder mentions', () => {
     const help = runHelp();
     assert.doesNotMatch(help, bannedPattern);
@@ -255,7 +283,6 @@ describe('public surface language gate', () => {
       assert.doesNotMatch(mainSource, /['"]control-map['"]\s*:/, 'main package CLI must not register control-map');
       assert.match(helper, /['"]control-map['"]\s*:/, 'generated helper must retain read-only control-map');
       assert.doesNotMatch(helper, /\bannotate\b|\bcloseout-report\b/i, 'generated helper must not expose retired mutation or report commands');
-      assert.match(readme, /generated internal workflow plumbing, not a second public package CLI/i);
       assert.match(design, /Current disposition.*generated.*helper.*read-only control-map/is);
       assert.match(evidence, /Current disposition.*generated.*helper.*read-only control-map/is);
     } finally {
@@ -289,10 +316,8 @@ describe('public surface language gate', () => {
     assert.match(help, /sequential|best-effort/i);
     assert.match(help, /no lock|no concurrency guarantee/i);
     assert.doesNotMatch(help, /at most once per 24 hours/i);
-    // README.md, docs/USER-GUIDE.md and docs/RUNTIME-SUPPORT.md are all fully renamed to the
-    // current `workspine` package, so every row pins the package name exactly.
+    // Detailed operational controls stay in the guide/runtime reference so the README remains progressive.
     for (const [relative, updatePattern] of [
-      ['README.md', /npx -y workspine update/],
       ['docs/USER-GUIDE.md', /npx -y workspine update/],
       ['docs/RUNTIME-SUPPORT.md', /npx -y workspine update/],
     ]) {

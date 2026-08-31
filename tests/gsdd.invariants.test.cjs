@@ -1823,6 +1823,7 @@ describe('G8 — Auto-Mode Contract', () => {
 
 describe('G12 — Documentation Accuracy Guards', () => {
   const ROOT_README = path.join(__dirname, '..', 'README.md');
+  const USER_GUIDE = path.join(__dirname, '..', 'docs', 'USER-GUIDE.md');
   const DISTILLED_README = path.join(__dirname, '..', 'distilled', 'README.md');
   const AGENTS_README = path.join(__dirname, '..', 'agents', 'README.md');
   const CLI_ENTRY = path.join(__dirname, '..', 'bin', 'gsdd.mjs');
@@ -1830,6 +1831,7 @@ describe('G12 — Documentation Accuracy Guards', () => {
   const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
 
   const rootReadme = fs.readFileSync(ROOT_README, 'utf-8');
+  const userGuide = fs.readFileSync(USER_GUIDE, 'utf-8');
   const distilledReadme = fs.readFileSync(DISTILLED_README, 'utf-8');
   const agentsReadme = fs.readFileSync(AGENTS_README, 'utf-8');
   const designContent = fs.readFileSync(DESIGN_MD, 'utf-8');
@@ -1855,33 +1857,38 @@ describe('G12 — Documentation Accuracy Guards', () => {
   });
 
   // G12.2: Workflow count matches WORKFLOWS array length
-  test('root README workflow count matches WORKFLOWS array length', () => {
+  test('User Guide workflow count matches WORKFLOWS array length while README stays progressive', () => {
     const workflowArrayMatch = workflowsContent.match(/export const WORKFLOWS = \[/);
     assert.ok(workflowArrayMatch, 'bin/lib/workflows.mjs must define WORKFLOWS array');
     // Count workflow entries by counting `{ name:` lines
     const workflowEntries = (workflowsContent.match(/\{\s*name:\s*'/g) || []).length;
     assert.ok(
-      rootReadme.includes(`${workflowEntries} workflows`),
-      `Root README claims wrong workflow count. Actual: ${workflowEntries}. FIX: Update root README to say "${workflowEntries} workflows".`
+      userGuide.includes(`${workflowEntries} workflows`),
+      `User Guide claims wrong workflow count. Actual: ${workflowEntries}. FIX: Update User Guide to say "${workflowEntries} workflows".`
     );
+    assert.match(rootReadme, /\[User Guide\]\(docs\/USER-GUIDE\.md\)/,
+      'README must link to the detailed User Guide under progressive disclosure.');
   });
 
   // G12.3: CLI commands completeness — README table includes all registered commands
   // lifecycle-preflight is internal/agent-facing and intentionally excluded from the README CLI table
-  test('root README CLI commands table includes all registered commands', () => {
+  test('User Guide CLI reference includes all registered commands while README stays progressive', () => {
     // Extract command names from COMMANDS object in bin/gsdd.mjs
     const commandsMatch = cliContent.match(/const COMMANDS = \{([\s\S]*?)\};/);
     assert.ok(commandsMatch, 'bin/gsdd.mjs must define COMMANDS object');
     const commandNames = [...commandsMatch[1].matchAll(/'?([a-z-]+)'?\s*:/g)].map(m => m[1]);
+    commandNames.push('setup'); // public first-use facade is registered outside COMMANDS
     const internalCommands = ['lifecycle-preflight'];
 
     for (const cmd of commandNames) {
       if (internalCommands.includes(cmd)) continue;
       assert.ok(
-        new RegExp(`npx -y workspine ${cmd}\\b`).test(rootReadme) || rootReadme.includes(`gsdd ${cmd}`),
-        `Root README CLI commands table missing "${cmd}". FIX: Add an npx-first "npx -y <package> ${cmd}" row to the CLI Commands table.`
+        new RegExp(`npx -y workspine ${cmd}\\b`).test(userGuide),
+        `User Guide CLI reference missing "${cmd}". FIX: Add an npx-first command row to the detailed reference.`
       );
     }
+    assert.match(rootReadme, /\[User Guide\]\(docs\/USER-GUIDE\.md\)/,
+      'README must link to the detailed command reference under progressive disclosure.');
   });
 
   // G12.4: No ghost commands in distilled/README workflow diagram
@@ -1915,11 +1922,12 @@ describe('G12 — Documentation Accuracy Guards', () => {
   });
 
   // G12.6: Update command documentation mentions --templates
-  test('root README update command mentions --templates', () => {
+  test('User Guide update command mentions --templates while README links to it', () => {
     assert.ok(
-      rootReadme.includes('--templates'),
-      'Root README update command documentation does not mention --templates. FIX: Add --templates to the update command description.'
+      userGuide.includes('--templates'),
+      'User Guide update command documentation does not mention --templates. FIX: Add --templates to the detailed command reference.'
     );
+    assert.match(rootReadme, /\[User Guide\]\(docs\/USER-GUIDE\.md\)/);
   });
 
   test('package.json description stays jargon-free', () => {
@@ -2145,8 +2153,6 @@ describe('G34e - Phase 24 Public Naming Invariants', () => {
       'package.json bin.gsdd must remain bin/gsdd.mjs. FIX: Keep the retained command contract stable.');
     // That README.md and the user guide name the retained legacy package / gsdd / .work/
     // and explain why is checked once, in gsdd.guards.test.cjs (G37).
-    assert.match(readme, /began as a fork of.*Get Shit Done/i,
-      'README.md must preserve the brief appreciative lineage note. FIX: Keep the lineage explicit but secondary.');
     assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
       'distilled/README.md must preserve the same concise lineage note. FIX: Keep the public surfaces aligned.');
   });
@@ -2236,10 +2242,10 @@ describe('G42 - Public Proof Pack Invariants', () => {
     const brownfieldProof = fs.readFileSync(path.join(__dirname, '..', 'docs', 'BROWNFIELD-PROOF.md'), 'utf-8');
     const runtimeSupport = fs.readFileSync(path.join(__dirname, '..', 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
     const verificationDiscipline = fs.readFileSync(path.join(__dirname, '..', 'docs', 'VERIFICATION-DISCIPLINE.md'), 'utf-8');
-    const rootReadme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf-8');
+    const userGuide = fs.readFileSync(path.join(__dirname, '..', 'docs', 'USER-GUIDE.md'), 'utf-8');
 
-    assert.match(rootReadme, /docs\/proof\/consumer-node-cli\/README\.md/i,
-      'README.md must point to the tracked consumer proof pack. FIX: Add the exported proof-pack link to the launch-proof section.');
+    assert.match(userGuide, /proof\/consumer-node-cli\/README\.md/i,
+      'User Guide must point to the tracked consumer proof pack.');
     assert.match(brownfieldProof, /proof\/consumer-node-cli\/README\.md/i,
       'docs/BROWNFIELD-PROOF.md must point to the tracked proof-pack index. FIX: Route the brownfield proof narrative through the exported pack.');
     assert.match(runtimeSupport, /docs\/proof\/consumer-node-cli\/README\.md|proof\/consumer-node-cli\/README\.md/i,

@@ -2,13 +2,17 @@
 
 A detailed reference for Workspine workflows, troubleshooting, and configuration. Workspine is the public product name; the npm package is `workspine`, the CLI and workspace remain `gsdd` and `.work/` as retained technical contracts, and the workflows are `work-*`. Runtime floor: Node >=22. For quick-start setup and the public proof pack, start with the [README](../README.md). Human install/update commands use `npx -y workspine ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
 
+The tracked consumer evidence is indexed at [`docs/proof/consumer-node-cli/README.md`](proof/consumer-node-cli/README.md).
+
 The supported public CLI/generated helper has default-on update awareness on commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. Eligible commands make sequential/best-effort anonymous npm metadata checks when the contained `.work/.local` cache is writable, with no lock or cross-process concurrency guarantee. It uses a two-second timeout and 64 KiB/normalized-version limits, sends no credentials or repository data, and cache/check failures are nonblocking. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` remain network-free; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
 
 ---
 
 ## Fast Path
 
-Run `npx -y workspine init` from the repo root, then choose one goal:
+The registry contains 13 workflows; this guide is their detailed reference.
+
+Run `npx -y workspine setup` from the repo root, then choose one goal:
 
 1. **Quick** — use `work-quick` for a concrete, bounded change.
 2. **Planned change** — use `work-plan`, then `work-execute`, then `work-verify` for a standalone brownfield change that needs a durable plan but not a roadmap phase.
@@ -16,9 +20,11 @@ Run `npx -y workspine init` from the repo root, then choose one goal:
 
 Use `work-map-codebase` only when a repo is unfamiliar, risky, or its existing map is stale. It creates trusted brownfield context before you choose Quick or a broader project route; it is not a fourth mandatory goal.
 
-Use `npx -y workspine init` for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. Use `--auto` to refresh detected existing homes; global install never creates `.work/` in the current repo.
+Compatibility: `npx -y workspine init` remains available for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. Use `--auto` to refresh detected existing homes; global install never creates `.work/` in the current repo.
 
-If init detects a supported legacy `.planning/` state, it offers an optional move into `.work/` because that leaves one current authority and a receipt. The move preserves bytes; declining leaves the legacy state unchanged. Fresh workspaces never show this offer, and migration is never silent.
+If setup detects a supported legacy `.planning/` state, it offers an optional move into `.work/` because that leaves one current authority and a receipt. The move preserves bytes; declining leaves the legacy state unchanged. Fresh workspaces never show this offer, and migration is never silent.
+
+Workspine does not copy context automatically. Plans, decisions, summaries, verification, and explicit pause checkpoints are the handoff between sessions.
 
 ---
 
@@ -245,6 +251,16 @@ Details worth knowing before you script it:
 | `npx -y workspine models agent-profile --agent <id> --profile <tier>` | Per-agent semantic override |
 | `npx -y workspine models set --runtime <rt> --agent <id> --model <id>` | Exact runtime model override |
 | `npx -y workspine models clear --runtime <rt> --agent <id>` | Remove runtime override |
+| `npx -y workspine setup` | Run the first-use setup facade |
+| `npx -y workspine rigor` | Inspect or update rigor configuration |
+| `npx -y workspine next` | Read the next file-backed action |
+| `npx -y workspine file-op` | Apply an approved file operation |
+| `npx -y workspine lifecycle-transition` | Advance a recorded lifecycle state |
+| `npx -y workspine remember` | Record a durable project memory |
+| `npx -y workspine decisions` | Inspect or promote decisions |
+| `npx -y workspine journey` | Inspect journey receipts |
+| `npx -y workspine git-identity` | Inspect Git identity and root |
+| `npx -y workspine phase-status` | Inspect phase status |
 | `npx -y workspine help` | Show all commands |
 
 If `workspine` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .work/bin/gsdd.mjs ...` from the repo root. The `gsdd` binary alias is removed at the next minor release, so new scripts and CI should call `workspine ...` directly.
@@ -370,6 +386,8 @@ Disable these to speed up phases in familiar domains or when conserving tokens. 
 ### Model Control
 
 Optional keys for fine-grained model selection:
+
+Model profiles control cost and model quality: `quality` maximizes correctness, `balanced` fits ordinary work, and `budget` minimizes cost. Rigor controls alignment and quality gates. Use `npx -y workspine rigor` to inspect or update configuration without conflating those choices.
 
 | Setting | What it Controls |
 |---------|------------------|

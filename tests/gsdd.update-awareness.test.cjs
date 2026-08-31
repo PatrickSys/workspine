@@ -870,7 +870,7 @@ describe('bounded update awareness', () => {
     const launcher = (await import(`${pathToFileURL(path.join(ROOT, 'bin', 'lib', 'rendering.mjs')).href}?cadence=${Date.now()}`)).renderPlanningCliLauncher({ packageName: 'workspine', packageVersion: '0.32.0' });
     assert.match(launcher, /sequential|best-effort/i);
     assert.match(launcher, /no lock|no concurrency guarantee/i);
-    for (const file of ['README.md', 'docs/RUNTIME-SUPPORT.md', 'docs/USER-GUIDE.md']) {
+    for (const file of ['docs/RUNTIME-SUPPORT.md', 'docs/USER-GUIDE.md']) {
       const content = fs.readFileSync(path.join(ROOT, file), 'utf8');
       assert.match(content, /sequential|best-effort/i);
       assert.match(content, /no lock|no concurrency guarantee/i);
