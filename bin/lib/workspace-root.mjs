@@ -108,7 +108,7 @@ function hasGitCoreLayout(dir) {
 
 function isPlausibleGitDir(gitDir, readFile) {
   // A `.git` directory that Git itself disowns is not a project root. Measured 2026-08-23: a hollow
-  // `C:/Users/bitaz/.git` holding only `info/exclude` made the home directory look like a repository,
+  // `C:/Users/<user>/.git` holding only `info/exclude` made the home directory look like a repository,
   // so every command run from a non-Git directory beneath it initialised a workspace *there* instead
   // of locally -- silently, exit 0. `git rev-parse` refused the same directory three ways.
   //
