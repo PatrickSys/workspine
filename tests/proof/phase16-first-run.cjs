@@ -28,7 +28,7 @@ const SOURCE_FILES = Object.freeze([
   ...fs.readdirSync(path.join(REPO, 'distilled', 'workflows')).filter((name) => name.endsWith('.md')).sort().map((name) => `distilled/workflows/${name}`),
 ]);
 const LIMIT = 12000;
-const NORMALIZATION_CONTRACT_VERSION = 'phase16.receipt-normalization.v1';
+const NORMALIZATION_CONTRACT_VERSION = 'phase16.receipt-normalization.v2';
 const APPROVED_SEEDS = new Set(['1602', '170002', '170003', '170004']);
 const args = process.argv.slice(2);
 const SEED = args.includes('--seed') ? String(args[args.indexOf('--seed') + 1] || '') : '';
@@ -185,6 +185,7 @@ function stableStringify(value) {
 function normalizedReceipt(value) {
   const clone = JSON.parse(JSON.stringify(value));
   clone.run_id = '<RUN_ID>';
+  clone.seed = '<SEED>';
   delete clone.reproducibility;
   if (clone.normalization) delete clone.normalization.normalized_receipt_sha256;
   const snapshotHashKeys = new Set([
@@ -214,6 +215,7 @@ function sealReceipt(receipt, candidateKey) {
     contract_version: NORMALIZATION_CONTRACT_VERSION,
     nondeterministic_fields: [
       'run_id',
+      'seed',
       'reproducibility',
       'records[*].snapshot.{before_sha256,after_sha256,repo_before_sha256,repo_after_sha256,global_before_sha256,global_after_sha256}',
       'initial_scope_evidence.*_before_sha256',
@@ -223,6 +225,7 @@ function sealReceipt(receipt, candidateKey) {
     ],
     substitutions: {
       run_id: '<RUN_ID>',
+      seed: '<SEED>',
       reproducibility: '<EXCLUDED_FROM_PRODUCT_HASH>',
       raw_snapshot_hashes: '<RAW_SNAPSHOT_HASH>',
       proof_temp_root_in_normalized_tree_hashes: 'workspine-phase16-first-run-<PROOF_RUN>',
@@ -592,7 +595,7 @@ function main() {
     if (receipt) {
       try {
         if (receipt.terminal?.status === 'passed') sealReceipt(receipt, candidateKey);
-        else receipt.normalization = { contract_version: NORMALIZATION_CONTRACT_VERSION, nondeterministic_fields: ['run_id', 'reproducibility', 'raw snapshot hash fields listed in substitutions', 'proof temp root names inside normalized tree hashes', 'global manifest commands/work-plan.md hash'], substitutions: { run_id: '<RUN_ID>', reproducibility: '<EXCLUDED_FROM_PRODUCT_HASH>', raw_snapshot_hashes: '<RAW_SNAPSHOT_HASH>', proof_temp_root_in_normalized_tree_hashes: 'workspine-phase16-first-run-<PROOF_RUN>', global_manifest_work_plan_command_hash: '<VOLATILE_WORK_PLAN_COMMAND_HASH>' } };
+        else receipt.normalization = { contract_version: NORMALIZATION_CONTRACT_VERSION, nondeterministic_fields: ['run_id', 'seed', 'reproducibility', 'raw snapshot hash fields listed in substitutions', 'proof temp root names inside normalized tree hashes', 'global manifest commands/work-plan.md hash'], substitutions: { run_id: '<RUN_ID>', seed: '<SEED>', reproducibility: '<EXCLUDED_FROM_PRODUCT_HASH>', raw_snapshot_hashes: '<RAW_SNAPSHOT_HASH>', proof_temp_root_in_normalized_tree_hashes: 'workspine-phase16-first-run-<PROOF_RUN>', global_manifest_work_plan_command_hash: '<VOLATILE_WORK_PLAN_COMMAND_HASH>' } };
       } catch (error) {
         const failure = error instanceof ProofFailure ? error : new ProofFailure('infrastructure', 'reproducibility_seal_failure', error.message);
         receipt.terminal = { status: 'failed', failure_class: failure.kind, failure_code: failure.code, message: failure.message, evidence: failure.evidence || null };
