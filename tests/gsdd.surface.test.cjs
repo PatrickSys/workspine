@@ -290,6 +290,30 @@ describe('public surface language gate', () => {
     }
   });
 
+  test('generated helper help and work-verify lifecycle examples use the .work phase root', async () => {
+    const fixtureRoot = initializeFreshFixture();
+
+    try {
+      const helperResult = spawnSync(process.execPath, [path.join(fixtureRoot, '.work', 'bin', 'gsdd.mjs'), 'help'], {
+        cwd: fixtureRoot,
+        encoding: 'utf-8',
+      });
+      assert.strictEqual(helperResult.status, 0, helperResult.stderr || helperResult.stdout);
+      const verifyWorkflow = fs.readFileSync(path.join(fixtureRoot, '.agents', 'skills', 'work-verify', 'SKILL.md'), 'utf8');
+
+      for (const [surface, content] of [
+        ['generated helper help', helperResult.stdout],
+        ['work-verify workflow', verifyWorkflow],
+      ]) {
+        assert.doesNotMatch(content, /--(?:plan|artifact) phases\//, `${surface} must not advertise bare phase paths`);
+        assert.match(content, /--plan \.work\/phases\/\{phase_dir\}\/\{plan_id\}-PLAN\.md/, `${surface} must show the .work plan path`);
+        assert.match(content, /--artifact \.work\/phases\/\{phase_dir\}\/\{plan_id\}-(?:SUMMARY|VERIFICATION)\.md/, `${surface} must show the .work artifact path`);
+      }
+    } finally {
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   test('renderer callers bind generated helpers to package metadata and helper policy strips only its flag', async () => {
     const runtimeFreshness = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'runtime-freshness.mjs'), 'utf8');
     const initFlow = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init-flow.mjs'), 'utf8');

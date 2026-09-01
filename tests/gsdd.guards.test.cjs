@@ -4352,7 +4352,7 @@ describe('G44 - Engine Contract Hardening', () => {
       ['plan.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight plan \{phase_num\}/],
       ['plan.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight plan brownfield-change/],
       ['execute.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight execute \{phase_num\} --expects-mutation phase-status/],
-      ['verify.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight verify \{phase_identity\} --plan phases\/\{phase_dir\}\/\{plan_id\}-PLAN\.md --expects-mutation phase-status/],
+      ['verify.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight verify \{phase_identity\} --plan \.work\/phases\/\{phase_dir\}\/\{plan_id\}-PLAN\.md --expects-mutation phase-status/],
       ['audit-milestone.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight audit-milestone/],
       ['complete-milestone.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight complete-milestone/],
       ['new-milestone.md', /node \.work\/bin\/gsdd\.mjs lifecycle-preflight new-milestone/],
@@ -4363,6 +4363,10 @@ describe('G44 - Engine Contract Hardening', () => {
       const content = fs.readFileSync(path.join(workflowsDir, file), 'utf-8');
       assert.match(content, pattern,
         `${file} must route lifecycle eligibility through node .work/bin/gsdd.mjs lifecycle-preflight. FIX: Restore the shared preflight invocation.`);
+      if (file === 'verify.md') {
+        assert.doesNotMatch(content, /--(?:plan|artifact) phases\//,
+          'verify.md must not advertise bare lifecycle plan or artifact paths. FIX: Use .work/phases/... paths.');
+      }
     }
 
     const progress = fs.readFileSync(path.join(workflowsDir, 'progress.md'), 'utf-8');

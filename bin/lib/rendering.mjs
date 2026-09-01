@@ -163,7 +163,7 @@ function printHelp() {
     '                               Example: node ${helperPath} lifecycle-preflight verify 1 --expects-mutation phase-status',
     '  lifecycle-transition <target> --plan <path> [--artifact <path>]',
     '                               Record one artifact-backed plan/execute/verify lifecycle transition',
-    '                               Example: node ${helperPath} lifecycle-transition verify --plan phases/{phase_dir}/{plan_id}-PLAN.md --artifact phases/{phase_dir}/{plan_id}-SUMMARY.md --authority workflow --json',
+    '                               Example: node ${helperPath} lifecycle-transition verify --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --artifact .work/phases/{phase_dir}/{plan_id}-SUMMARY.md --authority workflow --json',
     '  next [--json] [--format auto|json|human]',
     '                               Route to the next safe Workspine action from ${normalizeStateDirName(stateDirName)}, brownfield, planning, and repo truth',
     '  supported package runtime floor: Node >=22',
