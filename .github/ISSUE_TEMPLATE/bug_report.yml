@@ -10,9 +10,9 @@ body:
   - type: input
     id: version
     attributes:
-      label: workspine Version
-      description: "Run: npm list -g workspine"
-      placeholder: "e.g., 1.18.0"
+      label: Workspine version
+      description: "Run: npx -y workspine --version"
+      placeholder: "e.g., 0.35.x"
     validations:
       required: true
   - type: dropdown
@@ -21,7 +21,7 @@ body:
       label: Runtime
       options:
         - Claude Code
-        - Gemini CLI
+        - Codex CLI
         - OpenCode
     validations:
       required: true
@@ -45,7 +45,7 @@ body:
       label: Steps to reproduce
       description: How can we reproduce this?
       placeholder: |
-        1. Run npx -y workspine init
+        1. Run npx -y workspine setup
         2. ...
     validations:
       required: true

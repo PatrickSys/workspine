@@ -168,6 +168,34 @@ describe('public surface language gate', () => {
     assert.doesNotMatch(readme, /—/, 'README must not contain em dashes');
   });
 
+  test('public compatibility and issue forms describe the current release surface', () => {
+    const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+    const friction = fs.readFileSync(path.join(ROOT, '.github', 'ISSUE_TEMPLATE', 'friction.yml'), 'utf8');
+    const bugReport = fs.readFileSync(path.join(ROOT, '.github', 'ISSUE_TEMPLATE', 'bug_report.yml'), 'utf8');
+
+    assert.match(readme, /compatibility command `workspine init` remains available throughout\s+the `0\.35\.x` release line\./i);
+    assert.doesNotMatch(readme, /compatibility command `workspine init`[^\n]*0\.35\.0/i);
+    assert.match(readme, /The `gsdd` binary alias is removed in the next minor release\./i);
+
+    const frictionVersionField = friction.match(/id: workspine-version[\s\S]*?(?=\n  - type:|$)/)?.[0] || '';
+    assert.match(frictionVersionField, /placeholder:\s*0\.35\.x/);
+    assert.doesNotMatch(frictionVersionField, /0\.35\.0/);
+
+    const bugReportVersionField = bugReport.match(/id: version[\s\S]*?(?=\n  - type:|$)/)?.[0] || '';
+    assert.match(bugReportVersionField, /placeholder:[^\n]*0\.35\.x/);
+    assert.doesNotMatch(bugReportVersionField, /1\.18\.0|0\.35\.0/);
+
+    assert.match(bugReport, /label: Workspine version\b/);
+    assert.doesNotMatch(bugReport, /label: workspine Version\b/);
+    assert.match(bugReport, /description: "Run: npx -y workspine --version"/);
+    assert.doesNotMatch(bugReport, /npm list -g workspine/);
+    assert.match(bugReport, /placeholder: \|[\s\S]*Run npx -y workspine setup/i);
+    assert.doesNotMatch(bugReport, /workspine init/);
+    for (const runtime of ['Claude Code', 'Codex CLI', 'OpenCode']) {
+      assert.match(bugReport, new RegExp(`- ${runtime}`), `bug form must offer ${runtime}`);
+    }
+  });
+
   test('help output has no banned terms or legacy state folder mentions', () => {
     const help = runHelp();
     assert.doesNotMatch(help, bannedPattern);

@@ -10,7 +10,7 @@ body:
     id: workspine-version
     attributes:
       label: Workspine version
-      placeholder: 0.35.0
+      placeholder: 0.35.x
     validations:
       required: true
   - type: input
