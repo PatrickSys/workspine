@@ -989,8 +989,13 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const { GLOBAL_AGENT_OPTIONS, getHelpText } = await import(`${pathToFileURL(INIT_RUNTIME_MODULE).href}?targets=${Date.now()}`);
     const targetIds = GLOBAL_AGENT_OPTIONS.map(({ id }) => id);
     const helpText = getHelpText();
-    assert.match(helpText, /Advanced.*init.*install/i,
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(helpText, /Advanced.*setup.*init.*install/i,
       'Compact help must route advanced setup and global install to reference material.');
+    for (const setupFlag of ['--global', '--agent', '--all', '--migrate']) {
+      assert.match(guide, new RegExp(`setup[^\\n]*${setupFlag.replace('-', '\\-')}`),
+        `User Guide must preserve discoverability of setup ${setupFlag}.`);
+    }
     assert.match(helpText, /docs\/RUNTIME-SUPPORT\.md/,
       'Compact help must route detailed global-target guidance to runtime support.');
 

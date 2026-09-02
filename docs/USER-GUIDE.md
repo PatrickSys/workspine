@@ -21,6 +21,8 @@ Use `work-map-codebase` only when a repo is unfamiliar, risky, or its existing m
 
 Compatibility: `npx -y workspine init` remains available for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. Use `--auto` to refresh detected existing homes; global install never creates `.work/` in the current repo.
 
+Setup defaults to recommended portable files in the current repo. Use `setup --global` for personal agent homes, `--agent <target>` for one native target, `--all` for every detected target, or `--migrate` to approve a detected legacy-state move explicitly. `-y`/`--yes` accepts the bounded write without prompts; `--dry-run` previews it.
+
 If setup detects a supported legacy `.planning/` state, it offers an optional move into `.work/` because that leaves one current authority and a receipt. The move preserves bytes; declining leaves the legacy state unchanged. Fresh workspaces never show this offer, and migration is never silent.
 
 Workspine does not copy context automatically. Plans, decisions, summaries, verification, and explicit pause checkpoints are the handoff between sessions.

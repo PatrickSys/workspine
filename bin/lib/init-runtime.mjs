@@ -569,7 +569,7 @@ Starting lanes:
 ${renderStartingLaneHelp()}
 
 More:
-  Advanced \`init\`/\`install\` flags, platform support, compatibility,
+  Advanced \`setup\`/\`init\`/\`install\` flags, platform support, compatibility,
   the full workflow catalogue, and internal helpers:
   docs/USER-GUIDE.md and docs/RUNTIME-SUPPORT.md
   Requires Node >=22. Project overview: README.md
