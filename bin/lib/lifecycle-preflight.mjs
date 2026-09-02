@@ -1036,6 +1036,24 @@ function metadataStatus(metadata) {
   return String(metadata.status || metadata.result || metadata.verification_status || '').toLowerCase().replace(/[-\s]+/g, '_');
 }
 
+function assertBrownfieldTransitionContract({ planningDir, target, plan }) {
+  const brownfield = evaluateLifecycleState({ planningDir }).brownfieldChange;
+  if ((brownfield.contractErrors || []).length > 0) {
+    throw transitionErrorForCli('brownfield_contract_invalid', 'Brownfield CHANGE.md is missing a required bounded-change contract field.', brownfield.contractErrors);
+  }
+  if (brownfield.wideningRequested) {
+    throw transitionErrorForCli('brownfield_change_widening', 'Brownfield change requests milestone-sized widening; use the explicit milestone workflow.', [plan.relative]);
+  }
+  if (target === 'execute' && brownfield.currentStatus !== 'active') {
+    throw transitionErrorForCli('brownfield_not_active', `Brownfield execution requires CHANGE.md posture active, not ${brownfield.currentStatus || 'unknown'}.`, [plan.relative]);
+  }
+  if (target === 'audit' || target === 'next') {
+    if (brownfield.currentStatus !== 'ready_for_verification' && brownfield.currentStatus !== 'closed') {
+      throw transitionErrorForCli('brownfield_not_ready', 'Brownfield closeout requires CHANGE.md posture ready_for_verification or closed.', [plan.relative]);
+    }
+  }
+}
+
 function validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approvalRefProvided = false, approved = false, approvalRequested = false }) {
   const workspaceRoot = resolve(planningDir, '..');
   const stateLabel = createStateLabeler(planningDir);
@@ -1098,22 +1116,10 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   if (authority !== 'owner' && normalizedApprovalRef) {
     throw transitionErrorForCli('approval_ref_authority_mismatch', 'Only owner authority may carry an approval reference.', ['--authority owner', '--approval-ref']);
   }
+  let preWriteGuard = null;
   if (brownfieldChain && target !== 'blocked' && target !== 'ask_user') {
-    const brownfield = evaluateLifecycleState({ planningDir }).brownfieldChange;
-    if ((brownfield.contractErrors || []).length > 0) {
-      throw transitionErrorForCli('brownfield_contract_invalid', 'Brownfield CHANGE.md is missing a required bounded-change contract field.', brownfield.contractErrors);
-    }
-    if (brownfield.wideningRequested) {
-      throw transitionErrorForCli('brownfield_change_widening', 'Brownfield change requests milestone-sized widening; use the explicit milestone workflow.', [plan.relative]);
-    }
-    if (target === 'execute' && brownfield.currentStatus !== 'active') {
-      throw transitionErrorForCli('brownfield_not_active', `Brownfield execution requires CHANGE.md posture active, not ${brownfield.currentStatus || 'unknown'}.`, [plan.relative]);
-    }
-    if (target === 'audit' || target === 'next') {
-      if (brownfield.currentStatus !== 'ready_for_verification' && brownfield.currentStatus !== 'closed') {
-        throw transitionErrorForCli('brownfield_not_ready', 'Brownfield closeout requires CHANGE.md posture ready_for_verification or closed.', [plan.relative]);
-      }
-    }
+    preWriteGuard = () => assertBrownfieldTransitionContract({ planningDir, target, plan });
+    preWriteGuard();
   }
   const explicitOwnerApproval = target === 'approve'
     && approved === true
@@ -1143,6 +1149,7 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
     authority: authority || planMeta?.metadata?.authority || null,
     approvalRef: authority === 'owner' ? normalizedApprovalRef || null : null,
     approvalRequested,
+    preWriteGuard,
     stateLabel,
   };
 }
@@ -1200,6 +1207,7 @@ export function cmdLifecycleTransition(...args) {
       reason,
       question,
       approved,
+      preWriteGuard: validated.preWriteGuard,
     });
     respond({ schema_version: 1, operation: 'lifecycle-transition', target, ...result, evidence: [validated.plan?.relative, validated.artifact?.relative].filter(Boolean) });
     if (result.status === 'error') process.exitCode = 1;

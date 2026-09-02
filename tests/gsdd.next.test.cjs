@@ -1541,6 +1541,36 @@ describe('next command routing', () => {
     assert.strictEqual(createHash('sha256').update(after).digest('hex'), beforeHash);
   });
 
+  test('lifecycle transition pre-write guard blocks a write after validation', async () => {
+    await initWork();
+    const planPath = '.work/phases/01-transition/01-PLAN.md';
+    const statePath = path.join(tmpDir, '.work', 'state.json');
+    writeFile(planPath, '---\nstatus: pending\n---\n# plan\n');
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', planPath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'approve', '--plan', planPath, '--approval-ref', 'test-approval', '--authority', 'owner', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    const before = fs.readFileSync(statePath);
+    const beforeHash = createHash('sha256').update(before).digest('hex');
+    const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'work-context.mjs')).href;
+    const { transitionWorkflowState } = await import(`${modulePath}?guard=${Date.now()}-${Math.random()}`);
+    const guardError = new Error('Brownfield contract changed during transition validation.');
+    guardError.code = 'brownfield_contract_invalid';
+
+    assert.throws(() => transitionWorkflowState(path.join(tmpDir, '.work'), {
+      target: 'execute',
+      planPath,
+      planIdentity: planPath,
+      authority: 'workflow',
+      preWriteGuard: () => { throw guardError; },
+    }), (error) => error.code === 'brownfield_contract_invalid');
+    const after = fs.readFileSync(statePath);
+    assert.deepStrictEqual(after, before);
+    assert.strictEqual(createHash('sha256').update(after).digest('hex'), beforeHash);
+  });
+
   test('brownfield lifecycle refuses failed or missing verification evidence without changing state', async () => {
     await initWork();
     const changePath = '.work/brownfield-change/CHANGE.md';

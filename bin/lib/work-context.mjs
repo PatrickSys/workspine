@@ -286,6 +286,7 @@ export function transitionWorkflowState(workDir, {
   reason = null,
   question = null,
   approved = null,
+  preWriteGuard = null,
   now = new Date(),
 } = {}) {
   const statePath = join(workDir, 'state.json');
@@ -457,6 +458,7 @@ export function transitionWorkflowState(workDir, {
   if (validatedPlanSha256 && planArtifactSha256(workDir, normalizedPlan) !== validatedPlanSha256) {
     throw transitionError('stale_plan', 'The approved PLAN changed while the transition was being validated.', [String(normalizedPlan)]);
   }
+  if (typeof preWriteGuard === 'function') preWriteGuard();
   if (JSON.stringify(beforeComparable) === JSON.stringify(nextComparable)) {
     return { status: 'replayed', changed: false, state };
   }
