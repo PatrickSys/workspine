@@ -1498,6 +1498,49 @@ describe('next command routing', () => {
     assert.strictEqual(result.route_kind, 'authority_conflict');
   });
 
+  test('canonical brownfield preflight rejects an empty Done When section', async () => {
+    await initWork();
+    writeFile('.work/brownfield-change/CHANGE.md', brownfieldChange({ doneWhen: false }));
+
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'brownfield-change']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const response = JSON.parse(result.output);
+    assert.strictEqual(response.allowed, false);
+    assert.ok(response.blockers.some(({ code }) => code === 'brownfield_contract_invalid'));
+  });
+
+  test('brownfield execute rejects operational HANDOFF conflicts before mutating approved state', async () => {
+    await initWork();
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    const statePath = path.join(tmpDir, '.work', 'state.json');
+    writeFile(changePath, brownfieldChange());
+
+    let result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'approve', '--plan', changePath, '--approval-ref', 'test-approval', '--authority', 'owner', '--json']);
+    assert.strictEqual(result.exitCode, 0, result.output);
+
+    writeFile('.work/brownfield-change/HANDOFF.md', [
+      '# Brownfield Handoff',
+      '',
+      '## Current Status',
+      '- Current posture: active',
+      '',
+    ].join('\n'));
+    const before = fs.readFileSync(statePath);
+    const beforeHash = createHash('sha256').update(before).digest('hex');
+
+    result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
+
+    assert.strictEqual(result.exitCode, 1, result.output);
+    const response = JSON.parse(result.output);
+    assert.strictEqual(response.error_code, 'brownfield_contract_invalid');
+    assert.strictEqual(response.changed, false);
+    const after = fs.readFileSync(statePath);
+    assert.deepStrictEqual(after, before);
+    assert.strictEqual(createHash('sha256').update(after).digest('hex'), beforeHash);
+  });
+
   test('brownfield lifecycle refuses failed or missing verification evidence without changing state', async () => {
     await initWork();
     const changePath = '.work/brownfield-change/CHANGE.md';

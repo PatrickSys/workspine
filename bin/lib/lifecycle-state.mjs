@@ -1055,7 +1055,7 @@ function extractMarkdownSection(content, heading) {
 
   const start = headingMatch.index + headingMatch[0].length;
   const remainder = normalized.slice(start).replace(/^\n/, '');
-  const nextHeading = /\n##\s+/.exec(remainder);
+  const nextHeading = /(?:^|\n)##\s+/.exec(remainder);
   const end = nextHeading ? nextHeading.index : remainder.length;
   return remainder.slice(0, end).trim();
 }

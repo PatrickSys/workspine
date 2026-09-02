@@ -1036,28 +1036,6 @@ function metadataStatus(metadata) {
   return String(metadata.status || metadata.result || metadata.verification_status || '').toLowerCase().replace(/[-\s]+/g, '_');
 }
 
-function readBrownfieldContractForTransition(planPath) {
-  const content = readFileSync(planPath, 'utf8').replace(/\r\n/g, '\n');
-  const section = (heading) => {
-    const match = new RegExp(`^##\\s+${heading}\\s*$`, 'im').exec(content);
-    if (!match) return '';
-    const remainder = content.slice(match.index + match[0].length).replace(/^\n/, '');
-    const nextHeading = /(?:^|\n)##\s+/.exec(remainder);
-    return (nextHeading ? remainder.slice(0, nextHeading.index) : remainder).trim();
-  };
-  const posture = section('Current Status').match(/^[-*]\s+Current posture\s*:\s*(.+)$/im)?.[1]?.trim().toLowerCase().replace(/[ -]+/g, '_') || null;
-  const doneWhen = section('Done When').split('\n').filter((line) => /^[-*]\s+/.test(line) && !/observable outcomes?|conditions that must be true/i.test(line));
-  const errors = [];
-  for (const [heading, code] of [['Goal', 'missing_goal'], ['In Scope', 'missing_in_scope'], ['Out of Scope', 'missing_out_of_scope'], ['Next Action', 'missing_next_action'], ['Closeout Path', 'missing_closeout_path']]) {
-    if (!section(heading)) errors.push(code);
-  }
-  if (doneWhen.length === 0) errors.push('missing_done_when');
-  if (!['active', 'blocked', 'ready_for_verification', 'closed'].includes(posture)) errors.push('invalid_posture');
-  const wideningRequested = ['widening', 'promote', 'new_project', 'new_milestone'].includes(posture)
-    || /(?:widen|promot|milestone planning|\/work-new-(?:project|milestone))/i.test(section('Next Action'));
-  return { status: posture, errors, wideningRequested };
-}
-
 function validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approvalRefProvided = false, approved = false, approvalRequested = false }) {
   const workspaceRoot = resolve(planningDir, '..');
   const stateLabel = createStateLabeler(planningDir);
@@ -1121,22 +1099,18 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
     throw transitionErrorForCli('approval_ref_authority_mismatch', 'Only owner authority may carry an approval reference.', ['--authority owner', '--approval-ref']);
   }
   if (brownfieldChain && target !== 'blocked' && target !== 'ask_user') {
-    const brownfield = readBrownfieldContractForTransition(plan.path);
-    const lifecycleBrownfield = evaluateLifecycleState({ planningDir }).brownfieldChange;
-    if ((lifecycleBrownfield.contractErrors || []).includes('multiple_active_brownfield_streams')) {
-      brownfield.errors.push('multiple_active_brownfield_streams');
-    }
-    if (brownfield.errors.length > 0) {
-      throw transitionErrorForCli('brownfield_contract_invalid', 'Brownfield CHANGE.md is missing a required bounded-change contract field.', brownfield.errors);
+    const brownfield = evaluateLifecycleState({ planningDir }).brownfieldChange;
+    if ((brownfield.contractErrors || []).length > 0) {
+      throw transitionErrorForCli('brownfield_contract_invalid', 'Brownfield CHANGE.md is missing a required bounded-change contract field.', brownfield.contractErrors);
     }
     if (brownfield.wideningRequested) {
       throw transitionErrorForCli('brownfield_change_widening', 'Brownfield change requests milestone-sized widening; use the explicit milestone workflow.', [plan.relative]);
     }
-    if (target === 'execute' && brownfield.status !== 'active') {
-      throw transitionErrorForCli('brownfield_not_active', `Brownfield execution requires CHANGE.md posture active, not ${brownfield.status || 'unknown'}.`, [plan.relative]);
+    if (target === 'execute' && brownfield.currentStatus !== 'active') {
+      throw transitionErrorForCli('brownfield_not_active', `Brownfield execution requires CHANGE.md posture active, not ${brownfield.currentStatus || 'unknown'}.`, [plan.relative]);
     }
     if (target === 'audit' || target === 'next') {
-      if (brownfield.status !== 'ready_for_verification' && brownfield.status !== 'closed') {
+      if (brownfield.currentStatus !== 'ready_for_verification' && brownfield.currentStatus !== 'closed') {
         throw transitionErrorForCli('brownfield_not_ready', 'Brownfield closeout requires CHANGE.md posture ready_for_verification or closed.', [plan.relative]);
       }
     }
