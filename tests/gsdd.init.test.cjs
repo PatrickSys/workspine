@@ -1788,8 +1788,9 @@ describe('gsdd init and update', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
     assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')),
       'Wizard runtime selection must not write AGENTS.md unless governance was explicitly enabled.');
-    assert.match(output, /Cursor:\s+\/work-quick .*\/work-plan .*\/work-new-project/);
-    assert.match(output, /Codex CLI:\s+\$work-quick .*\$work-plan .*\$work-new-project/);
+    assert.doesNotMatch(output, /undefined/, 'The compact configuration summary must remain useful for partial compatible configs.');
+    assert.match(output, /Cursor:\s+\/work-plan .*\/work-quick .*\/work-new-project/);
+    assert.match(output, /Codex CLI:\s+\$work-plan .*\$work-quick .*\$work-new-project/);
   });
 
   test('interactive wizard governance opt-in writes AGENTS.md separately from runtime choice', async () => {
@@ -2131,10 +2132,12 @@ describe('gsdd init and update', () => {
 
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /Usage: workspine <command> \[args\]/);
-    assert.match(result.output, /Compatibility: gsdd <command> \[args\] remains a supported alias/);
-    assert.match(result.output, /Commands:/);
-    assert.match(result.output, /claude\s+Generate Claude Code skills .* native agents/);
-    assert.match(result.output, /codex\s+Generate Codex CLI native/);
+    assert.match(result.output, /compatibility[\s\S]*docs\/USER-GUIDE\.md/i);
+    assert.match(result.output, /Everyday commands:/);
+    assert.match(result.output, /^\s*setup\b/m);
+    assert.match(result.output, /Advanced.*init.*install/i);
+    assert.match(result.output, /docs\/RUNTIME-SUPPORT\.md/,
+      'runtime-specific details remain discoverable without expanding default help');
   });
 
   describe('auto mode', () => {

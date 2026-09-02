@@ -36,6 +36,7 @@ import { migrateLegacyState } from './state-migration.mjs';
 import { resolveStateDir, stateAuthorityGate, MIGRATION_COMMAND } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { ensureWorkStructure } from './work-context.mjs';
+import { workflowId } from './workflows.mjs';
 
 function contextAtWorkspaceRoot(ctx, workspaceRoot) {
   const state = resolveStateDir(workspaceRoot);
@@ -297,8 +298,10 @@ export function createCmdInit(ctx) {
 
     console.log('\n\x1B[1m\x1B[32m✓ Workspine initialized.\x1B[0m');
     printInitSummary(interactiveSession.config ?? buildDefaultConfig({ autoAdvance: isAuto }));
-    console.log('Next: choose the starting lane that fits your repo and current scope:\n');
+    console.log('Start with one small planned change:\n');
     printPostInitRouting(interactiveSession.selectedRuntimes);
+    console.log(`After owner approval: ${workflowId('execute')} -> ${workflowId('verify')}.`);
+    console.log(`${workflowId('quick')} is the lighter shortcut; ${workflowId('new-project')} is for fuzzy or broader scope.`);
     console.log('\nSetup complete — this session will now exit.');
   };
 }
@@ -916,19 +919,12 @@ function ensureGitignoreEntry(cwd, entry, message) {
 }
 
 function printInitSummary(config) {
-  console.log('Config summary:');
-  console.log(`  - rigorProfile: ${config.rigorProfile}`);
-  console.log(`  - researchDepth: ${config.researchDepth}`);
-  console.log(`  - parallelization: ${config.parallelization}`);
-  console.log(`  - commitDocs: ${config.commitDocs}`);
-  console.log(`  - modelProfile: ${config.modelProfile}`);
-  if (typeof config.autoAdvance === 'boolean') console.log(`  - autoAdvance: ${config.autoAdvance} (new-project bootstrap only)`);
-  if (config.workflow) {
-    console.log(`  - workflow.research: ${config.workflow.research}`);
-    console.log(`  - workflow.discuss: ${config.workflow.discuss}`);
-    console.log(`  - workflow.planCheck: ${config.workflow.planCheck}`);
-    console.log(`  - workflow.verifier: ${config.workflow.verifier}`);
-  }
+  const defaults = buildDefaultConfig();
+  const rigorProfile = config.rigorProfile ?? defaults.rigorProfile;
+  const modelProfile = config.modelProfile ?? defaults.modelProfile;
+  const commitDocs = config.commitDocs ?? defaults.commitDocs;
+  const tracking = commitDocs ? 'tracked .work/ documents' : 'local-only .work/ documents';
+  console.log(`Configuration: ${rigorProfile} rigor, ${modelProfile} models, ${tracking}.`);
   console.log('');
 }
 

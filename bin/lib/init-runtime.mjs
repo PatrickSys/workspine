@@ -62,14 +62,6 @@ export const GLOBAL_AGENT_OPTIONS = [
   },
 ];
 
-function renderGlobalInstallTargetHelp() {
-  const width = Math.max(...GLOBAL_AGENT_OPTIONS.map(({ id }) => id.length));
-  return [
-    ...GLOBAL_AGENT_OPTIONS.map(({ id, description }) => `  ${id.padEnd(width)}  ${description}`),
-    `  ${'all'.padEnd(width)}  Install all global targets above`,
-  ].join('\n');
-}
-
 export const INIT_VERSION = 'v1.1';
 
 export function normalizeRequestedTools(requestedTools) {
@@ -240,48 +232,18 @@ export function resolveWizardAdapterTargets(selectedRuntimes, installGovernance)
 // Keep the first decision small: a bounded change, a planned standalone change,
 // or a project to start/extend. Mapping is recommended only by the contextual
 // brownfield guidance, and milestone creation is history-gated in its workflow.
-const STARTING_LANE_SLUGS = Object.freeze(['quick', 'plan', 'new-project']);
-
-const HELP_WORKFLOW_SUMMARIES = Object.freeze({
-  'new-project': 'Full initializer: questioning, brownfield audit, research, spec, roadmap',
-  'map-codebase': 'Map or refresh brownfield codebase context before choosing or refreshing a work lane',
-  plan: 'Research, plan, and fresh-context plan check for a phase',
-  execute: 'Execute a phase plan and write phase summaries',
-  verify: 'Verify a completed phase with 3-level checks',
-  'verify-work': 'Conversational UAT validation for user-facing behavior',
-  'audit-milestone': 'Cross-phase integration, requirements coverage, and E2E audit',
-  'complete-milestone': 'Archive a shipped milestone and collapse roadmap state',
-  'new-milestone': 'Start the next milestone with goals, requirements, and phases',
-  quick: 'Bounded brownfield lane for sub-hour work',
-  pause: 'Save session context to checkpoint',
-  resume: 'Restore context and route to the next action',
-  progress: 'Read-only status and routing surface',
-});
+const STARTING_LANE_SLUGS = Object.freeze(['plan', 'quick', 'new-project']);
 
 const STARTING_LANE_SUMMARIES = Object.freeze({
-  quick: 'Concrete bounded brownfield change',
-  plan: 'Standalone change that needs a plan, execution, and verification',
-  'new-project': 'Start or extend a broader project or milestone',
+  plan: 'Recommended: plan a real change, approve it, execute it, then verify it',
+  quick: 'Shortcut: one concrete, already-understood change',
+  'new-project': 'Broader path: shape a fuzzy project or milestone first',
 });
 
 const WORKFLOW_HELP_WIDTH = Math.max(...WORKFLOWS.map(({ name }) => name.length));
 
-function workflowSlug({ workflow }) {
-  return workflow.replace(/\.md$/, '');
-}
-
 function renderWorkflowHelpRow(id, summary) {
   return `  ${id.padEnd(WORKFLOW_HELP_WIDTH)}   ${summary}`;
-}
-
-function renderWorkflowHelp() {
-  return WORKFLOWS.map((workflow) => {
-    const summary = HELP_WORKFLOW_SUMMARIES[workflowSlug(workflow)];
-    if (!summary) {
-      throw new Error(`init help text is missing a summary for workflow '${workflow.name}'`);
-    }
-    return renderWorkflowHelpRow(workflow.name, summary);
-  }).join('\n');
 }
 
 function renderStartingLaneHelp() {
@@ -588,142 +550,28 @@ export function reportCommandShapeError(command, commandArgs, error, packageName
 export function getHelpText() {
   return `
 workspine - Workspine CLI
-Plan, execute, and verify AI-assisted work from files in your repo — with proof before "done".
+Plan, execute, and verify AI-assisted work from files in your repo, with proof before "done".
 
 Usage: workspine <command> [args]
-Compatibility: gsdd <command> [args] remains a supported alias for existing installs.
 
-  --help, -h                  Show this help and exit without writing anything
-  --version, -v               Print the installed package version and exit without writing anything
+First use:
+  npx -y workspine setup
+  work-plan -> owner approval -> work-execute -> work-verify
+  work-quick is the lighter shortcut; work-new-project is for fuzzy or broader scope
 
-Commands:
-  setup [-g|--global] [--agent <target>] [--all] [-y|--yes] [--dry-run]
-                              First-time setup: portable repo skills or personal agent-home surfaces
-                              --migrate: explicitly move a supported legacy state tree before repo setup
-  init [--tools <platform>] [--auto] [--brief <file>] [--migrate]
-                              Launch guided install wizard in TTYs, or use --tools for manual/headless setup
-                               --auto: non-interactive new-project bootstrap config (requires --tools)
-                              --brief <file>: copy project brief to .work/PROJECT_BRIEF.md
-                              --migrate: explicitly move a supported legacy state tree to .work/ before setup
-  install --global [--auto] [--tools <platform>] [--dry-run]
-                              Install reusable Workspine skills and native runtime surfaces into agent home directories
-                              --auto: refresh detected existing agent homes; if none exist, print exact target commands without writing
-                              In TTYs, omitting --tools opens an agent picker
-  update [--dry-run] [-g|--global]
-                              Reconcile all manifest-owned repo outputs, or all owned personal-agent surfaces with --global
-                              --dry-run: preview changes without writing files
-  health [--json] [-g|--global]
-                              Check repo or personal-agent integrity (healthy/degraded/broken); read-only
-  next [--json] [--format auto|json|human]
-                              Read explicit file-backed \`.work\` continuity and emit the next coherent agent action
-Advanced/internal commands (available when you need them):
-  journey [--json]            Show the milestone and phase delivery journey # (experimental)
-  remember "<text>" --type <t> --scope <s> [--for <ref>]
-                              Capture a candidate decision, rule, or lesson for later verification
-  decisions query "<terms>" [--path <path>]
-                              Recall matching decision records as a compact digest
-  decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>
-                              Promote or re-attest one decision through the auditable cooperative owner protocol
-  decisions reject <id> [--reason <text>]
-                              Reject a candidate decision without deleting its record
-  decisions invalidate <id> --reason <text>
-                              Invalidate an active decision without deleting its record
-  models [subcommand]         Inspect or update model profile / runtime overrides
-  rigor [show|low|medium|high|max|<plan|execute|verify> <level>]
-                              Inspect or update rigor alignment and quality gates; max uses high gates
-  find-phase [N]              Show phase info as JSON (for agent consumption)
-  verify <N>                  Run artifact checks for phase N
-  scaffold phase <N> [name]   Create a new phase plan file
-  file-op <copy|delete|regex-sub>
-                              Run deterministic workspace-confined file copy/delete/text mutation
-  phase-status <N> <status>   Update ROADMAP.md phase status ([ ] / [-] / [x])
-  lifecycle-preflight <surface> [phase]
-                              Inspect deterministic lifecycle gate results for a workflow surface
-  git-identity check [--expect <fingerprint>] [--confirm <fingerprint>]
-                              Inspect the current worktree Git identity read-only before an owned commit
-  help                        Show this summary
+Everyday commands:
+  setup [-y|--yes] [--dry-run]  Set up portable skills in this repo
+  health [--json] [-g|--global] Check generated files without changing them
+  update [--dry-run] [-g|--global] Repair or refresh generated files
+  next [--json]                 Show the next file-backed action
 
-Platforms (for --tools):
-  claude    Generate Claude Code skills (.claude/skills/work-*), the plan command (.claude/commands/work-plan.md), and native agents (.claude/agents/work-*.md)
-  opencode  Generate OpenCode local slash commands (.opencode/commands/work-*.md) + native agents (.opencode/agents/work-*.md)
-  codex     Generate Codex CLI native agents (.codex/agents/work-plan-checker.toml and .codex/agents/work-approach-explorer.toml)
-  agents    Generate/Update root AGENTS.md (bounded GSDD block)
-  cursor    Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
-  copilot   Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
-  gemini    Generate root AGENTS.md governance block; workflows are already discovered natively from .agents/skills/ (legacy alias kept for backward compatibility)
-  all       Generate all adapters (Claude, OpenCode, Codex, AGENTS.md, Cursor, Copilot, Gemini)
-
-Global install targets:
-${renderGlobalInstallTargetHelp()}
-
-Notes:
-  - use \`npx -y workspine setup\` for first-time onboarding; it defaults to this repo and always installs portable skills
-  - use \`npx -y workspine setup --global --agent claude\` for one personal agent home; setup never installs an npm package globally
-  - use \`npx -y workspine setup\` for normal repo-local setup; \`init\` remains the compatibility and advanced scripted path
-  - init always generates open-standard skills at .agents/skills/work-*; this is the shared workflow entry surface
-  - init also generates a local .work/bin/gsdd* helper surface for workflow-embedded lifecycle helpers; it is internal/advanced, not the normal first-run user entrypoint
-  - install --global never creates .work/ in the current repo; it writes only selected agent-home surfaces and per-runtime Workspine manifests
-  - use \`npx -y workspine install --global --auto\` to refresh detected existing agent homes; in a fresh/headless home use \`--tools <targets>\`
-  - repair or refresh a global install by rerunning \`npx -y workspine install --global --auto\` or \`npx -y workspine install --global --tools <targets>\`; runtime probes stay in test harnesses
-  - Workspine is the public product name and the npm package; the retained command and workspace contracts stay gsdd and .work/, and the workflows are work-*; legacy planning workspaces are still read only for explicit migration
-  - running \`npx -y workspine init\` in a terminal opens the guided runtime-selection wizard; bare \`gsdd init\` is equivalent only when globally installed
-  - repo-local \`init --auto\` sets the legacy-named \`autoAdvance\` key only for brief-driven \`${workflowId('new-project')}\` SPEC/ROADMAP bootstrap; it never chains plan, execute, verify, release, or delivery
-  - the wizard lets you pick runtimes first, then separately decide whether repo-wide AGENTS.md governance is worth installing
-  - \`npx -y workspine health\` is for repo-local .work/ workspaces; it compares local generated surfaces and points back to \`npx -y workspine update\` when they drift
-  - health and update remain network-free; health is read-only and update is explicit repair only
-  - supported package runtime floor: Node >=22
-  - update awareness is on by default for supported CLI/helper commands: a sequential/best-effort anonymous npm metadata check with a two-second timeout and a 64 KiB/normalized-version limit; there is no lock or cross-process concurrency guarantee
-  - the notice uses only a contained .work/.local cache, sends no credentials or repository data, and cache/check failures never block commands
-  - use \`--no-update-notice\`, \`WORKSPINE_UPDATE_AWARENESS=0\`, or the legacy \`GSDD_UPDATE_AWARENESS=0\` to opt out; only the supported public CLI/generated helper can show it
-  - \`health\` and \`update\` remain network-free; run \`npx -y workspine update\` for explicit repair
-  - \`npx -y workspine init\` bootstraps the complete Workspine workspace; plain \`next\` is read-only and emits a typed packet, including any explicit pause checkpoint; it never runs a background compaction or context-transfer hook
-  - \`gsdd next\` defaults to JSON when stdout is captured; use \`--format human\` for the compact supervisor card
-  - recorded launch proof in this repo currently covers the Codex CLI path; Claude Code and OpenCode get generated native surfaces with local freshness checks and no recorded run
-  - Cursor, Copilot, and Gemini are qualified support through the shared .agents/skills/ surface plus optional governance
-  - --tools remains the advanced/manual path for init/install and preserves legacy runtime aliases for backward compatibility
-  - --tools codex generates .codex/agents/work-plan-checker.toml and .codex/agents/work-approach-explorer.toml (portable skill is the entry surface; $work-plan is plan-only until explicit $work-execute)
-  - root AGENTS.md is only written on init when explicitly requested via --tools agents, --tools all, or the wizard governance opt-in
-  - normal repo path: npx -y workspine setup -> run /work-* or $work-* -> npx -y workspine health -> npx -y workspine update when local repair or refresh is needed
-  - post-init, choose one goal: quick for a bounded change, plan for a standalone change that needs plan -> execute -> verify, or new-project to start/extend a project; use map-codebase first only when a risky or unfamiliar brownfield repo needs deeper orientation
-
-Examples:
-  npx -y workspine init
-  npx -y workspine init --tools claude
-  npx -y workspine init --tools cursor
-  npx -y workspine init --auto --tools claude --brief project-idea.md
-  npx -y workspine init --auto --tools all
-  npx -y workspine models show
-  npx -y workspine models profile quality
-  npx -y workspine models agent-profile --agent plan-checker --profile quality
-  npx -y workspine models set --runtime opencode --agent plan-checker --model anthropic/claude-opus-4-6
-  npx -y workspine models clear --runtime opencode --agent plan-checker
-  npx -y workspine init --tools agents
-  npx -y workspine init --tools all
-  npx -y workspine install --global
-  npx -y workspine install --global --auto
-  npx -y workspine install --global --tools ${GLOBAL_AGENT_OPTIONS.map(({ id }) => id).join(',')}
-  npx -y workspine update
-  npx -y workspine next --json
-  npx -y workspine next --format human
-  npx -y workspine next --json
-  npx -y workspine find-phase
-  npx -y workspine verify 1
-  npx -y workspine scaffold phase 4 Payments
-
-Workflows (run via skills/adapters generated by init, not direct CLI):
-${renderWorkflowHelp()}
-
-Starting lanes after init:
+Starting lanes:
 ${renderStartingLaneHelp()}
 
-Contextual routing:
-  map-codebase       Use first only for an unfamiliar, risky, or stale brownfield baseline
-  new-milestone      Appears after a shipped milestone is recorded; use new-project for the first one
-
-Advanced/internal helpers (kept available, but not the primary first-run user story):
-  lifecycle-preflight       Inspect deterministic lifecycle gate results for a workflow surface
-  phase-status              Update ROADMAP.md phase status through the local helper surface
-  next                      Read-only \`.work\` continuity router for the next coherent agent action
-  file-op                   Deterministic workspace-confined file copy/delete/text mutation
+More:
+  Advanced \`init\`/\`install\` flags, platform support, compatibility,
+  the full workflow catalogue, and internal helpers:
+  docs/USER-GUIDE.md and docs/RUNTIME-SUPPORT.md
+  Requires Node >=22. Project overview: README.md
 `;
 }

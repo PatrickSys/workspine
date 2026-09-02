@@ -20,11 +20,15 @@ It brings decisions to you and keeps development consistent across agents and se
 npx -y workspine setup
 ```
 
-Setup adds Workspine to the current repository. Then choose one route:
+Setup adds Workspine to the current repository. Start with one small planned change:
 
-- **`work-quick`** for one bounded change.
-- **`work-plan`** for a change that needs a plan, implementation, and verification.
-- **`work-new-project`** for a new project or a new roadmap milestone.
+1. Run **`work-plan`** so the agent turns the request into a checked plan.
+2. Review the plan. Nothing executes until your explicit owner approval.
+3. Run **`work-execute`** to implement the approved plan.
+4. Run **`work-verify`** to check the result against it.
+
+Use **`work-quick`** when the change is already understood and needs less ceremony.
+Use **`work-new-project`** when the project or milestone itself still needs shaping.
 
 ## What you keep
 
@@ -39,9 +43,9 @@ and explains why. It never migrates silently, and declining leaves the old files
 
 ### Quickstart
 
-Ask your coding agent to run one of the three routes above. Use its slash command or skill reference
-when it discovers the installed skills. If discovery is unavailable, open
-`.agents/skills/work-<workflow>/SKILL.md` and follow it directly.
+Ask your coding agent to run `work-plan`. Use its slash command or skill reference when it discovers the installed skills.
+If discovery is unavailable, open `.agents/skills/work-<workflow>/SKILL.md` and follow it directly.
+After you approve the plan, run `work-execute`, then `work-verify`.
 
 Use `npx -y workspine health` to check the installation and `npx -y workspine update` to repair
 generated files. Both are network-free.

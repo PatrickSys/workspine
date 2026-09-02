@@ -152,22 +152,42 @@ describe('gsdd setup facade', () => {
     assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')));
   });
 
-  test('interactive customize, consent, and migration decline are bounded', async () => {
+  test('bare interactive setup defaults to this repo and recommended portable skills with one consent', async () => {
+    let consentPrompts = 0;
+    const result = await runPromptedSetup(tmpDir, [], {
+      chooseSetupScope: async () => { throw new Error('bare setup must not ask for scope'); },
+      chooseProjectMode: async () => { throw new Error('bare setup must not ask for a project mode'); },
+      selectProjectTargets: async () => { throw new Error('bare setup must not ask for native targets'); },
+      confirmSetup: async ({ details }) => {
+        consentPrompts += 1;
+        assert.match(details.join(' '), /Bounded write set: \.work\//);
+        assert.match(details.join(' '), /portable selected project surfaces/);
+        return true;
+      },
+    });
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.strictEqual(consentPrompts, 1);
+    assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md')));
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.codex')), 'native targets stay explicit');
+    assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')), 'root governance stays explicit');
+    assert.doesNotMatch(result.output, /Config summary:/);
+    assert.match(result.output, /Configuration: medium rigor, balanced models, tracked \.work\/ documents\./);
+    assert.match(result.output, /Start with one small planned change/i);
+    assert.match(result.output, /work-plan[\s\S]*owner approval[\s\S]*work-execute[\s\S]*work-verify/i);
+    assert.ok(result.output.indexOf('work-plan') < result.output.indexOf('work-quick'), 'the trustworthy loop must appear before the shortcut');
+  });
+
+  test('interactive explicit target, consent, and migration decline are bounded', async () => {
     const customizedRoot = path.join(tmpDir, 'customized');
     fs.mkdirSync(customizedRoot);
-    const declined = await runPromptedSetup(customizedRoot, [], {
-      chooseSetupScope: async () => 'project',
-      chooseProjectMode: async () => 'customize',
-      selectProjectTargets: async () => ['codex'],
+    const declined = await runPromptedSetup(customizedRoot, ['--agent', 'codex'], {
       confirmSetup: async () => false,
     });
     assert.strictEqual(declined.exitCode, 1);
     assert.ok(!fs.existsSync(path.join(customizedRoot, '.work')));
 
-    const accepted = await runPromptedSetup(customizedRoot, [], {
-      chooseSetupScope: async () => 'project',
-      chooseProjectMode: async () => 'customize',
-      selectProjectTargets: async () => ['codex'],
+    const accepted = await runPromptedSetup(customizedRoot, ['--agent', 'codex'], {
       confirmSetup: async () => true,
     });
     assert.strictEqual(accepted.exitCode, 0, accepted.output);
@@ -177,7 +197,6 @@ describe('gsdd setup facade', () => {
     writeFile(path.join(legacyRoot, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
     const legacyBefore = snapshotTree(legacyRoot);
     const migrationDeclined = await runPromptedSetup(legacyRoot, [], {
-      chooseSetupScope: async () => 'project',
       confirmLegacyMigration: async () => false,
     });
     assert.strictEqual(migrationDeclined.exitCode, 1);
@@ -188,8 +207,6 @@ describe('gsdd setup facade', () => {
     const migrationConsentBefore = snapshotTree(migrationConsentRoot);
     let migrationPrompts = 0;
     const migrationConsentDeclined = await runPromptedSetup(migrationConsentRoot, [], {
-      chooseSetupScope: async () => 'project',
-      chooseProjectMode: async () => 'recommended',
       confirmLegacyMigration: async () => {
         migrationPrompts += 1;
         return true;

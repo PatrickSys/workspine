@@ -973,13 +973,20 @@ describe('S1 decision recall loop', () => {
     assert.ok(output.warnings.some((warning) => warning.code === 'decision_ack_stale'), output.warnings.map((warning) => warning.code).join(','));
   });
 
-  test('README and help keep every decision backend command experimental and expose all verbs', async () => {
+  test('compact help discovers the decision surface while the reference exposes all verbs', async () => {
     const root = createTempProject();
     dirs.push(root);
     const help = await runCliAsMain(root, ['help']);
     assert.strictEqual(help.exitCode, 0, help.output);
-    for (const verb of ['remember', 'decisions query', 'decisions promote', 'decisions reject', 'decisions invalidate']) {
-      assert.match(help.output, new RegExp(verb.replace(' ', '\\s+')));
+    assert.match(help.output, /docs\/USER-GUIDE\.md/);
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    assert.match(guide, /workspine remember/);
+    assert.match(guide, /workspine decisions/);
+    const decisionsUsage = await runCliAsMain(root, ['decisions']);
+    assert.notStrictEqual(decisionsUsage.exitCode, 0, decisionsUsage.output);
+    for (const verb of ['query', 'promote', 'reject', 'invalidate']) {
+      assert.match(decisionsUsage.output, new RegExp(`\\b${verb}\\b`),
+        `command-specific decisions usage must expose ${verb}`);
     }
     const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
     for (const line of readme.split(/\r?\n/).filter((line) => /npx -y workspine (?:remember|decisions)/.test(line))) {

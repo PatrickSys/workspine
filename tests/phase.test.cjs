@@ -640,13 +640,14 @@ describe('Phase 18 deterministic CLI mechanics', () => {
     assert.match(result.output, /Workspace root is not a real directory/);
   });
 
-  test('help text documents file-op, phase-status, and lifecycle-preflight commands', async () => {
+  test('compact help routes phase helper command discovery to the User Guide', async () => {
     const result = await runCliAsMain(tmpDir, ['help']);
     assert.strictEqual(result.exitCode, 0, result.output);
-    assert.match(result.output, /file-op <copy\|delete\|regex-sub>/);
-    assert.match(result.output, /phase-status <N> <status>/);
-    assert.match(result.output, /verify <N>/);
-    assert.match(result.output, /lifecycle-preflight <surface> \[phase]/);
+    assert.match(result.output, /docs\/USER-GUIDE\.md/);
+    const guide = fs.readFileSync(path.join(__dirname, '..', 'docs', 'USER-GUIDE.md'), 'utf-8');
+    for (const command of ['file-op', 'phase-status', 'verify', 'lifecycle-preflight']) {
+      assert.match(guide, new RegExp(`\\b${command}\\b`));
+    }
   });
 
   test('repo-local helper executes correctly from a nested cwd', async () => {

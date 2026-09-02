@@ -3,7 +3,7 @@ import { join, resolve } from 'path';
 import { spawnSync } from 'child_process';
 import { createCmdInit } from './init-flow.mjs';
 import { createCmdInstall, resolveGlobalInstallRoots } from './global-install.mjs';
-import { promptConfirm, promptMultiSelect, promptSingleSelect } from './init-prompts.mjs';
+import { promptConfirm, promptMultiSelect } from './init-prompts.mjs';
 import { parseFlagValue } from './cli-utils.mjs';
 import { GLOBAL_AGENT_OPTIONS, validateCommandShape } from './init-runtime.mjs';
 import { resolveStateDir, stateAuthorityGate } from './state-dir.mjs';
@@ -61,52 +61,6 @@ function selectedProjectTools(agent, all) {
 
 function detectGlobalTargets(roots) {
   return GLOBAL_ALL.filter((target) => existsSync(roots[target]));
-}
-
-async function chooseSetupScope({ promptApi, input = process.stdin, output = process.stdout }) {
-  if (promptApi?.chooseSetupScope) return promptApi.chooseSetupScope();
-  if (!input.isTTY) return null;
-  return promptSingleSelect({
-    input,
-    output,
-    title: 'Where should Workspine be set up?',
-    choices: [
-      { value: 'project', label: 'This repo', description: 'Portable workflow skills for this repository.' },
-      { value: 'global', label: 'My agent (for future repos)', description: 'Reusable skills in your personal agent home.' },
-    ],
-    defaultIndex: 0,
-  });
-}
-
-async function chooseProjectMode({ promptApi, input = process.stdin, output = process.stdout }) {
-  if (promptApi?.chooseProjectMode) return promptApi.chooseProjectMode();
-  return promptSingleSelect({
-    input,
-    output,
-    title: 'Choose setup path',
-    choices: [
-      { value: 'recommended', label: 'Recommended defaults', description: 'Portable skills only; native targets and AGENTS.md remain opt-in.' },
-      { value: 'customize', label: 'Customize', description: 'Choose native runtime targets and optional generic governance.' },
-    ],
-    defaultIndex: 0,
-  });
-}
-
-async function chooseProjectTargets({ input = process.stdin, output = process.stdout }) {
-  const choices = [
-    { value: 'claude', label: 'Claude Code', description: 'Generate Claude-native local surfaces.', selected: false, detected: false },
-    { value: 'opencode', label: 'OpenCode', description: 'Generate OpenCode-native local surfaces.', selected: false, detected: false },
-    { value: 'codex', label: 'Codex CLI', description: 'Generate Codex-native local surfaces.', selected: false, detected: false },
-    { value: 'generic', label: 'Generic AGENTS.md governance', description: 'Opt in to a bounded root AGENTS.md block.', selected: false, detected: false },
-  ];
-  const selected = await promptMultiSelect({
-    input,
-    output,
-    title: 'Customize project targets',
-    hint: 'Space toggles, Enter confirms. Portable skills are always included.',
-    choices,
-  });
-  return selected;
 }
 
 async function chooseGlobalTargets({ detected, input = process.stdin, output = process.stdout }) {
@@ -174,13 +128,8 @@ export function createCmdSetup(ctx) {
     if (all && agent) return fail('--all and --agent cannot be combined. Choose one target selection.');
     if (migrate && globalScope) return fail('--migrate applies only to project setup.');
 
-    let scope = globalScope ? 'global' : null;
+    const scope = globalScope ? 'global' : 'project';
     const interactive = Boolean(process.stdin.isTTY && !yes && !dryRun);
-    if (!scope && !agent && !all && interactive) {
-      scope = await chooseSetupScope({ promptApi: ctx.setupPromptApi, input: process.stdin, output: process.stdout });
-      if (scope === 'global') return createCmdSetup(ctx)(...setupArgs, '--global');
-    }
-    if (!scope) scope = 'project';
     if (!yes && !dryRun && !process.stdin.isTTY) {
       return fail(`Non-interactive setup requires -y/--yes so setup can obtain consent.\n${setupUsage()}`);
     }
@@ -233,18 +182,7 @@ export function createCmdSetup(ctx) {
       }
     }
 
-    let tools = selectedProjectTools(agent, all);
-    if (scope === 'project' && !agent && !all && interactive) {
-      const mode = await chooseProjectMode({ promptApi: ctx.setupPromptApi, input: process.stdin, output: process.stdout });
-      if (mode === 'customize') {
-        const customized = ctx.setupPromptApi?.selectProjectTargets
-          ? await ctx.setupPromptApi.selectProjectTargets()
-          : await chooseProjectTargets({ input: process.stdin, output: process.stdout });
-        tools = customized.length > 0
-          ? customized.map((target) => target === 'generic' ? 'agents' : target)
-          : ['portable'];
-      }
-    }
+    const tools = selectedProjectTools(agent, all);
     if (dryRun) return printProjectDryRun(root, tools);
     if (!yes && !(await confirmSetup({ promptApi: ctx.setupPromptApi, details: [`Bounded write set: .work/, .agents/skills/work-*, and ${tools.join(', ')} selected project surfaces.`] }))) {
       return fail('Setup cancelled; no files were written.');
@@ -261,7 +199,7 @@ export function createCmdSetup(ctx) {
         return fail(`Legacy state migration failed: ${error.message}`);
       }
     }
-    // Setup owns consent, scope, and target UX; init-flow owns the established filesystem
+    // Setup owns consent and explicit scope/target flags; init-flow owns the established filesystem
     // preflight and generation transaction. Supplying targets avoids reopening its runtime wizard.
     return createCmdInit(initCtx)('--tools', tools.join(','), '--workspace-root', root);
   };

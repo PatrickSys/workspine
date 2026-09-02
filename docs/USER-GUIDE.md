@@ -1,22 +1,21 @@
 # Workspine User Guide
 
-A detailed reference for Workspine workflows, troubleshooting, and configuration. Workspine is the public product name; the npm package is `workspine`, the CLI and workspace remain `gsdd` and `.work/` as retained technical contracts, and the workflows are `work-*`. Runtime floor: Node >=22. For quick-start setup and the public proof pack, start with the [README](../README.md). Human install/update commands use `npx -y workspine ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
+A detailed reference for Workspine workflows, troubleshooting, and configuration. Start with the [README](../README.md) for the shortest first-use path. Workspine is the public product name; the npm package is `workspine`, the CLI and workspace remain `gsdd` and `.work/` as retained technical contracts, and the workflows are `work-*`. Runtime floor: Node >=22. Human install/update commands use `npx -y workspine ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
 
 The tracked consumer evidence is indexed at [`docs/proof/consumer-node-cli/README.md`](proof/consumer-node-cli/README.md).
-
-The supported public CLI/generated helper has default-on update awareness on commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. Eligible commands make sequential/best-effort anonymous npm metadata checks when the contained `.work/.local` cache is writable, with no lock or cross-process concurrency guarantee. It uses a two-second timeout and 64 KiB/normalized-version limits, sends no credentials or repository data, and cache/check failures are nonblocking. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` remain network-free; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
 
 ---
 
 ## Fast Path
 
-The registry contains 13 workflows; this guide is their detailed reference.
+Run `npx -y workspine setup` from the repo root, then use the representative loop:
 
-Run `npx -y workspine setup` from the repo root, then choose one goal:
+1. Run `work-plan` for one real, bounded change.
+2. Review the checked plan and give explicit owner approval.
+3. Run `work-execute`.
+4. Run `work-verify`.
 
-1. **Quick** — use `work-quick` for a concrete, bounded change.
-2. **Planned change** — use `work-plan`, then `work-execute`, then `work-verify` for a standalone brownfield change that needs a durable plan but not a roadmap phase.
-3. **Start or extend a project** — use `work-new-project` for greenfield, fuzzy, or first-milestone work. After a milestone is shipped, `work-new-milestone` starts the next one.
+`work-quick` is the lighter shortcut for an already-understood change. Use `work-new-project` when the project or milestone itself is fuzzy or broader. After a milestone is shipped, `work-new-milestone` starts the next one.
 
 Use `work-map-codebase` only when a repo is unfamiliar, risky, or its existing map is stale. It creates trusted brownfield context before you choose Quick or a broader project route; it is not a fourth mandatory goal.
 
@@ -184,6 +183,8 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 
 ## Command Reference
 
+This reference covers all 13 workflows.
+
 ### Install Modes
 
 Use local repo install when the project should own `.work/`, `.agents/skills`, and optional repo-local runtime adapters:
@@ -261,9 +262,13 @@ Details worth knowing before you script it:
 | `npx -y workspine journey` | Inspect journey receipts |
 | `npx -y workspine git-identity` | Inspect Git identity and root |
 | `npx -y workspine phase-status` | Inspect phase status |
-| `npx -y workspine help` | Show all commands |
+| `npx -y workspine help` | Show the concise first-use and core-command summary; this guide owns the detailed command reference |
 
 If `workspine` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .work/bin/gsdd.mjs ...` from the repo root. The `gsdd` binary alias is removed at the next minor release, so new scripts and CI should call `workspine ...` directly.
+
+Global repair checks remain available as `workspine health --global` and `workspine update --global` (or `-g`).
+
+The supported public CLI/generated helper has default-on update awareness on commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. Eligible commands make sequential/best-effort anonymous npm metadata checks when the contained `.work/.local` cache is writable, with no lock or cross-process concurrency guarantee. It uses a two-second timeout and 64 KiB/normalized-version limits, sends no credentials or repository data, and cache/check failures are nonblocking. Use `--no-update-notice` or `WORKSPINE_UPDATE_AWARENESS=0` (legacy `GSDD_UPDATE_AWARENESS=0`) to opt out. `health` and `update` remain network-free; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
 
 Browser-proof contract migration: `update` refreshes templates, skills,
 adapters, and helper code, but it does not rewrite historical phase artifacts.

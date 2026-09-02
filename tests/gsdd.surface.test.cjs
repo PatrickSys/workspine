@@ -168,6 +168,49 @@ describe('public surface language gate', () => {
     assert.doesNotMatch(readme, /—/, 'README must not contain em dashes');
   });
 
+  test('first-use surfaces lead with the owner-controlled plan, execute, and verify loop', async () => {
+    const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf8');
+    const { getHelpText } = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs')).href}?ux=${Date.now()}`);
+    const help = getHelpText();
+    const guideOpening = guide.split('## Table of Contents')[0];
+
+    for (const [name, surface] of [['README', readme], ['User Guide opening', guideOpening], ['CLI help', help]]) {
+      assert.match(surface, /work-plan[\s\S]*owner approval[\s\S]*work-execute[\s\S]*work-verify/i,
+        `${name} must show the trustworthy loop in order`);
+      assert.ok(surface.indexOf('work-plan') < surface.indexOf('work-quick'),
+        `${name} must present the trustworthy loop before the lighter shortcut`);
+    }
+    assert.match(help, /First use:/);
+    assert.match(help, /More:/);
+    assert.match(guideOpening, /detailed reference/i);
+  });
+
+  test('default CLI help is a one-screen first-use summary while advanced commands remain discoverable', async () => {
+    const { getHelpText } = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs')).href}?compact=${Date.now()}`);
+    const help = getHelpText();
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf8');
+    const everydayCommands = ['setup', 'update', 'health', 'next'];
+    const referenceCommands = [
+      'init', 'install', 'journey', 'remember',
+      'decisions', 'models', 'rigor', 'find-phase', 'verify', 'scaffold', 'file-op',
+      'phase-status', 'lifecycle-preflight', 'lifecycle-transition', 'git-identity', 'help',
+    ];
+
+    assert.ok(help.trim().split(/\r?\n/).length <= 35, 'default help must stay within one practical screen');
+    for (const command of everydayCommands) {
+      assert.match(help, new RegExp(`^\\s*${command.replace('-', '\\-')}\\b`, 'm'), `${command} must remain in first-use help`);
+    }
+    for (const command of referenceCommands) {
+      assert.match(guide, new RegExp(`\\b${command.replace('-', '\\-')}\\b`), `${command} must remain discoverable in the User Guide`);
+    }
+    assert.match(guide, /workspine help[^\n]*concise first-use and core-command summary/i);
+    assert.doesNotMatch(guide, /workspine help[^\n]*Show all commands/i);
+    assert.doesNotMatch(help, /^(Platforms \(for --tools\)|Global install targets|Notes|Examples|Workflows \(run via\)|Reference and advanced commands):/m,
+      'reference catalogs must not be front-loaded into default help');
+    assert.match(help, /docs\/USER-GUIDE\.md[\s\S]*docs\/RUNTIME-SUPPORT\.md/, 'default help must point to detailed reference material');
+  });
+
   test('public compatibility and issue forms describe the current release surface', () => {
     const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
     const friction = fs.readFileSync(path.join(ROOT, '.github', 'ISSUE_TEMPLATE', 'friction.yml'), 'utf8');
@@ -358,16 +401,13 @@ describe('public surface language gate', () => {
     }
   });
 
-  test('public help and owned docs state the bounded update-awareness contract', () => {
+  test('owned references and package metadata state the bounded update-awareness contract', () => {
     const help = runHelp();
+    assert.match(help, /docs\/RUNTIME-SUPPORT\.md/,
+      'Compact help must route bounded update-awareness details to the runtime reference.');
     assert.match(help, /Node >=22/);
-    assert.match(help, /--no-update-notice/);
-    assert.match(help, /GSDD_UPDATE_AWARENESS=0/);
-    assert.match(help, /WORKSPINE_UPDATE_AWARENESS=0/);
-    assert.match(help, /health and update remain network-free/);
-    assert.match(help, /sequential|best-effort/i);
-    assert.match(help, /no lock|no concurrency guarantee/i);
-    assert.doesNotMatch(help, /at most once per 24 hours/i);
+    assert.match(help, /^\s*update\b/m);
+    assert.match(help, /^\s*health\b/m);
     // Detailed operational controls stay in the guide/runtime reference so the README remains progressive.
     for (const [relative, updatePattern] of [
       ['docs/USER-GUIDE.md', /npx -y workspine update/],
@@ -384,11 +424,11 @@ describe('public surface language gate', () => {
     assert.strictEqual(require(path.join(ROOT, 'package-lock.json')).packages[''].engines.node, '>=22');
   });
 
-  test('opt-out wording is explicit on the public and generated surfaces', async () => {
-    const help = runHelp();
-    assert.match(help, /--no-update-notice/);
-    assert.match(help, /GSDD_UPDATE_AWARENESS=0/);
-    assert.match(help, /WORKSPINE_UPDATE_AWARENESS=0/);
+  test('opt-out wording is explicit in the public reference and generated surface', async () => {
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf8');
+    assert.match(guide, /--no-update-notice/);
+    assert.match(guide, /GSDD_UPDATE_AWARENESS=0/);
+    assert.match(guide, /WORKSPINE_UPDATE_AWARENESS=0/);
     const { renderPlanningCliLauncher } = await loadRenderer();
     const launcher = renderPlanningCliLauncher({ packageName: PACKAGE.name, packageVersion: PACKAGE.version });
     assert.match(launcher, /Node >=22/);

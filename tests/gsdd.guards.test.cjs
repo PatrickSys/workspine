@@ -968,8 +968,8 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     assert.match(normalFlow, /npx -y workspine setup/i, 'The User Guide normal flow must begin with the same first-use setup command.');
     assert.match(runtimeSupport, /normal first use[^\n]*npx -y workspine setup/i, 'Runtime support must identify setup as the normal first-use command.');
     assert.match(runtimeSupport, /init[^\n]*compatib/i, 'Runtime support must keep init explicitly labeled as compatibility guidance.');
-    assert.match(helpText, /normal repo path: npx -y workspine setup/i, 'Executable help must route the normal repo path through setup.');
-    assert.doesNotMatch(helpText, /normal repo path: npx -y workspine init/i, 'Executable help must not present init as the normal repo path.');
+    assert.match(helpText, /First use:[\s\S]*npx -y workspine setup/i, 'Executable help must route the normal repo path through setup.');
+    assert.doesNotMatch(helpText, /First use:[\s\S]{0,120}npx -y workspine init/i, 'Executable help must not present init as the normal repo path.');
     assert.match(guide, /npx -y workspine init/i);
     assert.match(guide, /npx -y workspine install --global/i);
     assert.match(guide, /global install never creates `.work\/`/i);
@@ -988,12 +988,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
   test('global install help and public guidance match the shared supported-target metadata', async () => {
     const { GLOBAL_AGENT_OPTIONS, getHelpText } = await import(`${pathToFileURL(INIT_RUNTIME_MODULE).href}?targets=${Date.now()}`);
     const targetIds = GLOBAL_AGENT_OPTIONS.map(({ id }) => id);
-    const helpSection = getHelpText().split('Global install targets:')[1].split('\n\nNotes:')[0];
-    const helpIds = [...helpSection.matchAll(/^  ([a-z]+)\s{2,}/gm)]
-      .map((match) => match[1])
-      .filter((id) => id !== 'all');
-    assert.deepStrictEqual(helpIds, targetIds,
-      'Global install help target rows must be rendered from GLOBAL_AGENT_OPTIONS in order.');
+    const helpText = getHelpText();
+    assert.match(helpText, /Advanced.*init.*install/i,
+      'Compact help must route advanced setup and global install to reference material.');
+    assert.match(helpText, /docs\/RUNTIME-SUPPORT\.md/,
+      'Compact help must route detailed global-target guidance to runtime support.');
 
     const explicitList = targetIds.join(',');
     const publicGuides = [
@@ -1159,30 +1158,31 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'DESIGN.md must contain section 25. FIX: Add D25 Consumer First-Run Experience.');
   });
 
-  test('init help text does not imply Cursor/Copilot/Gemini need AGENTS for workflow discovery', () => {
-    const content = fs.readFileSync(INIT_HELP, 'utf-8');
-    assert.match(content, /cursor\s+Generate root AGENTS\.md governance block; workflows are already discovered natively from \.agents\/skills\//,
-      "init help must describe cursor as governance augmentation on top of native skill discovery. FIX: Replace 'Same as agents' with native-discovery wording.");
-    assert.match(content, /copilot\s+Generate root AGENTS\.md governance block; workflows are already discovered natively from \.agents\/skills\//,
-      "init help must describe copilot as governance augmentation on top of native skill discovery. FIX: Replace 'Same as agents' with native-discovery wording.");
-    assert.match(content, /gemini\s+Generate root AGENTS\.md governance block; workflows are already discovered natively from \.agents\/skills\//,
-      "init help must describe gemini as governance augmentation on top of native skill discovery. FIX: Replace 'Same as agents' with native-discovery wording.");
+  test('runtime reference does not imply Cursor/Copilot/Gemini need AGENTS for workflow discovery', async () => {
+    const { getHelpText } = await import(`${pathToFileURL(INIT_RUNTIME_MODULE).href}?runtime-ref=${Date.now()}`);
+    const support = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    assert.match(getHelpText(), /docs\/RUNTIME-SUPPORT\.md/,
+      'Compact help must route runtime details to the canonical reference.');
+    for (const runtime of ['Cursor', 'GitHub Copilot', 'Gemini CLI']) {
+      assert.ok(support.includes('| ' + runtime + ' | Qualified support | `.agents/skills/work-*`'),
+        `${runtime} must remain documented as skills-native qualified support.`);
+    }
   });
 
-  test('init help describes separate governance decision in the wizard', () => {
-    const content = fs.readFileSync(INIT_HELP, 'utf-8');
-    assert.match(content, /separately decide whether repo-wide AGENTS\.md governance is worth installing/i,
-      'init help must describe governance as a separate wizard decision. FIX: Add wizard governance wording to help text.');
+  test('runtime reference keeps governance optional', () => {
+    const support = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    assert.match(support, /Native adapter and governance surfaces are optional ergonomics/i,
+      'Runtime support must keep governance optional without front-loading it in default help.');
+    assert.match(support, /not required for the portable workflow contract/i);
   });
 
-  test('init help text carries the same proof-split public support wording', () => {
-    const content = fs.readFileSync(INIT_HELP, 'utf-8');
-    assert.match(content, /recorded launch proof.*Codex CLI path/i,
-      'init help must state which runtime paths have recorded repo proof. FIX: Add a recorded-proof note in the help text.');
-    assert.doesNotMatch(content, /recorded launch proof[^\n]*(Claude Code|OpenCode)[^\n]*path[s]?\b(?![^\n]*no recorded run)/i,
-      'init help must not claim recorded proof for a runtime that has none. FIX: Name only Codex CLI as recorded; describe the others as generated with no recorded run.');
-    assert.match(content, /Cursor, Copilot, and Gemini are qualified support/i,
-      'init help must describe Cursor/Copilot/Gemini as qualified support. FIX: Add the qualified-support note in the help text.');
+  test('runtime reference owns the proof-split public support wording', async () => {
+    const { getHelpText } = await import(`${pathToFileURL(INIT_RUNTIME_MODULE).href}?proof-ref=${Date.now()}`);
+    const support = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    assert.match(getHelpText(), /docs\/RUNTIME-SUPPORT\.md/);
+    assert.match(support, /### Recorded proof[\s\S]*Codex CLI/);
+    assert.match(support, /### Generated-surface proof[\s\S]*Claude Code[\s\S]*OpenCode/);
+    assert.match(support, /### Qualified support[\s\S]*Cursor[\s\S]*GitHub Copilot[\s\S]*Gemini CLI/);
   });
 
   test('post-init routing includes slash-command guidance for Cursor/Copilot/Gemini', async () => {
@@ -1190,12 +1190,12 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const lines = mod.getPostInitRoutingLines(['cursor', 'copilot', 'gemini']);
     const content = lines.join('\n');
     for (const [runtime, command] of [
-      ['Cursor', '/work-quick'],
-      ['Copilot', '/work-quick'],
-      ['Gemini CLI', '/work-quick'],
+      ['Cursor', '/work-plan'],
+      ['Copilot', '/work-plan'],
+      ['Gemini CLI', '/work-plan'],
     ]) {
-      assert.match(content, new RegExp(`${runtime}:\\s+${command} .* /work-plan .* /work-new-project`),
-        `post-init routing must show the three goal lanes for ${runtime}. FIX: Keep quick, plan, and new-project in init output.`);
+      assert.match(content, new RegExp(`${runtime}:\\s+${command} .* /work-quick .* /work-new-project`),
+        `post-init routing must lead with the representative plan loop for ${runtime}. FIX: Keep plan first, with quick and new-project as secondary lanes.`);
     }
   });
 
@@ -3050,7 +3050,7 @@ describe('Phase 18 deterministic CLI guards', () => {
       'bin/lib/file-ops.mjs must export cmdFileOp. FIX: Export the file-op command handler.');
   });
 
-  test('init help text documents file-op, phase-status, and lifecycle-preflight', async () => {
+  test('the User Guide keeps advanced command names discoverable outside compact help', async () => {
     const mod = await import(`file://${INIT_MODULE.replace(/\\/g, '/')}`);
     const previousLog = console.log;
     let output = '';
@@ -3061,16 +3061,12 @@ describe('Phase 18 deterministic CLI guards', () => {
       console.log = previousLog;
     }
 
-    assert.match(output, /file-op <copy\|delete\|regex-sub>/,
-      'Help text must document file-op. FIX: Add file-op command to cmdHelp output.');
-    assert.match(output, /phase-status <N> <status>/,
-      'Help text must document phase-status. FIX: Add phase-status command to cmdHelp output.');
-    assert.match(output, /lifecycle-preflight <surface> \[phase\]/,
-      'Help text must document lifecycle-preflight. FIX: Add lifecycle-preflight command to cmdHelp output.');
-    assert.match(output, /rigor \[show\|low\|medium\|high\|max\|<plan\|execute\|verify> <level>\]/,
-      'Help text must document rigor configuration. FIX: Add the rigor command to cmdHelp output.');
-    assert.match(output, /new-project bootstrap/i,
-      'Help text must scope repo-local init --auto to new-project bootstrap. FIX: Add the bootstrap-only note.');
+    assert.match(output, /docs\/USER-GUIDE\.md/,
+      'Detailed advanced usage must be delegated to the User Guide.');
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    for (const command of ['file-op', 'phase-status', 'lifecycle-preflight', 'rigor']) {
+      assert.match(guide, new RegExp(`\\b${command}\\b`), `${command} must remain discoverable in the User Guide.`);
+    }
   });
 
   test('public configuration surfaces describe only active rigor behavior', () => {
@@ -3609,8 +3605,8 @@ describe('G37 - Launch Surface Consistency', () => {
     }
     assert.match(distilledReadme, /began as a fork of.*Get Shit Done/i,
       'distilled/README.md must keep the same brief appreciative lineage note. FIX: Mirror the concise lineage note in the distilled public surface.');
-    assert.match(helpText, /Workspine is the public product name and the npm package; the retained command and workspace contracts stay gsdd and \.work\/, and the workflows are work-\*; legacy planning workspaces are still read/i,
-      'init-runtime help text must explain the retained technical contracts without advertising the legacy folder. FIX: Keep the Workspine-plus-retained-contract note aligned to .work/.');
+    assert.match(helpText, /compatibility[\s\S]*docs\/USER-GUIDE\.md/i,
+      'Compact help must route compatibility details to the User Guide without embedding their history.');
     assert.match(pkg.description, /^Workspine\b/,
       'package.json description must be Workspine-led after Phase 24. FIX: Align package metadata with the public product name.');
   });
@@ -3649,20 +3645,19 @@ describe('G37 - Launch Surface Consistency', () => {
       'agents.block.md must not duplicate public launch evidence language. FIX: Keep launch proof posture in README/package/help surfaces instead.');
   });
 
-  test('init runtime help text preserves the proof split', async () => {
+  test('compact help delegates the proof split while preserving the owner approval boundary', async () => {
     const mod = await import(`file://${INIT_RUNTIME_MODULE.replace(/\\/g, '/')}`);
     const helpText = mod.getHelpText();
-    assert.match(helpText, /recorded launch proof.*Codex CLI path/i,
-      'init-runtime help text must name only runtime paths with recorded repo proof. FIX: Keep the help text aligned with launch proof.');
-    assert.doesNotMatch(helpText, /recorded launch proof[^\n]*(Claude Code|OpenCode)[^\n]*path[s]?\b(?![^\n]*no recorded run)/i,
-      'init-runtime help text must not claim recorded proof for a runtime that has none. FIX: Name only Codex CLI as recorded; describe the others as generated with no recorded run.');
-    assert.match(helpText, /qualified support.*shared \.agents\/skills\/ surface plus optional governance/i,
-      'init-runtime help text must distinguish qualified support from directly validated native runtimes. FIX: Keep the proof split explicit in the notes.');
-    assert.match(helpText, /\$work-plan is plan-only until explicit \$work-execute/i,
-      'init-runtime help text must keep the explicit plan-to-execute boundary visible for Codex. FIX: Add the plan-only / execute-unlock note to the codex help text.');
+    const support = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    assert.match(helpText, /docs\/RUNTIME-SUPPORT\.md/,
+      'Compact help must point to the canonical proof and runtime reference.');
+    assert.match(helpText, /work-plan -> owner approval -> work-execute -> work-verify/i,
+      'Compact help must preserve the explicit plan-to-execute owner boundary.');
+    assert.match(support, /### Recorded proof[\s\S]*### Generated-surface proof[\s\S]*### Qualified support/,
+      'Runtime support must retain the detailed proof split removed from default help.');
   });
 
-  test('init help workflow list is generated from the workflow manifest', async () => {
+  test('compact help starting lanes are manifest-derived and the User Guide owns the full workflow catalog', async () => {
     const initRuntime = await import(pathToFileURL(INIT_RUNTIME_MODULE).href);
     const { WORKFLOWS } = await import(pathToFileURL(path.join(ROOT, 'bin', 'lib', 'workflows.mjs')).href);
     const source = fs.readFileSync(INIT_RUNTIME_MODULE, 'utf-8');
@@ -3677,14 +3672,15 @@ describe('G37 - Launch Surface Consistency', () => {
       return section.split(/\r?\n\r?\n/)[0].split(/\r?\n/).filter(Boolean).map((line) => line.trim().split(/\s{2,}/)[0]);
     };
 
-    assert.deepStrictEqual(
-      idsIn('Workflows (run via skills/adapters generated by init, not direct CLI):'),
-      WORKFLOWS.map(({ name }) => name),
-      'init help must list every manifest workflow exactly once, in manifest order. FIX: Render the help list from WORKFLOWS instead of hand-maintaining a second copy.');
-
-    for (const lane of idsIn('Starting lanes after init:')) {
+    for (const lane of idsIn('Starting lanes:')) {
       assert.ok(WORKFLOWS.some(({ name }) => name === lane),
         `init help starting lane ${lane} must be a manifest workflow id. FIX: Derive the lane ids from WORKFLOWS via workflowId().`);
+    }
+
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
+    for (const { name } of WORKFLOWS) {
+      assert.match(guide, new RegExp(`\\b${name}\\b`),
+        `The User Guide must retain the full workflow catalog entry ${name}.`);
     }
 
     for (const line of initRuntime.getPostInitRoutingLines(['claude', 'codex'])) {
@@ -4454,8 +4450,8 @@ describe('G45 - Runtime Surface Freshness Contract', () => {
       'README.md must include deterministic repair guidance through an npx -y <package> update or global gsdd update. FIX: Add the repair path.');
     assert.match(support, /Generated-surface freshness/i,
       'docs/RUNTIME-SUPPORT.md must have a generated-surface freshness section. FIX: Add the explicit runtime-boundary section.');
-    assert.match(helpSource, /workspine health.*workspine update|gsdd health.*gsdd update/i,
-      'bin/lib/init-runtime.mjs help text must mention health/update runtime-surface drift handling. FIX: Add the note to getHelpText().');
+    assert.match(helpSource, /health \[--json\][\s\S]{0,240}update \[--dry-run\]/i,
+      'bin/lib/init-runtime.mjs help text must keep health and update in the everyday command surface.');
     assert.match(planWorkflow, /workspine health.*workspine update|gsdd health.*gsdd update/i,
       'distilled/workflows/plan.md must mention the renderer-backed freshness/repair path. FIX: Add the runtime-surface trust note to completion.');
   });
@@ -4549,18 +4545,20 @@ describe('G40 - Provenance And Write-Gate Contracts', () => {
 });
 
 describe('G56 - Cooperative Decision Authority Contract', () => {
-  test('public authority surfaces keep approval record-local and non-authenticated', () => {
+  test('public authority surfaces keep approval record-local and non-authenticated', async () => {
     const userGuide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
     const design = fs.readFileSync(DESIGN_MD, 'utf-8');
-    const help = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs'), 'utf-8');
+    const runtime = await import(`${pathToFileURL(INIT_RUNTIME_MODULE).href}?authority=${Date.now()}`);
     const grammar = /decisions promote <id> --authority owner --approval-ref <non-sensitive-ref>/;
+    const commandGrammar = /promote <id> --authority owner --approval-ref <non-sensitive-ref>/;
 
     assert.match(userGuide, grammar);
     assert.match(design, grammar);
-    assert.match(help, grammar);
+    assert.match(runtime.validateCommandShape('decisions', ['promote', 'candidate', '--approval-ref']), commandGrammar,
+      'Command-specific validation must preserve the approval syntax without expanding default help.');
     assert.match(userGuide, /cooperative.*owner assertion.*human authentication/i);
     assert.match(design, /unreceipted_active|malformed_assertion/);
-    assert.doesNotMatch(help, /promote <id>\s+Promote a candidate decision to active authority/);
+    assert.doesNotMatch(runtime.getHelpText(), /promote <id>\s+Promote a candidate decision to active authority/);
 
     for (const file of ['distilled/workflows/plan.md', 'distilled/references/proof-rules.md', 'distilled/templates/delegates/plan-checker.md']) {
       assert.match(fs.readFileSync(path.join(ROOT, file), 'utf-8'), /authority_fingerprint/,
@@ -4656,14 +4654,17 @@ describe('Phase 16-D - global update and health routes', () => {
     assert.match(source, /cmdGlobalUpdate\(\.\.\.updateArgs\)/);
   });
 
-  test('help and central grammar expose both global aliases without a second parser', async () => {
+  test('central grammar and reference expose both global aliases without a second parser', async () => {
     const runtime = await import(pathToFileURL(INIT_RUNTIME_MODULE).href);
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
     assert.deepStrictEqual(runtime.COMMAND_FLAGS.update['--global'], false);
     assert.deepStrictEqual(runtime.COMMAND_FLAGS.update['-g'], false);
     assert.deepStrictEqual(runtime.COMMAND_FLAGS.health['--global'], false);
     assert.deepStrictEqual(runtime.COMMAND_FLAGS.health['-g'], false);
     assert.match(runtime.getHelpText(), /update \[--dry-run\] \[-g\|--global\]/);
     assert.match(runtime.getHelpText(), /health \[--json\] \[-g\|--global\]/);
+    assert.match(guide, /workspine update --global|gsdd update --global/i);
+    assert.match(guide, /workspine health --global|gsdd health --global/i);
     assert.strictEqual(runtime.validateCommandShape('update', ['--global']), null);
     assert.strictEqual(runtime.validateCommandShape('health', ['--global', '--json']), null);
   });

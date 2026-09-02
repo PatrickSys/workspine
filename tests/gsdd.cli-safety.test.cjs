@@ -147,10 +147,9 @@ test.describe('CLI safety: help and version are zero-write information paths', (
     });
   }
 
-  test('help documents both information flags', () => {
+  test('help output remains identifiable after information flags are behavior-tested', () => {
     const result = runZeroWrite(tmpDir, ['help']);
-    assert.match(result.stdout, /--help, -h/, result.output);
-    assert.match(result.stdout, /--version, -v/, result.output);
+    assert.match(result.stdout, /workspine - Workspine CLI/, result.output);
   });
 
   test('an unknown command still fails, prints help, and writes nothing', () => {
