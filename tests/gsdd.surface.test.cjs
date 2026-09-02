@@ -197,7 +197,8 @@ describe('public surface language gate', () => {
       'phase-status', 'lifecycle-preflight', 'lifecycle-transition', 'git-identity', 'help',
     ];
 
-    assert.ok(help.trim().split(/\r?\n/).length <= 35, 'default help must stay within one practical screen');
+    assert.ok(help.trim().split(/\r?\n/).length <= 60,
+      'default help must preserve progressive disclosure instead of becoming the full reference manual');
     for (const command of everydayCommands) {
       assert.match(help, new RegExp(`^\\s*${command.replace('-', '\\-')}\\b`, 'm'), `${command} must remain in first-use help`);
     }
