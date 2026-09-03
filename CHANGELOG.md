@@ -13,9 +13,10 @@ IDs included, because rewriting shipped release notes would falsify them. That i
 why `CHANGELOG.md` is the single entry in `docs/RENAME-ALLOWLIST.txt`, the pinned
 list of paths allowed to keep pre-rename text.
 
-Upgrading an existing local install leaves the previously generated `gsdd-*`
-files in place alongside the new `work-*` ones; local generation has no pruning
-pass. Delete the stale `gsdd-*` files by hand after upgrading.
+Plain `workspine update` now bridges recognized official pre-rename `.work`
+installs and removes stale local `gsdd-*` skills only when their exact historical
+bytes prove they were Workspine-generated. Modified, unknown, additional, or
+otherwise unprovable legacy files are never silently adopted or deleted.
 
 # [0.35.0](https://github.com/PatrickSys/workspine/compare/v0.34.0...v0.35.0) (2026-08-31)
 

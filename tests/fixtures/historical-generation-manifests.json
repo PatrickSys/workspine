@@ -1,0 +1,164 @@
+{
+  "workspine@0.33.0": {
+    "frameworkVersion": "v1.4",
+    "generatedAt": "2026-09-03T14:37:22.000Z",
+    "templates": {
+      "delegates": {
+        "approach-explorer.md": "11924fc23f1cc75ffbab2dcacefc9e6c53ce50e3ca9e43c4c3883f0b790bbf92",
+        "mapper-arch.md": "865f5eaf05d337dd390e248b70c3eb4c4f5298f18aff880ad4f8ad93825dde5a",
+        "mapper-concerns.md": "63ecf2c06e5e23c9ec75d8860adc2f391a2325175d47f967eead6caa83648991",
+        "mapper-quality.md": "18a153df2d02bae98da02969f1bcdda7eb5cff686f4696f830e92bc5bb336ad7",
+        "mapper-tech.md": "018ab5ecbbaa354dc96a8f035a0b67b9df53af8b5f6063459282bdfdec02f385",
+        "plan-checker.md": "00170557303f9d2604c012120082c9b9c4a40da19c68351f8014635448f0f75e",
+        "researcher-architecture.md": "f194f143770fc34f8d5d7dd907b3a96aa1c179cfb3cc78331c0b8107fa3346f1",
+        "researcher-features.md": "8760e5e46dd801abadaf89ac827419a247947c0e45bf6f948453cb75a31c097b",
+        "researcher-pitfalls.md": "4b97e9b0a8cdd8953d947741c40837376103e3f5281b036018ad71d5e0b7c07d",
+        "researcher-stack.md": "773788c8ae58654178cf5256440f7a3db153f416964c5aefb07def9e6eec2f42",
+        "researcher-synthesizer.md": "6027a2e563acc454e684ed8bb161741887b068ad42997fe38a30e08d964c41f3"
+      },
+      "research": {
+        "architecture.md": "16714ed5b89b3cbe86c3caa65d1346726e22284aabc31c3580378a753f492b47",
+        "features.md": "e6ef59a80e162af604d9144a511f2920f7c0ae1d195d958ef33a9eff68596311",
+        "pitfalls.md": "e29cd4c3342c266d10fe7ccbcb92ecc6a60f1042f97fa72829a18f7de12734db",
+        "stack.md": "d032629fccbb57190bd242f34d15fbc0cca2966ad2e7a1fb35e41866a6c111bf",
+        "summary.md": "f3a43d24171902f9e911d05e85a2da45e2efdad7f7a3fd033c7ba5bcf4db2218"
+      },
+      "codebase": {
+        "architecture.md": "a41b88215c38366f6584cb7463942ca525656a04bfb705190cba1ac4d274fac7",
+        "concerns.md": "e7b08037df3add0662c7d9903db346254013195aad715bb68837ca9680bb2c21",
+        "conventions.md": "59d899078970ddde926e70c6a333cdcfb59198e485f5906500116e6da92d6415",
+        "stack.md": "bf65da9a8242c8c119cd0d2a2b72262a63f816be5b0e939824cf1f93be743d3f"
+      },
+      "brownfieldChange": {
+        "CHANGE.md": "2a66b6d9d69c1f4e4781b0506699a1dc4544fdee27512050c2b902c39e217ec0",
+        "HANDOFF.md": "75e1fdf45424ec3bc505b081ab90ff4a92318ac8de1bc4ffee26fc49d6619fb1",
+        "VERIFICATION.md": "084c46c389dde80567c81ed5de5b5c4e0c9ea9426954724df331d7b6fef11641"
+      },
+      "root": {
+        "agents.block.md": "46fcf5c704c7da27d4a61ad3055330b5998f7b31d9720f78e89673e9ffad726d",
+        "agents.md": "c0b71faa4a7ab9cc06f4daaf4200eee1cc7754b1393358e00eb1ea8e7c851163",
+        "approach.md": "29a67d4db3ff7e2329b4ae68979170a3b570aea2e4effbbd22d62531782f4369",
+        "auth-matrix.md": "642b373bcc6cf0196972659ac0996e91f2ee650053ab2a7179dbc043567a55e3",
+        "roadmap.md": "a507bd8042d5e850a5bd17db09aad6efdd21280053ae618ac372b3855c5beaa5",
+        "spec.md": "f3fb6fd810bdc7d082b10ba8a6ce6d915b8f90efece4ecc68eec2d44ecc58aad",
+        "ui-proof.md": "e67649a514df7e7b4f92af121d33bf5f8c796b0f8fba788893a8b97225e3f6f7"
+      }
+    },
+    "roles": {
+      "approach-explorer.md": "d558657a7bf39ddeac478650b89da9f8fb479ed4914aaf928971f0457e69c206",
+      "debugger.md": "d26a4f90e73b72a24750c28dcae71023496667e1f4551ba82ac9880cf652c5cf",
+      "DISTILLATION.md": "a565e1229d6dd0bfdafb585029336ecb3ad0bda8fe590b6a5983ddd33b28d771",
+      "executor.md": "298ca2a6cc596de71632d7880f90c5c46fd333ccf73a0782df184ccf6b898d8d",
+      "integration-checker.md": "98024424f74642f19e75be8bf9208ca6b3b381b7dfdd8e3a290dfb080253e0e4",
+      "mapper.md": "6d1a91561a90151161ee151fb1356a91253b956af3e9e344f9a9cd1b330d6eda",
+      "planner.md": "2756b0d27db2074362f48f744ae17f81a78f60da54ef341283a336a694ed8508",
+      "researcher.md": "7f6183bd722dbc75039b5e8cd165b2ae1791c493b73d844e87163ee8cf7a394b",
+      "roadmapper.md": "577de6b27f5bfa7e68a79a27042b209a771e58bd0f41226e05ff6806fe777d18",
+      "synthesizer.md": "e1e5f08cb7113adbc857f54a0aa5dd877f3ad8f26f34c64fac79308d9478e653",
+      "verifier.md": "6511b8b918422f903c1344a3b4a9ca2e5a9432bf14bd8dea6976b6e60e2f95a7"
+    },
+    "runtimeHelpers": {
+      "bin/gsdd": "41e0384c217548b26de4f507367f5424cb5868810f4634a5886ac5dd3de6abae",
+      "bin/gsdd.cmd": "0af836d186b4bf71be08f69786dc9606d45341419e1d5c93ad84d4d2f5d6b5a6",
+      "bin/gsdd.mjs": "3c6372bac46d4c443700b9cd61b107e48531db4062dbef0cc54d6156db874dc2",
+      "bin/gsdd.ps1": "91f03d5ce7b60828adfe1dfd14d787e35d6172b79d3c7ba7ce85730f2ba0f271",
+      "bin/lib/atomic-write.mjs": "af4179391622006cb370b48255f41b1ae98040a5f23c8f6eb92a4db5f24b53c5",
+      "bin/lib/candidate-provenance.mjs": "cae54967060acf9d9814681f6d0df71acb5df176311a8f64791c09436782397e",
+      "bin/lib/cli-utils.mjs": "dfe32340660a6dde7fb6a14e8edbeb16770c5b40691e4fa54ce910c48efe575d",
+      "bin/lib/control-map.mjs": "96e5610b8b0e043fefe13468cecebb976c08394baeae4179af79b1286e372171",
+      "bin/lib/decision-cli.mjs": "ba81c1aab6da52bedfdf2e3781bc313edab2bf0f3e7ef418c2d3aa2ba7a6512f",
+      "bin/lib/file-ops.mjs": "23028282737a880e7406381bff80595bd113c929e0408bf597e35f6eaa49ddaa",
+      "bin/lib/git-identity.mjs": "549a5442ce3c421b0f891ba8d7c3b65081ae834293cf63990f20be309bec10d3",
+      "bin/lib/lifecycle-preflight.mjs": "79a28256f69a14579fdca491854e63495373af94271dfaf64f64110b354f42b5",
+      "bin/lib/lifecycle-state.mjs": "0cee8a66ed00ff11d0dcef241be9a3cbf77321e9103940f28fda4a168f252cfb",
+      "bin/lib/next.mjs": "d3042899c37745aad05352b85fea3bcd76b6d6014ec5465af4f46c30c3067503",
+      "bin/lib/phase.mjs": "c13c54391c78fe6793b199e9e9921b0c43a7cfa0746ef9d1ca76e1ed4a0b9b6c",
+      "bin/lib/state-dir.mjs": "c374922260b230982d3224ddd34a3f4ca23e1f83cfa4d1ee6c8299ee47f3fa9e",
+      "bin/lib/update-awareness.mjs": "f60d8d443fd1f1986417f9d681508fd0bef5955119983bf0cc37aa737dd90dd7",
+      "bin/lib/work-context.mjs": "a9c18cc7adf3f9aa78e578f6ccf0b9d70acd97cc3537059fc53a6c3bd2b98f79",
+      "bin/lib/workflows.mjs": "7c30caa4b363777d573efa558d8900b3217978fd4be1b7171f03e9eed45b455d",
+      "bin/lib/workspace-root.mjs": "07710b9a6cb0bd01a702fb825aa15f5076cb39c562d074ca34abc139a7275e42"
+    }
+  },
+  "workspine@0.34.0": {
+    "frameworkVersion": "v1.4",
+    "generatedAt": "2026-09-03T14:37:25.510Z",
+    "templates": {
+      "delegates": {
+        "approach-explorer.md": "11924fc23f1cc75ffbab2dcacefc9e6c53ce50e3ca9e43c4c3883f0b790bbf92",
+        "mapper-arch.md": "865f5eaf05d337dd390e248b70c3eb4c4f5298f18aff880ad4f8ad93825dde5a",
+        "mapper-concerns.md": "63ecf2c06e5e23c9ec75d8860adc2f391a2325175d47f967eead6caa83648991",
+        "mapper-quality.md": "18a153df2d02bae98da02969f1bcdda7eb5cff686f4696f830e92bc5bb336ad7",
+        "mapper-tech.md": "018ab5ecbbaa354dc96a8f035a0b67b9df53af8b5f6063459282bdfdec02f385",
+        "plan-checker.md": "00170557303f9d2604c012120082c9b9c4a40da19c68351f8014635448f0f75e",
+        "researcher-architecture.md": "f194f143770fc34f8d5d7dd907b3a96aa1c179cfb3cc78331c0b8107fa3346f1",
+        "researcher-features.md": "8760e5e46dd801abadaf89ac827419a247947c0e45bf6f948453cb75a31c097b",
+        "researcher-pitfalls.md": "4b97e9b0a8cdd8953d947741c40837376103e3f5281b036018ad71d5e0b7c07d",
+        "researcher-stack.md": "773788c8ae58654178cf5256440f7a3db153f416964c5aefb07def9e6eec2f42",
+        "researcher-synthesizer.md": "6027a2e563acc454e684ed8bb161741887b068ad42997fe38a30e08d964c41f3"
+      },
+      "research": {
+        "architecture.md": "16714ed5b89b3cbe86c3caa65d1346726e22284aabc31c3580378a753f492b47",
+        "features.md": "e6ef59a80e162af604d9144a511f2920f7c0ae1d195d958ef33a9eff68596311",
+        "pitfalls.md": "e29cd4c3342c266d10fe7ccbcb92ecc6a60f1042f97fa72829a18f7de12734db",
+        "stack.md": "d032629fccbb57190bd242f34d15fbc0cca2966ad2e7a1fb35e41866a6c111bf",
+        "summary.md": "f3a43d24171902f9e911d05e85a2da45e2efdad7f7a3fd033c7ba5bcf4db2218"
+      },
+      "codebase": {
+        "architecture.md": "a41b88215c38366f6584cb7463942ca525656a04bfb705190cba1ac4d274fac7",
+        "concerns.md": "e7b08037df3add0662c7d9903db346254013195aad715bb68837ca9680bb2c21",
+        "conventions.md": "59d899078970ddde926e70c6a333cdcfb59198e485f5906500116e6da92d6415",
+        "stack.md": "bf65da9a8242c8c119cd0d2a2b72262a63f816be5b0e939824cf1f93be743d3f"
+      },
+      "brownfieldChange": {
+        "CHANGE.md": "62dca76969cc4416d8a7fd01c6dcdaa803011d172bdfe47737e4fd7f45af226f",
+        "HANDOFF.md": "bb2151bb053039e18c119a89ac5b671e4948ebb34ed9099f2ab5a05058937e50",
+        "VERIFICATION.md": "b2de0b6eec58babce81acc1f104e29ad65239b09ea780a008d671eff06ca2e60"
+      },
+      "root": {
+        "agents.block.md": "46fcf5c704c7da27d4a61ad3055330b5998f7b31d9720f78e89673e9ffad726d",
+        "agents.md": "c0b71faa4a7ab9cc06f4daaf4200eee1cc7754b1393358e00eb1ea8e7c851163",
+        "approach.md": "29a67d4db3ff7e2329b4ae68979170a3b570aea2e4effbbd22d62531782f4369",
+        "auth-matrix.md": "642b373bcc6cf0196972659ac0996e91f2ee650053ab2a7179dbc043567a55e3",
+        "roadmap.md": "a507bd8042d5e850a5bd17db09aad6efdd21280053ae618ac372b3855c5beaa5",
+        "spec.md": "f3fb6fd810bdc7d082b10ba8a6ce6d915b8f90efece4ecc68eec2d44ecc58aad",
+        "ui-proof.md": "e67649a514df7e7b4f92af121d33bf5f8c796b0f8fba788893a8b97225e3f6f7"
+      }
+    },
+    "roles": {
+      "approach-explorer.md": "d558657a7bf39ddeac478650b89da9f8fb479ed4914aaf928971f0457e69c206",
+      "debugger.md": "d26a4f90e73b72a24750c28dcae71023496667e1f4551ba82ac9880cf652c5cf",
+      "DISTILLATION.md": "a565e1229d6dd0bfdafb585029336ecb3ad0bda8fe590b6a5983ddd33b28d771",
+      "executor.md": "298ca2a6cc596de71632d7880f90c5c46fd333ccf73a0782df184ccf6b898d8d",
+      "integration-checker.md": "98024424f74642f19e75be8bf9208ca6b3b381b7dfdd8e3a290dfb080253e0e4",
+      "mapper.md": "6d1a91561a90151161ee151fb1356a91253b956af3e9e344f9a9cd1b330d6eda",
+      "planner.md": "2756b0d27db2074362f48f744ae17f81a78f60da54ef341283a336a694ed8508",
+      "researcher.md": "7f6183bd722dbc75039b5e8cd165b2ae1791c493b73d844e87163ee8cf7a394b",
+      "roadmapper.md": "577de6b27f5bfa7e68a79a27042b209a771e58bd0f41226e05ff6806fe777d18",
+      "synthesizer.md": "e1e5f08cb7113adbc857f54a0aa5dd877f3ad8f26f34c64fac79308d9478e653",
+      "verifier.md": "6511b8b918422f903c1344a3b4a9ca2e5a9432bf14bd8dea6976b6e60e2f95a7"
+    },
+    "runtimeHelpers": {
+      "bin/gsdd": "41e0384c217548b26de4f507367f5424cb5868810f4634a5886ac5dd3de6abae",
+      "bin/gsdd.cmd": "0af836d186b4bf71be08f69786dc9606d45341419e1d5c93ad84d4d2f5d6b5a6",
+      "bin/gsdd.mjs": "1667cb69a9a18e82f10987c0e806773ccf873f1aef9b3851b463597e0bc3cb9e",
+      "bin/gsdd.ps1": "91f03d5ce7b60828adfe1dfd14d787e35d6172b79d3c7ba7ce85730f2ba0f271",
+      "bin/lib/atomic-write.mjs": "af4179391622006cb370b48255f41b1ae98040a5f23c8f6eb92a4db5f24b53c5",
+      "bin/lib/candidate-provenance.mjs": "cae54967060acf9d9814681f6d0df71acb5df176311a8f64791c09436782397e",
+      "bin/lib/cli-utils.mjs": "dfe32340660a6dde7fb6a14e8edbeb16770c5b40691e4fa54ce910c48efe575d",
+      "bin/lib/control-map.mjs": "96e5610b8b0e043fefe13468cecebb976c08394baeae4179af79b1286e372171",
+      "bin/lib/decision-cli.mjs": "ba81c1aab6da52bedfdf2e3781bc313edab2bf0f3e7ef418c2d3aa2ba7a6512f",
+      "bin/lib/file-ops.mjs": "23028282737a880e7406381bff80595bd113c929e0408bf597e35f6eaa49ddaa",
+      "bin/lib/git-identity.mjs": "549a5442ce3c421b0f891ba8d7c3b65081ae834293cf63990f20be309bec10d3",
+      "bin/lib/lifecycle-preflight.mjs": "d2e442489e11c73d9c8e99953a729fd73f42b033842a7c739a8fc238b0d4ad36",
+      "bin/lib/lifecycle-state.mjs": "09cd8c57c232f785e937355b31c40343be8dd40be480d3e227711af270d9106f",
+      "bin/lib/next.mjs": "3412f8882beb2a5af523b2a866a8ac83a5506b47b80faf61008a1698352ad95f",
+      "bin/lib/phase.mjs": "66bb643f8f6b066b9cd8b0d7996a44c7f0ecb60b8f246420f47942b6584b60fe",
+      "bin/lib/state-dir.mjs": "c374922260b230982d3224ddd34a3f4ca23e1f83cfa4d1ee6c8299ee47f3fa9e",
+      "bin/lib/update-awareness.mjs": "f60d8d443fd1f1986417f9d681508fd0bef5955119983bf0cc37aa737dd90dd7",
+      "bin/lib/work-context.mjs": "0572dbbe607f6241d816ba26a750f5879c523246691179dce40ec1770c4fb5d7",
+      "bin/lib/workflows.mjs": "7c30caa4b363777d573efa558d8900b3217978fd4be1b7171f03e9eed45b455d",
+      "bin/lib/workspace-root.mjs": "07710b9a6cb0bd01a702fb825aa15f5076cb39c562d074ca34abc139a7275e42"
+    }
+  }
+}

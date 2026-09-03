@@ -10,7 +10,9 @@ import {
   upsertBoundedBlock,
 } from './rendering.mjs';
 import {
+  applyHistoricalAdapterPruning,
   applyAdapterRecovery,
+  bridgeHistoricalAdapterOwnership,
   buildAdapterOwnership,
   buildManifest,
   fileHash,
@@ -20,7 +22,7 @@ import {
 } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
 import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs';
-import { applyTemplateRefresh, explicitTemplateOwnership, installProjectTemplates, planTemplateRefresh, refreshTemplates, validateTemplateOwnership, validateTemplateSources } from './templates.mjs';
+import { applyTemplateRefresh, explicitTemplateOwnership, installProjectTemplates, planTemplateRefresh, validateTemplateOwnership, validateTemplateSources } from './templates.mjs';
 import {
   detectPlatforms,
   validateCommandShape,
@@ -37,6 +39,32 @@ import { resolveStateDir, stateAuthorityGate, MIGRATION_COMMAND } from './state-
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { ensureWorkStructure } from './work-context.mjs';
 import { workflowId } from './workflows.mjs';
+import {
+  collectGlobalInstallSpecs,
+  getManifestOwnedGlobalTargets,
+  resolveGlobalInstallRoots,
+} from './global-install.mjs';
+import { evaluateGlobalRuntimeFreshness } from './runtime-freshness.mjs';
+
+function printRepoUpdateBoundary(ctx, { failed = false } = {}) {
+  console.log(failed
+    ? 'Repository update stopped. Global agent surfaces were not changed.'
+    : 'Repository update complete. Global agent surfaces were not changed.');
+
+  try {
+    const roots = resolveGlobalInstallRoots(ctx.globalInstallRootOptions);
+    const targets = getManifestOwnedGlobalTargets({ roots });
+    if (targets.length === 0) return;
+    const specs = targets.flatMap((target) => collectGlobalInstallSpecs({ target, roots, ctx }));
+    const freshness = evaluateGlobalRuntimeFreshness({ specs });
+    if (freshness.issueCount > 0) {
+      console.log('Global agent surfaces also need attention. Run `npx -y workspine update --global`.');
+    }
+  } catch {
+    // Global inspection is advisory and read-only. It must never hide or
+    // change the repository update result.
+  }
+}
 
 function contextAtWorkspaceRoot(ctx, workspaceRoot) {
   const state = resolveStateDir(workspaceRoot);
@@ -318,6 +346,7 @@ export function createCmdUpdate(ctx) {
     const gate = stateAuthorityGate(resolveStateDir(ctx.cwd));
     if (!gate.allowed) {
       console.error(`ERROR: ${gate.message}`);
+      printRepoUpdateBoundary(ctx, { failed: true });
       process.exitCode = 1;
       return;
     }
@@ -328,12 +357,33 @@ export function createCmdUpdate(ctx) {
     const doTemplates = true;
     const { planningDir, stateDirName } = ctx;
 
-    console.log(`gsdd update - regenerating adapter files${isDry ? ' (dry run)' : ''}\n`);
+    if (isDry) console.log('Workspine repository update (dry run)\n');
 
     const existingManifest = readManifest(planningDir);
-    const manifestPlatforms = Array.isArray(existingManifest?.adapterSelection)
-      ? existingManifest.adapterSelection.filter((name) => typeof name === 'string')
-      : [...new Set(Object.values(existingManifest?.adapterFiles ?? {})
+    let effectiveManifest = existingManifest;
+    let replacementHashes = null;
+    let historicalPruningPlan = null;
+    try {
+      const historicalBridge = bridgeHistoricalAdapterOwnership({
+        cwd: ctx.cwd,
+        manifest: existingManifest,
+        stateDirName,
+      });
+      if (historicalBridge) {
+        effectiveManifest = historicalBridge.manifest;
+        replacementHashes = historicalBridge.replacementHashes;
+        historicalPruningPlan = historicalBridge.pruningPlan;
+        console.log(`  - recognized ${historicalBridge.profileId} ownership; bridging generated surfaces safely`);
+      }
+    } catch (error) {
+      console.error(`ERROR: ${error.message}`);
+      if (!isDry) printRepoUpdateBoundary(ctx, { failed: true });
+      process.exitCode = 1;
+      return;
+    }
+    const manifestPlatforms = Array.isArray(effectiveManifest?.adapterSelection)
+      ? effectiveManifest.adapterSelection.filter((name) => typeof name === 'string')
+      : [...new Set(Object.values(effectiveManifest?.adapterFiles ?? {})
         .map((entry) => entry && typeof entry === 'object' ? entry.adapter : null)
         .filter((name) => typeof name === 'string'))];
     const platforms = manifestPlatforms.length > 0 ? manifestPlatforms : detectPlatforms(ctx.adapters);
@@ -358,15 +408,20 @@ export function createCmdUpdate(ctx) {
         cwd: ctx.cwd,
         planningDir,
         targets: localAdapterTargets,
-        manifest: existingManifest,
+        manifest: effectiveManifest,
         stateDirName,
         requireManifest: existsSync(planningDir),
         requireExistingNativeTargets: true,
+        replacementHashes,
       });
+      const templatePlan = doTemplates && existsSync(planningDir)
+        ? planTemplateRefresh({ ...ctx, isDry })
+        : null;
       if (!isDry) applyAdapterRecovery(adapterPlan);
-      if (doTemplates) templateOwnership = refreshTemplates({ ...ctx, isDry });
+      if (templatePlan) templateOwnership = applyTemplateRefresh(templatePlan, { isDry });
     } catch (error) {
       console.error(`ERROR: ${error.message}`);
+      if (!isDry) printRepoUpdateBoundary(ctx, { failed: true });
       process.exitCode = 1;
       return;
     }
@@ -379,7 +434,6 @@ export function createCmdUpdate(ctx) {
         console.log('  - would update open-standard skills (.agents/skills/work-*)');
       } else {
         generateOpenStandardSkills(ctx.cwd, ctx.workflows, { stateDirName });
-        console.log('  - updated open-standard skills (.agents/skills/work-*)');
       }
       updated = true;
     }
@@ -389,7 +443,6 @@ export function createCmdUpdate(ctx) {
         console.log(`  - would update local workflow helpers (${stateDirName}/bin/gsdd*)`);
       } else {
         runtimeGeneration = generatePlanningCliHelpers(ctx);
-        console.log(`  - updated local workflow helpers (${stateDirName}/bin/gsdd*)`);
       }
       updated = true;
     }
@@ -408,6 +461,7 @@ export function createCmdUpdate(ctx) {
     if (!updated) {
       console.log('  - no adapters found to update (run `npx -y workspine init` first; bare `gsdd init` is equivalent only when globally installed)');
       if (isDry) console.log('\nDry run complete. No files were written.\n');
+      else printRepoUpdateBoundary(ctx);
     } else if (isDry) {
       console.log('\nDry run complete. No files were written.\n');
     } else {
@@ -428,12 +482,12 @@ export function createCmdUpdate(ctx) {
           adapterInventory: getLocalAdapterInventory(ctx.adapters, ctx.workflows),
         });
         if (manifest) {
+          if (historicalPruningPlan) applyHistoricalAdapterPruning(historicalPruningPlan);
           applyObsoleteRuntimeHelperCleanup(planningDir, runtimeGeneration.obsoleteRuntimeHelpers);
           writeManifest(planningDir, manifest);
-          console.log('  - updated generation manifest');
         }
       }
-      console.log('\nAdapters updated.\n');
+      printRepoUpdateBoundary(ctx);
     }
   };
 }

@@ -1,0 +1,302 @@
+{
+  "gsdd-cli@0.29.0": {
+    "frameworkVersion": "v1.4",
+    "generatedAt": "2026-09-03T14:38:00.870Z",
+    "templates": {
+      "delegates": {
+        "approach-explorer.md": "528749e03c568354129b03e8093ea2b5aa42c2beefbd08bb88c077bcc1d6b9dd",
+        "mapper-arch.md": "e0809706d73060c1947196273e2685811355f77f5e837bd52efac58e06f82e4d",
+        "mapper-concerns.md": "e34ec675630134344ae2106871beaaed5eddd685361c035f703a65ed38f32dbe",
+        "mapper-quality.md": "44faa3b5e29af0d1c45d192ca660d3e6e90db5fc84df026337e8a4cadd7df07a",
+        "mapper-tech.md": "25c0eda09dbf58c70f30d5e852c865fdcdb476c25c55af9d6ec04f3eda5d4999",
+        "plan-checker.md": "bf41c22882290a6183d2307851eaacf9450b1e82d99d4f3920357f3f7aad1db3",
+        "researcher-architecture.md": "064bbb4e8f53398628dd21ef1813e3372d2aef30b3da731510958fdc4e78c730",
+        "researcher-features.md": "e8f0e5b9b0a967f437f97c753cc6b5921402feb907ec7f3c0d866791e7c44c9c",
+        "researcher-pitfalls.md": "d635fc2e59db2672c6d56a3c209e287736414a63a1d312031b592fa1e485835b",
+        "researcher-stack.md": "54d152073eb21c73590c81bfae662a372b373f214ffc1721acdc50e5f0c66a9f",
+        "researcher-synthesizer.md": "3dcd4e5d5508712919d5919a7e43ee3afdfa346d3478f25c7bd55a770095e96f"
+      },
+      "research": {
+        "architecture.md": "16714ed5b89b3cbe86c3caa65d1346726e22284aabc31c3580378a753f492b47",
+        "features.md": "e6ef59a80e162af604d9144a511f2920f7c0ae1d195d958ef33a9eff68596311",
+        "pitfalls.md": "e29cd4c3342c266d10fe7ccbcb92ecc6a60f1042f97fa72829a18f7de12734db",
+        "stack.md": "d032629fccbb57190bd242f34d15fbc0cca2966ad2e7a1fb35e41866a6c111bf",
+        "summary.md": "f3a43d24171902f9e911d05e85a2da45e2efdad7f7a3fd033c7ba5bcf4db2218"
+      },
+      "codebase": {
+        "architecture.md": "a41b88215c38366f6584cb7463942ca525656a04bfb705190cba1ac4d274fac7",
+        "concerns.md": "e7b08037df3add0662c7d9903db346254013195aad715bb68837ca9680bb2c21",
+        "conventions.md": "59d899078970ddde926e70c6a333cdcfb59198e485f5906500116e6da92d6415",
+        "stack.md": "bf65da9a8242c8c119cd0d2a2b72262a63f816be5b0e939824cf1f93be743d3f"
+      },
+      "brownfieldChange": {
+        "CHANGE.md": "6bc283dc7344eaddc9a262abbbd0c19e320b4744721b60f28e0466a30a6212a1",
+        "HANDOFF.md": "1412991a6f9ae1ab1a26dcaa6381d53e31e2536e1b444c1fecd65881ac8ce1a7",
+        "VERIFICATION.md": "084c46c389dde80567c81ed5de5b5c4e0c9ea9426954724df331d7b6fef11641"
+      },
+      "root": {
+        "agents.block.md": "2005946cd770a5f281312252485e95af505042d2c816851ac40ec0cb53c6b2c9",
+        "agents.md": "c0b71faa4a7ab9cc06f4daaf4200eee1cc7754b1393358e00eb1ea8e7c851163",
+        "approach.md": "29a67d4db3ff7e2329b4ae68979170a3b570aea2e4effbbd22d62531782f4369",
+        "auth-matrix.md": "642b373bcc6cf0196972659ac0996e91f2ee650053ab2a7179dbc043567a55e3",
+        "roadmap.md": "a507bd8042d5e850a5bd17db09aad6efdd21280053ae618ac372b3855c5beaa5",
+        "spec.md": "f3fb6fd810bdc7d082b10ba8a6ce6d915b8f90efece4ecc68eec2d44ecc58aad",
+        "ui-proof.md": "05367ad9869ccb48edd5972fe7895ecf4927c79057d03ce00fc9942c8eb0b76c"
+      }
+    },
+    "roles": {
+      "approach-explorer.md": "d558657a7bf39ddeac478650b89da9f8fb479ed4914aaf928971f0457e69c206",
+      "debugger.md": "d26a4f90e73b72a24750c28dcae71023496667e1f4551ba82ac9880cf652c5cf",
+      "DISTILLATION.md": "a565e1229d6dd0bfdafb585029336ecb3ad0bda8fe590b6a5983ddd33b28d771",
+      "executor.md": "b259c9880bea7ef1e8a5b6a4996af0ea9da45d00202dd0e45f4777cc58eeeaf0",
+      "integration-checker.md": "98024424f74642f19e75be8bf9208ca6b3b381b7dfdd8e3a290dfb080253e0e4",
+      "mapper.md": "6d1a91561a90151161ee151fb1356a91253b956af3e9e344f9a9cd1b330d6eda",
+      "planner.md": "9b1a88a64776bc0e2a28241a87a0bf1a2c2524d518b901d489308fdcf0ddb7b2",
+      "researcher.md": "7f6183bd722dbc75039b5e8cd165b2ae1791c493b73d844e87163ee8cf7a394b",
+      "roadmapper.md": "577de6b27f5bfa7e68a79a27042b209a771e58bd0f41226e05ff6806fe777d18",
+      "synthesizer.md": "e1e5f08cb7113adbc857f54a0aa5dd877f3ad8f26f34c64fac79308d9478e653",
+      "verifier.md": "7aed48903bfb980104b365c65f55422cacd73c44ec433c2ced4649e3e1b4146c"
+    },
+    "runtimeHelpers": {
+      "bin/gsdd": "41e0384c217548b26de4f507367f5424cb5868810f4634a5886ac5dd3de6abae",
+      "bin/gsdd.cmd": "0af836d186b4bf71be08f69786dc9606d45341419e1d5c93ad84d4d2f5d6b5a6",
+      "bin/gsdd.mjs": "cde9ac37897b1eb8c075d870d9a6f6cdf2183a34c82d36b1b605d2be22aeebf9",
+      "bin/gsdd.ps1": "91f03d5ce7b60828adfe1dfd14d787e35d6172b79d3c7ba7ce85730f2ba0f271",
+      "bin/lib/cli-utils.mjs": "dfe32340660a6dde7fb6a14e8edbeb16770c5b40691e4fa54ce910c48efe575d",
+      "bin/lib/control-map.mjs": "96e5610b8b0e043fefe13468cecebb976c08394baeae4179af79b1286e372171",
+      "bin/lib/file-ops.mjs": "23028282737a880e7406381bff80595bd113c929e0408bf597e35f6eaa49ddaa",
+      "bin/lib/lifecycle-preflight.mjs": "8c39c3e7caa672e25573554fbe352b538a5b65debf030754d0f88a542641417c",
+      "bin/lib/lifecycle-state.mjs": "5e6936e05aefcf6db388cb733528af84ceec46d7963bd7d11df51be565ede2d0",
+      "bin/lib/next.mjs": "5ad4c19639ca8e195e594cc243c1e3537b5f59ec77de7db0adaccc7477b85e83",
+      "bin/lib/phase.mjs": "7b1d6ced7ed41f111c90a56fe2f94d1ad111f8c81aceda3eebd95003132b7d88",
+      "bin/lib/state-dir.mjs": "5914bfcc55d929994b53812f59c2ea36c3050eb28eac72df0376bbee6df73a32",
+      "bin/lib/work-context.mjs": "e082d66d43b31362ecf184fe16f4c1ac91dab08e123fa94f6ecc32d2467972cf",
+      "bin/lib/workspace-root.mjs": "95249c3aaa63899c4c91733e4843e9bbfb017dddbf976a9c3f9b57ef5bbf9842"
+    }
+  },
+  "gsdd-cli@0.29.2": {
+    "frameworkVersion": "v1.4",
+    "generatedAt": "2026-09-03T14:38:04.079Z",
+    "templates": {
+      "delegates": {
+        "approach-explorer.md": "528749e03c568354129b03e8093ea2b5aa42c2beefbd08bb88c077bcc1d6b9dd",
+        "mapper-arch.md": "e0809706d73060c1947196273e2685811355f77f5e837bd52efac58e06f82e4d",
+        "mapper-concerns.md": "e34ec675630134344ae2106871beaaed5eddd685361c035f703a65ed38f32dbe",
+        "mapper-quality.md": "44faa3b5e29af0d1c45d192ca660d3e6e90db5fc84df026337e8a4cadd7df07a",
+        "mapper-tech.md": "25c0eda09dbf58c70f30d5e852c865fdcdb476c25c55af9d6ec04f3eda5d4999",
+        "plan-checker.md": "bf41c22882290a6183d2307851eaacf9450b1e82d99d4f3920357f3f7aad1db3",
+        "researcher-architecture.md": "064bbb4e8f53398628dd21ef1813e3372d2aef30b3da731510958fdc4e78c730",
+        "researcher-features.md": "e8f0e5b9b0a967f437f97c753cc6b5921402feb907ec7f3c0d866791e7c44c9c",
+        "researcher-pitfalls.md": "d635fc2e59db2672c6d56a3c209e287736414a63a1d312031b592fa1e485835b",
+        "researcher-stack.md": "54d152073eb21c73590c81bfae662a372b373f214ffc1721acdc50e5f0c66a9f",
+        "researcher-synthesizer.md": "3dcd4e5d5508712919d5919a7e43ee3afdfa346d3478f25c7bd55a770095e96f"
+      },
+      "research": {
+        "architecture.md": "16714ed5b89b3cbe86c3caa65d1346726e22284aabc31c3580378a753f492b47",
+        "features.md": "e6ef59a80e162af604d9144a511f2920f7c0ae1d195d958ef33a9eff68596311",
+        "pitfalls.md": "e29cd4c3342c266d10fe7ccbcb92ecc6a60f1042f97fa72829a18f7de12734db",
+        "stack.md": "d032629fccbb57190bd242f34d15fbc0cca2966ad2e7a1fb35e41866a6c111bf",
+        "summary.md": "f3a43d24171902f9e911d05e85a2da45e2efdad7f7a3fd033c7ba5bcf4db2218"
+      },
+      "codebase": {
+        "architecture.md": "a41b88215c38366f6584cb7463942ca525656a04bfb705190cba1ac4d274fac7",
+        "concerns.md": "e7b08037df3add0662c7d9903db346254013195aad715bb68837ca9680bb2c21",
+        "conventions.md": "59d899078970ddde926e70c6a333cdcfb59198e485f5906500116e6da92d6415",
+        "stack.md": "bf65da9a8242c8c119cd0d2a2b72262a63f816be5b0e939824cf1f93be743d3f"
+      },
+      "brownfieldChange": {
+        "CHANGE.md": "6bc283dc7344eaddc9a262abbbd0c19e320b4744721b60f28e0466a30a6212a1",
+        "HANDOFF.md": "1412991a6f9ae1ab1a26dcaa6381d53e31e2536e1b444c1fecd65881ac8ce1a7",
+        "VERIFICATION.md": "084c46c389dde80567c81ed5de5b5c4e0c9ea9426954724df331d7b6fef11641"
+      },
+      "root": {
+        "agents.block.md": "2005946cd770a5f281312252485e95af505042d2c816851ac40ec0cb53c6b2c9",
+        "agents.md": "c0b71faa4a7ab9cc06f4daaf4200eee1cc7754b1393358e00eb1ea8e7c851163",
+        "approach.md": "29a67d4db3ff7e2329b4ae68979170a3b570aea2e4effbbd22d62531782f4369",
+        "auth-matrix.md": "642b373bcc6cf0196972659ac0996e91f2ee650053ab2a7179dbc043567a55e3",
+        "roadmap.md": "a507bd8042d5e850a5bd17db09aad6efdd21280053ae618ac372b3855c5beaa5",
+        "spec.md": "f3fb6fd810bdc7d082b10ba8a6ce6d915b8f90efece4ecc68eec2d44ecc58aad",
+        "ui-proof.md": "05367ad9869ccb48edd5972fe7895ecf4927c79057d03ce00fc9942c8eb0b76c"
+      }
+    },
+    "roles": {
+      "approach-explorer.md": "d558657a7bf39ddeac478650b89da9f8fb479ed4914aaf928971f0457e69c206",
+      "debugger.md": "d26a4f90e73b72a24750c28dcae71023496667e1f4551ba82ac9880cf652c5cf",
+      "DISTILLATION.md": "a565e1229d6dd0bfdafb585029336ecb3ad0bda8fe590b6a5983ddd33b28d771",
+      "executor.md": "b259c9880bea7ef1e8a5b6a4996af0ea9da45d00202dd0e45f4777cc58eeeaf0",
+      "integration-checker.md": "98024424f74642f19e75be8bf9208ca6b3b381b7dfdd8e3a290dfb080253e0e4",
+      "mapper.md": "6d1a91561a90151161ee151fb1356a91253b956af3e9e344f9a9cd1b330d6eda",
+      "planner.md": "9b1a88a64776bc0e2a28241a87a0bf1a2c2524d518b901d489308fdcf0ddb7b2",
+      "researcher.md": "7f6183bd722dbc75039b5e8cd165b2ae1791c493b73d844e87163ee8cf7a394b",
+      "roadmapper.md": "577de6b27f5bfa7e68a79a27042b209a771e58bd0f41226e05ff6806fe777d18",
+      "synthesizer.md": "e1e5f08cb7113adbc857f54a0aa5dd877f3ad8f26f34c64fac79308d9478e653",
+      "verifier.md": "7aed48903bfb980104b365c65f55422cacd73c44ec433c2ced4649e3e1b4146c"
+    },
+    "runtimeHelpers": {
+      "bin/gsdd": "41e0384c217548b26de4f507367f5424cb5868810f4634a5886ac5dd3de6abae",
+      "bin/gsdd.cmd": "0af836d186b4bf71be08f69786dc9606d45341419e1d5c93ad84d4d2f5d6b5a6",
+      "bin/gsdd.mjs": "cde9ac37897b1eb8c075d870d9a6f6cdf2183a34c82d36b1b605d2be22aeebf9",
+      "bin/gsdd.ps1": "91f03d5ce7b60828adfe1dfd14d787e35d6172b79d3c7ba7ce85730f2ba0f271",
+      "bin/lib/cli-utils.mjs": "dfe32340660a6dde7fb6a14e8edbeb16770c5b40691e4fa54ce910c48efe575d",
+      "bin/lib/control-map.mjs": "96e5610b8b0e043fefe13468cecebb976c08394baeae4179af79b1286e372171",
+      "bin/lib/file-ops.mjs": "23028282737a880e7406381bff80595bd113c929e0408bf597e35f6eaa49ddaa",
+      "bin/lib/lifecycle-preflight.mjs": "105142febeec165ef32cf5f3ba28f545cb370bed756d807e7960f6f5271d0744",
+      "bin/lib/lifecycle-state.mjs": "5e6936e05aefcf6db388cb733528af84ceec46d7963bd7d11df51be565ede2d0",
+      "bin/lib/next.mjs": "f7b9b2b4e4436d74a0615548f223bc9f61ad86e23de05a9ec008cfc5736e5f91",
+      "bin/lib/phase.mjs": "7b1d6ced7ed41f111c90a56fe2f94d1ad111f8c81aceda3eebd95003132b7d88",
+      "bin/lib/state-dir.mjs": "5914bfcc55d929994b53812f59c2ea36c3050eb28eac72df0376bbee6df73a32",
+      "bin/lib/work-context.mjs": "455ae4a93f65503ca60d7a6544a6919cbae0e95a04905a7db86dac2fb13e70db",
+      "bin/lib/workspace-root.mjs": "95249c3aaa63899c4c91733e4843e9bbfb017dddbf976a9c3f9b57ef5bbf9842"
+    }
+  },
+  "gsdd-cli@0.30.0": {
+    "frameworkVersion": "v1.4",
+    "generatedAt": "2026-09-03T14:38:07.187Z",
+    "templates": {
+      "delegates": {
+        "approach-explorer.md": "528749e03c568354129b03e8093ea2b5aa42c2beefbd08bb88c077bcc1d6b9dd",
+        "mapper-arch.md": "e0809706d73060c1947196273e2685811355f77f5e837bd52efac58e06f82e4d",
+        "mapper-concerns.md": "e34ec675630134344ae2106871beaaed5eddd685361c035f703a65ed38f32dbe",
+        "mapper-quality.md": "44faa3b5e29af0d1c45d192ca660d3e6e90db5fc84df026337e8a4cadd7df07a",
+        "mapper-tech.md": "25c0eda09dbf58c70f30d5e852c865fdcdb476c25c55af9d6ec04f3eda5d4999",
+        "plan-checker.md": "bf41c22882290a6183d2307851eaacf9450b1e82d99d4f3920357f3f7aad1db3",
+        "researcher-architecture.md": "064bbb4e8f53398628dd21ef1813e3372d2aef30b3da731510958fdc4e78c730",
+        "researcher-features.md": "e8f0e5b9b0a967f437f97c753cc6b5921402feb907ec7f3c0d866791e7c44c9c",
+        "researcher-pitfalls.md": "d635fc2e59db2672c6d56a3c209e287736414a63a1d312031b592fa1e485835b",
+        "researcher-stack.md": "54d152073eb21c73590c81bfae662a372b373f214ffc1721acdc50e5f0c66a9f",
+        "researcher-synthesizer.md": "3dcd4e5d5508712919d5919a7e43ee3afdfa346d3478f25c7bd55a770095e96f"
+      },
+      "research": {
+        "architecture.md": "16714ed5b89b3cbe86c3caa65d1346726e22284aabc31c3580378a753f492b47",
+        "features.md": "e6ef59a80e162af604d9144a511f2920f7c0ae1d195d958ef33a9eff68596311",
+        "pitfalls.md": "e29cd4c3342c266d10fe7ccbcb92ecc6a60f1042f97fa72829a18f7de12734db",
+        "stack.md": "d032629fccbb57190bd242f34d15fbc0cca2966ad2e7a1fb35e41866a6c111bf",
+        "summary.md": "f3a43d24171902f9e911d05e85a2da45e2efdad7f7a3fd033c7ba5bcf4db2218"
+      },
+      "codebase": {
+        "architecture.md": "a41b88215c38366f6584cb7463942ca525656a04bfb705190cba1ac4d274fac7",
+        "concerns.md": "e7b08037df3add0662c7d9903db346254013195aad715bb68837ca9680bb2c21",
+        "conventions.md": "59d899078970ddde926e70c6a333cdcfb59198e485f5906500116e6da92d6415",
+        "stack.md": "bf65da9a8242c8c119cd0d2a2b72262a63f816be5b0e939824cf1f93be743d3f"
+      },
+      "brownfieldChange": {
+        "CHANGE.md": "6bc283dc7344eaddc9a262abbbd0c19e320b4744721b60f28e0466a30a6212a1",
+        "HANDOFF.md": "1412991a6f9ae1ab1a26dcaa6381d53e31e2536e1b444c1fecd65881ac8ce1a7",
+        "VERIFICATION.md": "084c46c389dde80567c81ed5de5b5c4e0c9ea9426954724df331d7b6fef11641"
+      },
+      "root": {
+        "agents.block.md": "2005946cd770a5f281312252485e95af505042d2c816851ac40ec0cb53c6b2c9",
+        "agents.md": "c0b71faa4a7ab9cc06f4daaf4200eee1cc7754b1393358e00eb1ea8e7c851163",
+        "approach.md": "29a67d4db3ff7e2329b4ae68979170a3b570aea2e4effbbd22d62531782f4369",
+        "auth-matrix.md": "642b373bcc6cf0196972659ac0996e91f2ee650053ab2a7179dbc043567a55e3",
+        "roadmap.md": "a507bd8042d5e850a5bd17db09aad6efdd21280053ae618ac372b3855c5beaa5",
+        "spec.md": "f3fb6fd810bdc7d082b10ba8a6ce6d915b8f90efece4ecc68eec2d44ecc58aad",
+        "ui-proof.md": "05367ad9869ccb48edd5972fe7895ecf4927c79057d03ce00fc9942c8eb0b76c"
+      }
+    },
+    "roles": {
+      "approach-explorer.md": "d558657a7bf39ddeac478650b89da9f8fb479ed4914aaf928971f0457e69c206",
+      "debugger.md": "d26a4f90e73b72a24750c28dcae71023496667e1f4551ba82ac9880cf652c5cf",
+      "DISTILLATION.md": "a565e1229d6dd0bfdafb585029336ecb3ad0bda8fe590b6a5983ddd33b28d771",
+      "executor.md": "b259c9880bea7ef1e8a5b6a4996af0ea9da45d00202dd0e45f4777cc58eeeaf0",
+      "integration-checker.md": "98024424f74642f19e75be8bf9208ca6b3b381b7dfdd8e3a290dfb080253e0e4",
+      "mapper.md": "6d1a91561a90151161ee151fb1356a91253b956af3e9e344f9a9cd1b330d6eda",
+      "planner.md": "9b1a88a64776bc0e2a28241a87a0bf1a2c2524d518b901d489308fdcf0ddb7b2",
+      "researcher.md": "7f6183bd722dbc75039b5e8cd165b2ae1791c493b73d844e87163ee8cf7a394b",
+      "roadmapper.md": "577de6b27f5bfa7e68a79a27042b209a771e58bd0f41226e05ff6806fe777d18",
+      "synthesizer.md": "e1e5f08cb7113adbc857f54a0aa5dd877f3ad8f26f34c64fac79308d9478e653",
+      "verifier.md": "7aed48903bfb980104b365c65f55422cacd73c44ec433c2ced4649e3e1b4146c"
+    },
+    "runtimeHelpers": {
+      "bin/gsdd": "41e0384c217548b26de4f507367f5424cb5868810f4634a5886ac5dd3de6abae",
+      "bin/gsdd.cmd": "0af836d186b4bf71be08f69786dc9606d45341419e1d5c93ad84d4d2f5d6b5a6",
+      "bin/gsdd.mjs": "cde9ac37897b1eb8c075d870d9a6f6cdf2183a34c82d36b1b605d2be22aeebf9",
+      "bin/gsdd.ps1": "91f03d5ce7b60828adfe1dfd14d787e35d6172b79d3c7ba7ce85730f2ba0f271",
+      "bin/lib/cli-utils.mjs": "dfe32340660a6dde7fb6a14e8edbeb16770c5b40691e4fa54ce910c48efe575d",
+      "bin/lib/control-map.mjs": "96e5610b8b0e043fefe13468cecebb976c08394baeae4179af79b1286e372171",
+      "bin/lib/file-ops.mjs": "23028282737a880e7406381bff80595bd113c929e0408bf597e35f6eaa49ddaa",
+      "bin/lib/lifecycle-preflight.mjs": "ac7d7c2f5590ec37febd64e35a65a346df57fb12348907d42fd5d072e8435e1f",
+      "bin/lib/lifecycle-state.mjs": "5e6936e05aefcf6db388cb733528af84ceec46d7963bd7d11df51be565ede2d0",
+      "bin/lib/next.mjs": "f7b9b2b4e4436d74a0615548f223bc9f61ad86e23de05a9ec008cfc5736e5f91",
+      "bin/lib/phase.mjs": "7b1d6ced7ed41f111c90a56fe2f94d1ad111f8c81aceda3eebd95003132b7d88",
+      "bin/lib/state-dir.mjs": "5914bfcc55d929994b53812f59c2ea36c3050eb28eac72df0376bbee6df73a32",
+      "bin/lib/work-context.mjs": "135967dc28be5b8911ff119ad06cd95803dc7d6f5cba181cbc2f95bebab72bbd",
+      "bin/lib/workspace-root.mjs": "95249c3aaa63899c4c91733e4843e9bbfb017dddbf976a9c3f9b57ef5bbf9842"
+    }
+  },
+  "gsdd-cli@0.31.0": {
+    "frameworkVersion": "v1.4",
+    "generatedAt": "2026-09-03T14:38:10.378Z",
+    "templates": {
+      "delegates": {
+        "approach-explorer.md": "528749e03c568354129b03e8093ea2b5aa42c2beefbd08bb88c077bcc1d6b9dd",
+        "mapper-arch.md": "e0809706d73060c1947196273e2685811355f77f5e837bd52efac58e06f82e4d",
+        "mapper-concerns.md": "e34ec675630134344ae2106871beaaed5eddd685361c035f703a65ed38f32dbe",
+        "mapper-quality.md": "44faa3b5e29af0d1c45d192ca660d3e6e90db5fc84df026337e8a4cadd7df07a",
+        "mapper-tech.md": "25c0eda09dbf58c70f30d5e852c865fdcdb476c25c55af9d6ec04f3eda5d4999",
+        "plan-checker.md": "c6392fe53846810e02e8f112d65c0804b86fb69d60e04c1ddae0f7e64ff37ebd",
+        "researcher-architecture.md": "064bbb4e8f53398628dd21ef1813e3372d2aef30b3da731510958fdc4e78c730",
+        "researcher-features.md": "e8f0e5b9b0a967f437f97c753cc6b5921402feb907ec7f3c0d866791e7c44c9c",
+        "researcher-pitfalls.md": "d635fc2e59db2672c6d56a3c209e287736414a63a1d312031b592fa1e485835b",
+        "researcher-stack.md": "54d152073eb21c73590c81bfae662a372b373f214ffc1721acdc50e5f0c66a9f",
+        "researcher-synthesizer.md": "3dcd4e5d5508712919d5919a7e43ee3afdfa346d3478f25c7bd55a770095e96f"
+      },
+      "research": {
+        "architecture.md": "16714ed5b89b3cbe86c3caa65d1346726e22284aabc31c3580378a753f492b47",
+        "features.md": "e6ef59a80e162af604d9144a511f2920f7c0ae1d195d958ef33a9eff68596311",
+        "pitfalls.md": "e29cd4c3342c266d10fe7ccbcb92ecc6a60f1042f97fa72829a18f7de12734db",
+        "stack.md": "d032629fccbb57190bd242f34d15fbc0cca2966ad2e7a1fb35e41866a6c111bf",
+        "summary.md": "f3a43d24171902f9e911d05e85a2da45e2efdad7f7a3fd033c7ba5bcf4db2218"
+      },
+      "codebase": {
+        "architecture.md": "a41b88215c38366f6584cb7463942ca525656a04bfb705190cba1ac4d274fac7",
+        "concerns.md": "e7b08037df3add0662c7d9903db346254013195aad715bb68837ca9680bb2c21",
+        "conventions.md": "59d899078970ddde926e70c6a333cdcfb59198e485f5906500116e6da92d6415",
+        "stack.md": "bf65da9a8242c8c119cd0d2a2b72262a63f816be5b0e939824cf1f93be743d3f"
+      },
+      "brownfieldChange": {
+        "CHANGE.md": "6bc283dc7344eaddc9a262abbbd0c19e320b4744721b60f28e0466a30a6212a1",
+        "HANDOFF.md": "1412991a6f9ae1ab1a26dcaa6381d53e31e2536e1b444c1fecd65881ac8ce1a7",
+        "VERIFICATION.md": "084c46c389dde80567c81ed5de5b5c4e0c9ea9426954724df331d7b6fef11641"
+      },
+      "root": {
+        "agents.block.md": "2005946cd770a5f281312252485e95af505042d2c816851ac40ec0cb53c6b2c9",
+        "agents.md": "c0b71faa4a7ab9cc06f4daaf4200eee1cc7754b1393358e00eb1ea8e7c851163",
+        "approach.md": "29a67d4db3ff7e2329b4ae68979170a3b570aea2e4effbbd22d62531782f4369",
+        "auth-matrix.md": "642b373bcc6cf0196972659ac0996e91f2ee650053ab2a7179dbc043567a55e3",
+        "roadmap.md": "a507bd8042d5e850a5bd17db09aad6efdd21280053ae618ac372b3855c5beaa5",
+        "spec.md": "f3fb6fd810bdc7d082b10ba8a6ce6d915b8f90efece4ecc68eec2d44ecc58aad",
+        "ui-proof.md": "05367ad9869ccb48edd5972fe7895ecf4927c79057d03ce00fc9942c8eb0b76c"
+      }
+    },
+    "roles": {
+      "approach-explorer.md": "d558657a7bf39ddeac478650b89da9f8fb479ed4914aaf928971f0457e69c206",
+      "debugger.md": "d26a4f90e73b72a24750c28dcae71023496667e1f4551ba82ac9880cf652c5cf",
+      "DISTILLATION.md": "a565e1229d6dd0bfdafb585029336ecb3ad0bda8fe590b6a5983ddd33b28d771",
+      "executor.md": "b259c9880bea7ef1e8a5b6a4996af0ea9da45d00202dd0e45f4777cc58eeeaf0",
+      "integration-checker.md": "98024424f74642f19e75be8bf9208ca6b3b381b7dfdd8e3a290dfb080253e0e4",
+      "mapper.md": "6d1a91561a90151161ee151fb1356a91253b956af3e9e344f9a9cd1b330d6eda",
+      "planner.md": "9b1a88a64776bc0e2a28241a87a0bf1a2c2524d518b901d489308fdcf0ddb7b2",
+      "researcher.md": "7f6183bd722dbc75039b5e8cd165b2ae1791c493b73d844e87163ee8cf7a394b",
+      "roadmapper.md": "577de6b27f5bfa7e68a79a27042b209a771e58bd0f41226e05ff6806fe777d18",
+      "synthesizer.md": "e1e5f08cb7113adbc857f54a0aa5dd877f3ad8f26f34c64fac79308d9478e653",
+      "verifier.md": "7aed48903bfb980104b365c65f55422cacd73c44ec433c2ced4649e3e1b4146c"
+    },
+    "runtimeHelpers": {
+      "bin/gsdd": "41e0384c217548b26de4f507367f5424cb5868810f4634a5886ac5dd3de6abae",
+      "bin/gsdd.cmd": "0af836d186b4bf71be08f69786dc9606d45341419e1d5c93ad84d4d2f5d6b5a6",
+      "bin/gsdd.mjs": "cde9ac37897b1eb8c075d870d9a6f6cdf2183a34c82d36b1b605d2be22aeebf9",
+      "bin/gsdd.ps1": "91f03d5ce7b60828adfe1dfd14d787e35d6172b79d3c7ba7ce85730f2ba0f271",
+      "bin/lib/cli-utils.mjs": "dfe32340660a6dde7fb6a14e8edbeb16770c5b40691e4fa54ce910c48efe575d",
+      "bin/lib/control-map.mjs": "96e5610b8b0e043fefe13468cecebb976c08394baeae4179af79b1286e372171",
+      "bin/lib/file-ops.mjs": "23028282737a880e7406381bff80595bd113c929e0408bf597e35f6eaa49ddaa",
+      "bin/lib/lifecycle-preflight.mjs": "decf1a86ad07a5fb698e946b7e682af5e3e97c0827a46be7bcc245599a210859",
+      "bin/lib/lifecycle-state.mjs": "5e6936e05aefcf6db388cb733528af84ceec46d7963bd7d11df51be565ede2d0",
+      "bin/lib/next.mjs": "f7b9b2b4e4436d74a0615548f223bc9f61ad86e23de05a9ec008cfc5736e5f91",
+      "bin/lib/phase.mjs": "98bfc47252117d3c673cd0e30b7b39dd0941aecb1b45ea3359980deac15473ca",
+      "bin/lib/state-dir.mjs": "5914bfcc55d929994b53812f59c2ea36c3050eb28eac72df0376bbee6df73a32",
+      "bin/lib/work-context.mjs": "70f60d3bc511cc7595e33096ed04618b12feb4110d17d95c1a17d6ab83eef513",
+      "bin/lib/workspace-root.mjs": "95249c3aaa63899c4c91733e4843e9bbfb017dddbf976a9c3f9b57ef5bbf9842"
+    }
+  }
+}

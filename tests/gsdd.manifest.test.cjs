@@ -600,9 +600,40 @@ describe('generation manifest', () => {
   test('plain update skips unchanged files', async () => {
     await initProject();
 
-    const result = await runCliAsMain(tmpDir, ['update']);
-    assert.ok(!result.output.includes('refreshed delegates/'));
-    assert.ok(!result.output.includes('refreshed roles/'));
+    const homeDir = createTempProject();
+    try {
+      const result = await withEnv({ GSDD_TEST_HOME: homeDir }, () => runCliAsMain(tmpDir, ['update']));
+      assert.ok(!result.output.includes('refreshed delegates/'));
+      assert.ok(!result.output.includes('refreshed roles/'));
+      assert.match(result.output, /Repository update complete\. Global agent surfaces were not changed\./);
+      assert.doesNotMatch(result.output, /regenerating adapter files|updated open-standard skills|updated local workflow helpers|updated generation manifest/);
+      assert.doesNotMatch(result.output, /update --global/);
+    } finally {
+      cleanup(homeDir);
+    }
+  });
+
+  test('repository update inspects stale global ownership read-only and prints the explicit next command', async () => {
+    await initProject();
+    const homeDir = createTempProject();
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+        const install = await runCliAsMain(tmpDir, ['install', '--global', '--tools', 'codex']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        const globalSkill = path.join(homeDir, '.agents', 'skills', 'work-plan', 'SKILL.md');
+        fs.appendFileSync(globalSkill, '\nconsumer modification\n');
+        const beforeHome = snapshotTree(homeDir);
+
+        const result = await runCliAsMain(tmpDir, ['update']);
+
+        assert.strictEqual(result.exitCode, 0, result.output);
+        assert.match(result.output, /Repository update complete\. Global agent surfaces were not changed\./);
+        assert.match(result.output, /npx -y workspine update --global/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeHome, 'repository update must not write personal agent homes');
+      });
+    } finally {
+      cleanup(homeDir);
+    }
   });
 
   test('plain update reconciles templates as owned outputs', async () => {
@@ -682,7 +713,8 @@ describe('generation manifest', () => {
 
     const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0);
-    assert.match(result.output, /updated open-standard skills/);
+    assert.match(result.output, /Repository update complete/);
+    assert.doesNotMatch(result.output, /updated open-standard skills/);
     assert.ok(fs.existsSync(path.join(skillsDir, 'work-plan', 'SKILL.md')));
     assert.ok(fs.existsSync(launcherPath));
   });
@@ -696,7 +728,8 @@ describe('generation manifest', () => {
 
     const result = await runCliAsMain(tmpDir, ['update']);
     assert.strictEqual(result.exitCode, 0);
-    assert.match(result.output, /updated local workflow helpers/);
+    assert.match(result.output, /Repository update complete/);
+    assert.doesNotMatch(result.output, /updated local workflow helpers/);
     assert.ok(fs.existsSync(launcherPath));
   });
 
