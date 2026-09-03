@@ -451,9 +451,9 @@ export function createCmdUpdate(ctx) {
       if (isDry) {
         console.log(`  - would update ${adapter.name} adapter`);
       } else {
-        adapter.generate();
+        const changed = adapter.generate();
         validateKindContract(adapter, ctx.cwd);
-        console.log(`  - ${adapter.summary('updated')}`);
+        if (changed !== false) console.log(`  - ${adapter.summary('updated')}`);
       }
       updated = true;
     }

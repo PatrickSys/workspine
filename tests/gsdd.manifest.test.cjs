@@ -613,6 +613,15 @@ describe('generation manifest', () => {
     }
   });
 
+  test('plain update does not claim unchanged root governance was updated', async () => {
+    await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+
+    const result = await runCliAsMain(tmpDir, ['update']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.doesNotMatch(result.output, /updated root AGENTS\.md/, 'unchanged governance bytes must not be reported as updated');
+  });
+
   test('repository update inspects stale global ownership read-only and prints the explicit next command', async () => {
     await initProject();
     const homeDir = createTempProject();

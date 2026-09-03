@@ -25,11 +25,14 @@ function createRootAgentsAdapter({ cwd, stateDirName = '.work', renderAgentsBoun
 
       if (!existsSync(agentsPath)) {
         writeFileSync(agentsPath, renderAgentsFileContent({ stateDirName }));
-        return;
+        return true;
       }
 
       const existing = readFileSync(agentsPath, 'utf-8');
-      writeFileSync(agentsPath, upsertBoundedBlock(existing, block));
+      const next = upsertBoundedBlock(existing, block);
+      if (next === existing) return false;
+      writeFileSync(agentsPath, next);
+      return true;
     },
     summary(action) {
       return `${action} root AGENTS.md (bounded GSDD block)`;
