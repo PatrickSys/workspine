@@ -2845,6 +2845,68 @@ describe('gsdd init and update', () => {
       assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
     });
 
+    for (const ownership of ['missing', 'corrupt', 'incomplete', 'unowned']) {
+      test(`legacy migration preflight preserves bytes for ${ownership} template ownership`, async () => {
+        const legacy = path.join(tmpDir, '.planning');
+        fs.mkdirSync(path.join(legacy, 'templates'), { recursive: true });
+        fs.writeFileSync(path.join(legacy, 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+        fs.writeFileSync(path.join(legacy, 'templates', 'spec.md'), '# Keep the existing template\n');
+        fs.writeFileSync(path.join(legacy, 'consumer.bin'), Buffer.from([0, 1, 13, 10, 255]));
+        if (ownership !== 'missing') {
+          const manifest = ownership === 'corrupt' ? '{broken' : JSON.stringify(ownership === 'incomplete'
+            ? { templates: { root: {} }, roles: {} }
+            : { templates: { delegates: {}, research: {}, codebase: {}, brownfieldChange: {}, root: {} }, roles: {} });
+          fs.writeFileSync(path.join(legacy, 'generation-manifest.json'), manifest);
+        }
+        const before = snapshotTree(tmpDir);
+
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const result = await runCliAsMain(tmpDir, ['init', '--migrate', '--auto', '--tools', 'agents']);
+          assert.strictEqual(result.exitCode, 1, result.output);
+          assert.match(result.output, /generation manifest ownership is missing or corrupt|not manifest-owned/);
+          assert.ok(fs.existsSync(legacy), 'failed preflight must leave .planning in place');
+          assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+          assert.deepStrictEqual(snapshotTree(tmpDir), before, 'refusal and retry must preserve every path and byte');
+        }
+      });
+    }
+
+    test('legacy migration preflight checks the destination tracking policy before renaming', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.planning'));
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1', commitDocs: true }));
+      fs.writeFileSync(path.join(tmpDir, '.gitignore'), '.work/\n');
+      const before = snapshotTree(tmpDir);
+
+      const result = await runCliAsMain(tmpDir, ['init', '--migrate', '--auto', '--tools', 'agents']);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.match(result.output, /\.work\/ is already ignored but commitDocs is true/);
+      assert.ok(fs.existsSync(path.join(tmpDir, '.planning')), 'tracking refusal must precede the rename');
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    });
+
+    test('legacy migration preflight permits owned templates and retains unrelated consumer bytes', async () => {
+      const legacy = path.join(tmpDir, '.planning');
+      fs.mkdirSync(path.join(legacy, 'templates'), { recursive: true });
+      fs.writeFileSync(path.join(legacy, 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+      const template = '# Older generated spec template\n';
+      fs.writeFileSync(path.join(legacy, 'templates', 'spec.md'), template);
+      const templateHash = require('node:crypto').createHash('sha256').update(template).digest('hex');
+      fs.writeFileSync(path.join(legacy, 'generation-manifest.json'), JSON.stringify({
+        templates: { delegates: {}, research: {}, codebase: {}, brownfieldChange: {}, root: { 'spec.md': templateHash } },
+        roles: {},
+      }));
+      const consumerBytes = Buffer.from([0, 1, 13, 10, 255]);
+      fs.writeFileSync(path.join(legacy, 'consumer.bin'), consumerBytes);
+
+      const result = await runCliAsMain(tmpDir, ['init', '--migrate', '--auto', '--tools', 'agents']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      assert.strictEqual(fs.existsSync(legacy), false);
+      assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'consumer.bin')), consumerBytes);
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'migration-receipt.json')));
+      assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
+      assert.notStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'templates', 'spec.md'), 'utf8'), template);
+    });
+
     test('init --migrate refuses legacy decision content and receipt collisions before writes', async () => {
       for (const collision of ['decisions', 'migration-receipt.json']) {
         fs.rmSync(path.join(tmpDir, '.planning'), { recursive: true, force: true });

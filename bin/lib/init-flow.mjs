@@ -119,6 +119,19 @@ function validateKindContract(adapter, cwd) {
   }
 }
 
+function preflightInitState(ctx, { isAuto, preselectedConfig = null }) {
+  const { planningDir, stateDirName } = ctx;
+  validateTemplateSources(ctx);
+  const hasGeneratedTemplateState = existsSync(join(planningDir, 'templates'))
+    || existsSync(join(planningDir, 'generation-manifest.json'));
+  const templatePlan = existsSync(planningDir) && hasGeneratedTemplateState
+    ? planTemplateRefresh(ctx)
+    : null;
+  const selectedConfig = readSelectedConfig({ planningDir, isAuto, preselectedConfig });
+  preflightCommitDocsOwnership(ctx.cwd, stateDirName, selectedConfig);
+  return { templatePlan, selectedConfig };
+}
+
 export function createCmdInit(ctx) {
   return async function cmdInit(...initArgs) {
     // A15-44: fail before any write when a flag is unknown, duplicated, or missing its value.
@@ -187,6 +200,10 @@ export function createCmdInit(ctx) {
         return;
       }
       try {
+        // Validate the existing bytes before moving them. Keep stateDirName at
+        // .work so generated content and tracking policy use the destination.
+        // Init revalidates after the rename before applying the refresh plan.
+        preflightInitState({ ...initCtx, planningDir: state.legacyDir }, { isAuto });
         migrateLegacyState(initCtx.cwd);
       } catch (error) {
         console.error(`ERROR: Legacy state migration failed: ${error.message}`);
@@ -224,18 +241,10 @@ export function createCmdInit(ctx) {
     let templatePlan;
     let selectedConfig;
     try {
-      validateTemplateSources(initCtx);
-      const hasGeneratedTemplateState = existsSync(join(planningDir, 'templates'))
-        || existsSync(join(planningDir, 'generation-manifest.json'));
-      templatePlan = existed && hasGeneratedTemplateState
-        ? planTemplateRefresh({ ...initCtx, planningDir, stateDirName })
-        : null;
-      selectedConfig = readSelectedConfig({
-        planningDir,
+      ({ templatePlan, selectedConfig } = preflightInitState(initCtx, {
         isAuto,
         preselectedConfig: interactiveSession.config,
-      });
-      preflightCommitDocsOwnership(initCtx.cwd, stateDirName, selectedConfig);
+      }));
     } catch (error) {
       console.error(`ERROR: ${error.message}`);
       process.exitCode = 1;
