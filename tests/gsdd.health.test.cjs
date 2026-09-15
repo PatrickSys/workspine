@@ -878,6 +878,67 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.doesNotMatch(warning.fix, /workspine init --tools|`npx -y workspine update`/);
   });
 
+  test('missing Claude target with inconsistent sibling provenance → W11 does not advertise init that will refuse', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    const before = snapshotTree(tmpDir);
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.fix, /Automatic repair preflight refused/);
+    assert.match(warning.fix, /inconsistent source provenance/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'health preflight must remain byte-neutral');
+
+    const refused = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+    assert.notStrictEqual(refused.exitCode, 0, refused.output);
+    assert.match(refused.output, /inconsistent source provenance/);
+  });
+
+  test('stale Claude target with inconsistent sibling provenance → W11 does not advertise update that will refuse', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.appendFileSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'), '\n<!-- drift -->\n');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.fix, /Automatic repair preflight refused/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine update`/);
+
+    const refused = await runCliAsMain(tmpDir, ['update']);
+    assert.notStrictEqual(refused.exitCode, 0, refused.output);
+    assert.match(refused.output, /inconsistent source provenance/);
+  });
+
+  test('manifest-selected Claude runtime with its whole native root deleted → W11 emits executable init repair', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude'), { recursive: true, force: true });
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.message, /\.claude\/skills\/work-plan\/SKILL\.md \[missing\]/);
+    assert.match(warning.fix, /`npx -y workspine init --tools claude`/);
+
+    const repaired = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+    assert.strictEqual(repaired.exitCode, 0, repaired.output);
+    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md')));
+    const clean = await runCliAsMain(tmpDir, ['health', '--json']);
+    assert.ok(!JSON.parse(clean.output).warnings.some((w) => w.id === 'W11'), clean.output);
+  });
+
   test('aligned framework truth files → no W7-W10', async () => {
     await initWorkspace();
     writeAlignedTruthFixtures();

@@ -498,9 +498,21 @@ export function evaluateRuntimeFreshness({ cwd = process.cwd(), workflows = [] }
     ownershipManifest = null;
   }
   const groups = collectExpectedRuntimeSurfaceGroups({ cwd, workflows }).map((group) => {
+    const selectionManifest = ownershipManifest ?? manifest;
+    const manifestSelected = group.runtime !== 'workspace-helper' && (
+      group.entries.some((entry) => localTargetOwned(
+        selectionManifest,
+        state.name,
+        group.runtime,
+        entry.relativePath,
+      ))
+      || (['claude', 'opencode', 'codex'].includes(group.runtime)
+        && Array.isArray(selectionManifest?.adapterSelection)
+        && selectionManifest.adapterSelection.includes(group.runtime))
+    );
     const installed = group.runtime === 'workspace-helper'
       ? existsSync(resolveStateDir(cwd).dir)
-      : existsSync(join(cwd, group.root));
+      : existsSync(join(cwd, group.root)) || manifestSelected;
     const comparisons = installed
       ? group.entries.map((entry) => compareGeneratedFile({
         cwd,
@@ -552,7 +564,9 @@ export function summarizeRuntimeFreshnessIssues(report, limit = 4) {
 export function getRuntimeFreshnessRepairGuidance(report) {
   if (!report || report.issueCount === 0) return 'Run `npx -y workspine update` to regenerate installed runtime surfaces.';
   const manualIssues = report.issues.filter((entry) =>
-    entry.owned === false || ['collision', 'unreadable', 'unowned', 'unowned-missing'].includes(entry.status));
+    entry.manual === true
+    || entry.owned === false
+    || ['collision', 'unreadable', 'unowned', 'unowned-missing'].includes(entry.status));
   const automaticIssues = report.issues.filter((entry) => !manualIssues.includes(entry));
   const commands = [...new Set(automaticIssues.map((entry) => entry.repairCommand).filter(Boolean))];
   const orderedCommands = [
@@ -568,7 +582,11 @@ export function getRuntimeFreshnessRepairGuidance(report) {
 
   if (manualIssues.length > 0) {
     const targets = [...new Set(manualIssues.map((entry) => entry.relativePath))];
-    return `Resolve generated target ownership manually first (${targets.join(', ')}). Preserve existing bytes; move or rename consumer-owned collisions, and restore matching generation-manifest ownership from a trusted backup. If no valid ownership record exists, preserve this workspace and initialize a clean workspace.${commandGuidance ? ` Then ${commandGuidance}` : ''}`;
+    const blockedReasons = [...new Set(manualIssues.map((entry) => entry.repairBlockReason).filter(Boolean))];
+    const preflightContext = blockedReasons.length > 0
+      ? ` Automatic repair preflight refused: ${blockedReasons.join(' | ')}.`
+      : '';
+    return `Resolve generated target ownership manually first (${targets.join(', ')}).${preflightContext} Preserve existing bytes; move or rename consumer-owned collisions, and restore matching generation-manifest ownership from a trusted backup. If no valid ownership record exists, preserve this workspace and initialize a clean workspace.${commandGuidance ? ` Then ${commandGuidance}` : ''}`;
   }
   if (orderedCommands.length === 1) {
     return `Run \`${orderedCommands[0]}\` to regenerate the installed runtime surfaces.`;

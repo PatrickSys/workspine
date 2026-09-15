@@ -19,6 +19,10 @@ import {
   getGlobalHealthTargets,
   resolveGlobalInstallRoots,
 } from './global-install.mjs';
+import {
+  preflightLocalInitRepair,
+  preflightLocalUpdateRepair,
+} from './init-flow.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { stateAuthorityGate } from './state-dir.mjs';
 import { WORKFLOW_ID_PREFIX } from './workflows.mjs';
@@ -303,9 +307,12 @@ export function buildHealthReport(ctx, healthArgs = []) {
       warnings.push({ id: 'W6', severity: 'WARN', message: 'No generated workflow adapter surfaces detected', fix: 'Run `npx -y workspine init --tools <platform>`' });
     }
 
-    const runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
+    let runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
       ? evaluateRuntimeFreshness({ cwd, workflows: ctx.workflows })
       : null;
+    if (runtimeFreshnessReport?.issueCount > 0) {
+      runtimeFreshnessReport = preflightLocalRuntimeRepairGuidance(ctx, runtimeFreshnessReport);
+    }
 
     warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport, stateDirName }).map((warning) => {
       if (warning.id !== 'W10') return warning;
@@ -352,6 +359,45 @@ export function buildHealthReport(ctx, healthArgs = []) {
     const status = hasErrors ? 'broken' : hasWarnings ? 'degraded' : 'healthy';
 
     return { status, errors, warnings, info };
+}
+
+function preflightLocalRuntimeRepairGuidance(ctx, report) {
+  const commandResults = new Map();
+  const commands = [...new Set(report.issues.map((issue) => issue.repairCommand).filter(Boolean))];
+  for (const command of commands) {
+    const initMatch = command.match(/\bworkspine init --tools ([a-z0-9_-]+)\b/);
+    commandResults.set(command, initMatch
+      ? preflightLocalInitRepair(ctx, initMatch[1])
+      : command === 'npx -y workspine update'
+        ? preflightLocalUpdateRepair(ctx)
+        : { ok: true, reason: null });
+  }
+
+  const blockedInit = [...commandResults.entries()]
+    .find(([command, result]) => /\bworkspine init --tools /.test(command) && !result.ok);
+  const annotatedIssues = report.issues.map((issue) => {
+    if (!issue.repairCommand) return issue;
+    let result = commandResults.get(issue.repairCommand) ?? { ok: true, reason: null };
+    // Plain update is downstream of init in mixed W11 repair chains. If init
+    // itself cannot start, do not advertise a later update that cannot yet make
+    // progress either.
+    if (issue.repairCommand === 'npx -y workspine update' && blockedInit) {
+      result = {
+        ok: false,
+        reason: `prerequisite ${blockedInit[0]} refused: ${blockedInit[1].reason}`,
+      };
+    }
+    return result.ok
+      ? issue
+      : {
+          ...issue,
+          repairCommand: null,
+          retryCommand: null,
+          manual: true,
+          repairBlockReason: result.reason,
+        };
+  });
+  return { ...report, issues: annotatedIssues };
 }
 /**
  * Factory function returning the health command.
