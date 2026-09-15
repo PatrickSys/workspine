@@ -878,6 +878,31 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.doesNotMatch(warning.fix, /workspine init --tools|`npx -y workspine update`/);
   });
 
+  test('dangling Claude parent link blocks init repair before any repository writes', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const skillsDir = path.join(tmpDir, '.claude', 'skills');
+    fs.rmSync(skillsDir, { recursive: true, force: true });
+    fs.symlinkSync(
+      path.join(tmpDir, 'missing-external-skills'),
+      skillsDir,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    const health = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(health.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, health.output);
+    assert.match(warning.fix, /Automatic repair preflight refused/);
+    assert.match(warning.fix, /parent must be a real directory/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`|`npx -y workspine update`/);
+
+    const before = snapshotTree(tmpDir);
+    const init = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+    assert.notStrictEqual(init.exitCode, 0, init.output);
+    assert.match(init.output, /parent must be a real directory/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'init must refuse a dangling parent link before any repository writes');
+  });
+
   test('missing Claude target with inconsistent sibling provenance → W11 does not advertise init that will refuse', async () => {
     const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
     assert.strictEqual(initialized.exitCode, 0, initialized.output);
@@ -1057,6 +1082,28 @@ describe('Health — WARN: adapter and truth drift detection', () => {
       assert.notStrictEqual(init.exitCode, 0, init.output);
       assert.match(init.output, /\.gitignore must be a regular file/);
       assert.strictEqual(fs.readFileSync(externalGitignore, 'utf-8'), externalBefore, 'init must not write through linked .gitignore');
+    } finally {
+      cleanup(external);
+    }
+  });
+
+  test('linked current .work root blocks init guidance and init before external writes', async () => {
+    const external = createTempProject();
+    fs.symlinkSync(external, path.join(tmpDir, '.work'), process.platform === 'win32' ? 'junction' : 'dir');
+    try {
+      const externalBefore = snapshotTree(external);
+      const health = await runCliAsMain(tmpDir, ['health', '--json']);
+      const report = JSON.parse(health.output);
+      const e1 = report.errors.find((entry) => entry.id === 'E1');
+      assert.ok(e1, health.output);
+      assert.match(e1.fix, /\.work\/.*real directory/i);
+      assert.doesNotMatch(e1.fix, /workspine init/);
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'health must not write through linked .work');
+
+      const init = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+      assert.notStrictEqual(init.exitCode, 0, init.output);
+      assert.match(init.output, /\.work\/.*real directory/i);
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'init must refuse linked .work before external writes');
     } finally {
       cleanup(external);
     }

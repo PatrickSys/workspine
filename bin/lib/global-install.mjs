@@ -1,7 +1,7 @@
 import os from 'os';
 import { spawnSync } from 'child_process';
 import { existsSync, lstatSync } from 'fs';
-import { join } from 'path';
+import { isAbsolute, join, parse, relative, resolve, sep } from 'path';
 import { promptMultiSelect } from './init-prompts.mjs';
 import {
   buildPortableSkillEntries,
@@ -55,6 +55,25 @@ function getHomeDir() {
 
 function getConfigHome(homeDir, env = process.env) {
   return env.XDG_CONFIG_HOME || join(homeDir, '.config');
+}
+
+function pathIsInside(root, target) {
+  const rel = relative(resolve(root), resolve(target));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+function globalContainmentRoot(roots, rootDir) {
+  if (pathIsInside(roots.home, rootDir)) return roots.home;
+  if (pathIsInside(roots.configHome, rootDir) && pathIsInside(roots.home, roots.configHome)) return roots.home;
+  // Explicit config/runtime homes outside the normal Workspine home are an
+  // allowed destination, but a missing leaf must not hide a junction or file
+  // collision in one of its existing ancestors. Anchor at that path's volume
+  // root so the read-only containment walk sees every ancestor before mkdir.
+  return parse(resolve(rootDir)).root;
+}
+
+function globalInstallSpec(roots, runtime, rootDir, entries) {
+  return { runtime, rootDir, containmentRoot: globalContainmentRoot(roots, rootDir), entries };
 }
 
 export function resolveGlobalInstallRoots({ homeDir = getHomeDir(), env = process.env } = {}) {
@@ -231,63 +250,35 @@ function buildGlobalEntries(target, ctx, rootDir) {
 function buildGlobalInstallSpecs(target, roots, ctx) {
   if (target === 'codex') {
     return [
-      {
-        runtime: 'agent-skills',
-        rootDir: roots.codexSkills,
-        entries: buildAgentCompatibleGlobalSkillEntries(ctx),
-      },
-      {
-        runtime: 'codex',
-        rootDir: roots.codex,
-        entries: buildCodexGlobalAgentEntries(),
-      },
+      globalInstallSpec(roots, 'agent-skills', roots.codexSkills, buildAgentCompatibleGlobalSkillEntries(ctx)),
+      globalInstallSpec(roots, 'codex', roots.codex, buildCodexGlobalAgentEntries()),
     ];
   }
 
   if (target === 'opencode' && roots.opencode !== roots.opencodeSkills) {
     return [
-      {
-        runtime: 'agent-skills',
-        rootDir: roots.opencodeSkills,
-        entries: buildAgentCompatibleGlobalSkillEntries(ctx),
-      },
-      {
-        runtime: 'opencode',
-        rootDir: roots.opencode,
-        entries: [
+      globalInstallSpec(roots, 'agent-skills', roots.opencodeSkills, buildAgentCompatibleGlobalSkillEntries(ctx)),
+      globalInstallSpec(roots, 'opencode', roots.opencode, [
           ...buildOpenCodeGlobalCommandEntries(ctx, roots.opencodeSkills),
           ...buildOpenCodeGlobalAgentEntries(ctx),
-        ],
-      },
+        ]),
     ];
   }
 
   if (target === 'copilot' && roots.copilot !== roots.copilotSkills) {
     return [
-      {
-        runtime: 'agent-skills',
-        rootDir: roots.copilotSkills,
-        entries: buildAgentCompatibleGlobalSkillEntries(ctx),
-      },
-      {
-        runtime: 'copilot',
-        rootDir: roots.copilot,
-        entries: buildCopilotGlobalAgentEntries(),
-      },
+      globalInstallSpec(roots, 'agent-skills', roots.copilotSkills, buildAgentCompatibleGlobalSkillEntries(ctx)),
+      globalInstallSpec(roots, 'copilot', roots.copilot, buildCopilotGlobalAgentEntries()),
     ];
   }
 
   return [
-    {
-      runtime: target,
-      rootDir: roots[target],
-      entries: buildGlobalEntries(target, ctx, roots[target]),
-    },
+    globalInstallSpec(roots, target, roots[target], buildGlobalEntries(target, ctx, roots[target])),
   ];
 }
 
 function preflightInstallSpec(spec, { strictOwnership = false } = {}) {
-  const manifestState = inspectGlobalManifest(spec.rootDir);
+  const manifestState = inspectGlobalManifest(spec.rootDir, spec.containmentRoot);
   const previousManifest = manifestState.manifest;
   const manifestOwnershipMismatch = manifestState.status === 'valid'
     && (manifestState.manifest.product !== 'Workspine'
@@ -295,7 +286,7 @@ function preflightInstallSpec(spec, { strictOwnership = false } = {}) {
       || !manifestState.manifest.files
       || typeof manifestState.manifest.files !== 'object'
       || Array.isArray(manifestState.manifest.files));
-  if (['linked', 'collision', 'unreadable', 'corrupt'].includes(manifestState.status) || manifestOwnershipMismatch) {
+  if (['linked', 'collision', 'unreadable', 'unsafe', 'corrupt'].includes(manifestState.status) || manifestOwnershipMismatch) {
     const status = manifestOwnershipMismatch ? 'skipped_collision' : `skipped_${manifestState.status}`;
     return {
       ...spec,
@@ -322,12 +313,14 @@ function preflightInstallSpec(spec, { strictOwnership = false } = {}) {
     nextFiles,
     dryRun: true,
     strictOwnership,
+    containmentRoot: spec.containmentRoot,
   }));
   const pruneResults = pruneStaleManifestTrackedFiles({
     rootDir: spec.rootDir,
     previousManifest,
     nextFiles,
     dryRun: true,
+    containmentRoot: spec.containmentRoot,
   });
   const results = [...fileResults, ...pruneResults];
 
@@ -349,12 +342,14 @@ function writeInstallSpec(plan, ctx) {
     previousManifest: plan.previousManifest,
     nextFiles,
     dryRun: false,
+    containmentRoot: plan.containmentRoot,
   }));
   results.push(...pruneStaleManifestTrackedFiles({
     rootDir: plan.rootDir,
     previousManifest: plan.previousManifest,
     nextFiles,
     dryRun: false,
+    containmentRoot: plan.containmentRoot,
   }));
 
   writeGlobalManifest(plan.rootDir, {
@@ -365,7 +360,7 @@ function writeInstallSpec(plan, ctx) {
     runtime: plan.runtime,
     generatedAt: new Date().toISOString(),
     files: nextFiles,
-  });
+  }, plan.containmentRoot);
 
   return results;
 }

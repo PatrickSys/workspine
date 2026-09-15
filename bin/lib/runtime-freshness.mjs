@@ -35,6 +35,7 @@ import { bridgeHistoricalAdapterOwnership, readManifest } from './manifest.mjs';
 import {
   fileHash,
   inspectGlobalManifest,
+  inspectGlobalTrackedPath,
   pruneStaleManifestTrackedFiles,
 } from './global-manifest.mjs';
 
@@ -141,9 +142,19 @@ function localTargetOwned(manifest, stateDirName, runtime, relativePath) {
     && Object.hasOwn(adapterFiles, normalized));
 }
 
-function compareGlobalGeneratedFile({ rootDir, runtime, relativePath, expectedContent, manifest }) {
+function compareGlobalGeneratedFile({ rootDir, containmentRoot, runtime, relativePath, expectedContent, manifest }) {
   const absolutePath = join(rootDir, relativePath);
   const manifestHash = manifest?.files?.[relativePath];
+  const pathState = inspectGlobalTrackedPath(rootDir, relativePath, containmentRoot);
+  if (pathState.status !== 'safe') {
+    return {
+      runtime,
+      relativePath,
+      status: pathState.status,
+      repairCommand: null,
+      blocker: true,
+    };
+  }
   let stat;
   try {
     stat = lstatSync(absolutePath);
@@ -198,7 +209,7 @@ function compareGlobalGeneratedFile({ rootDir, runtime, relativePath, expectedCo
   return { runtime, relativePath, status: 'clean', repairCommand: null, blocker: false };
 }
 
-function compareObsoleteGlobalManifestEntries({ rootDir, runtime, entries, manifest }) {
+function compareObsoleteGlobalManifestEntries({ rootDir, containmentRoot, runtime, entries, manifest }) {
   const currentFiles = Object.fromEntries(entries.map((entry) => [
     normalizeRelativePath(entry.relativePath),
     true,
@@ -208,6 +219,7 @@ function compareObsoleteGlobalManifestEntries({ rootDir, runtime, entries, manif
     previousManifest: manifest,
     nextFiles: currentFiles,
     dryRun: true,
+    containmentRoot,
   }).map((result) => {
     const base = {
       runtime,
@@ -253,7 +265,8 @@ function compareObsoleteGlobalManifestEntries({ rootDir, runtime, entries, manif
  */
 export function evaluateGlobalRuntimeFreshness({ specs = [] } = {}) {
   const rawGroups = specs.map((spec) => {
-    const manifestState = inspectGlobalManifest(spec.rootDir);
+    const containmentRoot = spec.containmentRoot || spec.rootDir;
+    const manifestState = inspectGlobalManifest(spec.rootDir, containmentRoot);
     const manifestOwned = manifestState.status === 'valid'
       && manifestState.manifest.product === 'Workspine'
       && manifestState.manifest.runtime === spec.runtime
@@ -264,6 +277,7 @@ export function evaluateGlobalRuntimeFreshness({ specs = [] } = {}) {
       ? [
           ...spec.entries.map((entry) => compareGlobalGeneratedFile({
             rootDir: spec.rootDir,
+            containmentRoot,
             runtime: spec.runtime,
             relativePath: entry.relativePath,
             expectedContent: entry.content,
@@ -271,6 +285,7 @@ export function evaluateGlobalRuntimeFreshness({ specs = [] } = {}) {
           })),
           ...compareObsoleteGlobalManifestEntries({
             rootDir: spec.rootDir,
+            containmentRoot,
             runtime: spec.runtime,
             entries: spec.entries,
             manifest: manifestState.manifest,

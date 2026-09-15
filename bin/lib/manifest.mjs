@@ -251,8 +251,16 @@ function assertSafeAdapterTarget(workspaceRoot, absolutePath, label) {
   const parentParts = relative(root, dirname(target)).split(sep).filter(Boolean);
   for (const part of parentParts) {
     current = join(current, part);
-    if (!existsSync(current)) continue;
-    const stat = lstatSync(current);
+    let stat;
+    try {
+      // lstat must be used directly here: existsSync() follows links and
+      // reports dangling parent links as absent, which would let init/update
+      // advertise a repair that the adapter writer cannot complete safely.
+      stat = lstatSync(current);
+    } catch (error) {
+      if (error?.code === 'ENOENT') continue;
+      throw new Error(`Refusing adapter update: ${label} parent could not be inspected safely.`);
+    }
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Refusing adapter update: ${label} parent must be a real directory.`);
     if (!pathIsInside(realpathSync(root), realpathSync(current))) throw new Error(`Refusing adapter update: ${label} parent resolves outside the workspace root.`);
   }

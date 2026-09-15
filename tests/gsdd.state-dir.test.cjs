@@ -198,6 +198,22 @@ describe('canonical Workspine state classification', () => {
     }
   });
 
+  test('linked current .work root is unsafe and authority refuses it', async () => {
+    const { resolveStateDir, stateAuthorityGate } = await loadModule(STATE_DIR_MODULE);
+    const outside = createTempProject();
+    try {
+      fs.symlinkSync(outside, path.join(tmp, '.work'), process.platform === 'win32' ? 'junction' : 'dir');
+      const state = resolveStateDir(tmp);
+      assert.strictEqual(state.status, 'current_unsafe');
+      assert.strictEqual(state.reason, 'linked_current_root');
+      const gate = stateAuthorityGate(state);
+      assert.strictEqual(gate.allowed, false);
+      assert.match(gate.message, /\.work\/.*real directory/i);
+    } finally {
+      cleanup(outside);
+    }
+  });
+
   test('shared authority gate emits the exact explicit migration command', async () => {
     const { resolveStateDir, stateAuthorityGate, MIGRATION_COMMAND } = await loadModule(STATE_DIR_MODULE);
     writeLegacyConfig(tmp);
