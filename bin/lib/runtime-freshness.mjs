@@ -32,7 +32,11 @@ import {
 } from './config.mjs';
 import { resolveStateDir } from './state-dir.mjs';
 import { bridgeHistoricalAdapterOwnership, readManifest } from './manifest.mjs';
-import { fileHash, inspectGlobalManifest } from './global-manifest.mjs';
+import {
+  fileHash,
+  inspectGlobalManifest,
+  pruneStaleManifestTrackedFiles,
+} from './global-manifest.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -52,21 +56,20 @@ function compareGeneratedFile({
   missingRepairCommand = repairCommand,
 }) {
   const absolutePath = join(cwd, relativePath);
-  if (!existsSync(absolutePath)) {
-    return {
-      runtime,
-      relativePath,
-      status: owned ? 'missing' : 'unowned-missing',
-      repairCommand: missingRepairCommand,
-      retryCommand: missingRepairCommand,
-      owned,
-    };
-  }
-
   let stat;
   try {
     stat = lstatSync(absolutePath);
-  } catch {
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return {
+        runtime,
+        relativePath,
+        status: owned ? 'missing' : 'unowned-missing',
+        repairCommand: missingRepairCommand,
+        retryCommand: missingRepairCommand,
+        owned,
+      };
+    }
     return {
       runtime,
       relativePath,
@@ -195,6 +198,54 @@ function compareGlobalGeneratedFile({ rootDir, runtime, relativePath, expectedCo
   return { runtime, relativePath, status: 'clean', repairCommand: null, blocker: false };
 }
 
+function compareObsoleteGlobalManifestEntries({ rootDir, runtime, entries, manifest }) {
+  const currentFiles = Object.fromEntries(entries.map((entry) => [
+    normalizeRelativePath(entry.relativePath),
+    true,
+  ]));
+  return pruneStaleManifestTrackedFiles({
+    rootDir,
+    previousManifest: manifest,
+    nextFiles: currentFiles,
+    dryRun: true,
+  }).map((result) => {
+    const base = {
+      runtime,
+      relativePath: result.relativePath,
+      obsolete: true,
+    };
+    if (result.status === 'would_remove') {
+      return {
+        ...base,
+        status: 'obsolete',
+        repairCommand: 'npx -y workspine update --global',
+        blocker: false,
+      };
+    }
+    if (result.status === 'removed_missing') {
+      return {
+        ...base,
+        status: 'obsolete-missing',
+        repairCommand: 'npx -y workspine update --global',
+        blocker: false,
+      };
+    }
+    const blockedStatus = {
+      skipped_modified: 'modified',
+      skipped_linked: 'linked',
+      skipped_collision: 'collision',
+      skipped_unreadable: 'unreadable',
+      skipped_unsafe: 'unsafe',
+    }[result.status] || 'unsafe';
+    return {
+      ...base,
+      status: blockedStatus,
+      repairCommand: null,
+      blocker: true,
+    };
+  });
+}
+
 /**
  * Read-only freshness evaluation for global manifest specs.  The global
  * installer owns spec construction; this seam only compares bytes and never
@@ -210,13 +261,21 @@ export function evaluateGlobalRuntimeFreshness({ specs = [] } = {}) {
       && typeof manifestState.manifest.files === 'object'
       && !Array.isArray(manifestState.manifest.files);
     const comparisons = manifestOwned
-      ? spec.entries.map((entry) => compareGlobalGeneratedFile({
-        rootDir: spec.rootDir,
-        runtime: spec.runtime,
-        relativePath: entry.relativePath,
-        expectedContent: entry.content,
-        manifest: manifestState.manifest,
-      }))
+      ? [
+          ...spec.entries.map((entry) => compareGlobalGeneratedFile({
+            rootDir: spec.rootDir,
+            runtime: spec.runtime,
+            relativePath: entry.relativePath,
+            expectedContent: entry.content,
+            manifest: manifestState.manifest,
+          })),
+          ...compareObsoleteGlobalManifestEntries({
+            rootDir: spec.rootDir,
+            runtime: spec.runtime,
+            entries: spec.entries,
+            manifest: manifestState.manifest,
+          }),
+        ]
       : [{
         runtime: spec.runtime,
         relativePath: 'workspine-file-manifest.json',

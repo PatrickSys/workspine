@@ -863,6 +863,21 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.doesNotMatch(warning.fix, /`npx -y workspine update`/);
   });
 
+  test('dangling owned Claude symlink → W11 stays manual and never emits init repair', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const target = path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    fs.unlinkSync(target);
+    fs.symlinkSync(path.join(tmpDir, 'missing-dangling-skill.md'), target, 'file');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.message, /\.claude\/skills\/work-plan\/SKILL\.md \[collision\]/);
+    assert.match(warning.fix, /Resolve generated target ownership manually first/);
+    assert.doesNotMatch(warning.fix, /workspine init --tools|`npx -y workspine update`/);
+  });
+
   test('aligned framework truth files → no W7-W10', async () => {
     await initWorkspace();
     writeAlignedTruthFixtures();
@@ -1051,6 +1066,81 @@ describe('Health — global agent homes', () => {
         assert.match(degradedReport.warnings.find((warning) => warning.message.includes('modified')).fix, /Preserve the existing file/);
         assert.deepStrictEqual(snapshotTree(homeDir), beforeHealthHome, 'global health must not rewrite the modified owned home');
         assert.deepStrictEqual(snapshotTree(repoDir), beforeHealthRepo, 'global health must not touch the invoking repo');
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global health reports user-modified obsolete manifest entries and blocks update-global', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const obsoleteRelativePath = 'skills/work-obsolete/SKILL.md';
+    const obsoletePath = path.join(homeDir, '.claude', ...obsoleteRelativePath.split('/'));
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        fs.mkdirSync(path.dirname(obsoletePath), { recursive: true });
+        const originalBytes = 'obsolete package-owned bytes\n';
+        fs.writeFileSync(obsoletePath, originalBytes);
+        const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        manifest.files[obsoleteRelativePath] = createHash('sha256').update(originalBytes).digest('hex');
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        fs.appendFileSync(obsoletePath, 'user edit\n');
+
+        const beforeHealth = snapshotTree(homeDir);
+        const health = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(health.output);
+        const issue = report.warnings.find((entry) => entry.message.includes(obsoleteRelativePath) && /modified/.test(entry.message));
+        assert.ok(issue, health.output);
+        assert.match(issue.fix, /Preserve the existing file/);
+        assert.doesNotMatch(issue.fix, /update --global/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeHealth, 'global health must stay read-only');
+
+        const beforeUpdate = snapshotTree(homeDir);
+        const update = await runCliAsMain(repoDir, ['update', '--global']);
+        assert.notStrictEqual(update.exitCode, 0, update.output);
+        assert.match(update.output, /stale Workspine-managed file was modified by the user/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeUpdate, 'blocked update must preserve the entire selected set');
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('safe obsolete manifest-owned global file is advertised and removed by update-global', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const obsoleteRelativePath = 'skills/work-obsolete/SKILL.md';
+    const obsoletePath = path.join(homeDir, '.claude', ...obsoleteRelativePath.split('/'));
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        fs.mkdirSync(path.dirname(obsoletePath), { recursive: true });
+        const originalBytes = 'obsolete package-owned bytes\n';
+        fs.writeFileSync(obsoletePath, originalBytes);
+        const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        manifest.files[obsoleteRelativePath] = createHash('sha256').update(originalBytes).digest('hex');
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+        const health = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(health.output);
+        const issue = report.warnings.find((entry) => entry.message.includes(obsoleteRelativePath) && /obsolete/.test(entry.message));
+        assert.ok(issue, health.output);
+        assert.match(issue.fix, /npx -y workspine update --global/);
+
+        const update = await runCliAsMain(repoDir, ['update', '--global']);
+        assert.strictEqual(update.exitCode, 0, update.output);
+        assert.ok(!fs.existsSync(obsoletePath), 'safe obsolete manifest-owned file should be removed');
+        const clean = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        assert.strictEqual(clean.exitCode, 0, clean.output);
+        assert.strictEqual(JSON.parse(clean.output).status, 'healthy');
       });
     } finally {
       cleanup(homeDir);

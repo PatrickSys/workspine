@@ -53,7 +53,7 @@ export function buildGlobalHealthReport(ctx, healthArgs = []) {
       return true;
     });
   const freshness = evaluateGlobalRuntimeFreshness({ specs });
-  const severeStatuses = new Set(['missing', 'linked', 'collision', 'unreadable', 'corrupt', 'foreign', 'manifest-missing', 'ownership-missing']);
+  const severeStatuses = new Set(['missing', 'linked', 'collision', 'unreadable', 'unsafe', 'corrupt', 'foreign', 'manifest-missing', 'ownership-missing']);
   const errors = freshness.issues
     .filter((issue) => severeStatuses.has(issue.status))
     .map((issue, index) => ({
