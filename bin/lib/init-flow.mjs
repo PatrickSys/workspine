@@ -378,6 +378,9 @@ export function createCmdInit(ctx) {
       preflightPlanningCliHelpersReadOnly(initCtx);
       applyAdapterRecovery(adapterPlan);
     } catch (error) {
+      if (String(error?.message || error).startsWith('Refusing to write generated runtime helper')) {
+        throw error;
+      }
       console.error(`ERROR: ${error.message}`);
       process.exitCode = 1;
       return;
@@ -542,6 +545,9 @@ export function createCmdUpdate(ctx) {
       if (!isDry) applyAdapterRecovery(adapterPlan);
       if (templatePlan) templateOwnership = applyTemplateRefresh(templatePlan, { isDry });
     } catch (error) {
+      if (String(error?.message || error).startsWith('Refusing to write generated runtime helper')) {
+        throw error;
+      }
       console.error(`ERROR: ${error.message}`);
       if (!isDry) printRepoUpdateBoundary(ctx, { failed: true });
       process.exitCode = 1;

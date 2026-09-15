@@ -1023,9 +1023,10 @@ describe('Health — WARN: adapter and truth drift detection', () => {
       assert.deepStrictEqual(snapshotTree(external), externalBefore, 'health must not write through the runtime junction');
 
       const repoBefore = snapshotTree(tmpDir);
-      const update = await runCliAsMain(tmpDir, ['update']);
-      assert.notStrictEqual(update.exitCode, 0, update.output);
-      assert.match(update.output, /generated runtime helpers: bin\/ must be a real directory/);
+      await assert.rejects(
+        () => runCliAsMain(tmpDir, ['update']),
+        /generated runtime helpers: bin\/ must be a real directory/
+      );
       assert.deepStrictEqual(snapshotTree(tmpDir), repoBefore, 'update must refuse unsafe runtime root before repository writes');
       assert.deepStrictEqual(snapshotTree(external), externalBefore, 'update must not write through the runtime junction');
     } finally {
