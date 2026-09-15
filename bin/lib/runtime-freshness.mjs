@@ -31,6 +31,7 @@ import {
   resolveRuntimeAgentModel,
 } from './config.mjs';
 import { resolveStateDir } from './state-dir.mjs';
+import { bridgeHistoricalAdapterOwnership, readManifest } from './manifest.mjs';
 import { fileHash, inspectGlobalManifest } from './global-manifest.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -41,14 +42,59 @@ function normalizeContent(content) {
   return String(content).replace(/\r\n/g, '\n');
 }
 
-function compareGeneratedFile({ cwd, runtime, relativePath, expectedContent, repairCommand }) {
+function compareGeneratedFile({
+  cwd,
+  runtime,
+  relativePath,
+  expectedContent,
+  owned,
+  repairCommand,
+  missingRepairCommand = repairCommand,
+}) {
   const absolutePath = join(cwd, relativePath);
   if (!existsSync(absolutePath)) {
     return {
       runtime,
       relativePath,
-      status: 'missing',
+      status: owned ? 'missing' : 'unowned-missing',
+      repairCommand: missingRepairCommand,
+      retryCommand: missingRepairCommand,
+      owned,
+    };
+  }
+
+  let stat;
+  try {
+    stat = lstatSync(absolutePath);
+  } catch {
+    return {
+      runtime,
+      relativePath,
+      status: 'unreadable',
       repairCommand,
+      retryCommand: repairCommand,
+      owned,
+    };
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    return {
+      runtime,
+      relativePath,
+      status: 'collision',
+      repairCommand,
+      retryCommand: repairCommand,
+      owned,
+    };
+  }
+
+  if (!owned) {
+    return {
+      runtime,
+      relativePath,
+      status: 'unowned',
+      repairCommand: missingRepairCommand,
+      retryCommand: missingRepairCommand,
+      owned,
     };
   }
 
@@ -60,6 +106,7 @@ function compareGeneratedFile({ cwd, runtime, relativePath, expectedContent, rep
       relativePath,
       status: 'clean',
       repairCommand,
+      owned,
     };
   }
 
@@ -68,38 +115,84 @@ function compareGeneratedFile({ cwd, runtime, relativePath, expectedContent, rep
     relativePath,
     status: 'stale',
     repairCommand,
+    owned,
   };
+}
+
+function normalizeRelativePath(relativePath) {
+  return String(relativePath).replace(/\\/g, '/');
+}
+
+function localTargetOwned(manifest, stateDirName, runtime, relativePath) {
+  if (!manifest) return false;
+  const normalized = normalizeRelativePath(relativePath);
+  if (runtime === 'workspace-helper') {
+    const prefix = `${stateDirName}/`;
+    const manifestRelative = normalized.startsWith(prefix) ? normalized.slice(prefix.length) : normalized;
+    const helpers = manifest.runtimeHelpers;
+    return Boolean(helpers && typeof helpers === 'object' && !Array.isArray(helpers)
+      && Object.hasOwn(helpers, manifestRelative));
+  }
+  const adapterFiles = manifest.adapterFiles;
+  return Boolean(adapterFiles && typeof adapterFiles === 'object' && !Array.isArray(adapterFiles)
+    && Object.hasOwn(adapterFiles, normalized));
 }
 
 function compareGlobalGeneratedFile({ rootDir, runtime, relativePath, expectedContent, manifest }) {
   const absolutePath = join(rootDir, relativePath);
+  const manifestHash = manifest?.files?.[relativePath];
   let stat;
   try {
     stat = lstatSync(absolutePath);
   } catch (error) {
+    if (error?.code === 'ENOENT' && !manifestHash) {
+      return {
+        runtime,
+        relativePath,
+        status: 'ownership-missing',
+        repairCommand: null,
+        blocker: true,
+      };
+    }
     return {
       runtime,
       relativePath,
       status: error?.code === 'ENOENT' ? 'missing' : 'unreadable',
-      repairCommand: 'npx -y workspine update --global',
+      repairCommand: error?.code === 'ENOENT' ? 'npx -y workspine update --global' : null,
+      blocker: error?.code !== 'ENOENT',
     };
   }
   if (stat.isSymbolicLink()) {
-    return { runtime, relativePath, status: 'linked', repairCommand: 'npx -y workspine update --global' };
+    return { runtime, relativePath, status: 'linked', repairCommand: null, blocker: true };
   }
   if (!stat.isFile()) {
-    return { runtime, relativePath, status: 'collision', repairCommand: 'npx -y workspine update --global' };
+    return { runtime, relativePath, status: 'collision', repairCommand: null, blocker: true };
   }
 
-  const manifestHash = manifest?.files?.[relativePath];
   if (!manifestHash) {
-    return { runtime, relativePath, status: 'untracked', repairCommand: 'npx -y workspine update --global' };
+    return { runtime, relativePath, status: 'untracked', repairCommand: null, blocker: true };
   }
-  const actualHash = fileHash(absolutePath);
-  if (actualHash !== manifestHash || normalizeContent(readFileSync(absolutePath, 'utf-8')) !== normalizeContent(expectedContent)) {
-    return { runtime, relativePath, status: 'modified', repairCommand: 'npx -y workspine update --global' };
+  let actualHash;
+  let actualContent;
+  try {
+    actualHash = fileHash(absolutePath);
+    actualContent = normalizeContent(readFileSync(absolutePath, 'utf-8'));
+  } catch {
+    return { runtime, relativePath, status: 'unreadable', repairCommand: null, blocker: true };
   }
-  return { runtime, relativePath, status: 'clean', repairCommand: 'npx -y workspine update --global' };
+  if (actualHash !== manifestHash) {
+    return { runtime, relativePath, status: 'modified', repairCommand: null, blocker: true };
+  }
+  if (actualContent !== normalizeContent(expectedContent)) {
+    return {
+      runtime,
+      relativePath,
+      status: 'package-stale',
+      repairCommand: 'npx -y workspine update --global',
+      blocker: false,
+    };
+  }
+  return { runtime, relativePath, status: 'clean', repairCommand: null, blocker: false };
 }
 
 /**
@@ -108,7 +201,7 @@ function compareGlobalGeneratedFile({ rootDir, runtime, relativePath, expectedCo
  * repairs or rewrites a personal-agent home.
  */
 export function evaluateGlobalRuntimeFreshness({ specs = [] } = {}) {
-  const groups = specs.map((spec) => {
+  const rawGroups = specs.map((spec) => {
     const manifestState = inspectGlobalManifest(spec.rootDir);
     const manifestOwned = manifestState.status === 'valid'
       && manifestState.manifest.product === 'Workspine'
@@ -127,8 +220,13 @@ export function evaluateGlobalRuntimeFreshness({ specs = [] } = {}) {
       : [{
         runtime: spec.runtime,
         relativePath: 'workspine-file-manifest.json',
-        status: manifestState.status === 'valid' ? 'collision' : manifestState.status,
-        repairCommand: 'npx -y workspine update --global',
+        status: manifestState.status === 'valid'
+          ? 'foreign'
+          : manifestState.status === 'missing'
+            ? 'manifest-missing'
+            : manifestState.status,
+        repairCommand: null,
+        blocker: true,
       }];
     return {
       runtime: spec.runtime,
@@ -138,14 +236,51 @@ export function evaluateGlobalRuntimeFreshness({ specs = [] } = {}) {
       issueCount: comparisons.filter((entry) => entry.status !== 'clean').length,
     };
   });
+  const rawIssues = rawGroups.flatMap((group) => group.comparisons.filter((entry) => entry.status !== 'clean'));
+  const selectedSetBlocked = rawIssues.some((entry) => entry.blocker === true);
+  const groups = selectedSetBlocked
+    ? rawGroups.map((group) => ({
+        ...group,
+        comparisons: group.comparisons.map((entry) => entry.status === 'clean'
+          ? entry
+          : { ...entry, repairCommand: null }),
+      }))
+    : rawGroups;
   const issues = groups.flatMap((group) => group.comparisons.filter((entry) => entry.status !== 'clean'));
   return {
     groups,
     issues,
     issueCount: issues.length,
-    staleCount: issues.filter((entry) => entry.status === 'modified').length,
+    staleCount: issues.filter((entry) => entry.status === 'package-stale').length,
     missingCount: issues.filter((entry) => entry.status === 'missing').length,
+    blockerCount: issues.filter((entry) => entry.blocker === true).length,
+    selectedSetBlocked,
   };
+}
+
+export function getGlobalRuntimeRepairGuidance(issue, report) {
+  const pathLabel = `${issue.runtime}: ${issue.relativePath}`;
+  if (issue.blocker === true) {
+    if (issue.status === 'modified' || issue.status === 'untracked') {
+      return `Manual resolution required for ${pathLabel}. Preserve the existing file; move the customization aside or restore trusted manifest-owned bytes, then rerun \`npx -y workspine health --global\`. Do not adopt or overwrite it automatically.`;
+    }
+    if (issue.status === 'linked' || issue.status === 'collision') {
+      return `Manual resolution required for ${pathLabel}. Preserve the existing path, then move or rename the linked/colliding entry and rerun \`npx -y workspine health --global\`.`;
+    }
+    if (issue.status === 'unreadable') {
+      return `Manual resolution required for ${pathLabel}. Fix filesystem access so Workspine can inspect it safely, then rerun \`npx -y workspine health --global\`.`;
+    }
+    if (['corrupt', 'foreign', 'manifest-missing', 'ownership-missing'].includes(issue.status)) {
+      return `Manual ownership repair required for ${pathLabel}. Restore a trusted Workspine ownership manifest for this runtime, or preserve the existing home and do not adopt it automatically; then rerun \`npx -y workspine health --global\`.`;
+    }
+    return `Manual resolution required for ${pathLabel}. Preserve the existing home and rerun \`npx -y workspine health --global\` after resolving the ownership blocker.`;
+  }
+  if (report?.selectedSetBlocked) {
+    return `Automatic global reconciliation is blocked by another unsafe global issue. Resolve the manual blocker(s), then rerun \`npx -y workspine health --global\`.`;
+  }
+  return issue.repairCommand
+    ? `Run \`${issue.repairCommand}\` to reconcile this manifest-owned global surface.`
+    : `Rerun \`npx -y workspine health --global\` after resolving this global surface.`;
 }
 
 function buildClaudeEntries({ cwd, workflows, stateDirName = '.work' }) {
@@ -265,27 +400,44 @@ export function collectExpectedRuntimeSurfaceGroups({ cwd = process.cwd(), workf
       runtime: 'claude',
       label: 'Claude Code native surfaces',
       root: '.claude',
-      repairCommand: 'npx -y workspine update --tools claude',
+      repairCommand: 'npx -y workspine update',
+      missingRepairCommand: 'npx -y workspine init --tools claude',
       entries: buildClaudeEntries({ cwd, workflows, stateDirName }),
     },
     {
       runtime: 'opencode',
       label: 'OpenCode native surfaces',
       root: '.opencode',
-      repairCommand: 'npx -y workspine update --tools opencode',
+      repairCommand: 'npx -y workspine update',
+      missingRepairCommand: 'npx -y workspine init --tools opencode',
       entries: buildOpenCodeEntries({ cwd, workflows, stateDirName }),
     },
     {
       runtime: 'codex',
       label: 'Codex CLI native agents',
       root: '.codex',
-      repairCommand: 'npx -y workspine update --tools codex',
+      repairCommand: 'npx -y workspine update',
+      missingRepairCommand: 'npx -y workspine init --tools codex',
       entries: buildCodexEntries({ cwd }),
     },
   ];
 }
 
 export function evaluateRuntimeFreshness({ cwd = process.cwd(), workflows = [] }) {
+  const state = resolveStateDir(cwd);
+  const manifest = readManifest(state.dir);
+  let ownershipManifest = manifest;
+  try {
+    ownershipManifest = bridgeHistoricalAdapterOwnership({
+      cwd,
+      manifest,
+      stateDirName: state.name,
+    })?.manifest ?? manifest;
+  } catch {
+    // Unsafe historical ownership must stay manual in health rather than
+    // advertising an update/init path that the real preflight will refuse.
+    ownershipManifest = null;
+  }
   const groups = collectExpectedRuntimeSurfaceGroups({ cwd, workflows }).map((group) => {
     const installed = group.runtime === 'workspace-helper'
       ? existsSync(resolveStateDir(cwd).dir)
@@ -296,7 +448,9 @@ export function evaluateRuntimeFreshness({ cwd = process.cwd(), workflows = [] }
         runtime: group.runtime,
         relativePath: entry.relativePath,
         expectedContent: entry.expectedContent,
+        owned: localTargetOwned(ownershipManifest, state.name, group.runtime, entry.relativePath),
         repairCommand: group.repairCommand,
+        missingRepairCommand: group.missingRepairCommand,
       }))
       : [];
 
@@ -338,9 +492,27 @@ export function summarizeRuntimeFreshnessIssues(report, limit = 4) {
 
 export function getRuntimeFreshnessRepairGuidance(report) {
   if (!report || report.issueCount === 0) return 'Run `npx -y workspine update` to regenerate installed runtime surfaces.';
-  const commands = [...new Set(report.issues.map((entry) => entry.repairCommand))];
-  if (commands.length === 1) {
-    return `Run \`${commands[0]}\` to regenerate the installed runtime surfaces.`;
+  const manualIssues = report.issues.filter((entry) =>
+    entry.owned === false || ['collision', 'unreadable', 'unowned', 'unowned-missing'].includes(entry.status));
+  const automaticIssues = report.issues.filter((entry) => !manualIssues.includes(entry));
+  const commands = [...new Set(automaticIssues.map((entry) => entry.repairCommand).filter(Boolean))];
+  const orderedCommands = [
+    ...commands.filter((command) => / workspine init --tools /.test(command)),
+    ...commands.filter((command) => command === 'npx -y workspine update'),
+    ...commands.filter((command) => !/ workspine init --tools /.test(command) && command !== 'npx -y workspine update'),
+  ];
+  const commandGuidance = orderedCommands.length === 1
+    ? `Run \`${orderedCommands[0]}\`.`
+    : orderedCommands.length > 1
+      ? `Run ${orderedCommands.map((command) => `\`${command}\``).join(', then ')}.`
+      : '';
+
+  if (manualIssues.length > 0) {
+    const targets = [...new Set(manualIssues.map((entry) => entry.relativePath))];
+    return `Resolve generated target ownership manually first (${targets.join(', ')}). Preserve existing bytes; move or rename consumer-owned collisions, and restore matching generation-manifest ownership from a trusted backup. If no valid ownership record exists, preserve this workspace and initialize a clean workspace.${commandGuidance ? ` Then ${commandGuidance}` : ''}`;
   }
-  return `Run \`npx -y workspine update\` to regenerate all installed runtime surfaces, or target the affected adapters individually: ${commands.map((command) => `\`${command}\``).join(', ')}.`;
+  if (orderedCommands.length === 1) {
+    return `Run \`${orderedCommands[0]}\` to regenerate the installed runtime surfaces.`;
+  }
+  return `${commandGuidance.slice(0, -1)} in that order so each repair can make progress.`;
 }

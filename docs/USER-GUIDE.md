@@ -19,7 +19,7 @@ Run `npx -y workspine setup` from the repo root, then use the representative loo
 
 Use `work-map-codebase` only when a repo is unfamiliar, risky, or its existing map is stale. It creates trusted brownfield context before you choose Quick or a broader project route; it is not a fourth mandatory goal.
 
-Compatibility: `npx -y workspine init` remains available for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. Use `--auto` to refresh detected existing homes; global install never creates `.work/` in the current repo.
+Compatibility: `npx -y workspine init` remains available for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. `--auto` selects detected existing homes for install/setup; for repair, run `npx -y workspine health --global` first and follow its safe update or manual-resolution guidance. Global install never creates `.work/` in the current repo.
 
 Setup defaults to recommended portable files in the current repo. Use `setup --global` for personal agent homes, `--agent <target>` for one native target, `--all` for every detected target, or `--migrate` to approve a detected legacy-state move explicitly. `-y`/`--yes` accepts the bounded write without prompts; `--dry-run` previews it.
 
@@ -204,7 +204,7 @@ npx -y workspine install --global --auto
 npx -y workspine install --global --tools claude,opencode,codex,copilot
 ```
 
-For a fresh install, choose targets interactively or pass `--tools <targets>`. Use `--auto` for a non-interactive refresh of detected existing agent homes. If none are detected, it writes nothing and prints one exact command per supported target.
+For a fresh install, choose targets interactively or pass `--tools <targets>`. `--auto` selects detected existing agent homes for non-interactive install/setup; it is not the repair path. If none are detected, it writes nothing and prints one exact command per supported target. For an existing Workspine-owned home, inspect `npx -y workspine health --global` before attempting repair.
 
 Global install writes Workspine-managed files under selected agent homes and records per-runtime manifests. It does not bootstrap project planning state. Each target writes to these directories:
 
@@ -244,8 +244,7 @@ Details worth knowing before you script it:
 | Command | Purpose |
 |---------|---------|
 | `npx -y workspine init [--tools <platform>]` | Set up `.work/`, generate skills/adapters |
-| `npx -y workspine update [--tools <platform>]` | Regenerate skills/adapters from latest sources |
-| `npx -y workspine update --templates` | Refresh role contracts and delegates (warns about user modifications) |
+| `npx -y workspine update [--dry-run]` | Reconcile all manifest-owned repo-local templates, helpers, skills, and adapters from latest sources |
 | `npx -y workspine find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `npx -y workspine verify <N>` | Run artifact checks for phase N |
 | `npx -y workspine scaffold phase <N> [name]` | Create a new phase plan file |
@@ -286,7 +285,7 @@ Normal user flow:
 2. Enter workflows through your runtime surface: `/work-*` or `$work-*`.
 3. Use `npx -y workspine health` to check repo-local generated surfaces.
 4. Use `npx -y workspine update` when repo-local generated surfaces drift or you want the latest shipped output.
-5. For personal global installs, rerun `npx -y workspine install --global --auto` to repair or refresh detected existing agent homes, or use `npx -y workspine install --global --tools <targets>` for a fresh or explicitly scoped target set.
+5. For personal global installs, run `npx -y workspine health --global`. It recommends `npx -y workspine update --global` only when every discovered issue is safe to reconcile; otherwise resolve the named ownership/filesystem blocker manually. Use `npx -y workspine install --global --tools <targets>` for a fresh or explicitly scoped install.
 
 Surface split:
 
@@ -511,18 +510,18 @@ Do not re-run `work-execute`. Use `work-quick` for targeted fixes, or `work-veri
 ### Template Refresh After Update
 
 ```bash
-npx -y workspine update --templates       # Refreshes role contracts and delegates
+npx -y workspine update       # Reconciles role contracts, delegates, helpers, skills, and adapters
 ```
 
 If you've modified any templates, the generation manifest detects this and warns you before overwriting. The SHA-256 hash of each generated file is tracked in `.work/generation-manifest.json`.
 
 ### Generated Surfaces Drift Or A Runtime Command Goes Missing
 
-In a repo-local `.work/` workspace, start with `npx -y workspine health`. If it reports drift or missing installed generated surfaces, run `npx -y workspine update` for the whole workspace or `npx -y workspine update --tools <runtime>` for a specific runtime. For global personal installs, rerun `npx -y workspine install --global --auto` or scope it explicitly with `npx -y workspine install --global --tools <targets>`.
+In a repo-local `.work/` workspace, start with `npx -y workspine health`. Stale manifest-owned repo-local surfaces are repaired with plain `npx -y workspine update`. If health reports a missing manifest-owned Claude, OpenCode, or Codex native target, follow its emitted `npx -y workspine init --tools <runtime>` repair first, then rerun health and plain update if further stale surfaces remain. Generated-looking files without matching manifest ownership require manual preservation/ownership repair rather than automatic adoption. For global personal installs, use `npx -y workspine health --global`: safe missing/package-stale ownership can route to `update --global`, while any unowned, user-modified, linked, colliding, unreadable, corrupt, foreign, or ownership-missing state blocks automatic reconciliation until resolved manually. Fresh installs still use `npx -y workspine install --global --tools <targets>`.
 
 That repair path is deterministic for generated files. It does not imply that every runtime has equal native ergonomics or equal validation depth.
 
-A global install repair restores managed files you deleted and rewrites stale ones you have not touched, and it never overwrites your edits. If a managed file was hand-edited, or an untracked file sits where a managed one belongs, preflight stops and names that file, and nothing is written for any selected target until you resolve it. Restore the file from the manifest hash or delete it, then rerun the install.
+For an existing global install, start with `npx -y workspine health --global`. Manifest-owned missing files and package-stale bytes can be reconciled with `npx -y workspine update --global` only when the whole discovered target set is auto-safe. If health reports a user-modified, untracked, ownership-missing, linked, colliding, unreadable, corrupt, or foreign state, preserve the existing bytes and resolve that blocker manually before rerunning global health; do not use global install as an in-place repair shortcut.
 
 ### Model Costs Too High
 
@@ -539,7 +538,7 @@ Switch to budget profile: `npx -y workspine models profile budget` (or `gsdd mod
 | Quick targeted fix | `work-quick` |
 | Something broke | Use the debugger role for systematic debugging |
 | Costs running high | `npx -y workspine models profile budget`, disable workflow toggles |
-| Templates out of date | `npx -y workspine update --templates` or `gsdd update --templates` if globally installed |
+| Templates out of date | `npx -y workspine update` or `gsdd update` if globally installed |
 | Adapters out of date | `npx -y workspine update` or `gsdd update` if globally installed |
 
 ---

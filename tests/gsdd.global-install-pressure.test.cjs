@@ -845,11 +845,14 @@ describe('global install pressure loop', () => {
         assert.match(cleanUpdate, /codex:/);
         assert.strictEqual(process.exitCode, undefined);
         fs.writeFileSync(claudeSkill, 'user edit that should be recovered\n');
+        const beforeBlockedHome = snapshotTree(homeDir);
         const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
         assert.match(output, /claude:/);
         assert.match(output, /codex:/);
         assert.strictEqual(process.exitCode, 1, 'modified owned global bytes must refuse before any target writes');
+        assert.match(output, /Manual resolution is required before retrying/);
         assert.strictEqual(fs.readFileSync(claudeSkill, 'utf-8'), 'user edit that should be recovered\n');
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeBlockedHome, 'one blocker must keep the entire selected global set zero-write');
         assert.deepStrictEqual(snapshotTree(repoDir), beforeRepo, 'global update must not touch the invoking repo');
       });
     } finally {
@@ -879,6 +882,42 @@ describe('global install pressure loop', () => {
         assert.match(output, /claude:/);
         assert.match(output, /codex:/);
         for (const filePath of missingFiles) assert.ok(fs.existsSync(filePath), `${filePath} must be reconciled`);
+      });
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global update refuses an absent expected file when manifest ownership is also missing', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const target = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        const installOutput = await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude'));
+        assert.match(installOutput, /Global install complete/);
+        assert.ok(fs.existsSync(target), 'fresh install must create the expected target');
+
+        fs.unlinkSync(target);
+        const manifest = readJson(manifestPath);
+        delete manifest.files['skills/work-plan/SKILL.md'];
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        const before = snapshotTree(homeDir);
+
+        const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
+
+        assert.strictEqual(process.exitCode, 1, output);
+        assert.match(output, /missing target is unowned|not tracked by Workspine manifest/i);
+        assert.match(output, /Manual resolution is required before retrying/);
+        assert.ok(!fs.existsSync(target), 'strict global update must not recreate an absent unowned target');
+        assert.deepStrictEqual(snapshotTree(homeDir), before, 'absent plus untracked global target must refuse with zero writes');
       });
     } finally {
       restoreStdin();
@@ -975,6 +1014,7 @@ describe('global install pressure loop', () => {
           assert.strictEqual(process.exitCode, 1, `${scenario.name} must refuse`);
           const expectedReason = scenario.name === 'corrupt' ? 'corrupt' : scenario.name === 'linked-manifest' ? 'linked' : scenario.name;
           assert.match(output, new RegExp(expectedReason));
+          assert.match(output, /Manual resolution is required before retrying/);
           assert.deepStrictEqual(snapshotTree(homeDir), before, `${scenario.name} refusal must be zero-write`);
         });
       } finally {

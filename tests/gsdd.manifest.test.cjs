@@ -622,7 +622,7 @@ describe('generation manifest', () => {
     assert.doesNotMatch(result.output, /updated root AGENTS\.md/, 'unchanged governance bytes must not be reported as updated');
   });
 
-  test('repository update inspects stale global ownership read-only and prints the explicit next command', async () => {
+  test('repository update routes unsafe global modification to read-only global health and manual attention', async () => {
     await initProject();
     const homeDir = createTempProject();
     try {
@@ -637,8 +637,32 @@ describe('generation manifest', () => {
 
         assert.strictEqual(result.exitCode, 0, result.output);
         assert.match(result.output, /Repository update complete\. Global agent surfaces were not changed\./);
-        assert.match(result.output, /npx -y workspine update --global/);
+        assert.match(result.output, /npx -y workspine health --global/);
+        assert.match(result.output, /manual attention/i);
+        assert.doesNotMatch(result.output, /npx -y workspine update --global/);
         assert.deepStrictEqual(snapshotTree(homeDir), beforeHome, 'repository update must not write personal agent homes');
+      });
+    } finally {
+      cleanup(homeDir);
+    }
+  });
+
+  test('repository update advises update-global only for an auto-safe missing owned global file', async () => {
+    await initProject();
+    const homeDir = createTempProject();
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir }, async () => {
+        const install = await runCliAsMain(tmpDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        fs.unlinkSync(path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+        const beforeHome = snapshotTree(homeDir);
+
+        const result = await runCliAsMain(tmpDir, ['update']);
+
+        assert.strictEqual(result.exitCode, 0, result.output);
+        assert.match(result.output, /npx -y workspine update --global/);
+        assert.doesNotMatch(result.output, /manual attention/i);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeHome, 'repository update advisory must stay read-only for safe global drift');
       });
     } finally {
       cleanup(homeDir);

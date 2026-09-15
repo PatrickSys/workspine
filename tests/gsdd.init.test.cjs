@@ -2816,6 +2816,50 @@ describe('gsdd init and update', () => {
       }
     });
 
+    test('interactive legacy migration preflights the wizard-selected AGENTS.md target before renaming', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+      fs.writeFileSync(path.join(tmpDir, 'AGENTS.md'), 'consumer-owned\n');
+      const before = snapshotTree(tmpDir);
+      const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
+      const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
+      const configMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'config.mjs'));
+      const restoreStdin = setInteractiveStdin();
+      const previousExitCode = process.exitCode;
+      const originalConsoleError = console.error;
+      const errors = [];
+      let wizardCalls = 0;
+      try {
+        const ctx = gsddMod.createCliContext(tmpDir);
+        ctx.initPromptApi = {
+          confirmLegacyMigration: async () => true,
+          runInitWizard: async () => {
+            wizardCalls += 1;
+            return {
+              selectedRuntimes: [],
+              adapterTargets: ['agents'],
+              config: configMod.buildDefaultConfig(),
+            };
+          },
+        };
+        console.error = (...args) => errors.push(args.join(' '));
+        process.exitCode = undefined;
+
+        await initMod.createCmdInit(ctx)();
+
+        assert.strictEqual(process.exitCode, 1);
+        assert.strictEqual(wizardCalls, 1);
+        assert.match(errors.join('\n'), /Refusing adapter update: AGENTS\.md exists without a generation manifest/);
+        assert.ok(fs.existsSync(path.join(tmpDir, '.planning')), 'adapter refusal must precede the rename');
+        assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+        assert.deepStrictEqual(snapshotTree(tmpDir), before, 'interactive adapter refusal must preserve every path and byte');
+      } finally {
+        console.error = originalConsoleError;
+        process.exitCode = previousExitCode;
+        restoreStdin();
+      }
+    });
+
     test('models and rigor commands refuse supported legacy state without writes', async () => {
       fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
       fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
@@ -2844,6 +2888,33 @@ describe('gsdd init and update', () => {
       assert.strictEqual(receipt.method, 'same-parent-rename');
       assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs')));
     });
+
+    for (const { relativePath, tools } of [
+      { relativePath: 'AGENTS.md', tools: 'agents' },
+      { relativePath: '.agents/skills/work-plan/SKILL.md', tools: 'claude' },
+      { relativePath: '.claude/skills/work-plan/SKILL.md', tools: 'claude' },
+      { relativePath: '.codex/agents/work-plan-checker.toml', tools: 'codex' },
+    ]) {
+      test(`legacy migration preflights selected adapter collision at ${relativePath}`, async () => {
+        fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+        fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+        const collisionPath = path.join(tmpDir, ...relativePath.split('/'));
+        fs.mkdirSync(path.dirname(collisionPath), { recursive: true });
+        fs.writeFileSync(collisionPath, 'consumer-owned\n');
+        const before = snapshotTree(tmpDir);
+
+        const result = await runCliAsMain(tmpDir, ['init', '--migrate', '--auto', '--tools', tools]);
+
+        assert.strictEqual(result.exitCode, 1, result.output);
+        assert.ok(
+          result.output.includes(`Refusing adapter update: ${relativePath} exists without a generation manifest`),
+          result.output,
+        );
+        assert.ok(fs.existsSync(path.join(tmpDir, '.planning')), 'adapter refusal must precede the rename');
+        assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+        assert.deepStrictEqual(snapshotTree(tmpDir), before, 'adapter refusal must preserve every path and byte');
+      });
+    }
 
     for (const ownership of ['missing', 'corrupt', 'incomplete', 'unowned']) {
       test(`legacy migration preflight preserves bytes for ${ownership} template ownership`, async () => {

@@ -1947,19 +1947,19 @@ describe('G12 — Documentation Accuracy Guards', () => {
   });
 
   // G12.5: No "(planned)" for implemented features
-  test('agents/README.md does not say "(planned)" for gsdd update --templates', () => {
+  test('agents/README.md does not say "(planned)" for repo-local update', () => {
     assert.ok(
       !agentsReadme.includes('(planned)'),
       'agents/README.md still says "(planned)" for an implemented feature. FIX: Remove "(planned)" and describe current behavior.'
     );
   });
 
-  // G12.6: Update command documentation mentions --templates
-  test('User Guide update command mentions --templates while README links to it', () => {
-    assert.ok(
-      userGuide.includes('--templates'),
-      'User Guide update command documentation does not mention --templates. FIX: Add --templates to the detailed command reference.'
-    );
+  // G12.6: Update command documentation stays aligned with selector-free repo repair.
+  test('User Guide documents selector-free update while README links to it', () => {
+    assert.match(userGuide, /npx -y workspine update/,
+      'User Guide must document the supported whole-repo update command.');
+    assert.doesNotMatch(userGuide, /workspine update --(?:templates|tools)/,
+      'User Guide must not advertise retired repo-local update selectors.');
     assert.match(rootReadme, /\[User Guide\]\(docs\/USER-GUIDE\.md\)/);
   });
 

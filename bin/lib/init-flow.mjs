@@ -41,7 +41,7 @@ import { ensureWorkStructure } from './work-context.mjs';
 import { workflowId } from './workflows.mjs';
 import {
   collectGlobalInstallSpecs,
-  getManifestOwnedGlobalTargets,
+  getGlobalHealthTargets,
   resolveGlobalInstallRoots,
 } from './global-install.mjs';
 import { evaluateGlobalRuntimeFreshness } from './runtime-freshness.mjs';
@@ -53,12 +53,14 @@ function printRepoUpdateBoundary(ctx, { failed = false } = {}) {
 
   try {
     const roots = resolveGlobalInstallRoots(ctx.globalInstallRootOptions);
-    const targets = getManifestOwnedGlobalTargets({ roots });
+    const targets = getGlobalHealthTargets({ roots, ctx });
     if (targets.length === 0) return;
     const specs = targets.flatMap((target) => collectGlobalInstallSpecs({ target, roots, ctx }));
     const freshness = evaluateGlobalRuntimeFreshness({ specs });
     if (freshness.issueCount > 0) {
-      console.log('Global agent surfaces also need attention. Run `npx -y workspine update --global`.');
+      console.log(freshness.selectedSetBlocked
+        ? 'Global agent surfaces also need manual attention. Run `npx -y workspine health --global`, resolve the reported blocker(s), then retry global repair.'
+        : 'Global agent surfaces also need attention. Run `npx -y workspine update --global`.');
     }
   } catch {
     // Global inspection is advisory and read-only. It must never hide or
@@ -188,6 +190,7 @@ export function createCmdInit(ctx) {
 
     let state = resolveStateDir(initCtx.cwd);
     const promptApi = ctx.initPromptApi || createInitPromptApi();
+    let interactiveSession;
 
     if (state.status === 'legacy_migratable') {
       let approved = wantsMigration;
@@ -199,11 +202,32 @@ export function createCmdInit(ctx) {
         process.exitCode = 1;
         return;
       }
+      interactiveSession = await resolveInteractiveInitSession({
+        ctx: initCtx,
+        promptApi,
+        parsedTools,
+        isAuto,
+      });
       try {
         // Validate the existing bytes before moving them. Keep stateDirName at
         // .work so generated content and tracking policy use the destination.
         // Init revalidates after the rename before applying the refresh plan.
-        preflightInitState({ ...initCtx, planningDir: state.legacyDir }, { isAuto });
+        preflightInitState(
+          { ...initCtx, planningDir: state.legacyDir },
+          { isAuto, preselectedConfig: interactiveSession.config },
+        );
+        const migrationAdapterTargets = getLocalAdapterTargets(
+          initCtx.adapters,
+          initCtx.workflows,
+          interactiveSession.adapterTargets,
+        );
+        planAdapterGeneration({
+          cwd: initCtx.cwd,
+          planningDir: state.legacyDir,
+          targets: migrationAdapterTargets,
+          manifest: readManifest(state.legacyDir),
+          stateDirName: initCtx.stateDirName,
+        });
         migrateLegacyState(initCtx.cwd);
       } catch (error) {
         console.error(`ERROR: Legacy state migration failed: ${error.message}`);
@@ -227,7 +251,7 @@ export function createCmdInit(ctx) {
       }
     }
 
-    const interactiveSession = await resolveInteractiveInitSession({
+    interactiveSession ??= await resolveInteractiveInitSession({
       ctx: initCtx,
       promptApi,
       parsedTools,

@@ -299,7 +299,7 @@ export function applyTemplateRefresh(plan, { isDry = false } = {}) {
 
 export function refreshTemplates(options) {
   if (!existsSync(options.planningDir)) {
-    // `update --templates --dry` may inspect a fresh directory; it must not
+    // `update --dry` may inspect a fresh directory; it must not
     // bootstrap a state root merely to describe a prospective refresh.
     return { templates: { delegates: {}, research: {}, codebase: {}, brownfieldChange: {}, root: {} }, roles: {} };
   }

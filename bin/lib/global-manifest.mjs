@@ -32,13 +32,28 @@ export function inspectGlobalManifest(rootDir) {
   let stat;
   try {
     stat = lstatSync(manifestPath);
-  } catch {
-    return { path: manifestPath, status: 'missing', manifest: null };
+  } catch (error) {
+    return {
+      path: manifestPath,
+      status: error?.code === 'ENOENT' ? 'missing' : 'unreadable',
+      manifest: null,
+    };
   }
   if (stat.isSymbolicLink()) return { path: manifestPath, status: 'linked', manifest: null };
   if (!stat.isFile()) return { path: manifestPath, status: 'collision', manifest: null };
 
-  const manifest = readGlobalManifest(rootDir);
+  let raw;
+  try {
+    raw = readFileSync(manifestPath, 'utf-8');
+  } catch {
+    return { path: manifestPath, status: 'unreadable', manifest: null };
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse(raw);
+  } catch {
+    return { path: manifestPath, status: 'corrupt', manifest: null };
+  }
   return manifest && typeof manifest === 'object' && !Array.isArray(manifest)
     ? { path: manifestPath, status: 'valid', manifest }
     : { path: manifestPath, status: 'corrupt', manifest: null };
@@ -121,6 +136,14 @@ export function writeManifestTrackedFile({
         message: 'existing Workspine-managed file was modified by the user',
       };
     }
+  }
+
+  if (!stat && strictOwnership && !previousHash) {
+    return {
+      relativePath: normalizedRelativePath,
+      status: 'skipped_unmanaged',
+      message: 'missing target is unowned (not tracked by Workspine manifest)',
+    };
   }
 
   nextFiles[normalizedRelativePath] = expectedHash;

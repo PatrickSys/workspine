@@ -591,6 +591,32 @@ export function getManifestOwnedGlobalTargets({ roots = resolveGlobalInstallRoot
   });
 }
 
+/**
+ * Global health must also inspect a partially lost ownership set when native
+ * Workspine-looking files remain. Shared agent-skills ownership alone is not
+ * enough to infer OpenCode/Codex/Copilot ownership.
+ */
+export function getGlobalHealthTargets({ roots = resolveGlobalInstallRoots(), ctx } = {}) {
+  const pathPresentOrUnreadable = (filePath) => {
+    try {
+      lstatSync(filePath);
+      return true;
+    } catch (error) {
+      return error?.code !== 'ENOENT';
+    }
+  };
+  const fullyOwned = new Set(getManifestOwnedGlobalTargets({ roots }));
+  return GLOBAL_AGENT_IDS.filter((target) => {
+    if (fullyOwned.has(target)) return true;
+    if (!ctx) return false;
+    const nativeSpecs = buildGlobalInstallSpecs(target, roots, ctx)
+      .filter((spec) => spec.runtime !== 'agent-skills');
+    return nativeSpecs.some((spec) =>
+      pathPresentOrUnreadable(join(spec.rootDir, GLOBAL_MANIFEST_FILENAME))
+      || spec.entries.some((entry) => pathPresentOrUnreadable(join(spec.rootDir, entry.relativePath))));
+  });
+}
+
 export function collectGlobalInstallSpecs({ target, roots, ctx }) {
   return buildGlobalInstallSpecs(target, roots, ctx);
 }
@@ -644,7 +670,9 @@ async function reconcileGlobalTargets({ ctx, targets, dryRun = false, heading = 
   }
 
   if (hasBlocked) {
-    console.error('\nGlobal reconciliation finished with skipped files. Review them before retrying.');
+    console.error(heading === 'update'
+      ? '\nGlobal update blocked. Manual resolution is required before retrying; review the warnings and run `npx -y workspine health --global` after resolving them.'
+      : '\nGlobal reconciliation finished with skipped files. Review them before retrying.');
     process.exitCode = 1;
     return { targets, reports, blocked: true };
   }
