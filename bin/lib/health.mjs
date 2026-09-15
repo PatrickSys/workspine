@@ -13,6 +13,7 @@ import {
   evaluateGlobalRuntimeFreshness,
   evaluateRuntimeFreshness,
   getGlobalRuntimeRepairGuidance,
+  getRuntimeFreshnessRepairGuidance,
 } from './runtime-freshness.mjs';
 import {
   collectGlobalInstallSpecs,
@@ -302,16 +303,26 @@ export function buildHealthReport(ctx, healthArgs = []) {
       }
     }
 
-    // W6: No generated workflow adapter surfaces detected
-    if (!hasAnyGeneratedWorkflowSurface(cwd)) {
-      warnings.push({ id: 'W6', severity: 'WARN', message: 'No generated workflow adapter surfaces detected', fix: 'Run `npx -y workspine init --tools <platform>`' });
-    }
-
     let runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
       ? evaluateRuntimeFreshness({ cwd, workflows: ctx.workflows })
       : null;
+    const repairCtx = { ...ctx, cwd };
     if (runtimeFreshnessReport?.issueCount > 0) {
-      runtimeFreshnessReport = preflightLocalRuntimeRepairGuidance(ctx, runtimeFreshnessReport);
+      runtimeFreshnessReport = preflightLocalRuntimeRepairGuidance(repairCtx, runtimeFreshnessReport);
+    }
+
+    // W6: No generated workflow adapter surfaces detected. When a manifest
+    // still proves selected generated surfaces, use the same preflighted W11
+    // repair sequence rather than contradicting it with a generic init hint.
+    if (!hasAnyGeneratedWorkflowSurface(cwd)) {
+      warnings.push({
+        id: 'W6',
+        severity: 'WARN',
+        message: 'No generated workflow adapter surfaces detected',
+        fix: runtimeFreshnessReport?.issueCount > 0
+          ? getRuntimeFreshnessRepairGuidance(runtimeFreshnessReport)
+          : 'Run `npx -y workspine init --tools <platform>`',
+      });
     }
 
     warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport, stateDirName }).map((warning) => {
@@ -353,12 +364,36 @@ export function buildHealthReport(ctx, healthArgs = []) {
       info.push({ id: 'I3', severity: 'INFO', message: `Installed runtime/governance surfaces: ${installedSurfaces.join(', ')}` });
     }
 
+    reconcileRepositoryUpdateGuidance({
+      ctx: repairCtx,
+      runtimeFreshnessReport,
+      entries: [...errors, ...warnings, ...info],
+    });
+
     // --- Verdict ---
     const hasErrors = errors.length > 0;
     const hasWarnings = warnings.length > 0;
     const status = hasErrors ? 'broken' : hasWarnings ? 'degraded' : 'healthy';
 
     return { status, errors, warnings, info };
+}
+
+function reconcileRepositoryUpdateGuidance({ ctx, runtimeFreshnessReport, entries }) {
+  const updateEntries = entries.filter((entry) =>
+    typeof entry.fix === 'string' && entry.fix.includes('npx -y workspine update'));
+  if (updateEntries.length === 0) return;
+
+  const preflight = preflightLocalUpdateRepair(ctx);
+  if (!preflight.ok) {
+    const manual = `Resolve repository generated-surface safety/ownership manually first. Automatic update preflight refused: ${preflight.reason}. Preserve existing bytes, rerun health, and retry update only after the blocker is cleared.`;
+    for (const entry of updateEntries) entry.fix = manual;
+    return;
+  }
+
+  if (runtimeFreshnessReport?.issueCount > 0) {
+    const sequence = getRuntimeFreshnessRepairGuidance(runtimeFreshnessReport);
+    for (const entry of updateEntries) entry.fix = sequence;
+  }
 }
 
 function preflightLocalRuntimeRepairGuidance(ctx, report) {

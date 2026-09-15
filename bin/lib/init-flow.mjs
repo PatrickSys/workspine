@@ -123,6 +123,7 @@ function validateKindContract(adapter, cwd) {
 
 function preflightInitState(ctx, { isAuto, preselectedConfig = null }) {
   const { planningDir, stateDirName } = ctx;
+  assertSafeGitignoreTarget(ctx.cwd);
   validateTemplateSources(ctx);
   const hasGeneratedTemplateState = existsSync(join(planningDir, 'templates'))
     || existsSync(join(planningDir, 'generation-manifest.json'));
@@ -155,6 +156,7 @@ export function preflightLocalInitRepair(ctx, runtime) {
       manifest: readManifest(initCtx.planningDir),
       stateDirName: initCtx.stateDirName,
     });
+    preflightPlanningCliHelpersReadOnly(initCtx);
     return { ok: true, reason: null };
   } catch (error) {
     return { ok: false, reason: String(error?.message || error) };
@@ -212,6 +214,7 @@ export function preflightLocalUpdateRepair(ctx) {
       requireExistingNativeTargets: false,
       replacementHashes,
     });
+    preflightPlanningCliHelpersReadOnly(updateCtx);
     return { ok: true, reason: null };
   } catch (error) {
     return { ok: false, reason: String(error?.message || error) };
@@ -372,6 +375,7 @@ export function createCmdInit(ctx) {
         manifest: readManifest(planningDir),
         stateDirName,
       });
+      preflightPlanningCliHelpersReadOnly(initCtx);
       applyAdapterRecovery(adapterPlan);
     } catch (error) {
       console.error(`ERROR: ${error.message}`);
@@ -534,6 +538,7 @@ export function createCmdUpdate(ctx) {
       const templatePlan = doTemplates && existsSync(planningDir)
         ? planTemplateRefresh({ ...ctx, isDry })
         : null;
+      preflightPlanningCliHelpersReadOnly(ctx);
       if (!isDry) applyAdapterRecovery(adapterPlan);
       if (templatePlan) templateOwnership = applyTemplateRefresh(templatePlan, { isDry });
     } catch (error) {
@@ -699,6 +704,52 @@ function managedRuntimeContext(planningDir) {
     planningRootIdentity,
     runtimeRootIdentity: directoryIdentity(runtimeStat),
   };
+}
+
+function preflightPlanningCliHelpersReadOnly({ packageName, packageVersion, planningDir, stateDirName = '.work' }) {
+  if (!existsSync(planningDir)) return;
+  const entries = buildPlanningCliHelperEntries({ packageName, packageVersion, stateDirName });
+  const runtimeContext = managedRuntimeContext(planningDir);
+  if (!runtimeContext.realRuntimeRoot) return;
+
+  for (const entry of entries) {
+    const absolutePath = resolve(planningDir, entry.relativePath);
+    if (!pathIsStrictlyInside(runtimeContext.runtimeRoot, absolutePath)) {
+      refuseGeneratedRuntimeHelperWrite(entry.relativePath, 'target must remain inside bin/');
+    }
+    const parentRelative = relative(runtimeContext.runtimeRoot, dirname(absolutePath));
+    const parentParts = parentRelative === '' ? [] : parentRelative.split(sep);
+    let currentPath = runtimeContext.runtimeRoot;
+    let missingParent = false;
+    for (const part of parentParts) {
+      currentPath = join(currentPath, part);
+      let stat;
+      try {
+        stat = lstatSync(currentPath);
+      } catch (error) {
+        if (error?.code === 'ENOENT') {
+          missingParent = true;
+          break;
+        }
+        refuseGeneratedRuntimeHelperWrite(entry.relativePath, 'parent could not be inspected safely');
+      }
+      if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        refuseGeneratedRuntimeHelperWrite(entry.relativePath, 'parent must be a real directory inside bin/');
+      }
+      let realParent;
+      try {
+        realParent = realpathSync(currentPath);
+      } catch {
+        refuseGeneratedRuntimeHelperWrite(entry.relativePath, 'parent could not be resolved safely');
+      }
+      if (realParent !== runtimeContext.realRuntimeRoot
+        && !pathIsStrictlyInside(runtimeContext.realRuntimeRoot, realParent)) {
+        refuseGeneratedRuntimeHelperWrite(entry.relativePath, 'parent resolves outside bin/');
+      }
+    }
+    if (missingParent) continue;
+    assertSafeGeneratedRuntimeHelperTarget(runtimeContext, absolutePath, entry.relativePath, false);
+  }
 }
 
 function directoryIdentity(stat) {
@@ -1078,7 +1129,36 @@ function preflightCommitDocsOwnership(cwd, stateDirName, config) {
   }
 }
 
+function assertSafeGitignoreTarget(cwd) {
+  const workspaceRoot = resolve(cwd);
+  const gitignorePath = resolve(workspaceRoot, '.gitignore');
+  let stat;
+  try {
+    stat = lstatSync(gitignorePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw new Error('Refusing init: .gitignore could not be inspected safely.');
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error('Refusing init: .gitignore must be a regular file inside the workspace root.');
+  }
+  let realRoot;
+  let realTarget;
+  try {
+    realRoot = realpathSync(workspaceRoot);
+    realTarget = realpathSync(gitignorePath);
+  } catch {
+    throw new Error('Refusing init: .gitignore could not be resolved safely.');
+  }
+  if (!pathIsStrictlyInside(realRoot, realTarget)) {
+    throw new Error('Refusing init: .gitignore resolves outside the workspace root.');
+  }
+}
+
 function ensureGitignoreEntry(cwd, entry, message) {
+  // Revalidate immediately before every write. The earlier init preflight is
+  // intentionally not trusted across the mutation boundary.
+  assertSafeGitignoreTarget(cwd);
   const gitignorePath = join(cwd, '.gitignore');
   const hasGitignore = existsSync(gitignorePath);
   const current = hasGitignore ? readFileSync(gitignorePath, 'utf-8') : '';

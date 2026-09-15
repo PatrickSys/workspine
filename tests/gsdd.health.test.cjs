@@ -939,6 +939,128 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.ok(!JSON.parse(clean.output).warnings.some((w) => w.id === 'W11'), clean.output);
   });
 
+  test('nested cwd health preflights W11 against the resolved workspace root', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    const nested = path.join(tmpDir, 'src', 'nested');
+    fs.mkdirSync(nested, { recursive: true });
+
+    const result = await runCliAsMain(nested, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.fix, /Automatic repair preflight refused/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`/);
+  });
+
+  test('explicit workspace-root health preflights W11 against the named workspace', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    const foreign = createTempProject();
+    try {
+      const result = await runCliAsMain(foreign, ['health', '--workspace-root', tmpDir, '--json']);
+      const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+      assert.ok(warning, result.output);
+      assert.match(warning.fix, /Automatic repair preflight refused/);
+      assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`/);
+    } finally {
+      cleanup(foreign);
+    }
+  });
+
+  test('W6 does not contradict manual W11 ownership guidance', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.agents'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.claude', 'commands'), { recursive: true, force: true });
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const report = JSON.parse(result.output);
+    const w6 = report.warnings.find((w) => w.id === 'W6');
+    const w11 = report.warnings.find((w) => w.id === 'W11');
+    assert.ok(w6 && w11, result.output);
+    assert.match(w11.fix, /Automatic repair preflight refused/);
+    assert.strictEqual(w6.fix, w11.fix, 'W6 must reuse the preflighted repair truth instead of advertising generic init');
+    assert.doesNotMatch(w6.fix, /`npx -y workspine init --tools <platform>`/);
+  });
+
+  test('unsafe runtime-helper root suppresses every repository update fix before mutation', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const external = createTempProject();
+    const runtimeDir = path.join(tmpDir, '.work', 'bin');
+    const externalRuntime = path.join(external, 'bin-copy');
+    try {
+      fs.cpSync(runtimeDir, externalRuntime, { recursive: true });
+      fs.rmSync(runtimeDir, { recursive: true, force: true });
+      fs.symlinkSync(externalRuntime, runtimeDir, process.platform === 'win32' ? 'junction' : 'dir');
+      fs.appendFileSync(path.join(externalRuntime, 'gsdd.mjs'), '\n// drift\n');
+      const externalBefore = snapshotTree(external);
+
+      const result = await runCliAsMain(tmpDir, ['health', '--json']);
+      const report = JSON.parse(result.output);
+      const updateFixes = [...report.errors, ...report.warnings, ...report.info]
+        .filter((entry) => typeof entry.fix === 'string' && /update/.test(entry.fix));
+      assert.ok(updateFixes.length > 0, result.output);
+      for (const entry of updateFixes) {
+        assert.match(entry.fix, /Automatic update preflight refused/);
+        assert.doesNotMatch(entry.fix, /`npx -y workspine update`/);
+      }
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'health must not write through the runtime junction');
+
+      const repoBefore = snapshotTree(tmpDir);
+      const update = await runCliAsMain(tmpDir, ['update']);
+      assert.notStrictEqual(update.exitCode, 0, update.output);
+      assert.match(update.output, /generated runtime helpers: bin\/ must be a real directory/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), repoBefore, 'update must refuse unsafe runtime root before repository writes');
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'update must not write through the runtime junction');
+    } finally {
+      cleanup(external);
+    }
+  });
+
+  test('linked .gitignore blocks init repair guidance and actual init before external writes', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    const external = createTempProject();
+    const externalGitignore = path.join(external, 'outside.gitignore');
+    fs.writeFileSync(externalGitignore, '# external\n');
+    fs.rmSync(path.join(tmpDir, '.gitignore'), { force: true });
+    fs.symlinkSync(externalGitignore, path.join(tmpDir, '.gitignore'), 'file');
+    try {
+      const externalBefore = fs.readFileSync(externalGitignore, 'utf-8');
+      const health = await runCliAsMain(tmpDir, ['health', '--json']);
+      const warning = JSON.parse(health.output).warnings.find((w) => w.id === 'W11');
+      assert.ok(warning, health.output);
+      assert.match(warning.fix, /Automatic repair preflight refused/);
+      assert.match(warning.fix, /\.gitignore must be a regular file/);
+      assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`/);
+      assert.strictEqual(fs.readFileSync(externalGitignore, 'utf-8'), externalBefore);
+
+      const init = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+      assert.notStrictEqual(init.exitCode, 0, init.output);
+      assert.match(init.output, /\.gitignore must be a regular file/);
+      assert.strictEqual(fs.readFileSync(externalGitignore, 'utf-8'), externalBefore, 'init must not write through linked .gitignore');
+    } finally {
+      cleanup(external);
+    }
+  });
+
   test('aligned framework truth files → no W7-W10', async () => {
     await initWorkspace();
     writeAlignedTruthFixtures();
