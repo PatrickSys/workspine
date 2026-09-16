@@ -254,6 +254,50 @@ describe('gsdd setup facade', () => {
     }
   });
 
+  test('project setup binds native adapters to the resolved workspace root, not the invocation cwd', async () => {
+    for (const [label, selection, expectedPaths] of [
+      ['claude', ['--agent', 'claude'], ['.claude']],
+      ['codex', ['--agent', 'codex'], ['.codex']],
+      ['all', ['--all'], ['.claude', '.opencode', '.codex', 'AGENTS.md']],
+    ]) {
+      const invocationRoot = path.join(tmpDir, `foreign-${label}`);
+      const targetRoot = path.join(tmpDir, `target-${label}`);
+      fs.mkdirSync(invocationRoot, { recursive: true });
+      fs.mkdirSync(targetRoot, { recursive: true });
+      writeFile(path.join(invocationRoot, 'canary.txt'), `${label}-foreign\n`);
+      const invocationBefore = snapshotTree(invocationRoot);
+
+      const result = await runCliAsMain(invocationRoot, [
+        'setup',
+        '--workspace-root', targetRoot,
+        ...selection,
+        '-y',
+      ]);
+
+      assert.strictEqual(result.exitCode, 0, `${label}\n${result.output}`);
+      assert.deepStrictEqual(snapshotTree(invocationRoot), invocationBefore, `${label} wrote outside the selected workspace`);
+      assert.ok(fs.existsSync(path.join(targetRoot, '.work', 'config.json')));
+      assert.ok(fs.existsSync(path.join(targetRoot, '.agents', 'skills', 'work-plan', 'SKILL.md')));
+      for (const relativePath of expectedPaths) {
+        assert.ok(fs.existsSync(path.join(targetRoot, relativePath)), `${label} missing ${relativePath} in selected workspace`);
+      }
+    }
+
+    const gitRoot = path.join(tmpDir, 'git-root');
+    const nestedCwd = path.join(gitRoot, 'nested', 'deep');
+    fs.mkdirSync(nestedCwd, { recursive: true });
+    execFileSync('git', ['init', '-q'], { cwd: gitRoot });
+    writeFile(path.join(nestedCwd, 'canary.txt'), 'nested-foreign\n');
+    const nestedBefore = snapshotTree(nestedCwd);
+
+    const nested = await runCliAsMain(nestedCwd, ['setup', '--agent', 'codex', '-y']);
+
+    assert.strictEqual(nested.exitCode, 0, nested.output);
+    assert.deepStrictEqual(snapshotTree(nestedCwd), nestedBefore, 'nested invocation cwd received setup writes');
+    assert.ok(fs.existsSync(path.join(gitRoot, '.work', 'config.json')));
+    assert.ok(fs.existsSync(path.join(gitRoot, '.codex', 'agents')));
+  });
+
   test('global detection auto-selects one home and fails closed on zero or many with -y', async () => {
     const oneHome = fs.mkdtempSync(path.join(os.tmpdir(), 'gsdd-setup-one-home-'));
     try {
@@ -370,11 +414,16 @@ describe('gsdd setup facade', () => {
       assert.ok(fs.existsSync(path.join(exactCwd, '.work')));
       assert.ok(!fs.existsSync(path.join(exactCwd, '.git')));
       fs.mkdirSync(explicitRoot, { recursive: true });
-      fs.mkdirSync(path.join(packed.root, 'launcher'));
-      const explicit = runInstalled(packed.entry, path.join(packed.root, 'launcher'), ['setup', '--workspace-root', explicitRoot, '--yes']);
+      const launcherRoot = path.join(packed.root, 'launcher');
+      fs.mkdirSync(launcherRoot);
+      writeFile(path.join(launcherRoot, 'canary.txt'), 'packed-foreign\n');
+      const launcherBefore = snapshotTree(launcherRoot);
+      const explicit = runInstalled(packed.entry, launcherRoot, ['setup', '--workspace-root', explicitRoot, '--agent', 'codex', '--yes']);
       assert.strictEqual(explicit.status, 0, explicit.stderr || explicit.stdout);
       assert.ok(fs.existsSync(path.join(explicitRoot, '.work')));
+      assert.ok(fs.existsSync(path.join(explicitRoot, '.codex', 'agents')));
       assert.ok(!fs.existsSync(path.join(explicitRoot, '.git')));
+      assert.deepStrictEqual(snapshotTree(launcherRoot), launcherBefore, 'packed explicit-root setup wrote native surfaces into the launcher cwd');
       assert.strictEqual(fs.readFileSync(path.join(ancestor, '.work', 'config.json'), 'utf8'), '{"user":"ancestor"}\n');
 
       const collisionRoot = path.join(packed.root, 'collision');

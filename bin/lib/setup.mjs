@@ -191,7 +191,11 @@ export function createCmdSetup(ctx) {
     const initPromptApi = ctx.initPromptApi || {
       promptForConfig: () => buildDefaultConfig({ autoAdvance: false }),
     };
-    const initCtx = { ...ctx, cwd: root, initPromptApi };
+    // Keep the invocation cwd here. createCmdInit resolves --workspace-root and
+    // contextAtWorkspaceRoot then rebuilds cwd-bound native adapters when the
+    // selected workspace differs. Pre-setting cwd=root would make that rebind
+    // look unnecessary while retaining adapter closures for the invocation cwd.
+    const initCtx = { ...ctx, initPromptApi };
     if (migrate) {
       try {
         migrateLegacyState(root);
