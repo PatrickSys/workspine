@@ -186,6 +186,16 @@ describe('public surface language gate', () => {
     assert.match(guideOpening, /detailed reference/i);
   });
 
+  test('User Guide checker dimension summary follows the production dimension list', async () => {
+    const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf8');
+    const { PLAN_CHECK_DIMENSIONS } = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'lib', 'plan-constants.mjs')).href}?guideDimensions=${Date.now()}`);
+    assert.match(guide, new RegExp(`The ${PLAN_CHECK_DIMENSIONS.length} check dimensions:`));
+    for (const dimension of PLAN_CHECK_DIMENSIONS) {
+      assert.match(guide, new RegExp(dimension.split('_').join('[\\s-]+'), 'i'),
+        `User Guide must include plan-check dimension ${dimension}`);
+    }
+  });
+
   test('default CLI help is a one-screen first-use summary while advanced commands remain discoverable', async () => {
     const { getHelpText } = await import(`${pathToFileURL(path.join(ROOT, 'bin', 'lib', 'init-runtime.mjs')).href}?compact=${Date.now()}`);
     const help = getHelpText();

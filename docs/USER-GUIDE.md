@@ -1,6 +1,6 @@
 # Workspine User Guide
 
-A detailed reference for Workspine workflows, troubleshooting, and configuration. Start with the [README](../README.md) for the shortest first-use path. Workspine is the public product name; the npm package is `workspine`, the CLI and workspace remain `gsdd` and `.work/` as retained technical contracts, and the workflows are `work-*`. Runtime floor: Node >=22. Human install/update commands use `npx -y workspine ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
+A detailed reference for Workspine workflows, troubleshooting, and configuration. Start with the [README](../README.md) for the shortest first-use path. Workspine is the public product name; the npm package and public CLI are `workspine`, durable project state lives in `.work/`, and the workflows are `work-*`. Runtime floor: Node >=22. Human install/update commands use `npx -y workspine ...`; the `gsdd` helper name is retained so existing generated workspaces keep working, while the `gsdd` binary alias is removed at the next minor release.
 
 The tracked consumer evidence is indexed at [`docs/proof/consumer-node-cli/README.md`](proof/consumer-node-cli/README.md).
 
@@ -8,7 +8,14 @@ The tracked consumer evidence is indexed at [`docs/proof/consumer-node-cli/READM
 
 ## Fast Path
 
-Run `npx -y workspine setup` from the repo root, then use the representative loop:
+Run `npx -y workspine setup` from the repo root. Setup creates the durable `.work/` state and the shared
+`.agents/skills/work-*` workflow entry surface. Optional runtime-specific adapters are generated only when you
+select them; you do not need to learn the helper CLI to start a change.
+
+Enter the workflow through the skill your runtime discovers: commonly `/work-*`, `$work-*`, or a skill reference.
+If discovery is unavailable, open or paste the matching `.agents/skills/work-<workflow>/SKILL.md` file directly.
+
+For one real, bounded change, use the representative loop:
 
 1. Run `work-plan` for one real, bounded change.
 2. Review the checked plan and give explicit owner approval.
@@ -19,19 +26,42 @@ Run `npx -y workspine setup` from the repo root, then use the representative loo
 
 Use `work-map-codebase` only when a repo is unfamiliar, risky, or its existing map is stale. It creates trusted brownfield context before you choose Quick or a broader project route; it is not a fourth mandatory goal.
 
-Compatibility: `npx -y workspine init` remains available for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. `--auto` selects detected existing homes for install/setup; for repair, run `npx -y workspine health --global` first and follow its safe update or manual-resolution guidance. Global install never creates `.work/` in the current repo.
+Your decision boundary is the plan and any material clarification it surfaces. Routine workflow mechanics stay inside the skill. A checked plan is not permission to change an owner-approved behavior, expand scope, or weaken the agreed verification.
 
-Setup defaults to recommended portable files in the current repo. Use `setup --global` for personal agent homes, `--agent <target>` for one native target, `--all` for every detected target, or `--migrate` to approve a detected legacy-state move explicitly. `-y`/`--yes` accepts the bounded write without prompts; `--dry-run` previews it.
+Verification checks the implemented result against the plan and its stated verification requirements. For UI-sensitive work, a plan can require real browser proof of the relevant rendered behavior and viewport/state; conversational `work-verify-work` UAT is optional and does not replace required code, test, runtime, delivery, or browser evidence.
 
-If setup detects a supported legacy `.planning/` state, it offers an optional move into `.work/` because that leaves one current authority and a receipt. The move preserves bytes; declining leaves the legacy state unchanged. Fresh workspaces never show this offer, and migration is never silent.
+When stopping mid-work, run `work-pause`. In a fresh session, use `work-resume` to restore the file-backed context or `work-progress` to inspect where the repository is and what comes next. Workspine does not copy context automatically: plans, decisions, summaries, verification, and explicit pause checkpoints are the handoff between sessions.
 
-Workspine does not copy context automatically. Plans, decisions, summaries, verification, and explicit pause checkpoints are the handoff between sessions.
+That is the first-use path. Everything below is reference material for deeper lifecycle, configuration, runtime, recovery, and automation needs; you do not need to memorize it to use Workspine.
+
+---
+
+## First Change, End to End
+
+Suppose you need to change behavior in an existing application and there is at least one product decision the agent
+should not silently make for you.
+
+1. From the repo root, run `npx -y workspine setup` once.
+2. Start the planned route with the skill your runtime exposes: `/work-plan`, `$work-plan`, or
+   `.agents/skills/work-plan/SKILL.md` when discovery is unavailable.
+3. Describe the change. If a material behavior is ambiguous, answer that decision before implementation rather than
+   letting the agent infer it silently.
+4. Read the resulting plan. Approve it only when it reflects the behavior and scope you actually want.
+5. Run `work-execute` as a separate step. The approved plan remains the execution boundary.
+6. Run `work-verify`. Code/tests are part of the evidence; a UI-sensitive plan can additionally require browser
+   observations of the real rendered behavior before the UI claim closes.
+7. If you stop before the work is finished, run `work-pause`. In the next session, use `work-resume` or
+   `work-progress`; the handoff comes from repository artifacts and checkpoints, not copied chat memory.
+
+For a small change whose behavior and scope are already clear, use `work-quick` instead. For a fuzzy project or
+milestone that still needs shaping, use `work-new-project`.
 
 ---
 
 ## Table of Contents
 
 - [Fast Path](#fast-path)
+- [First Change, End to End](#first-change-end-to-end)
 - [Workflow Diagrams](#workflow-diagrams)
 - [Command Reference](#command-reference)
 - [Configuration Reference](#configuration-reference)
@@ -42,6 +72,8 @@ Workspine does not copy context automatically. Plans, decisions, summaries, veri
 ---
 
 ## Workflow Diagrams
+
+Reference only: these diagrams explain the machinery behind the skills. You do not need to operate the delegates or helper commands yourself.
 
 ### Full Project Lifecycle
 
@@ -105,7 +137,7 @@ Optional closure and milestone-continuation workflows in the shipped surface:
          │     ┌─────▼──────────────┐     ┌────────┐
          │     │  Plan Checker      │────>│ PASS?  │
          │     │  (fresh context,   │     └───┬────┘
-         │     │   7 dimensions,    │         │
+         │     │   10 dimensions,   │         │
          │     │   typed JSON)      │    Yes  │  No
          │     └────────────────────┘     │   │   │
          │                                │   └───┘  (max 3 cycles)
@@ -116,9 +148,10 @@ Optional closure and milestone-continuation workflows in the shipped surface:
          └── Done
 ```
 
-The plan checker runs in a **separate context window** from the planner. This prevents the checker from inheriting the planner's blind spots. The same reasoning error that produced the plan cannot suppress the review of that plan. This is the [ICLR-validated](https://arxiv.org/abs/2310.01798) pattern for LLM self-refinement.
+When the selected runtime and rigor route supports the checker delegate, the plan checker runs separately from the planner so it can review the produced plan without relying on the planner's hidden reasoning. This is an additional review boundary, not a guarantee that the checker will catch every planning error.
 
-The 7 check dimensions: requirement coverage, task completeness, dependency correctness, key-link completeness, scope sanity, must-have quality, context compliance.
+The 10 check dimensions: requirement coverage, task completeness, dependency correctness, key-link completeness,
+scope sanity, must-have quality, context compliance, goal achievement, approach alignment, and decision compliance.
 
 ### Execution Wave Coordination
 
@@ -128,11 +161,11 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
          ├── Analyze plan dependencies
          │
          ├── Wave 1 (independent plans):
-         │     ├── Executor A (fresh 200K context) -> commit
-         │     └── Executor B (fresh 200K context) -> commit
+         │     ├── Executor A (separate executor context) -> commit
+         │     └── Executor B (separate executor context) -> commit
          │
          ├── Wave 2 (depends on Wave 1):
-         │     └── Executor C (fresh 200K context) -> commit
+         │     └── Executor C (separate executor context) -> commit
          │
          └── Phase summary written to disk
 ```
@@ -181,15 +214,34 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
                └── TODO/FIXME/HACK markers, empty catches
 ```
 
+Those repository checks are the base gate, not the whole evidence story. When a plan declares browser proof
+required, `work-verify` must also evaluate the planned browser observations before the UI claim can close. Optional
+`work-verify-work` conversational UAT is a separate human-validation route, not a substitute for required browser proof.
+
 ---
 
 ## Command Reference
 
-This reference covers all 13 workflows.
+Workspine is skills-first for normal use. Most people need the CLI only for `setup`, `health`, `update`, and optional
+configuration/global-install work. The broader command catalog below stays documented because generated workflows,
+automation, recovery, and advanced users rely on it; it is not a prerequisite checklist for a first task.
+
+This reference also covers all 13 workflows.
 
 ### Install Modes
 
-Use local repo install when the project should own `.work/`, `.agents/skills`, and optional repo-local runtime adapters:
+Normal repo setup:
+
+```bash
+npx -y workspine setup
+```
+
+Setup defaults to recommended portable files in the current repo. Use `setup --global` for personal agent homes,
+`setup --agent <target>` for one native target, `setup --all` for every supported project target, or
+`setup --migrate` to approve a detected legacy-state move explicitly. `-y`/`--yes` accepts the bounded write without
+prompts; `--dry-run` previews it.
+
+Compatibility and automation-oriented `init` remain available when you need the lower-level setup contract:
 
 ```bash
 npx -y workspine init
@@ -205,6 +257,10 @@ npx -y workspine install --global --tools claude,opencode,codex,copilot
 ```
 
 For a fresh install, choose targets interactively or pass `--tools <targets>`. `--auto` selects detected existing agent homes for non-interactive install/setup; it is not the repair path. If none are detected, it writes nothing and prints one exact command per supported target. For an existing Workspine-owned home, inspect `npx -y workspine health --global` before attempting repair.
+
+Compatibility: `npx -y workspine init` remains available for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. `--auto` selects detected existing homes for install/setup; for repair, run `npx -y workspine health --global` first and follow its safe update or manual-resolution guidance. Global install never creates `.work/` in the current repo.
+
+If setup detects a supported legacy `.planning/` state, it offers an optional move into `.work/` because that leaves one current authority and a receipt. The move preserves bytes; declining leaves the legacy state unchanged. Fresh workspaces never show this offer, and migration is never silent.
 
 Global install writes Workspine-managed files under selected agent homes and records per-runtime manifests. It does not bootstrap project planning state. Each target writes to these directories:
 
@@ -243,8 +299,10 @@ Details worth knowing before you script it:
 
 | Command | Purpose |
 |---------|---------|
-| `npx -y workspine init [--tools <platform>]` | Set up `.work/`, generate skills/adapters |
+| `npx -y workspine setup` | Normal first-use setup for the current repo |
 | `npx -y workspine update [--dry-run]` | Reconcile all manifest-owned repo-local templates, helpers, skills, and adapters from latest sources |
+| `npx -y workspine health [--global]` | Inspect repo-local or global generated surfaces and safe repair guidance |
+| `npx -y workspine init [--tools <platform>]` | Compatibility/advanced setup contract used by automation and targeted repair |
 | `npx -y workspine find-phase [N]` | Show phase info as JSON (for agent consumption) |
 | `npx -y workspine verify <N>` | Run artifact checks for phase N |
 | `npx -y workspine scaffold phase <N> [name]` | Create a new phase plan file |
@@ -345,7 +403,8 @@ The assertion is stored on the same decision record and binds the exact decision
 
 ## Configuration Reference
 
-`npx -y workspine init` creates `.work/config.json` interactively (or with defaults via repo-local `init --auto --tools <targets>`).
+`npx -y workspine setup` creates `.work/config.json` through the normal first-use path. The compatibility/advanced
+`init` route can do the same directly (or with defaults via repo-local `init --auto --tools <targets>`).
 
 ### Full config.json Schema
 
@@ -425,7 +484,7 @@ Workspine does not impose commit formats, branch naming, or one-commit-per-task 
 
 ### New Project (Full Cycle)
 
-`npx -y workspine init`
+`npx -y workspine setup`
 
 Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces when their slash/skill discovery sees that directory. The difference is runtime proof and ergonomics, not workflow shape. If discovery is unavailable, open or paste the relevant `.agents/skills/work-*/SKILL.md` file.
 
@@ -442,9 +501,9 @@ Cursor, Copilot, and Gemini can use the installed `.agents/skills/` surfaces whe
 
 ### Repos That Already Have Code
 
-`npx -y workspine init`
+`npx -y workspine setup`
 
-- Choose one starting goal after init:
+- Choose one starting goal after setup:
 - `Claude/OpenCode`: `/work-quick` for a concrete bounded change, `/work-plan` for a planned standalone change, or `/work-new-project` to start/extend a broader project
 - `Codex`: `$work-quick`, `$work-plan`, or `$work-new-project` for those same goals (`$work-plan` remains plan-only until `$work-execute`)
 - `Cursor / Copilot / Gemini`: use the matching slash command when skill discovery is available, using the same three-goal routing
@@ -489,11 +548,11 @@ npx -y workspine init --auto --tools claude --brief path/to/PRD.md  # Seed from 
 
 ### Context Degradation During Long Sessions
 
-Clear your context window between major workflows. Workspine is designed around fresh contexts, and every delegate gets a clean context window. If quality drops in the main session, clear and use `work-resume` or `work-progress` to restore state.
+When a runtime supports delegated contexts, Workspine can use separate contexts for relevant planning/checking/execution roles. Do not depend on chat memory for continuity: after a context reset or new session, use `work-resume` or `work-progress` to restore the file-backed state.
 
 ### Plans Seem Wrong or Misaligned
 
-Check that research ran before planning (`workflow.research: true`). Most plan quality issues come from the planner making assumptions that domain research would have prevented. If plan-checking is enabled, the checker should catch alignment issues, though it cannot fix missing domain context.
+Check whether the plan made an assumption that needed domain research or an owner decision. If research is enabled, use it for missing domain context. If plan-checking is enabled, the checker adds an independent review boundary, but it cannot guarantee alignment or replace missing owner/domain information.
 
 ### Execution Produces Stubs
 
