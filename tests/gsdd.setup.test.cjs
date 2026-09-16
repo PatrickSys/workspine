@@ -171,8 +171,12 @@ describe('gsdd setup facade', () => {
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md')));
     assert.ok(!fs.existsSync(path.join(tmpDir, '.codex')), 'native targets stay explicit');
     assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')), 'root governance stays explicit');
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf8'));
+    assert.strictEqual(config.rigorProfile, 'high');
+    assert.strictEqual(config.researchDepth, 'deep');
+    assert.strictEqual(config.workflow.discuss, true);
     assert.doesNotMatch(result.output, /Config summary:/);
-    assert.match(result.output, /Configuration: medium rigor, balanced models, tracked \.work\/ documents\./);
+    assert.match(result.output, /Configuration: high rigor, balanced models, tracked \.work\/ documents\./);
     assert.match(result.output, /Start with one small planned change/i);
     assert.match(result.output, /work-plan[\s\S]*owner approval[\s\S]*work-execute[\s\S]*work-verify/i);
     assert.ok(result.output.indexOf('work-plan') < result.output.indexOf('work-quick'), 'the trustworthy loop must appear before the shortcut');

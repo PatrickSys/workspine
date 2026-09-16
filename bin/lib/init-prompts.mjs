@@ -70,10 +70,10 @@ export async function promptForConfig(cwd, { input = process.stdin, output = pro
     title: 'Rigor - workflow alignment and quality gates',
     choices: [
       { value: 'low', label: 'low', description: 'Least ceremony: skips research, discussion, and plan-check; verifier remains enabled.' },
-      { value: 'medium', label: 'medium', description: 'Recommended default: research and a fresh-context plan check.' },
-      { value: 'high', label: 'high', description: 'Deep research plus discussion, plan-check, and verifier gates.' },
+      { value: 'medium', label: 'medium', description: 'Balanced rigor: research and a fresh-context plan check.' },
+      { value: 'high', label: 'high', description: 'Recommended default: deep research plus discussion, plan-check, and verifier gates.' },
     ],
-    defaultIndex: 1,
+    defaultIndex: 2,
   });
   const cost = await promptSingleSelect({
     input,

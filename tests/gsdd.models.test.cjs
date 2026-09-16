@@ -857,7 +857,49 @@ describe('gsdd models and model propagation', () => {
       assert.ok('gitProtocol' in config);
       assert.ok('initVersion' in config);
       assert.strictEqual(config.workflow.verifier, true);
+      assert.strictEqual(config.rigorProfile, 'high');
+      assert.strictEqual(config.researchDepth, 'deep');
+      assert.strictEqual(config.workflow.discuss, true);
+    });
+
+    test('existing config without rigorProfile keeps the legacy medium fallback', async () => {
+      const models = await import('../bin/lib/config.mjs');
+      fs.mkdirSync(path.join(tmpDir, '.work'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, '.work', 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+
+      const config = models.loadProjectModelConfig(tmpDir);
       assert.strictEqual(config.rigorProfile, 'medium');
+      assert.strictEqual(config.researchDepth, 'balanced');
+      assert.strictEqual(config.workflow.discuss, false);
+    });
+
+    test('missing config uses the new high fresh default', async () => {
+      const models = await import('../bin/lib/config.mjs');
+      const config = models.loadProjectModelConfig(tmpDir);
+      assert.strictEqual(config.rigorProfile, 'high');
+      assert.strictEqual(config.researchDepth, 'deep');
+      assert.strictEqual(config.workflow.discuss, true);
+    });
+
+    test('partial existing high and max configs derive missing gates from their explicit level', async () => {
+      const models = await import('../bin/lib/config.mjs');
+      fs.mkdirSync(path.join(tmpDir, '.work'), { recursive: true });
+      const configPath = path.join(tmpDir, '.work', 'config.json');
+
+      for (const level of ['high', 'max']) {
+        fs.writeFileSync(configPath, JSON.stringify({
+          initVersion: 'v1.1',
+          rigorProfile: level,
+          workflow: { research: false },
+        }));
+        const config = models.loadProjectModelConfig(tmpDir);
+        assert.strictEqual(config.rigorProfile, level);
+        assert.strictEqual(config.researchDepth, 'deep');
+        assert.strictEqual(config.workflow.research, false, 'explicit workflow overrides must be preserved');
+        assert.strictEqual(config.workflow.discuss, true);
+        assert.strictEqual(config.workflow.planCheck, true);
+        assert.strictEqual(config.workflow.verifier, true);
+      }
     });
   });
 });

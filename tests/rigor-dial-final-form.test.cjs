@@ -65,6 +65,8 @@ describe('final rigor dial output contract', () => {
     projects.push(cwd);
     const init = await runCliAsMain(cwd, ['init', '--auto', '--tools', 'agents']);
     assert.strictEqual(init.exitCode, 0, init.output);
+    const setBase = await runCliAsMain(cwd, ['rigor', 'medium']);
+    assert.strictEqual(setBase.exitCode, 0, setBase.output);
     const set = await runCliAsMain(cwd, ['rigor', 'execute', 'max']);
     assert.strictEqual(set.exitCode, 0, set.output);
     const result = await runCliAsMain(cwd, ['rigor', 'show']);

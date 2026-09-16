@@ -21,7 +21,7 @@ import {
   writeManifest,
 } from './manifest.mjs';
 import { parseFlagValue, parseToolsFlag, parseAutoFlag } from './cli-utils.mjs';
-import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES } from './config.mjs';
+import { buildDefaultConfig, COST_PROFILES, RIGOR_PROFILES, resolveRigor } from './config.mjs';
 import { applyTemplateRefresh, explicitTemplateOwnership, installProjectTemplates, planTemplateRefresh, validateTemplateOwnership, validateTemplateSources } from './templates.mjs';
 import {
   detectPlatforms,
@@ -401,6 +401,11 @@ export function createCmdInit(ctx) {
       preselectedConfig: interactiveSession.config,
       stateDirName,
     });
+    // The --tools interactive path may prompt for config inside ensureConfig,
+    // after the earlier read-only preflight snapshot. Re-read the persisted
+    // config so tracking behavior and the final summary describe the bytes that
+    // were actually selected/written, including compatibility-medium partials.
+    selectedConfig = readSelectedConfig({ planningDir, isAuto, preselectedConfig: null });
     if (!selectedConfig.commitDocs) {
       ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/`, `  - ensured ${stateDirName}/ is gitignored`);
     }
@@ -449,7 +454,7 @@ export function createCmdInit(ctx) {
     console.log('  - wrote generation manifest');
 
     console.log('\n\x1B[1m\x1B[32m✓ Workspine initialized.\x1B[0m');
-    printInitSummary(interactiveSession.config ?? buildDefaultConfig({ autoAdvance: isAuto }));
+    printInitSummary(selectedConfig);
     console.log('Start with one small planned change:\n');
     printPostInitRouting(interactiveSession.selectedRuntimes);
     console.log(`After owner approval: ${workflowId('execute')} -> ${workflowId('verify')}.`);
@@ -1108,11 +1113,16 @@ async function ensureConfig({ cwd, planningDir, stateDirName = '.work', isAuto, 
 }
 
 function readSelectedConfig({ planningDir, isAuto, preselectedConfig }) {
-  const defaults = buildDefaultConfig({ autoAdvance: isAuto });
   const configFile = join(planningDir, 'config.json');
   if (existsSync(configFile)) {
     try {
       const existing = JSON.parse(readFileSync(configFile, 'utf-8'));
+      const rigorProfile = existing.rigorProfile ?? 'medium';
+      const defaults = {
+        ...buildDefaultConfig({ autoAdvance: isAuto }),
+        rigorProfile,
+        ...resolveRigor(rigorProfile),
+      };
       return {
         ...defaults,
         ...existing,
@@ -1122,7 +1132,20 @@ function readSelectedConfig({ planningDir, isAuto, preselectedConfig }) {
       throw new Error('Refusing init: existing config.json is invalid. Repair it before retrying.');
     }
   }
-  return preselectedConfig ?? defaults;
+  if (preselectedConfig) {
+    const rigorProfile = preselectedConfig.rigorProfile ?? 'medium';
+    const defaults = {
+      ...buildDefaultConfig({ autoAdvance: isAuto }),
+      rigorProfile,
+      ...resolveRigor(rigorProfile),
+    };
+    return {
+      ...defaults,
+      ...preselectedConfig,
+      workflow: { ...defaults.workflow, ...(preselectedConfig.workflow ?? {}) },
+    };
+  }
+  return buildDefaultConfig({ autoAdvance: isAuto });
 }
 
 function preflightCommitDocsOwnership(cwd, stateDirName, config) {

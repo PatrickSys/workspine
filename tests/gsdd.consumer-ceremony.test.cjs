@@ -18,7 +18,7 @@ async function importModule(filePath) {
   return import(`${pathToFileURL(filePath).href}?t=${Date.now()}-${Math.random()}`);
 }
 
-async function runWizardInit(tmpDir, { selectedRuntimes = ['claude'], adapterTargets = ['claude'], rigor = 'balanced', cost = 'balanced', commitDocs = true } = {}) {
+async function runWizardInit(tmpDir, { selectedRuntimes = ['claude'], adapterTargets = ['claude'], rigor = 'high', cost = 'balanced', commitDocs = true } = {}) {
   const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));
   const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
   const models = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'config.mjs'));
@@ -129,15 +129,16 @@ describe('consumer ceremony reduction', () => {
     cleanup(tmpDir);
   });
 
-  test('wizard init uses exactly five visible prompts and balanced defaults', async () => {
+  test('wizard init uses exactly five visible prompts with high rigor and balanced cost defaults', async () => {
     const { callLog, config } = await runWizardInit(tmpDir);
 
     assert.deepStrictEqual(callLog, ['runtimes', 'agentsGovernance', 'rigor', 'cost', 'commitDocs']);
-    assert.strictEqual(config.researchDepth, 'balanced');
+    assert.strictEqual(config.rigorProfile, 'high');
+    assert.strictEqual(config.researchDepth, 'deep');
     assert.strictEqual(config.modelProfile, 'balanced');
     assert.strictEqual(config.parallelization, true);
     assert.strictEqual(config.workflow.research, true);
-    assert.strictEqual(config.workflow.discuss, false);
+    assert.strictEqual(config.workflow.discuss, true);
     assert.strictEqual(config.workflow.planCheck, true);
     assert.strictEqual(config.workflow.verifier, true);
     assert.ok(!('showCode' in config.workflow));

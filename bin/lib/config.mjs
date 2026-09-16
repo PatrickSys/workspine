@@ -29,7 +29,8 @@ export const RIGOR_PROFILES = {
 };
 
 // Legacy rigor names map silently to the new levels so old configs and callers keep
-// working. medium is behaviorally identical to the old balanced default.
+// working. medium is behaviorally identical to the old balanced default and remains
+// the compatibility fallback for existing configs that predate rigorProfile.
 export const RIGOR_ALIASES = { quick: 'low', balanced: 'medium', thorough: 'high' };
 
 export const RIGOR_LEVELS = ['low', 'medium', 'high', 'max'];
@@ -93,11 +94,11 @@ export function normalizeModelProfile(value) {
   return VALID_MODEL_PROFILES.includes(value) ? value : 'balanced';
 }
 
-export function buildDefaultConfig({ autoAdvance = false } = {}) {
-  const rigor = resolveRigor('medium');
+function buildConfigDefaults({ autoAdvance = false, rigorProfile }) {
+  const rigor = resolveRigor(rigorProfile);
   const cost = resolveCost('balanced');
   const config = {
-    rigorProfile: 'medium',
+    rigorProfile,
     ...rigor,
     ...cost,
     commitDocs: true,
@@ -106,6 +107,17 @@ export function buildDefaultConfig({ autoAdvance = false } = {}) {
   };
   if (autoAdvance) config.autoAdvance = true;
   return config;
+}
+
+export function buildDefaultConfig({ autoAdvance = false } = {}) {
+  return buildConfigDefaults({ autoAdvance, rigorProfile: 'high' });
+}
+
+function buildExistingConfigDefaults(existing = {}, { autoAdvance = false } = {}) {
+  return buildConfigDefaults({
+    autoAdvance,
+    rigorProfile: existing?.rigorProfile ?? 'medium',
+  });
 }
 
 export function isProjectInitialized(cwd = process.cwd()) {
@@ -121,13 +133,16 @@ export function loadProjectModelConfig(cwd = process.cwd()) {
   if (!existsSync(configPath)) return buildDefaultConfig();
 
   try {
+    const existing = JSON.parse(readFileSync(configPath, 'utf-8'));
+    const defaults = buildExistingConfigDefaults(existing);
     return {
-      ...buildDefaultConfig(),
-      ...JSON.parse(readFileSync(configPath, 'utf-8')),
+      ...defaults,
+      ...existing,
+      workflow: { ...defaults.workflow, ...(existing.workflow ?? {}) },
     };
   } catch (e) {
     console.error(`WARNING: ${configPathLabel(cwd)} is malformed (${e.message}). Using defaults.`);
-    return buildDefaultConfig();
+    return buildExistingConfigDefaults();
   }
 }
 
@@ -142,7 +157,17 @@ function loadConfigForMutation(cwd = process.cwd()) {
     return { ok: false, pathLabel, error: `could not read config file (${e.message})` };
   }
   try {
-    return { ok: true, pathLabel, config: { ...buildDefaultConfig(), ...JSON.parse(raw) } };
+    const existing = JSON.parse(raw);
+    const defaults = buildExistingConfigDefaults(existing);
+    return {
+      ok: true,
+      pathLabel,
+      config: {
+        ...defaults,
+        ...existing,
+        workflow: { ...defaults.workflow, ...(existing.workflow ?? {}) },
+      },
+    };
   } catch (e) {
     return { ok: false, pathLabel, error: `malformed JSON (${e.message})` };
   }

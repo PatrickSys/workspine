@@ -24,6 +24,23 @@ function fakeTtyInput() {
 const fakeOutput = () => ({ write() {}, columns: 80 });
 
 describe('D-47 prompt lifecycle', () => {
+  test('promptForConfig defaults to high rigor with balanced cost', async () => {
+    const mod = await import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'init-prompts.mjs')).href}?defaults=${Date.now()}`);
+    const input = fakeTtyInput();
+    const timer = setInterval(() => input.emit('keypress', '', { name: 'return' }), 5);
+    try {
+      const config = await mod.promptForConfig(process.cwd(), { input, output: fakeOutput() });
+      assert.strictEqual(config.rigorProfile, 'high');
+      assert.strictEqual(config.researchDepth, 'deep');
+      assert.strictEqual(config.workflow.discuss, true);
+      assert.strictEqual(config.modelProfile, 'balanced');
+      assert.strictEqual(config.parallelization, true);
+      assert.strictEqual(config.commitDocs, true);
+    } finally {
+      clearInterval(timer);
+    }
+  });
+
   test('promptChoiceList resolves on enter and cleans up stdin state', async () => {
     const mod = await import(pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'init-prompts.mjs')).href);
     const input = fakeTtyInput();

@@ -410,12 +410,14 @@ The assertion is stored on the same decision record and binds the exact decision
 
 ```json
 {
-  "researchDepth": "balanced",
+  "rigorProfile": "high",
+  "researchDepth": "deep",
   "parallelization": true,
   "commitDocs": true,
   "modelProfile": "balanced",
   "workflow": {
     "research": true,
+    "discuss": true,
     "planCheck": true,
     "verifier": true
   },
@@ -431,7 +433,8 @@ The assertion is stored on the same decision record and binds the exact decision
 
 | Setting | Options | Default | What it Controls |
 |---------|---------|---------|------------------|
-| `researchDepth` | `fast`, `balanced`, `deep` | `balanced` | Research thoroughness per phase |
+| `rigorProfile` | `low`, `medium`, `high`, `max` | `high` | Project-wide alignment and quality-gate level; `max` is compatibility input and currently uses high gates |
+| `researchDepth` | `fast`, `balanced`, `deep` | `deep` | Research thoroughness derived from the default high rigor profile |
 | `parallelization` | `true`, `false` | `true` | Run independent agents simultaneously |
 | `commitDocs` | `true`, `false` | `true` | Track `.work/` in git |
 | `modelProfile` | `balanced`, `quality`, `budget` | `balanced` | Portable semantic model tier |
@@ -443,6 +446,7 @@ Each adds quality but costs tokens and time:
 | Setting | Default | What it Controls |
 |---------|---------|------------------|
 | `workflow.research` | `true` | Research domain before planning each phase |
+| `workflow.discuss` | `true` | Surface material approach ambiguity for owner alignment before planning |
 | `workflow.planCheck` | `true` | Fresh-context adversarial plan checking (max-3 cycle loop) |
 | `workflow.verifier` | `true` | 3-level verification gate after execution |
 

@@ -291,6 +291,23 @@ describe('gsdd init and update', () => {
     assert.match(fs.readFileSync(helperPath, 'utf-8'), /captureGitCandidate/);
   });
 
+  test('existing legacy config without rigorProfile keeps medium behavior and bytes during init', async () => {
+    const configPath = path.join(tmpDir, '.work', 'config.json');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify({
+      initVersion: 'v1.1',
+      commitDocs: true,
+      modelProfile: 'balanced',
+    }, null, 2));
+    const before = fs.readFileSync(configPath);
+
+    const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+
+    assert.strictEqual(result.exitCode, 0, result.output);
+    assert.deepStrictEqual(fs.readFileSync(configPath), before, 'existing config bytes must not be widened by fresh defaults');
+    assert.match(result.output, /Configuration: medium rigor, balanced models, tracked \.work\/ documents\./);
+  });
+
   test('init creates planning structure, default config, templates, and open-standard skills', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
@@ -336,7 +353,8 @@ describe('gsdd init and update', () => {
       'repeat init must preserve existing workflow state bytes');
 
     const config = readJson(path.join(tmpDir, '.work', 'config.json'));
-    assert.strictEqual(config.researchDepth, 'balanced');
+    assert.strictEqual(config.rigorProfile, 'high');
+    assert.strictEqual(config.researchDepth, 'deep');
     assert.strictEqual(config.parallelization, true);
     assert.strictEqual(config.commitDocs, true);
     assert.deepStrictEqual(config.gitProtocol, {
@@ -346,7 +364,7 @@ describe('gsdd init and update', () => {
     });
     assert.deepStrictEqual(config.workflow, {
       research: true,
-      discuss: false,
+      discuss: true,
       planCheck: true,
       verifier: true,
     });
@@ -1789,6 +1807,8 @@ describe('gsdd init and update', () => {
     assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')),
       'Wizard runtime selection must not write AGENTS.md unless governance was explicitly enabled.');
     assert.doesNotMatch(output, /undefined/, 'The compact configuration summary must remain useful for partial compatible configs.');
+    assert.match(output, /Configuration: medium rigor, balanced models, tracked \.work\/ documents\./,
+      'partial preselected configs without rigorProfile keep compatibility-medium summary semantics');
     assert.match(output, /Cursor:\s+\/work-plan .*\/work-quick .*\/work-new-project/);
     assert.match(output, /Codex CLI:\s+\$work-plan .*\$work-quick .*\$work-new-project/);
   });
@@ -1860,11 +1880,15 @@ describe('gsdd init and update', () => {
       },
     };
 
+    let output = '';
+    const previousLog = console.log;
     const restoreStdin = setInteractiveStdin();
+    console.log = (...parts) => { output += `${parts.join(' ')}\n`; };
     try {
       const cmdInit = initMod.createCmdInit(ctx);
       await cmdInit('--tools', 'codex');
     } finally {
+      console.log = previousLog;
       restoreStdin();
     }
 
@@ -1873,6 +1897,8 @@ describe('gsdd init and update', () => {
     assert.strictEqual(config.modelProfile, 'balanced');
     assert.strictEqual(config.initVersion, 'v1.1');
     assert.ok(!('selectedRuntimes' in config), 'config must not contain the wizard wrapper shape');
+    assert.match(output, /Configuration: medium rigor, balanced models, tracked \.work\/ documents\./,
+      'partial prompted configs without rigorProfile keep compatibility-medium summary semantics');
     assert.ok(fs.existsSync(path.join(tmpDir, '.codex', 'agents', 'work-plan-checker.toml')));
   });
 
@@ -2152,9 +2178,10 @@ describe('gsdd init and update', () => {
 
       const config = readJson(path.join(tmpDir, '.work', 'config.json'));
       assert.strictEqual(config.autoAdvance, true);
-      assert.strictEqual(config.researchDepth, 'balanced');
+      assert.strictEqual(config.rigorProfile, 'high');
+      assert.strictEqual(config.researchDepth, 'deep');
       assert.strictEqual(config.parallelization, true);
-      assert.deepStrictEqual(config.workflow, { research: true, discuss: false, planCheck: true, verifier: true });
+      assert.deepStrictEqual(config.workflow, { research: true, discuss: true, planCheck: true, verifier: true });
     });
 
     test('--auto --tools all generates shared, helper, and native runtime surfaces', async () => {
