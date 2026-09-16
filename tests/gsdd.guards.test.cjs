@@ -1043,6 +1043,10 @@ describe('G19 - Consumer First-Run Accuracy', () => {
       'Generated AGENTS block must tell agents how to verify installed skill surfaces. FIX: Add health guidance.');
     assert.match(agentsBlock, /npx -y workspine update/i,
       'Generated AGENTS block must tell agents how to repair generated-surface drift. FIX: Add update guidance.');
+    assert.match(agentsBlock, /health --global[\s\S]{0,180}(?:safe-update|manual-resolution)/i,
+      'Generated AGENTS block must route existing global installs through health before conditional repair.');
+    assert.doesNotMatch(agentsBlock, /repaired by rerunning.*install --global/i,
+      'Generated AGENTS block must not present global install as generic repair.');
     assert.match(agentsBlock, /Codex CLI/i,
       'Generated AGENTS block must distinguish Codex CLI from Codex VS Code/app. FIX: Use Codex CLI in the $work-plan invocation guidance.');
     assert.doesNotMatch(newProject, /`gsdd init --auto --brief <path>`/,
@@ -4681,5 +4685,27 @@ describe('Phase 16-D - global update and health routes', () => {
     assert.match(health, /evaluateGlobalRuntimeFreshness/);
     assert.match(freshness, /read-only freshness evaluation for global manifest specs/i);
     assert.doesNotMatch(health, /writeFileSync|mkdirSync|rmSync/);
+  });
+
+  test('global manifest inspection and freshness preserve safe-vs-manual repair truth', () => {
+    const manifest = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'global-manifest.mjs'), 'utf-8');
+    const freshness = fs.readFileSync(path.join(ROOT, 'bin', 'lib', 'runtime-freshness.mjs'), 'utf-8');
+    assert.match(manifest, /error\?\.code === 'ENOENT' \? 'missing' : 'unreadable'/,
+      'Non-ENOENT manifest inspection failures must be unreadable, never missing.');
+    assert.match(freshness, /status: 'package-stale'/,
+      'Global freshness must distinguish package-stale owned bytes from user modification.');
+    assert.match(freshness, /selectedSetBlocked/,
+      'Global freshness must carry selected-set blocker truth so unsafe issues suppress automatic repair.');
+  });
+
+  test('current global repair docs route existing homes through health before conditional update', () => {
+    const docs = [
+      fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8'),
+      fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8'),
+    ].join('\n');
+    assert.match(docs, /health --global[\s\S]*update --global/i);
+    assert.match(docs, /manual (?:resolution|ownership|blocker)/i);
+    assert.doesNotMatch(docs, /(?:use|rerun)[^.\n]*--auto[^.\n]*(?:repair|refresh)/i,
+      '--auto must not be documented as generic global repair for existing homes.');
   });
 });

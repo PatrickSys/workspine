@@ -765,19 +765,19 @@ architecturally not viable without reverting to vendor-specific APIs. This close
 **GSD:** `install.js` uses SHA-256 manifest (`installedFileHashes`) plus `gsd-local-patches/` backup directory
 (lines 1227-1327). On update, GSD backs up user-modified files before overwriting, enabling rollback.
 
-**GSDD:** Generation manifest in `.planning/generation-manifest.json`, opt-in `--templates` flag on
-`npx -y workspine update`, warn-but-overwrite semantics (no backup directory), `--dry` preview mode.
+**GSDD:** Generation manifest in `.work/generation-manifest.json`, selector-free whole-repo
+`npx -y workspine update`, warn-but-overwrite semantics (no backup directory), `--dry-run` preview mode.
 
 **Key differences from GSD:**
 - **No backup directory.** Git handles recovery — users can `git checkout` to restore any overwritten
   template. Adding a `gsd-local-patches/` equivalent would introduce stale-state complexity that Git
   already solves.
-- **Opt-in flag.** `npx -y workspine update` without `--templates` preserves current behavior (adapter/skill refresh
-  only). Template refresh is explicitly requested, so users are not surprised by file overwrites.
-- **Project-scoped manifest.** `generation-manifest.json` lives in `.planning/` alongside other project
+- **Whole-repo reconciliation.** `npx -y workspine update` refreshes manifest-owned templates, helpers, skills,
+  and adapters together through one preflight rather than exposing partial-update selectors.
+- **Project-scoped manifest.** `generation-manifest.json` lives in `.work/` alongside other project
   artifacts, making it portable and inspectable. The manifest records SHA-256 hashes of all installed
   templates and role contracts at init/update time.
-- **Modification detection.** When `--templates` runs, GSDD compares installed file hashes against the
+- **Modification detection.** During update, GSDD compares installed file hashes against the
   manifest to detect user modifications. Modified files trigger a `WARN` before overwrite. Files matching
   the manifest (unchanged) are silently refreshed. Files matching source (already current) are skipped.
 
@@ -842,7 +842,7 @@ Implementation lives under `bin/lib/`:
 - keep ROADMAP phase checkbox transitions in a status-aware helper; broader roadmap rewrites stay outside this helper boundary
 - keep config-schema ownership in `config.mjs`; do not duplicate or relocate `buildDefaultConfig` into the init flow
   just to satisfy an old task list
-- let `init` use the same template-sync module that `update --templates` uses, instead of maintaining separate
+- let `init` use the same template-sync module that plain `update` uses, instead of maintaining separate
   copy logic
 - enforce the boundary with code-structure guard tests, not by re-auditing the file manually each session
 
@@ -947,7 +947,7 @@ Implementation lives under `bin/lib/`:
 
 **GSD:** `health.md` (157 lines) — calls `gsd-tools.cjs validate health [--repair]`, parses JSON with error codes E001-E005/W001-W007, supports `--repair` flag for createConfig/resetConfig/regenerateState repair actions.
 
-**GSDD:** `npx -y workspine health` CLI command (`bin/lib/health.mjs` + `bin/lib/health-truth.mjs`; global `gsdd health` is equivalent). Factory function `createCmdHealth(ctx)` returning an async command. No `--repair` flag — fixes are documented as actionable instructions, not automated mutations. GSDD already has `npx -y workspine init` and `npx -y workspine update --templates` as the repair paths; a separate repair mode would duplicate those commands.
+**GSDD:** `npx -y workspine health` CLI command (`bin/lib/health.mjs` + `bin/lib/health-truth.mjs`; global `gsdd health` is equivalent). Factory function `createCmdHealth(ctx)` returning an async command. No `--repair` flag — fixes are documented as actionable instructions, not automated mutations. Missing config can bootstrap through `npx -y workspine init`; manifest-owned generated drift uses plain `npx -y workspine update`; invalid existing config or missing ownership records require manual repair rather than circular init/update advice.
 
 **Check categories:**
 
@@ -990,9 +990,9 @@ Implementation lives under `bin/lib/`:
 
 **Key design choices:**
 
-1. **No `--repair` flag.** GSD's health workflow supported `--repair` with three actions (createConfig, resetConfig, regenerateState). GSDD does not need this because `npx -y workspine init` and `npx -y workspine update --templates` already serve as repair paths. Documenting the fix command in each diagnostic is sufficient — agents can read and execute the instruction directly.
+1. **No `--repair` flag.** GSD's health workflow supported `--repair` with three actions (createConfig, resetConfig, regenerateState). GSDD uses existing commands only where they are truthful: init for missing config/native-target bootstrap and plain update for manifest-owned repo-local drift. Invalid existing config and missing ownership records stay manual. Documenting the fix in each diagnostic is sufficient.
 
-2. **`brew doctor` pattern.** Diagnose, report, suggest — never auto-fix. This matches the D13 principle: error messages ARE the enforcement mechanism. When an agent reads `"E3: .planning/templates/ missing. Fix: Run npx -y workspine update --templates"`, it can act on the instruction.
+2. **`brew doctor` pattern.** Diagnose, report, suggest — never auto-fix. This matches the D13 principle: error messages ARE the enforcement mechanism. When an agent reads `"E3: .work/templates/ missing. Fix: Run npx -y workspine update"`, it can act on a supported instruction.
 
 3. **Pre-init guard.** If `.planning/config.json` doesn't exist, output a one-line message and exit 1. No partial checks — the workspace is simply not initialized.
 
@@ -1100,7 +1100,7 @@ Benefits:
 1. **Reusable:** The same delegate can be invoked from multiple orchestrator workflows (new-project, plan, milestone audit)
 2. **Testable:** Delegate contracts are explicit and can be verified independently
 3. **Portable:** Delegates are plain markdown; any agent can read them
-4. **Versioned:** The generation manifest tracks delegate content; `npx -y workspine update --templates` refreshes them
+4. **Versioned:** The generation manifest tracks delegate content; plain `npx -y workspine update` refreshes them
 
 **Tradeoffs and close condition:**
 
@@ -2276,7 +2276,7 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 **Decision:**
 - Add one shared renderer-backed helper for runtime-surface freshness rather than per-test or per-runtime drift logic.
 - Compare only installed runtime surfaces; absent generated roots stay non-issues until the runtime surface actually exists locally.
-- Route drift through deterministic repair (`npx -y workspine update` or targeted `npx -y workspine update --tools <runtime>`) instead of treating the fix as a manual review exercise.
+- Route stale manifest-owned drift through plain `npx -y workspine update`; a missing manifest-owned Claude/OpenCode/Codex native target uses `npx -y workspine init --tools <runtime>` before update. Unowned generated-looking targets stay manual rather than being adopted automatically.
 - Treat the portable runtime surface as more than skill markdown: keep workflow discovery under `.agents/skills/`, generate the repo-local helper runtime at `.work/bin/gsdd.mjs`, route workflow-internal deterministic helper calls through `node .work/bin/gsdd.mjs ...` instead of bare `gsdd ...`, and keep human install/update/health guidance on `npx -y workspine ...` unless a global install is explicitly present.
 - Keep the public/runtime-facing wording brief: the authored source stays canonical, generated files are trusted because they are rendered and checked, and parity language remains narrow where live validation still does not exist.
 **Why this fits the codebase:**
@@ -2892,7 +2892,7 @@ Posture compatibility is part of that closeout contract: `repo_closeout` and `ru
 **Consequences:**
 - Future UI-related phases must not add new evidence kinds by treating artifact types as proof categories.
 - Future dogfood or runtime validation must not upgrade artifact counts or human waivers into proof.
-- Generated runtime surfaces and local templates must stay freshness-checkable through `gsdd update --templates` and health diagnostics.
+- Generated runtime surfaces and local templates must stay freshness-checkable through plain `gsdd update` and health diagnostics.
 - Future provider/tooling work must not make `agent-browser` a required validator field without a separate product decision; the current contract makes it the default workflow path, not a schema lock.
 
 ## D63 - Computed-First Control Map

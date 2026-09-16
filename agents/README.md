@@ -55,7 +55,7 @@ The catalog contains 10 canonical roles across lifecycle, audit, and utility res
 - **Single source of truth:** `agents/*.md` in this repo. Consumer copies are generated, not edited.
 - **Delegates reference the local copy:** `distilled/templates/delegates/*.md` point to `.work/templates/roles/<role>.md`, not back to this repo; legacy installs localize those paths to `.planning/templates/roles/<role>.md`.
 - **Idempotent:** `gsdd init` skips the copy if `.work/templates/roles/` already exists.
-- **Updates:** `gsdd update --templates` re-copies from latest framework sources with hash-based modification detection.
+- **Updates:** plain `gsdd update` reconciles the manifest-owned repo-local templates, helpers, skills, and adapters from latest framework sources with hash-based modification detection.
 
 Verifier note:
 - `verifier.md` is phase-scoped.

@@ -6,7 +6,7 @@ This matrix is the release-floor truth surface.
 
 The package runtime floor is Node >=22. Update awareness is limited to the supported public CLI/generated helper, and within it to commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. It uses sequential/best-effort anonymous metadata checks, with no lock or cross-process concurrency guarantee, a two-second timeout, 64 KiB/normalized-version limits, no credentials or repository data, and a contained `.work/.local` cache with nonblocking failures. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` are network-free; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
 
-Human repo setup and repair commands in this document use `npx -y workspine ...` because that works without a global install. If you installed `workspine` globally, the equivalent bare `gsdd ...` command is fine. For fresh cross-repo setup, run `npx -y workspine install --global` interactively or pass `--tools <targets>`; use `--auto` to refresh detected existing agent homes.
+Human repo setup and repair commands in this document use `npx -y workspine ...` because that works without a global install. If you installed `workspine` globally, the equivalent bare `gsdd ...` command is fine. For fresh cross-repo setup, run `npx -y workspine install --global` interactively or pass `--tools <targets>`. For an existing Workspine-owned global install, run `npx -y workspine health --global` first; it emits `update --global` only when the whole discovered set is safe to reconcile automatically. `--auto` detects existing agent homes for install/setup and is not the generic repair path.
 
 Normal first use starts with `npx -y workspine setup`. The lower-level `npx -y workspine init` command remains available for compatibility and scripted advanced setup.
 
@@ -64,7 +64,7 @@ Two surfaces matter for users:
 
 ## Global install surfaces
 
-For a fresh install, choose targets interactively or run `npx -y workspine install --global --tools <targets>`. Use `npx -y workspine install --global --auto` to refresh detected existing agent homes; when none are detected it writes nothing and prints exact explicit commands. Supported target IDs are `claude,opencode,codex,copilot`:
+For a fresh install, choose targets interactively or run `npx -y workspine install --global --tools <targets>`. `npx -y workspine install --global --auto` remains a setup convenience that selects detected existing homes; it is not a blanket repair command. Existing Workspine-owned homes should be inspected with `npx -y workspine health --global`, which distinguishes safe missing/package-stale files from manual ownership or filesystem blockers. Supported target IDs are `claude,opencode,codex,copilot`:
 
 | Target | Global surfaces |
 | --- | --- |
@@ -86,7 +86,7 @@ The authored source contract stays in `distilled/workflows/*`. Generated runtime
 - `npx -y workspine update` regenerates drifted generated surfaces from the authored workflow and delegate sources.
 - Bare `gsdd health` and `gsdd update` are equivalent only when `workspine` is globally installed.
 - Missing generated surfaces are not treated as drift unless the corresponding runtime surface is actually installed locally.
-- Detected existing global installs are refreshed by rerunning `npx -y workspine install --global --auto`; fresh or explicitly scoped installs use `npx -y workspine install --global --tools <targets>`. Global runtime probes remain an internal pressure-harness concern, not a public install flag.
+- Existing global installs are checked with `npx -y workspine health --global`. If every discovered issue is auto-safe, health routes to `npx -y workspine update --global`; if any unowned, user-modified, linked, colliding, unreadable, corrupt, foreign, or ownership-missing state is present, it requires manual resolution and suppresses automatic update guidance for the selected set. Fresh or explicitly scoped installs use `npx -y workspine install --global --tools <targets>`. Global runtime probes remain an internal pressure-harness concern, not a public install flag.
 
 ## Entry and helper surfaces
 

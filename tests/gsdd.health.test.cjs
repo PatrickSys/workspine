@@ -6,6 +6,7 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { createHash } = require('node:crypto');
 
 const { createTempProject, loadGsdd, runCliAsMain, cleanup, withEnv } = require('./gsdd.helpers.cjs');
 
@@ -174,6 +175,7 @@ describe('Health — pre-init guard', () => {
     assert.strictEqual(json.status, 'broken');
     assert.ok(json.errors.length > 0);
     assert.strictEqual(json.errors[0].id, 'E1');
+    assert.match(json.errors[0].fix, /npx -y workspine init/);
   });
 
   test('supported legacy state is a blocking migration issue and remains byte-identical', async () => {
@@ -230,7 +232,10 @@ describe('Health — ERROR: malformed config.json', () => {
     assert.strictEqual(result.exitCode, 1);
     const json = JSON.parse(result.output);
     assert.strictEqual(json.status, 'broken');
-    assert.ok(json.errors.some((e) => e.id === 'E1'));
+    const error = json.errors.find((e) => e.id === 'E1');
+    assert.ok(error);
+    assert.match(error.fix, /Repair or restore .*config\.json manually/);
+    assert.doesNotMatch(error.fix, /Run `npx -y workspine init`/);
   });
 });
 
@@ -243,8 +248,11 @@ describe('Health — ERROR: missing required config fields', () => {
     fs.writeFileSync(configPath, JSON.stringify(config));
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.errors.some((e) => e.id === 'E2'));
-    assert.match(json.errors.find((e) => e.id === 'E2').message, /researchDepth/);
+    const error = json.errors.find((e) => e.id === 'E2');
+    assert.ok(error);
+    assert.match(error.message, /researchDepth/);
+    assert.match(error.fix, /Repair or restore .*config\.json manually/);
+    assert.doesNotMatch(error.fix, /Run `npx -y workspine init`/);
   });
 });
 
@@ -316,7 +324,12 @@ describe('Health — ERROR: missing research/codebase/root templates', () => {
     fs.rmSync(path.join(tmpDir, '.work', 'templates', 'spec.md'), { force: true });
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.errors.some((e) => e.id === 'E8' && e.message.includes('spec.md')));
+    const error = json.errors.find((e) => e.id === 'E8' && e.message.includes('spec.md'));
+    assert.ok(error);
+    assert.strictEqual(error.fix, 'Run `npx -y workspine update`');
+    const repaired = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(repaired.exitCode, 0, repaired.output);
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'spec.md')));
   });
 
   test('ui-proof root template removed → E8', async () => {
@@ -335,7 +348,11 @@ describe('Health — WARN: missing manifest', () => {
     if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.warnings.some((w) => w.id === 'W1'));
+    const warning = json.warnings.find((w) => w.id === 'W1');
+    assert.ok(warning);
+    assert.match(warning.fix, /Restore .*generation-manifest\.json.*trusted backup/);
+    assert.match(warning.fix, /initialize a clean workspace/);
+    assert.doesNotMatch(warning.fix, /Run `npx -y workspine update`/);
     assert.strictEqual(json.status, 'degraded');
     assert.strictEqual(result.exitCode, 0);
   });
@@ -781,6 +798,317 @@ describe('Health — WARN: adapter and truth drift detection', () => {
     assert.match(warning.fix, /npx -y workspine update/);
   });
 
+  test('missing owned Claude runtime target → W11 emits supported init repair and restores the file', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const target = path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    fs.rmSync(target);
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, 'missing owned Claude target should emit W11');
+    assert.match(warning.fix, /`npx -y workspine init --tools claude`/);
+    assert.doesNotMatch(warning.fix, /workspine update --tools/);
+
+    const repaired = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+    assert.strictEqual(repaired.exitCode, 0, repaired.output);
+    assert.ok(fs.existsSync(target), 'emitted init repair must restore the missing Claude target');
+  });
+
+  test('stale owned Claude runtime target → W11 keeps plain update repair', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const target = path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    fs.appendFileSync(target, '\n<!-- drift -->\n');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, 'stale owned Claude target should emit W11');
+    assert.match(warning.fix, /`npx -y workspine update`/);
+    assert.doesNotMatch(warning.fix, /workspine update --tools|workspine init --tools/);
+  });
+
+  test('mixed missing native plus stale helper W11 orders init repair before plain update', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    fs.appendFileSync(path.join(tmpDir, '.work', 'bin', 'gsdd.mjs'), '\n// drift\n');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning);
+    const initIndex = warning.fix.indexOf('npx -y workspine init --tools claude');
+    const updateIndex = warning.fix.indexOf('npx -y workspine update');
+    assert.ok(initIndex >= 0 && updateIndex > initIndex, warning.fix);
+    assert.doesNotMatch(warning.fix, /workspine update --tools/);
+  });
+
+  test('unowned generated-looking Claude target → W11 requires manual ownership repair first', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const relativeTarget = '.claude/skills/work-plan/SKILL.md';
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    delete manifest.adapterFiles[relativeTarget];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning);
+    assert.match(warning.fix, /Resolve generated target ownership manually first/);
+    assert.match(warning.fix, /\.claude\/skills\/work-plan\/SKILL\.md/);
+    assert.doesNotMatch(warning.fix, /workspine (?:update|init) --tools/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine update`/);
+  });
+
+  test('dangling owned Claude symlink → W11 stays manual and never emits init repair', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const target = path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    fs.unlinkSync(target);
+    fs.symlinkSync(path.join(tmpDir, 'missing-dangling-skill.md'), target, 'file');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.message, /\.claude\/skills\/work-plan\/SKILL\.md \[collision\]/);
+    assert.match(warning.fix, /Resolve generated target ownership manually first/);
+    assert.doesNotMatch(warning.fix, /workspine init --tools|`npx -y workspine update`/);
+  });
+
+  test('dangling Claude parent link blocks init repair before any repository writes', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const skillsDir = path.join(tmpDir, '.claude', 'skills');
+    fs.rmSync(skillsDir, { recursive: true, force: true });
+    fs.symlinkSync(
+      path.join(tmpDir, 'missing-external-skills'),
+      skillsDir,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    const health = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(health.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, health.output);
+    assert.match(warning.fix, /Automatic repair preflight refused/);
+    assert.match(warning.fix, /parent must be a real directory/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`|`npx -y workspine update`/);
+
+    const before = snapshotTree(tmpDir);
+    const init = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+    assert.notStrictEqual(init.exitCode, 0, init.output);
+    assert.match(init.output, /parent must be a real directory/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'init must refuse a dangling parent link before any repository writes');
+  });
+
+  test('missing Claude target with inconsistent sibling provenance → W11 does not advertise init that will refuse', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    const before = snapshotTree(tmpDir);
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.fix, /Automatic repair preflight refused/);
+    assert.match(warning.fix, /inconsistent source provenance/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'health preflight must remain byte-neutral');
+
+    const refused = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+    assert.notStrictEqual(refused.exitCode, 0, refused.output);
+    assert.match(refused.output, /inconsistent source provenance/);
+  });
+
+  test('stale Claude target with inconsistent sibling provenance → W11 does not advertise update that will refuse', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.appendFileSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'), '\n<!-- drift -->\n');
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.fix, /Automatic repair preflight refused/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine update`/);
+
+    const refused = await runCliAsMain(tmpDir, ['update']);
+    assert.notStrictEqual(refused.exitCode, 0, refused.output);
+    assert.match(refused.output, /inconsistent source provenance/);
+  });
+
+  test('manifest-selected Claude runtime with its whole native root deleted → W11 emits executable init repair', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude'), { recursive: true, force: true });
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.message, /\.claude\/skills\/work-plan\/SKILL\.md \[missing\]/);
+    assert.match(warning.fix, /`npx -y workspine init --tools claude`/);
+
+    const repaired = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+    assert.strictEqual(repaired.exitCode, 0, repaired.output);
+    assert.ok(fs.existsSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md')));
+    const clean = await runCliAsMain(tmpDir, ['health', '--json']);
+    assert.ok(!JSON.parse(clean.output).warnings.some((w) => w.id === 'W11'), clean.output);
+  });
+
+  test('nested cwd health preflights W11 against the resolved workspace root', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    const nested = path.join(tmpDir, 'src', 'nested');
+    fs.mkdirSync(nested, { recursive: true });
+
+    const result = await runCliAsMain(nested, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+    assert.ok(warning, result.output);
+    assert.match(warning.fix, /Automatic repair preflight refused/);
+    assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`/);
+  });
+
+  test('explicit workspace-root health preflights W11 against the named workspace', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    const foreign = createTempProject();
+    try {
+      const result = await runCliAsMain(foreign, ['health', '--workspace-root', tmpDir, '--json']);
+      const warning = JSON.parse(result.output).warnings.find((w) => w.id === 'W11');
+      assert.ok(warning, result.output);
+      assert.match(warning.fix, /Automatic repair preflight refused/);
+      assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`/);
+    } finally {
+      cleanup(foreign);
+    }
+  });
+
+  test('W6 does not contradict manual W11 ownership guidance', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.agents'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills'), { recursive: true, force: true });
+    fs.rmSync(path.join(tmpDir, '.claude', 'commands'), { recursive: true, force: true });
+    const manifestPath = path.join(tmpDir, '.work', 'generation-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    manifest.adapterFiles['.claude/agents/work-plan-checker.md'].source = 'bin/adapters/codex.mjs';
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const report = JSON.parse(result.output);
+    const w6 = report.warnings.find((w) => w.id === 'W6');
+    const w11 = report.warnings.find((w) => w.id === 'W11');
+    assert.ok(w6 && w11, result.output);
+    assert.match(w11.fix, /Automatic repair preflight refused/);
+    assert.strictEqual(w6.fix, w11.fix, 'W6 must reuse the preflighted repair truth instead of advertising generic init');
+    assert.doesNotMatch(w6.fix, /`npx -y workspine init --tools <platform>`/);
+  });
+
+  test('unsafe runtime-helper root suppresses every repository update fix before mutation', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    const external = createTempProject();
+    const runtimeDir = path.join(tmpDir, '.work', 'bin');
+    const externalRuntime = path.join(external, 'bin-copy');
+    try {
+      fs.cpSync(runtimeDir, externalRuntime, { recursive: true });
+      fs.rmSync(runtimeDir, { recursive: true, force: true });
+      fs.symlinkSync(externalRuntime, runtimeDir, process.platform === 'win32' ? 'junction' : 'dir');
+      fs.appendFileSync(path.join(externalRuntime, 'gsdd.mjs'), '\n// drift\n');
+      const externalBefore = snapshotTree(external);
+
+      const result = await runCliAsMain(tmpDir, ['health', '--json']);
+      const report = JSON.parse(result.output);
+      const updateFixes = [...report.errors, ...report.warnings, ...report.info]
+        .filter((entry) => typeof entry.fix === 'string' && /update/.test(entry.fix));
+      assert.ok(updateFixes.length > 0, result.output);
+      for (const entry of updateFixes) {
+        assert.match(entry.fix, /Automatic update preflight refused/);
+        assert.doesNotMatch(entry.fix, /`npx -y workspine update`/);
+      }
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'health must not write through the runtime junction');
+
+      const repoBefore = snapshotTree(tmpDir);
+      await assert.rejects(
+        () => runCliAsMain(tmpDir, ['update']),
+        /generated runtime helpers: bin\/ must be a real directory/
+      );
+      assert.deepStrictEqual(snapshotTree(tmpDir), repoBefore, 'update must refuse unsafe runtime root before repository writes');
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'update must not write through the runtime junction');
+    } finally {
+      cleanup(external);
+    }
+  });
+
+  test('linked .gitignore blocks init repair guidance and actual init before external writes', async () => {
+    const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+    assert.strictEqual(initialized.exitCode, 0, initialized.output);
+    fs.rmSync(path.join(tmpDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+    const external = createTempProject();
+    const externalGitignore = path.join(external, 'outside.gitignore');
+    fs.writeFileSync(externalGitignore, '# external\n');
+    fs.rmSync(path.join(tmpDir, '.gitignore'), { force: true });
+    fs.symlinkSync(externalGitignore, path.join(tmpDir, '.gitignore'), 'file');
+    try {
+      const externalBefore = fs.readFileSync(externalGitignore, 'utf-8');
+      const health = await runCliAsMain(tmpDir, ['health', '--json']);
+      const warning = JSON.parse(health.output).warnings.find((w) => w.id === 'W11');
+      assert.ok(warning, health.output);
+      assert.match(warning.fix, /Automatic repair preflight refused/);
+      assert.match(warning.fix, /\.gitignore must be a regular file/);
+      assert.doesNotMatch(warning.fix, /`npx -y workspine init --tools claude`/);
+      assert.strictEqual(fs.readFileSync(externalGitignore, 'utf-8'), externalBefore);
+
+      const init = await runCliAsMain(tmpDir, ['init', '--tools', 'claude']);
+      assert.notStrictEqual(init.exitCode, 0, init.output);
+      assert.match(init.output, /\.gitignore must be a regular file/);
+      assert.strictEqual(fs.readFileSync(externalGitignore, 'utf-8'), externalBefore, 'init must not write through linked .gitignore');
+    } finally {
+      cleanup(external);
+    }
+  });
+
+  test('linked current .work root blocks init guidance and init before external writes', async () => {
+    const external = createTempProject();
+    fs.symlinkSync(external, path.join(tmpDir, '.work'), process.platform === 'win32' ? 'junction' : 'dir');
+    try {
+      const externalBefore = snapshotTree(external);
+      const health = await runCliAsMain(tmpDir, ['health', '--json']);
+      const report = JSON.parse(health.output);
+      const e1 = report.errors.find((entry) => entry.id === 'E1');
+      assert.ok(e1, health.output);
+      assert.match(e1.fix, /\.work\/.*real directory/i);
+      assert.doesNotMatch(e1.fix, /workspine init/);
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'health must not write through linked .work');
+
+      const init = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'claude']);
+      assert.notStrictEqual(init.exitCode, 0, init.output);
+      assert.match(init.output, /\.work\/.*real directory/i);
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'init must refuse linked .work before external writes');
+    } finally {
+      cleanup(external);
+    }
+  });
+
   test('aligned framework truth files → no W7-W10', async () => {
     await initWorkspace();
     writeAlignedTruthFixtures();
@@ -960,9 +1288,90 @@ describe('Health — global agent homes', () => {
         const beforeHealthRepo = snapshotTree(repoDir);
         const degraded = await runCliAsMain(repoDir, ['health', '-g', '--json']);
         assert.strictEqual(degraded.exitCode, 0, degraded.output);
-        assert.strictEqual(JSON.parse(degraded.output).status, 'degraded');
+        const degradedReport = JSON.parse(degraded.output);
+        assert.strictEqual(degradedReport.status, 'degraded');
+        assert.ok(degradedReport.warnings.some((warning) => warning.message.includes('modified')));
+        for (const issue of [...degradedReport.errors, ...degradedReport.warnings]) {
+          assert.doesNotMatch(issue.fix, /update --global/, 'unsafe global health must not emit automatic update repair');
+        }
+        assert.match(degradedReport.warnings.find((warning) => warning.message.includes('modified')).fix, /Preserve the existing file/);
         assert.deepStrictEqual(snapshotTree(homeDir), beforeHealthHome, 'global health must not rewrite the modified owned home');
         assert.deepStrictEqual(snapshotTree(repoDir), beforeHealthRepo, 'global health must not touch the invoking repo');
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global health reports user-modified obsolete manifest entries and blocks update-global', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const obsoleteRelativePath = 'skills/work-obsolete/SKILL.md';
+    const obsoletePath = path.join(homeDir, '.claude', ...obsoleteRelativePath.split('/'));
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        fs.mkdirSync(path.dirname(obsoletePath), { recursive: true });
+        const originalBytes = 'obsolete package-owned bytes\n';
+        fs.writeFileSync(obsoletePath, originalBytes);
+        const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        manifest.files[obsoleteRelativePath] = createHash('sha256').update(originalBytes).digest('hex');
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        fs.appendFileSync(obsoletePath, 'user edit\n');
+
+        const beforeHealth = snapshotTree(homeDir);
+        const health = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(health.output);
+        const issue = report.warnings.find((entry) => entry.message.includes(obsoleteRelativePath) && /modified/.test(entry.message));
+        assert.ok(issue, health.output);
+        assert.match(issue.fix, /Preserve the existing file/);
+        assert.doesNotMatch(issue.fix, /update --global/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeHealth, 'global health must stay read-only');
+
+        const beforeUpdate = snapshotTree(homeDir);
+        const update = await runCliAsMain(repoDir, ['update', '--global']);
+        assert.notStrictEqual(update.exitCode, 0, update.output);
+        assert.match(update.output, /stale Workspine-managed file was modified by the user/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeUpdate, 'blocked update must preserve the entire selected set');
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('safe obsolete manifest-owned global file is advertised and removed by update-global', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const obsoleteRelativePath = 'skills/work-obsolete/SKILL.md';
+    const obsoletePath = path.join(homeDir, '.claude', ...obsoleteRelativePath.split('/'));
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        fs.mkdirSync(path.dirname(obsoletePath), { recursive: true });
+        const originalBytes = 'obsolete package-owned bytes\n';
+        fs.writeFileSync(obsoletePath, originalBytes);
+        const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        manifest.files[obsoleteRelativePath] = createHash('sha256').update(originalBytes).digest('hex');
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+        const health = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(health.output);
+        const issue = report.warnings.find((entry) => entry.message.includes(obsoleteRelativePath) && /obsolete/.test(entry.message));
+        assert.ok(issue, health.output);
+        assert.match(issue.fix, /npx -y workspine update --global/);
+
+        const update = await runCliAsMain(repoDir, ['update', '--global']);
+        assert.strictEqual(update.exitCode, 0, update.output);
+        assert.ok(!fs.existsSync(obsoletePath), 'safe obsolete manifest-owned file should be removed');
+        const clean = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        assert.strictEqual(clean.exitCode, 0, clean.output);
+        assert.strictEqual(JSON.parse(clean.output).status, 'healthy');
       });
     } finally {
       cleanup(homeDir);
@@ -1004,6 +1413,15 @@ describe('Health — global agent homes', () => {
           fs.writeFileSync(path.join(homeDir, '.claude', 'workspine-file-manifest.json'), '{not-json');
         },
       },
+      {
+        name: 'foreign',
+        mutate: (homeDir) => {
+          const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+          manifest.product = 'OtherProduct';
+          fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        },
+      },
     ];
     for (const scenario of cases) {
       const homeDir = createTempProject();
@@ -1020,6 +1438,9 @@ describe('Health — global agent homes', () => {
           const parsed = JSON.parse(result.output);
           assert.strictEqual(parsed.status, 'broken');
           assert.match(`${parsed.errors.map((error) => error.message).join('\n')}\n${parsed.warnings.map((warning) => warning.message).join('\n')}`, new RegExp(scenario.name));
+          for (const issue of [...parsed.errors, ...parsed.warnings]) {
+            assert.doesNotMatch(issue.fix, /update --global/, `${scenario.name} must not advertise blocked global update`);
+          }
           assert.deepStrictEqual(snapshotTree(homeDir), beforeHome, `${scenario.name} health must be zero-write`);
           assert.deepStrictEqual(snapshotTree(repoDir), beforeRepo, `${scenario.name} health must not touch repo`);
         });
@@ -1027,6 +1448,160 @@ describe('Health — global agent homes', () => {
         cleanup(homeDir);
         cleanup(repoDir);
       }
+    }
+  });
+
+  test('global health marks an untracked expected file manual and never emits update-global', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        delete manifest.files['skills/work-plan/SKILL.md'];
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        const before = snapshotTree(homeDir);
+
+        const result = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(result.output);
+        const issue = [...report.errors, ...report.warnings].find((entry) => /untracked/.test(entry.message));
+        assert.ok(issue, result.output);
+        assert.match(issue.fix, /Preserve the existing file/);
+        assert.doesNotMatch(issue.fix, /update --global/);
+        assert.deepStrictEqual(snapshotTree(homeDir), before);
+
+        fs.unlinkSync(path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md'));
+        const beforeMissingOwnership = snapshotTree(homeDir);
+        const missingOwnership = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const missingReport = JSON.parse(missingOwnership.output);
+        const missingIssue = missingReport.errors.find((entry) => /ownership-missing/.test(entry.message));
+        assert.ok(missingIssue, missingOwnership.output);
+        assert.match(missingIssue.fix, /Manual ownership repair required/);
+        assert.doesNotMatch(missingIssue.fix, /update --global/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeMissingOwnership);
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('safe missing owned global file emits update-global, restores it, and clears health', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const target = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        fs.unlinkSync(target);
+
+        const health = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(health.output);
+        const issue = report.errors.find((entry) => /skills\/work-plan\/SKILL\.md is missing/.test(entry.message));
+        assert.ok(issue, health.output);
+        assert.match(issue.fix, /npx -y workspine update --global/);
+
+        const repaired = await runCliAsMain(repoDir, ['update', '--global']);
+        assert.strictEqual(repaired.exitCode, 0, repaired.output);
+        assert.ok(fs.existsSync(target));
+        const clean = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        assert.strictEqual(clean.exitCode, 0, clean.output);
+        assert.strictEqual(JSON.parse(clean.output).status, 'healthy');
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('package-stale owned global bytes are auto-safe and update-global converges', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const target = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        const oldBytes = 'older package-owned work-plan bytes\n';
+        fs.writeFileSync(target, oldBytes);
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        manifest.files['skills/work-plan/SKILL.md'] = createHash('sha256').update(oldBytes).digest('hex');
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+        const health = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(health.output);
+        const issue = report.warnings.find((entry) => /package-stale/.test(entry.message));
+        assert.ok(issue, health.output);
+        assert.match(issue.fix, /npx -y workspine update --global/);
+        const repaired = await runCliAsMain(repoDir, ['update', '--global']);
+        assert.strictEqual(repaired.exitCode, 0, repaired.output);
+        assert.notStrictEqual(fs.readFileSync(target, 'utf-8'), oldBytes);
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('mixed safe missing plus manual blocker suppresses update-global everywhere and stays zero-write', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const missingTarget = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    const modifiedTarget = path.join(homeDir, '.claude', 'agents', 'work-plan-checker.md');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'claude']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        fs.unlinkSync(missingTarget);
+        fs.appendFileSync(modifiedTarget, '\nuser edit\n');
+        const beforeHealth = snapshotTree(homeDir);
+
+        const health = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(health.output);
+        assert.ok([...report.errors, ...report.warnings].some((entry) => /missing/.test(entry.message)));
+        assert.ok([...report.errors, ...report.warnings].some((entry) => /modified/.test(entry.message)));
+        for (const issue of [...report.errors, ...report.warnings]) {
+          assert.doesNotMatch(issue.fix, /update --global/);
+        }
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeHealth, 'mixed global health must be read-only');
+
+        const beforeUpdate = snapshotTree(homeDir);
+        const blocked = await runCliAsMain(repoDir, ['update', '--global']);
+        assert.notStrictEqual(blocked.exitCode, 0, blocked.output);
+        assert.match(blocked.output, /Manual resolution is required before retrying/);
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeUpdate, 'blocked selected set must write nothing');
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('partial lost split-root ownership is reported manually instead of omitted as healthy', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const install = await runCliAsMain(repoDir, ['install', '--global', '--tools', 'opencode']);
+        assert.strictEqual(install.exitCode, 0, install.output);
+        fs.unlinkSync(path.join(homeDir, '.agents', 'workspine-file-manifest.json'));
+        const before = snapshotTree(homeDir);
+        const result = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        assert.strictEqual(result.exitCode, 1, result.output);
+        const report = JSON.parse(result.output);
+        const issue = report.errors.find((entry) => /manifest-missing/.test(entry.message));
+        assert.ok(issue, result.output);
+        assert.match(issue.fix, /Manual ownership repair required/);
+        assert.doesNotMatch(issue.fix, /update --global/);
+        assert.deepStrictEqual(snapshotTree(homeDir), before);
+      });
+    } finally {
+      cleanup(homeDir);
+      cleanup(repoDir);
     }
   });
 

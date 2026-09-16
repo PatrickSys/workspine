@@ -101,7 +101,15 @@ export function resolveStateDir(root) {
   if (workStat && legacyStat) {
     return { ...base, status: 'dual_conflict', action: 'refuse', reason: 'both_state_roots_exist' };
   }
-  if (workStat) return { ...base, status: 'current', action: 'use_current' };
+  if (workStat) {
+    if (workStat.isSymbolicLink()) {
+      return { ...base, status: 'current_unsafe', action: 'refuse', reason: 'linked_current_root' };
+    }
+    if (!workStat.isDirectory()) {
+      return { ...base, status: 'current_unsafe', action: 'refuse', reason: 'invalid_current_root' };
+    }
+    return { ...base, status: 'current', action: 'use_current' };
+  }
   if (!legacyStat) return { ...base, status: 'fresh', action: 'use_current' };
 
   const legacy = inspectLegacyState(legacyDir, legacyStat);
@@ -133,6 +141,13 @@ export function stateAuthorityGate(state) {
       allowed: false,
       status: state.status,
       message: 'Both `.work/` and `.planning/` exist. Refusing split-root state. Resolve the two roots manually so only one remains; Workspine will not merge or delete either root.',
+    };
+  }
+  if (state.status === 'current_unsafe') {
+    return {
+      allowed: false,
+      status: state.status,
+      message: 'Current `.work/` state root must be a real directory inside this workspace. Preserve any linked or colliding target bytes, replace `.work/` with a real local directory, then rerun health.',
     };
   }
   return {

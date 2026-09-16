@@ -845,11 +845,14 @@ describe('global install pressure loop', () => {
         assert.match(cleanUpdate, /codex:/);
         assert.strictEqual(process.exitCode, undefined);
         fs.writeFileSync(claudeSkill, 'user edit that should be recovered\n');
+        const beforeBlockedHome = snapshotTree(homeDir);
         const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
         assert.match(output, /claude:/);
         assert.match(output, /codex:/);
         assert.strictEqual(process.exitCode, 1, 'modified owned global bytes must refuse before any target writes');
+        assert.match(output, /Manual resolution is required before retrying/);
         assert.strictEqual(fs.readFileSync(claudeSkill, 'utf-8'), 'user edit that should be recovered\n');
+        assert.deepStrictEqual(snapshotTree(homeDir), beforeBlockedHome, 'one blocker must keep the entire selected global set zero-write');
         assert.deepStrictEqual(snapshotTree(repoDir), beforeRepo, 'global update must not touch the invoking repo');
       });
     } finally {
@@ -879,6 +882,42 @@ describe('global install pressure loop', () => {
         assert.match(output, /claude:/);
         assert.match(output, /codex:/);
         for (const filePath of missingFiles) assert.ok(fs.existsSync(filePath), `${filePath} must be reconciled`);
+      });
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('global update refuses an absent expected file when manifest ownership is also missing', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    const target = path.join(homeDir, '.claude', 'skills', 'work-plan', 'SKILL.md');
+    const manifestPath = path.join(homeDir, '.claude', 'workspine-file-manifest.json');
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        const installOutput = await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude'));
+        assert.match(installOutput, /Global install complete/);
+        assert.ok(fs.existsSync(target), 'fresh install must create the expected target');
+
+        fs.unlinkSync(target);
+        const manifest = readJson(manifestPath);
+        delete manifest.files['skills/work-plan/SKILL.md'];
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        const before = snapshotTree(homeDir);
+
+        const output = await captureLogs(() => gsdd.cmdGlobalUpdate());
+
+        assert.strictEqual(process.exitCode, 1, output);
+        assert.match(output, /missing target is unowned|not tracked by Workspine manifest/i);
+        assert.match(output, /Manual resolution is required before retrying/);
+        assert.ok(!fs.existsSync(target), 'strict global update must not recreate an absent unowned target');
+        assert.deepStrictEqual(snapshotTree(homeDir), before, 'absent plus untracked global target must refuse with zero writes');
       });
     } finally {
       restoreStdin();
@@ -975,6 +1014,7 @@ describe('global install pressure loop', () => {
           assert.strictEqual(process.exitCode, 1, `${scenario.name} must refuse`);
           const expectedReason = scenario.name === 'corrupt' ? 'corrupt' : scenario.name === 'linked-manifest' ? 'linked' : scenario.name;
           assert.match(output, new RegExp(expectedReason));
+          assert.match(output, /Manual resolution is required before retrying/);
           assert.deepStrictEqual(snapshotTree(homeDir), before, `${scenario.name} refusal must be zero-write`);
         });
       } finally {
@@ -983,6 +1023,156 @@ describe('global install pressure loop', () => {
         cleanup(homeDir);
         cleanup(repoDir);
       }
+    }
+  });
+
+  test('global health and update refuse an intermediate parent junction before external writes', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const external = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    try {
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'claude'));
+
+        const linkedParent = path.join(homeDir, '.claude', 'skills', 'work-plan');
+        fs.rmSync(linkedParent, { recursive: true, force: true });
+        fs.symlinkSync(external, linkedParent, process.platform === 'win32' ? 'junction' : 'dir');
+        const externalBefore = snapshotTree(external);
+
+        const health = await runCliAsMain(repoDir, ['health', '--global', '--json']);
+        const report = JSON.parse(health.output);
+        const linked = [...report.errors, ...report.warnings].find((entry) =>
+          /skills\/work-plan\/SKILL\.md/.test(entry.message));
+        assert.ok(linked, health.output);
+        assert.match(linked.message, /linked/);
+        assert.match(linked.fix, /Manual resolution required/);
+        assert.doesNotMatch(linked.fix, /workspine update --global/);
+        assert.deepStrictEqual(snapshotTree(external), externalBefore, 'global health must not write through an intermediate junction');
+
+        process.exitCode = undefined;
+        const update = await captureLogs(() => gsdd.cmdGlobalUpdate());
+        assert.strictEqual(process.exitCode, 1, update);
+        assert.match(update, /linked|Manual resolution is required before retrying/);
+        assert.deepStrictEqual(snapshotTree(external), externalBefore, 'global update must refuse before writing through an intermediate junction');
+      });
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(external);
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('isolated global install refuses a linked parent of the runtime root before external writes', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const external = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    try {
+      fs.symlinkSync(external, path.join(homeDir, '.config'), process.platform === 'win32' ? 'junction' : 'dir');
+      const externalBefore = snapshotTree(external);
+      const homeBefore = snapshotTree(homeDir);
+      await withEnv({ GSDD_TEST_HOME: homeDir, XDG_CONFIG_HOME: path.join(homeDir, '.ignored-config') }, async () => {
+        const gsdd = await loadGsdd(repoDir);
+        const output = await captureLogs(() => gsdd.cmdInstall('--global', '--tools', 'opencode'));
+        assert.strictEqual(process.exitCode, 1, output);
+        assert.match(output, /linked|Manual resolution is required before retrying/);
+      });
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'global install must not write through a linked parent of the runtime root');
+      assert.deepStrictEqual(snapshotTree(homeDir), homeBefore, 'one unsafe split-root spec must keep the selected global target zero-write');
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(external);
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('explicit external runtime root refuses a linked ancestor before shared or external writes', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const parentDir = createTempProject();
+    const external = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    try {
+      const linkedParent = path.join(parentDir, 'linked-runtime-parent');
+      fs.symlinkSync(external, linkedParent, process.platform === 'win32' ? 'junction' : 'dir');
+      const opencodeConfigDir = path.join(linkedParent, 'opencode');
+      const homeBefore = snapshotTree(homeDir);
+      const externalBefore = snapshotTree(external);
+
+      const [{ createCliContext }, { createCmdInstall }] = await Promise.all([
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'gsdd.mjs')).href}?t=${Date.now()}-external-linked-ctx`),
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-external-linked-install`),
+      ]);
+      const ctx = createCliContext(repoDir);
+      ctx.globalInstallRootOptions = {
+        homeDir,
+        env: {
+          XDG_CONFIG_HOME: path.join(homeDir, '.config'),
+          OPENCODE_CONFIG_DIR: opencodeConfigDir,
+        },
+      };
+      process.exitCode = undefined;
+      const output = await captureLogs(() => createCmdInstall(ctx)('--global', '--tools', 'opencode'));
+      assert.strictEqual(process.exitCode, 1, output);
+      assert.match(output, /linked|selected set blocked/i);
+      assert.deepStrictEqual(snapshotTree(homeDir), homeBefore, 'unsafe explicit runtime root must block shared HOME writes too');
+      assert.deepStrictEqual(snapshotTree(external), externalBefore, 'explicit runtime root must not write through an ancestor junction');
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(external);
+      cleanup(parentDir);
+      cleanup(homeDir);
+      cleanup(repoDir);
+    }
+  });
+
+  test('explicit external runtime root refuses a file ancestor before partial selected-target writes', async () => {
+    const homeDir = createTempProject();
+    const repoDir = createTempProject();
+    const parentDir = createTempProject();
+    const restoreStdin = setNonInteractiveStdin();
+    const previousExitCode = process.exitCode;
+    try {
+      const fileParent = path.join(parentDir, 'runtime-parent-file');
+      fs.writeFileSync(fileParent, 'consumer bytes\n');
+      const opencodeConfigDir = path.join(fileParent, 'opencode');
+      const homeBefore = snapshotTree(homeDir);
+      const fileBefore = fs.readFileSync(fileParent);
+
+      const [{ createCliContext }, { createCmdInstall }] = await Promise.all([
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'gsdd.mjs')).href}?t=${Date.now()}-external-file-ctx`),
+        import(`${pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'global-install.mjs')).href}?t=${Date.now()}-external-file-install`),
+      ]);
+      const ctx = createCliContext(repoDir);
+      ctx.globalInstallRootOptions = {
+        homeDir,
+        env: {
+          XDG_CONFIG_HOME: path.join(homeDir, '.config'),
+          OPENCODE_CONFIG_DIR: opencodeConfigDir,
+        },
+      };
+      process.exitCode = undefined;
+      const output = await captureLogs(() => createCmdInstall(ctx)('--global', '--tools', 'opencode'));
+      assert.strictEqual(process.exitCode, 1, output);
+      assert.match(output, /collision|not a directory|selected set blocked/i);
+      assert.deepStrictEqual(snapshotTree(homeDir), homeBefore, 'file-ancestor refusal must happen before shared HOME writes');
+      assert.deepStrictEqual(fs.readFileSync(fileParent), fileBefore, 'consumer ancestor file must remain byte-identical');
+    } finally {
+      restoreStdin();
+      process.exitCode = previousExitCode;
+      cleanup(parentDir);
+      cleanup(homeDir);
+      cleanup(repoDir);
     }
   });
 

@@ -9,13 +9,21 @@ import { readManifest, detectModifications } from './manifest.mjs';
 import { output } from './cli-utils.mjs';
 import { runTruthChecks, TRUTH_CHECK_IDS } from './health-truth.mjs';
 import { evaluateLifecycleState } from './lifecycle-state.mjs';
-import { evaluateRuntimeFreshness } from './runtime-freshness.mjs';
-import { evaluateGlobalRuntimeFreshness } from './runtime-freshness.mjs';
+import {
+  evaluateGlobalRuntimeFreshness,
+  evaluateRuntimeFreshness,
+  getGlobalRuntimeRepairGuidance,
+  getRuntimeFreshnessRepairGuidance,
+} from './runtime-freshness.mjs';
 import {
   collectGlobalInstallSpecs,
-  getManifestOwnedGlobalTargets,
+  getGlobalHealthTargets,
   resolveGlobalInstallRoots,
 } from './global-install.mjs';
+import {
+  preflightLocalInitRepair,
+  preflightLocalUpdateRepair,
+} from './init-flow.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { stateAuthorityGate } from './state-dir.mjs';
 import { WORKFLOW_ID_PREFIX } from './workflows.mjs';
@@ -35,7 +43,7 @@ export function buildGlobalHealthReport(ctx, healthArgs = []) {
     return { status: 'broken', errors: [{ id: 'G1', severity: 'ERROR', message, fix: 'Remove --workspace-root from global health.' }], warnings: [], info: [], humanMessage: message };
   }
   const roots = resolveGlobalInstallRoots(ctx.globalInstallRootOptions);
-  const targets = getManifestOwnedGlobalTargets({ roots });
+  const targets = getGlobalHealthTargets({ roots, ctx });
   if (targets.length === 0) {
     const message = 'No manifest-owned global install targets found. Run `npx -y workspine install --global --tools <target>` first.';
     return { status: 'broken', errors: [{ id: 'G1', severity: 'ERROR', message, fix: message }], warnings: [], info: [], humanMessage: message };
@@ -50,14 +58,14 @@ export function buildGlobalHealthReport(ctx, healthArgs = []) {
       return true;
     });
   const freshness = evaluateGlobalRuntimeFreshness({ specs });
-  const severeStatuses = new Set(['missing', 'linked', 'collision', 'unreadable', 'corrupt']);
+  const severeStatuses = new Set(['missing', 'linked', 'collision', 'unreadable', 'unsafe', 'corrupt', 'foreign', 'manifest-missing', 'ownership-missing']);
   const errors = freshness.issues
     .filter((issue) => severeStatuses.has(issue.status))
     .map((issue, index) => ({
       id: `G${index + 2}`,
       severity: 'ERROR',
       message: `${issue.runtime}: ${issue.relativePath} is ${issue.status}`,
-      fix: issue.repairCommand,
+      fix: getGlobalRuntimeRepairGuidance(issue, freshness),
     }));
   const warnings = freshness.issues
     .filter((issue) => !severeStatuses.has(issue.status))
@@ -65,7 +73,7 @@ export function buildGlobalHealthReport(ctx, healthArgs = []) {
       id: `GW${index + 1}`,
       severity: 'WARN',
       message: `${issue.runtime}: ${issue.relativePath} is ${issue.status}`,
-      fix: issue.repairCommand,
+      fix: getGlobalRuntimeRepairGuidance(issue, freshness),
     }));
   const info = targets.map((target) => ({
     id: 'GI1',
@@ -138,10 +146,20 @@ export function buildHealthReport(ctx, healthArgs = []) {
       const requiredFields = ['researchDepth', 'modelProfile', 'initVersion'];
       const missing = requiredFields.filter((f) => !(f in config));
       if (missing.length > 0) {
-        errors.push({ id: 'E2', severity: 'ERROR', message: `config.json missing required fields: ${missing.join(', ')}`, fix: 'Run `npx -y workspine init` to regenerate' });
+        errors.push({
+          id: 'E2',
+          severity: 'ERROR',
+          message: `config.json missing required fields: ${missing.join(', ')}`,
+          fix: `Repair or restore ${statePath(stateDirName, 'config.json')} manually from a trusted config, then rerun health. Init preserves an existing config and will not regenerate these fields.`,
+        });
       }
     } catch {
-      errors.push({ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} is unparseable`, fix: 'Run `npx -y workspine init`' });
+      errors.push({
+        id: 'E1',
+        severity: 'ERROR',
+        message: `${statePath(stateDirName, 'config.json')} is unparseable`,
+        fix: `Repair or restore ${statePath(stateDirName, 'config.json')} manually from a trusted copy, then rerun health. Init refuses an invalid existing config rather than replacing it.`,
+      });
     }
 
     // E3: templates/ missing
@@ -156,47 +174,47 @@ export function buildHealthReport(ctx, healthArgs = []) {
     const skipInstalledTemplateChecks = !hasTemplatesDir && frameworkSourceMode;
 
     if (!hasTemplatesDir && !skipInstalledTemplateChecks) {
-      errors.push({ id: 'E3', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
+      errors.push({ id: 'E3', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing`, fix: 'Run `npx -y workspine update`' });
     } else if (hasTemplatesDir) {
       // E4: roles/ missing or empty
       if (!hasRolesDir) {
-        errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
+        errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} missing`, fix: 'Run `npx -y workspine update`' });
       } else {
         const roleFiles = readdirSync(rolesDir).filter((f) => f.endsWith('.md'));
         if (roleFiles.length === 0) {
-          errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} has 0 role files`, fix: 'Run `npx -y workspine update --templates`' });
+          errors.push({ id: 'E4', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/roles/')} has 0 role files`, fix: 'Run `npx -y workspine update`' });
         }
       }
 
       // E5: delegates/ missing or empty
       if (!hasDelegatesDir) {
-        errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
+        errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} missing`, fix: 'Run `npx -y workspine update`' });
       } else {
         const delegateFiles = readdirSync(delegatesDir).filter((f) => f.endsWith('.md'));
         if (delegateFiles.length === 0) {
-          errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} has 0 delegate files`, fix: 'Run `npx -y workspine update --templates`' });
+          errors.push({ id: 'E5', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/delegates/')} has 0 delegate files`, fix: 'Run `npx -y workspine update`' });
         }
       }
 
       // E6: research/ missing or empty
       const researchDir = join(templatesDir, 'research');
       if (!existsSync(researchDir)) {
-        errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
+        errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} missing`, fix: 'Run `npx -y workspine update`' });
       } else {
         const researchFiles = readdirSync(researchDir).filter((f) => f.endsWith('.md'));
         if (researchFiles.length === 0) {
-          errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} has 0 template files`, fix: 'Run `npx -y workspine update --templates`' });
+          errors.push({ id: 'E6', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/research/')} has 0 template files`, fix: 'Run `npx -y workspine update`' });
         }
       }
 
       // E7: codebase/ missing or empty
       const codebaseDir = join(templatesDir, 'codebase');
       if (!existsSync(codebaseDir)) {
-        errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
+        errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} missing`, fix: 'Run `npx -y workspine update`' });
       } else {
         const codebaseFiles = readdirSync(codebaseDir).filter((f) => f.endsWith('.md'));
         if (codebaseFiles.length === 0) {
-          errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} has 0 template files`, fix: 'Run `npx -y workspine update --templates`' });
+          errors.push({ id: 'E7', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/codebase/')} has 0 template files`, fix: 'Run `npx -y workspine update`' });
         }
       }
 
@@ -204,16 +222,16 @@ export function buildHealthReport(ctx, healthArgs = []) {
       const requiredRootFiles = ['spec.md', 'roadmap.md', 'auth-matrix.md', 'ui-proof.md'];
       const missingRoot = requiredRootFiles.filter((f) => !existsSync(join(templatesDir, f)));
       if (missingRoot.length > 0) {
-        errors.push({ id: 'E8', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `npx -y workspine update --templates`' });
+        errors.push({ id: 'E8', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/')} missing critical root files: ${missingRoot.join(', ')}`, fix: 'Run `npx -y workspine update`' });
       }
 
       const brownfieldChangeDir = join(templatesDir, 'brownfield-change');
       if (!existsSync(brownfieldChangeDir)) {
-        errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing`, fix: 'Run `npx -y workspine update --templates`' });
+        errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing`, fix: 'Run `npx -y workspine update`' });
       } else {
         const missingBrownfield = ['CHANGE.md', 'HANDOFF.md', 'VERIFICATION.md'].filter((file) => !existsSync(join(brownfieldChangeDir, file)));
         if (missingBrownfield.length > 0) {
-          errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y workspine update --templates`' });
+          errors.push({ id: 'E9', severity: 'ERROR', message: `${statePath(stateDirName, 'templates/brownfield-change/')} missing critical files: ${missingBrownfield.join(', ')}`, fix: 'Run `npx -y workspine update`' });
         }
       }
     }
@@ -223,18 +241,23 @@ export function buildHealthReport(ctx, healthArgs = []) {
     // W1: generation-manifest.json missing
     const manifest = skipInstalledTemplateChecks ? null : readManifest(planningDir);
     if (!manifest && !skipInstalledTemplateChecks) {
-      warnings.push({ id: 'W1', severity: 'WARN', message: 'generation-manifest.json missing', fix: 'Run `npx -y workspine update` to create' });
+      warnings.push({
+        id: 'W1',
+        severity: 'WARN',
+        message: 'generation-manifest.json missing',
+        fix: `Restore ${statePath(stateDirName, 'generation-manifest.json')} from a trusted backup that matches the generated surfaces. If no valid ownership record exists, preserve the existing generated files and initialize a clean workspace; update cannot recreate ownership safely.`,
+      });
     }
 
     // W2 + W3: template/role hash mismatches and missing files
     if (manifest && hasTemplatesDir) {
       const allCategories = [
-        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null, fixCommand: 'npx -y workspine update --templates' },
-        { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research, fixCommand: 'npx -y workspine update --templates' },
-        { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase, fixCommand: 'npx -y workspine update --templates' },
-        { name: 'brownfield-change', dir: join(templatesDir, 'brownfield-change'), hashes: manifest.templates?.brownfieldChange, fixCommand: 'npx -y workspine update --templates' },
-        { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root, fixCommand: 'npx -y workspine update --templates' },
-        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null, fixCommand: 'npx -y workspine update --templates' },
+        { name: 'delegates', dir: delegatesDir, hashes: hasDelegatesDir ? manifest.templates?.delegates : null, fixCommand: 'npx -y workspine update' },
+        { name: 'research', dir: join(templatesDir, 'research'), hashes: manifest.templates?.research, fixCommand: 'npx -y workspine update' },
+        { name: 'codebase', dir: join(templatesDir, 'codebase'), hashes: manifest.templates?.codebase, fixCommand: 'npx -y workspine update' },
+        { name: 'brownfield-change', dir: join(templatesDir, 'brownfield-change'), hashes: manifest.templates?.brownfieldChange, fixCommand: 'npx -y workspine update' },
+        { name: 'root templates', dir: templatesDir, hashes: manifest.templates?.root, fixCommand: 'npx -y workspine update' },
+        { name: 'roles', dir: rolesDir, hashes: hasRolesDir ? manifest.roles : null, fixCommand: 'npx -y workspine update' },
         { name: 'runtime helpers', dir: planningDir, hashes: hasRuntimeHelpersDir ? manifest.runtimeHelpers : null, fixCommand: 'npx -y workspine update' },
       ];
 
@@ -280,14 +303,27 @@ export function buildHealthReport(ctx, healthArgs = []) {
       }
     }
 
-    // W6: No generated workflow adapter surfaces detected
-    if (!hasAnyGeneratedWorkflowSurface(cwd)) {
-      warnings.push({ id: 'W6', severity: 'WARN', message: 'No generated workflow adapter surfaces detected', fix: 'Run `npx -y workspine init --tools <platform>`' });
-    }
-
-    const runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
+    let runtimeFreshnessReport = configOk && Array.isArray(ctx.workflows)
       ? evaluateRuntimeFreshness({ cwd, workflows: ctx.workflows })
       : null;
+    const repairCtx = { ...ctx, cwd };
+    if (runtimeFreshnessReport?.issueCount > 0) {
+      runtimeFreshnessReport = preflightLocalRuntimeRepairGuidance(repairCtx, runtimeFreshnessReport);
+    }
+
+    // W6: No generated workflow adapter surfaces detected. When a manifest
+    // still proves selected generated surfaces, use the same preflighted W11
+    // repair sequence rather than contradicting it with a generic init hint.
+    if (!hasAnyGeneratedWorkflowSurface(cwd)) {
+      warnings.push({
+        id: 'W6',
+        severity: 'WARN',
+        message: 'No generated workflow adapter surfaces detected',
+        fix: runtimeFreshnessReport?.issueCount > 0
+          ? getRuntimeFreshnessRepairGuidance(runtimeFreshnessReport)
+          : 'Run `npx -y workspine init --tools <platform>`',
+      });
+    }
 
     warnings.push(...runTruthChecks(planningDir, cwd, healthCheckIds, { runtimeFreshnessReport, stateDirName }).map((warning) => {
       if (warning.id !== 'W10') return warning;
@@ -305,7 +341,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
 
     // I1: generation manifest was produced by a different framework version
     if (manifest && manifest.frameworkVersion && manifest.frameworkVersion !== ctx.frameworkVersion) {
-      info.push({ id: 'I1', severity: 'INFO', message: `Generation manifest frameworkVersion (${manifest.frameworkVersion}) differs from current framework version (${ctx.frameworkVersion})`, fix: 'Run `npx -y workspine update --templates`' });
+      info.push({ id: 'I1', severity: 'INFO', message: `Generation manifest frameworkVersion (${manifest.frameworkVersion}) differs from current framework version (${ctx.frameworkVersion})`, fix: 'Run `npx -y workspine update`' });
     }
 
     // I2: Phase completion count
@@ -328,12 +364,75 @@ export function buildHealthReport(ctx, healthArgs = []) {
       info.push({ id: 'I3', severity: 'INFO', message: `Installed runtime/governance surfaces: ${installedSurfaces.join(', ')}` });
     }
 
+    reconcileRepositoryUpdateGuidance({
+      ctx: repairCtx,
+      runtimeFreshnessReport,
+      entries: [...errors, ...warnings, ...info],
+    });
+
     // --- Verdict ---
     const hasErrors = errors.length > 0;
     const hasWarnings = warnings.length > 0;
     const status = hasErrors ? 'broken' : hasWarnings ? 'degraded' : 'healthy';
 
     return { status, errors, warnings, info };
+}
+
+function reconcileRepositoryUpdateGuidance({ ctx, runtimeFreshnessReport, entries }) {
+  const updateEntries = entries.filter((entry) =>
+    typeof entry.fix === 'string' && entry.fix.includes('npx -y workspine update'));
+  if (updateEntries.length === 0) return;
+
+  const preflight = preflightLocalUpdateRepair(ctx);
+  if (!preflight.ok) {
+    const manual = `Resolve repository generated-surface safety/ownership manually first. Automatic update preflight refused: ${preflight.reason}. Preserve existing bytes, rerun health, and retry update only after the blocker is cleared.`;
+    for (const entry of updateEntries) entry.fix = manual;
+    return;
+  }
+
+  if (runtimeFreshnessReport?.issueCount > 0) {
+    const sequence = getRuntimeFreshnessRepairGuidance(runtimeFreshnessReport);
+    for (const entry of updateEntries) entry.fix = sequence;
+  }
+}
+
+function preflightLocalRuntimeRepairGuidance(ctx, report) {
+  const commandResults = new Map();
+  const commands = [...new Set(report.issues.map((issue) => issue.repairCommand).filter(Boolean))];
+  for (const command of commands) {
+    const initMatch = command.match(/\bworkspine init --tools ([a-z0-9_-]+)\b/);
+    commandResults.set(command, initMatch
+      ? preflightLocalInitRepair(ctx, initMatch[1])
+      : command === 'npx -y workspine update'
+        ? preflightLocalUpdateRepair(ctx)
+        : { ok: true, reason: null });
+  }
+
+  const blockedInit = [...commandResults.entries()]
+    .find(([command, result]) => /\bworkspine init --tools /.test(command) && !result.ok);
+  const annotatedIssues = report.issues.map((issue) => {
+    if (!issue.repairCommand) return issue;
+    let result = commandResults.get(issue.repairCommand) ?? { ok: true, reason: null };
+    // Plain update is downstream of init in mixed W11 repair chains. If init
+    // itself cannot start, do not advertise a later update that cannot yet make
+    // progress either.
+    if (issue.repairCommand === 'npx -y workspine update' && blockedInit) {
+      result = {
+        ok: false,
+        reason: `prerequisite ${blockedInit[0]} refused: ${blockedInit[1].reason}`,
+      };
+    }
+    return result.ok
+      ? issue
+      : {
+          ...issue,
+          repairCommand: null,
+          retryCommand: null,
+          manual: true,
+          repairBlockReason: result.reason,
+        };
+  });
+  return { ...report, issues: annotatedIssues };
 }
 /**
  * Factory function returning the health command.
