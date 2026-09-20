@@ -24,7 +24,7 @@ Setup adds Workspine to the current repository. Run it from the repo root with N
 Then, in your coding agent's chat, start with one small planned change:
 
 1. Run **`work-plan`** so the agent turns the request into a checked plan.
-2. Review the plan the agent shows or links. Give explicit owner approval in chat, or ask for changes.
+2. Review the plan the agent shows or links. Give explicit owner approval in chat, or ask for changes. The agent records your approval and confirms it succeeded.
 3. Run **`work-execute`** to implement the approved plan.
 4. Run **`work-verify`** to check the result against it. Inspect the diff, check results, and any remaining gaps.
 
