@@ -12,6 +12,7 @@ import {
   closeCodexChild,
   buildCodexCommand,
   codexTurnPolicy,
+  scanSandboxEnvironmentFailure,
   scanWindowsSandboxRefusal,
   findCheckpointWitness,
   findNetworkViolation,
@@ -166,14 +167,78 @@ test('Codex split-root refusal is an environment failure, not a completed turn',
 });
 
 test('Codex app-server command is posture-isolated before provider launch', () => {
-  const command = buildCodexCommand();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-codex-bin-'));
+  const executable = path.join(root, 'codex');
+  fs.writeFileSync(executable, '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(executable, 0o755);
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${root}${path.delimiter}${previousPath || ''}`;
+  let command;
+  try { command = buildCodexCommand(); } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
   const args = process.platform === 'win32' ? command.args.slice(1) : command.args;
   assert.deepEqual(args, [
     '-c', 'windows.sandbox="elevated"',
     '--disable', 'apps', '--disable', 'plugins',
     'app-server', '--stdio',
   ]);
-  assert.equal(command.executable, process.platform === 'win32' ? process.execPath : 'codex');
+  assert.equal(command.executable, process.platform === 'win32' ? process.execPath : executable);
+});
+
+test('Linux bwrap failure is an environment result and scans split stderr chunks', () => {
+  const marker = 'bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted';
+  const scan = { tail: '', found: false, failureCode: null };
+  scanSandboxEnvironmentFailure(scan, `sandbox helper: ${marker.slice(0, 29)}`);
+  scanSandboxEnvironmentFailure(scan, `${marker.slice(29)}\n`);
+  assert.equal(scan.found, true);
+  assert.equal(scan.failureCode, 'linux_sandbox_unavailable');
+  assert.deepEqual(classifyProviderResult({ exitCode: 0, sessionId: 'A', sandboxEnvironmentFailure: true,
+    sandboxEnvironmentFailureCode: scan.failureCode }), { outcome: 'environment_invalid', failure_code: 'linux_sandbox_unavailable', usage: { total_tokens: 'not_observable' } });
+});
+
+test('native transport settles pre-turn RPC failures and child exits in subprocesses', { skip: process.platform === 'win32' }, t => {
+  const root = tempRoot(t), bin = path.join(root, 'bin'), executable = path.join(bin, 'codex');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(executable, `#!/usr/bin/env node
+import readline from 'node:readline';
+const mode = process.env.CODEX_FIXTURE_MODE;
+if (mode === 'sandbox') process.stderr.write('prefix bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted suffix');
+if (mode === 'immediate-exit') process.exit(0);
+const input = readline.createInterface({ input: process.stdin });
+input.once('line', line => {
+  const request = JSON.parse(line);
+  if (mode === 'rpc-error') process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { message: 'pre-turn RPC failure' } }) + '\\n');
+  setTimeout(() => process.exit(mode === 'sandbox' ? 1 : 0), 10);
+});
+`);
+  fs.chmodSync(executable, 0o755);
+  const codexModule = new URL('./codex.mjs', import.meta.url).href;
+  const runner = `
+    const { CodexTransport } = await import(${JSON.stringify(codexModule)});
+    const result = await new CodexTransport({ env: process.env }).runTurn({
+      id: 'fixture', cwd: process.cwd(), prompt: 'fixture', runRoot: ${JSON.stringify(path.join(root, 'run'))} + '/' + process.env.CODEX_FIXTURE_MODE, hardTimeoutMs: 1000
+    });
+    process.stdout.write(JSON.stringify({ outcome: result.outcome, failure_code: result.failure_code }));
+  `;
+  const run = mode => spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '-e', runner], {
+    cwd: root, env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH || ''}`, CODEX_FIXTURE_MODE: mode },
+    encoding: 'utf8', shell: false, windowsHide: true, timeout: 5000,
+  });
+  const rpcFailure = run('rpc-error');
+  assert.equal(rpcFailure.status, 0, `${rpcFailure.stdout}${rpcFailure.stderr}`);
+  assert.deepEqual(JSON.parse(rpcFailure.stdout), { outcome: 'protocol_invalid', failure_code: 'protocol_invalid' });
+  const immediateExit = run('immediate-exit');
+  assert.equal(immediateExit.status, 0, `${immediateExit.stdout}${immediateExit.stderr}`);
+  assert.deepEqual(JSON.parse(immediateExit.stdout), { outcome: 'provider_invalid', failure_code: 'native_provider_failure' });
+  const childExit = run('silent-exit');
+  assert.equal(childExit.status, 0, `${childExit.stdout}${childExit.stderr}`);
+  assert.deepEqual(JSON.parse(childExit.stdout), { outcome: 'provider_invalid', failure_code: 'native_provider_failure' });
+  const sandboxFailure = run('sandbox');
+  assert.equal(sandboxFailure.status, 0, `${sandboxFailure.stdout}${sandboxFailure.stderr}`);
+  assert.deepEqual(JSON.parse(sandboxFailure.stdout), { outcome: 'environment_invalid', failure_code: 'linux_sandbox_unavailable' });
 });
 
 test('provider results preserve typed invalid domains and null usage', () => {

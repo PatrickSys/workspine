@@ -3,8 +3,9 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { EvalError, mkdirp, resolveDirectCommand, sha256, toPosix } from './util.mjs';
 export function codexTurnPolicy(cwd) { return { type: 'workspaceWrite', writableRoots: [path.resolve(cwd)], networkAccess: false, excludeTmpdirEnvVar: true, excludeSlashTmp: true }; }
-const WINDOWS_SANDBOX_REFUSAL = 'windows unelevated restricted-token sandbox cannot enforce split writable root sets directly; refusing to run unsandboxed';
+const WINDOWS_SANDBOX_REFUSAL = 'windows unelevated restricted-token sandbox cannot enforce split writable root sets directly; refusing to run unsandboxed', LINUX_SANDBOX_FAILURE = 'bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted';
 export function scanWindowsSandboxRefusal(state, chunk) { const combined = state.tail + String(chunk); state.found ||= combined.includes(WINDOWS_SANDBOX_REFUSAL); state.tail = combined.slice(1 - WINDOWS_SANDBOX_REFUSAL.length); return state; }
+export function scanSandboxEnvironmentFailure(state, chunk) { const combined = state.tail + String(chunk); if (combined.includes(WINDOWS_SANDBOX_REFUSAL)) { state.found = true; state.failureCode ||= 'windows_sandbox_unavailable'; } if (combined.includes(LINUX_SANDBOX_FAILURE)) { state.found = true; state.failureCode ||= 'linux_sandbox_unavailable'; } state.tail = combined.slice(1 - Math.max(WINDOWS_SANDBOX_REFUSAL.length, LINUX_SANDBOX_FAILURE.length)); return state; }
 export function classifyProviderResult(result, expectedSession = null) {
   let outcome = 'completed';
   let failure_code = null;
@@ -13,7 +14,7 @@ export function classifyProviderResult(result, expectedSession = null) {
   else if (result.outputExcess) [outcome, failure_code] = ['provider_invalid', 'output_excess'];
   else if (result.closeTimedOut) [outcome, failure_code] = ['provider_invalid', 'post_turn_close_timeout'];
   else if (result.networkViolation) [outcome, failure_code] = ['environment_invalid', 'native_network_event'];
-  else if (result.sandboxEnvironmentFailure) [outcome, failure_code] = ['environment_invalid', 'windows_sandbox_unavailable'];
+  else if (result.sandboxEnvironmentFailure) [outcome, failure_code] = ['environment_invalid', result.sandboxEnvironmentFailureCode || 'sandbox_unavailable'];
   else if (result.protocolError?.code === 'provider_invalid') [outcome, failure_code] = ['provider_invalid', 'native_provider_failure'];
   else if (result.protocolError) [outcome, failure_code] = ['protocol_invalid', result.protocolError.code || 'app_server_protocol_error'];
   else if (result.malformedEvents) [outcome, failure_code] = ['protocol_invalid', 'malformed_native_event'];
@@ -58,11 +59,7 @@ export function findNetworkViolation(rows) {
   }
   return null;
 }
-export function buildCodexCommand() {
-  const command = resolveDirectCommand('codex', ['-c', 'windows.sandbox="elevated"', '--disable', 'apps', '--disable', 'plugins', 'app-server', '--stdio']);
-  if (!fs.existsSync(command.executable)) throw new EvalError('environment_invalid', 'Codex CLI executable is missing');
-  return command;
-}
+export function buildCodexCommand(env = process.env) { const command = resolveDirectCommand('codex', ['-c', 'windows.sandbox="elevated"', '--disable', 'apps', '--disable', 'plugins', 'app-server', '--stdio']), available = candidate => { try { return fs.statSync(candidate).isFile() && (process.platform === 'win32' || (fs.accessSync(candidate, fs.constants.X_OK), true)); } catch { return false; } }, executable = path.isAbsolute(command.executable) || command.executable.includes(path.sep) ? path.resolve(command.executable) : String(env.PATH || '').split(path.delimiter).map(entry => path.resolve(entry || '.', command.executable)).find(available); if (!executable || !available(executable)) throw new EvalError('environment_invalid', 'Codex CLI executable is missing'); return { ...command, executable }; }
 async function killTree(pid) {
   if (!pid) return;
   if (process.platform === 'win32') return void spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { shell: false, windowsHide: true, timeout: 15_000 });
@@ -89,17 +86,17 @@ export class CodexTransport {
     mkdirp(path.dirname(eventsFile));
     fs.writeFileSync(eventsFile, '', { flag: 'wx' });
     fs.writeFileSync(stderrFile, '', { flag: 'wx' });
-    const command = buildCodexCommand();
+    const command = buildCodexCommand(this.env);
     const child = spawn(command.executable, command.args, {
       cwd, env: this.env, shell: false, windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32',
     });
     let buffer = '', stdoutBytes = 0, stderrBytes = 0, malformedEvents = 0, eventCount = 0;
-    const sandboxScan = { tail: '', found: false };
+    const sandboxScan = { tail: '', found: false, failureCode: null };
     let threadId = sessionId, turnId = null, totalTokens = null, timedOut = false, outputExcess = false, spawnError = null, protocolError = null, networkViolation = null;
     let nextId = 1, complete, fail;
     const completion = new Promise((resolve, reject) => { complete = resolve; fail = reject; });
-    const pending = new Map();
+    const pending = new Map(), failRun = error => { for (const request of pending.values()) request.reject(error); pending.clear(); fail(error); }; completion.catch(() => {});
     const parsedEvents = [];
     const record = line => {
       if (!line.trim()) return;
@@ -126,25 +123,26 @@ export class CodexTransport {
         else if (Number.isFinite(usage.input_tokens) && Number.isFinite(usage.output_tokens)) totalTokens = usage.input_tokens + usage.output_tokens;
         complete();
       }
-      if (parsed.method === 'turn/failed') fail(new EvalError('provider_invalid', params.error?.message || 'Codex turn failed'));
+      if (parsed.method === 'turn/failed') failRun(new EvalError('provider_invalid', params.error?.message || 'Codex turn failed'));
     };
     child.stdout.on('data', chunk => {
       stdoutBytes += chunk.length;
-      if (stdoutBytes > this.maxOutputBytes) { outputExcess = true; fail(new EvalError('provider_invalid', 'Codex output exceeded cap')); void killTree(child.pid); return; }
+      if (stdoutBytes > this.maxOutputBytes) { outputExcess = true; failRun(new EvalError('provider_invalid', 'Codex output exceeded cap')); void killTree(child.pid); return; }
       buffer += chunk.toString('utf8');
       while (buffer.includes('\n')) { const index = buffer.indexOf('\n'); record(buffer.slice(0, index)); buffer = buffer.slice(index + 1); }
     });
-    child.stderr.on('data', chunk => { stderrBytes += chunk.length; scanWindowsSandboxRefusal(sandboxScan, chunk.toString('utf8')); fs.appendFileSync(stderrFile, chunk); });
-    child.on('error', error => { spawnError = { code: error.code || null, message: error.message }; fail(error); });
+    child.stderr.on('data', chunk => { stderrBytes += chunk.length; scanSandboxEnvironmentFailure(sandboxScan, chunk.toString('utf8')); fs.appendFileSync(stderrFile, chunk); });
+    child.stdin.on('error', error => { const failure = new EvalError('provider_invalid', error.message); protocolError = { code: failure.code, message: failure.message }; failRun(failure); });
+    child.on('error', error => { spawnError = { code: error.code || null, message: error.message }; failRun(error); });
     const request = (method, params) => new Promise((resolve, reject) => {
       const requestId = nextId++; pending.set(requestId, { resolve, reject });
       child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: requestId, method, params })}\n`);
     });
     const notify = (method, params) => child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
     const closed = new Promise(resolve => child.once('close', (exitCode, signal) => {
-      fail(new EvalError('provider_invalid', 'Codex app-server exited before turn completion')); resolve({ exitCode, signal });
+      failRun(new EvalError('provider_invalid', 'Codex app-server exited before turn completion')); resolve({ exitCode, signal });
     }));
-    const timer = setTimeout(() => { timedOut = true; fail(new EvalError('provider_invalid', 'Codex turn timed out')); void killTree(child.pid); }, hardTimeoutMs);
+    const timer = setTimeout(() => { timedOut = true; failRun(new EvalError('provider_invalid', 'Codex turn timed out')); void killTree(child.pid); }, hardTimeoutMs);
     let exit = { exitCode: null, signal: null };
     try {
       await request('initialize', { clientInfo: { name: 'workspine-native-brownfield', version: '1' }, capabilities: { experimentalApi: true } });
@@ -163,7 +161,7 @@ export class CodexTransport {
       clearTimeout(timer);
       if (buffer.trim()) record(buffer);
     }
-    const base = { pid: child.pid, ...exit, timedOut, outputExcess, spawnError, protocolError, networkViolation, sandboxEnvironmentFailure: sandboxScan.found, stdoutBytes, stderrBytes, malformedEvents, eventCount, sessionId: threadId, turnId, totalTokens };
+    const base = { pid: child.pid, ...exit, timedOut, outputExcess, spawnError, protocolError, networkViolation, sandboxEnvironmentFailure: sandboxScan.found, sandboxEnvironmentFailureCode: sandboxScan.failureCode, stdoutBytes, stderrBytes, malformedEvents, eventCount, sessionId: threadId, turnId, totalTokens };
     return { id, ...base, ...classifyProviderResult(base, sessionId), eventsFile, stderrFile, events: parsedEvents };
   }
 }
