@@ -10,6 +10,7 @@
 A coding agent can move fast while quietly guessing what you meant. The next session may guess again.
 Tests can pass while the result is still wrong.
 
+Workspine is a workflow for coding agents.
 It brings decisions to you and keeps development consistent across agents and sessions.
 
 ![Workspine turns a request into an owner-steered plan, implementation, and verification](assets/workspine-hero.webp)
@@ -21,12 +22,18 @@ npx -y workspine setup
 Setup adds Workspine to the current repository: durable project state in `.work/` and workflow skills in
 `.agents/skills/work-*`. Runtime-specific adapters are optional layers on top of that shared skill surface.
 
-Start with one small planned change:
+For a self-contained task with clear decisions and checks, your agent's normal workflow may be enough.
+Use Workspine when you want the plan, decisions you approve, verification, and next-session handoff kept
+with the repository.
 
-1. Run **`work-plan`** so the agent turns the request into a checked plan.
-2. Review the plan. Nothing executes until your explicit owner approval.
+Start in your coding agent's chat with one small planned change:
+
+1. Ask the agent to use **`work-plan`** and describe the outcome and constraints.
+2. Review the checked plan and answer any material questions. Give explicit owner approval in chat when
+   it matches what you want; the agent records the approval against that plan and confirms it. You do not
+   need to create an approval ID or edit a record.
 3. Run **`work-execute`** to implement the approved plan.
-4. Run **`work-verify`** to check the result against it.
+4. Run **`work-verify`**, then inspect the change, check results, and any remaining gaps.
 
 Verification is evidence-based. If the approved plan makes a UI claim, it can require real browser evidence;
 passing code tests alone does not establish that rendered behavior.
@@ -40,8 +47,9 @@ Workspine records the plan, the decisions you approve, what changed, and what wa
 in your repo.
 The chat can end. The decisions stay with the work.
 
-Stopping mid-work? Run `work-pause`. In a fresh session, run `work-resume` to continue or `work-progress`
-to see the current state and next action without re-explaining the project.
+Stopping mid-work? Run `work-pause` and check that it saved the decisions, unfinished work, and next
+action. In a fresh session in the same repo, run `work-resume` to continue or `work-progress` to see
+the current state and next action.
 
 ## Use Workspine
 

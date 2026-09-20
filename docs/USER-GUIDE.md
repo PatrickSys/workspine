@@ -8,21 +8,32 @@ The tracked consumer evidence is indexed at [`docs/proof/consumer-node-cli/READM
 
 ## Fast Path
 
-Run `npx -y workspine setup` from the repo root. Setup creates the durable `.work/` state and the shared
-`.agents/skills/work-*` workflow entry surface. Optional runtime-specific adapters are generated only when you
-select them; you do not need to learn the helper CLI to start a change.
+Your agent's native planning workflow may be enough for a self-contained task with clear decisions and checks.
+Use Workspine when you want the plan, owner decisions, verification, and continuation recorded with the repo.
 
-Enter the workflow through the skill your runtime discovers: commonly `/work-*`, `$work-*`, or a skill reference.
-If discovery is unavailable, open or paste the matching `.agents/skills/work-<workflow>/SKILL.md` file directly.
+1. **Set up the repo.** From its root, run `npx -y workspine setup` with Node `>=22`. Setup creates `.work/`
+   and the shared `.agents/skills/work-*` workflow entry surface; runtime-specific adapters are optional.
+2. **Describe one change in chat.** Ask your agent to use `work-plan` and state the outcome and constraints.
+   Enter through the discovered skill, commonly `/work-plan`, `$work-plan`, or a skill reference. If discovery
+   is unavailable, ask the agent to read and follow `.agents/skills/work-plan/SKILL.md`.
+3. **Review and decide.** The agent should show or link the checked plan in `.work/` and identify it with a
+   short reference. Check the intended behavior, scope, verification, and unresolved choices. Answer material
+   questions, then give explicit owner approval in chat (for example, “I approve this plan”) or request a
+   revision. The agent records your approval against that plan and confirms it succeeded; you do not need
+   to create an approval ID, inspect metadata, or edit records. A changed plan needs approval again.
+4. **Implement.** Run `work-execute` after the agent confirms approval was recorded. It stays within the approved
+   plan and records what changed and which checks ran. Any material unresolved owner choice comes back to you.
+5. **Inspect the result.** Run `work-verify`, then review the code diff, actual check output, and summary or
+   verification report. Try the changed behavior yourself when relevant. A blocked or failed check is unfinished;
+   revise the plan or use `work-quick` for a bounded correction, then verify again.
+6. **Stop and resume.** Before ending mid-work, run `work-pause` and check it saved the decisions, unfinished
+   work, and next action. In a fresh session in the same repo, run `work-resume`; use `work-progress` when you
+   only need the current state and next action.
 
-For one real, bounded change, use the representative loop:
-
-1. Run `work-plan` for one real, bounded change.
-2. Review the checked plan and give explicit owner approval.
-3. Run `work-execute`.
-4. Run `work-verify`.
-
-`work-quick` is the lighter shortcut for an already-understood change. Use `work-new-project` when the project or milestone itself is fuzzy or broader. After a milestone is shipped, `work-new-milestone` starts the next one.
+`work-quick` is for an already-understood change and includes its own confirmation before execution. Use the
+separate plan/approval/execute loop above when you want to review the full checked plan first. Use
+`work-new-project` when the project or milestone itself still needs shaping. After a milestone is shipped,
+`work-new-milestone` starts the next one.
 
 Use `work-map-codebase` only when a repo is unfamiliar, risky, or its existing map is stale. It creates trusted brownfield context before you choose Quick or a broader project route; it is not a fourth mandatory goal.
 
@@ -30,7 +41,8 @@ Your decision boundary is the plan and any material clarification it surfaces. R
 
 Verification checks the implemented result against the plan and its stated verification requirements. For UI-sensitive work, a plan can require real browser proof of the relevant rendered behavior and viewport/state; conversational `work-verify-work` UAT is optional and does not replace required code, test, runtime, delivery, or browser evidence.
 
-When stopping mid-work, run `work-pause`. In a fresh session, use `work-resume` to restore the file-backed context or `work-progress` to inspect where the repository is and what comes next. Workspine does not copy context automatically: plans, decisions, summaries, verification, and explicit pause checkpoints are the handoff between sessions.
+Workspine does not copy context automatically: plans, decisions, summaries, verification, and explicit pause
+checkpoints are the handoff between sessions. On resume, the agent still checks the current code and Git state.
 
 That is the first-use path. Everything below is reference material for deeper lifecycle, configuration, runtime, recovery, and automation needs; you do not need to memorize it to use Workspine.
 

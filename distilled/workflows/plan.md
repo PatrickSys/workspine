@@ -31,7 +31,9 @@ Before writing or rewriting substantive planning content beyond the bounded targ
 - Phase: `node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`; bounded brownfield: `node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`; amend/extend before roadmap append: `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift. Do not run phase preflight before target classification; an unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
-After developer approval, persist `status: approved`, `approved_by`, `approved_at`, and the owner-provided non-sensitive `approval_ref` in the PLAN frontmatter, then bind that decision to the exact PLAN bytes through the shared repo-local helper. The plan approval is an owner decision; workflow agents must not simulate it with `--approved` or pass an approval reference while executing:
+When presenting the plan for approval, show its path and a short non-sensitive approval reference; use the owner's reference if one was supplied, otherwise propose one with the plan. Explicit owner approval of that identified plan also confirms the displayed reference. The owner can say "I approve this plan" without inventing an identifier or editing metadata. Silence, vague praise, and an agent-proposed reference are not approval. If the plan or reference was not identified when approval was given, clarify the binding before proceeding.
+
+After owner approval, persist `status: approved`, `approved_by`, `approved_at`, and the owner-confirmed non-sensitive `approval_ref` in the PLAN frontmatter, then bind that decision to the exact PLAN bytes through the shared repo-local helper. Confirm successful recording to the owner; the agent handles the metadata. The plan approval is an owner decision; workflow agents must not simulate it with `--approved` or pass an approval reference while executing:
 `node .work/bin/gsdd.mjs lifecycle-transition approve --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --authority owner --approval-ref {approval_ref} --json`.
 This is the only lifecycle-state writer for plan approval; if it fails, preserve the PLAN and stop with bounded evidence instead of editing `.work/state.json` directly.
 <amend_extend_mode>
@@ -182,7 +184,6 @@ Group artifacts into tasks. Each task should:
 - produce a reviewable unit of work
 - have a clear done criterion
 </goal_backward_planning>
-
 <plan_schema>
 Every `PLAN.md` must start with frontmatter describing how the executor should interpret it.
 
@@ -422,7 +423,6 @@ notes: [What the checker actually validated or why it was skipped]
 
 **MANDATORY: You MUST write PLAN.md to disk at `.work/phases/{phase_dir}/{plan_id}-PLAN.md`. Output to conversation alone is NOT sufficient. If this file is not written to disk, planning is NOT complete.**
 </plan_structure>
-
 <approach_exploration>
 ### When This Runs
 Check `.work/config.json` for `workflow.discuss`:
