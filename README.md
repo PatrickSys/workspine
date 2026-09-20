@@ -20,12 +20,13 @@ It brings decisions to you and keeps development consistent across agents and se
 npx -y workspine setup
 ```
 
-Setup adds Workspine to the current repository. Start with one small planned change:
+Setup adds Workspine to the current repository. Run it from the repo root with Node `>=22`.
+Then, in your coding agent's chat, start with one small planned change:
 
 1. Run **`work-plan`** so the agent turns the request into a checked plan.
-2. Review the plan. Nothing executes until your explicit owner approval.
+2. Review the plan the agent shows or links. Give explicit owner approval in chat, or ask for changes.
 3. Run **`work-execute`** to implement the approved plan.
-4. Run **`work-verify`** to check the result against it.
+4. Run **`work-verify`** to check the result against it. Inspect the diff, check results, and any remaining gaps.
 
 Use **`work-quick`** when the change is already understood and needs less ceremony.
 Use **`work-new-project`** when the project or milestone itself still needs shaping.
@@ -43,12 +44,21 @@ and explains why. It never migrates silently, and declining leaves the old files
 
 ### Quickstart
 
-Ask your coding agent to run `work-plan`. Use its slash command or skill reference when it discovers the installed skills.
-If discovery is unavailable, open `.agents/skills/work-<workflow>/SKILL.md` and follow it directly.
-After you approve the plan, run `work-execute`, then `work-verify`.
+The `work-*` names are agent workflows, not terminal commands. In chat, ask the agent to use
+`work-plan` with your request. Use its slash command or skill reference when it discovers the installed skills.
+If discovery is unavailable, open `.agents/skills/work-<workflow>/SKILL.md` and ask the agent to follow it;
+for planning, that is `.agents/skills/work-plan/SKILL.md`.
+The [User Guide](docs/USER-GUIDE.md#fast-path) shows the approval and review steps.
+
+Before ending a session mid-work, run `work-pause`. In the next session, use `work-resume`;
+use `work-progress` when you only need the current status and next action.
+
+For a self-contained task whose decisions and checks already fit your agent's native workflow,
+that workflow may be enough. Workspine is useful when you want an explicit plan, owner decisions,
+and verification kept with the repo across sessions.
 
 Use `npx -y workspine health` to check the installation and `npx -y workspine update` to repair
-generated files. Both are network-free.
+generated files. The health and update operations are network-free; `npx` may first download the package.
 
 Install it, try one real change, and [report any friction](https://github.com/PatrickSys/workspine/issues/new?template=friction.yml).
 

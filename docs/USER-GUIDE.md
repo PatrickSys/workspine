@@ -1,6 +1,6 @@
 # Workspine User Guide
 
-A detailed reference for Workspine workflows, troubleshooting, and configuration. Start with the [README](../README.md) for the shortest first-use path. Workspine is the public product name; the npm package is `workspine`, the CLI and workspace remain `gsdd` and `.work/` as retained technical contracts, and the workflows are `work-*`. Runtime floor: Node >=22. Human install/update commands use `npx -y workspine ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
+A detailed reference for Workspine workflows, troubleshooting, and configuration. Start with the [README](../README.md) for the shortest first-use path. The npm package and CLI are `workspine`; `gsdd` is retained as a compatibility alias. Workflows are named `work-*`, and their records live in `.work/`. Runtime floor: Node >=22. Human install/update commands use `npx -y workspine ...`; bare `gsdd ...` is shorthand only when the package is globally installed.
 
 The tracked consumer evidence is indexed at [`docs/proof/consumer-node-cli/README.md`](proof/consumer-node-cli/README.md).
 
@@ -8,178 +8,48 @@ The tracked consumer evidence is indexed at [`docs/proof/consumer-node-cli/READM
 
 ## Fast Path
 
-Run `npx -y workspine setup` from the repo root, then use the representative loop:
+Use a terminal for setup, then your coding agent's chat for the workflows.
 
-1. Run `work-plan` for one real, bounded change.
-2. Review the checked plan and give explicit owner approval.
-3. Run `work-execute`.
-4. Run `work-verify`.
+1. **Set up the repo.** From its root, run `npx -y workspine setup` with Node `>=22`.
+2. **Describe one change in chat.** Ask the agent to use `work-plan` and give it the outcome and constraints. For example: "Use work-plan to add a --json option to the existing report command. Preserve its current text output."
+3. **Review and decide.** The agent should show or link the plan under `.work/`. Check the intended behavior, scope, checks, and unresolved choices. Give explicit owner approval in chat or request a revision. For example: "I approve this plan; use report-json-v1 as the approval reference." Use a non-sensitive reference. The agent records that approval for the exact plan and should confirm it succeeded; you do not need to edit metadata yourself. A changed plan needs approval again.
+4. **Implement.** Run `work-execute` in chat after approval. The agent follows the approved scope and records what changed and which checks ran. A material unresolved owner choice returns to you.
+5. **Inspect the result.** Run `work-verify`, then review the code diff, actual check output, and the summary/verification report. Try the changed behavior yourself when relevant. A blocked or failed check is unfinished work: use `work-plan` to revise the plan or `work-quick` for a bounded correction, then verify again.
+6. **Stop and resume.** Before ending a session mid-work, run `work-pause` and check that it saved the current decisions, unfinished work, and next action. In a fresh session in the same repo, run `work-resume`. Use `work-progress` when you only need status and the next action.
 
-`work-quick` is the lighter shortcut for an already-understood change. Use `work-new-project` when the project or milestone itself is fuzzy or broader. After a milestone is shipped, `work-new-milestone` starts the next one.
+`work-*` names are agent workflows, not terminal binaries. Claude/OpenCode use `/work-plan`;
+Codex uses `$work-plan`. Use the matching prefix for execute, verify, pause, and resume.
+If your runtime does not discover the skills, ask the agent to read and follow
+`.agents/skills/work-plan/SKILL.md` (and the matching file for the next workflow).
+See [Runtime Support](RUNTIME-SUPPORT.md) for the tested surfaces and limitations.
 
-Use `work-map-codebase` only when a repo is unfamiliar, risky, or its existing map is stale. It creates trusted brownfield context before you choose Quick or a broader project route; it is not a fourth mandatory goal.
+`work-quick` combines planning and execution for an already-understood change, with its own
+confirmation before execution. Use the separate plan/approve/execute loop above when you need
+to review the full checked plan first. Use `work-new-project`
+when the project or milestone itself needs shaping, and `work-new-milestone` after a milestone
+is shipped. Use `work-map-codebase` only when the repo is unfamiliar, risky, or its map is stale.
 
-Compatibility: `npx -y workspine init` remains available for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. `--auto` selects detected existing homes for install/setup; for repair, run `npx -y workspine health --global` first and follow its safe update or manual-resolution guidance. Global install never creates `.work/` in the current repo.
+Your native agent workflow may be enough for a self-contained task with clear decisions and checks.
+Workspine adds a repo-owned plan, approval, verification, and continuation record when those need
+to persist across sessions. It does not copy context automatically. A checkpoint helps the next
+agent recover, but current code, plans, and Git state still need to be checked.
 
-Setup defaults to recommended portable files in the current repo. Use `setup --global` for personal agent homes, `--agent <target>` for one native target, `--all` for every detected target, or `--migrate` to approve a detected legacy-state move explicitly. `-y`/`--yes` accepts the bounded write without prompts; `--dry-run` previews it.
-
-If setup detects a supported legacy `.planning/` state, it offers an optional move into `.work/` because that leaves one current authority and a receipt. The move preserves bytes; declining leaves the legacy state unchanged. Fresh workspaces never show this offer, and migration is never silent.
-
-Workspine does not copy context automatically. Plans, decisions, summaries, verification, and explicit pause checkpoints are the handoff between sessions.
+For installation trouble, start with `npx -y workspine health` and follow its diagnosis.
+See [Common Problems](#common-problems) for repair and [Install Modes](#install-modes) for global
+installation, runtime targets, headless flags, and legacy migration.
 
 ---
 
 ## Table of Contents
 
 - [Fast Path](#fast-path)
-- [Workflow Diagrams](#workflow-diagrams)
 - [Command Reference](#command-reference)
 - [Configuration Reference](#configuration-reference)
 - [Usage Examples](#usage-examples)
 - [Common Problems](#common-problems)
 - [Recovery Quick Reference](#recovery-quick-reference)
-
----
-
-## Workflow Diagrams
-
-### Full Project Lifecycle
-
-```
-  ┌──────────────────────────────────────────────────┐
-  │                   NEW PROJECT                    │
-  │  work-new-project                                │
-  │  Questions -> Research -> Spec -> Roadmap        │
-  └─────────────────────────┬────────────────────────┘
-                            │
-             ┌──────────────▼─────────────┐
-             │      FOR EACH PHASE:       │
-             │                            │
-             │  ┌────────────────────┐    │
-             │  │ work-plan          │    │  <- Research + Plan + Check
-             │  └──────────┬─────────┘    │
-             │             │              │
-             │  ┌──────────▼─────────┐    │
-             │  │ work-execute       │    │  <- Wave-based execution
-             │  └──────────┬─────────┘    │
-             │             │              │
-             │  ┌──────────▼─────────┐    │
-             │  │ work-verify        │    │  <- 3-level gate
-             │  └──────────┬─────────┘    │
-             │             │              │
-             │     Next Phase?────────────┘
-             │             │ No
-             └─────────────┼──────────────┘
-                           │
-             ┌──────────────▼──────────────┐
-             │  work-audit-milestone       │
-             └─────────────────────────────┘
-```
-
-Optional closure and milestone-continuation workflows in the shipped surface:
-
-- `work-verify-work` adds conversational UAT when user-facing behavior needs explicit validation.
-- `work-plan` also handles amend/extend planning when audit findings need gap-closure phases before a milestone is ready to ship.
-- `work-complete-milestone` archives a shipped milestone, evolves `SPEC.md`, and collapses `ROADMAP.md`.
-- `work-new-milestone` starts the next milestone after closure.
-
-### How Plan Agents Coordinate
-
-```
-  work-plan (phase N)
-         │
-         ├── Phase Researcher (x4 parallel)
-         │     ├── Stack researcher
-         │     ├── Features researcher
-         │     ├── Architecture researcher
-         │     └── Pitfalls researcher
-         │           │
-         │     ┌─────▼───────┐
-         │     │ RESEARCH.md │
-         │     └─────┬───────┘
-         │           │
-         │     ┌─────▼──────┐
-         │     │  Planner   │  <- Reads SPEC.md, ROADMAP.md, RESEARCH.md
-         │     └─────┬──────┘
-         │           │
-         │     ┌─────▼──────────────┐     ┌────────┐
-         │     │  Plan Checker      │────>│ PASS?  │
-         │     │  (fresh context,   │     └───┬────┘
-         │     │   7 dimensions,    │         │
-         │     │   typed JSON)      │    Yes  │  No
-         │     └────────────────────┘     │   │   │
-         │                                │   └───┘  (max 3 cycles)
-         │                                │
-         │                          ┌─────▼──────┐
-         │                          │ PLAN files │
-         │                          └────────────┘
-         └── Done
-```
-
-The plan checker runs in a **separate context window** from the planner. This prevents the checker from inheriting the planner's blind spots. The same reasoning error that produced the plan cannot suppress the review of that plan. This is the [ICLR-validated](https://arxiv.org/abs/2310.01798) pattern for LLM self-refinement.
-
-The 7 check dimensions: requirement coverage, task completeness, dependency correctness, key-link completeness, scope sanity, must-have quality, context compliance.
-
-### Execution Wave Coordination
-
-```
-  work-execute (phase N)
-         │
-         ├── Analyze plan dependencies
-         │
-         ├── Wave 1 (independent plans):
-         │     ├── Executor A (fresh 200K context) -> commit
-         │     └── Executor B (fresh 200K context) -> commit
-         │
-         ├── Wave 2 (depends on Wave 1):
-         │     └── Executor C (fresh 200K context) -> commit
-         │
-         └── Phase summary written to disk
-```
-
-### Brownfield Workflow (Existing Codebase)
-
-```
-  Brownfield repo
-        │
-        ├── bounded change already concrete
-        │        │
-        │        ▼
-        │   work-quick
-        │   bounded feature work
-        │   with inline baseline
-        │
-        ├── repo unfamiliar / risky / deeper orientation needed
-        │        │
-        │        ▼
-        │   work-map-codebase
-        │        │
-        │        └── continue with work-quick or work-new-project
-        │
-        └── fuzzy scope / full lifecycle setup
-                 │
-                 ▼
-           work-new-project
-           canonical initializer
-```
-
-### Verification Gate
-
-```
-  work-verify (phase N)
-         │
-         ├── Level 1: EXISTS
-         │     └── Do the expected files exist?
-         │
-         ├── Level 2: SUBSTANTIVE
-         │     └── Is the code real, not stubs?
-         │
-         ├── Level 3: WIRED
-         │     └── Is it connected and functional?
-         │
-         └── Anti-pattern scan
-               └── TODO/FIXME/HACK markers, empty catches
-```
+- [Project File Structure](#project-file-structure)
+- [Workflow Diagrams](#workflow-diagrams) (agent coordination reference)
 
 ---
 
@@ -188,6 +58,12 @@ The 7 check dimensions: requirement coverage, task completeness, dependency corr
 This reference covers all 13 workflows.
 
 ### Install Modes
+
+Compatibility: `npx -y workspine init` remains available for repo-local setup. For reusable global surfaces, run `npx -y workspine install --global` to choose targets interactively or pass `--tools <targets>` in a fresh/headless home. `--auto` selects detected existing homes for install/setup; for repair, run `npx -y workspine health --global` first and follow its safe update or manual-resolution guidance. Global install never creates `.work/` in the current repo.
+
+Setup defaults to recommended portable files in the current repo. Use `setup --global` for personal agent homes, `--agent <target>` for one native target, `--all` for every detected target, or `--migrate` to approve a detected legacy-state move explicitly. `-y`/`--yes` accepts the bounded write without prompts; `--dry-run` previews it.
+
+If setup detects a supported legacy `.planning/` state, it offers an optional move into `.work/` because that leaves one current authority and a receipt. The move preserves bytes; declining leaves the legacy state unchanged. Fresh workspaces never show this offer, and migration is never silent.
 
 Use local repo install when the project should own `.work/`, `.agents/skills`, and optional repo-local runtime adapters:
 
@@ -269,7 +145,7 @@ If `workspine` is globally installed, you can use the shorter `gsdd ...` form fo
 
 Global repair checks remain available as `workspine health --global` and `workspine update --global` (or `-g`).
 
-The supported public CLI/generated helper has default-on update awareness on commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. Eligible commands make sequential/best-effort anonymous npm metadata checks when the contained `.work/.local` cache is writable, with no lock or cross-process concurrency guarantee. It uses a two-second timeout and 64 KiB/normalized-version limits, sends no credentials or repository data, and cache/check failures are nonblocking. Use `--no-update-notice` or `WORKSPINE_UPDATE_AWARENESS=0` (legacy `GSDD_UPDATE_AWARENESS=0`) to opt out. `health` and `update` remain network-free; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
+The supported public CLI/generated helper has default-on update awareness on commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. Eligible commands make sequential/best-effort anonymous npm metadata checks when the contained `.work/.local` cache is writable, with no lock or cross-process concurrency guarantee. It uses a two-second timeout and 64 KiB/normalized-version limits, sends no credentials or repository data, and cache/check failures are nonblocking. Use `--no-update-notice` or `WORKSPINE_UPDATE_AWARENESS=0` (legacy `GSDD_UPDATE_AWARENESS=0`) to opt out. The `health` and `update` operations remain network-free, though `npx` may download the package first; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
 
 Browser-proof contract migration: `update` refreshes templates, skills,
 adapters, and helper code, but it does not rewrite historical phase artifacts.
@@ -595,3 +471,147 @@ AGENTS.md                   # Optional governance block (useful for agents that 
 ```
 
 `.agents/skills/` is the workflow entry surface. `.work/bin/` is the internal helper runtime used by those workflows. Native adapters and governance files are optional ergonomics, not required prompt bulk.
+
+---
+
+## Workflow Diagrams
+
+### Full Project Lifecycle
+
+```
+  ┌──────────────────────────────────────────────────┐
+  │                   NEW PROJECT                    │
+  │  work-new-project                                │
+  │  Questions -> Research -> Spec -> Roadmap        │
+  └─────────────────────────┬────────────────────────┘
+                            │
+             ┌──────────────▼─────────────┐
+             │      FOR EACH PHASE:       │
+             │                            │
+             │  ┌────────────────────┐    │
+             │  │ work-plan          │    │  <- Research + Plan + Check
+             │  └──────────┬─────────┘    │
+             │             │              │
+             │  ┌──────────▼─────────┐    │
+             │  │ work-execute       │    │  <- Wave-based execution
+             │  └──────────┬─────────┘    │
+             │             │              │
+             │  ┌──────────▼─────────┐    │
+             │  │ work-verify        │    │  <- 3-level gate
+             │  └──────────┬─────────┘    │
+             │             │              │
+             │     Next Phase?────────────┘
+             │             │ No
+             └─────────────┼──────────────┘
+                           │
+             ┌──────────────▼──────────────┐
+             │  work-audit-milestone       │
+             └─────────────────────────────┘
+```
+
+Optional closure and milestone-continuation workflows in the shipped surface:
+
+- `work-verify-work` adds conversational UAT when user-facing behavior needs explicit validation.
+- `work-plan` also handles amend/extend planning when audit findings need gap-closure phases before a milestone is ready to ship.
+- `work-complete-milestone` archives a shipped milestone, evolves `SPEC.md`, and collapses `ROADMAP.md`.
+- `work-new-milestone` starts the next milestone after closure.
+
+### How Plan Agents Coordinate
+
+```
+  work-plan (phase N)
+         │
+         ├── Phase Researcher (x4 parallel)
+         │     ├── Stack researcher
+         │     ├── Features researcher
+         │     ├── Architecture researcher
+         │     └── Pitfalls researcher
+         │           │
+         │     ┌─────▼───────┐
+         │     │ RESEARCH.md │
+         │     └─────┬───────┘
+         │           │
+         │     ┌─────▼──────┐
+         │     │  Planner   │  <- Reads SPEC.md, ROADMAP.md, RESEARCH.md
+         │     └─────┬──────┘
+         │           │
+         │     ┌─────▼──────────────┐     ┌────────┐
+         │     │  Plan Checker      │────>│ PASS?  │
+         │     │  (fresh context,   │     └───┬────┘
+         │     │   10 dimensions,    │         │
+         │     │   typed JSON)      │    Yes  │  No
+         │     └────────────────────┘     │   │   │
+         │                                │   └───┘  (max 3 cycles)
+         │                                │
+         │                          ┌─────▼──────┐
+         │                          │ PLAN files │
+         │                          └────────────┘
+         └── Done
+```
+
+Where supported, the plan checker runs in a **separate context window** from the planner. This separates the review from the planning conversation, but does not guarantee independent reasoning or eliminate shared blind spots. When a separate checker is unavailable, record the reduced assurance. Verification still needs evidence from the actual code and behavior.
+
+The 10 check dimensions: requirement coverage, task completeness, dependency correctness, key-link completeness, scope sanity, must-have quality, context compliance, goal achievement, approach alignment, and decision compliance. See the shipped planning workflow for applicability and skipped checks.
+
+### Execution Wave Coordination
+
+```
+  work-execute (phase N)
+         │
+         ├── Analyze plan dependencies
+         │
+         ├── Wave 1 (independent plans):
+         │     ├── Executor A (fresh context     ) -> commit
+         │     └── Executor B (fresh context     ) -> commit
+         │
+         ├── Wave 2 (depends on Wave 1):
+         │     └── Executor C (fresh context     ) -> commit
+         │
+         └── Phase summary written to disk
+```
+
+### Brownfield Workflow (Existing Codebase)
+
+```
+  Brownfield repo
+        │
+        ├── bounded change already concrete
+        │        │
+        │        ▼
+        │   work-quick
+        │   bounded feature work
+        │   with inline baseline
+        │
+        ├── repo unfamiliar / risky / deeper orientation needed
+        │        │
+        │        ▼
+        │   work-map-codebase
+        │        │
+        │        └── continue with work-quick or work-new-project
+        │
+        └── fuzzy scope / full lifecycle setup
+                 │
+                 ▼
+           work-new-project
+           canonical initializer
+```
+
+### Verification Gate
+
+```
+  work-verify (phase N)
+         │
+         ├── Level 1: EXISTS
+         │     └── Do the expected files exist?
+         │
+         ├── Level 2: SUBSTANTIVE
+         │     └── Is the code real, not stubs?
+         │
+         ├── Level 3: WIRED
+         │     └── Is it connected and functional?
+         │
+         └── Anti-pattern scan
+               └── TODO/FIXME/HACK markers, empty catches
+```
+
+---
