@@ -123,10 +123,10 @@ export function buildHealthReport(ctx, healthArgs = []) {
     if (!existsSync(join(planningDir, 'config.json'))) {
       return {
         status: 'broken',
-        errors: [{ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} missing`, fix: 'Run `npx -y workspine init`' }],
+        errors: [{ id: 'E1', severity: 'ERROR', message: `${statePath(stateDirName, 'config.json')} missing`, fix: 'Run `npx -y workspine setup`' }],
         warnings: [],
         info: [],
-        humanMessage: 'Not initialized. Run `npx -y workspine init`. If `gsdd` is installed globally, `gsdd init` is also fine.',
+        humanMessage: 'Not initialized. Run `npx -y workspine setup`.',
       };
     }
 

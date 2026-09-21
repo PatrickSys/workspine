@@ -19,6 +19,9 @@ It brings decisions to you and keeps development consistent across agents and se
 npx -y workspine setup
 ```
 
+That command is interactive when a terminal is available. In CI or another headless/non-TTY environment, use
+`npx -y workspine setup --yes` so Workspine has explicit permission to perform the bounded setup writes.
+
 Setup adds Workspine to the current repository: durable project state in `.work/` and workflow skills in
 `.agents/skills/work-*`. Runtime-specific adapters are optional layers on top of that shared skill surface.
 

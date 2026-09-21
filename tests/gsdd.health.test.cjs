@@ -165,7 +165,8 @@ describe('Health — pre-init guard', () => {
     const result = await runCliAsMain(tmpDir, ['health']);
     assert.strictEqual(result.exitCode, 1);
     assert.match(result.output, /Not initialized/);
-    assert.match(result.output, /gsdd init/);
+    assert.match(result.output, /npx -y workspine setup/);
+    assert.doesNotMatch(result.output, /workspine init/);
   });
 
   test('no .planning/ with --json → broken JSON', async () => {
@@ -175,7 +176,8 @@ describe('Health — pre-init guard', () => {
     assert.strictEqual(json.status, 'broken');
     assert.ok(json.errors.length > 0);
     assert.strictEqual(json.errors[0].id, 'E1');
-    assert.match(json.errors[0].fix, /npx -y workspine init/);
+    assert.match(json.errors[0].fix, /npx -y workspine setup/);
+    assert.doesNotMatch(json.errors[0].fix, /workspine init/);
   });
 
   test('supported legacy state is a blocking migration issue and remains byte-identical', async () => {

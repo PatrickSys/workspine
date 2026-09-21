@@ -11,7 +11,8 @@ The tracked consumer evidence is indexed at [`docs/proof/consumer-node-cli/READM
 Your agent's native planning workflow may be enough for a self-contained task with clear decisions and checks.
 Use Workspine when you want the plan, owner decisions, verification, and continuation recorded with the repo.
 
-1. **Set up the repo.** From its root, run `npx -y workspine setup` with Node `>=22`. Setup creates `.work/`
+1. **Set up the repo.** From its root, run `npx -y workspine setup` with Node `>=22` in an interactive terminal.
+   In CI or another headless/non-TTY environment, use `npx -y workspine setup --yes`. Setup creates `.work/`
    and the shared `.agents/skills/work-*` workflow entry surface; runtime-specific adapters are optional.
 2. **Describe one change in chat.** Ask your agent to use `work-plan` and state the outcome and constraints.
    Enter through the discovered skill, commonly `/work-plan`, `$work-plan`, or a skill reference. If discovery
@@ -248,10 +249,17 @@ Normal repo setup:
 npx -y workspine setup
 ```
 
+In CI or another headless/non-TTY environment, setup requires explicit write consent:
+
+```bash
+npx -y workspine setup --yes
+```
+
 Setup defaults to recommended portable files in the current repo. Use `setup --global` for personal agent homes,
 `setup --agent <target>` for one native target, `setup --all` for every supported project target, or
 `setup --migrate` to approve a detected legacy-state move explicitly. `-y`/`--yes` accepts the bounded write without
-prompts; `--dry-run` previews it.
+prompts; `--dry-run` previews it. For an explicit legacy migration in CI/headless use
+`npx -y workspine setup --migrate --yes`.
 
 Compatibility and automation-oriented `init` remain available when you need the lower-level setup contract:
 
@@ -259,6 +267,11 @@ Compatibility and automation-oriented `init` remain available when you need the 
 npx -y workspine init
 npx -y workspine init --auto --tools all
 ```
+
+The `autoAdvance: true` written by the brief-driven `init --auto` path is currently a **bootstrap-only**
+contract: `work-new-project` can create `SPEC.md` and `ROADMAP.md` non-interactively from
+`.work/PROJECT_BRIEF.md`, while still running configured research and quality checks. It does not automatically
+start `work-plan`, `work-execute`, `work-verify`, release, or delivery.
 
 Use global agent install when you want Workspine workflows available across repos from your personal agent home:
 
@@ -415,8 +428,10 @@ The assertion is stored on the same decision record and binds the exact decision
 
 ## Configuration Reference
 
-`npx -y workspine setup` creates `.work/config.json` through the normal first-use path. The compatibility/advanced
-`init` route can do the same directly (or with defaults via repo-local `init --auto --tools <targets>`).
+`npx -y workspine setup` creates `.work/config.json` through the normal first-use path. In CI/headless use
+`npx -y workspine setup --yes`. The compatibility/advanced `init` route can do the same directly (or with defaults
+via repo-local `init --auto --tools <targets>`). When that route writes `autoAdvance: true`, the current meaning is
+only brief-driven `SPEC.md`/`ROADMAP.md` bootstrap; it does not authorize or chain later lifecycle workflows.
 
 ### Full config.json Schema
 
