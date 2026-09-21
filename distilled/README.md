@@ -2,7 +2,7 @@
 
 Workspine is a harness for AI coding agents. It runs a spec-driven loop around your agent (plan, execute, verify) and every step lands as a file in the repo, so the next session or a different tool can pick the work back up.
 
-Plans, execution records, verification, handoff notes, and progress state all live in the repo. For a session boundary, explicitly write a checkpoint with `work-pause`, then read it back with `gsdd next --json`; no background compaction or automatic context transfer is implied.
+Plans, execution records, verification, handoff notes, and progress state all live in the repo. For a session boundary, explicitly write a checkpoint with `work-pause`, then read it back with `npx -y workspine next --json`; no background compaction or automatic context transfer is implied.
 
 ## Why It Matters
 
@@ -25,7 +25,7 @@ Skip the full lifecycle for tiny, obvious edits. Direct prompting in your usual 
 
 ## What This Is
 
-Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:
+Workspine is a small set of workflow sources plus the `workspine` CLI that:
 - scaffolds a project planning workspace (`.work/`)
 - generates compact open-standard workflow entrypoints as skills (`.agents/skills/work-*/SKILL.md`)
 - generates an internal repo-local helper runtime at `.work/bin/gsdd.mjs` for deterministic workflow commands run from the repo root
@@ -33,7 +33,7 @@ Workspine is a small set of workflow sources plus a CLI (`gsdd`) that:
 
 It gives serious AI-assisted work one durable, repo-native workflow for planning, checking, execution, verification, and handoff — plain files, no hosted service.
 
-The command is `gsdd`, the npm package is `workspine`, the workflows are `work-*`, and the workspace is `.work/`. Workspine kept the `gsdd` and `.work/` names so existing installs keep working; legacy `.planning/` workspaces are still read.
+The public command and npm package are `workspine`, the workflows are `work-*`, and the workspace is `.work/`. The `gsdd` binary alias remains a compatibility surface throughout the `0.35.x` line and is removed in the next minor release. Legacy `.planning/` workspaces are migration/diagnostic input only; active lifecycle work resolves to `.work/`.
 
 Workspine began as a fork of Get Shit Done, whose long-horizon workflow proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native tool with fewer public workflows, generated runtime surfaces from a portable core, proof required before closing work, and decisions that keep their why.
 
@@ -49,10 +49,10 @@ Proof:
 
 Run in your project root:
 ```bash
-npx -y workspine init
+npx -y workspine setup
 ```
 
-In a TTY, `npx -y workspine init` opens a guided install wizard: choose runtimes first, then decide separately whether repo-wide `AGENTS.md` governance is worth installing. If `workspine` is globally installed, `gsdd init` is the equivalent shorthand.
+`setup` is the normal first-use facade. In an interactive terminal it guides the bounded setup; in CI or another headless/non-TTY environment use `npx -y workspine setup --yes`. The lower-level `npx -y workspine init` contract remains available for compatibility, scripted advanced setup, and explicit runtime-target generation.
 
 For personal cross-repo availability, run:
 
@@ -84,7 +84,7 @@ Notes:
 ## The Workflow
 
 ```
-npx -y workspine init      -> bootstrap (create .work/, copy templates, generate skills/adapters)
+npx -y workspine setup     -> bootstrap (create .work/, copy templates, generate portable skills)
 /work-new-project          -> .work/SPEC.md + .work/ROADMAP.md  (questioning + codebase audit + research)
 /work-plan N               -> phases/N/PLAN.md      (task breakdown + research)
 /work-execute N            -> code changes           (plan execution with quality gates)

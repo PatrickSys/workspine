@@ -35,7 +35,7 @@ Key exported artifacts:
 
 ### 1. Initialize a fresh consumer repo
 
-The exported proof pack comes from a new non-framework project that used the shipped `gsdd init` flow.
+The exported proof pack comes from a new non-framework project that used the lower-level `gsdd init` flow available when that evidence was captured. That is historical provenance, not current first-use guidance; current first use starts with `npx -y workspine setup`.
 
 The generated surface included:
 

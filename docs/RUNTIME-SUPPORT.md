@@ -2,7 +2,7 @@
 
 Workspine is a Spec Driven Development framework with portable multi-runtime workflow surfaces, but the proof bar is not the same for every runtime today.
 
-This matrix is the release-floor truth surface.
+This matrix is the public support truth surface for the current candidate/release line. It does not imply that an unreleased repository candidate is already published to npm.
 
 The package runtime floor is Node >=22. Update awareness is limited to the supported public CLI/generated helper, and within it to commands that already write to `.work/`; read-only commands such as `next` and `verify` never check or cache. It uses sequential/best-effort anonymous metadata checks, with no lock or cross-process concurrency guarantee, a two-second timeout, 64 KiB/normalized-version limits, no credentials or repository data, and a contained `.work/.local` cache with nonblocking failures. Use `--no-update-notice` or `GSDD_UPDATE_AWARENESS=0` to opt out. `health` and `update` are network-free; run `npx -y workspine update` for explicit repair. No native/TUI startup hook, automatic context transfer, runtime parity, or protection against adversarial concurrent cache-path swaps is implied.
 

@@ -961,6 +961,9 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     const readme = fs.readFileSync(README_MD, 'utf-8');
     const guide = fs.readFileSync(path.join(ROOT, 'docs', 'USER-GUIDE.md'), 'utf-8');
     const runtimeSupport = fs.readFileSync(path.join(ROOT, 'docs', 'RUNTIME-SUPPORT.md'), 'utf-8');
+    const distilledReadme = fs.readFileSync(DISTILLED_README_MD, 'utf-8');
+    const verificationDiscipline = fs.readFileSync(path.join(ROOT, 'docs', 'VERIFICATION-DISCIPLINE.md'), 'utf-8');
+    const brownfieldProof = fs.readFileSync(path.join(ROOT, 'docs', 'BROWNFIELD-PROOF.md'), 'utf-8');
     const { getHelpText } = await import(`${pathToFileURL(INIT_RUNTIME_MODULE).href}?firstUse=${Date.now()}`);
     const helpText = getHelpText();
     const normalFlow = guide.match(/Normal user flow:\s*\n\s*1\.\s+([^\n]+)/)?.[1] || '';
@@ -968,6 +971,11 @@ describe('G19 - Consumer First-Run Accuracy', () => {
     assert.match(normalFlow, /npx -y workspine setup/i, 'The User Guide normal flow must begin with the same first-use setup command.');
     assert.match(runtimeSupport, /normal first use[^\n]*npx -y workspine setup/i, 'Runtime support must identify setup as the normal first-use command.');
     assert.match(runtimeSupport, /init[^\n]*compatib/i, 'Runtime support must keep init explicitly labeled as compatibility guidance.');
+    assert.match(distilledReadme, /^npx -y workspine setup$/m, 'The shipped distilled README must keep setup as its quick-start command.');
+    assert.doesNotMatch(distilledReadme, /The command is `gsdd`/i, 'The shipped distilled README must not present the compatibility alias as the public command.');
+    assert.match(distilledReadme, /`gsdd` binary alias[^\n]*compatibility[^\n]*0\.35\.x/i, 'The shipped distilled README must scope gsdd to its compatibility role.');
+    assert.match(verificationDiscipline, /setup -> plan -> execute -> verify/i, 'Verification discipline must describe the current first-use delivery loop.');
+    assert.match(brownfieldProof, /historical provenance[^\n]*current first use starts with `npx -y workspine setup`/i, 'Historical proof must not masquerade as current init-first guidance.');
     assert.match(helpText, /First use:[\s\S]*npx -y workspine setup/i, 'Executable help must route the normal repo path through setup.');
     assert.doesNotMatch(helpText, /First use:[\s\S]{0,120}npx -y workspine init/i, 'Executable help must not present init as the normal repo path.');
     assert.match(guide, /npx -y workspine init/i);

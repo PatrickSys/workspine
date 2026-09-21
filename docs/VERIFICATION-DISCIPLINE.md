@@ -8,7 +8,9 @@ AI output is cheap enough that the scarce part is often proof: whether the chang
 
 The durable loop is:
 
-`init -> plan -> execute -> verify`
+`setup -> plan -> execute -> verify`
+
+`setup` is the normal first-use facade. The lower-level `init` route remains a compatibility/advanced setup contract; it is not a separate delivery lifecycle.
 
 Within that loop, the framework preserves two important review seams.
 
@@ -48,7 +50,7 @@ See `docs/BROWNFIELD-PROOF.md` for the reader-facing narrative and `docs/proof/c
 
 ## What this note does and does not claim
 
-This note explains the release-floor discipline that Workspine can prove publicly in this release.
+This note explains the release-floor discipline that Workspine can support from tracked public evidence. It does not claim that an unreleased repository candidate is already the package users receive from npm.
 
 It does **not** claim:
 
