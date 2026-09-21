@@ -43,8 +43,12 @@ Use **`work-new-project`** when the project or milestone itself still needs shap
 
 ## What you keep
 
-Workspine records the plan, the decisions you approve, what changed, and what was verified in `.work/`
-in your repo.
+For example, suppose a docs sidebar should reveal a newly selected page while respecting manual collapse
+on the current page. You choose that behavior and approve the plan. Workspine keeps that decision, the
+implementation summary, and verification evidence in `.work/` in your repo. Inspect the diff and
+reported checks against the behavior you chose. A fresh session can recover the decision and unfinished
+work from those records.
+
 The chat can end. The decisions stay with the work.
 
 Stopping mid-work? Run `work-pause` and check that it saved the decisions, unfinished work, and next
