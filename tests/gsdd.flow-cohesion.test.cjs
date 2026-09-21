@@ -133,6 +133,22 @@ describe('Phase 16 flow cohesion', () => {
     assert.equal(verify.allowed, true);
     assert.equal(verify.authority, 'brownfield_change');
     assert.equal(verify.blockers.length, 0);
+
+    const documentedVerify = await runCliAsMain(tmpDir, [
+      'lifecycle-preflight', 'verify', 'brownfield-change', '--expects-mutation', 'phase-status',
+    ]);
+    assert.equal(documentedVerify.exitCode, 0, documentedVerify.output);
+    const documentedReceipt = JSON.parse(documentedVerify.output);
+    assert.equal(documentedReceipt.allowed, true);
+    assert.equal(documentedReceipt.authority, 'brownfield_change');
+
+    const changeMisroutedAsPlan = await runCliAsMain(tmpDir, [
+      'lifecycle-preflight', 'verify', 'brownfield-change', '--plan',
+      '.work/brownfield-change/CHANGE.md', '--expects-mutation', 'phase-status',
+    ]);
+    assert.notEqual(changeMisroutedAsPlan.exitCode, 0);
+    assert.ok(JSON.parse(changeMisroutedAsPlan.output).blockers.some((entry) => entry.code === 'invalid_plan_selector'));
+
     assert.equal(fs.existsSync(path.join(tmpDir, '.work', 'SPEC.md')), false);
     assert.equal(fs.existsSync(path.join(tmpDir, '.work', 'ROADMAP.md')), false);
   });

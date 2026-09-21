@@ -4369,6 +4369,33 @@ describe('G44 - Engine Contract Hardening', () => {
       assert.match(content, pattern,
         `${file} must route lifecycle eligibility through node .work/bin/gsdd.mjs lifecycle-preflight. FIX: Restore the shared preflight invocation.`);
       if (file === 'verify.md') {
+        assert.match(content, /First run `node \.work\/bin\/gsdd\.mjs control-map --json`[\s\S]*Select brownfield when `non_phase_state` is `active_brownfield_change` or the caller explicitly selects `brownfield-change`/i,
+          'verify.md must select brownfield authority before requiring phase artifacts. FIX: Classify from control-map first.');
+        assert.match(content, /Mere presence of a closed CHANGE does not override an unrelated phase target/i,
+          'closed brownfield evidence must not commandeer unrelated phase verification.');
+        assert.match(content, /non_phase_state` is `active_brownfield_change`[\s\S]*skip phase PLAN\/SUMMARY\/SPEC\/ROADMAP/i,
+          'verify.md must route an active brownfield change around phase-only inputs. FIX: Keep brownfield evidence on its CHANGE lane.');
+        assert.match(content, /lifecycle-preflight verify brownfield-change --expects-mutation phase-status/,
+          'verify.md must use the explicit brownfield selector without a phase PLAN argument. FIX: Add the route-specific preflight command.');
+        assert.match(content, /does not validate an arbitrary caller-supplied PLAN path in a mixed phase/i,
+          'verify.md must preserve the boundary of phase-level lifecycle preflight. FIX: Keep the supplied-PLAN refusal explicit.');
+        const brownfieldRoute = content.match(/<brownfield_change_verify>([\s\S]*?)<\/brownfield_change_verify>/)?.[1] || '';
+        assert.match(brownfieldRoute, /ready_for_verification[\s\S]*lifecycle-transition verify[\s\S]*Only on pass[\s\S]*lifecycle-transition audit[\s\S]*next --json/i,
+          'verify.md must preserve the accepted brownfield ready -> verify -> assess -> close -> audit -> next choreography.');
+        assert.match(brownfieldRoute, /lifecycle-transition fix_gaps[\s\S]*keep the lane open/i,
+          'verify.md must preserve native brownfield gap handling.');
+        assert.match(brownfieldRoute, /Never run phase-status here/i,
+          'brownfield closeout must explicitly forbid phase-status mutation.');
+        assert.doesNotMatch(brownfieldRoute, /node \.work\/bin\/gsdd\.mjs phase-status/,
+          'brownfield closeout must not invoke the phase-status command.');
+        assert.match(content, /For phase authority only, after the verification artifact is durable[\s\S]*lifecycle-transition audit --plan \.work\/phases/,
+          'phase audit command must stay scoped to phase authority.');
+        assert.match(content, /For a phase, write `\.work\/phases[\s\S]*for brownfield, write `\.work\/brownfield-change\/VERIFICATION\.md`/,
+          'verification report path must follow the selected authority.');
+        assert.match(content, /phase-specific PLAN\/SUMMARY\/ROADMAP criteria below apply only to phase authority[\s\S]*brownfield uses CHANGE\/HANDOFF\/VERIFICATION/i,
+          'phase-only closure requirements must not leak into brownfield verification.');
+        assert.match(content, /repo-local, parser-compatible `## Browser Proof Observation`[\s\S]*exact candidate set/,
+          'route gating must preserve substantive phase browser-proof validation.');
         assert.doesNotMatch(content, /--(?:plan|artifact) phases\//,
           'verify.md must not advertise bare lifecycle plan or artifact paths. FIX: Use .work/phases/... paths.');
       }
@@ -4546,8 +4573,8 @@ describe('G40 - Provenance And Write-Gate Contracts', () => {
     const verify = fs.readFileSync(path.join(workflowsDir, 'verify.md'), 'utf-8');
     const audit = fs.readFileSync(path.join(workflowsDir, 'audit-milestone.md'), 'utf-8');
 
-    assert.match(verify, /Before any ROADMAP closure.*SUMMARY\.md.*still exists on disk/i,
-      'verify.md must confirm SUMMARY.md exists before ROADMAP closure. FIX: Add the fail-closed summary existence gate.');
+    assert.match(verify, /For phase authority: Before any ROADMAP closure step, confirm the required phase `SUMMARY\.md` still exists on disk[\s\S]*Brownfield has no phase SUMMARY or ROADMAP closure/i,
+      'verify.md must keep the SUMMARY gate on phase authority and route brownfield through its own closeout.');
     assert.match(audit, /Do NOT downgrade a write failure into "results shown inline anyway\."/i,
       'audit-milestone.md must not present durable results when the audit file was not written. FIX: Keep the fail-closed write gate wording.');
   });
