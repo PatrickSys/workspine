@@ -21,6 +21,7 @@ import {
   resolveActiveMilestoneDir,
   isValidApprovalReference,
   normalizeApprovalReference,
+  assertLifecyclePlanIdentity,
   hasDurableWorkflowApproval,
   transitionWorkflowState,
 } from './work-context.mjs';
@@ -1082,6 +1083,9 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   }
   const artifactKind = artifact ? lifecycleArtifactKind(artifact.path) : null;
   const planKind = plan ? lifecycleArtifactKind(plan.path) : null;
+  if (plan && ['plan', 'approve', 'execute'].includes(target)) {
+    assertLifecyclePlanIdentity(planningDir, target, plan.relative);
+  }
   const brownfieldChain = planKind === 'brownfield_plan';
   const artifactKindAllowed = target === 'verify' && brownfieldChain
     ? ['brownfield_verification', 'brownfield_plan'].includes(artifactKind)
@@ -1116,9 +1120,15 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   if (authority !== 'owner' && normalizedApprovalRef) {
     throw transitionErrorForCli('approval_ref_authority_mismatch', 'Only owner authority may carry an approval reference.', ['--authority owner', '--approval-ref']);
   }
-  let preWriteGuard = null;
+  let preWriteGuard = plan && ['plan', 'approve', 'execute'].includes(target)
+    ? () => assertLifecyclePlanIdentity(planningDir, target, plan.relative)
+    : null;
   if (brownfieldChain && target !== 'blocked' && target !== 'ask_user') {
-    preWriteGuard = () => assertBrownfieldTransitionContract({ planningDir, target, plan });
+    const identityGuard = preWriteGuard;
+    preWriteGuard = () => {
+      identityGuard?.();
+      assertBrownfieldTransitionContract({ planningDir, target, plan });
+    };
     preWriteGuard();
   }
   const explicitOwnerApproval = target === 'approve'

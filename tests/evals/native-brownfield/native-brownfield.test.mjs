@@ -17,7 +17,7 @@ import {
   findCheckpointWitness,
   findNetworkViolation,
 } from './codex.mjs';
-import { approvePlan, runJourney, validateTopology } from './journey.mjs';
+import { approvePlan, readSelectedPlanIdentity, runJourney, validateTopology } from './journey.mjs';
 import {
   assertCandidateBinding,
   assertSyntheticBaseline,
@@ -62,6 +62,12 @@ test('public outcome mapping is complete and fail closed', () => {
   assert.throws(() => projectOutcome('unknown'), /unsupported outcome/);
 });
 
+test('primary evaluator source stays within the approved bounded budget', async () => {
+  const result = await main(['characterize']);
+  assert.equal(result.provider_invoked, false);
+  assert.equal(result.primary_source_lines <= 900, true);
+});
+
 test('workspine red requires independent generic reproduction', () => {
   assert.throws(() => projectOutcome('workspine_red'), /generic reproduction/);
   assert.deepEqual(projectOutcome('workspine_red', { genericReproductionSha256: 'a'.repeat(64) }),
@@ -97,6 +103,96 @@ test('receipt chain resumes a validated prefix without adding a second seal laye
   resumed.append(10, 'qualification', 'qualification', { ok: true });
   resumed.terminal('environment_invalid');
   assert.deepEqual(verifySeal(root).links.map(link => link.sequence), [0, 10]);
+});
+
+function appendEarlyIdentityPrefix(chain, selection) {
+  chain.append(0, 'manifest', 'manifest', { fixture: true });
+  chain.append(10, 'qualification', 'qualification', { ok: true, provider_invoked: false });
+  chain.append(100, 'a-plan', 'turn', { outcome: 'completed', turn_id: 'a-plan', session_id: 'A' });
+  chain.append(110, 'a-pause', 'turn', { outcome: 'completed', turn_id: 'a-pause', session_id: 'A' });
+  return { failure_code: selection.reason, stopped_before_approval: true, plan_selection: selection };
+}
+
+test('early identity task red seals a qualified A prefix with evidence and no approval or B', t => {
+  const root = tempRoot(t), chain = new ReceiptChain(root, 'run-identity-red');
+  const payload = appendEarlyIdentityPrefix(chain, { ok: false, reason: 'selected_plan_identity_mismatch',
+    path: '.work/phases/01-wrong/01-PLAN.md', identity: '.work/phases/01-wrong/01-PLAN.md', approved: false,
+    expected_path: '.work/brownfield-change/CHANGE.md' });
+  const terminal = chain.terminal('task_red', payload);
+  const verified = verifySeal(root);
+  assert.deepEqual(verified.links.map(link => link.sequence), [0, 10, 100, 110]);
+  assert.equal(verified.public.disposition, 'red');
+  assert.equal(verified.public.failure_domain, 'task_outcome');
+  assert.deepEqual(terminal.payload.plan_selection, payload.plan_selection);
+});
+
+test('early identity seal accepts missing and preapproved observed selections', t => {
+  for (const [runId, selection] of [
+    ['run-missing', { ok: false, reason: 'selected_plan_identity_missing', path: null, identity: null, approved: false,
+      expected_path: '.work/brownfield-change/CHANGE.md' }],
+    ['run-preapproved', { ok: false, reason: 'plan_preapproved_outside_harness', path: '.work/brownfield-change/CHANGE.md',
+      identity: '.work/brownfield-change/CHANGE.md', approved: true, expected_path: '.work/brownfield-change/CHANGE.md' }],
+    ['run-preapproved-identity-missing', { ok: false, reason: 'plan_preapproved_outside_harness', path: null,
+      identity: null, approved: true, expected_path: '.work/brownfield-change/CHANGE.md' }],
+  ]) {
+    const root = tempRoot(t), chain = new ReceiptChain(root, runId);
+    const payload = appendEarlyIdentityPrefix(chain, selection);
+    chain.terminal('task_red', payload);
+    assert.equal(verifySeal(root).public.failure_domain, 'task_outcome');
+    assert.deepEqual(verifySeal(root).links.map(link => link.sequence), [0, 10, 100, 110]);
+  }
+});
+
+test('early terminal rejects generic red, green, wrong prefix, and canonical identity mislabeled wrong', t => {
+  const make = (t, runId, prefix = appendEarlyIdentityPrefix) => {
+    const root = tempRoot(t), chain = new ReceiptChain(root, runId);
+    const payload = prefix(chain, { ok: false, reason: 'selected_plan_identity_mismatch', path: '.work/phases/wrong/01-PLAN.md',
+      identity: '.work/phases/wrong/01-PLAN.md', approved: false, expected_path: '.work/brownfield-change/CHANGE.md' });
+    return { root, chain, payload };
+  };
+  {
+    const { chain } = make(t, 'run-generic-red');
+    assert.throws(() => chain.terminal('task_red'), /allowlisted identity failure/);
+  }
+  {
+    const { chain, payload } = make(t, 'run-early-green');
+    assert.throws(() => chain.terminal('product_green', payload), /complete receipt chain/);
+  }
+  {
+    const { chain, payload } = make(t, 'run-canonical-falsely-wrong');
+    payload.plan_selection.path = '.work/brownfield-change/CHANGE.md';
+    payload.plan_selection.identity = '.work/brownfield-change/CHANGE.md';
+    assert.throws(() => chain.terminal('task_red', payload), /contradicts the observed selection/);
+  }
+  {
+    const { chain, payload } = make(t, 'run-ok-true-wrong-identity');
+    payload.plan_selection.ok = true;
+    assert.throws(() => chain.terminal('task_red', payload), /allowlisted identity failure/);
+  }
+  {
+    const root = tempRoot(t), chain = new ReceiptChain(root, 'run-seal-canonical-falsely-wrong');
+    const payload = appendEarlyIdentityPrefix(chain, { ok: false, reason: 'selected_plan_identity_mismatch', path: '.work/phases/wrong/01-PLAN.md',
+      identity: '.work/phases/wrong/01-PLAN.md', approved: false, expected_path: '.work/brownfield-change/CHANGE.md' });
+    chain.terminal('task_red', payload);
+    const file = path.join(root, 'receipts', '900-terminal-seal.json');
+    const terminal = JSON.parse(fs.readFileSync(file, 'utf8'));
+    terminal.payload.plan_selection.path = '.work/brownfield-change/CHANGE.md';
+    terminal.payload.plan_selection.identity = '.work/brownfield-change/CHANGE.md';
+    const { receipt_sha256: _receipt, seal_sha256: _seal, ...body } = terminal;
+    terminal.receipt_sha256 = sha256(canonicalStringify(body));
+    const { seal_sha256: _ignored, ...withReceipt } = terminal;
+    terminal.seal_sha256 = sha256(canonicalStringify(withReceipt));
+    fs.writeFileSync(file, `${canonicalStringify(terminal)}\n`);
+    assert.throws(() => verifySeal(root), /contradicts the observed selection/);
+  }
+  {
+    const root = tempRoot(t), chain = new ReceiptChain(root, 'run-wrong-prefix');
+    chain.append(0, 'manifest', 'manifest', {});
+    chain.append(10, 'qualification', 'qualification', { ok: true, provider_invoked: false });
+    chain.append(100, 'a-plan', 'turn', { outcome: 'completed', turn_id: 'a-plan', session_id: 'A' });
+    chain.append(120, 'approval', 'approval', {});
+    assert.throws(() => chain.terminal('task_red', {}), /complete receipt chain|valid prefix|early identity result requires/);
+  }
 });
 
 test('receipt path is create-exclusive', t => {
@@ -500,6 +596,8 @@ test('journey order is plan, pause, approval, fresh B, verify, progress', async 
   const result = await runJourney({
     transport,
     captureCheckpoint: () => ({ path: '.work/.continue-here.md', sha256: 'c'.repeat(64) }),
+    selectPlan: () => ({ ok: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md', approved: false,
+      expected_path: '.work/brownfield-change/CHANGE.md' }),
     approve: ({ checkpoint }) => { calls.push('approval'); return { ok: true, checkpoint_sha256: checkpoint.sha256 }; },
     checkpointWitness: () => ({ ok: true, output_sha256: 'c'.repeat(64) }),
     hardTimeoutMs: 321,
@@ -522,6 +620,8 @@ test('journey rejects approval checkpoint mutation without dependent turns', asy
   const result = await runJourney({
     transport,
     captureCheckpoint: () => ({ path: '.work/.continue-here.md', sha256: 'a'.repeat(64) }),
+    selectPlan: () => ({ ok: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md', approved: false,
+      expected_path: '.work/brownfield-change/CHANGE.md' }),
     approve: () => ({ ok: true, checkpoint_sha256: 'b'.repeat(64) }),
     checkpointWitness: () => ({ ok: true }),
   });
@@ -537,9 +637,62 @@ test('journey stops before approval when session A identity drifts', async () =>
   } };
   const result = await runJourney({ transport,
     captureCheckpoint: () => ({ sha256: 'a'.repeat(64) }),
+    selectPlan: () => ({ ok: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md', approved: false,
+      expected_path: '.work/brownfield-change/CHANGE.md' }),
     approve: () => { calls.push('approval'); return { ok: true, checkpoint_sha256: 'a'.repeat(64) }; } });
   assert.equal(result.outcome, 'protocol_invalid');
   assert.deepEqual(calls, ['a-plan', 'a-pause']);
+});
+
+test('journey grades the agent-selected identity before any harness approval', async () => {
+  const calls = [];
+  const transport = { runTurn: async turn => {
+    calls.push(turn.id);
+    return { outcome: 'completed', sessionId: 'A', turnId: turn.id };
+  } };
+  const result = await runJourney({ transport,
+    captureCheckpoint: () => ({ sha256: 'a'.repeat(64) }),
+    selectPlan: () => ({ ok: false, reason: 'selected_plan_identity_mismatch', path: '.work/phases/01-wrong/01-PLAN.md',
+      identity: '.work/phases/01-wrong/01-PLAN.md', approved: false, expected_path: '.work/brownfield-change/CHANGE.md' }),
+    approve: () => { calls.push('approval'); return { ok: true, checkpoint_sha256: 'a'.repeat(64) }; },
+  });
+  assert.equal(result.outcome, 'task_red');
+  assert.equal(result.failure_code, 'selected_plan_identity_mismatch');
+  assert.equal(result.planSelection.path, '.work/phases/01-wrong/01-PLAN.md');
+  assert.equal(result.stopped_before_approval, true);
+  assert.deepEqual(calls, ['a-plan', 'a-pause']);
+});
+
+test('preapproval with missing identity is an observed task failure, not evaluator-invalid', async t => {
+  const root = tempRoot(t), work = path.join(root, '.work');
+  fs.mkdirSync(work);
+  fs.writeFileSync(path.join(work, 'state.json'), `${JSON.stringify({ workflow: { plan: { approved: true } } })}\n`);
+  const selection = readSelectedPlanIdentity(root);
+  assert.equal(selection.reason, 'plan_preapproved_outside_harness');
+  assert.equal(selection.approved, true);
+  assert.equal(selection.path, null);
+  const calls = [];
+  const result = await runJourney({ consumerRoot: root,
+    transport: { runTurn: async turn => { calls.push(turn.id); return { outcome: 'completed', sessionId: 'A', turnId: turn.id }; } },
+    captureCheckpoint: () => { throw new Error('checkpoint must not be captured'); },
+    approve: () => { throw new Error('owner approval must not be simulated'); },
+  });
+  assert.equal(result.outcome, 'task_red');
+  assert.equal(result.failure_code, 'plan_preapproved_outside_harness');
+  assert.equal(result.stopped_before_approval, true);
+  assert.deepEqual(calls, ['a-plan', 'a-pause']);
+});
+
+test('malformed lifecycle state containers are evaluator failures while absent identity is task evidence', t => {
+  const root = tempRoot(t), work = path.join(root, '.work');
+  fs.mkdirSync(work);
+  const stateFile = path.join(work, 'state.json');
+  for (const state of [null, [], { workflow: [] }, { workflow: { plan: [] } }]) {
+    fs.writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
+    assert.equal(readSelectedPlanIdentity(root).evaluatorFailure, true);
+  }
+  fs.writeFileSync(stateFile, '{}\n');
+  assert.equal(readSelectedPlanIdentity(root).reason, 'selected_plan_identity_missing');
 });
 
 test('provider-free approval uses the real generated lifecycle command and persists exact state', t => {
@@ -565,12 +718,25 @@ test('provider-free approval uses the real generated lifecycle command and persi
   result = run([path.join(root, '.work', 'bin', 'gsdd.mjs'), 'lifecycle-transition', 'plan',
     '--plan', '.work/brownfield-change/CHANGE.md', '--authority', 'workflow', '--json', '--no-update-notice']);
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  const planSelection = readSelectedPlanIdentity(root);
+  assert.deepEqual(planSelection, { ok: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md',
+    approved: false, expected_path: '.work/brownfield-change/CHANGE.md' });
   const checkpoint = '---\nworkflow: brownfield-change\n---\n\nResume the approved bounded change.\n';
   fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), checkpoint);
   const approval = approvePlan({ consumerRoot: root,
-    checkpoint: { sha256: sha256(checkpoint) }, approvalRef: 'owner-frozen-eval-approval' });
+    checkpoint: { sha256: sha256(checkpoint) }, approvalRef: 'owner-frozen-eval-approval', planSelection });
   assert.equal(approval.ok, true);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(root, '.work', 'state.json'), 'utf8')).workflow.plan.approved, true);
+  let persisted = JSON.parse(fs.readFileSync(path.join(root, '.work', 'state.json'), 'utf8'));
+  assert.equal(persisted.workflow.plan.approved, true);
+  assert.equal(persisted.workflow.plan.path, '.work/brownfield-change/CHANGE.md');
+  assert.equal(persisted.workflow.plan.identity, '.work/brownfield-change/CHANGE.md');
+  result = run([path.join(root, '.work', 'bin', 'gsdd.mjs'), 'lifecycle-transition', 'execute',
+    '--plan', planSelection.path, '--authority', 'workflow', '--json', '--no-update-notice']);
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  persisted = JSON.parse(fs.readFileSync(path.join(root, '.work', 'state.json'), 'utf8'));
+  assert.equal(persisted.workflow.current_state, 'execute');
+  assert.equal(persisted.workflow.plan.path, planSelection.path);
+  assert.equal(persisted.workflow.plan.identity, planSelection.identity);
 });
 
 test('topology requires A/B/C fresh identities and within-session reuse', () => {

@@ -2,6 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { canonicalStringify, command, EvalError, fileSha256 } from './util.mjs';
 import { findCheckpointWitness } from './codex.mjs';
+export const BROWNFIELD_PLAN_IDENTITY = '.work/brownfield-change/CHANGE.md';
+export function classifyPlanSelection(plan = {}) {
+  const path = typeof plan.path === 'string' && plan.path.trim() ? plan.path : null;
+  const identity = typeof plan.identity === 'string' && plan.identity.trim() ? plan.identity : null;
+  const approved = plan.approved === true;
+  const reason = approved ? 'plan_preapproved_outside_harness' : (!path || !identity ? 'selected_plan_identity_missing'
+    : (path !== identity || path !== BROWNFIELD_PLAN_IDENTITY ? 'selected_plan_identity_mismatch' : null));
+  return { ok: !reason, ...(reason ? { reason } : {}), path, identity, approved, expected_path: BROWNFIELD_PLAN_IDENTITY };
+}
 export function buildPrompts() {
   const owner = 'Read the owner inputs at inputs/owner/TASK.md and inputs/owner/BRIEF.md.'; return {
     'a-plan': `$work-plan\n${owner} Plan this brownfield change, then stop after the plan is complete.`,
@@ -16,8 +25,29 @@ export function captureCheckpoint(consumerRoot) {
   if (!stat?.isFile() || stat.isSymbolicLink()) throw new EvalError('protocol_invalid', 'canonical checkpoint is missing');
   return { path: '.work/.continue-here.md', sha256: fileSha256(file), bytes: stat.size };
 }
-export function approvePlan({ consumerRoot, checkpoint, approvalRef }) {
-  const root = path.resolve(consumerRoot), planRelative = '.work/brownfield-change/CHANGE.md';
+export function readSelectedPlanIdentity(consumerRoot) {
+  const statePath = path.join(path.resolve(consumerRoot), '.work', 'state.json');
+  const stat = fs.lstatSync(statePath, { throwIfNoEntry: false });
+  if (!stat?.isFile() || stat.isSymbolicLink()) return { ok: false, evaluatorFailure: true, reason: 'lifecycle_state_missing' };
+  let state;
+  try { state = JSON.parse(fs.readFileSync(statePath, 'utf8')); }
+  catch { return { ok: false, evaluatorFailure: true, reason: 'lifecycle_state_unreadable' }; }
+  if (!state || typeof state !== 'object' || Array.isArray(state)
+    || ('workflow' in state && (!state.workflow || typeof state.workflow !== 'object' || Array.isArray(state.workflow)))
+    || (state.workflow && 'plan' in state.workflow && (!state.workflow.plan || typeof state.workflow.plan !== 'object' || Array.isArray(state.workflow.plan)))) {
+    return { ok: false, evaluatorFailure: true, reason: 'lifecycle_state_malformed' };
+  }
+  return classifyPlanSelection(state?.workflow?.plan);
+}
+export function approvePlan({ consumerRoot, checkpoint, approvalRef, planSelection }) {
+  const root = path.resolve(consumerRoot), planRelative = planSelection?.path;
+  if (!planSelection?.ok || !classifyPlanSelection(planSelection).ok || planRelative !== BROWNFIELD_PLAN_IDENTITY) {
+    throw new EvalError('protocol_invalid', 'agent-selected plan identity does not match the owner-approved brownfield CHANGE.md identity');
+  }
+  const currentSelection = readSelectedPlanIdentity(root);
+  if (!currentSelection.ok || currentSelection.path !== planSelection.path || currentSelection.identity !== planSelection.identity) {
+    throw new EvalError('protocol_invalid', 'agent-selected plan identity changed before harness approval');
+  }
   const planFile = path.join(root, ...planRelative.split('/'));
   const planStat = fs.lstatSync(planFile, { throwIfNoEntry: false });
   if (!planStat?.isFile() || planStat.isSymbolicLink()) throw new EvalError('protocol_invalid', 'canonical plan is missing');
@@ -58,6 +88,7 @@ export async function runJourney(options) {
   const capture = options.captureCheckpoint || (() => captureCheckpoint(options.consumerRoot));
   const approve = options.approve || (input => approvePlan({ consumerRoot: options.consumerRoot,
     approvalRef: options.approvalRef, ...input }));
+  const selectPlan = options.selectPlan || (() => readSelectedPlanIdentity(options.consumerRoot));
   const witness = options.checkpointWitness || ((result, checkpoint) => findCheckpointWitness(result.events || [], {
     consumerRoot: options.consumerRoot, checkpointSha256: checkpoint.sha256, sessionId: result.sessionId,
   }));
@@ -74,8 +105,33 @@ export async function runJourney(options) {
   const aPause = await run('a-pause', aPlan.sessionId);
   if (aPause.outcome !== 'completed') return { outcome: aPause.outcome, turns };
   if (aPause.sessionId !== aPlan.sessionId) return { outcome: 'protocol_invalid', failure_code: 'a_session_mismatch', turns };
+  const planSelection = selectPlan();
+  if (planSelection?.evaluatorFailure) {
+    return { outcome: 'protocol_invalid', failure_code: planSelection.reason || 'lifecycle_state_unreadable', turns, planSelection,
+      stopped_before_approval: true };
+  }
+  const assessedSelection = classifyPlanSelection(planSelection);
+  const observedFailure = assessedSelection.reason;
+  if (observedFailure) {
+    if (planSelection?.reason && planSelection.reason !== observedFailure) {
+      return { outcome: 'protocol_invalid', failure_code: 'selection_evidence_conflict', turns, planSelection, stopped_before_approval: true };
+    }
+    if (planSelection?.ok === true) return { outcome: 'protocol_invalid', failure_code: 'selection_evidence_conflict', turns, planSelection,
+      stopped_before_approval: true };
+    return { outcome: 'task_red', failure_code: observedFailure, turns, planSelection: assessedSelection,
+      stopped_before_approval: true };
+  }
+  if (planSelection?.ok !== true || planSelection.expected_path !== BROWNFIELD_PLAN_IDENTITY) {
+    return { outcome: 'protocol_invalid', failure_code: 'selection_evidence_conflict', turns, planSelection,
+      stopped_before_approval: true };
+  }
   const checkpoint = capture();
-  const approval = approve({ checkpoint });
+  let approval;
+  try { approval = approve({ checkpoint, planSelection }); }
+  catch (error) {
+    if (error?.code === 'protocol_invalid') return { outcome: 'protocol_invalid', failure_code: 'selected_plan_identity_mismatch', turns, checkpoint, planSelection };
+    throw error;
+  }
   options.record?.('approval', approval);
   if (!approval?.ok || approval.checkpoint_sha256 !== checkpoint.sha256 || capture().sha256 !== checkpoint.sha256) {
     return { outcome: 'protocol_invalid', failure_code: 'approval_checkpoint_mutation', turns };
@@ -93,6 +149,6 @@ export async function runJourney(options) {
   if (cProgress.outcome !== 'completed') return { outcome: cProgress.outcome, turns, checkpoint, approval };
   const topology = validateTopology({ aPlan: aPlan.sessionId, aPause: aPause.sessionId,
     b: b.sessionId, cVerify: cVerify.sessionId, cProgress: cProgress.sessionId });
-  return topology.ok ? { outcome: 'completed', turns, checkpoint, checkpointRead, approval, topology }
-    : { outcome: 'protocol_invalid', failure_code: topology.reason, turns, checkpoint, approval, topology };
+  return topology.ok ? { outcome: 'completed', turns, checkpoint, checkpointRead, approval, planSelection, topology }
+    : { outcome: 'protocol_invalid', failure_code: topology.reason, turns, checkpoint, approval, planSelection, topology };
 }

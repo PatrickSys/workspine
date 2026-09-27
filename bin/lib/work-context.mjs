@@ -270,6 +270,22 @@ function transitionError(code, message, evidence = []) {
   return error;
 }
 
+export function assertLifecyclePlanIdentity(planningDir, target, planIdentity) {
+  if (!['plan', 'approve', 'execute'].includes(String(target || '').toLowerCase())) return;
+  const lifecycle = evaluateLifecycleState({ planningDir });
+  if (lifecycle.nonPhaseState !== 'active_brownfield_change') return;
+  const workspaceRoot = resolve(planningDir, '..');
+  const canonicalPlan = normalizeSlashes(relative(workspaceRoot, join(planningDir, 'brownfield-change', 'CHANGE.md')));
+  const suppliedPlan = normalizeSlashes(String(planIdentity || '')).replace(/^\.\//, '');
+  if (suppliedPlan !== canonicalPlan) {
+    throw transitionError(
+      'wrong_brownfield_plan_identity',
+      `Active brownfield authority requires the canonical CHANGE.md plan identity (${canonicalPlan}); refusing ${suppliedPlan || 'an unbound plan'} before lifecycle state changes.`,
+      [canonicalPlan, suppliedPlan].filter(Boolean),
+    );
+  }
+}
+
 /**
  * Persist one validated lifecycle transition without changing any other state
  * fields. Callers must validate artifact identity and authority before calling
@@ -325,6 +341,7 @@ export function transitionWorkflowState(workDir, {
   }
 
   const expectedPlan = planPath || planIdentity;
+  assertLifecyclePlanIdentity(workDir, normalizedTarget, expectedPlan);
   const recordedPlan = workflow.plan.path || workflow.plan.identity || null;
   if (recordedPlan && expectedPlan && recordedPlan !== expectedPlan) {
     throw transitionError('stale_state', 'Recorded plan authority does not match the supplied plan artifact.', [String(recordedPlan), String(expectedPlan)]);

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { canonicalStringify, EvalError, mkdirp, readJson, sha256, writeExclusiveJson } from './util.mjs';
+import { classifyPlanSelection } from './journey.mjs';
 const PUBLIC = Object.freeze({
   product_green: ['green', null],
   task_red: ['red', 'task_outcome'],
@@ -16,6 +17,9 @@ const RECEIPT_NAMES = Object.freeze({ 0: 'manifest', 10: 'qualification', 100: '
 const RECEIPT_TYPES = Object.freeze({ 0: 'manifest', 10: 'qualification', 100: 'turn', 110: 'turn', 120: 'approval',
   200: 'turn', 300: 'turn', 310: 'turn', 400: 'oracle', 410: 'grade', 420: 'regrade' });
 const PREFIX = Object.keys(RECEIPT_TYPES).map(Number).sort((a, b) => a - b);
+const IDENTITY_FAILURES = new Set(['selected_plan_identity_missing', 'selected_plan_identity_mismatch', 'plan_preapproved_outside_harness']);
+const EARLY_IDENTITY_PREFIX = [0, 10, 100, 110];
+const BROWNFIELD_PLAN = '.work/brownfield-change/CHANGE.md';
 export function projectOutcome(outcome, options = {}) {
   if (!(outcome in PUBLIC)) throw new EvalError('evaluator_invalid', `unsupported outcome: ${outcome}`);
   if (outcome === 'workspine_red' && !/^[0-9a-f]{64}$/i.test(options.genericReproductionSha256 || '')) {
@@ -31,6 +35,32 @@ function receiptHash(receipt) {
   return sha256(canonicalStringify(body));
 }
 function receiptName(sequence, name) { if (RECEIPT_NAMES[sequence] !== name) throw new EvalError('evaluator_invalid', `unexpected receipt path for sequence ${sequence}`); return `${String(sequence).padStart(3, '0')}-${name}.json`; }
+function validateEarlyIdentityFailure(outcome, payload, links, receiptDir) {
+  if (outcome !== 'task_red' || links.length !== EARLY_IDENTITY_PREFIX.length) return false;
+  if (links.some((link, index) => link.sequence !== EARLY_IDENTITY_PREFIX[index])) {
+    throw new EvalError('evaluator_invalid', 'early identity result requires manifest, qualification, a-plan, and a-pause receipts');
+  }
+  const receipts = links.map(link => readJson(path.join(receiptDir, link.path)));
+  const [manifest, qualification, plan, pause] = receipts;
+  if (manifest.record_type !== 'manifest' || qualification.payload?.ok !== true || qualification.payload?.provider_invoked !== false
+    || plan.payload?.outcome !== 'completed' || plan.payload?.turn_id !== 'a-plan'
+    || pause.payload?.outcome !== 'completed' || pause.payload?.turn_id !== 'a-pause'
+    || typeof plan.payload?.session_id !== 'string' || !plan.payload.session_id
+    || pause.payload?.session_id !== plan.payload.session_id) {
+    throw new EvalError('evaluator_invalid', 'early identity result lacks a completed qualified A session');
+  }
+  const selection = payload.plan_selection;
+  const failure = payload.failure_code;
+  if (payload.stopped_before_approval !== true || !IDENTITY_FAILURES.has(failure) || !selection
+    || selection.ok !== false || typeof selection.approved !== 'boolean' || selection.reason !== failure
+    || selection.expected_path !== BROWNFIELD_PLAN) {
+    throw new EvalError('evaluator_invalid', 'early task_red requires an allowlisted identity failure with matching selection evidence');
+  }
+  if (classifyPlanSelection(selection).reason !== failure) {
+    throw new EvalError('evaluator_invalid', 'identity failure evidence contradicts the observed selection');
+  }
+  return true;
+}
 export class ReceiptChain {
   constructor(runRoot, runId, options = {}) {
     if (!runId) throw new EvalError('evaluator_invalid', 'run ID is required');
@@ -71,7 +101,8 @@ export class ReceiptChain {
   }
   terminal(outcome, payload = {}, options = {}) {
     const publicResult = projectOutcome(outcome, options);
-    if (publicResult.disposition !== 'invalid' && this.links.length !== PREFIX.length) throw new EvalError('evaluator_invalid', 'product outcome requires a complete receipt chain');
+    const earlyIdentityResult = validateEarlyIdentityFailure(outcome, payload, this.links, this.receiptDir);
+    if (publicResult.disposition !== 'invalid' && this.links.length !== PREFIX.length && !earlyIdentityResult) throw new EvalError('evaluator_invalid', 'product outcome requires a complete receipt chain');
     const body = { schema_version: 1, record_type: 'terminal_seal', run_id: this.runId, sequence: 900,
       payload: { ...payload, outcome, public: publicResult, links: this.links.map(link => ({ ...link })) } };
     const withReceipt = { ...body, receipt_sha256: sha256(canonicalStringify(body)) };
@@ -109,7 +140,8 @@ export function verifySeal(runRoot) {
     lastSequence = link.sequence;
     expectedFiles.add(link.path);
   }
-  if (links.some((link, index) => link.sequence !== PREFIX[index])) throw new EvalError('evaluator_invalid', 'receipt links are not a valid prefix');
+  const normalPrefix = links.length <= PREFIX.length && links.every((link, index) => link.sequence === PREFIX[index]);
+  if (!normalPrefix) throw new EvalError('evaluator_invalid', 'receipt links are not a valid prefix');
   const actualFiles = new Set(fs.readdirSync(receiptDir).filter(name => name.endsWith('.json')));
   if (actualFiles.size !== expectedFiles.size || [...actualFiles].some(name => !expectedFiles.has(name))) {
     throw new EvalError('evaluator_invalid', 'unlinked or replayed receipt found');
@@ -120,6 +152,7 @@ export function verifySeal(runRoot) {
   if (canonicalStringify(publicResult) !== canonicalStringify(terminal.payload.public)) {
     throw new EvalError('evaluator_invalid', 'public outcome mapping mismatch');
   }
-  if (publicResult.disposition !== 'invalid' && links.length !== PREFIX.length) throw new EvalError('evaluator_invalid', 'product outcome has an incomplete receipt chain');
+  const earlyIdentityResult = validateEarlyIdentityFailure(terminal.payload.outcome, terminal.payload, links, receiptDir);
+  if (publicResult.disposition !== 'invalid' && links.length !== PREFIX.length && !earlyIdentityResult) throw new EvalError('evaluator_invalid', 'product outcome has an incomplete receipt chain');
   return { terminal, links, public: publicResult };
 }

@@ -92,7 +92,7 @@ describe('G9 - Generation Manifest Contract', () => {
 });
 
 describe('Approval characterization', () => {
-  function makeApprovalFixture({ planStatus = 'pending', workflowPlan = {}, workflow = {} } = {}) {
+  function makeApprovalFixture({ planStatus = 'pending', workflowPlan = {}, workflow = {}, brownfieldStatus = null } = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspine-approval-characterization-'));
     const phaseDir = path.join(root, '.work', 'phases', '01-approval');
     fs.mkdirSync(phaseDir, { recursive: true });
@@ -112,6 +112,19 @@ describe('Approval characterization', () => {
     fs.writeFileSync(path.join(root, '.work', 'state.json'), `${JSON.stringify(state)}\n`);
     const plan = '.work/phases/01-approval/01-PLAN.md';
     fs.writeFileSync(path.join(root, plan), `---\nstatus: ${planStatus}\n---\n# Approval characterization\n`);
+    if (brownfieldStatus) {
+      const changeDir = path.join(root, '.work', 'brownfield-change');
+      fs.mkdirSync(changeDir, { recursive: true });
+      fs.writeFileSync(path.join(changeDir, 'CHANGE.md'), [
+        '---', `status: ${brownfieldStatus}`, '---', '', '# Bounded change', '',
+        '## Goal', 'Keep the approval bound to the active authority.', '',
+        '## In Scope', '- Brownfield identity.', '', '## Out of Scope', '- Other lifecycle changes.', '',
+        '## Done When', '- The workflow identity is guarded.', '',
+        '## Current Status', `- Current posture: ${brownfieldStatus}`, '',
+        '## Next Action', '- Complete the identity check.', '',
+        '## Closeout Path', '1. Verify the result.', '',
+      ].join('\n'));
+    }
     return { root, plan };
   }
 
@@ -122,6 +135,69 @@ describe('Approval characterization', () => {
       '--authority', 'workflow', '--json', '--no-update-notice',
     ], { cwd: root, encoding: 'utf8' });
   }
+
+  test('active brownfield authority rejects a phase plan before approval or lifecycle writes', async () => {
+    const fixture = makeApprovalFixture({ brownfieldStatus: 'active' });
+    try {
+      const statePath = path.join(fixture.root, '.work', 'state.json');
+      const before = fs.readFileSync(statePath);
+      for (const target of ['plan', 'approve', 'execute']) {
+        const result = spawnSync(process.execPath, [
+          GSDD_PATH, 'lifecycle-transition', target, '--plan', fixture.plan,
+          '--authority', target === 'approve' ? 'owner' : 'workflow',
+          ...(target === 'approve' ? ['--approval-ref', 'owner-review'] : []),
+          '--json', '--no-update-notice',
+        ], { cwd: fixture.root, encoding: 'utf8' });
+        assert.notStrictEqual(result.status, 0, result.stdout || result.stderr);
+        const receipt = JSON.parse(result.stdout);
+        assert.strictEqual(receipt.status, 'error');
+        assert.strictEqual(receipt.changed, false);
+        assert.strictEqual(receipt.error_code, 'wrong_brownfield_plan_identity');
+        assert.deepStrictEqual(fs.readFileSync(statePath), before);
+      }
+      const finalState = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+      assert.strictEqual(finalState.workflow.plan.approved, false);
+      assert.strictEqual(finalState.workflow.approval_ref, undefined);
+
+      const workContext = await import(`file://${path.join(ROOT, 'bin', 'lib', 'work-context.mjs').replace(/\\/g, '/')}`);
+      assert.throws(() => workContext.transitionWorkflowState(path.join(fixture.root, '.work'), {
+        target: 'approve', planPath: fixture.plan, planIdentity: fixture.plan,
+        authority: 'owner', approvalRef: 'owner-review', approved: true,
+      }), error => error.code === 'wrong_brownfield_plan_identity');
+      assert.deepStrictEqual(fs.readFileSync(statePath), before);
+    } finally {
+      fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test('plan and execute workflows carry the same brownfield plan identity through their lifecycle steps', () => {
+    const plan = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'plan.md'), 'utf8');
+    const execute = fs.readFileSync(path.join(ROOT, 'distilled', 'workflows', 'execute.md'), 'utf8');
+    assert.match(plan, /Put the plan body and structured `<checks><plan_check>\.\.\.<\/plan_check><\/checks>` in a `## Implementation Plan` section of `\.work\/brownfield-change\/CHANGE\.md`/i);
+    assert.match(plan, /lifecycle-transition plan --plan \.work\/brownfield-change\/CHANGE\.md --authority workflow --json/i);
+    assert.match(plan, /lifecycle-transition approve --plan \.work\/brownfield-change\/CHANGE\.md --authority owner --approval-ref \{approval_ref\} --json/i);
+    assert.match(plan, /For active brownfield authority, show and approve `\.work\/brownfield-change\/CHANGE\.md` with that reference/i);
+    assert.match(execute, /active brownfield change,[\s\S]{0,240}lifecycle-transition execute --plan \.work\/brownfield-change\/CHANGE\.md/i);
+    assert.match(execute, /Do not switch identities between planning, approval, and execution/i);
+    assert.match(execute, /For active brownfield authority, record task evidence[\s\S]{0,220}ready_for_verification/i);
+  });
+
+  test('closed brownfield history does not block an unrelated phase approval', () => {
+    const fixture = makeApprovalFixture({ brownfieldStatus: 'closed' });
+    try {
+      const result = spawnSync(process.execPath, [
+        GSDD_PATH, 'lifecycle-transition', 'approve', '--plan', fixture.plan,
+        '--authority', 'owner', '--approval-ref', 'owner-review', '--json', '--no-update-notice',
+      ], { cwd: fixture.root, encoding: 'utf8' });
+      assert.strictEqual(result.status, 0, result.stdout || result.stderr);
+      const receipt = JSON.parse(result.stdout);
+      assert.strictEqual(receipt.status, 'ok');
+      assert.strictEqual(receipt.state.workflow.plan.path, fixture.plan);
+      assert.strictEqual(receipt.state.workflow.plan.identity, fixture.plan);
+    } finally {
+      fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
 
   test('approval characterization rejects agent-editable approved frontmatter alone', () => {
     const fixture = makeApprovalFixture({ planStatus: 'approved' });
