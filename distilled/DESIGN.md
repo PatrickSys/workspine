@@ -975,6 +975,7 @@ Implementation lives under `bin/lib/`:
 | W10 | WARN | ROADMAP lifecycle status drift, including requirement checkbox and overview/detail phase status mismatches |
 | W11 | WARN | Renderer-backed generated runtime/helper surfaces drift from current render output |
 | W12 | RETIRED | Retired session-fingerprint warning; current continuity is explicit and file-backed rather than inferred from a hidden session fingerprint |
+| W13 | WARN | `ROADMAP.md` is non-empty but no line matched the phase pattern, so the lifecycle sees zero phases |
 | I1 | INFO | Generation manifest `frameworkVersion` differs from current `FRAMEWORK_VERSION` |
 | I2 | INFO | Phase completion count from ROADMAP |
 | I3 | INFO | Which runtime/governance surfaces are installed |

@@ -117,7 +117,7 @@ export function buildHealthReport(ctx, healthArgs = []) {
     }
     const cwd = workspaceRoot;
     const frameworkSourceMode = isFrameworkSourceRepo(cwd);
-    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'I1', 'I2', 'I3'];
+    const healthCheckIds = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', ...TRUTH_CHECK_IDS, 'W13', 'I1', 'I2', 'I3'];
 
     // Pre-init guard
     if (!existsSync(join(planningDir, 'config.json'))) {
@@ -288,6 +288,18 @@ export function buildHealthReport(ctx, healthArgs = []) {
           fix: 'Create missing phase dirs or update ROADMAP',
         });
       }
+    }
+
+    // W13: a non-empty roadmap the phase parser cannot read. Without this,
+    // "the parser matched nothing" and "this roadmap has no phases" are the
+    // same empty list, so W4 and I2 stay silent for the wrong reason.
+    if (roadmap && roadmap.trim().length > 0 && lifecycle.phases.length === 0) {
+      warnings.push({
+        id: 'W13',
+        severity: 'WARN',
+        message: `${statePath(stateDirName, 'ROADMAP.md')} is non-empty but no lines matched the phase pattern, so the lifecycle treats this workspace as having no phases`,
+        fix: `Rewrite roadmap phases as \`- [ ] **Phase N: title**\` lines, or accept that phase and roadmap tooling stays inert in this workspace.`,
+      });
     }
 
     // W5: Phase dir has PLAN but no SUMMARY (stale in-progress)

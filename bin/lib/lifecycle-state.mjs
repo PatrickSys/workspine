@@ -398,7 +398,7 @@ function collectPhaseArtifacts(phasesDir) {
         if (artifact) artifacts.push(artifact);
         continue;
       }
-      if (entry.isDirectory() && isContainedRealPath(phasesRoot, entryPath)) {
+      if (entry.isDirectory() && !isRetentionDirName(entry.name) && isContainedRealPath(phasesRoot, entryPath)) {
         walk(entryPath, artifactDirectory ? `${artifactDirectory}/${entry.name}` : entry.name);
       }
     }
@@ -406,6 +406,13 @@ function collectPhaseArtifacts(phasesDir) {
 
   walk(phasesDir, '');
   return artifacts.sort(compareArtifactPaths);
+}
+
+// `_archive/` and dot-prefixed directories are retention and tooling space,
+// not live phase numbers. Walking them reports already-shipped phases as
+// stale and attributes them to the phase numbers in use today.
+function isRetentionDirName(name) {
+  return name.startsWith('_') || name.startsWith('.');
 }
 
 function isWithinRoot(root, candidate) {
@@ -877,7 +884,7 @@ export function collectNativePhaseArtifacts({ workspaceRoot, phasesDir } = {}) {
       .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' }));
     for (const entry of entries) {
       const entryPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
+      if (entry.isDirectory() && !isRetentionDirName(entry.name)) {
         visit(entryPath);
         continue;
       }

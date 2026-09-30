@@ -9,6 +9,7 @@ import { resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const MAX_DIRTY_BUCKET_ENTRIES = 200;
+const UNBORN_HEAD = /^0+$/;
 const CLEANUP_STATES = Object.freeze(['active', 'paused', 'merged', 'abandoned', 'superseded', 'cleanup_deferred']);
 const ACTIVE_ANNOTATION_STATES = Object.freeze(['active', 'paused', 'cleanup_deferred']);
 const AUTHORITY_ORDER = Object.freeze([
@@ -157,6 +158,13 @@ function parseAheadBehind(branchLine) {
   };
 }
 
+function branchFromStatusLine(branchLine) {
+  if (!branchLine) return null;
+  if (branchLine.startsWith('HEAD (no branch)')) return 'HEAD';
+  const upstream = branchLine.indexOf('...');
+  return (upstream === -1 ? branchLine : branchLine.slice(0, upstream)).trim();
+}
+
 function dirtyRepoPathEntries(worktree) {
   const entries = [];
   for (const entry of worktree.dirty.tracked || []) {
@@ -248,7 +256,7 @@ function findDirtyWriteSetOverlaps(writeEntries, dirtyEntries) {
   return overlaps;
 }
 
-function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false, includeIgnoredCount = false } = {}) {
+function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false, includeIgnoredCount = false, listed = null } = {}) {
   const status = runGit(pathValue, [
     'status',
     '--short',
@@ -256,10 +264,15 @@ function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false
     ...(includeIgnoredPaths ? ['--ignored'] : []),
     '--untracked-files=all',
   ]);
-  const branch = runGit(pathValue, ['rev-parse', '--abbrev-ref', 'HEAD']);
-  const head = runGit(pathValue, ['rev-parse', 'HEAD']);
-  const gitTopLevel = runGit(pathValue, ['rev-parse', '--show-toplevel']);
   const buckets = status.ok ? parseStatusBuckets(status.stdout) : parseStatusBuckets('');
+  // `git worktree list --porcelain` already carries HEAD and the checked-out branch, so
+  // rev-parse only runs for worktrees the listing cannot answer for (unborn HEAD, bare, unreadable).
+  const listedTrusted = status.ok && listed !== null;
+  const listedHead = listedTrusted && listed.head && !UNBORN_HEAD.test(listed.head) ? listed.head : null;
+  const listedBranch = listedHead ? branchFromStatusLine(buckets.branch_line) : null;
+  const branch = listedBranch ? { ok: true, stdout: listedBranch } : runGit(pathValue, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const head = listedHead ? { ok: true, stdout: listedHead } : runGit(pathValue, ['rev-parse', 'HEAD']);
+  const gitTopLevel = listedTrusted ? { ok: true, stdout: pathValue } : runGit(pathValue, ['rev-parse', '--show-toplevel']);
   const ignoredCountResult = includeIgnoredCount && !includeIgnoredPaths ? runIgnoredCount(pathValue) : null;
   const ignoredEntries = includeIgnoredPaths ? capBucket(buckets.ignored) : [];
   const ignoredCount = includeIgnoredPaths
@@ -344,11 +357,12 @@ function discoverGitWorktrees(workspaceRoot, { includeIgnoredPaths = false, incl
     git_available: true,
     worktrees: paths.map((pathValue) => {
       const isCanonical = resolve(pathValue) === resolve(workspaceRoot);
+      const raw = byPath.get(resolve(pathValue)) || {};
       const computed = readGitWorktree(pathValue, workspaceRoot, {
         includeIgnoredPaths,
         includeIgnoredCount: includeIgnoredPaths || (isCanonical && includeIgnoredCount),
+        listed: raw.branch_ref || raw.head ? raw : null,
       });
-      const raw = byPath.get(resolve(pathValue)) || {};
       return {
         ...computed,
         branch_ref: raw.branch_ref || null,

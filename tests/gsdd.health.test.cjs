@@ -73,6 +73,7 @@ function writeAlignedTruthFixtures() {
 | W9 | WARN | x |
 | W10 | WARN | x |
 | W11 | WARN | x |
+| W13 | WARN | x |
 | I1 | INFO | x |
 | I2 | INFO | x |
 | I3 | INFO | x |
@@ -447,6 +448,49 @@ describe('Health — WARN: ROADMAP references nonexistent phase', () => {
     assert.ok(warning, 'historical-only chains must be missing current lifecycle artifacts');
     assert.match(warning.message, /no current PLAN or SUMMARY/);
     assert.ok(!json.warnings.some((entry) => entry.id === 'W5'), 'historical PLAN must not be stale current work');
+  });
+test('archived PLAN without SUMMARY → no W5', async () => {
+    await initWorkspace();
+    const archiveDir = path.join(tmpDir, '.work', 'phases', '_archive', '01-foundation');
+    fs.mkdirSync(archiveDir, { recursive: true });
+    fs.writeFileSync(path.join(archiveDir, '01-01-PLAN.md'), '# Phase 1 Plan\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(!json.warnings.some((w) => w.id === 'W5'), 'an archived phase is not stale in-progress work');
+  });
+});
+
+describe('Health — WARN: unreadable roadmap', () => {
+  test('non-empty roadmap the phase pattern cannot match → W13', async () => {
+    await initWorkspace();
+    writeFile('.work/ROADMAP.md', [
+      '# Roadmap',
+      '',
+      '| Phase | Work item | What | Status |',
+      '|---|---|---|---|',
+      '| 09 | Bug 85738 | avatar alignment | shipped |',
+      '',
+    ].join('\n'));
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    const warning = json.warnings.find((w) => w.id === 'W13');
+    assert.ok(warning, 'an unreadable roadmap should warn');
+    assert.match(warning.message, /\.work\/ROADMAP\.md/);
+  });
+
+  test('roadmap with bullet phases → no W13', async () => {
+    await initWorkspace();
+    writeFile('.work/ROADMAP.md', '- [ ] **Phase 16: Framework Health** — [LAUNCH-07]\n');
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(!json.warnings.some((w) => w.id === 'W13'), 'a readable roadmap must not warn');
+  });
+
+  test('absent roadmap → no W13', async () => {
+    await initWorkspace();
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const json = JSON.parse(result.output);
+    assert.ok(!json.warnings.some((w) => w.id === 'W13'), 'a workspace without a roadmap must not warn');
   });
 });
 
