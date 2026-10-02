@@ -12,6 +12,20 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 
 const ROOT = path.join(__dirname, '..');
+
+test('S8 workflow brownfield commands and plan body use CHANGE.md', () => {
+  for (const name of ['plan', 'execute']) {
+    const text = fs.readFileSync(path.join(ROOT, 'distilled/workflows', `${name}.md`), 'utf8');
+    for (const verb of ['plan', 'approve', 'execute', 'verify', 'audit']) {
+      assert.ok(text.includes(`lifecycle-transition ${verb} --plan .work/brownfield-change/CHANGE.md`), `${name}: ${verb}`);
+    }
+    assert.match(text, /## Implementation Plan/);
+    assert.match(text, /HANDOFF.md.*context-only/);
+  }
+  const plan = fs.readFileSync(path.join(ROOT, 'distilled/workflows/plan.md'), 'utf8');
+  assert.match(plan, /repair[\s\S]*lifecycle-transition plan --plan .work\/brownfield-change\/CHANGE.md/i);
+  assert.match(plan, /produced.*CHANGE.md/);
+});
 const GSDD_PATH = path.join(ROOT, 'bin', 'gsdd.mjs');
 const MODELS_MODULE = path.join(ROOT, 'bin', 'lib', 'config.mjs');
 const MANIFEST_MODULE = path.join(ROOT, 'bin', 'lib', 'manifest.mjs');
@@ -196,6 +210,86 @@ describe('Approval characterization', () => {
       assert.strictEqual(receipt.state.workflow.plan.identity, fixture.plan);
     } finally {
       fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test('sibling-only and multiple brownfield streams block every plan write at the shared seam', async () => {
+    const context = await import(`file://${path.join(ROOT, 'bin/lib/work-context.mjs').replace(/\\/g, '/')}`);
+    for (const canonical of [false, true]) {
+      const fixture = makeApprovalFixture({ brownfieldStatus: canonical ? 'active' : null });
+      try {
+        const work = path.join(fixture.root, '.work'), statePath = path.join(work, 'state.json');
+        const sibling = path.join(work, 'brownfield-change-other');
+        fs.mkdirSync(sibling);
+        fs.writeFileSync(path.join(sibling, 'CHANGE.md'), '---\nstatus: active\n---\n# Second stream\n');
+        const before = fs.readFileSync(statePath);
+        for (const target of ['plan', 'approve', 'execute']) {
+          assert.throws(() => context.transitionWorkflowState(work, {
+            target, planPath: fixture.plan, planIdentity: fixture.plan,
+            authority: target === 'approve' ? 'owner' : 'workflow',
+            ...(target === 'approve' ? { approved: true, approvalRef: 'owner-review' } : {}),
+          }), error => error.code === 'multiple_active_brownfield_streams');
+          const result = spawnSync(process.execPath, [GSDD_PATH, 'lifecycle-transition', target, '--plan', fixture.plan,
+            '--authority', target === 'approve' ? 'owner' : 'workflow',
+            ...(target === 'approve' ? ['--approval-ref', 'owner-review'] : []), '--json', '--no-update-notice'],
+          { cwd: fixture.root, encoding: 'utf8' });
+          assert.strictEqual(JSON.parse(result.stdout).error_code, 'multiple_active_brownfield_streams');
+          assert.deepStrictEqual(fs.readFileSync(statePath), before);
+        }
+        fs.writeFileSync(path.join(sibling, 'CHANGE.md'), '---\nstatus: closed\n---\n# Retained history\n');
+        if (!canonical) assert.doesNotThrow(() => context.transitionWorkflowState(work, {
+          target: 'plan', planPath: fixture.plan, planIdentity: fixture.plan, authority: 'workflow',
+        }));
+      } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    }
+  });
+
+  test('canonical brownfield replanning clears prior phase approval and requires fresh consent', () => {
+    const fixture = makeApprovalFixture({ brownfieldStatus: 'active', workflowPlan: {
+      approved: true, path: '.work/phases/01-approval/01-PLAN.md', identity: '.work/phases/01-approval/01-PLAN.md', approved_sha256: 'a'.repeat(64),
+    }, workflow: { authority: 'owner', approval_ref: 'old-owner-review' } });
+    try {
+      const oldPlan = fs.readFileSync(path.join(fixture.root, fixture.plan));
+      const canonical = '.work/brownfield-change/CHANGE.md';
+      const replan = spawnSync(process.execPath, [GSDD_PATH, 'lifecycle-transition', 'plan', '--plan', canonical,
+        '--authority', 'workflow', '--json', '--no-update-notice'], { cwd: fixture.root, encoding: 'utf8' });
+      assert.strictEqual(replan.status, 0, replan.stdout + replan.stderr);
+      const state = JSON.parse(replan.stdout).state;
+      assert.strictEqual(state.workflow.plan.path, canonical);
+      assert.strictEqual(state.workflow.plan.identity, canonical);
+      assert.strictEqual(state.workflow.plan.approved, false);
+      assert.strictEqual(state.workflow.plan.approved_sha256, undefined);
+      assert.strictEqual(state.workflow.approval_ref, null);
+      assert.deepStrictEqual(fs.readFileSync(path.join(fixture.root, fixture.plan)), oldPlan);
+      assert.strictEqual(JSON.parse(runExecute(fixture.root, canonical).stdout).error_code, 'not_approved');
+      const approval = spawnSync(process.execPath, [GSDD_PATH, 'lifecycle-transition', 'approve', '--plan', canonical,
+        '--authority', 'owner', '--approval-ref', 'fresh-owner-review', '--json', '--no-update-notice'], { cwd: fixture.root, encoding: 'utf8' });
+      assert.strictEqual(approval.status, 0, approval.stdout + approval.stderr);
+      assert.strictEqual(runExecute(fixture.root, canonical).status, 0);
+    } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  });
+
+  test('brownfield identity recovery refuses execution or verification evidence without changing bytes', async () => {
+    const context = await import(`file://${path.join(ROOT, 'bin/lib/work-context.mjs').replace(/\\/g, '/')}`);
+    const cases = [
+      { execution: { status: 'in_progress' } }, { execution: { status: 'not_started', identity: 'old-proof' } },
+      { verification: { status: 'passed' } }, { verification: { status: 'not_started', artifact: 'old-proof' } },
+      { audit: { status: 'passed' } }, { dogfood: { status: 'complete' } },
+      ...['SUMMARY', 'EXECUTE', 'VERIFICATION', 'VERIFY'].map(kind => ({ physical: kind })),
+    ];
+    for (const entry of cases) {
+      const { physical, ...workflow } = entry;
+      const fixture = makeApprovalFixture({ brownfieldStatus: 'active', workflowPlan: {
+        approved: true, path: '.work/phases/01-approval/01-PLAN.md', identity: '.work/phases/01-approval/01-PLAN.md', approved_sha256: 'a'.repeat(64),
+      }, workflow: { authority: 'owner', approval_ref: 'old-owner-review', ...workflow } });
+      try {
+        if (physical) fs.writeFileSync(path.join(fixture.root, fixture.plan.replace('PLAN', physical)), 'Retained proof\n');
+        const statePath = path.join(fixture.root, '.work/state.json'), before = fs.readFileSync(statePath);
+        assert.throws(() => context.transitionWorkflowState(path.join(fixture.root, '.work'), {
+          target: 'plan', planPath: '.work/brownfield-change/CHANGE.md', planIdentity: '.work/brownfield-change/CHANGE.md', authority: 'workflow',
+        }), error => error.code === 'stale_state');
+        assert.deepStrictEqual(fs.readFileSync(statePath), before);
+      } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
     }
   });
 
@@ -4819,4 +4913,34 @@ describe('Phase 16-D - global update and health routes', () => {
     assert.doesNotMatch(docs, /(?:use|rerun)[^.\n]*--auto[^.\n]*(?:repair|refresh)/i,
       '--auto must not be documented as generic global repair for existing homes.');
   });
+});
+
+
+test('S8 plan classifies plain requests across the three existing lanes', () => {
+  const plan = fs.readFileSync(path.join(ROOT, 'distilled/workflows/plan.md'), 'utf8');
+  assert.match(plan, /self-contained tiny change[\s\S]*work-quick/);
+  assert.match(plan, /no.*ROADMAP.md.*bounded multi-step change.*brownfield-change/);
+  assert.match(plan, /existing roadmap.*phase behaviour/);
+});
+
+test('E quick and plan share the same boundary and route overflow to work-plan', () => {
+  const boundary = 'Use `/work-quick` for one small self-contained task with at most 3 tasks, finished in one sitting, with no owner decision that must survive a break; otherwise use `/work-plan`.';
+  for (const name of ['quick', 'plan']) {
+    const content = fs.readFileSync(path.join(ROOT, `distilled/workflows/${name}.md`), 'utf8');
+    assert.ok(content.includes(boundary), `${name}.md must carry the shared boundary verbatim`);
+    assert.doesNotMatch(content, /one local edit|Quick tasks are for sub-hour work/);
+  }
+  const quick = fs.readFileSync(path.join(ROOT, 'distilled/workflows/quick.md'), 'utf8');
+  const scope = quick.split('## Step 3.6:')[1].split('## Step 3.7:')[0];
+  assert.match(scope, /more than 3 tasks[\s\S]*one sitting[\s\S]*owner-approved plan[\s\S]*survive a break[\s\S]*not a quick task[\s\S]*stop[\s\S]*\/work-plan/i);
+});
+
+
+test('S8 Claude planning and pause preserve the brownfield identity', () => {
+  const adapter = fs.readFileSync(path.join(ROOT, 'bin/adapters/claude.mjs'), 'utf8');
+  assert.match(adapter, /bounded multi-step[\s\S]*brownfield-change/);
+  assert.match(adapter, /produced.*CHANGE.md/);
+  const pause = fs.readFileSync(path.join(ROOT, 'distilled/workflows/pause.md'), 'utf8');
+  assert.match(pause, /brownfield-change\/CHANGE.md/);
+  assert.match(pause, /approved CHANGE.md bytes/);
 });

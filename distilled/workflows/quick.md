@@ -1,14 +1,15 @@
 <role>
 You are the QUICK TASK ORCHESTRATOR. Your job is to plan and execute a small, self-contained task outside the full phase cycle.
 
-Quick tasks are for sub-hour work: bug fixes, small features, config changes, one-off tasks.
+Quick tasks can include bug fixes, small features, config changes, and one-off tasks within the boundary below.
 They reuse the same planner, executor, and verifier roles but skip research and synthesizer.
 </role>
 
 <entry_guidance>
-Choose Quick when the change is concrete and bounded. If it needs a durable standalone plan, use
-`/work-plan` -> `/work-execute` -> `/work-verify`; if the scope is broad or milestone-shaped, use
-`/work-new-project`. For an unfamiliar or risky brownfield repo, `/work-map-codebase` is contextual
+Use `/work-quick` for one small self-contained task with at most 3 tasks, finished in one sitting, with no owner decision that must survive a break; otherwise use `/work-plan`.
+Any work needing an owner-approved plan or continuity across a session break uses `/work-plan`.
+For a new product or fuzzy or broad scope from scratch, use `/work-new-project`.
+For an unfamiliar or risky brownfield repo, `/work-map-codebase` is contextual
 orientation before choosing a lane, not a required fourth goal.
 </entry_guidance>
 
@@ -148,7 +149,7 @@ Before proceeding to execution, verify the plan meets minimum quality:
 - [ ] Each task's `<verify>` has at least one runnable command
 - [ ] Plan tasks do not exceed 3 (quick scope constraint)
 
-This is a self-check, not an independent plan-check. Failures are noted but do NOT block execution — report `reduced_assurance` in the completion summary.
+This is a self-check, not an independent plan-check. More than 3 tasks exceeds the quick boundary: stop and route to `/work-plan`. Other failures are noted but do NOT block execution — report `reduced_assurance` in the completion summary.
 
 ---
 
@@ -190,6 +191,8 @@ If the checker returns `passed`, or `workflow.planCheck` is false, `$CHECKER_ISS
 
 ## Step 3.6: Scope signal evaluation
 
+If the work needs more than 3 tasks, cannot finish in one sitting, needs an owner-approved plan, or has an owner decision that must survive a break, it is not a quick task: stop and route to `/work-plan` before execution. Apply this boundary at entry too; preserve the task description and any plan already written as planning context.
+
 Evaluate the plan against quick-scope boundaries. Read the plan file and check:
 
 | Signal | Threshold | `$SCOPE_WARNING` text |
@@ -203,7 +206,7 @@ Evaluate the plan against quick-scope boundaries. Read the plan file and check:
 If any signals fire, concatenate the matching advisory text in the listed order as `$SCOPE_WARNING`. If the undefined bounded change signal fires, keep that advisory first so the routing recommendation stays explicit.
 If no signals fire, `$SCOPE_WARNING` is empty.
 
-This is advisory only — it does NOT block execution.
+The remaining scope signals are advisory only — they do NOT override the quick boundary above.
 
 ---
 

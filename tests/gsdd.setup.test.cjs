@@ -85,6 +85,30 @@ describe('gsdd setup facade', () => {
   beforeEach(() => { tmpDir = createTempProject(); });
   afterEach(() => cleanup(tmpDir));
 
+  test('S8 portable setup hints Claude only when its home exists and no agent was selected', async () => {
+    const home = path.join(tmpDir, 'isolated-home');
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    await withEnv({ GSDD_TEST_HOME: home }, async () => {
+      const result = await runCliAsMain(tmpDir, ['setup', '--yes']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      assert.match(result.output, /npx -y workspine setup --agent claude --yes/);
+      assert.ok(fs.existsSync(path.join(tmpDir, '.agents/skills/work-plan/SKILL.md')));
+      assert.ok(!fs.existsSync(path.join(tmpDir, '.claude')), 'portable remains the default');
+      const claudeRepo = path.join(tmpDir, 'claude-repo');
+      fs.mkdirSync(claudeRepo);
+      const explicit = await runCliAsMain(claudeRepo, ['setup', '--agent', 'claude', '--yes']);
+      assert.strictEqual(explicit.exitCode, 0, explicit.output);
+      assert.doesNotMatch(explicit.output, /Claude home detected/);
+      assert.ok(fs.existsSync(path.join(claudeRepo, '.claude/skills/work-plan/SKILL.md')));
+      assert.ok(fs.existsSync(path.join(claudeRepo, '.claude/agents/work-plan-checker.md')));
+    });
+    const absentHome = path.join(tmpDir, 'absent-home');
+    await withEnv({ GSDD_TEST_HOME: absentHome }, async () => {
+      const result = await runCliAsMain(tmpDir, ['setup', '--yes', '--dry-run']);
+      assert.doesNotMatch(result.output, /Claude home detected/);
+    });
+  });
+
   test('defaults to project scope, creates portable skills, and reruns without writes', async () => {
     const first = await runCliAsMain(tmpDir, ['setup', '-y']);
     assert.strictEqual(first.exitCode, 0, first.output);

@@ -8,7 +8,7 @@ Resolve config/override into `requested_level` and `effective_level`; preserve l
 </rigor_contract>
 <load_context>
 Before starting, read these files:
-1. `.work/SPEC.md` - requirements, constraints, key decisions, current state
+1. `.work/SPEC.md` if present - requirements, constraints, key decisions, current state
 2. `.work/ROADMAP.md` - find the target phase, its goal, requirements, success criteria, explicit out-of-scope, and stop/replan conditions when this is phase planning
 3. `.work/brownfield-change/CHANGE.md`, `.work/brownfield-change/HANDOFF.md`, and `.work/brownfield-change/VERIFICATION.md` - if an active bounded brownfield change exists, classify whether the user request belongs to that lane before phase preflight
 4. `.work/research/*.md` - if research exists and is relevant to this phase or bounded change
@@ -19,7 +19,10 @@ Before starting, read these files:
 9. **Session-boundary fallback:** If prior phase SUMMARY (phase) or HANDOFF judgment (brownfield) is absent, read `.work/.continue-here.bak` if present, absorb its judgment, then run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.bak --missing ok`.
 10. Read milestone audits, evidence manifests, and recent VERIFICATION files only when gaps, tech debt, brownfield amendments, or incidents may require roadmap extension.
 Classify the target before preflight:
-- For an explicitly chosen planned standalone change, select `brownfield-change`. If canonical `CHANGE.md` is absent, first confirm there is no competing active `brownfield-change*` stream or milestone/work authority, then instantiate `CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` from the shipped templates with create-if-missing semantics and populate only the bounded `CHANGE.md` contract fields needed for preflight from the owner request. Run brownfield lifecycle preflight next; never overwrite user content or create another lane folder. If an existing active change fits its single goal, scope, done-when, next action, or declared write scope, reuse that lane; if it no longer fits one active stream, stop and route widening through `/work-new-project` or `/work-new-milestone` using the brownfield artifact family as preserved input.
+- A self-contained tiny change follows this boundary: Use `/work-quick` for one small self-contained task with at most 3 tasks, finished in one sitting, with no owner decision that must survive a break; otherwise use `/work-plan`. Any work needing an owner-approved plan or continuity across a session break uses `/work-plan`.
+- With no active `ROADMAP.md`, a bounded multi-step change outside that quick boundary selects `brownfield-change` even when the plain-language request does not name a lane. An absent roadmap is not a reason to refuse planning or route a multi-step change to quick.
+- An existing roadmap keeps phase behaviour: select the requested phase or first open phase unless the owner explicitly selects a standalone change or an active bounded change already owns the request.
+- For selected `brownfield-change` work (plain bounded requests or explicit standalone changes), use the canonical family. If canonical `CHANGE.md` is absent, first confirm there is no competing active `brownfield-change*` stream or milestone/work authority, then instantiate `CHANGE.md`, `HANDOFF.md`, and `VERIFICATION.md` from the shipped templates with create-if-missing semantics and populate only the bounded `CHANGE.md` contract fields needed for preflight from the owner request. Run brownfield lifecycle preflight next; never overwrite user content or create another lane folder. If an existing active change fits its single goal, scope, done-when, next action, or declared write scope, reuse that lane; if it no longer fits one active stream, stop and route widening through `/work-new-project` or `/work-new-milestone` using the brownfield artifact family as preserved input.
 - If audit gaps, verification gaps, user-named tech debt, brownfield amendments, incident docs, or `gsdd next` state `fix_gaps` require adding new roadmap work, select `amend` as the planning target before normal phase selection.
 - Otherwise identify the target phase: the first phase with status `[ ]` or `[-]` in `ROADMAP.md`.
 </load_context>
@@ -31,6 +34,7 @@ Before writing or rewriting substantive planning content beyond the bounded targ
 - Phase: `node .work/bin/gsdd.mjs lifecycle-preflight plan {phase_num}`; bounded brownfield: `node .work/bin/gsdd.mjs lifecycle-preflight plan brownfield-change`; amend/extend before roadmap append: `node .work/bin/gsdd.mjs lifecycle-preflight plan amend`
 If the preflight result is `blocked`, STOP and report the blocker instead of inferring planning eligibility from workflow-local prose. Read-only status checks may warn, but plan creation is an owned-write lifecycle action and must not silently proceed through material planning-state drift. Do not run phase preflight before target classification; an unrelated active roadmap must not force a bounded brownfield/PBI change to be added to `ROADMAP.md` just to create an approval plan.
 </lifecycle_preflight>
+Before presenting a brownfield plan, complete its draft and checker result and run the canonical plan transition in `<brownfield_change_plan>`. A mis-recorded unexecuted phase chain must be repaired through that transition first, clearing old approval before requesting fresh consent; stop if execution or verification evidence exists. Preserve historical artifacts.
 When presenting the plan for approval, show its path and a short non-sensitive approval reference; use the owner's reference if one was supplied, otherwise propose one with the plan. Explicit owner approval of that identified plan also confirms the displayed reference. The owner can say "I approve this plan" without inventing an identifier or editing metadata. Silence, vague praise, and an agent-proposed reference are not approval. If the plan or reference was not identified when approval was given, clarify the binding before proceeding.
 
 After owner approval, bind the selected plan's exact bytes through the shared helper. For phase authority, persist `status: approved`, `approved_by`, `approved_at`, and the owner-confirmed non-sensitive `approval_ref` in its PLAN frontmatter. For active brownfield authority, show and approve `.work/brownfield-change/CHANGE.md` with that reference; do not create a phase PLAN or add phase frontmatter. Approval is owner-only: agents must not simulate it with `--approved` or pass an approval reference while executing. Phase command: `node .work/bin/gsdd.mjs lifecycle-transition approve --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --authority owner --approval-ref {approval_ref} --json`.
@@ -141,6 +145,12 @@ already milestone-sized is a fail-closed planning result. Record the plan transi
 those checks pass.
 
 Put the plan body and structured `<checks><plan_check>...</plan_check></checks>` in a `## Implementation Plan` section of `.work/brownfield-change/CHANGE.md`, covering objective, concrete tasks, files, actions, runnable verification, and done conditions. Keep existing operational sections authoritative, bind approval and execution to complete CHANGE bytes, and keep HANDOFF judgment-only. Use owner-confirmed decisions in CHANGE.md; if a material decision is missing, stop and ask rather than creating phase APPROACH state or inferring alignment from HANDOFF prose. Once the plan body is ready, record its identity with `node .work/bin/gsdd.mjs lifecycle-transition plan --plan .work/brownfield-change/CHANGE.md --authority workflow --json`. After the owner approves those exact bytes and reference, record consent with `node .work/bin/gsdd.mjs lifecycle-transition approve --plan .work/brownfield-change/CHANGE.md --authority owner --approval-ref {approval_ref} --json`.
+Finish checker/runtime/assurance recording before presenting CHANGE.md. Owner approval is recorded only in existing lifecycle state; the agent runs the approve command after explicit consent and confirms it was recorded. Preserve the presented CHANGE.md bytes through approval and incomplete execution.
+Use the matching commands as work progresses:
+- Start execution: `node .work/bin/gsdd.mjs lifecycle-transition execute --plan .work/brownfield-change/CHANGE.md --authority workflow --json`
+- Implementation evidence complete: `node .work/bin/gsdd.mjs lifecycle-transition verify --plan .work/brownfield-change/CHANGE.md --artifact .work/brownfield-change/VERIFICATION.md --authority workflow --json`
+- Verification passed: `node .work/bin/gsdd.mjs lifecycle-transition audit --plan .work/brownfield-change/CHANGE.md --artifact .work/brownfield-change/VERIFICATION.md --authority workflow --json`
+Repair an already mis-recorded phase approval only before execution: preserve the old phase artifact bytes, put the bounded plan body in CHANGE.md, and run its plan command above. This supersedes the current selected chain and clears its approval, hash, and reference. Present CHANGE.md for fresh explicit approval. Stop if execution or verification state or artifacts exist; this repair cannot move evidence. Never edit state.json.
 </brownfield_change_plan>
 </phase_contract_gate>
 <browser_proof_planning>
@@ -302,7 +312,7 @@ Split a task if:
 - splitting would create tasks that cannot be verified independently
 </task_sizing>
 <plan_structure>
-For phase authority, create `.work/phases/{phase_dir}/{plan_id}-PLAN.md` with this structure:
+For roadmap phases, create `.work/phases/{phase_dir}/{plan_id}-PLAN.md` with this structure. Brownfield uses `## Implementation Plan` in CHANGE.md as specified above:
 
 ```markdown
 ---
@@ -519,7 +529,7 @@ The smaller dimension set still preserves the old failure coverage: scope bounda
    - relevant locked decisions / deferred items from `.work/SPEC.md`
    - project config from `.work/config.json`, especially `workflow.planCheck`; `workflow.discuss` applies to phase authority
    - for phase authority: approach decisions from `.work/phases/*-APPROACH.md` (if exists), relevant phase research, and the produced `.work/phases/*-PLAN.md` file(s)
-   - for brownfield authority: `.work/brownfield-change/CHANGE.md` including its `## Implementation Plan`, plus `HANDOFF.md` only as judgment context
+   - for brownfield authority: produced `.work/brownfield-change/CHANGE.md` including its `## Implementation Plan`, plus `HANDOFF.md` only as judgment context
    - the exact persisted `lastDecisionsDigest` snapshot from the successful plan preflight, if present, including an explicitly persisted empty snapshot
    For phase authority, compare each PLAN `decision_dispositions` body hash and `authority_fingerprint` directly to that snapshot. Brownfield must honor owner-confirmed decisions in `CHANGE.md` and must not invent phase-only `decision_dispositions`. When the digest is absent, report `skipped`; an explicitly persisted empty snapshot must remain empty and must not be replaced with a recomputed digest.
 4. Require the checker to return a single JSON object:
@@ -619,7 +629,7 @@ Planning is done when all of these are true:
 <completion>
 Report to the user what was accomplished, then present the next step:
 ---
-**Completed:** Phase planning: created `.work/phases/{phase_dir}/{plan_id}-PLAN.md`; bounded brownfield planning: updated `.work/brownfield-change/CHANGE.md` with its `## Implementation Plan`.
+**Completed:** Brownfield planning — updated `.work/brownfield-change/CHANGE.md`; or phase planning — created `.work/phases/{phase_dir}/{plan_id}-PLAN.md`.
 **Planning stops here:** `work-plan` ends after the plan artifact is written. Do not start implementation in this same run, and do not treat imperative handoff text as execution authorization.
 Installed generated runtime surfaces are trusted through rendering, not reviewer memory: `npx -y workspine health` compares any local generated skill/adapter surfaces against current render output, and `npx -y workspine update` regenerates them when they drift. Bare `gsdd health` / `gsdd update` are equivalent only when globally installed.
 **Next workflow:** `/work-execute` — start execution in a separate run when the user explicitly wants implementation to begin

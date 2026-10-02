@@ -7,7 +7,7 @@ import {
   CHECKER_STATUSES,
 } from '../lib/plan-constants.mjs';
 import { localizeStateDirReferences } from '../lib/rendering.mjs';
-import { SUBAGENT_IDS } from '../lib/workflows.mjs';
+import { SUBAGENT_IDS, WORKFLOWS } from '../lib/workflows.mjs';
 
 const SOURCE_FILE = 'bin/adapters/opencode.mjs';
 
@@ -151,7 +151,7 @@ ${delegateContent.trim()}
 
 function renderOpenCodePlanCommand({ skillPath = '.agents/skills/work-plan/SKILL.md', stateDirName = '.work' } = {}) {
   const content = `---
-description: OpenCode-native phase planning with fresh-context plan checking for GSDD
+description: ${WORKFLOWS.find(({ name }) => name === 'work-plan').description}
 subtask: false
 ---
 

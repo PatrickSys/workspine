@@ -273,14 +273,19 @@ function transitionError(code, message, evidence = []) {
 export function assertLifecyclePlanIdentity(planningDir, target, planIdentity) {
   if (!['plan', 'approve', 'execute'].includes(String(target || '').toLowerCase())) return;
   const lifecycle = evaluateLifecycleState({ planningDir });
-  if (lifecycle.nonPhaseState !== 'active_brownfield_change') return;
+  if (lifecycle.brownfieldChange.streamCount > 0) {
+    throw transitionError('multiple_active_brownfield_streams',
+      'Another active brownfield stream exists; resolve its authority before lifecycle state changes.',
+      lifecycle.brownfieldChange.contractErrors);
+  }
+  if (!lifecycle.brownfieldChange.exists || lifecycle.brownfieldChange.currentStatus === 'closed') return;
   const workspaceRoot = resolve(planningDir, '..');
   const canonicalPlan = normalizeSlashes(relative(workspaceRoot, join(planningDir, 'brownfield-change', 'CHANGE.md')));
   const suppliedPlan = normalizeSlashes(String(planIdentity || '')).replace(/^\.\//, '');
   if (suppliedPlan !== canonicalPlan) {
     throw transitionError(
       'wrong_brownfield_plan_identity',
-      `Active brownfield authority requires the canonical CHANGE.md plan identity (${canonicalPlan}); refusing ${suppliedPlan || 'an unbound plan'} before lifecycle state changes.`,
+      `Active brownfield authority requires --plan ${canonicalPlan}, the canonical CHANGE.md identity; refusing ${suppliedPlan || 'an unbound plan'} before lifecycle state changes.`,
       [canonicalPlan, suppliedPlan].filter(Boolean),
     );
   }
@@ -342,8 +347,28 @@ export function transitionWorkflowState(workDir, {
 
   const expectedPlan = planPath || planIdentity;
   assertLifecyclePlanIdentity(workDir, normalizedTarget, expectedPlan);
+  if (planIdentity) assertLifecyclePlanIdentity(workDir, normalizedTarget, planIdentity);
   const recordedPlan = workflow.plan.path || workflow.plan.identity || null;
-  if (recordedPlan && expectedPlan && recordedPlan !== expectedPlan) {
+  // Recover the historical phase-path brownfield approval through the existing
+  // plan transition. Execution/evidence cannot be transferred to another chain.
+  const stateRoot = normalizeSlashes(relative(resolve(workDir, '..'), workDir));
+  const brownfield = evaluateLifecycleState({ planningDir: workDir });
+  const recordedPhasePlan = typeof recordedPlan === 'string'
+    && recordedPlan.startsWith(`${stateRoot}/phases/`) && /-PLAN\.md$/i.test(recordedPlan);
+  const recordedPhaseBase = recordedPlan?.replace(/-PLAN\.md$/i, '');
+  const oldChainArtifacts = recordedPhasePlan && ['SUMMARY', 'EXECUTE', 'VERIFICATION', 'VERIFY']
+    .some(kind => existsSync(resolve(workDir, '..', `${recordedPhaseBase}-${kind}.md`)));
+  const repairBrownfieldApproval = normalizedTarget === 'plan' && authority === 'workflow'
+    && expectedPlan === `${stateRoot}/brownfield-change/CHANGE.md` && recordedPhasePlan
+    && (!workflow.plan.identity || workflow.plan.identity === recordedPlan)
+    && brownfield.brownfieldChange.exists && brownfield.brownfieldChange.currentStatus === 'active'
+    && brownfield.brownfieldChange.contractErrors.length === 0 && !brownfield.brownfieldChange.wideningRequested
+    && (workflow.current_state || state.current_state) === 'plan'
+    && (!state.current_state || state.current_state === 'plan')
+    && [workflow.execution, workflow.verification, workflow.audit, workflow.dogfood]
+      .every(stage => stage.status === 'not_started' && !stage.artifact && !stage.identity)
+    && !oldChainArtifacts;
+  if (recordedPlan && expectedPlan && recordedPlan !== expectedPlan && !repairBrownfieldApproval) {
     throw transitionError('stale_state', 'Recorded plan authority does not match the supplied plan artifact.', [String(recordedPlan), String(expectedPlan)]);
   }
   if (artifactPath && artifactIdentity) {
@@ -416,6 +441,7 @@ export function transitionWorkflowState(workDir, {
     delete next.workflow.plan.approved_sha256;
     next.workflow.execution.status = 'not_started';
     next.workflow.current_state = 'plan';
+    next.workflow.approval_ref = null;
   } else if (effectiveTarget === 'execute') {
     if (!explicitOwnerApproval && !durableOwnerApproval) {
       throw transitionError('not_approved', 'The plan artifact is not approved; approve the plan before execution.', [normalizedPlan || '.work/state.json']);

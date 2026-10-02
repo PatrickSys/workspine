@@ -27,6 +27,8 @@ Checkpoints record `runtime` only — assurance does not apply to state snapshot
 <detect_work>
 Scan for active work in priority order:
 
+0. **Active bounded change** — read `.work/brownfield-change/CHANGE.md` first when its posture is not closed. Capture its exact plan identity, current task, owner decision, approval reference, and remaining work in the checkpoint. Use the existing `generic` checkpoint type with `phase: null`; keep HANDOFF.md context-only. Preserve approved CHANGE.md bytes while execution is incomplete: task progress belongs in this historical checkpoint until closeout, so pausing does not invalidate owner approval.
+
 1. **Active phase work** — look in `.work/phases/` for directories containing a PLAN file but no SUMMARY file (execution started but not completed).
 2. **Active quick task** — read `.work/quick/LOG.md` if it exists. Check the last entry: if its status is not `done`/`passed`, there is an incomplete quick task.
 3. **Generic work** — if neither of the above, ask the user what they were working on.

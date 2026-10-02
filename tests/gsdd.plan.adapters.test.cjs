@@ -25,6 +25,44 @@ describe('specialized plan adapter surfaces', () => {
     cleanup(tmpDir);
   });
 
+  test('E every rendered lane description carries its routing signals', async () => {
+    const restoreStdin = setNonInteractiveStdin();
+    try {
+      const gsdd = await loadGsdd(tmpDir);
+      await gsdd.cmdInit('--tools', 'claude,codex,opencode,agents');
+    } finally {
+      restoreStdin();
+    }
+
+    const signals = {
+      'work-plan': [/multi-step change/i, /existing codebase/i, /with or without a roadmap/i, /owner-approved plan/i, /session break/i],
+      'work-quick': [/one small self-contained task/i, /at most 3 tasks/i, /one sitting/i, /no owner decision.*survive a break/i, /otherwise.*work-plan/i],
+      'work-new-project': [/new product/i, /fuzzy or broad scope from scratch/i],
+      'work-new-milestone': [/next milestone/i, /already has SPEC.*ROADMAP/i],
+      'work-execute': [/execute/i, /approved.*bounded change/i, /phase/i],
+      'work-verify': [/verify/i, /approved.*bounded change/i, /phase/i],
+    };
+    const failures = [];
+    for (const [name, patterns] of Object.entries(signals)) {
+      const surfaces = [
+        `.agents/skills/${name}/SKILL.md`,
+        `.claude/skills/${name}/SKILL.md`,
+        `.opencode/commands/${name}.md`,
+        ...(name === 'work-plan' ? ['.claude/commands/work-plan.md'] : []),
+      ];
+      for (const surface of surfaces) {
+        const content = fs.readFileSync(path.join(tmpDir, surface), 'utf8');
+        const description = content.match(/^description: (.+)$/m)?.[1];
+        assert.ok(description, `${surface} must have a one-line description`);
+        assert.doesNotMatch(description, /^[>|]/, `${surface} must not use a multiline description`);
+        for (const pattern of patterns) {
+          if (!pattern.test(description)) failures.push(`${surface}: missing ${pattern}`);
+        }
+      }
+    }
+    assert.deepStrictEqual(failures, [], failures.join('\n'));
+  });
+
   test('claude plan skill is the primary native surface and stays out of forked subagent mode', async () => {
     const restoreStdin = setNonInteractiveStdin();
     try {
@@ -60,6 +98,14 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /Do NOT fork this skill into a subagent/);
     assert.match(claudePlanSkill, /not as a stop signal for this Claude-native adapter path/);
     assert.match(claudePlanSkill, /Maximum 3 checker cycles total/);
+    assert.match(claudePlanSkill, /for brownfield, use owner-confirmed decisions in CHANGE.md[\s\S]*skip the phase APPROACH procedure a-f/);
+    assert.match(claudePlanSkill, /an active bounded change owns the request/);
+    assert.match(claudePlanSkill, /brownfield writes CHANGE.md#Implementation Plan/);
+    const nativeChecker = fs.readFileSync(path.join(tmpDir, '.claude/agents/work-plan-checker.md'), 'utf8');
+    assert.match(nativeChecker, /Phase APPROACH.md and its alignment-proof fields are not required/);
+    assert.match(nativeChecker, /remaining APPROACH checks apply only to phase authority/);
+    assert.match(portablePlanSkill, /Owner approval is recorded only in existing lifecycle state/);
+    assert.match(portableExecuteSkill, /Skip phase discovery, phase SUMMARY output/);
     assert.match(claudePlanSkill, /blockers or warnings remain after cycle 3/);
     assert.match(claudePlanSkill, /"status": "issues_found"/);
     assert.match(claudePlanSkill, /Use "passed" only when "issues": \[\]/);

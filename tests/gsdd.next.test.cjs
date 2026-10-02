@@ -171,6 +171,70 @@ function brownfieldVerification(status = 'passed') {
   ].join('\n');
 }
 
+test('S8 refuses phase approve and execute under active brownfield authority without writes', async () => {
+  await initWork();
+  writeFile('.work/brownfield-change/CHANGE.md', brownfieldChange());
+  const phase = '.work/phases/brownfield-change/01-PLAN.md';
+  writeFile(phase, '---\nstatus: approved\n---\n# Wrong identity\n');
+  const before = fs.readFileSync(path.join(tmpDir, '.work/state.json'));
+  for (const target of ['approve', 'execute']) {
+    const args = ['lifecycle-transition', target, '--plan', phase, '--authority', target === 'approve' ? 'owner' : 'workflow', '--json'];
+    if (target === 'approve') args.push('--approval-ref', 'owner-test');
+    const result = await runCliAsMain(tmpDir, args);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.strictEqual(JSON.parse(result.output).error_code, 'wrong_brownfield_plan_identity');
+    assert.match(JSON.parse(result.output).error, /--plan .work\/brownfield-change\/CHANGE.md/);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work/state.json')), before);
+  }
+});
+
+test('S8 repairs a mis-recorded approval through plan then fresh owner approve', async () => {
+  await initWork();
+  const phase = '.work/phases/brownfield-change/01-PLAN.md';
+  const change = '.work/brownfield-change/CHANGE.md';
+  writeFile(phase, '---\nstatus: approved\n---\n# Old approval\n');
+  await runJson(['lifecycle-transition', 'approve', '--plan', phase, '--authority', 'owner', '--approval-ref', 'old-owner', '--json']);
+  writeFile(change, brownfieldChange());
+  assert.strictEqual((await runJson(['next', '--json'])).state, 'blocked');
+  await runJson(['lifecycle-transition', 'plan', '--plan', change, '--authority', 'workflow', '--json']);
+  const state = readJson(path.join(tmpDir, '.work/state.json'));
+  assert.strictEqual(state.workflow.plan.path, change);
+  assert.strictEqual(state.workflow.plan.approved, false);
+  assert.ok(!state.workflow.plan.approved_sha256);
+  assert.ok(!state.workflow.approval_ref);
+  const premature = await runCliAsMain(tmpDir, ['lifecycle-transition', 'execute', '--plan', change, '--authority', 'workflow', '--json']);
+  assert.strictEqual(JSON.parse(premature.output).error_code, 'not_approved');
+  await runJson(['lifecycle-transition', 'approve', '--plan', change, '--authority', 'owner', '--approval-ref', 'fresh-owner', '--json']);
+  await runJson(['lifecycle-transition', 'execute', '--plan', change, '--authority', 'workflow', '--json']);
+  assert.strictEqual((await runJson(['next', '--json'])).state, 'execute');
+});
+
+test('S8 accepts a backticked brownfield posture', async () => {
+  await initWork();
+  writeFile('.work/brownfield-change/CHANGE.md', brownfieldChange({ posture: '`active`' }));
+  const result = await runJson(['lifecycle-preflight', 'plan', 'brownfield-change']);
+  assert.strictEqual(result.allowed, true, JSON.stringify(result));
+  assert.strictEqual(result.lifecycle.brownfieldChange.status, 'active');
+});
+
+test('E a backticked closed sibling is not an active stream', async () => {
+  await initWork();
+  writeFile('.work/brownfield-change/CHANGE.md', brownfieldChange());
+  const sibling = '.work/brownfield-change-old/CHANGE.md';
+  for (const posture of ['closed', '`closed`', '`CLOSED`']) {
+    writeFile(sibling, brownfieldChange({ posture }));
+    const result = await runJson(['lifecycle-preflight', 'plan', 'brownfield-change']);
+    assert.strictEqual(result.allowed, true, `${posture}: ${JSON.stringify(result)}`);
+  }
+  for (const posture of ['active', '`active`', '`closed', 'closed`', '`closed` pending']) {
+    writeFile(sibling, brownfieldChange({ posture }));
+    const result = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'plan', 'brownfield-change']);
+    const packet = JSON.parse(result.output);
+    assert.strictEqual(packet.allowed, false, `${posture}: ${result.output}`);
+    assert.strictEqual(packet.reason, 'brownfield_contract_invalid');
+  }
+});
+
 function writeCheckpoint(content) {
   writeFile('.work/.continue-here.md', content);
 }
@@ -1285,7 +1349,7 @@ describe('next command routing', () => {
     assert.strictEqual(result.state, 'plan');
     assert.strictEqual(result.authority, 'work');
     assert.strictEqual(result.route_kind, 'work_native_plan');
-    assert.match(result.reason, /canonical .work lifecycle truth is incomplete/);
+    assert.match(result.reason, /Lane: brownfield-change via work-plan/);
     assert.ok(result.inputs_skipped.includes('.work/SPEC.md: missing'));
     assert.ok(result.inputs_skipped.includes('.work/ROADMAP.md: missing'));
     assert.ok(result.inputs_skipped.includes('.work/MILESTONES.md: missing'));
@@ -1431,6 +1495,28 @@ describe('next command routing', () => {
     result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.strictEqual(JSON.parse(result.output).state.current_state, 'execute');
+    // Regression pin: a real fresh CLI process recovers the same owner decision
+    // and plan identity after a normal generic checkpoint, without touching plan bytes.
+    const checkpoint = R3_STYLE_CHECKPOINT
+      .replace('workflow: phase', 'workflow: generic')
+      .replace('phase: 16-safe-cohesive-first-run', 'phase: null')
+      .replace('Keep the recovery evaluator-only until product evidence exists.',
+        'Owner test-approval: preserve the existing return contract. Plan: .work/brownfield-change/CHANGE.md');
+    writeFile('.work/.continue-here.md', checkpoint);
+    const { spawnSync } = require('node:child_process');
+    const fresh = (args) => {
+      const child = spawnSync(process.execPath, [path.join(__dirname, '../bin/gsdd.mjs'), ...args, '--no-update-notice'],
+        { cwd: tmpDir, encoding: 'utf8', windowsHide: true });
+      assert.strictEqual(child.status, 0, child.stdout + child.stderr);
+      return JSON.parse(child.stdout);
+    };
+    const resumed = fresh(['next', '--json']);
+    assert.strictEqual(resumed.continuity.checkpoint.status, 'valid');
+    assert.match(resumed.continuity.checkpoint.sections.decisions, /Owner test-approval/);
+    assert.strictEqual(resumed.state, 'execute');
+    assert.strictEqual(fresh(['lifecycle-preflight', 'resume']).allowed, true);
+    assert.strictEqual(readJson(path.join(tmpDir, '.work/state.json')).workflow.plan.path, changePath);
+    assert.strictEqual(readJson(path.join(tmpDir, '.work/state.json')).workflow.approval_ref, 'test-approval');
     writeFile(changePath, brownfieldChange({ posture: 'ready_for_verification', nextAction: 'Record Done-When evidence.' }));
     result = await runJson(['next', '--json']);
     assert.strictEqual(result.state, 'verify');
@@ -1481,12 +1567,12 @@ describe('next command routing', () => {
     writeFile('.work/brownfield-change-2/CHANGE.md', brownfieldChange());
     result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
     assert.strictEqual(result.exitCode, 1, result.output);
-    assert.strictEqual(JSON.parse(result.output).error_code, 'brownfield_contract_invalid');
+    assert.strictEqual(JSON.parse(result.output).error_code, 'multiple_active_brownfield_streams');
 
     writeFile('.work/brownfield-change-2/CHANGE.md', brownfieldChange({ posture: 'active', nextAction: 'Widen to /work-new-milestone.' }));
     result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
     assert.strictEqual(result.exitCode, 1, result.output);
-    assert.strictEqual(JSON.parse(result.output).error_code, 'brownfield_contract_invalid');
+    assert.strictEqual(JSON.parse(result.output).error_code, 'multiple_active_brownfield_streams');
 
     fs.rmSync(path.join(tmpDir, '.work', 'brownfield-change-2'), { recursive: true, force: true });
     writeFile('.work/milestone/MILESTONE.md', '# Active milestone\n');
@@ -2267,4 +2353,15 @@ describe('next command routing', () => {
     assert.strictEqual(next.error_code, 'workflow_state_contradiction');
     assert.match(next.reason, /missing durable artifact/);
   });
+});
+
+
+test('S8 setup banner and next name the bounded lane before a roadmap exists', async () => {
+  const setup = await runCliAsMain(tmpDir, ['setup', '--yes']);
+  assert.strictEqual(setup.exitCode, 0, setup.output);
+  assert.match(setup.output, /Lane: brownfield-change.*work-plan.*work-quick/);
+  const next = await runJson(['next', '--json']);
+  assert.match(next.reason, /Lane: brownfield-change.*work-plan.*work-quick/);
+  const human = await runCliAsMain(tmpDir, ['next']);
+  assert.match(human.output, /brownfield-change/);
 });

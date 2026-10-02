@@ -758,10 +758,12 @@ function routeNext(ctx) {
   if (!legacyComplete) {
     return packet({
       state: 'plan',
-      reason: `\`.work/goal.md\` exists, but canonical ${statePath(context)} lifecycle truth is incomplete; create or refresh the Workspine-native plan from \`.work\`.`,
+      reason: context.planning.has_roadmap
+        ? `\`.work/goal.md\` exists, but canonical ${statePath(context)} lifecycle truth is incomplete; create or refresh the Workspine-native plan from \`.work\`.`
+        : 'Lane: brownfield-change via work-plan for bounded multi-step work without a roadmap; work-quick for tiny changes.',
       confidence: context.planning.exists ? 'medium' : 'high',
       next_command: workflowId('plan'),
-      next_action: workflowAction(workflowId('plan'), 'Plan the Workspine-native milestone from `.work` truth.'),
+      next_action: workflowAction(workflowId('plan'), 'Classify the request and plan from `.work` truth.'),
       authority: 'work',
       route_kind: 'work_native_plan',
       blocked_by: controlMapBlockers(controlMap),

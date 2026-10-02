@@ -183,6 +183,9 @@ export function createCmdSetup(ctx) {
     }
 
     const tools = selectedProjectTools(agent, all);
+    if (!agent && !all && detectGlobalTargets(resolveGlobalInstallRoots(ctx.globalInstallRootOptions)).includes('claude')) {
+      console.log('Claude home detected. For Claude skills in a fresh repo: npx -y workspine setup --agent claude --yes. After portable setup, add them with: npx -y workspine init --tools claude');
+    }
     if (dryRun) return printProjectDryRun(root, tools);
     if (!yes && !(await confirmSetup({ promptApi: ctx.setupPromptApi, details: [`Bounded write set: .work/, .agents/skills/work-*, and ${tools.join(', ')} selected project surfaces.`] }))) {
       return fail('Setup cancelled; no files were written.');

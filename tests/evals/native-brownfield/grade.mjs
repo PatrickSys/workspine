@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { canonicalStringify, command, EvalError, fileSha256, sha256, toPosix, treeManifest } from './util.mjs';
+import { readSelectedPlanIdentity } from './journey.mjs';
 const SETUP_PREFIXES = ['.agents/', '.work/', 'inputs/', 'node_modules/'];
 const VALID_REPRODUCTION = Symbol('validated generic Workspine reproduction');
 export function evaluateScope(actualPaths, allowedPaths) {
@@ -55,6 +56,10 @@ export function observeWorkflow(consumerRoot, approvalRef) {
     plan_approved: workflow?.plan?.approved ?? null, execution_status: workflow?.execution?.status || null,
     verification_status: workflow?.verification?.status || null,
   } : null };
+}
+export function observePlanSelection(consumerRoot) {
+  const selection = readSelectedPlanIdentity(consumerRoot);
+  return { ...selection, plan_path: selection.path || null, plan_identity: selection.identity || null };
 }
 export function runOracle(consumerRoot, oracle) {
   if (!oracle?.executable || !Array.isArray(oracle.args)) throw new EvalError('evaluator_invalid', 'oracle command is missing');

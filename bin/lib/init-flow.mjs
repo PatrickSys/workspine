@@ -456,6 +456,7 @@ export function createCmdInit(ctx) {
     console.log('\n\x1B[1m\x1B[32m✓ Workspine initialized.\x1B[0m');
     printInitSummary(selectedConfig);
     console.log('Start with one small planned change:\n');
+    console.log('Lane: brownfield-change via work-plan for bounded multi-step work without a roadmap; work-quick for tiny changes; existing roadmaps keep phase planning.');
     printPostInitRouting(interactiveSession.selectedRuntimes);
     console.log(`After owner approval: ${workflowId('execute')} -> ${workflowId('verify')}.`);
     console.log(`${workflowId('quick')} is the lighter shortcut; ${workflowId('new-project')} is for fuzzy or broader scope.`);

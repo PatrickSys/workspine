@@ -61,7 +61,7 @@ section is a planning blocker; execution and closeout must not proceed on an inf
 
 ## Current Status
 
-- Current posture: `active | blocked | ready_for_verification | closed`
+- Current posture: active
 - Current branch / integration surface:
 - Current owner / runtime:
 
@@ -88,6 +88,11 @@ When possible, list repo-relative paths or module roots in `Owned files / module
 | Slice | Scope | Owned files / modules | Status |
 | --- | --- | --- | --- |
 | A | [What this slice does] | [Disjoint write set] | planned |
+
+## Implementation Plan
+
+Write ordered tasks with owned files, actions, verification commands, dependencies, and owner checkpoints here.
+Keep runtime and assurance in the structured checker result in this body. The lifecycle helper records owner approval in state.json against the exact CHANGE.md bytes; do not add approval metadata to CHANGE.md after presenting it.
 
 ## Dependencies And Risks
 

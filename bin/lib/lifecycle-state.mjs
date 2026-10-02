@@ -253,7 +253,12 @@ export function readBrownfieldChangeState(planningDir) {
       .filter((entry) => entry.isDirectory() && /^brownfield-change(?:-|\d)/i.test(entry.name) && entry.name.toLowerCase() !== BROWNFIELD_CHANGE_DIR)
       .map((entry) => join(planningDir, entry.name, 'CHANGE.md'))
       .filter((candidate) => existsSync(candidate))
-      .filter((candidate) => !/^\s*-\s*Current posture:\s*closed\s*$/im.test(readTextIfExists(candidate)))
+      .filter((candidate) => {
+        const artifact = readMarkdownArtifact(candidate);
+        const posture = extractBulletLabel(extractMarkdownSection(artifact.body, 'Current Status'), 'Current posture')
+          || artifact.frontmatter.status;
+        return String(posture || '').trim().replace(/^`([^`]+)`$/, '$1').toLowerCase() !== 'closed';
+      })
     : [];
 
   if (!existsSync(changePath)) {
@@ -289,7 +294,7 @@ export function readBrownfieldChangeState(planningDir) {
   const doneWhenSection = extractMarkdownSection(changeArtifact.body, 'Done When');
   const doneWhen = markdownBullets(doneWhenSection).filter((line) => !/^observable outcomes?|^conditions that must be true/i.test(line));
   const currentStatus = extractBulletLabel(currentStatusSection, 'Current posture') || changeArtifact.frontmatter.status || null;
-  const normalizedStatus = String(currentStatus || '').trim().toLowerCase().replace(/[ -]+/g, '_');
+  const normalizedStatus = String(currentStatus || '').trim().replace(/^`([^`]+)`$/, '$1').toLowerCase().replace(/[ -]+/g, '_');
   const nextAction = collapseMarkdownSection(nextActionSection);
   const contractErrors = [];
   if (!extractMarkdownSection(changeArtifact.body, 'Goal').trim()) contractErrors.push('missing_goal');

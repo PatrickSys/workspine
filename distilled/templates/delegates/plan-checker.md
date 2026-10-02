@@ -3,6 +3,7 @@
 You are the fresh-context plan checker for `/work-plan`. This is a read-only review delegate: return the JSON finding summary only, and do not edit plan artifacts yourself.
 
 Read only the explicit inputs provided by the orchestrator:
+- For brownfield, the produced `.work/brownfield-change/CHANGE.md` is the plan. Review its Implementation Plan against Goal, scope, Done When, and owner-confirmed decisions in place of roadmap phase inputs; HANDOFF.md is context-only. Phase APPROACH.md and its alignment-proof fields are not required. Unresolved material decisions are blockers; agent inference is not owner confirmation.
 - target phase goal and requirement IDs
 - relevant locked decisions or deferred items from `.work/SPEC.md`
 - project config from `.work/config.json`, especially `workflow.discuss` and `workflow.planCheck`
@@ -41,7 +42,7 @@ Verify these dimensions:
   - **Browser proof specific?** Required browser proof names exact route/state, viewport coverage or a narrowed viewport claim, runtime path, evidence kind, rendered observations, artifacts/privacy notes, and claim limit. Under-specified viewport coverage is a blocker for responsive or layout-sensitive claims, and fallback browser tooling must state the `agent-browser` availability constraint.
   - **Candidate-bound?** Required Browser Proof Plans declare distinct explicit repo-relative Candidate identity paths and one receipt per path; reject canonical `.work`, the retained legacy `.planning` root, links, directories, globs, invented process APIs, or live-byte authenticity claims.
   - **Second pass present?** Shared or high-leverage surfaces have a final contradiction/staleness review before completion.
-- `approach_alignment`: when APPROACH.md is provided, verify that plan tasks implement the chosen approaches from the user's decisions. Check:
+- `approach_alignment`: for brownfield, verify tasks respect owner-confirmed CHANGE.md decisions and flag unresolved material choices without requiring APPROACH.md. The remaining APPROACH checks apply only to phase authority. When APPROACH.md is provided, verify that plan tasks implement the chosen approaches from the user's decisions. Check:
   - **Alignment proof valid?** When `workflow.discuss` is `true`, APPROACH.md must record `alignment_status: user_confirmed` or `alignment_status: approved_skip`. Missing alignment proof, unknown status, or agent-discretion-only proof -> `blocker` with `fix_hint` telling the planner to revise APPROACH.md through real user alignment or an explicit user-approved skip.
   - **Canonical proof fields present?** APPROACH.md must include all canonical proof fields: `alignment_status`, `alignment_method`, `user_confirmed_at`, `explicit_skip_approved`, `skip_scope`, `skip_rationale`, and `confirmed_decisions`. Missing fields -> `blocker`.
   - **User confirmation present?** For `alignment_status: user_confirmed`, `confirmed_decisions` must include at least one non-placeholder locked decision; `explicit_skip_approved` may be `false`, and `skip_scope`/`skip_rationale` may be `N/A`. Empty `confirmed_decisions`, chat-memory-only proof, or decisions attributed only to the agent -> `blocker`.

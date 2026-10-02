@@ -8,16 +8,16 @@ function defineWorkflow({ mutatesArtifacts = true, ...workflow }) {
 }
 
 export const WORKFLOWS = [
-  defineWorkflow({ name: 'work-new-project', workflow: 'new-project.md', description: 'New project - questioning, codebase audit, research, spec, roadmap' }),
+  defineWorkflow({ name: 'work-new-project', workflow: 'new-project.md', description: 'Define a new product, or clarify fuzzy or broad scope from scratch into a spec and roadmap' }),
   defineWorkflow({ name: 'work-map-codebase', workflow: 'map-codebase.md', description: 'Map or refresh codebase - 4 parallel mappers, staleness check, secrets scan' }),
-  defineWorkflow({ name: 'work-plan', workflow: 'plan.md', description: 'Plan a phase - research check, backward planning, task creation' }),
-  defineWorkflow({ name: 'work-execute', workflow: 'execute.md', description: 'Execute a phase plan - implement tasks, verify changes, follow repo git conventions' }),
-  defineWorkflow({ name: 'work-verify', workflow: 'verify.md', description: 'Verify a completed phase - 3-level checks, anti-pattern scan' }),
+  defineWorkflow({ name: 'work-plan', workflow: 'plan.md', description: 'Plan a multi-step change to an existing codebase with or without a roadmap, or any work needing an owner-approved plan or continuity across a session break' }),
+  defineWorkflow({ name: 'work-execute', workflow: 'execute.md', description: 'Execute an approved plan for a bounded change or roadmap phase, implement its tasks, and check the results' }),
+  defineWorkflow({ name: 'work-verify', workflow: 'verify.md', description: 'Verify completed work against an approved plan for a bounded change or roadmap phase' }),
   defineWorkflow({ name: 'work-verify-work', workflow: 'verify-work.md', description: 'Conversational UAT testing - validate user-facing behavior with structured gap tracking' }),
   defineWorkflow({ name: 'work-audit-milestone', workflow: 'audit-milestone.md', description: 'Audit a completed milestone - cross-phase integration, requirements coverage, E2E flows' }),
   defineWorkflow({ name: 'work-complete-milestone', workflow: 'complete-milestone.md', description: 'Complete milestone - archive, evolve spec, collapse roadmap' }),
-  defineWorkflow({ name: 'work-new-milestone', workflow: 'new-milestone.md', description: 'New milestone - gather goals, define requirements, create roadmap phases' }),
-  defineWorkflow({ name: 'work-quick', workflow: 'quick.md', description: 'Quick task - plan and execute a sub-hour task outside the phase cycle' }),
+  defineWorkflow({ name: 'work-new-milestone', workflow: 'new-milestone.md', description: 'Start the next milestone of a project that already has SPEC and ROADMAP and a completed milestone in MILESTONES' }),
+  defineWorkflow({ name: 'work-quick', workflow: 'quick.md', description: 'Finish one small self-contained task with at most 3 tasks in one sitting and no owner decision that must survive a break; otherwise, or if an owner-approved plan is needed, use work-plan' }),
   defineWorkflow({ name: 'work-pause', workflow: 'pause.md', description: 'Pause work - save session context for seamless resumption' }),
   defineWorkflow({ name: 'work-resume', workflow: 'resume.md', description: 'Resume work - restore context and route to next action' }),
   defineWorkflow({ name: 'work-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', mutatesArtifacts: false }),

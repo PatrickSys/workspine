@@ -33,14 +33,13 @@ Treat the preflight as an authorization seam over shared repo truth only:
 - owned writes remain execution artifacts; phase ROADMAP mutation stays explicit in `<state_updates>` via `node .work/bin/gsdd.mjs phase-status`
 </lifecycle_preflight>
 <brownfield_change_execute>
-When the selected plan identity is `.work/brownfield-change/CHANGE.md`, execute the tasks in its `## Implementation Plan` as one bounded stream
-only. Re-read `CHANGE.md` as the operational authority and `HANDOFF.md` as judgment context; do not
-take scope or status from HANDOFF. Refuse execution without a concrete Done When list, when another
-active brownfield stream or milestone authority is present, when the posture is blocked or widening,
-or when the requested work exceeds the declared write scope. Reruns are read-before-write: preserve
-all existing user-authored text and evidence, and update only the approved bounded surfaces. After
-the approved work is complete, record its evidence and set `CHANGE.md` to `ready_for_verification`;
-do not close the lane from execution.
+Read the tasks under `## Implementation Plan` in CHANGE.md; HANDOFF.md stays context-only. Skip phase discovery, phase SUMMARY output, and ROADMAP phase-status updates. While execution is incomplete, preserve approved CHANGE.md bytes and capture task progress in the pause checkpoint. At implementation completion, update CHANGE.md and record closeout proof in VERIFICATION.md. Run `node .work/bin/gsdd.mjs lifecycle-preflight execute brownfield-change --expects-mutation phase-status`. Use this branch's commands in place of the phase commands below:
+- Plan recording or pre-execution approval repair: `node .work/bin/gsdd.mjs lifecycle-transition plan --plan .work/brownfield-change/CHANGE.md --authority workflow --json`
+- After explicit owner approval only: `node .work/bin/gsdd.mjs lifecycle-transition approve --plan .work/brownfield-change/CHANGE.md --authority owner --approval-ref {approval_ref} --json`
+- Start execution once, before changing approved plan bytes: `node .work/bin/gsdd.mjs lifecycle-transition execute --plan .work/brownfield-change/CHANGE.md --authority workflow --json`
+- Implementation evidence complete: `node .work/bin/gsdd.mjs lifecycle-transition verify --plan .work/brownfield-change/CHANGE.md --artifact .work/brownfield-change/VERIFICATION.md --authority workflow --json`
+- Verification passed: `node .work/bin/gsdd.mjs lifecycle-transition audit --plan .work/brownfield-change/CHANGE.md --artifact .work/brownfield-change/VERIFICATION.md --authority workflow --json`
+On pause/resume, recover this identity from CHANGE.md and the checkpoint. Resume an already recorded execution from its current task; scope changes require replanning and fresh approval. When the selected plan identity is `.work/brownfield-change/CHANGE.md`, execute one bounded stream only. Re-read `CHANGE.md` as the operational authority and `HANDOFF.md` as judgment context; do not take scope or status from HANDOFF. Refuse execution without a concrete Done When list, when another active brownfield stream or milestone authority is present, when the posture is blocked or widening, or when the requested work exceeds the declared write scope. Reruns are read-before-write: preserve all existing user-authored text and evidence, and update only the approved bounded surfaces. After the approved work is complete, record its evidence and set `CHANGE.md` to `ready_for_verification`; do not close the lane from execution.
 </brownfield_change_execute>
 <control_map_check>Before code mutation, run `node .work/bin/gsdd.mjs control-map --json` when available. Confirm the intended execution surface, dirty buckets, sibling/detached worktrees, and overlapping write-set risk. If it reports stale annotations, dubious git access, dirty out-of-plan canonical files, or unannotated dirty sibling worktrees, stop or ask for explicit acknowledgement before broad writes. Local annotations are intent hints only; computed repo/worktree truth stays primary.
 </control_map_check>

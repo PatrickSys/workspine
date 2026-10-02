@@ -28,7 +28,7 @@ function characterize() {
   if (lines > MAX_PRIMARY_SOURCE_LINES) throw new EvalError('evaluator_invalid', `primary evaluator exceeds ${MAX_PRIMARY_SOURCE_LINES} lines: ${lines}`);
   return { schema_version: 1, mode: 'characterize', provider_invoked: false, primary_source_lines: lines,
     stages: ['a-plan', 'a-pause', 'approval', 'b-resume-execute', 'c-verify', 'c-progress'],
-    session_topology: { A: ['a-plan', 'a-pause'], B: ['b-resume-execute'], C: ['c-verify', 'c-progress'] },
+    session_topology: { A: ['a-plan', 'a-pause', 'approval'], B: ['b-resume-execute'], C: ['c-verify', 'c-progress'] },
     public_fields: ['disposition', 'failure_domain'], seal_layer: 'terminal_ordered_links' };
 }
 function readFreeze(file) {
@@ -68,10 +68,11 @@ function qualify(freezeFile, runRoot) {
 function appendTurn(chain, id, value) {
   if (id === 'checkpoint-witness') return;
   const [sequence, name] = TURN_RECEIPTS[id];
-  const payload = id === 'approval' ? value : {
+  const payload = id === 'approval' ? { ...value, turn: { outcome: value.turn?.outcome, session_id: value.turn?.sessionId, turn_id: value.turn?.turnId, event_stream_sha256: value.turn?.eventsFile ? fileSha256(value.turn.eventsFile) : null } } : {
     outcome: value.outcome, failure_code: value.failure_code || null, session_id: value.sessionId || null,
     turn_id: value.turnId || null, usage: value.usage, event_stream_sha256: value.eventsFile ? fileSha256(value.eventsFile) : null,
-    checkpoint_witness: value.checkpoint_witness || null,
+    checkpoint_witness: value.checkpoint_witness || null, lane_selection: value.lane_selection || null,
+    plan_sha256: value.plan_sha256 || null,
   };
   chain.append(sequence, name, id === 'approval' ? 'approval' : 'turn', payload);
 }
@@ -95,10 +96,11 @@ async function run(freezeFile, runRoot) {
     const homeFiles = fs.readdirSync(home), auth = fs.lstatSync(path.join(home, 'auth.json'), { throwIfNoEntry: false });
     if (homeFiles.length !== 1 || homeFiles[0] !== 'auth.json' || !auth?.isFile() || auth.isSymbolicLink()) throw new EvalError('environment_invalid', 'qualified CODEX_HOME posture changed');
     const result = await runJourney({ transport, consumerRoot: freeze.consumer_root, runRoot, hardTimeoutMs: freeze.hard_timeout_ms,
-      approvalRef: freeze.approval_ref, prompts: freeze.prompts || buildPrompts(), record: (id, value) => appendTurn(chain, id, value) });
+      approvalRef: freeze.approval_ref, prompts: freeze.prompts || buildPrompts({ approvalRef: freeze.approval_ref }), record: (id, value) => appendTurn(chain, id, value) });
     if (result.outcome !== 'completed') return chain.terminal(result.outcome, {
       failure_code: result.failure_code || null,
       ...(result.stopped_before_approval === true ? { stopped_before_approval: true, plan_selection: result.planSelection || null } : {}),
+      ...(result.stopped_before_execution === true ? { stopped_before_execution: true, plan_selection: result.planSelection || null } : {}),
     });
     const grade = gradeWorkspace({ consumerRoot: freeze.consumer_root, baselineManifest: freeze.baseline_manifest,
       allowedPaths: freeze.allowed_paths, oracle: freeze.oracle, approvalRef: freeze.approval_ref, genericReproduction: freeze.generic_reproduction });

@@ -18,7 +18,6 @@ const RECEIPT_TYPES = Object.freeze({ 0: 'manifest', 10: 'qualification', 100: '
   200: 'turn', 300: 'turn', 310: 'turn', 400: 'oracle', 410: 'grade', 420: 'regrade' });
 const PREFIX = Object.keys(RECEIPT_TYPES).map(Number).sort((a, b) => a - b);
 const IDENTITY_FAILURES = new Set(['selected_plan_identity_missing', 'selected_plan_identity_mismatch', 'plan_preapproved_outside_harness']);
-const EARLY_IDENTITY_PREFIX = [0, 10, 100, 110];
 const BROWNFIELD_PLAN = '.work/brownfield-change/CHANGE.md';
 export function projectOutcome(outcome, options = {}) {
   if (!(outcome in PUBLIC)) throw new EvalError('evaluator_invalid', `unsupported outcome: ${outcome}`);
@@ -36,21 +35,41 @@ function receiptHash(receipt) {
 }
 function receiptName(sequence, name) { if (RECEIPT_NAMES[sequence] !== name) throw new EvalError('evaluator_invalid', `unexpected receipt path for sequence ${sequence}`); return `${String(sequence).padStart(3, '0')}-${name}.json`; }
 function validateEarlyIdentityFailure(outcome, payload, links, receiptDir) {
-  if (outcome !== 'task_red' || links.length !== EARLY_IDENTITY_PREFIX.length) return false;
-  if (links.some((link, index) => link.sequence !== EARLY_IDENTITY_PREFIX[index])) {
-    throw new EvalError('evaluator_invalid', 'early identity result requires manifest, qualification, a-plan, and a-pause receipts');
+  if (outcome !== 'task_red' || ![3, 4, 5].includes(links.length)) return false;
+  if (links.some((link, index) => link.sequence !== PREFIX[index])) {
+    throw new EvalError('evaluator_invalid', 'early identity result requires an ordered qualified A prefix');
   }
   const receipts = links.map(link => readJson(path.join(receiptDir, link.path)));
-  const [manifest, qualification, plan, pause] = receipts;
+  const [manifest, qualification, plan, pause, approval] = receipts;
   if (manifest.record_type !== 'manifest' || qualification.payload?.ok !== true || qualification.payload?.provider_invoked !== false
-    || plan.payload?.outcome !== 'completed' || plan.payload?.turn_id !== 'a-plan'
-    || pause.payload?.outcome !== 'completed' || pause.payload?.turn_id !== 'a-pause'
+    || plan.payload?.outcome !== 'completed' || typeof plan.payload?.turn_id !== 'string' || !plan.payload.turn_id
     || typeof plan.payload?.session_id !== 'string' || !plan.payload.session_id
-    || pause.payload?.session_id !== plan.payload.session_id) {
+    || (pause && (pause.payload?.outcome !== 'completed' || typeof pause.payload?.turn_id !== 'string' || !pause.payload.turn_id
+      || pause.payload?.session_id !== plan.payload.session_id))) {
     throw new EvalError('evaluator_invalid', 'early identity result lacks a completed qualified A session');
   }
   const selection = payload.plan_selection;
   const failure = payload.failure_code;
+  if (approval) {
+    const observed = approval.payload;
+    if (!classifyPlanSelection(selection).ok || canonicalStringify(selection) !== canonicalStringify(plan.payload.lane_selection)
+      || canonicalStringify(selection) !== canonicalStringify(pause.payload.lane_selection)) throw new EvalError('evaluator_invalid', 'approval failure selection does not match the presented A-turn observations');
+    if (payload.stopped_before_execution !== true || observed?.ok !== false || observed.reason !== failure
+      || observed.turn?.outcome !== 'completed' || observed.turn?.session_id !== plan.payload.session_id) {
+      throw new EvalError('evaluator_invalid', 'early approval failure lacks a completed matching owner turn');
+    }
+    if (['selected_plan_identity_missing', 'selected_plan_identity_mismatch'].includes(failure)
+      && observed.plan_selection?.ok === false && observed.plan_selection.reason === failure
+      && classifyPlanSelection(observed.plan_selection, true).reason === failure) return true;
+    if (observed.presented_plan_sha256 !== plan.payload.plan_sha256) throw new EvalError('evaluator_invalid', 'approval failure is not bound to the presented plan receipt');
+    if (failure === 'approval_plan_mutated' && /^[0-9a-f]{64}$/i.test(observed.presented_plan_sha256 || '')
+      && observed.plan_sha256 !== observed.presented_plan_sha256) return true;
+    if (failure === 'approval_not_bound' && observed.plan_sha256 === observed.presented_plan_sha256
+      && /^[0-9a-f]{64}$/i.test(observed.plan_sha256 || '') && (observed.plan_approved !== true
+        || observed.approved_sha256 !== observed.plan_sha256 || observed.authority !== 'owner'
+        || observed.approval_ref !== observed.expected_approval_ref)) return true;
+    throw new EvalError('evaluator_invalid', 'early task_red requires matching approval failure evidence');
+  }
   if (payload.stopped_before_approval !== true || !IDENTITY_FAILURES.has(failure) || !selection
     || selection.ok !== false || typeof selection.approved !== 'boolean' || selection.reason !== failure
     || selection.expected_path !== BROWNFIELD_PLAN) {
@@ -59,6 +78,7 @@ function validateEarlyIdentityFailure(outcome, payload, links, receiptDir) {
   if (classifyPlanSelection(selection).reason !== failure) {
     throw new EvalError('evaluator_invalid', 'identity failure evidence contradicts the observed selection');
   }
+  if (canonicalStringify(selection) !== canonicalStringify((pause || plan).payload.lane_selection)) throw new EvalError('evaluator_invalid', 'terminal selection does not match the recorded A-turn observation');
   return true;
 }
 export class ReceiptChain {

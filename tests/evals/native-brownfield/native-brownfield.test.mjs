@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-import { canonicalStringify, sha256, treeManifest } from './util.mjs';
+import { canonicalStringify, fileSha256, sha256, treeManifest } from './util.mjs';
 import { ReceiptChain, projectOutcome, verifySeal } from './seal.mjs';
 import {
   classifyProviderResult,
@@ -17,7 +17,7 @@ import {
   findCheckpointWitness,
   findNetworkViolation,
 } from './codex.mjs';
-import { approvePlan, readSelectedPlanIdentity, runJourney, validateTopology } from './journey.mjs';
+import { observeApproval, readSelectedPlanIdentity, runJourney, validateTopology } from './journey.mjs';
 import {
   assertCandidateBinding,
   assertSyntheticBaseline,
@@ -108,8 +108,8 @@ test('receipt chain resumes a validated prefix without adding a second seal laye
 function appendEarlyIdentityPrefix(chain, selection) {
   chain.append(0, 'manifest', 'manifest', { fixture: true });
   chain.append(10, 'qualification', 'qualification', { ok: true, provider_invoked: false });
-  chain.append(100, 'a-plan', 'turn', { outcome: 'completed', turn_id: 'a-plan', session_id: 'A' });
-  chain.append(110, 'a-pause', 'turn', { outcome: 'completed', turn_id: 'a-pause', session_id: 'A' });
+  chain.append(100, 'a-plan', 'turn', { outcome: 'completed', turn_id: 'a-plan', session_id: 'A', lane_selection: selection });
+  chain.append(110, 'a-pause', 'turn', { outcome: 'completed', turn_id: 'a-pause', session_id: 'A', lane_selection: selection });
   return { failure_code: selection.reason, stopped_before_approval: true, plan_selection: selection };
 }
 
@@ -141,6 +141,106 @@ test('early identity seal accepts missing and preapproved observed selections', 
     assert.equal(verifySeal(root).public.failure_domain, 'task_outcome');
     assert.deepEqual(verifySeal(root).links.map(link => link.sequence), [0, 10, 100, 110]);
   }
+});
+
+test('plan-time wrong selection seals immediately with real native turn identifiers', t => {
+  const root = tempRoot(t), chain = new ReceiptChain(root, 'plan-time-red');
+  const selection = { ok: false, reason: 'selected_plan_identity_mismatch', path: '.work/phases/01/01-PLAN.md',
+    identity: '.work/phases/01/01-PLAN.md', approved: false, expected_path: '.work/brownfield-change/CHANGE.md' };
+  chain.append(0, 'manifest', 'manifest', {});
+  chain.append(10, 'qualification', 'qualification', { ok: true, provider_invoked: false });
+  chain.append(100, 'a-plan', 'turn', { outcome: 'completed', turn_id: 'native-turn-uuid', session_id: 'native-session-uuid', lane_selection: selection });
+  chain.terminal('task_red', { failure_code: selection.reason, stopped_before_approval: true, plan_selection: selection });
+  assert.deepEqual(verifySeal(root).links.map(link => link.sequence), [0, 10, 100]);
+});
+
+test('early red cannot replace a recorded canonical selection with a different self-consistent terminal claim', t => {
+  for (const afterPause of [false, true]) {
+    const root = tempRoot(t), chain = new ReceiptChain(root, `tamper-${afterPause}`);
+    const observed = { ok: false, reason: 'selected_plan_identity_missing', path: null, identity: null,
+      approved: false, expected_path: '.work/brownfield-change/CHANGE.md' };
+    chain.append(0, 'manifest', 'manifest', {});
+    chain.append(10, 'qualification', 'qualification', { ok: true, provider_invoked: false });
+    chain.append(100, 'a-plan', 'turn', { outcome: 'completed', session_id: 'A', turn_id: 'native-plan-id', lane_selection: observed });
+    if (afterPause) chain.append(110, 'a-pause', 'turn', { outcome: 'completed', session_id: 'A', turn_id: 'native-pause-id', lane_selection: observed });
+    chain.terminal('task_red', { stopped_before_approval: true, failure_code: observed.reason, plan_selection: observed });
+    const file = path.join(root, 'receipts/900-terminal-seal.json'), terminal = JSON.parse(fs.readFileSync(file, 'utf8'));
+    terminal.payload.plan_selection = { ...observed, reason: 'selected_plan_identity_mismatch',
+      path: '.work/phases/01/01-PLAN.md', identity: '.work/phases/01/01-PLAN.md' };
+    terminal.payload.failure_code = terminal.payload.plan_selection.reason;
+    const { receipt_sha256: ignoredReceipt, seal_sha256: ignoredSeal, ...body } = terminal;
+    terminal.receipt_sha256 = sha256(canonicalStringify(body));
+    const { seal_sha256: ignored, ...withReceipt } = terminal;
+    terminal.seal_sha256 = sha256(canonicalStringify(withReceipt));
+    fs.writeFileSync(file, canonicalStringify(terminal));
+    assert.throws(() => verifySeal(root), /does not match the recorded A-turn observation/);
+    fs.rmSync(file);
+    const canonical = { ok: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md',
+      approved: false, expected_path: '.work/brownfield-change/CHANGE.md' };
+    const prefix = new ReceiptChain(path.join(root, 'canonical-root'), 'canonical-tamper');
+    prefix.append(0, 'manifest', 'manifest', {});
+    prefix.append(10, 'qualification', 'qualification', { ok: true, provider_invoked: false });
+    prefix.append(100, 'a-plan', 'turn', { outcome: 'completed', session_id: 'A', turn_id: 'native-id', lane_selection: canonical });
+    assert.throws(() => prefix.terminal('task_red', { stopped_before_approval: true,
+      failure_code: observed.reason, plan_selection: observed }), /does not match the recorded A-turn observation/);
+  }
+});
+
+test('natural approval turn edit is task-red and seals its actual qualified prefix before execution', async t => {
+  for (const mutation of ['body', 'identity', 'unbound', 'metadata']) {
+    const root = tempRoot(t), work = path.join(root, '.work'), planPath = '.work/brownfield-change/CHANGE.md';
+    fs.mkdirSync(path.join(work, 'brownfield-change'), { recursive: true });
+    const planFile = path.join(root, planPath), stateFile = path.join(work, 'state.json');
+    fs.writeFileSync(planFile, '---\nstatus: active\n---\n# Presented plan\nTask: repair behavior\n');
+    fs.writeFileSync(path.join(work, '.continue-here.md'), 'Frozen checkpoint\n');
+    fs.writeFileSync(stateFile, JSON.stringify({ workflow: { plan: { path: planPath, identity: planPath, approved: false } } }));
+    const chain = new ReceiptChain(path.join(root, 'receipts-root'), `natural-${mutation}`), calls = [];
+    chain.append(0, 'manifest', 'manifest', {});
+    chain.append(10, 'qualification', 'qualification', { ok: true, provider_invoked: false });
+    const result = await runJourney({ consumerRoot: root, approvalRef: 'owner-natural', transport: { runTurn: async ({ id }) => {
+      calls.push(id);
+      if (id === 'approval') {
+        if (mutation === 'body') fs.appendFileSync(planFile, 'Unseen task: expand scope\n');
+        if (mutation === 'metadata') fs.writeFileSync(planFile, fs.readFileSync(planFile, 'utf8').replace('status: active', 'status: approved'));
+        const wrong = mutation === 'identity' ? '.work/phases/01/01-PLAN.md' : planPath;
+        fs.writeFileSync(stateFile, JSON.stringify({ workflow: { authority: 'owner', approval_ref: 'owner-natural', plan: {
+          path: wrong, identity: wrong, approved: mutation !== 'unbound', approved_sha256: fileSha256(planFile),
+        } } }));
+      }
+      return { outcome: 'completed', sessionId: 'native-session-A', turnId: `native-${id}-uuid` };
+    } }, record: (id, value) => {
+      if (id === 'approval') chain.append(120, 'approval', 'approval', { ...value, turn: {
+        outcome: value.turn.outcome, session_id: value.turn.sessionId, turn_id: value.turn.turnId,
+      } });
+      else chain.append(id === 'a-plan' ? 100 : 110, id, 'turn', { outcome: value.outcome, session_id: value.sessionId,
+        turn_id: value.turnId, lane_selection: value.lane_selection || null, plan_sha256: value.plan_sha256 || null });
+    } });
+    assert.equal(result.outcome, 'task_red');
+    assert.equal(result.stopped_before_execution, true);
+    assert.deepEqual(calls, ['a-plan', 'a-pause', 'approval']);
+    assert.throws(() => chain.terminal(result.outcome, { failure_code: result.failure_code, stopped_before_execution: true,
+      plan_selection: { ...result.planSelection, path: '.work/phases/01/01-PLAN.md', identity: '.work/phases/01/01-PLAN.md' } }),
+    /does not match the presented A-turn observations/);
+    chain.terminal(result.outcome, { failure_code: result.failure_code, stopped_before_execution: true, plan_selection: result.planSelection });
+    const sealed = verifySeal(path.join(root, 'receipts-root'));
+    assert.equal(sealed.public.failure_domain, 'task_outcome');
+    assert.deepEqual(sealed.links.map(link => link.sequence), [0, 10, 100, 110, 120]);
+  }
+});
+
+test('approval observer refuses unseen bytes even when the agent rehashes them as owner-approved', t => {
+  const root = tempRoot(t), work = path.join(root, '.work'), file = path.join(work, 'brownfield-change/CHANGE.md');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, '# Presented bounded plan\n');
+  const presentedPlanSha256 = fileSha256(file);
+  fs.appendFileSync(file, 'Unseen expansion\n');
+  fs.writeFileSync(path.join(work, 'state.json'), JSON.stringify({ workflow: { authority: 'owner', approval_ref: 'owner-natural',
+    plan: { path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md', approved: true, approved_sha256: fileSha256(file) } } }));
+  const stateBytes = fs.readFileSync(path.join(work, 'state.json')), planBytes = fs.readFileSync(file);
+  const observed = observeApproval({ consumerRoot: root, approvalRef: 'owner-natural', presentedPlanSha256 });
+  assert.equal(observed.reason, 'approval_plan_mutated');
+  assert.deepEqual(fs.readFileSync(path.join(work, 'state.json')), stateBytes);
+  assert.deepEqual(fs.readFileSync(file), planBytes);
 });
 
 test('early terminal rejects generic red, green, wrong prefix, and canonical identity mislabeled wrong', t => {
@@ -585,7 +685,7 @@ test('journey order is plan, pause, approval, fresh B, verify, progress', async 
   const calls = [];
   const records = new Map();
   const sessions = {
-    'a-plan': 'A', 'a-pause': 'A',
+    'a-plan': 'A', 'a-pause': 'A', approval: 'A',
     'b-resume-execute': 'B', 'c-verify': 'C', 'c-progress': 'C',
   };
   const transport = { runTurn: async turn => {
@@ -593,19 +693,19 @@ test('journey order is plan, pause, approval, fresh B, verify, progress', async 
     calls.push(`turn:${turn.id}`);
     return { outcome: 'completed', sessionId: sessions[turn.id], turnId: `${turn.id}-id`, totalTokens: null };
   } };
-  const result = await runJourney({
+  const result = await runJourney({ capturePlanSha256: () => 'a'.repeat(64),
     transport,
     captureCheckpoint: () => ({ path: '.work/.continue-here.md', sha256: 'c'.repeat(64) }),
     selectPlan: () => ({ ok: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md', approved: false,
       expected_path: '.work/brownfield-change/CHANGE.md' }),
-    approve: ({ checkpoint }) => { calls.push('approval'); return { ok: true, checkpoint_sha256: checkpoint.sha256 }; },
+    observeApproval: ({ checkpoint }) => { calls.push('approval'); return { ok: true, checkpoint_sha256: checkpoint.sha256 }; },
     checkpointWitness: () => ({ ok: true, output_sha256: 'c'.repeat(64) }),
     hardTimeoutMs: 321,
     record: (id, value) => records.set(id, value),
   });
   assert.equal(result.outcome, 'completed');
   assert.deepEqual(calls, [
-    'turn:a-plan', 'turn:a-pause', 'approval',
+    'turn:a-plan', 'turn:a-pause', 'turn:approval', 'approval',
     'turn:b-resume-execute', 'turn:c-verify', 'turn:c-progress',
   ]);
   assert.equal(records.get('b-resume-execute').checkpoint_witness.ok, true);
@@ -617,16 +717,16 @@ test('journey rejects approval checkpoint mutation without dependent turns', asy
     calls.push(turn.id);
     return { outcome: 'completed', sessionId: 'A', turnId: turn.id };
   } };
-  const result = await runJourney({
+  const result = await runJourney({ capturePlanSha256: () => 'a'.repeat(64),
     transport,
     captureCheckpoint: () => ({ path: '.work/.continue-here.md', sha256: 'a'.repeat(64) }),
     selectPlan: () => ({ ok: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md', approved: false,
       expected_path: '.work/brownfield-change/CHANGE.md' }),
-    approve: () => ({ ok: true, checkpoint_sha256: 'b'.repeat(64) }),
+    observeApproval: () => ({ ok: true, checkpoint_sha256: 'b'.repeat(64) }),
     checkpointWitness: () => ({ ok: true }),
   });
   assert.equal(result.outcome, 'protocol_invalid');
-  assert.deepEqual(calls, ['a-plan', 'a-pause']);
+  assert.deepEqual(calls, ['a-plan', 'a-pause', 'approval']);
 });
 
 test('journey stops before approval when session A identity drifts', async () => {
@@ -635,11 +735,11 @@ test('journey stops before approval when session A identity drifts', async () =>
     calls.push(turn.id);
     return { outcome: 'completed', sessionId: turn.id === 'a-plan' ? 'A' : 'wrong', turnId: turn.id };
   } };
-  const result = await runJourney({ transport,
+  const result = await runJourney({ capturePlanSha256: () => 'a'.repeat(64), transport,
     captureCheckpoint: () => ({ sha256: 'a'.repeat(64) }),
     selectPlan: () => ({ ok: true, path: '.work/brownfield-change/CHANGE.md', identity: '.work/brownfield-change/CHANGE.md', approved: false,
       expected_path: '.work/brownfield-change/CHANGE.md' }),
-    approve: () => { calls.push('approval'); return { ok: true, checkpoint_sha256: 'a'.repeat(64) }; } });
+    observeApproval: () => { calls.push('approval'); return { ok: true, checkpoint_sha256: 'a'.repeat(64) }; } });
   assert.equal(result.outcome, 'protocol_invalid');
   assert.deepEqual(calls, ['a-plan', 'a-pause']);
 });
@@ -654,13 +754,13 @@ test('journey grades the agent-selected identity before any harness approval', a
     captureCheckpoint: () => ({ sha256: 'a'.repeat(64) }),
     selectPlan: () => ({ ok: false, reason: 'selected_plan_identity_mismatch', path: '.work/phases/01-wrong/01-PLAN.md',
       identity: '.work/phases/01-wrong/01-PLAN.md', approved: false, expected_path: '.work/brownfield-change/CHANGE.md' }),
-    approve: () => { calls.push('approval'); return { ok: true, checkpoint_sha256: 'a'.repeat(64) }; },
+    observeApproval: () => { calls.push('approval'); return { ok: true, checkpoint_sha256: 'a'.repeat(64) }; },
   });
   assert.equal(result.outcome, 'task_red');
   assert.equal(result.failure_code, 'selected_plan_identity_mismatch');
   assert.equal(result.planSelection.path, '.work/phases/01-wrong/01-PLAN.md');
   assert.equal(result.stopped_before_approval, true);
-  assert.deepEqual(calls, ['a-plan', 'a-pause']);
+  assert.deepEqual(calls, ['a-plan']);
 });
 
 test('preapproval with missing identity is an observed task failure, not evaluator-invalid', async t => {
@@ -675,19 +775,20 @@ test('preapproval with missing identity is an observed task failure, not evaluat
   const result = await runJourney({ consumerRoot: root,
     transport: { runTurn: async turn => { calls.push(turn.id); return { outcome: 'completed', sessionId: 'A', turnId: turn.id }; } },
     captureCheckpoint: () => { throw new Error('checkpoint must not be captured'); },
-    approve: () => { throw new Error('owner approval must not be simulated'); },
+    observeApproval: () => { throw new Error('owner approval must not be simulated'); },
   });
   assert.equal(result.outcome, 'task_red');
   assert.equal(result.failure_code, 'plan_preapproved_outside_harness');
   assert.equal(result.stopped_before_approval, true);
-  assert.deepEqual(calls, ['a-plan', 'a-pause']);
+  assert.deepEqual(calls, ['a-plan']);
 });
 
 test('malformed lifecycle state containers are evaluator failures while absent identity is task evidence', t => {
   const root = tempRoot(t), work = path.join(root, '.work');
   fs.mkdirSync(work);
   const stateFile = path.join(work, 'state.json');
-  for (const state of [null, [], { workflow: [] }, { workflow: { plan: [] } }]) {
+  for (const state of [null, [], { workflow: [] }, { workflow: { plan: [] } },
+    { workflow: { plan: { path: 4 } } }, { workflow: { plan: { approved: 'true' } } }]) {
     fs.writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
     assert.equal(readSelectedPlanIdentity(root).evaluatorFailure, true);
   }
@@ -695,7 +796,7 @@ test('malformed lifecycle state containers are evaluator failures while absent i
   assert.equal(readSelectedPlanIdentity(root).reason, 'selected_plan_identity_missing');
 });
 
-test('provider-free approval uses the real generated lifecycle command and persists exact state', t => {
+test('provider-free agent approval is graded read-only against generated lifecycle state', t => {
   const root = tempRoot(t), entry = path.resolve('bin', 'gsdd.mjs');
   const run = args => spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8', shell: false, windowsHide: true });
   let result = run([entry, 'init', '--auto', '--tools', 'agents', '--no-update-notice']);
@@ -723,8 +824,11 @@ test('provider-free approval uses the real generated lifecycle command and persi
     approved: false, expected_path: '.work/brownfield-change/CHANGE.md' });
   const checkpoint = '---\nworkflow: brownfield-change\n---\n\nResume the approved bounded change.\n';
   fs.writeFileSync(path.join(root, '.work', '.continue-here.md'), checkpoint);
-  const approval = approvePlan({ consumerRoot: root,
-    checkpoint: { sha256: sha256(checkpoint) }, approvalRef: 'owner-frozen-eval-approval', planSelection });
+  result = run([path.join(root, '.work/bin/gsdd.mjs'), 'lifecycle-transition', 'approve', '--plan', '.work/brownfield-change/CHANGE.md', '--authority', 'owner', '--approval-ref', 'owner-frozen-eval-approval', '--json']);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const approval = observeApproval({ consumerRoot: root,
+    checkpoint: { sha256: sha256(checkpoint) }, approvalRef: 'owner-frozen-eval-approval',
+    presentedPlanSha256: fileSha256(path.join(changeDir, 'CHANGE.md')) });
   assert.equal(approval.ok, true);
   let persisted = JSON.parse(fs.readFileSync(path.join(root, '.work', 'state.json'), 'utf8'));
   assert.equal(persisted.workflow.plan.approved, true);
@@ -884,4 +988,47 @@ test('calibration accepts only baseline-red witness-green mutant-red controls', 
     executable: process.execPath, args: ['-e', `process.stdout.write(${JSON.stringify(JSON.stringify(payload))})`],
   } }));
   await assert.rejects(main(['calibrate', '--case', file]), /calibration controls failed/);
+});
+
+
+test('S8 plain request exposes lane selection and approval is a chat turn', async () => {
+  const { buildPrompts } = await import('./journey.mjs');
+  const prompts = buildPrompts({ approvalRef: 'owner-s8b' });
+  assert.doesNotMatch(prompts['a-plan'], /brownfield|work-plan|CHANGE\.md/i);
+  assert.match(prompts.approval || '', /I approve/);
+  assert.match(prompts.approval || '', /owner-s8b/);
+  assert.doesNotMatch(prompts.approval || '', /--plan|CHANGE\.md/);
+  const source = fs.readFileSync(new URL('./journey.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /command\(process.execPath/);
+});
+
+test('S8 approval grader rejects a phase-path approval without changing state', async t => {
+  const { observeApproval } = await import('./journey.mjs');
+  assert.equal(typeof observeApproval, 'function');
+  const root = tempRoot(t);
+  fs.mkdirSync(path.join(root, '.work'), { recursive: true });
+  const state = { workflow: { authority: 'owner', approval_ref: 'owner-s8b', plan: {
+    approved: true, path: '.work/phases/brownfield-change/01-PLAN.md', identity: '.work/phases/brownfield-change/01-PLAN.md'
+  } } };
+  const file = path.join(root, '.work/state.json');
+  fs.writeFileSync(file, JSON.stringify(state));
+  const before = fs.readFileSync(file);
+  const grade = observeApproval({ consumerRoot: root, approvalRef: 'owner-s8b' });
+  assert.equal(grade.ok, false);
+  assert.equal(grade.reason, 'selected_plan_identity_mismatch');
+  assert.deepEqual(fs.readFileSync(file), before);
+});
+
+
+test('S8 lane grader rejects phase selection before owner approval', async t => {
+  const { observePlanSelection } = await import('./grade.mjs');
+  assert.equal(typeof observePlanSelection, 'function');
+  const root = tempRoot(t), file = path.join(root, '.work/state.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  for (const plan of ['.work/phases/01/01-PLAN.md', '.work/brownfield-change/CHANGE.md']) {
+    fs.writeFileSync(file, JSON.stringify({ workflow: { plan: { path: plan, identity: plan, approved: false } } }));
+    const grade = observePlanSelection(root);
+    assert.equal(grade.ok, plan.endsWith('/CHANGE.md'));
+    assert.equal(grade.plan_path, plan);
+  }
 });
