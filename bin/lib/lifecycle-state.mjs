@@ -380,7 +380,7 @@ function collectPhaseArtifacts(phasesDir) {
   const declaredRoot = resolve(phasesDir);
   let phasesRoot;
   try {
-    phasesRoot = realpathSync(declaredRoot);
+    phasesRoot = canonicalPhasePath(declaredRoot);
   } catch {
     return [];
   }
@@ -398,8 +398,10 @@ function collectPhaseArtifacts(phasesDir) {
       const artifactDirectory = relativeDirectory || '';
       if (entry.isSymbolicLink()) continue;
       if (entry.isFile()) {
-        if (!isContainedRealPath(phasesRoot, entryPath)) continue;
         const artifact = classifyPhaseArtifact(artifactDirectory, entry.name, entryPath);
+        // The parent directory was resolved and contained before enumeration.
+        // A regular, non-link immediate child cannot redirect outside it. Avoid
+        // resolving every file's complete ancestor chain again for this scan.
         if (artifact) artifacts.push(artifact);
         continue;
       }
@@ -420,10 +422,18 @@ function isWithinRoot(root, candidate) {
 
 function isContainedRealPath(root, candidate) {
   try {
-    return isWithinRoot(root, realpathSync(candidate));
+    return isWithinRoot(root, canonicalPhasePath(candidate));
   } catch {
     return false;
   }
+}
+
+function canonicalPhasePath(candidate) {
+  // Native Windows resolution avoids repeating JS ancestor walks. Keep the
+  // existing resolver elsewhere: native realpath requires /proc on musl Linux.
+  return process.platform === 'win32' && realpathSync.native
+    ? realpathSync.native(candidate)
+    : realpathSync(candidate);
 }
 
 function classifyPhaseArtifact(dir, name, path) {

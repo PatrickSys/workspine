@@ -1921,11 +1921,84 @@ function parseCheckpointFrontmatter(content, errors) {
   return { frontmatter, body: content.slice(end + 5) };
 }
 
-function extractCheckpointSections(content, sectionNames, errors, label = 'checkpoint') {
+// Checkpoint tags are Markdown block delimiters, not arbitrary XML in prose.
+// Only whole-line delimiters (or a whole compact section) are structural. Keep
+// unknown historical wrappers in the tree so their children cannot impersonate
+// the canonical top-level sections, without imposing a new wrapper vocabulary.
+function parseCheckpointBlocks(content, errors) {
+  const roots = [];
+  const stack = [];
+  let fence = null;
+  let offset = 0;
+  for (const line of content.split('\n')) {
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (fenceMatch && fenceMatch[1][0] === fence.character
+        && fenceMatch[1].length >= fence.length && !fenceMatch[2].trim()) fence = null;
+    } else if (fenceMatch && (fenceMatch[1][0] !== '`' || !fenceMatch[2].includes('`'))) {
+      fence = { character: fenceMatch[1][0], length: fenceMatch[1].length };
+    } else {
+      const compact = line.match(/^ {0,3}<([A-Za-z_][A-Za-z0-9_.:-]*)(?:\s+[^<>]*)?>(.*)<\/\1>\s*$/);
+      const opening = line.match(/^ {0,3}<([A-Za-z_][A-Za-z0-9_.:-]*)(?:\s+[^<>]*)?>\s*$/);
+      const closing = line.match(/^ {0,3}<\/([A-Za-z_][A-Za-z0-9_.:-]*)>\s*$/);
+      if (compact || opening) {
+        const name = (compact || opening)[1];
+        const node = { name, children: [], compactContent: compact ? compact[2] : null, start: offset + line.length + 1, end: null, closed: Boolean(compact) };
+        (stack.length ? stack[stack.length - 1].children : roots).push(node);
+        if (!compact) stack.push(node);
+      } else if (closing) {
+        const node = stack[stack.length - 1];
+        if (!node || node.name !== closing[1]) {
+          checkpointError(errors, 'malformed checkpoint section closing delimiter');
+        } else {
+          node.end = offset;
+          node.closed = true;
+          stack.pop();
+        }
+      }
+    }
+    offset += line.length + 1;
+  }
+  if (stack.length) checkpointError(errors, 'unclosed checkpoint section');
+  return roots;
+}
+
+// A fully compact judgment is the existing four-child layout written on one
+// line. Read its adjacent complete child blocks without interpreting inline
+// tags in a child's prose. Backtick spans keep literal closing tags inert.
+function parseCompactCheckpointJudgment(content, errors) {
+  const visible = content.replace(/(?<!`)(`+)(?!`)([\s\S]*?)(?<!`)\1(?!`)/g, (span) => ' '.repeat(span.length));
+  const children = [];
+  let cursor = 0;
+  while (visible.slice(cursor).trim()) {
+    cursor += visible.slice(cursor).match(/^\s*/)[0].length;
+    const opening = visible.slice(cursor).match(/^<([A-Za-z_][A-Za-z0-9_.:-]*)(?:\s+[^<>]*)?>/);
+    if (!opening) {
+      checkpointError(errors, 'malformed compact checkpoint judgment');
+      break;
+    }
+    const start = cursor + opening[0].length;
+    const delimiter = `</${opening[1]}>`;
+    let closing = visible.indexOf(delimiter, start);
+    while (closing !== -1) {
+      const remainder = visible.slice(closing + delimiter.length).trimStart();
+      if (!remainder || /^<[A-Za-z_][A-Za-z0-9_.:-]*(?:\s+[^<>]*)?>/.test(remainder)) break;
+      closing = visible.indexOf(delimiter, closing + delimiter.length);
+    }
+    if (closing === -1) {
+      checkpointError(errors, 'unclosed compact checkpoint judgment section');
+      break;
+    }
+    children.push({ name: opening[1], children: [], compactContent: content.slice(start, closing), closed: true });
+    cursor = closing + delimiter.length;
+  }
+  return children;
+}
+
+function extractCheckpointSections(blocks, content, sectionNames, errors, label = 'checkpoint') {
   const sections = {};
   for (const name of sectionNames) {
-    const matcher = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'g');
-    const matches = [...content.matchAll(matcher)];
+    const matches = blocks.filter((block) => block.name === name && block.closed);
     if (matches.length === 0) {
       checkpointError(errors, `missing ${label} section: ${name}`);
       continue;
@@ -1934,7 +2007,10 @@ function extractCheckpointSections(content, sectionNames, errors, label = 'check
       checkpointError(errors, `duplicate ${label} section: ${name}`);
       continue;
     }
-    sections[name] = matches[0][1].trim();
+    sections[name] = (matches[0].compactContent ?? content.slice(matches[0].start, matches[0].end)).trim();
+    if (matches[0].children.some((child) => sectionNames.includes(child.name) || child.name === 'judgment')) {
+      checkpointError(errors, `invalid nested ${label} section: ${name}`);
+    }
   }
   return sections;
 }
@@ -1968,13 +2044,18 @@ export function readContinuityCheckpoint(planningDir) {
 
   const errors = [];
   const { frontmatter, body } = parseCheckpointFrontmatter(content, errors);
-  const sections = extractCheckpointSections(body, CHECKPOINT_REQUIRED_SECTIONS, errors);
-  const judgmentMatches = [...body.matchAll(/<judgment>([\s\S]*?)<\/judgment>/g)];
+  const blocks = parseCheckpointBlocks(body, errors);
+  const sections = extractCheckpointSections(blocks, body, CHECKPOINT_REQUIRED_SECTIONS, errors);
+  const judgmentMatches = blocks.filter((block) => block.name === 'judgment' && block.closed);
   let judgment = null;
   if (judgmentMatches.length > 1) {
     checkpointError(errors, 'duplicate checkpoint judgment block');
   } else if (judgmentMatches.length === 1) {
-    judgment = extractCheckpointSections(judgmentMatches[0][1], CHECKPOINT_JUDGMENT_SECTIONS, errors, 'checkpoint judgment');
+    const block = judgmentMatches[0];
+    const children = block.compactContent === null
+      ? block.children
+      : parseCompactCheckpointJudgment(block.compactContent, errors);
+    judgment = extractCheckpointSections(children, body, CHECKPOINT_JUDGMENT_SECTIONS, errors, 'checkpoint judgment');
   }
 
   return {

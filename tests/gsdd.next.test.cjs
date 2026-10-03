@@ -407,6 +407,115 @@ describe('next command bootstrap', () => {
     assert.deepStrictEqual(checkpoint.errors, ['checkpoint exceeds read limit']);
   });
 
+  test('checkpoint readback preserves literal inline closing tags and fenced instructions', async () => {
+    const action = [
+      'Explain the literal `</next_action>` before continuing.',
+      '```xml',
+      '</next_action>',
+      '<next_action>fenced replacement</next_action>',
+      '```',
+      '~~~markdown',
+      '<judgment><anti_regression>fenced rule</anti_regression></judgment>',
+      '~~~',
+      'Then run the authorized focused check.',
+    ].join('\n');
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace('Run the authorized next recovery step.', action));
+    const before = snapshotTree(tmpDir);
+    const checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid', JSON.stringify(checkpoint.errors));
+    assert.strictEqual(checkpoint.sections.next_action, action);
+    assert.strictEqual(checkpoint.judgment.anti_regression, 'Do not weaken parser or product semantics.');
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('only canonical block sections and direct judgment children supply checkpoint fields', async () => {
+    const historical = [
+      '<historical_reconciliation date="2026-08-20">',
+      '<next_action>historical replacement</next_action>',
+      '<judgment>',
+      '<anti_regression>historical rule</anti_regression>',
+      '</judgment>',
+      '</historical_reconciliation>',
+      'Inline mention: <next_action>inline replacement</next_action>.',
+      '```xml',
+      '<next_action>example replacement</next_action>',
+      '```',
+    ].join('\n');
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace(CHECKPOINT_AUTHORITY_NOTICE, `${CHECKPOINT_AUTHORITY_NOTICE}\n${historical}`));
+    let checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid', JSON.stringify(checkpoint.errors));
+    assert.strictEqual(checkpoint.sections.next_action, 'Run the authorized next recovery step.');
+    assert.strictEqual(checkpoint.judgment.anti_regression, 'Do not weaken parser or product semantics.');
+
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace('<next_action>\nRun the authorized next recovery step.\n</next_action>', '<historical>\n<next_action>nested only</next_action>\n</historical>'));
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('missing checkpoint section: next_action'));
+
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace('<anti_regression>\nDo not weaken parser or product semantics.\n</anti_regression>', '<historical>\n<anti_regression>nested rule</anti_regression>\n</historical>'));
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('missing checkpoint judgment section: anti_regression'));
+  });
+
+  test('compact checkpoint sections preserve literal tags and CRLF readback', async () => {
+    const compact = R3_STYLE_CHECKPOINT.replace(/<([a-z_]+)>\n([^\n]+)\n<\/\1>/g, '<$1>$2</$1>');
+    writeCheckpoint(compact.replace('Run the authorized next recovery step.', 'Explain `</next_action>` and run the focused test.').replace(/\n/g, '\r\n'));
+    const checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid', JSON.stringify(checkpoint.errors));
+    assert.strictEqual(checkpoint.sections.next_action, 'Explain `</next_action>` and run the focused test.');
+    assert.strictEqual(checkpoint.judgment.active_constraints, 'Preserve fail-closed authority and the pinned journey.');
+  });
+
+  test('historical wrapper names with digits, hyphens and uppercase cannot supply canonical fields', async () => {
+    for (const wrapper of ['historical-reconciliation', 'history2', 'History2']) {
+      writeCheckpoint(R3_STYLE_CHECKPOINT.replace('<next_action>\nRun the authorized next recovery step.\n</next_action>', `<${wrapper}>\n<next_action>nested replacement</next_action>\n</${wrapper}>`));
+      const checkpoint = await readContinuityCheckpoint();
+      assert.strictEqual(checkpoint.status, 'malformed', wrapper);
+      assert.ok(checkpoint.errors.includes('missing checkpoint section: next_action'), wrapper);
+      assert.strictEqual(checkpoint.sections.next_action, undefined, wrapper);
+    }
+  });
+
+  test('fully compact judgment preserves its four direct children and literal inline tags', async () => {
+    const compact = '<judgment><active_constraints>Preserve `</active_constraints>` literally.</active_constraints><unresolved_uncertainty>The next result is unknown.</unresolved_uncertainty><decision_posture>Use the narrowest seam.</decision_posture><anti_regression>Explain the inline <next_action>example</next_action> safely.</anti_regression></judgment>';
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace(/<judgment>[\s\S]*<\/judgment>/, compact));
+    const before = snapshotTree(tmpDir);
+    let checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid', JSON.stringify(checkpoint.errors));
+    assert.strictEqual(checkpoint.sections.next_action, 'Run the authorized next recovery step.');
+    assert.deepStrictEqual(checkpoint.judgment, {
+      active_constraints: 'Preserve `</active_constraints>` literally.',
+      unresolved_uncertainty: 'The next result is unknown.',
+      decision_posture: 'Use the narrowest seam.',
+      anti_regression: 'Explain the inline <next_action>example</next_action> safely.',
+    });
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace(/<judgment>[\s\S]*<\/judgment>/, compact.replace('</judgment>', '<anti_regression>duplicate rule</anti_regression></judgment>')));
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('duplicate checkpoint judgment section: anti_regression'));
+  });
+
+  test('malformed checkpoint nesting and closing delimiters fail closed with bounded errors', async () => {
+    const malformed = [
+      R3_STYLE_CHECKPOINT.replace('</next_action>', '</remaining_work>'),
+      R3_STYLE_CHECKPOINT.replace('</next_action>', ''),
+      R3_STYLE_CHECKPOINT.replace('Run the authorized next recovery step.', '<next_action>nested action</next_action>'),
+      `${R3_STYLE_CHECKPOINT}\n<judgment>\n</judgment>`,
+      `${R3_STYLE_CHECKPOINT}\n${'</unmatched>\n'.repeat(40)}`,
+    ];
+    for (const content of malformed) {
+      writeCheckpoint(content);
+      const before = snapshotTree(tmpDir);
+      const checkpoint = await readContinuityCheckpoint();
+      assert.strictEqual(checkpoint.status, 'malformed');
+      assert.ok(checkpoint.errors.length > 0 && checkpoint.errors.length <= 12);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    }
+  });
+
   test('next rejects a checkpoint symlink without reading or rewriting its target', async (t) => {
     await initWork();
     const targetPath = path.join(tmpDir, '.work', 'checkpoint-target.md');

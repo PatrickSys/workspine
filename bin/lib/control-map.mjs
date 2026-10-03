@@ -47,6 +47,25 @@ function runGit(cwd, args) {
   }
 }
 
+/** Read a literal branch declaration, allowing only Markdown/display decoration. */
+export function resolveGitBranchDeclaration({ workspaceRoot, surface } = {}) {
+  const declaration = typeof surface === 'string' ? surface.trim() : '';
+  if (!declaration || /^(?:unknown|unverified|tbd)$/i.test(declaration)) return null;
+  const unwrap = (value) => value.replace(/^`([^`]+)`$/, '$1');
+  const candidates = [
+    unwrap(declaration),
+    unwrap(declaration.replace(/\s*\([^()]*\)\s*$/, '').trim()),
+  ];
+  for (const candidate of new Set(candidates)) {
+    if (!candidate) continue;
+    const branch = candidate.replace(/^refs\/heads\//, '');
+    const checked = runGit(workspaceRoot, ['check-ref-format', '--branch', branch]);
+    // Git owns ref-name syntax. Reject revision expansions such as @{-1}.
+    if (checked.ok && checked.stdout === branch) return branch;
+  }
+  return null;
+}
+
 function runIgnoredCount(cwd) {
   const result = runGit(cwd, ['ls-files', '-o', '-i', '--exclude-standard']);
   if (!result.ok) {

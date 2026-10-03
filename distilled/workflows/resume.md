@@ -4,6 +4,7 @@ You are the SESSION CONTEXT RESTORER. Your job is to reconstruct project state f
 Core mindset: derive state from primary artifacts. Do not depend on secondary summary files. ROADMAP.md checkboxes, phase directories, and the checkpoint file are your sources of truth.
 
 Scope boundary: unlike progress.md, you have side effects — checkpoint cleanup, interactive selection, and action dispatch. You restore context and get the user moving.
+Run this workflow after a session break before continuing product edits, even when the checkpoint's next action is concrete. Checkpoint prose supplies context; current artifacts, live repository truth, and the selected workflow's preflight supply authority.
 </role>
 
 <prerequisites>
@@ -135,6 +136,10 @@ Before routing, reconstruct and compare these truth buckets explicitly:
 
 Treat them as separate inputs. Do not flatten them into one continuity story.
 
+Keep owner decisions distinct from agent judgment. For material context mismatches requiring acknowledgement, validate the claimed owner acknowledgement against its referenced human instruction or durable owner-decision/approval record; an unsupported assertion by a prior agent is unverified and must follow the existing mismatch gate. Repeated checkpoint/handoff claims, agent-generated skill arguments, or a generic continuation prompt do not supply missing acknowledgement. Routine reversible choices remain agent-owned, and existing valid exact-plan approvals remain usable without a new question or raw-history search.
+
+For an active brownfield change, an unequivocal declared branch must agree with the resolved selected workspace's live branch. Resume and execute preflight block a proven disagreement or detached HEAD with a declared branch; acknowledgement cannot override this branch gate. Recover through the intended checkout/worktree or existing formal review, without silently editing or reapproving an executed CHANGE.md. Unknown/freeform surfaces or unavailable Git remain explicitly unverified, and ordinary dirty-state warnings remain warnings.
+
 Material mismatch signals include:
 - checkpoint narrative describes only a narrow slice of a broader dirty tree
 - current branch is stale/spent relative to the next intended integration surface
@@ -142,7 +147,7 @@ Material mismatch signals include:
 - `CHANGE.md` names a different branch / integration surface than the current git branch
 - dirty files fall outside the active brownfield write scope declared in `CHANGE.md`
 
-If git/worktree truth materially disagrees with checkpoint narrative truth:
+If git/worktree truth materially disagrees with checkpoint narrative truth for reasons other than a proven declared-branch blocker:
 - record a mismatch flag
 - keep ordinary git risk warning-level by default
 - require explicit user acknowledgement before routing onward
@@ -151,7 +156,7 @@ If git/worktree truth materially disagrees with checkpoint narrative truth:
 If git/worktree truth materially disagrees with the active brownfield artifact:
 - keep `CHANGE.md` as the operational anchor
 - surface the mismatch explicitly
-- require acknowledgement before continuing the brownfield change from this workflow
+- for material context mismatch other than declared-branch disagreement, require acknowledgement before continuing the brownfield change from this workflow
 - keep ordinary git warnings separate from this stronger continuity gate
 - When a checkpoint also exists, let that checkpoint outrank the brownfield anchor only if a strict-match rule proves it is still the active execution surface:
   - branch alignment: checkpoint branch, `CHANGE.md` integration surface, and current git branch all match
@@ -278,6 +283,8 @@ Only show the staleness banner when `<validate_checkpoint>` produced a staleness
 <determine_action>
 Evaluate in priority order and present the primary recommendation:
 
+If resume preflight reports `brownfield_branch_mismatch`, recommend the intended checkout/worktree reconciliation or existing formal review for an executed contract. Keep the checkpoint intact and do not dispatch execution until matching preflight confirms the blocker is resolved; acknowledgement cannot override this route.
+
 **Checkpoint exists (`.continue-here.md`):**
 Route based on the `workflow` frontmatter:
 - `phase` — route to `/work-execute` (or `/work-plan`/`/work-verify` based on checkpoint context)
@@ -286,14 +293,14 @@ Route based on the `workflow` frontmatter:
 
 If `<validate_checkpoint>` marked the checkpoint as stale, keep the same routing logic. The user may still choose to resume from the checkpoint after reviewing the warning. If the user chooses a different path, leave the checkpoint in place and continue without it.
 
-If `<provenance_reconciliation>` marked a material checkpoint/worktree mismatch, keep the same routing logic but require explicit acknowledgement before continuing. The workflow should not silently route onward from a materially misleading checkpoint narrative.
+If `<provenance_reconciliation>` marked a material checkpoint/worktree mismatch without a proven declared-branch blocker, keep the same routing logic but require explicit acknowledgement before continuing. The workflow should not silently route onward from a materially misleading checkpoint narrative.
 If an active brownfield change also exists, apply the same strict-match rule before making a `phase` or `quick` checkpoint primary. A checkpoint only stays primary when branch alignment, scope alignment, and still-active execution state all hold at once. Otherwise, keep the checkpoint visible and user-selectable, but fall through to the active brownfield change as the default resume target.
 
 **Active brownfield change (`.work/brownfield-change/CHANGE.md`):**
 If there is no checkpoint, or if the surviving checkpoint does not satisfy the strict-match rule against the active brownfield change:
 - present the `CHANGE.md` next action as the primary resume target
 - keep `HANDOFF.md` as supporting judgment context only
-- if artifact/worktree mismatch is material, require explicit acknowledgement before continuing
+- if artifact/worktree mismatch is material and is not a proven declared-branch blocker, require explicit acknowledgement before continuing
 - if the user does not want to continue immediately, let them review `CHANGE.md` or `HANDOFF.md` without deleting any checkpoint file
 - do not force this state back through `/work-new-project` or milestone routing just because there is no active roadmap
 - keep `/work-new-project` and `/work-new-milestone` as explicit widen-only choices when the bounded change no longer fits one active stream or now needs milestone-owned lifecycle state
@@ -326,15 +333,15 @@ What would you like to do?
 
 When the primary action is an active brownfield change rather than a checkpoint or lifecycle workflow, replace option 3 with `Review CHANGE.md or HANDOFF.md` if there is no active roadmap to inspect.
 
-**Quick-resume shortcut:** If there is no stale-checkpoint banner and no material checkpoint/worktree mismatch, the user may say "continue", "go", or "resume" without further input to execute the primary action directly.
+**Quick-resume shortcut:** If there is no stale-checkpoint banner, material checkpoint/worktree mismatch, or proven declared-branch blocker, the user may say "continue", "go", or "resume" without further input to execute the primary action directly.
 
-**Mismatch acknowledgement:** If material checkpoint/worktree mismatch or material brownfield artifact/worktree mismatch was detected, require an explicit acknowledgement such as "continue despite mismatch" or a different selected path. Do not let a bare "continue" skip the warning.
+**Mismatch acknowledgement:** For material checkpoint/worktree or brownfield artifact/worktree mismatch other than a proven declared-branch blocker, require an explicit acknowledgement such as "continue despite mismatch" or a different selected path. Do not let a bare "continue" skip the warning. A proven branch blocker offers only intended checkout/worktree reconciliation or existing formal review for an executed contract, never acknowledgement-and-proceed.
 
 Wait for user selection.
 </present_options>
 
 <cleanup_checkpoint>
-Immediately after the user confirms their action selection (before routing to the target workflow):
+Only when no unresolved `brownfield_branch_mismatch` remains, immediately after the user confirms their action selection (before routing to the target workflow):
 - If the user chose to resume from `.continue-here.md`:
   1. Run `node .work/bin/gsdd.mjs file-op copy .work/.continue-here.md .work/.continue-here.bak`.
   2. After the copy succeeds, run `node .work/bin/gsdd.mjs file-op delete .work/.continue-here.md`.
@@ -367,4 +374,5 @@ Consider clearing context before starting the next workflow for best results.
 ---
 
 Then dispatch to the selected `/work-*` workflow.
+Before any resumed product or lifecycle edit, complete that workflow's mandatory artifact reads and matching lifecycle preflight. For execution, recover the exact selected PLAN or `CHANGE.md#Implementation Plan` identity and current task, and validate its existing owner approval against current bytes. Resume does not grant approval, transfer it to a different plan, or repeat a completed execution transition to restart an already recorded task.
 </completion>

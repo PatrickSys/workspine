@@ -41,7 +41,7 @@ Store the detected work type as `$WORK_TYPE` (one of: `phase`, `quick`, `generic
 <gather_state>
 Build a draft checkpoint from artifact truth before asking the user to restate work. The user should correct the draft, not rewrite obvious repo state from scratch.
 
-When available, run `node .work/bin/gsdd.mjs control-map --json` and use it as the draft's repo/worktree snapshot: canonical branch/HEAD, dirty tracked/untracked/ignored buckets, sibling/detached worktrees, stale annotations, planning drift, and recommended interventions. Include only a compact summary or pointer in `.work/.continue-here.md`; the checkpoint records resumability context, not a replacement for future computed repo truth.
+Capture the current branch, HEAD, and dirty work from live Git alongside the active artifacts. Persist this minimum checkpoint before optional full-worktree discovery. When available, `node .work/bin/gsdd.mjs control-map --json` can then enrich its repo/worktree snapshot with dirty tracked/untracked/ignored buckets, sibling/detached worktrees, stale annotations, planning drift, and recommended interventions. If that enrichment is slow, unavailable, or fails, retain the checkpoint and record which facts remain unverified. Include only a compact summary or pointer in `.work/.continue-here.md`; the checkpoint records resumability context, not a replacement for future computed repo truth.
 
 Ask the user conversationally to fill in the gaps the artifacts cannot answer:
 
@@ -57,6 +57,8 @@ Read the relevant artifacts and current integration surface to pre-fill what you
 - For phase work: read the PLAN file and any partial SUMMARY — use these to pre-fill remaining_work and decisions where possible; only ask the user for gaps
 - For quick tasks: read the quick task PLAN and LOG.md entry — same pre-fill approach
 - For generic work: derive everything you can from repo state first, then ask only for what remains unknown
+
+Attribute owner decisions and mismatch acknowledgements only to a referenced human instruction or existing durable owner-decision/approval record. Label agent choices as agent judgment and uncertain attribution as unverified. Writing the checkpoint preserves these distinctions; it does not create owner authority.
 
 Question budget:
 - Ask at most 3 high-signal questions total
@@ -104,7 +106,7 @@ runtime: $INFERRED_RUNTIME
 </blockers>
 
 <next_action>
-[The specific first thing to do when resuming — include the exact command or file/step reference verbatim, quoted, so a fresh session can act without interpretation]
+Run `/work-resume` first. After its required reconciliation and the selected workflow's preflight, [include the exact continuation command or file/step reference verbatim, quoted].
 </next_action>
 
 <judgment>
@@ -124,6 +126,7 @@ runtime: $INFERRED_RUNTIME
 ```
 
 The checkpoint is project-scoped (lives at `.work/.continue-here.md`, not inside a phase directory) so resume always knows where to look. Keep the frontmatter and six required sections exactly as shown: `gsdd next --json` and resume preflight share this file-backed contract.
+Keep structural tags on their own lines, or use one complete compact section per line. Put examples containing structural tags inside Markdown fences. The `next_action` must start with `/work-resume` and retain the concrete continuation step after its checks; checkpoint prose never authorizes edits by itself.
 </write_checkpoint>
 
 **MANDATORY: `.work/.continue-here.md` must exist on disk after writing. If the file was not created, STOP and report the failure. The entire purpose of this workflow is to persist context — a failed write means the pause did nothing.**

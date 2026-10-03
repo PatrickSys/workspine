@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { isAbsolute, join, relative, resolve } from 'path';
 import { output } from './cli-utils.mjs';
-import { buildControlMap } from './control-map.mjs';
+import { buildControlMap, resolveGitBranchDeclaration } from './control-map.mjs';
 import {
   collectNativePhaseArtifacts,
   evaluateLifecycleState,
@@ -318,6 +318,18 @@ export function evaluateLifecyclePreflight({
     else warnings.push(notice);
   }
 
+  if ((surface === 'resume' || (surface === 'execute' && usesBrownfieldAuthority))
+      && lifecycle.brownfieldChange.exists && lifecycle.brownfieldChange.currentStatus !== 'closed') {
+    const continuity = brownfieldBranchContinuity({
+      workspaceRoot,
+      change: lifecycle.brownfieldChange,
+      map: controlMap.report,
+      stateLabel,
+    });
+    if (continuity.severity === 'block') blockers.push(continuity);
+    else if (continuity.severity === 'warn') warnings.push(continuity);
+  }
+
   if (lifecycle.phaseStatusAlignment.mismatches.length > 0) {
     const mismatch = {
       code: 'roadmap_phase_status_mismatch',
@@ -415,6 +427,7 @@ export function evaluateLifecyclePreflight({
 
 function buildPreflightControlMap({ planningDir, policy, existingBlockerCodes, controlMapReport = null }) {
   const empty = {
+    report: null,
     summary: null,
     notices: [],
   };
@@ -434,6 +447,7 @@ function buildPreflightControlMap({ planningDir, policy, existingBlockerCodes, c
   }));
 
   return {
+    report: map,
     summary: {
       riskCount: map.risks.length,
       noticeCount: notices.length,
@@ -442,6 +456,45 @@ function buildPreflightControlMap({ planningDir, policy, existingBlockerCodes, c
       interventions: map.interventions || [],
     },
     notices,
+  };
+}
+
+function brownfieldBranchContinuity({ workspaceRoot, change, map, stateLabel }) {
+  const artifacts = [stateLabel('brownfield-change', 'CHANGE.md')];
+  const unverified = (reason) => ({
+    code: 'brownfield_branch_unverified',
+    severity: 'warn',
+    message: `Brownfield integration surface is unverified: ${reason}. Reconcile the declared surface with live repository truth before relying on it.`,
+    artifacts,
+  });
+  const declaredBranch = resolveGitBranchDeclaration({ workspaceRoot, surface: change.currentIntegrationSurface });
+  if (!declaredBranch) return unverified('CHANGE.md does not declare one literal Git branch');
+  if (!map?.workspace_root || relative(workspaceRoot, resolve(map.workspace_root)) !== '') {
+    return unverified('the control map does not identify the selected workspace');
+  }
+  const selected = (map.worktrees || []).find((entry) => (
+    typeof entry.path === 'string' && relative(workspaceRoot, resolve(entry.path)) === ''
+  ));
+  if (!selected) return unverified('the selected workspace has no matching worktree record');
+  const detached = selected.detached === true || selected.branch === 'HEAD';
+  const branchFromRef = typeof selected.branch_ref === 'string' && selected.branch_ref.startsWith('refs/heads/')
+    ? selected.branch_ref.slice('refs/heads/'.length)
+    : null;
+  if (!detached && selected.branch && branchFromRef && selected.branch !== branchFromRef) {
+    return unverified('the selected workspace branch observations disagree');
+  }
+  // An unborn repository has no HEAD commit, but worktree list still reports
+  // its symbolic branch. Keep the existing Git-validity warning independent.
+  const actualBranch = selected.branch || branchFromRef;
+  if (!detached && (!actualBranch || (!selected.git_valid && !(branchFromRef && selected.git_top_level)))) {
+    return unverified('the selected workspace branch could not be read from Git');
+  }
+  if (!detached && actualBranch === declaredBranch) return { severity: 'info' };
+  return {
+    code: 'brownfield_branch_mismatch',
+    severity: 'block',
+    message: `CHANGE.md declares branch ${declaredBranch}, but the selected workspace is ${detached ? 'at detached HEAD' : `on branch ${actualBranch}`}. Use the intended checkout/worktree or the existing formal review path; acknowledgement cannot override branch agreement. Do not silently edit or reapprove an executed plan.`,
+    artifacts,
   };
 }
 
@@ -1053,6 +1106,7 @@ function assertBrownfieldTransitionContract({ planningDir, target, plan }) {
       throw transitionErrorForCli('brownfield_not_ready', 'Brownfield closeout requires CHANGE.md posture ready_for_verification or closed.', [plan.relative]);
     }
   }
+  return brownfield;
 }
 
 function validateTransitionArtifact({ planningDir, target, planArg, artifactArg, authority, approvalRef, approvalRefProvided = false, approved = false, approvalRequested = false }) {
@@ -1127,7 +1181,7 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
     const identityGuard = preWriteGuard;
     preWriteGuard = () => {
       identityGuard?.();
-      assertBrownfieldTransitionContract({ planningDir, target, plan });
+      return assertBrownfieldTransitionContract({ planningDir, target, plan });
     };
     preWriteGuard();
   }
@@ -1150,6 +1204,25 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   if (target === 'fix_gaps' && !['gaps_found', 'human_needed', 'blocked', 'failed', 'fail'].includes(artifactStatus)) {
     throw transitionErrorForCli('gaps_not_recorded', 'The supplied verification artifact does not record gaps or a human gate.', [artifact.relative]);
   }
+  const warnings = [];
+  if (brownfieldChain && target === 'execute') {
+    const contractGuard = preWriteGuard;
+    // Artifact/approval refusal keeps precedence. The final mutation guard
+    // runs before both a state write and replay, with one control-map scan.
+    preWriteGuard = () => {
+      const change = contractGuard();
+      const continuity = brownfieldBranchContinuity({
+        workspaceRoot,
+        change,
+        map: buildControlMap({ workspaceRoot, planningDir }),
+        stateLabel,
+      });
+      if (continuity.severity === 'block') {
+        throw transitionErrorForCli(continuity.code, continuity.message, continuity.artifacts);
+      }
+      if (continuity.severity === 'warn') warnings.push(continuity);
+    };
+  }
   return {
     workspaceRoot,
     plan,
@@ -1160,6 +1233,7 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
     approvalRef: authority === 'owner' ? normalizedApprovalRef || null : null,
     approvalRequested,
     preWriteGuard,
+    warnings,
     stateLabel,
   };
 }
@@ -1219,7 +1293,7 @@ export function cmdLifecycleTransition(...args) {
       approved,
       preWriteGuard: validated.preWriteGuard,
     });
-    respond({ schema_version: 1, operation: 'lifecycle-transition', target, ...result, evidence: [validated.plan?.relative, validated.artifact?.relative].filter(Boolean) });
+    respond({ schema_version: 1, operation: 'lifecycle-transition', target, ...result, ...(validated.warnings.length ? { warnings: validated.warnings } : {}), evidence: [validated.plan?.relative, validated.artifact?.relative].filter(Boolean) });
     if (result.status === 'error') process.exitCode = 1;
   } catch (transitionError) {
     const response = {
