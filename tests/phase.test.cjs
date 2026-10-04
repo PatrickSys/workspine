@@ -1577,6 +1577,106 @@ describe('Phase 30 lifecycle-preflight helper', () => {
     }
   });
 
+  test('control-map takes the top level from rev-parse, not the recorded worktree path', async () => {
+    const gitDir = path.join(tmpDir, 'outer');
+    const realTree = path.join(tmpDir, 'inner');
+    fs.mkdirSync(gitDir, { recursive: true });
+    fs.mkdirSync(realTree, { recursive: true });
+    git(['init'], gitDir);
+    git(['config', 'user.email', 'test@example.com'], gitDir);
+    git(['config', 'user.name', 'Test User'], gitDir);
+    // core.worktree splits the path the listing records from where git considers the root.
+    git(['config', 'core.worktree', realTree], gitDir);
+    writeProjectFile(realTree, 'README.md', '# real tree\n');
+    git(['add', 'README.md'], gitDir);
+    git(['commit', '-m', 'initial'], gitDir);
+
+    const revParseTopLevel = git(['rev-parse', '--show-toplevel'], gitDir).replace(/\\/g, '/');
+    const listedPath = git(['worktree', 'list', '--porcelain'], gitDir)
+      .split('\n')
+      .find((line) => line.startsWith('worktree '))
+      .slice('worktree '.length)
+      .replace(/\\/g, '/');
+    assert.notStrictEqual(listedPath, revParseTopLevel, 'fixture must separate the recorded path from the real root');
+
+    const { buildControlMap } = await importControlMapModule();
+    const output = buildControlMap({ workspaceRoot: gitDir });
+
+    assert.strictEqual(output.canonical_worktree.git_top_level, revParseTopLevel);
+    assert.strictEqual(output.repo_root_id, revParseTopLevel);
+    assert.notStrictEqual(output.repo_root_id, listedPath);
+  });
+
+  test('control-map takes HEAD from the directory, not the recorded listing entry', async () => {
+    const repoDir = path.join(tmpDir, 'repo');
+    const linkedDir = path.join(tmpDir, 'side');
+    fs.mkdirSync(repoDir, { recursive: true });
+    git(['init'], repoDir);
+    git(['config', 'user.email', 'test@example.com'], repoDir);
+    git(['config', 'user.name', 'Test User'], repoDir);
+    writeProjectFile(repoDir, 'README.md', '# canonical\n');
+    git(['add', 'README.md'], repoDir);
+    git(['commit', '-m', 'initial'], repoDir);
+    git(['branch', '-M', 'main'], repoDir);
+    git(['worktree', 'add', linkedDir, '-b', 'side'], repoDir);
+
+    const listing = git(['worktree', 'list', '--porcelain'], repoDir);
+    const recordedHead = listing
+      .split('\n\n')
+      .find((entry) => entry.includes(`worktree ${linkedDir.replace(/\\/g, '/')}`))
+      .split('\n')
+      .find((line) => line.startsWith('HEAD '))
+      .slice('HEAD '.length);
+
+    // The linked directory stops being the worktree the listing entry describes.
+    fs.rmSync(path.join(linkedDir, '.git'), { recursive: true, force: true });
+    git(['init'], linkedDir);
+    git(['config', 'user.email', 'test@example.com'], linkedDir);
+    git(['config', 'user.name', 'Test User'], linkedDir);
+    writeProjectFile(linkedDir, 'other.txt', '# a different repo\n');
+    git(['add', 'other.txt'], linkedDir);
+    git(['commit', '-m', 'replacement'], linkedDir);
+
+    const liveHead = git(['rev-parse', 'HEAD'], linkedDir);
+    assert.notStrictEqual(liveHead, recordedHead, 'fixture must leave the recorded HEAD stale');
+    assert.strictEqual(
+      git(['worktree', 'list', '--porcelain'], repoDir).includes(`HEAD ${recordedHead}`),
+      true,
+      'the stale listing is still what the canonical repo reports',
+    );
+
+    const { buildControlMap } = await importControlMapModule();
+    const output = buildControlMap({ workspaceRoot: repoDir });
+
+    const entry = output.worktrees.find((worktree) => worktree.path === linkedDir.replace(/\\/g, '/'));
+    assert.ok(entry, output.worktrees.map((worktree) => worktree.path).join(', '));
+    assert.strictEqual(entry.head, liveHead);
+    assert.notStrictEqual(entry.head, recordedHead);
+  });
+
+  test('control-map keeps branch and head null on an unborn HEAD, matching rev-parse', async () => {
+    const unbornDir = path.join(tmpDir, 'unborn');
+    fs.mkdirSync(unbornDir, { recursive: true });
+    git(['init'], unbornDir);
+    git(['config', 'user.email', 'test@example.com'], unbornDir);
+    git(['config', 'user.name', 'Test User'], unbornDir);
+
+    assert.ok(git(['status', '--short', '--branch'], unbornDir).startsWith('## No commits yet'));
+    assert.strictEqual(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: unbornDir, encoding: 'utf-8' }).status, 128);
+    assert.strictEqual(spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: unbornDir, encoding: 'utf-8' }).status, 128);
+
+    const { buildControlMap } = await importControlMapModule();
+    const output = buildControlMap({ workspaceRoot: unbornDir });
+
+    assert.strictEqual(output.canonical_worktree.git_valid, false);
+    assert.strictEqual(output.canonical_worktree.branch, null);
+    assert.strictEqual(output.canonical_worktree.head, null);
+    assert.strictEqual(
+      output.canonical_worktree.git_top_level,
+      git(['rev-parse', '--show-toplevel'], unbornDir).replace(/\\/g, '/'),
+    );
+  });
+
   test('owned-write preflight blocks on block-level control-map overlap risks', async () => {
     initPreflightGitWorkspace(tmpDir);
     writePreflightPhase(tmpDir);
