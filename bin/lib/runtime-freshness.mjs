@@ -525,9 +525,14 @@ export function evaluateRuntimeFreshness({ cwd = process.cwd(), workflows = [] }
         && Array.isArray(selectionManifest?.adapterSelection)
         && selectionManifest.adapterSelection.includes(group.runtime))
     );
+    // An explicit adapterSelection that leaves this runtime out means a bare root directory
+    // (for example a consumer's own .claude/settings.json) is not an install of it.
+    const declaredNotSelected = ['claude', 'opencode', 'codex'].includes(group.runtime)
+      && Array.isArray(selectionManifest?.adapterSelection)
+      && !manifestSelected;
     const installed = group.runtime === 'workspace-helper'
       ? existsSync(resolveStateDir(cwd).dir)
-      : existsSync(join(cwd, group.root)) || manifestSelected;
+      : (existsSync(join(cwd, group.root)) && !declaredNotSelected) || manifestSelected;
     const comparisons = installed
       ? group.entries.map((entry) => compareGeneratedFile({
         cwd,

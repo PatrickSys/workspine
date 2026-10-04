@@ -193,7 +193,9 @@ export function preflightLocalUpdateRepair(ctx) {
       : [...new Set(Object.values(effectiveManifest?.adapterFiles ?? {})
         .map((entry) => entry && typeof entry === 'object' ? entry.adapter : null)
         .filter((name) => typeof name === 'string'))];
-    const platforms = manifestPlatforms.length > 0 ? manifestPlatforms : detectPlatforms(updateCtx.adapters);
+    const platforms = Array.isArray(effectiveManifest?.adapterSelection) || manifestPlatforms.length > 0
+      ? manifestPlatforms
+      : detectPlatforms(updateCtx.adapters);
     const adaptersToUpdate = resolveAdapters(updateCtx.adapters, platforms);
     const writerPlatforms = [...new Set([...platforms, ...adaptersToUpdate.map((adapter) => adapter.name)])];
     const targets = getLocalAdapterTargets(updateCtx.adapters, updateCtx.workflows, writerPlatforms);
@@ -516,7 +518,9 @@ export function createCmdUpdate(ctx) {
       : [...new Set(Object.values(effectiveManifest?.adapterFiles ?? {})
         .map((entry) => entry && typeof entry === 'object' ? entry.adapter : null)
         .filter((name) => typeof name === 'string'))];
-    const platforms = manifestPlatforms.length > 0 ? manifestPlatforms : detectPlatforms(ctx.adapters);
+    const platforms = Array.isArray(effectiveManifest?.adapterSelection) || manifestPlatforms.length > 0
+      ? manifestPlatforms
+      : detectPlatforms(ctx.adapters);
     const adaptersToUpdate = resolveAdapters(ctx.adapters, platforms);
     const writerPlatforms = [...new Set([...platforms, ...adaptersToUpdate.map((adapter) => adapter.name)])];
     const localAdapterTargets = getLocalAdapterTargets(ctx.adapters, ctx.workflows, writerPlatforms);
