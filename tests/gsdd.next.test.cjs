@@ -2275,6 +2275,54 @@ describe('next command routing', () => {
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), beforeReplay);
   });
 
+  test('verification lifecycle reads only root status, even when nested frontmatter contradicts it', async () => {
+    await initWork();
+    const planPath = '.work/phases/01-transition/01-PLAN.md';
+    const summaryPath = '.work/phases/01-transition/01-SUMMARY.md';
+    const verificationPath = '.work/phases/01-transition/01-VERIFICATION.md';
+    writeFile(planPath, '---\nstatus: approved\n---\n# plan\n');
+    await runJson(['lifecycle-transition', 'plan', '--plan', planPath, '--authority', 'workflow', '--json']);
+    await runJson(['lifecycle-transition', 'approve', '--plan', planPath, '--authority', 'owner', '--approval-ref', 'owner-metadata-review', '--json']);
+    await runJson(['lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json']);
+    writeFile(summaryPath, '---\nstatus: complete\n---\n# summary\n');
+    await runJson(['lifecycle-transition', 'verify', '--plan', planPath, '--artifact', summaryPath, '--authority', 'workflow', '--json']);
+
+    writeFile(verificationPath, '---\nstatus: failed\nreview:\n  status: passed\n---\n# Verification\n');
+    const stateBeforeRefusal = fs.readFileSync(path.join(tmpDir, '.work', 'state.json'));
+    const falsePass = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'audit', '--plan', planPath, '--artifact', verificationPath, '--authority', 'workflow', '--json',
+    ]);
+    assert.strictEqual(falsePass.exitCode, 1, falsePass.output);
+    assert.strictEqual(JSON.parse(falsePass.output).error_code, 'verification_not_passed');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), stateBeforeRefusal);
+
+    writeFile(verificationPath, '---\nstatus: gaps_found\nreview:\n  status: passed\n---\n# Verification\n');
+    const gaps = await runJson(['lifecycle-transition', 'fix_gaps', '--plan', planPath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(gaps.state.current_state, 'fix_gaps');
+  });
+
+  test('nested body or fenced status cannot substitute for top-level verification status', async () => {
+    await initWork();
+    const planPath = '.work/phases/01-transition/01-PLAN.md';
+    const verificationPath = '.work/phases/01-transition/01-VERIFICATION.md';
+    writeFile(planPath, '---\nstatus: approved\n---\n# plan\n');
+    await runJson(['lifecycle-transition', 'plan', '--plan', planPath, '--authority', 'workflow', '--json']);
+    await runJson(['lifecycle-transition', 'approve', '--plan', planPath, '--authority', 'owner', '--approval-ref', 'owner-body-review', '--json']);
+    await runJson(['lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json']);
+    writeFile('.work/phases/01-transition/01-SUMMARY.md', 'status: complete\n');
+    await runJson(['lifecycle-transition', 'verify', '--plan', planPath, '--artifact', '.work/phases/01-transition/01-SUMMARY.md', '--authority', 'workflow', '--json']);
+
+    for (const body of [
+      'status: failed\n\n### Nested result\n  status: passed\n',
+      'status: failed\n\n```yaml\nstatus: passed\n```\n',
+    ]) {
+      writeFile(verificationPath, body);
+      const invalid = await runCliAsMain(tmpDir, ['lifecycle-transition', 'audit', '--plan', planPath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+      assert.strictEqual(invalid.exitCode, 1, invalid.output);
+      assert.strictEqual(JSON.parse(invalid.output).error_code, 'verification_not_passed');
+    }
+  });
+
   test('approved PLAN transitions execute before implementation and verify only after complete SUMMARY', async () => {
     await initWork();
     const planPath = '.work/phases/01-transition/01-PLAN.md';

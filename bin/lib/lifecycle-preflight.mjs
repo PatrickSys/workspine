@@ -1049,8 +1049,20 @@ function readArtifactMetadata(filePath) {
   const metadata = {};
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   const source = frontmatter ? frontmatter[1] : content;
+  let codeFence = null;
   for (const line of source.split(/\r?\n/)) {
-    const match = line.match(/^\s*(status|result|approved|approval_status|authority|approved_by|completed|verification_status)\s*:\s*(.*?)\s*$/i);
+    // Without frontmatter, preserve legacy root-level scalars while excluding
+    // Markdown examples. Nested YAML fields must never override lifecycle status.
+    if (!frontmatter) {
+      const fence = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (fence) {
+        if (!codeFence) codeFence = { marker: fence[1][0], length: fence[1].length };
+        else if (fence[1][0] === codeFence.marker && fence[1].length >= codeFence.length && !fence[2].trim()) codeFence = null;
+        continue;
+      }
+      if (codeFence) continue;
+    }
+    const match = line.match(/^(status|result|approved|approval_status|authority|approved_by|completed|verification_status)\s*:\s*(.*?)\s*$/i);
     if (!match) continue;
     const value = match[2].replace(/^['"]|['"]$/g, '').trim();
     metadata[match[1].toLowerCase()] = value;
