@@ -324,6 +324,42 @@ describe('gsdd models and model propagation', () => {
       assert.strictEqual(payload.detectedRuntimeModels.opencode, 'anthropic/claude-sonnet-4-5');
     });
 
+    test('executor model is inherited by default and can be overridden per runtime without changing checker or main preferences', async () => {
+      writeProjectConfig(tmpDir, { modelProfile: 'quality' });
+
+      let result = await runCliAsMain(tmpDir, ['models', 'show']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      let config = readJson(path.join(tmpDir, '.work', 'config.json'));
+      let show = JSON.parse(result.output);
+      assert.deepStrictEqual(show.effective.codex.executor, { mode: 'inherit', model: null });
+      assert.deepStrictEqual(show.effective.claude.executor, { mode: 'inherit', model: null });
+      assert.deepStrictEqual(show.effective.opencode.executor, { mode: 'inherit', model: null });
+
+      result = await runCliAsMain(tmpDir, ['models', 'set', '--runtime', 'codex', '--agent', 'executor', '--model', 'openai/gpt-6.1-sol']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      result = await runCliAsMain(tmpDir, ['models', 'set', '--runtime', 'opencode', '--agent', 'executor', '--model', 'openai/gpt-6.1-sol']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+
+      result = await runCliAsMain(tmpDir, ['models', 'show']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      show = JSON.parse(result.output);
+      config = readJson(path.join(tmpDir, '.work', 'config.json'));
+      assert.deepStrictEqual(show.effective.codex.executor, { mode: 'override', model: 'openai/gpt-6.1-sol' });
+      assert.deepStrictEqual(show.effective.opencode.executor, { mode: 'override', model: 'openai/gpt-6.1-sol' });
+      assert.deepStrictEqual(show.effective.claude.executor, { mode: 'inherit', model: null });
+      assert.strictEqual(show.modelProfile, 'quality');
+      assert.strictEqual(config.modelProfile, 'quality');
+      assert.strictEqual(show.effective.codex['plan-checker'].mode, 'inherit');
+
+      result = await runCliAsMain(tmpDir, ['models', 'clear', '--runtime', 'codex', '--agent', 'executor']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      result = await runCliAsMain(tmpDir, ['models', 'show']);
+      assert.deepStrictEqual(JSON.parse(result.output).effective.codex.executor, { mode: 'inherit', model: null });
+
+      result = await runCliAsMain(tmpDir, ['models', 'agent-profile', '--agent', 'executor', '--profile', 'quality']);
+      assert.strictEqual(result.exitCode, 1, 'an executor has no portable semantic profile mapping');
+    });
+
     test('models profile writes global modelProfile', async () => {
       writeProjectConfig(tmpDir, {});
       const result = await runCliAsMain(tmpDir, ['models', 'profile', 'quality']);
