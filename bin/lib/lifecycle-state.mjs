@@ -40,12 +40,15 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     structuralPhaseArtifacts,
     { companionKinds: ['summary', 'verification'], malformedPlanFrontmatter }
   );
+  const parkedPhaseTokens = new Set(phaseStatusAlignment.parkedPhaseTokens);
   const enrichedPhases = phases.map((phase) => {
     const matchingArtifacts = phaseArtifacts.filter((artifact) => artifact.phaseToken === phase.number);
     const hasPlan = matchingArtifacts.some((artifact) => artifact.kind === 'plan');
     const hasSummary = matchingArtifacts.some((artifact) => artifact.kind === 'summary');
     return {
       ...phase,
+      // Owner parking is an execution disposition distinct from [ ] not_started.
+      parked: parkedPhaseTokens.has(phase.number),
       hasArtifacts: matchingArtifacts.length > 0,
       hasLifecycleArtifacts: hasPlan || hasSummary,
       hasPlan,
@@ -81,7 +84,7 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     currentMilestone,
     phases: enrichedPhases,
     currentPhase: enrichedPhases.find((phase) => phase.status === 'in_progress') || null,
-    nextPhase: enrichedPhases.find((phase) => phase.status === 'not_started') || null,
+    nextPhase: enrichedPhases.find((phase) => phase.status === 'not_started' && !phase.parked) || null,
     counts,
     phaseArtifacts,
     historicalPhaseArtifacts,
@@ -101,10 +104,11 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
 }
 
 function evaluateRoadmapPhaseStatusAlignment(roadmap) {
-  if (!roadmap) return { mismatches: [] };
+  if (!roadmap) return { mismatches: [], parkedPhaseTokens: [] };
 
   const overview = new Map();
   const details = new Map();
+  const parkedPhaseTokens = new Set();
   const lines = normalizeContent(roadmap).split('\n');
   let inDetails = false;
   let currentDetailPhase = null;
@@ -126,6 +130,9 @@ function evaluateRoadmapPhaseStatusAlignment(roadmap) {
     if (phaseMatch) {
       const phaseToken = normalizePhaseToken(phaseMatch[2]);
       const status = normalizePhaseStatus(phaseMatch[1]);
+      if (status === 'not_started' && isExplicitOwnerParkedStatusSuffix(line.slice(phaseMatch[0].length))) {
+        parkedPhaseTokens.add(phaseToken);
+      }
       if (!overview.has(phaseToken)) overview.set(phaseToken, []);
       overview.get(phaseToken).push(status);
       continue;
@@ -146,6 +153,10 @@ function evaluateRoadmapPhaseStatusAlignment(roadmap) {
     const statusMatch = line.match(PHASE_DETAIL_STATUS_RE);
     if (statusMatch && currentDetailPhase) {
       details.get(currentDetailPhase).push(normalizePhaseStatus(statusMatch[1]));
+      if (normalizePhaseStatus(statusMatch[1]) === 'not_started'
+        && isExplicitOwnerParkedStatusSuffix(line.slice(statusMatch[0].length))) {
+        parkedPhaseTokens.add(currentDetailPhase);
+      }
     }
   }
 
@@ -171,7 +182,13 @@ function evaluateRoadmapPhaseStatusAlignment(roadmap) {
     }
   }
 
-  return { mismatches };
+  return { mismatches, parkedPhaseTokens: [...parkedPhaseTokens].sort(comparePhaseTokens) };
+}
+
+function isExplicitOwnerParkedStatusSuffix(suffix) {
+  // Only a recognized phase overview/detail status marker may declare parking.
+  // Body paragraphs, historical mentions and ordinary [ ] do not confer it.
+  return /^\s*[-—–]\s*(?:\*\*)?(?:parked\s+by\s+owner|owner[-\s]+parked)\b/i.test(suffix);
 }
 
 function comparePhaseTokens(a, b) {

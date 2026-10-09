@@ -1152,6 +1152,17 @@ export function cmdPhaseStatus(...args) {
       return;
     }
     const isNative = selection.candidate.authority === 'native';
+    const parked = !isNative && lifecycle.phases.find((phase) => phase.number === selection.candidate.phaseToken)?.parked;
+    if (parked) {
+      output({
+        error: 'owner_parked_phase',
+        phase: selection.candidate.phaseToken,
+        identity: selection.candidate.identity,
+        message: 'Current ROADMAP explicitly PARKS this phase by owner; do not change its lifecycle checkbox without an owner unpark disposition.',
+      });
+      process.exitCode = 1;
+      return;
+    }
     const roadmapPath = isNative ? join(nativeMilestoneDir, 'ROADMAP.md') : join(planningDir, 'ROADMAP.md');
     if (!existsSync(roadmapPath)) {
       console.error('No ROADMAP.md found. Run the new-project workflow first.');

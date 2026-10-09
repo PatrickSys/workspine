@@ -77,6 +77,22 @@ const SURFACE_POLICIES = {
 
 const WORK_PHASE_LINE_RE = /^\s*[-*]\s*\[([ x-])\]\s*\*\*Phase\s+(\d+(?:\.\d+)*[A-Za-z]?):\s*(.+?)\*\*/i;
 
+function checkpointParkedStandardPhase(lifecycle, value) {
+  // An explicit numbered checkpoint can name the standard phase by number or
+  // by its exact phase directory. A same-number native/other phase directory
+  // must not silently inherit the standard ROADMAP's PARKED disposition.
+  const raw = String(value || '').trim().toLowerCase();
+  const match = raw.match(/^(\d+(?:\.\d+)*[a-z]?)(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$/i);
+  if (!match) return null;
+  const phaseToken = normalizePhaseToken(match[1]);
+  if (raw !== match[1]) {
+    const selectedDir = (lifecycle.phaseArtifacts || []).some((artifact) => artifact.phaseToken === phaseToken
+      && String(artifact.dir).toLowerCase() === raw);
+    if (!selectedDir) return null;
+  }
+  return lifecycle.phases.find((phase) => phase.number === phaseToken) || null;
+}
+
 export function evaluateLifecyclePreflight({
   planningDir,
   surface,
@@ -141,6 +157,20 @@ export function evaluateLifecyclePreflight({
   const specPath = join(planningDir, 'SPEC.md');
   const milestonesPath = join(planningDir, 'MILESTONES.md');
   const blockers = [];
+
+  const selectedPhase = normalizedPhase && !usesBrownfieldAuthority && !usesPlanAmendAuthority && !usesNativeAuthority
+    ? lifecycle.phases.find((phase) => phase.number === normalizedPhase)
+    : surface === 'resume' && continuityCheckpoint?.status === 'valid'
+      && continuityCheckpoint.frontmatter?.workflow === 'phase'
+      ? checkpointParkedStandardPhase(lifecycle, continuityCheckpoint.frontmatter.phase)
+      : null;
+  if (selectedPhase?.parked && ['plan', 'execute', 'verify', 'resume'].includes(surface)) {
+    blockers.push(blocker(
+      'owner_parked_phase',
+      `Phase ${selectedPhase.number} is explicitly PARKED by owner in the current ROADMAP; do not dispatch its lifecycle work without a new owner unpark disposition.`,
+      [stateLabel('ROADMAP.md')],
+    ));
+  }
 
   const malformedPlans = [
     ...(lifecycle.malformedPlanFrontmatter || []),
@@ -1168,6 +1198,21 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   }
   const artifactKind = artifact ? lifecycleArtifactKind(artifact.path) : null;
   const planKind = plan ? lifecycleArtifactKind(plan.path) : null;
+  const mutatesSelectedPhase = ['plan', 'approve', 'execute', 'verify', 'audit', 'next', 'fix_gaps'].includes(target);
+  const assertSelectedPlanNotParked = () => {
+    if (!plan || planKind !== 'plan' || !mutatesSelectedPhase) return;
+    const lifecycle = evaluateLifecycleState({ planningDir });
+    const selectedPlan = lifecycle.phaseArtifacts.find((item) => item.kind === 'plan' && resolve(item.path) === resolve(plan.path));
+    const parked = selectedPlan && lifecycle.phases.find((phase) => phase.number === selectedPlan.phaseToken)?.parked;
+    if (parked) {
+      throw transitionErrorForCli('owner_parked_phase',
+        `Phase ${selectedPlan.phaseToken} is explicitly PARKED by owner in the current ROADMAP; no lifecycle transition is authorized.`,
+        [plan.relative, stateLabel('ROADMAP.md')]);
+    }
+  };
+  // This is a direct state-writing command; checking only workflow preflight
+  // would let a caller bypass the owner-PARKED refusal.
+  assertSelectedPlanNotParked();
   if (plan && ['plan', 'approve', 'execute'].includes(target)) {
     assertLifecyclePlanIdentity(planningDir, target, plan.relative);
   }
@@ -1208,6 +1253,10 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   let preWriteGuard = plan && ['plan', 'approve', 'execute'].includes(target)
     ? () => assertLifecyclePlanIdentity(planningDir, target, plan.relative)
     : null;
+  if (plan && planKind === 'plan' && mutatesSelectedPhase) {
+    const preceding = preWriteGuard;
+    preWriteGuard = () => { preceding?.(); assertSelectedPlanNotParked(); };
+  }
   if (brownfieldChain && target !== 'blocked' && target !== 'ask_user') {
     const identityGuard = preWriteGuard;
     preWriteGuard = () => {

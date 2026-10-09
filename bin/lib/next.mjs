@@ -751,7 +751,7 @@ function routeNext(ctx) {
     });
   }
 
-  if (hasUnverifiedSummaries(context.planning.phases)) {
+  if (hasUnverifiedSummaries(context.planning.phases, lifecycleTruth.lifecycle)) {
     return enrichRoute({ state: 'verify', reason: `${statePath(context)} phase summaries exist without matching verification reports.` }, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
   }
 
@@ -818,8 +818,9 @@ function routeNext(ctx) {
 function readLifecycleTruth(cwd, context) {
   const planningDir = resolveStateDir(cwd).dir;
   const malformed = [];
+  let lifecycle = null;
   try {
-    const lifecycle = evaluateLifecycleState({ planningDir });
+    lifecycle = evaluateLifecycleState({ planningDir });
     malformed.push(...(lifecycle.malformedPlanFrontmatter || []));
   } catch (error) {
     if (!isMalformedPlanFrontmatterError(error)) throw error;
@@ -848,7 +849,7 @@ function readLifecycleTruth(cwd, context) {
       });
     }
   }
-  return { malformed: malformed.filter((issue, index, all) => all.findIndex((candidate) => candidate.displayPath === issue.displayPath) === index) };
+  return { lifecycle, malformed: malformed.filter((issue, index, all) => all.findIndex((candidate) => candidate.displayPath === issue.displayPath) === index) };
 }
 
 function isMalformedPlanFrontmatterError(error) {
@@ -1095,8 +1096,20 @@ function defaultWriteArtifacts(state) {
   return [];
 }
 
-function hasUnverifiedSummaries(phases) {
-  return phases.some((phase) => phase.summaries.length > 0 && phase.verifications.length === 0);
+function hasUnverifiedSummaries(phases, lifecycle) {
+  const byToken = new Map((lifecycle?.phases || []).map((phase) => [phase.number, phase]));
+  const currentSummaries = (lifecycle?.phaseArtifacts || []).filter((artifact) => artifact.kind === 'summary');
+  const classifiedDirectories = new Set(currentSummaries.map((artifact) => artifact.dir));
+  const eligibleDirectories = new Set(currentSummaries.filter((artifact) => {
+    const roadmapPhase = byToken.get(artifact.phaseToken);
+    return !roadmapPhase || (roadmapPhase.status !== 'done' && !roadmapPhase.parked);
+  }).map((artifact) => artifact.dir));
+  return phases.some((phase) => {
+    if (phase.summaries.length === 0 || phase.verifications.length > 0) return false;
+    // Preserve unclassified legacy orphan behavior, but never promote a
+    // classified DONE or owner-PARKED summary into a fresh verify assignment.
+    return !classifiedDirectories.has(phase.dir) || eligibleDirectories.has(phase.dir);
+  });
 }
 
 function findTrustGate(manifest) {
