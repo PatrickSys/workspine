@@ -171,4 +171,23 @@ describe('same-parent legacy state migration', () => {
     assert.strictEqual(fs.existsSync(path.join(tmp, '.work')), false);
     assert.deepStrictEqual(fs.readdirSync(tmp), ['.planning']);
   });
+
+  test('adoption refuses a source edit during receipt writing after the first archive digest', async () => {
+    const { adoptLegacyState } = await loadMigration();
+    const legacy = path.join(tmp, '.planning');
+    fs.mkdirSync(legacy);
+    fs.writeFileSync(path.join(legacy, 'SPEC.md'), '# Historic Spec\n');
+    fs.writeFileSync(path.join(legacy, 'ROADMAP.md'), '# Historic Roadmap\n');
+    assert.throws(() => adoptLegacyState(tmp, {
+      writeReceipt(receiptPath, content) {
+        fs.writeFileSync(receiptPath, content);
+        const archive = path.join(path.dirname(receiptPath), '.local', 'legacy-planning');
+        fs.writeFileSync(path.join(archive, 'SPEC.md'), '# Owner edited during receipt\n');
+      },
+    }), /changed during adoption/);
+    assert.strictEqual(fs.readFileSync(path.join(legacy, 'SPEC.md'), 'utf8'), '# Owner edited during receipt\n');
+    assert.strictEqual(fs.existsSync(path.join(tmp, '.work')), false);
+    assert.deepStrictEqual(fs.readdirSync(tmp), ['.planning'],
+      'the staging receipt is discarded and ownership returns to the old tree');
+  });
 });

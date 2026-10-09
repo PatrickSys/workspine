@@ -128,6 +128,15 @@ export function adoptLegacyState(root, {
       throw new Error('Historical legacy content changed during adoption; source restored without establishing .work authority.');
     }
     writeReceipt(stagedReceipt, `${JSON.stringify(receipt, null, 2)}\n`);
+    // Recheck after the receipt writer: an owner's concurrent edit during
+    // that synchronous callback must remain historical source data rather
+    // than yield a receipt that falsely seals the earlier archive digest.
+    // This narrows the known window; it is not a lock against a separate
+    // process changing bytes after the final check.
+    const finalRetained = digestLegacyTree(archive);
+    if (finalRetained.sha256 !== digest.sha256 || finalRetained.entryCount !== digest.entryCount) {
+      throw new Error('Historical legacy content changed during adoption; source restored without establishing .work authority.');
+    }
     const concurrentState = resolveStateDir(state.root);
     if (concurrentState.workExists || concurrentState.legacyExists) {
       throw new Error('Workspine or a competing legacy root appeared during adoption; refusing split authority.');

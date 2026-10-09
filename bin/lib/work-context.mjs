@@ -378,6 +378,14 @@ export function transitionWorkflowState(workDir, {
   if (recordedPlan && expectedPlan && recordedPlan !== expectedPlan && !repairBrownfieldApproval) {
     throw transitionError('stale_state', 'Recorded plan authority does not match the supplied plan artifact.', [String(recordedPlan), String(expectedPlan)]);
   }
+  // ask_user/blocked can interrupt execute without clearing its execution
+  // status or old owner approval. They must never become a shortcut back to
+  // ordinary agent-controlled planning and reuse of the old approval ref.
+  if (normalizedTarget === 'plan' && !amend && workflow.execution.status === 'in_progress') {
+    throw transitionError('owner_amendment_required',
+      'An approved or interrupted execution still has in-progress lifecycle authority. Review its retained work and use explicit owner --amend for a bounded CHANGE, or formal review for other plans.',
+      [String(recordedPlan || '.work/state.json')]);
+  }
   if (artifactPath && artifactIdentity) {
     const recordedArtifact = normalizedTarget === 'verify'
       ? workflow.execution.artifact || workflow.execution.identity
@@ -400,11 +408,12 @@ export function transitionWorkflowState(workDir, {
   const originalApprovalHash = workflow.plan.approved_sha256;
   const amendedHash = amend && normalizedPlan ? planArtifactSha256(workDir, normalizedPlan) : null;
   const brownfieldIdentity = `${stateRoot}/brownfield-change/CHANGE.md`;
+  const interruptedExecutionStates = ['execute', 'ask_user', 'blocked'];
   const stagesHaveNoTerminalEvidence = [workflow.verification, workflow.audit, workflow.dogfood]
     .every((stage) => stage.status === 'not_started' && !stage.artifact && !stage.identity);
   if (amend && !(normalizedPlan === brownfieldIdentity && recordedPlan === normalizedPlan
-    && workflow.plan.identity === normalizedPlan && currentState === 'execute'
-    && (!state.current_state || state.current_state === 'execute')
+    && workflow.plan.identity === normalizedPlan && interruptedExecutionStates.includes(currentState)
+    && (!state.current_state || state.current_state === currentState)
     && workflow.execution.status === 'in_progress'
     && !workflow.execution.artifact && !workflow.execution.identity
     && stagesHaveNoTerminalEvidence && workflow.plan.approved === true
@@ -456,7 +465,7 @@ export function transitionWorkflowState(workDir, {
 
   const effectiveTarget = normalizedTarget === 'next' ? 'audit' : normalizedTarget;
   const allowedPredecessors = {
-    plan: amend ? ['execute'] : ['plan', 'fix_gaps', 'blocked', 'ask_user'],
+    plan: amend ? interruptedExecutionStates : ['plan', 'fix_gaps', 'blocked', 'ask_user'],
     approve: ['plan'],
     execute: ['plan', 'execute'],
     verify: ['execute', 'verify'],
@@ -489,10 +498,21 @@ export function transitionWorkflowState(workDir, {
           amended_plan_sha256: amendedHash,
           previous_approval_ref: workflow.approval_ref,
           previous_execution_status: workflow.execution.status,
+          previous_workflow_state: currentState,
+          previous_workflow_status: workflow.status || 'active',
+          previous_blocker_reason: workflow.reason || null,
+          previous_human_gate: workflow.human_gate || null,
           reason: String(reason).trim(),
           amended_at: now.toISOString(),
         },
       ];
+      // The owner has explicitly replaced the interrupted posture with fresh
+      // planning. Keep its reason/gate in the amendment receipt, then clear
+      // stale blocked/ask_user flags without authorizing execution.
+      next.workflow.status = 'active';
+      delete next.workflow.reason;
+      delete next.workflow.human_gate;
+      next.status = 'active';
     }
     next.workflow.plan.approved = false;
     delete next.workflow.plan.approved_sha256;

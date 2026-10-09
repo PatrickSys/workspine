@@ -1786,6 +1786,73 @@ describe('next command routing', () => {
     untouchedPaths.forEach((name, index) => assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, name)), retainedBytes[index]));
   });
 
+  for (const interruption of ['ask_user', 'blocked']) {
+    test(`interrupted in-progress CHANGE cannot bypass owner amendment through ${interruption}`, async () => {
+      await initWork();
+      const changePath = '.work/brownfield-change/CHANGE.md';
+      const statePath = path.join(tmpDir, '.work', 'state.json');
+      writeFile(changePath, brownfieldChange());
+      writeFile('.work/brownfield-change/HANDOFF.md', '# Preserved prior work\n');
+      const beforeHandoff = fs.readFileSync(path.join(tmpDir, '.work/brownfield-change/HANDOFF.md'));
+      const lifecycle = (target, flags = []) => runCliAsMain(tmpDir, [
+        'lifecycle-transition', target, '--plan', changePath, ...flags, '--json', '--no-update-notice',
+      ]);
+      const transitionWithoutPlan = (target) => runCliAsMain(tmpDir, [
+        'lifecycle-transition', target, '--reason', 'Synthetic interruption before amendment review', '--json', '--no-update-notice',
+      ]);
+      assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-original-ref'])).exitCode, 0);
+      const originalSha = readJson(statePath).workflow.plan.approved_sha256;
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+      writeFile(changePath, brownfieldChange({ nextAction: 'Execute the revised bounded change.' }));
+
+      const stop = await transitionWithoutPlan(interruption);
+      assert.strictEqual(stop.exitCode, 0, stop.output);
+      assert.strictEqual(readJson(statePath).workflow.execution.status, 'in_progress');
+      const stalePreflight = await runCliAsMain(tmpDir, [
+        'lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status',
+      ]);
+      assert.strictEqual(stalePreflight.exitCode, 1, stalePreflight.output);
+      assert.ok(JSON.parse(stalePreflight.output).blockers.some(({ code }) => code === 'plan_approval_stale'));
+      const beforeRefusal = fs.readFileSync(statePath);
+      for (const authority of ['workflow', 'owner']) {
+        const bypass = await lifecycle('plan', ['--authority', authority]);
+        assert.strictEqual(bypass.exitCode, 1, bypass.output);
+        assert.strictEqual(JSON.parse(bypass.output).error_code, 'owner_amendment_required');
+        assert.deepStrictEqual(fs.readFileSync(statePath), beforeRefusal,
+          `ordinary plan must preserve interrupted ${interruption} state`);
+      }
+
+      const amendment = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'Owner reviewed changed scope after interruption']);
+      assert.strictEqual(amendment.exitCode, 0, amendment.output);
+      const reviewed = readJson(statePath);
+      assert.strictEqual(reviewed.status, 'active');
+      assert.strictEqual(reviewed.workflow.status, 'active');
+      assert.strictEqual(reviewed.workflow.current_state, 'plan');
+      assert.strictEqual(reviewed.workflow.approval_ref, null);
+      assert.strictEqual(reviewed.workflow.plan.approved, false);
+      assert.strictEqual(reviewed.workflow.amendments.length, 1);
+      const recorded = reviewed.workflow.amendments[0];
+      assert.strictEqual(recorded.previous_approval_sha256, originalSha);
+      assert.strictEqual(recorded.previous_approval_ref, 'owner-original-ref');
+      assert.strictEqual(recorded.previous_execution_status, 'in_progress');
+      assert.strictEqual(recorded.previous_workflow_state, interruption);
+      assert.strictEqual(recorded.reason, 'Owner reviewed changed scope after interruption');
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 1);
+      const oldRef = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-original-ref']);
+      assert.strictEqual(oldRef.exitCode, 1, oldRef.output);
+      const approved = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-revised-ref']);
+      assert.strictEqual(approved.exitCode, 0, approved.output);
+      assert.notStrictEqual(readJson(statePath).workflow.plan.approved_sha256, originalSha);
+      const resumedPreflight = await runCliAsMain(tmpDir, [
+        'lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status',
+      ]);
+      assert.strictEqual(resumedPreflight.exitCode, 0, resumedPreflight.output);
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+      assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work/brownfield-change/HANDOFF.md')), beforeHandoff);
+    });
+  }
+
   test('in-progress amendment refuses an unchanged plan, other plan chains, and retained execution evidence', async () => {
     await initWork();
     const changePath = '.work/brownfield-change/CHANGE.md';
