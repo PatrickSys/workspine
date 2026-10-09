@@ -78,7 +78,7 @@ function listMilestoneDirs(stateDir, resolvedDir = resolveActiveMilestoneDir(sta
     }
   }
 
-  if (existsSync(join(resolvedDir, 'MILESTONE.md')) && !dirs.includes(resolvedDir)) {
+  if (resolvedDir && existsSync(join(resolvedDir, 'MILESTONE.md')) && !dirs.includes(resolvedDir)) {
     dirs.push(resolvedDir);
   }
 
@@ -304,7 +304,14 @@ export function collectJourney({ cwd = process.cwd() } = {}) {
   assertStateAuthority(state);
   const { dir: stateDir } = resolveStateDir(workspaceRoot);
   const decisionWorkDir = getWorkPaths(workspaceRoot).workDir;
-  const resolvedActiveDir = resolveActiveMilestoneDir(stateDir);
+  let resolvedActiveDir = null;
+  let authorityConflict = null;
+  try {
+    resolvedActiveDir = resolveActiveMilestoneDir(stateDir);
+  } catch (error) {
+    if (error.code !== 'multiple_active_milestones') throw error;
+    authorityConflict = { code: error.code, choices: error.choices || [], message: error.message };
+  }
   const milestoneDirs = listMilestoneDirs(stateDir, resolvedActiveDir);
   const milestones = milestoneDirs.map((milestoneDir) => readMilestone(milestoneDir, workspaceRoot, stateDir));
   const activeIndex = resolvedActiveDir ? milestones.findIndex((milestone) => milestone.path === resolvedActiveDir) : -1;
@@ -327,10 +334,13 @@ export function collectJourney({ cwd = process.cwd() } = {}) {
           ...(choices ? { choices } : {}),
           ...(plans ? { plans } : {}),
         })),
-        active: true,
+        // A conflicting native selection has no unique "you are here",
+        // including the root row. Keep its phases and identity visible.
+        active: !authorityConflict,
       }]
     : [];
   const journey = {
+    ...(authorityConflict ? { authority_conflict: authorityConflict } : {}),
     milestones: [
       ...rootRoadmap,
       ...milestones.map((milestone, index) => ({
@@ -357,6 +367,9 @@ export function renderJourney(journey, { now = new Date() } = {}) {
     ` WORKSPINE JOURNEY                                    ${date.slice(0, 10)}`,
     ' ==========================================================',
   ];
+  if (journey.authority_conflict) {
+    lines.push(`  BLOCKED: ${asciiText(journey.authority_conflict.message)}`);
+  }
   for (const milestone of journey.milestones) {
     const here = milestone.active ? '   <- you are here' : '';
     const name = asciiText(milestone.name);
@@ -385,8 +398,10 @@ export function createCmdJourney(context = {}) {
     const journey = collectJourney({ cwd: context.cwd || process.cwd() });
     if (jsonFlag.present) {
       output(journey);
+      if (journey.authority_conflict) process.exitCode = 1;
       return;
     }
     console.log(renderJourney(journey));
+    if (journey.authority_conflict) process.exitCode = 1;
   };
 }

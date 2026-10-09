@@ -1132,7 +1132,7 @@ export function cmdPhaseStatus(...args) {
     const lifecycle = evaluateLifecycleState({ planningDir });
     const workspaceRoot = resolve(planningDir, '..');
     const workDir = getWorkPaths(workspaceRoot).workDir;
-    const nativeMilestoneDir = resolveActiveMilestoneDir(workDir);
+    const nativeMilestoneDir = resolveActiveMilestoneDir(workDir, { phaseSelector: phaseNumber, rootLifecycle: lifecycle });
     const nativePhasesDir = join(nativeMilestoneDir, 'phases');
     const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
     const selection = resolveLifecyclePhaseSelection({
@@ -1205,7 +1205,9 @@ export function cmdPhaseStatus(...args) {
       changed,
     });
   } catch (error) {
-    console.error(error.message);
+    if (error.code === 'multiple_active_milestones' || error.code === 'ambiguous_phase_selector' || error.code === 'inactive_milestone_selector' || error.code === 'conflicting_milestone_selectors') {
+      output({ error: error.code, choices: error.choices || [], message: error.message });
+    } else console.error(error.message);
     process.exitCode = 1;
   }
 }
@@ -1232,7 +1234,15 @@ export function cmdFindPhase(...args) {
   const lifecycle = evaluateLifecycleState({ planningDir });
 
   if (phaseNum) {
-    const nativeMilestoneDir = resolveActiveMilestoneDir(getWorkPaths(workspaceRoot).workDir);
+    let nativeMilestoneDir;
+    try {
+      nativeMilestoneDir = resolveActiveMilestoneDir(getWorkPaths(workspaceRoot).workDir, { phaseSelector: phaseNum, rootLifecycle: lifecycle });
+    } catch (milestoneError) {
+      if (!['multiple_active_milestones', 'ambiguous_phase_selector', 'inactive_milestone_selector', 'conflicting_milestone_selectors'].includes(milestoneError.code)) throw milestoneError;
+      output({ error: milestoneError.code, choices: milestoneError.choices || [], message: milestoneError.message });
+      process.exitCode = 1;
+      return;
+    }
     const nativePhasesDir = join(nativeMilestoneDir, 'phases');
     const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
     const selection = resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector: phaseNum });
@@ -1316,7 +1326,13 @@ export function buildPhaseVerificationReport(...args) {
   if (planFlagPresent && (duplicatePlanFlag || !requestedPlan || requestedPlan.startsWith('--'))) {
     return { ok: true, result: { error: 'invalid_plan_selector', phase: phaseNum, plan: requestedPlan }, exitCode: 1 };
   }
-  const nativeMilestoneDir = resolveActiveMilestoneDir(getWorkPaths(workspaceRoot).workDir);
+  let nativeMilestoneDir;
+  try {
+    nativeMilestoneDir = resolveActiveMilestoneDir(getWorkPaths(workspaceRoot).workDir, { phaseSelector: phaseNum, planSelector: requestedPlan, rootLifecycle: lifecycle });
+  } catch (milestoneError) {
+    if (!['multiple_active_milestones', 'ambiguous_phase_selector', 'inactive_milestone_selector', 'conflicting_milestone_selectors'].includes(milestoneError.code)) throw milestoneError;
+    return { ok: true, result: { error: milestoneError.code, choices: milestoneError.choices || [], message: milestoneError.message }, exitCode: 1 };
+  }
   const nativePhasesDir = join(nativeMilestoneDir, 'phases');
   const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
   let phaseSelection = resolveLifecyclePhaseSelection({

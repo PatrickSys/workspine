@@ -115,9 +115,16 @@ export function evaluateLifecyclePreflight({
   const lifecycle = evaluateLifecycleState({ planningDir });
   const workspaceRoot = resolve(planningDir, '..');
   const decisionWorkDir = getWorkPaths(workspaceRoot).workDir;
-  const nativeMilestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
+  // "plan amend" always targets the root ROADMAP, even when unrelated native
+  // milestones are active. Classify this exact lane before resolving a native
+  // milestone; explicit PLAN selectors still take the ordinary guarded route.
+  const rootAmendLane = surface === 'plan' && normalizePhaseToken(phaseNumber) === 'amend'
+    && !planPath && !planFlagPresent;
+  const nativeMilestoneDir = rootAmendLane
+    ? join(decisionWorkDir, 'milestone')
+    : resolveActiveMilestoneDir(join(workspaceRoot, '.work'), { phaseSelector: phaseNumber, planSelector: planPath, rootLifecycle: lifecycle });
   const nativePhasesDir = join(nativeMilestoneDir, 'phases');
-  const workMilestoneAuthority = inspectWorkMilestone(decisionWorkDir);
+  const workMilestoneAuthority = inspectWorkMilestone(decisionWorkDir, { selectedMilestoneDir: nativeMilestoneDir });
   const nativeIdentityPrefix = relative(planningDir, nativePhasesDir).replace(/\\/g, '/');
   const malformedPlanFrontmatter = [];
   const selection = phaseNumber ? resolveLifecyclePhaseSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, selector: phaseNumber, malformedPlanFrontmatter }) : null;
@@ -136,13 +143,13 @@ export function evaluateLifecyclePreflight({
     ? readContinuityCheckpoint(planningDir)
     : null;
   const resumeWorkCheckpoint = surface === 'resume'
-    ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath, checkpoint: continuityCheckpoint })
+    ? evaluateResumeWorkCheckpoint({ planningDir, checkpointPath, checkpoint: continuityCheckpoint, selectedMilestoneDir: nativeMilestoneDir })
     : null;
   const planSelection = planPath
     ? resolveLifecyclePlanSelection({ lifecycle, workspaceRoot, nativePhasesDir, nativeIdentityPrefix, planPath, phaseSelection: selection, malformedPlanFrontmatter })
     : null;
   let workMilestone = normalizedPhase && (usesNativeAuthority || selection?.status !== 'selected')
-    ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase })
+    ? evaluateWorkMilestoneState({ planningDir, phaseToken: normalizedPhase, nativeMilestoneDir })
     : null;
   if (usesNativeAuthority && workMilestone) {
     const selectedChain = planSelection?.status === 'selected' ? planSelection.plan.chainKey : null;
@@ -157,6 +164,18 @@ export function evaluateLifecyclePreflight({
   const specPath = join(planningDir, 'SPEC.md');
   const milestonesPath = join(planningDir, 'MILESTONES.md');
   const blockers = [];
+
+  // Root ROADMAP amendment and a native milestone PLAN are different
+  // authorities. An explicit native PLAN cannot retarget "plan amend".
+  const nativePlanUnderAmend = usesPlanAmendAuthority
+    && /^(?:\.work\/|\.planning\/)?milestones\//i.test(String(planPath || '').replace(/\\/g, '/'));
+  if (nativePlanUnderAmend) {
+    blockers.push(blocker(
+      'conflicting_plan_amend_scope',
+      'Root plan amendment targets ROADMAP.md; a native milestone PLAN cannot be combined with amend.',
+      [stateLabel('ROADMAP.md'), planPath],
+    ));
+  }
 
   const selectedPhase = normalizedPhase && !usesBrownfieldAuthority && !usesPlanAmendAuthority && !usesNativeAuthority
     ? lifecycle.phases.find((phase) => phase.number === normalizedPhase)
@@ -633,9 +652,9 @@ function buildPhaseBlockers({ lifecycle, phaseToken, surface, stateLabel, select
   return blockers;
 }
 
-function evaluateWorkMilestoneState({ planningDir, phaseToken }) {
+function evaluateWorkMilestoneState({ planningDir, phaseToken, nativeMilestoneDir = null }) {
   const workspaceRoot = resolve(planningDir, '..');
-  const milestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
+  const milestoneDir = nativeMilestoneDir || resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
   const roadmapPath = join(milestoneDir, 'ROADMAP.md');
   const phasesDir = join(milestoneDir, 'phases');
 
@@ -732,11 +751,11 @@ function parseWorkPhaseStatus(rawStatus) {
   return 'pending';
 }
 
-function evaluateResumeWorkCheckpoint({ planningDir, checkpointPath, checkpoint }) {
+function evaluateResumeWorkCheckpoint({ planningDir, checkpointPath, checkpoint, selectedMilestoneDir = null }) {
   if (!existsSync(checkpointPath) || checkpoint?.status !== 'valid') return null;
 
   const workspaceRoot = resolve(planningDir, '..');
-  const milestoneDir = resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
+  const milestoneDir = selectedMilestoneDir || resolveActiveMilestoneDir(join(workspaceRoot, '.work'));
   const roadmapPath = join(milestoneDir, 'ROADMAP.md');
   if (!existsSync(roadmapPath)) return null;
 
@@ -1084,7 +1103,10 @@ export function cmdLifecyclePreflight(...args) {
       process.exitCode = 1;
     }
   } catch (error) {
-    console.error(error.message);
+    if (error.code === 'multiple_active_milestones' || error.code === 'ambiguous_phase_selector' || error.code === 'inactive_milestone_selector' || error.code === 'conflicting_milestone_selectors') {
+      output({ surface, phase: phaseNumber, status: 'blocked', allowed: false, reason: error.code,
+        blockers: [blocker(error.code, error.message, error.choices || [])] });
+    } else console.error(error.message);
     process.exitCode = 1;
   }
 }

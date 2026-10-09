@@ -1464,6 +1464,18 @@ export function createCmdNext(ctx) {
       if (jsonMode) output(result);
       else printHuman(result);
     } catch (error) {
+      if (error.code === 'multiple_active_milestones') {
+        const response = packet({
+          state: 'blocked', confidence: 'high', authority: 'blocked', route_kind: 'authority_conflict',
+          reason: error.message, error_code: error.code, blocked_by: [error.code],
+          next_action: manualReviewAction(error.choices || [], 'Select one emitted milestone phase or PLAN identity before acting.'),
+          artifacts_to_read: error.choices || [], artifacts_to_write: [],
+        });
+        if (jsonMode) output(response);
+        else printHuman(response);
+        process.exitCode = 1;
+        return;
+      }
       const response = {
         schema_version: 1,
         operation: 'next',

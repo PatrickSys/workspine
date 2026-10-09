@@ -14,7 +14,7 @@ import {
 import { execFileSync } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
-import { collectNativePhaseArtifacts, evaluateLifecycleState, partitionPlanChains, readPlanStatus } from './lifecycle-state.mjs';
+import { collectNativePhaseArtifacts, evaluateLifecycleState, normalizePhaseToken, partitionPlanChains, readPlanStatus, resolveStandardPhaseSelection } from './lifecycle-state.mjs';
 import { resolveStateDir, stateAuthorityGate, STATE_DIR_NAME } from './state-dir.mjs';
 import { writeFileAtomic as replaceFileAtomically } from './atomic-write.mjs';
 
@@ -2271,7 +2271,33 @@ function listMarkdownFiles(dir) {
     .map((name) => normalizeSlashes(join(basename(dir), name)));
 }
 
-export function resolveActiveMilestoneDir(workDir) {
+// A saved milestone is a separate authority. Never infer which of two simultaneously
+// active authorities a bare phase number means from their folder names.
+function milestoneStatusIsActive(content) {
+  const text = String(content || '').replace(/\r\n/g, '\n');
+  if (text.startsWith('---\n')) {
+    const end = text.indexOf('\n---', 4);
+    if (end === -1) return false;
+    return /^status:\s*in_progress\b/im.test(text.slice(4, end));
+  }
+  // Match the existing no-frontmatter milestone convention, including a
+  // heading above status; only closed frontmatter has distinct body authority.
+  return /^status:\s*in_progress\b/im.test(text);
+}
+
+function milestoneScopeSlug(value) {
+  const selector = String(value || '').trim().replace(/\\/g, '/').replace(/^\.work\//, '');
+  return selector.match(/^milestones\/([^/]+)\/phases\/[^/]+(?:\/[^/]+)?$/)?.[1] || null;
+}
+
+function milestoneAuthorityError(code, message, names) {
+  const error = new Error(message);
+  error.code = code;
+  error.choices = names.map((name) => `.work/milestones/${name}`);
+  return error;
+}
+
+export function resolveActiveMilestoneDir(workDir, { phaseSelector = null, planSelector = null, rootLifecycle = null } = {}) {
   const pluralDir = join(workDir, 'milestones');
   if (existsSync(pluralDir)) {
     let candidates = [];
@@ -2293,8 +2319,64 @@ export function resolveActiveMilestoneDir(workDir) {
     if (candidates.length > 0) {
       const inProgress = candidates.filter((name) => {
         const text = candidateText.get(name) || '';
-        return /^status:\s*in_progress\b/im.test(text);
+        return milestoneStatusIsActive(text);
       });
+      const selectedNames = [...new Set([phaseSelector, planSelector].map(milestoneScopeSlug).filter(Boolean))];
+      if (selectedNames.length > 1) {
+        throw milestoneAuthorityError('conflicting_milestone_selectors',
+          'Phase and PLAN selectors name different Workspine milestones.', selectedNames);
+      }
+      if (selectedNames.length === 1) {
+        const selected = selectedNames[0];
+        if (!candidates.includes(selected) || (inProgress.length > 0 && !inProgress.includes(selected))) {
+          throw milestoneAuthorityError('inactive_milestone_selector',
+            `Selected Workspine milestone ${selected} is absent or not active.`, candidates);
+        }
+        return join(pluralDir, selected);
+      }
+      const exactStandardScope = [phaseSelector, planSelector].some((value) =>
+        /^(?:phases\/|ROADMAP\.md#phase-)/.test(String(value || '').replace(/\\/g, '/')));
+      if (exactStandardScope && inProgress.length > 1) return join(workDir, 'milestone');
+      if (inProgress.length > 1 && rootLifecycle && /^\d+(?:\.\d+)*[a-z]?$/i.test(String(phaseSelector || '').trim())) {
+        // A bare phase token identifies a *phase*, not a particular native
+        // milestone. Examine the current-plan identities across every active
+        // milestone plus the already-observed root. The existing single-
+        // milestone classifier remains the source of truth after selection.
+        const token = normalizePhaseToken(phaseSelector);
+        const standard = resolveStandardPhaseSelection({ lifecycle: rootLifecycle, selector: phaseSelector });
+        const nativeMatchEntries = inProgress.flatMap((name) => {
+          const phasesDir = join(pluralDir, name, 'phases');
+          const artifacts = partitionPlanChains(
+            collectNativePhaseArtifacts({ workspaceRoot: resolve(workDir, '..'), phasesDir }),
+            { companionKinds: ['execute', 'verification'] },
+          ).currentArtifacts;
+          return artifacts
+            .filter((artifact) => artifact.kind === 'plan' && artifact.phaseToken === token)
+            .map((artifact) => ({ name, identity: `milestones/${name}/phases/${artifact.dir}` }));
+        });
+        if (standard.status === 'ambiguous') {
+          const failure = milestoneAuthorityError('ambiguous_phase_selector',
+            `Root phase ${token} has multiple current identities; use an exact emitted phase identity.`, []);
+          failure.choices = standard.choices;
+          throw failure;
+        }
+        const rootMatch = standard.status === 'selected';
+        if (rootMatch && nativeMatchEntries.length === 0) return join(workDir, 'milestone');
+        const uniqueNative = [...new Set(nativeMatchEntries.map((entry) => entry.identity))];
+        if (!rootMatch && uniqueNative.length === 1) return join(pluralDir, nativeMatchEntries[0].name);
+        if (!rootMatch && uniqueNative.length === 0) return join(workDir, 'milestone');
+        const failure = milestoneAuthorityError('multiple_active_milestones',
+          `Phase ${token} has multiple possible current authorities; choose one emitted phase identity.`, []);
+        failure.choices = [
+          ...(rootMatch ? [standard.candidate.identity] : []),
+          ...uniqueNative,
+        ];
+        throw failure;
+      }
+      if (inProgress.length > 1) {
+        throw milestoneAuthorityError('multiple_active_milestones',
+          `Multiple Workspine milestones are in progress (${inProgress.join(', ')}); choose an emitted milestones/<slug>/phases/<phase> identity.`, inProgress);
+      }
       const pool = inProgress.length > 0 ? inProgress : candidates;
       return join(pluralDir, pool.sort().at(-1));
     }
@@ -2302,8 +2384,8 @@ export function resolveActiveMilestoneDir(workDir) {
   return join(workDir, 'milestone');
 }
 
-export function inspectWorkMilestone(workDir) {
-  const milestoneDir = resolveActiveMilestoneDir(workDir);
+export function inspectWorkMilestone(workDir, { selectedMilestoneDir = null } = {}) {
+  const milestoneDir = selectedMilestoneDir || resolveActiveMilestoneDir(workDir);
   const roadmapPath = join(milestoneDir, 'ROADMAP.md');
   const auditPath = join(milestoneDir, 'AUDIT.md');
   const milestonePath = join(milestoneDir, 'MILESTONE.md');
