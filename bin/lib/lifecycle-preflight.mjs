@@ -251,6 +251,25 @@ export function evaluateLifecyclePreflight({
       ]
     ));
   }
+  if (usesBrownfieldAuthority && surface === 'execute') {
+    const recorded = readJsonIfExists(join(planningDir, 'state.json'));
+    const workflow = recorded.ok ? recorded.value?.workflow : null;
+    const amendmentHistory = workflow?.amendments;
+    const canonicalPlan = stateLabel('brownfield-change', 'CHANGE.md');
+    const approvalStale = workflow && (workflow.plan?.approved === true
+      || workflow.execution?.status === 'in_progress')
+      && !hasDurableWorkflowApproval(planningDir, canonicalPlan, recorded.value);
+    if (approvalStale || (Array.isArray(amendmentHistory) && amendmentHistory.length > 0
+      && !hasDurableWorkflowApproval(planningDir, canonicalPlan, recorded.value))) {
+      blockers.push(blocker(
+        Array.isArray(amendmentHistory) && amendmentHistory.length > 0
+          ? 'amendment_pending_approval'
+          : 'plan_approval_stale',
+        'An amended CHANGE.md requires fresh owner approval bound to its current bytes before execution.',
+        [canonicalPlan, stateLabel('state.json')],
+      ));
+    }
+  }
 
   if (normalizedPhase && !usesBrownfieldAuthority && !usesPlanAmendAuthority) {
     blockers.push(
@@ -1273,7 +1292,7 @@ export function cmdLifecycleTransition(...args) {
   try {
     assertStateAuthority(state);
     if (normalizedArgs.includes('--help') || normalizedArgs[0] === 'help') {
-      console.log('Usage: lifecycle-transition <plan|approve|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--question <text>] [--json]');
+      console.log('Usage: lifecycle-transition <plan|approve|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--amend (owner plan only)] [--question <text>] [--json]');
       return;
     }
     const target = String(normalizedArgs.find((arg) => !arg.startsWith('--')) || '').toLowerCase();
@@ -1288,6 +1307,7 @@ export function cmdLifecycleTransition(...args) {
     const approvalRef = flag('--approval-ref');
     const approvalRefProvided = normalizedArgs.includes('--approval-ref');
     const reason = flag('--reason');
+    const amend = normalizedArgs.includes('--amend');
     const question = flag('--question');
     const approved = String(flag('--approved') || '').toLowerCase() === 'true' || target === 'approve';
     const approvalRequested = target === 'approve' || String(flag('--approved') || '').toLowerCase() === 'true';
@@ -1301,6 +1321,7 @@ export function cmdLifecycleTransition(...args) {
       authority: validated.authority,
       approvalRef: validated.approvalRef,
       reason,
+      amend,
       question,
       approved,
       preWriteGuard: validated.preWriteGuard,

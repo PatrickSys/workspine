@@ -289,10 +289,16 @@ function brownfieldLifecycleRoute(context) {
     };
   }
   if (workflow.plan?.approved === true || workflow.execution?.status === 'in_progress') {
+    const inProgressAmendment = workflow.execution?.status === 'in_progress'
+      && workflow.plan?.approved === true;
     return {
-      state: 'plan', reason: 'The bounded brownfield approval is missing or no longer matches the current CHANGE.md bytes.',
+      state: 'plan', reason: inProgressAmendment
+        ? 'CHANGE.md changed during approved execution. Owner must review the amended scope and record lifecycle-transition plan --plan .work/brownfield-change/CHANGE.md --authority owner --amend --reason <review>, then separately approve with a fresh reference. Preserve existing execution evidence.'
+        : 'The bounded brownfield approval is missing or no longer matches the current CHANGE.md bytes.',
       authority: 'brownfield_change', route_kind: 'brownfield_change_approval_stale', blocked_by: ['plan_approval'],
-      next_command: workflowId('plan'), next_action: workflowAction(workflowId('plan'), 'Review and reapprove the current bounded CHANGE.md contract.'),
+      next_command: workflowId('plan'), next_action: workflowAction(workflowId('plan'), inProgressAmendment
+        ? 'Obtain owner-reviewed --amend and fresh approval for the changed bounded CHANGE.md. Do not resume prior execute without approval.'
+        : 'Review and reapprove the current bounded CHANGE.md contract.'),
       artifacts_to_read: evidence, artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md')], requires_user: true,
     };
   }
@@ -1401,6 +1407,20 @@ export function createCmdNext(ctx) {
       }
 
       const result = projectDecisionsDigest(effectiveCtx, routeNext(effectiveCtx));
+      const adopted = readJsonIfExists(join(workPaths.workDir, 'adoption-receipt.json'));
+      if (adopted.exists && adopted.ok
+        && adopted.value?.signature === 'GSD-roadmap-v1'
+        && adopted.value?.archive === '.work/.local/legacy-planning'
+        && adopted.value?.source === '.planning') {
+        result.artifacts_to_read = [...new Set([
+          ...result.artifacts_to_read,
+          '.work/adoption-receipt.json',
+          '.work/.local/legacy-planning/SPEC.md',
+          '.work/.local/legacy-planning/ROADMAP.md',
+        ])];
+        result.privacy_notes = [...result.privacy_notes,
+          'Historic .planning/ was archived under ignored .work/.local/legacy-planning/. Review as evidence only; do not execute its old phases or treat its decisions as Workspine approval.'];
+      }
       if (jsonMode) output(result);
       else printHuman(result);
     } catch (error) {

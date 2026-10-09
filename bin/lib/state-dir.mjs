@@ -4,7 +4,9 @@ import { join, resolve } from 'path';
 export const STATE_DIR_NAME = '.work';
 export const LEGACY_STATE_DIR_NAME = '.planning';
 export const LEGACY_SIGNATURE = 'S2-config-v1';
+export const LEGACY_ADOPTION_SIGNATURE = 'GSD-roadmap-v1';
 export const MIGRATION_COMMAND = 'npx -y workspine init --migrate';
+export const ADOPTION_COMMAND = 'npx -y workspine init --adopt-legacy';
 
 function lstatIfPresent(filePath, lstat = lstatSync) {
   try {
@@ -58,7 +60,7 @@ function inspectLegacyState(legacyDir, legacyStat) {
     return { reason: 'invalid_config_object' };
   }
   if (config.initVersion !== 'v1.1') {
-    return { reason: 'unsupported_init_version', detectedInitVersion: config.initVersion ?? null };
+    return { reason: 'unsupported_init_version', detectedInitVersion: config.initVersion ?? null, initVersionPresent: Object.hasOwn(config, 'initVersion') };
   }
 
   const receiptStat = lstatIfPresent(join(legacyDir, 'migration-receipt.json'));
@@ -72,6 +74,32 @@ function inspectLegacyState(legacyDir, legacyStat) {
     signature: LEGACY_SIGNATURE,
     detectedInitVersion: config.initVersion,
   };
+}
+
+// A historic roadmap-style .planning/ can be preserved without treating its
+// unrecognized lifecycle as executable Workspine state. Unknown initVersion
+// values belong to some other schema and must still refuse.
+function inspectLegacyAdoption(legacyDir, legacy) {
+  if (!['missing_config', 'unsupported_init_version'].includes(legacy.reason)
+    || (legacy.reason === 'unsupported_init_version' && legacy.initVersionPresent)) return null;
+  // A former Workspine migration or remembered decision store has distinct
+  // authority. Its missing/partial config cannot downgrade that to GSD history.
+  try {
+    if (lstatIfPresent(join(legacyDir, 'migration-receipt.json'))) return null;
+    const decisions = lstatIfPresent(join(legacyDir, 'decisions'));
+    if (decisions && (!decisions.isDirectory() || decisions.isSymbolicLink()
+      || readdirSync(join(legacyDir, 'decisions')).length > 0)) return null;
+  } catch {
+    return null;
+  }
+  for (const name of ['SPEC.md', 'ROADMAP.md']) {
+    const filePath = join(legacyDir, name);
+    let stat;
+    try { stat = lstatIfPresent(filePath); } catch { return null; }
+    if (!stat?.isFile() || stat.isSymbolicLink() || stat.size === 0) return null;
+    try { if (!readFileSync(filePath, 'utf8').trim()) return null; } catch { return null; }
+  }
+  return { signature: LEGACY_ADOPTION_SIGNATURE };
 }
 
 export function hasStateMarker(root, { lstat = lstatSync } = {}) {
@@ -122,6 +150,17 @@ export function resolveStateDir(root) {
       migrationNotice: `Legacy .planning/ state requires migration. Run \`${MIGRATION_COMMAND}\`.`,
     };
   }
+  const adoption = inspectLegacyAdoption(legacyDir, legacy);
+  if (adoption) {
+    return {
+      ...base,
+      ...legacy,
+      ...adoption,
+      status: 'legacy_adoptable',
+      action: 'adopt',
+      adoptionNotice: `Historic .planning/ has a different lifecycle. Run \`${ADOPTION_COMMAND}\` to archive its bytes privately and initialize a new .work/ root.`,
+    };
+  }
   return { ...base, ...legacy, status: 'legacy_unsupported', action: 'refuse' };
 }
 
@@ -135,6 +174,9 @@ export function stateAuthorityGate(state) {
       status: state.status,
       message: `Legacy .planning/ state is not an active Workspine root. Run \`${MIGRATION_COMMAND}\`.`,
     };
+  }
+  if (state.status === 'legacy_adoptable') {
+    return { allowed: false, status: state.status, message: state.adoptionNotice };
   }
   if (state.status === 'dual_conflict') {
     return {
@@ -153,7 +195,7 @@ export function stateAuthorityGate(state) {
   return {
     allowed: false,
     status: state.status,
-    message: `Legacy .planning/ state is unsupported (${state.reason}). Repair it to the S2-config-v1 signature, then run \`${MIGRATION_COMMAND}\`.`,
+    message: `Legacy .planning/ state is unsupported (${state.reason}). Preserve its bytes and reconcile this historical layout explicitly; Workspine will not adopt or overwrite unknown lifecycle state.`,
   };
 }
 

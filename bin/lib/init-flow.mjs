@@ -34,7 +34,7 @@ import {
 } from './init-runtime.mjs';
 import { createInitPromptApi } from './init-prompts.mjs';
 import { createAdapterRegistry } from '../adapters/index.mjs';
-import { migrateLegacyState } from './state-migration.mjs';
+import { adoptLegacyState, migrateLegacyState } from './state-migration.mjs';
 import { resolveStateDir, stateAuthorityGate, MIGRATION_COMMAND } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { ensureWorkStructure } from './work-context.mjs';
@@ -243,6 +243,12 @@ export function createCmdInit(ctx) {
 
     const isAuto = parseAutoFlag(normalizedArgs);
     const wantsMigration = normalizedArgs.includes('--migrate');
+    const wantsAdoption = normalizedArgs.includes('--adopt-legacy');
+    if (wantsMigration && wantsAdoption) {
+      console.error('ERROR: Select either supported --migrate or historical --adopt-legacy, not both.');
+      process.exitCode = 1;
+      return;
+    }
     const toolsFlag = parseFlagValue(normalizedArgs, '--tools');
     const briefFlag = parseFlagValue(normalizedArgs, '--brief');
     let briefSource = null;
@@ -279,7 +285,55 @@ export function createCmdInit(ctx) {
     const promptApi = ctx.initPromptApi || createInitPromptApi();
     let interactiveSession;
 
-    if (state.status === 'legacy_migratable') {
+    if (wantsAdoption && state.status !== 'legacy_adoptable') {
+      console.error('ERROR: --adopt-legacy requires a recognized historical roadmap-style .planning/ without a Workspine initVersion. No state changed.');
+      process.exitCode = 1;
+      return;
+    }
+    if (state.status === 'legacy_adoptable') {
+      if (!wantsAdoption) {
+        console.error(`ERROR: ${stateAuthorityGate(state).message}`);
+        process.exitCode = 1;
+        return;
+      }
+      interactiveSession = await resolveInteractiveInitSession({
+        ctx: initCtx, promptApi, parsedTools, isAuto,
+      });
+      try {
+        // Resolve the generated-file and Git ownership constraints while all
+        // legacy bytes are still in .planning. A conflicting adapter target
+        // must never force the owner to recover an already moved history.
+        preflightInitState(initCtx, {
+          isAuto,
+          preselectedConfig: interactiveSession.config,
+        });
+        planAdapterGeneration({
+          cwd: initCtx.cwd,
+          planningDir: initCtx.planningDir,
+          targets: getLocalAdapterTargets(
+            initCtx.adapters,
+            initCtx.workflows,
+            interactiveSession.adapterTargets,
+          ),
+          manifest: readManifest(initCtx.planningDir),
+          stateDirName: initCtx.stateDirName,
+        });
+        preflightPlanningCliHelpersReadOnly(initCtx);
+        adoptLegacyState(initCtx.cwd);
+      } catch (error) {
+        console.error(`ERROR: Historical state adoption failed: ${error.message}`);
+        process.exitCode = 1;
+        return;
+      }
+      console.log('  - preserved historical .planning/ bytes in ignored .work/.local/legacy-planning/; the new .work/ has independent authority');
+      initCtx = contextAtWorkspaceRoot(initCtx, initCtx.cwd);
+      state = resolveStateDir(initCtx.cwd);
+      if (state.status !== 'current') {
+        console.error('ERROR: Adoption failed to establish a single active .work/ root.');
+        process.exitCode = 1;
+        return;
+      }
+    } else if (state.status === 'legacy_migratable') {
       let approved = wantsMigration;
       if (!approved && !isAuto && process.stdin.isTTY) {
         approved = await promptApi.confirmLegacyMigration({ command: MIGRATION_COMMAND });

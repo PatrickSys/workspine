@@ -1704,6 +1704,131 @@ describe('next command routing', () => {
     assert.ok(response.blockers.some(({ code }) => code === 'brownfield_contract_invalid'));
   });
 
+  test('changed executing CHANGE requires explicit owner amendment and new approval before continuing', async () => {
+    await initWork();
+    const planPath = '.work/brownfield-change/CHANGE.md';
+    const statePath = path.join(tmpDir, '.work/state.json');
+    writeFile(planPath, brownfieldChange());
+    writeFile('.work/brownfield-change/HANDOFF.md', '# Historical review\n\nConstraints and completed tasks remain unchanged.\n');
+    writeFile('.work/phases/99-retained/HANDOFF.md', '# Another retained stream\n');
+    const untouchedPaths = ['.work/brownfield-change/HANDOFF.md', '.work/phases/99-retained/HANDOFF.md'];
+    const retainedBytes = untouchedPaths.map((name) => fs.readFileSync(path.join(tmpDir, name)));
+    const lifecycle = async (target, extra = []) => runCliAsMain(tmpDir, [
+      'lifecycle-transition', target, '--plan', planPath, ...extra, '--json', '--no-update-notice',
+    ]);
+    let receipt = await lifecycle('plan', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    receipt = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-first-scope']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    const firstApproval = readJson(statePath).workflow.plan.approved_sha256;
+    receipt = await lifecycle('execute', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    writeFile(planPath, brownfieldChange({ nextAction: 'Implement the amended bounded task.' }));
+    const stale = await runJson(['next', '--json']);
+    assert.strictEqual(stale.state, 'plan');
+    assert.strictEqual(stale.route_kind, 'brownfield_change_approval_stale');
+    assert.match(stale.reason, /--amend --reason/);
+    const stalePreflight = await runCliAsMain(tmpDir, [
+      'lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status',
+    ]);
+    assert.strictEqual(stalePreflight.exitCode, 1, stalePreflight.output);
+    assert.ok(JSON.parse(stalePreflight.output).blockers.some(({ code }) => code === 'plan_approval_stale'));
+    const beforeAmendment = fs.readFileSync(statePath);
+    for (const args of [
+      ['--authority', 'workflow'],
+      ['--authority', 'owner'],
+      ['--authority', 'workflow', '--amend', '--reason', 'reviewed scope change'],
+      ['--authority', 'owner', '--amend'],
+    ]) {
+      receipt = await lifecycle('plan', args);
+      assert.strictEqual(receipt.exitCode, 1, receipt.output);
+      assert.deepStrictEqual(fs.readFileSync(statePath), beforeAmendment);
+    }
+    receipt = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-new-scope']);
+    assert.strictEqual(receipt.exitCode, 1, receipt.output);
+    receipt = await lifecycle('execute', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 1, receipt.output);
+
+    receipt = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'Owner reviewed scope change']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    let state = readJson(statePath);
+    assert.strictEqual(state.workflow.current_state, 'plan');
+    assert.strictEqual(state.workflow.plan.approved, false);
+    assert.strictEqual(state.workflow.plan.approved_sha256, undefined);
+    assert.strictEqual(state.workflow.approval_ref, null);
+    assert.strictEqual(state.workflow.execution.status, 'not_started');
+    assert.strictEqual(state.workflow.amendments.length, 1);
+    assert.strictEqual(state.workflow.amendments[0].previous_approval_sha256, firstApproval);
+    assert.strictEqual(state.workflow.amendments[0].previous_approval_ref, 'owner-first-scope');
+    assert.strictEqual(state.workflow.amendments[0].reason, 'Owner reviewed scope change');
+    assert.strictEqual(state.workflow.amendments[0].previous_execution_status, 'in_progress');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, planPath)), Buffer.from(brownfieldChange({ nextAction: 'Implement the amended bounded task.' })));
+    const awaitingOwner = await runJson(['next', '--json']);
+    assert.strictEqual(awaitingOwner.state, 'plan');
+    let preflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(preflight.exitCode, 1, preflight.output);
+    assert.ok(JSON.parse(preflight.output).blockers.some(({ code }) => code === 'amendment_pending_approval'));
+    receipt = await lifecycle('execute', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 1, receipt.output);
+    receipt = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-first-scope']);
+    assert.strictEqual(receipt.exitCode, 1, receipt.output);
+    receipt = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-new-scope']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    state = readJson(statePath);
+    assert.notStrictEqual(state.workflow.plan.approved_sha256, firstApproval);
+    assert.strictEqual(state.workflow.amendments[0].approved_sha256, state.workflow.plan.approved_sha256);
+    assert.strictEqual(state.workflow.amendments[0].approval_ref, 'owner-new-scope');
+    preflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(preflight.exitCode, 0, preflight.output);
+    receipt = await lifecycle('execute', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    assert.strictEqual(readJson(statePath).workflow.current_state, 'execute');
+    untouchedPaths.forEach((name, index) => assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, name)), retainedBytes[index]));
+  });
+
+  test('in-progress amendment refuses an unchanged plan, other plan chains, and retained execution evidence', async () => {
+    await initWork();
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    const statePath = path.join(tmpDir, '.work/state.json');
+    writeFile(changePath, brownfieldChange());
+    const lifecycle = async (target, args = []) => runCliAsMain(tmpDir, [
+      'lifecycle-transition', target, '--plan', changePath, ...args, '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-original'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+    const before = fs.readFileSync(statePath);
+    let refusal = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'unchanged']);
+    assert.strictEqual(refusal.exitCode, 1, refusal.output);
+    assert.deepStrictEqual(fs.readFileSync(statePath), before);
+    writeFile(changePath, brownfieldChange({ nextAction: 'Amended tasks with earlier proof.' }));
+    const changed = readJson(statePath);
+    changed.workflow.execution.artifact = '.work/brownfield-change/VERIFICATION.md';
+    writeJson('.work/state.json', changed);
+    const beforeEvidence = fs.readFileSync(statePath);
+    refusal = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'retain old evidence']);
+    assert.strictEqual(refusal.exitCode, 1, refusal.output);
+    assert.deepStrictEqual(fs.readFileSync(statePath), beforeEvidence);
+  });
+
+  test('the brownfield owner-amendment exception never reopens an already executing phase plan', async () => {
+    await initWork();
+    const planPath = '.work/phases/01-protected/01-PLAN.md';
+    writeFile(planPath, '---\nstatus: approved\n---\n# Approved phase plan\n');
+    const lifecycle = async (target, extra = []) => runCliAsMain(tmpDir, [
+      'lifecycle-transition', target, '--plan', planPath, ...extra, '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-phase-original'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+    writeFile(planPath, '---\nstatus: approved\n---\n# Amended phase plan\n');
+    const before = fs.readFileSync(path.join(tmpDir, '.work', 'state.json'));
+    const blocked = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'This is a phase, not brownfield']);
+    assert.strictEqual(blocked.exitCode, 1, blocked.output);
+    assert.strictEqual(JSON.parse(blocked.output).error_code, 'amendment_not_allowed');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), before);
+  });
+
   test('brownfield execute rejects operational HANDOFF conflicts before mutating approved state', async () => {
     await initWork();
     const changePath = '.work/brownfield-change/CHANGE.md';

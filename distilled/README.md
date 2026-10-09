@@ -35,6 +35,8 @@ It gives serious AI-assisted work one durable, repo-native workflow for planning
 
 The public command and npm package are `workspine`, the workflows are `work-*`, and the workspace is `.work/`. The `gsdd` binary alias remains a compatibility surface throughout the `0.35.x` line and is removed in the next minor release. Legacy `.planning/` workspaces are migration/diagnostic input only; active lifecycle work resolves to `.work/`.
 
+An existing Workspine `.planning/` with the recognized `initVersion: v1.1` can use explicit `workspine init --migrate`. A roadmap-style historical `.planning/` with substantive SPEC/ROADMAP files and no Workspine `initVersion` can instead use `workspine init --adopt-legacy --tools agents`: the original tree is kept byte-for-byte under ignored `.work/.local/legacy-planning/` with a digest receipt, and a new `.work/` lifecycle starts. Old plans, decisions and approvals remain historical evidence; they are never automatically activated. Unknown versions, malformed layouts, links, competing state roots or unowned generated targets refuse before adoption. Review the archived context and explicitly plan any work to carry forward.
+
 Workspine began as a fork of Get Shit Done, whose long-horizon workflow proved the problem was real. Since the fork, upstream GSD has continued evolving into a broad multi-runtime framework. Workspine took a different path: a smaller repo-native tool with fewer public workflows, generated runtime surfaces from a portable core, proof required before closing work, and decisions that keep their why.
 
 Proof:

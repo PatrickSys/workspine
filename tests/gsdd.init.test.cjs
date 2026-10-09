@@ -2737,6 +2737,64 @@ describe('gsdd init and update', () => {
       assert.deepStrictEqual(snapshotTree(tmpDir), before);
     });
 
+    test('explicit init adoption preserves historical GSD planning bytes as ignored evidence and initializes fresh Workspine authority', async () => {
+      const legacy = path.join(tmpDir, '.planning');
+      fs.mkdirSync(path.join(legacy, 'phases', '01-existing'), { recursive: true });
+      fs.writeFileSync(path.join(legacy, 'SPEC.md'), '# Existing GSD spec\nHistorical requirements.\n');
+      fs.writeFileSync(path.join(legacy, 'ROADMAP.md'), '# Existing GSD roadmap\n- [ ] Old phase\n');
+      fs.writeFileSync(path.join(legacy, 'phases', '01-existing', '01-PLAN.md'), '# Existing phase plan\n');
+      fs.writeFileSync(path.join(legacy, 'consumer.bin'), Buffer.from([0, 1, 255]));
+      const original = snapshotTree(legacy);
+      const allBefore = snapshotTree(tmpDir);
+      let result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents']);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.match(result.output, /adopt-legacy/);
+      assert.deepStrictEqual(snapshotTree(tmpDir), allBefore);
+
+      result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents', '--adopt-legacy']);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      assert.strictEqual(fs.existsSync(legacy), false);
+      assert.deepStrictEqual(snapshotTree(path.join(tmpDir, '.work', '.local', 'legacy-planning')), original);
+      const adoption = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'adoption-receipt.json'), 'utf8'));
+      assert.strictEqual(adoption.signature, 'GSD-roadmap-v1');
+      assert.strictEqual(adoption.archive, '.work/.local/legacy-planning');
+      assert.strictEqual(adoption.source, '.planning');
+      assert.strictEqual(JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf8')).initVersion, 'v1.1');
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work', 'phases', '01-existing')), false, 'old roadmap must never become active');
+      const next = await runCliAsMain(tmpDir, ['next', '--json']);
+      assert.strictEqual(next.exitCode, 0, next.output);
+      const nextPacket = JSON.parse(next.output);
+      assert.notStrictEqual(nextPacket.state, 'execute');
+      assert.ok(nextPacket.artifacts_to_read.includes('.work/adoption-receipt.json'));
+      assert.ok(nextPacket.artifacts_to_read.includes('.work/.local/legacy-planning/SPEC.md'));
+      assert.match(nextPacket.privacy_notes.join('\n'), /historical|Historic/);
+    });
+
+    test('unknown legacy shape refuses adoption before any writes', async () => {
+      const legacy = path.join(tmpDir, '.planning');
+      fs.mkdirSync(legacy, { recursive: true });
+      fs.writeFileSync(path.join(legacy, 'SPEC.md'), '# Existing spec\n');
+      fs.writeFileSync(path.join(legacy, 'ROADMAP.md'), '# Existing roadmap\n');
+      fs.writeFileSync(path.join(legacy, 'config.json'), JSON.stringify({ initVersion: 'v9.9' }));
+      const before = snapshotTree(tmpDir);
+      const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents', '--adopt-legacy']);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    });
+
+    test('adoption preflights generated-file ownership before moving any historical source', async () => {
+      const legacy = path.join(tmpDir, '.planning');
+      fs.mkdirSync(legacy, { recursive: true });
+      fs.writeFileSync(path.join(legacy, 'SPEC.md'), '# Historical spec\n');
+      fs.writeFileSync(path.join(legacy, 'ROADMAP.md'), '# Historical roadmap\n');
+      fs.mkdirSync(path.join(tmpDir, '.gitignore'));
+      const before = snapshotTree(tmpDir);
+      const result = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'agents', '--adopt-legacy']);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
+      assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+    });
+
     test('fresh and current roots bypass the legacy migration prompt', async () => {
       const initMod = await importModule(path.join(__dirname, '..', 'bin', 'lib', 'init.mjs'));
       const gsddMod = await importModule(path.join(__dirname, '..', 'bin', 'gsdd.mjs'));

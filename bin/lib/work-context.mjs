@@ -307,6 +307,7 @@ export function transitionWorkflowState(workDir, {
   reason = null,
   question = null,
   approved = null,
+  amend = false,
   preWriteGuard = null,
   now = new Date(),
 } = {}) {
@@ -330,6 +331,12 @@ export function transitionWorkflowState(workDir, {
   const normalizedTarget = String(target || '').trim().toLowerCase();
   const allowed = new Set(['plan', 'execute', 'verify', 'audit', 'next', 'fix_gaps', 'blocked', 'ask_user', 'approve']);
   if (!allowed.has(normalizedTarget)) throw transitionError('unsupported_transition', `Unsupported lifecycle transition: ${target}.`);
+  if (amend && normalizedTarget !== 'plan') {
+    throw transitionError('invalid_amendment_target', 'Only the plan lifecycle transition accepts --amend.', ['--amend']);
+  }
+  if (amend && (authority !== 'owner' || !String(reason || '').trim() || approvalRef)) {
+    throw transitionError('owner_amendment_required', 'In-progress amendment requires owner authority, a non-empty --reason and no approval reference. Reapprove separately.', ['--authority owner', '--reason']);
+  }
   if (normalizedTarget === 'execute' && approvalRef !== null && approvalRef !== undefined) {
     throw transitionError('approval_ref_not_allowed', 'Execute cannot supply or replace the owner-recorded approval reference.', ['--approval-ref']);
   }
@@ -389,6 +396,30 @@ export function transitionWorkflowState(workDir, {
   next.workflow.dogfood = { ...workflow.dogfood };
   const normalizedPlan = planPath || planIdentity || null;
   const normalizedArtifact = artifactPath || artifactIdentity || null;
+  const currentState = workflow.current_state || state.current_state || 'plan';
+  const originalApprovalHash = workflow.plan.approved_sha256;
+  const amendedHash = amend && normalizedPlan ? planArtifactSha256(workDir, normalizedPlan) : null;
+  const brownfieldIdentity = `${stateRoot}/brownfield-change/CHANGE.md`;
+  const stagesHaveNoTerminalEvidence = [workflow.verification, workflow.audit, workflow.dogfood]
+    .every((stage) => stage.status === 'not_started' && !stage.artifact && !stage.identity);
+  if (amend && !(normalizedPlan === brownfieldIdentity && recordedPlan === normalizedPlan
+    && workflow.plan.identity === normalizedPlan && currentState === 'execute'
+    && (!state.current_state || state.current_state === 'execute')
+    && workflow.execution.status === 'in_progress'
+    && !workflow.execution.artifact && !workflow.execution.identity
+    && stagesHaveNoTerminalEvidence && workflow.plan.approved === true
+    && workflow.authority === 'owner' && isValidApprovalReference(workflow.approval_ref)
+    && typeof originalApprovalHash === 'string' && /^[a-f0-9]{64}$/.test(originalApprovalHash)
+    && brownfield.brownfieldChange.exists && brownfield.brownfieldChange.currentStatus === 'active'
+    && brownfield.brownfieldChange.contractErrors.length === 0
+    && !brownfield.brownfieldChange.wideningRequested && amendedHash)) {
+    throw transitionError('amendment_not_allowed',
+      'Only an in-progress, owner-approved bounded CHANGE without terminal execution evidence can be amended. Retain proof and use formal review for a different posture.',
+      [String(normalizedPlan || ''), '.work/state.json']);
+  }
+  if (amend && amendedHash === originalApprovalHash) {
+    throw transitionError('amendment_not_needed', 'CHANGE.md still matches its approved bytes; do not reset execution.', [normalizedPlan]);
+  }
   const explicitOwnerApproval = normalizedTarget === 'approve'
     && approved === true
     && authority === 'owner'
@@ -399,11 +430,18 @@ export function transitionWorkflowState(workDir, {
   if (explicitOwnerApproval && !approvedPlanSha256) {
     throw transitionError('approval_plan_unreadable', 'Owner approval requires a readable regular PLAN artifact.', [String(normalizedPlan || '')]);
   }
+  const latestAmendment = Array.isArray(workflow.amendments) ? workflow.amendments.at(-1) : null;
+  if (explicitOwnerApproval && latestAmendment && !latestAmendment.approved_sha256
+    && approvalRef === latestAmendment.previous_approval_ref) {
+    throw transitionError('fresh_approval_ref_required', 'An amended CHANGE needs a fresh owner approval reference.', [normalizedPlan]);
+  }
   const durableOwnerApproval = normalizedTarget === 'execute' && normalizedPlan
     ? hasDurableWorkflowApproval(workDir, normalizedPlan, state)
     : false;
   const validatedPlanSha256 = explicitOwnerApproval
     ? approvedPlanSha256
+    : amend
+      ? amendedHash
     : durableOwnerApproval
       ? workflow.plan.approved_sha256
       : null;
@@ -417,9 +455,8 @@ export function transitionWorkflowState(workDir, {
   if (approvalRef) next.workflow.approval_ref = approvalRef;
 
   const effectiveTarget = normalizedTarget === 'next' ? 'audit' : normalizedTarget;
-  const currentState = workflow.current_state || state.current_state || 'plan';
   const allowedPredecessors = {
-    plan: ['plan', 'fix_gaps', 'blocked', 'ask_user'],
+    plan: amend ? ['execute'] : ['plan', 'fix_gaps', 'blocked', 'ask_user'],
     approve: ['plan'],
     execute: ['plan', 'execute'],
     verify: ['execute', 'verify'],
@@ -436,7 +473,27 @@ export function transitionWorkflowState(workDir, {
     next.workflow.plan.approved_sha256 = approvedPlanSha256;
     next.workflow.execution.status = 'not_started';
     next.workflow.current_state = 'plan';
+    if (latestAmendment && !latestAmendment.approved_sha256) {
+      next.workflow.amendments = [
+        ...workflow.amendments.slice(0, -1),
+        { ...latestAmendment, approved_sha256: approvedPlanSha256, approval_ref: approvalRef, approved_at: now.toISOString() },
+      ];
+    }
   } else if (effectiveTarget === 'plan') {
+    if (amend) {
+      next.workflow.amendments = [
+        ...(Array.isArray(workflow.amendments) ? workflow.amendments : []),
+        {
+          plan_identity: normalizedPlan,
+          previous_approval_sha256: originalApprovalHash,
+          amended_plan_sha256: amendedHash,
+          previous_approval_ref: workflow.approval_ref,
+          previous_execution_status: workflow.execution.status,
+          reason: String(reason).trim(),
+          amended_at: now.toISOString(),
+        },
+      ];
+    }
     next.workflow.plan.approved = false;
     delete next.workflow.plan.approved_sha256;
     next.workflow.execution.status = 'not_started';
