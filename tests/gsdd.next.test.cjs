@@ -1878,6 +1878,71 @@ describe('next command routing', () => {
     assert.deepStrictEqual(fs.readFileSync(statePath), beforeEvidence);
   });
 
+  for (const status of ['passed', '"completed" # terminal result', 'gaps_found', 'human_needed']) {
+    test(`owner amendment rejects current brownfield terminal VERIFICATION.md (${status}) even when state says executing`, async () => {
+      await initWork();
+      const planPath = '.work/brownfield-change/CHANGE.md';
+      const evidencePath = '.work/brownfield-change/VERIFICATION.md';
+      const lifecycle = (target, options = []) => runCliAsMain(tmpDir, [
+        'lifecycle-transition', target, '--plan', planPath, ...options, '--json', '--no-update-notice',
+      ]);
+      writeFile(planPath, brownfieldChange());
+      assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'terminal-original'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+      writeFile(evidencePath, brownfieldVerification(status));
+      writeFile(planPath, brownfieldChange({ nextAction: 'Amend the bounded work after the prior terminal report.' }));
+      const statePath = path.join(tmpDir, '.work', 'state.json');
+      assert.strictEqual(readJson(statePath).workflow.execution.status, 'in_progress');
+      const before = snapshotTree(tmpDir);
+      const refused = await lifecycle('plan', [
+        '--authority', 'owner', '--amend', '--reason', 'Owner reviewed the changed plan but terminal evidence exists',
+      ]);
+      assert.strictEqual(refused.exitCode, 1, refused.output);
+      const receipt = JSON.parse(refused.output);
+      assert.strictEqual(receipt.error_code, 'amendment_terminal_evidence_conflict');
+      assert.match(receipt.error, /current.*VERIFICATION\.md.*terminal/i);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, 'terminal refusal must leave state and all evidence unchanged');
+    });
+  }
+
+  test('owner amendment still accepts a nonterminal current verification draft with unrelated passed history', async () => {
+    await initWork();
+    const planPath = '.work/brownfield-change/CHANGE.md';
+    const evidencePath = '.work/brownfield-change/VERIFICATION.md';
+    const lifecycle = (target, options = []) => runCliAsMain(tmpDir, [
+      'lifecycle-transition', target, '--plan', planPath, ...options, '--json', '--no-update-notice',
+    ]);
+    writeFile(planPath, brownfieldChange());
+    assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'draft-original'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+    writeFile(evidencePath, [
+      '---',
+      'status: pending',
+      'subrecord:',
+      '  status: passed',
+      '---',
+      '# Draft verification, not completed evidence',
+      '```yaml',
+      'status: passed',
+      '```',
+      '',
+    ].join('\n'));
+    writeFile('.work/phases/99-retained/99-VERIFICATION.md', brownfieldVerification('passed'));
+    const beforeEvidence = fs.readFileSync(path.join(tmpDir, evidencePath));
+    const beforeHistory = fs.readFileSync(path.join(tmpDir, '.work/phases/99-retained/99-VERIFICATION.md'));
+    writeFile(planPath, brownfieldChange({ nextAction: 'Owner-reviewed bounded amendment after a draft check.' }));
+    const changed = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'Only draft and old unrelated evidence exist']);
+    assert.strictEqual(changed.exitCode, 0, changed.output);
+    const state = readJson(path.join(tmpDir, '.work', 'state.json'));
+    assert.strictEqual(state.workflow.current_state, 'plan');
+    assert.strictEqual(state.workflow.plan.approved, false);
+    assert.strictEqual(state.workflow.amendments.length, 1);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, evidencePath)), beforeEvidence);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work/phases/99-retained/99-VERIFICATION.md')), beforeHistory);
+  });
+
   test('the brownfield owner-amendment exception never reopens an already executing phase plan', async () => {
     await initWork();
     const planPath = '.work/phases/01-protected/01-PLAN.md';

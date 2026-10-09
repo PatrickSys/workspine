@@ -14,7 +14,7 @@ import {
 import { execFileSync } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
-import { collectNativePhaseArtifacts, evaluateLifecycleState, partitionPlanChains } from './lifecycle-state.mjs';
+import { collectNativePhaseArtifacts, evaluateLifecycleState, partitionPlanChains, readPlanStatus } from './lifecycle-state.mjs';
 import { resolveStateDir, stateAuthorityGate, STATE_DIR_NAME } from './state-dir.mjs';
 import { writeFileAtomic as replaceFileAtomically } from './atomic-write.mjs';
 
@@ -291,6 +291,42 @@ export function assertLifecyclePlanIdentity(planningDir, target, planIdentity) {
   }
 }
 
+const BROWNFIELD_TERMINAL_VERIFICATION_STATUSES = new Set([
+  'complete', 'completed', 'done', 'passed', 'pass', 'verified',
+  'gaps_found', 'human_needed', 'failed', 'fail',
+]);
+
+function assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir) {
+  // An owner amendment is allowed only for unfinished execution. State can
+  // still say in_progress after a verification result was written to disk.
+  // Inspect only the canonical artifact in THIS active brownfield chain:
+  // historical phase VERIFICATION files are evidence, not its completion.
+  const verificationPath = brownfield.brownfieldChange?.verificationPath;
+  if (!verificationPath || !existsSync(verificationPath)) return;
+  const label = normalizeSlashes(relative(resolve(workDir, '..'), verificationPath));
+  let declaredStatus;
+  try {
+    const stat = lstatSync(verificationPath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('current verification artifact is not a regular file');
+    }
+    // Reuse the strict first-frontmatter top-level `status` reader: body
+    // examples, nested status and historical files cannot imply completion.
+    declaredStatus = readPlanStatus(readFileSync(verificationPath, 'utf8'));
+  } catch {
+    throw transitionError('amendment_terminal_evidence_conflict',
+      `Current ${label} cannot be reconciled with in-progress execution; retain the artifact and use formal review.`,
+      [label, '.work/state.json']);
+  }
+  if (!declaredStatus) return;
+  const status = String(declaredStatus).trim().toLowerCase().replace(/[ -]+/g, '_');
+  if (BROWNFIELD_TERMINAL_VERIFICATION_STATUSES.has(status)) {
+    throw transitionError('amendment_terminal_evidence_conflict',
+      `Current ${label} declares terminal ${status} evidence while workflow execution is in_progress; preserve that proof and use formal review instead of --amend.`,
+      [label, '.work/state.json']);
+  }
+}
+
 /**
  * Persist one validated lifecycle transition without changing any other state
  * fields. Callers must validate artifact identity and authority before calling
@@ -426,6 +462,7 @@ export function transitionWorkflowState(workDir, {
       'Only an in-progress, owner-approved bounded CHANGE without terminal execution evidence can be amended. Retain proof and use formal review for a different posture.',
       [String(normalizedPlan || ''), '.work/state.json']);
   }
+  if (amend) assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir);
   if (amend && amendedHash === originalApprovalHash) {
     throw transitionError('amendment_not_needed', 'CHANGE.md still matches its approved bytes; do not reset execution.', [normalizedPlan]);
   }
@@ -579,6 +616,9 @@ export function transitionWorkflowState(workDir, {
     throw transitionError('stale_plan', 'The approved PLAN changed while the transition was being validated.', [String(normalizedPlan)]);
   }
   if (typeof preWriteGuard === 'function') preWriteGuard();
+  // Reconcile current-chain proof again at the mutation boundary. Another
+  // process may have written a terminal VERIFICATION since initial validation.
+  if (amend) assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir);
   if (JSON.stringify(beforeComparable) === JSON.stringify(nextComparable)) {
     return { status: 'replayed', changed: false, state };
   }
