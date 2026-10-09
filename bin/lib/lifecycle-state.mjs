@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 
 const BROWNFIELD_CHANGE_DIR = 'brownfield-change';
@@ -410,14 +410,13 @@ function collectPhaseArtifacts(phasesDir) {
   const declaredRoot = resolve(phasesDir);
   let phasesRoot;
   try {
+    if (hasLinkedPhaseAncestor(declaredRoot)) return [];
     phasesRoot = canonicalPhasePath(declaredRoot);
   } catch {
     return [];
   }
-  // A phase root that is itself a link is not the canonical planning root.
-  // Refuse it rather than allowing recursive discovery to escape the caller's
-  // state tree through a junction or symlink.
-  if (!isWithinRoot(declaredRoot, phasesRoot)) return [];
+  // Windows 8.3 spellings can name this same physical directory without a link.
+  // Use its canonical identity for containment while retaining logical output paths.
 
   const artifacts = [];
   const walk = (directory, relativeDirectory) => {
@@ -443,6 +442,17 @@ function collectPhaseArtifacts(phasesDir) {
 
   walk(phasesDir, '');
   return artifacts.sort(compareArtifactPaths);
+}
+
+function hasLinkedPhaseAncestor(candidate) {
+  // Match workspace-root's ancestor-link policy once per scan, not per artifact.
+  let current = resolve(candidate);
+  while (true) {
+    if (lstatSync(current).isSymbolicLink()) return true;
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
 }
 
 function isWithinRoot(root, candidate) {
