@@ -296,6 +296,18 @@ const BROWNFIELD_TERMINAL_VERIFICATION_STATUSES = new Set([
   'gaps_found', 'human_needed', 'failed', 'fail',
 ]);
 
+function countTopLevelVerificationStatuses(content) {
+  // Match readPlanStatus's exact initial-frontmatter boundaries and unindented
+  // scalar grammar. The shared reader intentionally returns only the FIRST
+  // status; an amendment must not silently choose between duplicate values.
+  const lines = String(content).replace(/\r\n/g, '\n').split('\n');
+  if (lines[0] !== '---') return 0;
+  const closingIndex = lines.indexOf('---', 1);
+  // readPlanStatus separately rejects unclosed frontmatter.
+  if (closingIndex === -1) return 0;
+  return lines.slice(1, closingIndex).filter((line) => /^status:\s*(.*)$/.test(line)).length;
+}
+
 function assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir) {
   // An owner amendment is allowed only for unfinished execution. State can
   // still say in_progress after a verification result was written to disk.
@@ -305,6 +317,7 @@ function assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir) {
   if (!verificationPath || !existsSync(verificationPath)) return;
   const label = normalizeSlashes(relative(resolve(workDir, '..'), verificationPath));
   let declaredStatus;
+  let statusDeclarationCount = 0;
   try {
     const stat = lstatSync(verificationPath);
     if (!stat.isFile() || stat.isSymbolicLink()) {
@@ -312,10 +325,17 @@ function assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir) {
     }
     // Reuse the strict first-frontmatter top-level `status` reader: body
     // examples, nested status and historical files cannot imply completion.
-    declaredStatus = readPlanStatus(readFileSync(verificationPath, 'utf8'));
+    const content = readFileSync(verificationPath, 'utf8');
+    declaredStatus = readPlanStatus(content);
+    statusDeclarationCount = countTopLevelVerificationStatuses(content);
   } catch {
     throw transitionError('amendment_terminal_evidence_conflict',
       `Current ${label} cannot be reconciled with in-progress execution; retain the artifact and use formal review.`,
+      [label, '.work/state.json']);
+  }
+  if (statusDeclarationCount > 1) {
+    throw transitionError('amendment_terminal_evidence_conflict',
+      `Current ${label} has ambiguous multiple top-level status declarations; retain the evidence and reconcile it through formal review before --amend.`,
       [label, '.work/state.json']);
   }
   if (!declaredStatus) return;

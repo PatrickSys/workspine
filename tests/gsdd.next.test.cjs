@@ -1906,6 +1906,49 @@ describe('next command routing', () => {
     });
   }
 
+  for (const statuses of [
+    ['pending', 'passed'],
+    ['passed', 'pending'],
+    ['pending', 'pending'],
+  ]) {
+    test(`owner amendment refuses ambiguous duplicate top-level current verification statuses (${statuses.join(' then ')})`, async () => {
+      await initWork();
+      const planPath = '.work/brownfield-change/CHANGE.md';
+      const evidencePath = '.work/brownfield-change/VERIFICATION.md';
+      const lifecycle = (target, options = []) => runCliAsMain(tmpDir, [
+        'lifecycle-transition', target, '--plan', planPath, ...options, '--json', '--no-update-notice',
+      ]);
+      writeFile(planPath, brownfieldChange());
+      assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'duplicate-status-original'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+      writeFile(evidencePath, [
+        '---',
+        ...statuses.map((status) => `status: ${status}`),
+        'subrecord:',
+        '  status: passed',
+        '---',
+        '# Canonical verification report',
+        '```yaml',
+        'status: passed',
+        '```',
+        '',
+      ].join('\n'));
+      writeFile(planPath, brownfieldChange({ nextAction: 'Owner-reviewed amendment requires unambiguous current evidence.' }));
+      const statePath = path.join(tmpDir, '.work', 'state.json');
+      assert.strictEqual(readJson(statePath).workflow.execution.status, 'in_progress');
+      const before = snapshotTree(tmpDir);
+      const refused = await lifecycle('plan', [
+        '--authority', 'owner', '--amend', '--reason', 'Owner reviewed scope, but current proof has duplicate statuses',
+      ]);
+      assert.strictEqual(refused.exitCode, 1, refused.output);
+      const receipt = JSON.parse(refused.output);
+      assert.strictEqual(receipt.error_code, 'amendment_terminal_evidence_conflict');
+      assert.match(receipt.error, /current.*VERIFICATION\.md.*(?:ambiguous|multiple|duplicate)/i);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, 'ambiguous status refusal must preserve state, approval and evidence');
+    });
+  }
+
   test('owner amendment still accepts a nonterminal current verification draft with unrelated passed history', async () => {
     await initWork();
     const planPath = '.work/brownfield-change/CHANGE.md';
