@@ -109,22 +109,14 @@ function evaluateRoadmapPhaseStatusAlignment(roadmap) {
   const overview = new Map();
   const details = new Map();
   const parkedPhaseTokens = new Set();
-  const lines = normalizeContent(roadmap).split('\n');
-  let inDetails = false;
+  const lines = activeRoadmapLines(roadmap);
   let currentDetailPhase = null;
+  let inPhaseDetails = false;
 
   for (const line of lines) {
-    if (DETAILS_OPEN_RE.test(line) && !DETAILS_CLOSE_RE.test(line)) {
-      inDetails = true;
-      currentDetailPhase = null;
-      continue;
+    if (/^#{1,2}\s+/.test(line)) {
+      inPhaseDetails = /^##\s+Phase Details\s*(?:#+\s*)?$/i.test(line);
     }
-    if (DETAILS_CLOSE_RE.test(line)) {
-      inDetails = false;
-      currentDetailPhase = null;
-      continue;
-    }
-    if (inDetails) continue;
 
     const phaseMatch = line.match(PHASE_LINE_RE);
     if (phaseMatch) {
@@ -153,7 +145,7 @@ function evaluateRoadmapPhaseStatusAlignment(roadmap) {
     const statusMatch = line.match(PHASE_DETAIL_STATUS_RE);
     if (statusMatch && currentDetailPhase) {
       details.get(currentDetailPhase).push(normalizePhaseStatus(statusMatch[1]));
-      if (normalizePhaseStatus(statusMatch[1]) === 'not_started'
+      if (inPhaseDetails && normalizePhaseStatus(statusMatch[1]) === 'not_started'
         && isExplicitOwnerParkedStatusSuffix(line.slice(statusMatch[0].length))) {
         parkedPhaseTokens.add(currentDetailPhase);
       }
@@ -203,6 +195,38 @@ function normalizeContent(content) {
   return String(content || '').replace(/\r\n/g, '\n');
 }
 
+// Phase enumeration and status alignment must read the same current document.
+// Fenced examples and nested HTML archives cannot supply lifecycle authority.
+function activeRoadmapLines(content) {
+  const result = [];
+  let fence = null;
+  let detailsDepth = 0;
+  for (const line of normalizeContent(content).split('\n')) {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (marker && marker[1][0] === fence.character && marker[1].length >= fence.length
+          && !marker[2].trim()) fence = null;
+      result.push('');
+      continue;
+    }
+    if (marker && (marker[1][0] !== '`' || !marker[2].includes('`'))) {
+      fence = { character: marker[1][0], length: marker[1].length };
+      result.push('');
+      continue;
+    }
+    // Archives use block tags. A prose/inline-code mention such as
+    // "read the `<details>` example" must not hide the later phase ledger.
+    const tags = /^ {0,3}<\/?details(?:\s|>)/i.test(line)
+      ? [...line.matchAll(/<\/?details\b[^>]*>/gi)] : [];
+    const wasArchived = detailsDepth > 0;
+    for (const [tag] of tags) {
+      detailsDepth = /^<\//.test(tag) ? Math.max(0, detailsDepth - 1) : detailsDepth + 1;
+    }
+    result.push(wasArchived || detailsDepth > 0 || tags.length ? '' : line);
+  }
+  return result;
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -229,18 +253,7 @@ function parseActiveRoadmapPhases(roadmap) {
   if (!roadmap) return [];
 
   const phases = [];
-  let inDetails = false;
-
-  for (const line of normalizeContent(roadmap).split('\n')) {
-    if (DETAILS_OPEN_RE.test(line) && !DETAILS_CLOSE_RE.test(line)) {
-      inDetails = true;
-      continue;
-    }
-    if (DETAILS_CLOSE_RE.test(line)) {
-      inDetails = false;
-      continue;
-    }
-    if (inDetails) continue;
+  for (const line of activeRoadmapLines(roadmap)) {
 
     const match = line.match(PHASE_LINE_RE);
     if (!match) continue;

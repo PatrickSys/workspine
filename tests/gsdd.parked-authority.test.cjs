@@ -221,3 +221,69 @@ for (const [target,verificationStatus] of [['audit','passed'],['next','passed'],
     assert.deepEqual(snapshot(),before);
   });
 }
+
+for (const [name, open, close] of [
+  ['tilde', '~~~md', '~~~'],
+  ['backtick', String.fromCharCode(96).repeat(4)+'md', String.fromCharCode(96).repeat(4)],
+]) {
+  test(`fenced ${name} examples cannot supply current phase inventory, status or parking`, async () => {
+    const body = [roadmap({parked:false,detailParked:false}), '## Examples', open,
+      '- [ ] **Phase 21: Example only** - Parked by owner.',
+      '### Phase 11: Example only', '**Status**: [ ] — PARKED by owner.',
+      '<details>', String.fromCharCode(96).repeat(3), close].join('\n');
+    write('ROADMAP.md',body);
+    const before=snapshot();
+    const result=await cmd('lifecycle-preflight','verify','11','--expects-mutation','phase-status');
+    assert.equal(result.exitCode,0,result.output);
+    const module=await import(pathToFileURL(path.join(__dirname,'..','bin','lib','lifecycle-state.mjs')).href);
+    const state=module.evaluateLifecycleState({planningDir:work()});
+    assert.deepEqual(state.phases.map(p=>p.number),['11','12','16']);
+    assert.equal(state.phases[0].parked,false);
+    assert.deepEqual(snapshot(),before);
+  });
+}
+
+test('nested archived details remain inactive until the outer close, including same-line nesting', async () => {
+  for(const inner of ['<details>Inner note</details>','<details>\nInner note\n</details>']) {
+    write('ROADMAP.md',[roadmap({parked:false,detailParked:false}), '## Archive',
+      '<details>', '<summary>Historical examples</summary>',inner,
+      '- [ ] **Phase 21: Archived phase** - Parked by owner.',
+      '### Phase 11: Historical only','**Status**: [ ] — PARKED by owner.',
+      '</details>'].join('\n'));
+    const before=snapshot();
+    const result=await cmd('lifecycle-preflight','verify','11','--expects-mutation','phase-status');
+    assert.equal(result.exitCode,0,result.output);
+    const module=await import(pathToFileURL(path.join(__dirname,'..','bin','lib','lifecycle-state.mjs')).href);
+    assert.deepEqual(module.evaluateLifecycleState({planningDir:work()}).phases.map(p=>p.number),['11','12','16']);
+    assert.deepEqual(snapshot(),before);
+  }
+});
+
+test('HTML tags inside a fenced example cannot hide a later real owner parking instruction', async () => {
+  write('ROADMAP.md',['# Roadmap','~~~md','<details>','~~~',roadmap()].join('\n'));
+  const before=snapshot();
+  const result=await cmd('lifecycle-preflight','verify','11','--expects-mutation','phase-status');
+  assert.equal(result.exitCode,1,result.output);
+  assert.equal(JSON.parse(result.output).reason,'owner_parked_phase');
+  assert.deepEqual(snapshot(),before);
+});
+
+test('a phase-looking heading outside current Phase Details does not establish owner parking', async () => {
+  write('ROADMAP.md',['# Roadmap','- [ ] **Phase 11: Current ordinary phase**',
+    '## Historical example (not current Phase Details)','### Phase 11: Example only',
+    '**Status**: [ ] — PARKED by owner.'].join('\n'));
+  const before=snapshot();
+  const result=await cmd('lifecycle-preflight','verify','11','--expects-mutation','phase-status');
+  assert.equal(result.exitCode,0,result.output);
+  assert.deepEqual(snapshot(),before);
+});
+
+test('inline archive-tag examples cannot swallow later current phase authority', async () => {
+  const prose='Preserve the literal '+String.fromCharCode(96)+'<details>'+String.fromCharCode(96)+' example as historical text.';
+  write('ROADMAP.md',['# Current authority',prose,roadmap()].join('\n'));
+  const before=snapshot();
+  const result=await cmd('lifecycle-preflight','verify','11','--expects-mutation','phase-status');
+  assert.equal(result.exitCode,1,result.output);
+  assert.equal(JSON.parse(result.output).reason,'owner_parked_phase');
+  assert.deepEqual(snapshot(),before);
+});
