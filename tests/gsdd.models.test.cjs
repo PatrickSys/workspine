@@ -6,6 +6,7 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const {
   cleanup,
   createTempProject,
@@ -61,6 +62,64 @@ describe('gsdd models and model propagation', () => {
   });
 
   describe('model profile propagation', () => {
+    test('generated models show reads executor overrides without source tree or caller cwd assumptions', async () => {
+      const initialized = await runCliAsMain(tmpDir, ['init', '--auto', '--tools', 'codex']);
+      assert.strictEqual(initialized.exitCode, 0, initialized.output);
+      const helper = path.join(tmpDir, '.work', 'bin', 'gsdd.mjs');
+      const helperModelModule = path.join(tmpDir, '.work', 'bin', 'lib', 'executor-model-view.mjs');
+      assert.strictEqual(fs.existsSync(helperModelModule), true,
+        'the installed helper must carry its own model-read dependency');
+      const configPath = path.join(tmpDir, '.work', 'config.json');
+      const foreignCwd = createTempProject();
+      try {
+        const callHelper = (args = ['models', 'show']) => {
+          const result = spawnSync(process.execPath, [helper, ...args], {
+            cwd: foreignCwd,
+            encoding: 'utf8',
+            windowsHide: true,
+          });
+          assert.ifError(result.error);
+          return result;
+        };
+        const before = fs.readFileSync(configPath);
+        let result = callHelper();
+        assert.strictEqual(result.status, 0, result.stdout + result.stderr);
+        let payload = JSON.parse(result.stdout);
+        assert.strictEqual(payload.scope, 'executor');
+        assert.deepStrictEqual(payload.effective.codex.executor, { mode: 'inherit', model: null });
+        assert.deepStrictEqual(payload.effective.claude.executor, { mode: 'inherit', model: null });
+        assert.deepStrictEqual(payload.effective.opencode.executor, { mode: 'inherit', model: null });
+        assert.deepStrictEqual(fs.readFileSync(configPath), before);
+
+        result = await runCliAsMain(tmpDir, [
+          'models', 'set', '--runtime', 'codex', '--agent', 'executor', '--model', 'openai/gpt-6.1-sol',
+        ]);
+        assert.strictEqual(result.exitCode, 0, result.output);
+        const sourceModels = JSON.parse((await runCliAsMain(tmpDir, ['models', 'show'])).output);
+        const explicit = callHelper(['--workspace-root', tmpDir, 'models', 'show']);
+        assert.strictEqual(explicit.status, 0, explicit.stdout + explicit.stderr);
+        payload = JSON.parse(explicit.stdout);
+        for (const runtime of ['codex', 'claude', 'opencode']) {
+          assert.deepStrictEqual(payload.effective[runtime].executor, sourceModels.effective[runtime].executor,
+            `generated ${runtime} executor model must match the public models command`);
+        }
+        const afterOverride = fs.readFileSync(configPath);
+        const rejectedMutation = callHelper(['models', 'set', '--runtime', 'codex', '--agent', 'executor', '--model', 'another/model']);
+        assert.notStrictEqual(rejectedMutation.status, 0);
+        assert.match(rejectedMutation.stderr, /only models show/i);
+        assert.deepStrictEqual(fs.readFileSync(configPath), afterOverride);
+
+        fs.writeFileSync(configPath, '{ invalid JSON');
+        const corruptSnapshot = fs.readFileSync(configPath);
+        const unreadable = callHelper();
+        assert.notStrictEqual(unreadable.status, 0, 'malformed config cannot claim model inherit');
+        assert.match(unreadable.stderr, /selection is unknown/);
+        assert.deepStrictEqual(fs.readFileSync(configPath), corruptSnapshot);
+      } finally {
+        cleanup(foreignCwd);
+      }
+    });
+
     test('quality profile injects model: opus into Claude plan-checker', async () => {
       writeProjectConfig(tmpDir, { modelProfile: 'quality' });
 

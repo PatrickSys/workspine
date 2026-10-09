@@ -11,6 +11,7 @@ import { parseFlagValue, output } from './cli-utils.mjs';
 import { validateCommandShape } from './init-runtime.mjs';
 import { assertStateAuthority, resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { getRuntimeExecutorModelState } from './executor-model-view.mjs';
 
 export const DEFAULT_GIT_PROTOCOL = {
   branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
@@ -197,11 +198,6 @@ export function getPortableAgentProfile(config, agentId) {
 export function getRuntimeModelOverride(config, runtime, agentId) {
   const override = config.runtimeModelOverrides?.[runtime]?.[agentId];
   return typeof override === 'string' && override.trim() ? override.trim() : null;
-}
-
-function getRuntimeExecutorModelState(config, runtime) {
-  const model = getRuntimeModelOverride(config, runtime, 'executor');
-  return { mode: model ? 'override' : 'inherit', model };
 }
 
 export function resolveRuntimeAgentModel({ cwd = process.cwd(), runtime, agentId, profileMap = null }) {

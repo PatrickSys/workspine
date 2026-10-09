@@ -12,6 +12,7 @@ const HELPER_LIB_FILES = Object.freeze([
   'cli-utils.mjs',
   'control-map.mjs',
   'decision-cli.mjs',
+  'executor-model-view.mjs',
   'file-ops.mjs',
   'git-identity.mjs',
   'lifecycle-preflight.mjs',
@@ -73,6 +74,7 @@ import { cmdLifecyclePreflight, cmdLifecycleTransition } from './lib/lifecycle-p
 import { cmdPhaseStatus, cmdVerify } from './lib/phase.mjs';
 import { buildControlMap } from './lib/control-map.mjs';
 import { cmdDecisionsQuery, cmdRememberCandidate } from './lib/decision-cli.mjs';
+import { readExecutorModelsForHelper } from './lib/executor-model-view.mjs';
 import { createCmdNext } from './lib/next.mjs';
 import { maybeShowUpdateNotice } from './lib/update-awareness.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
@@ -110,8 +112,30 @@ function cmdControlMap(...controlArgs) {
   console.log(JSON.stringify(report, null, 2));
 }
 
+function cmdExecutorModelsShow(...modelArgs) {
+  if (modelArgs.length > 1 || (modelArgs.length === 1 && modelArgs[0] !== 'show')) {
+    console.error('ERROR: Generated helper supports only models show. Use the public Workspine CLI to set or clear executor models.');
+    process.exitCode = 1;
+    return;
+  }
+  const context = resolveWorkspaceContext([], { cwd: HELPER_CONTEXT.cwd });
+  if (context.invalid) {
+    console.error('ERROR: ' + context.error);
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    assertStateAuthority(context.state);
+    console.log(JSON.stringify(readExecutorModelsForHelper(context.workspaceRoot), null, 2));
+  } catch (error) {
+    console.error('ERROR: ' + error.message);
+    process.exitCode = 1;
+  }
+}
+
 const COMMANDS = {
   'control-map': cmdControlMap,
+  models: cmdExecutorModelsShow,
   decisions: cmdDecisionsQuery,
   'file-op': cmdFileOp,
   'git-identity': cmdGitIdentity,
@@ -145,6 +169,8 @@ function printHelp() {
     'Local workflow helper commands:',
     '  control-map [--json] [--with-ignored]',
     '                               Print computed repo/worktree/workflow state for workflow-internal checks',
+    '  models show                  Read effective executor model overrides for each runtime; no config writes',
+    '                               Use the public Workspine CLI for models set/clear',
     '  remember "<text>" --type <decision|lesson|rule> --scope <repo|global> [--for <ref>]',
     '                               Capture an agent-proposed candidate; this is not approval',
     '  decisions query "<terms>" [--path <path>]',

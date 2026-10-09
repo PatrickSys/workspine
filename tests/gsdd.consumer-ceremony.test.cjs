@@ -217,6 +217,40 @@ describe('consumer ceremony reduction', () => {
 
     const skillPath = path.join(consumerRoot, '.agents', 'skills', 'work-execute', 'SKILL.md');
     const skill = fs.readFileSync(skillPath, 'utf8');
+    assert.match(skill, /node \.work\/bin\/gsdd\.mjs models show/,
+      'installed executor must advertise a runnable local model-read command');
+    const generatedHelper = path.join(consumerRoot, '.work', 'bin', 'gsdd.mjs');
+    const generatedShow = () => {
+      const result = runProcess(process.execPath, [generatedHelper, 'models', 'show'], consumerRoot);
+      assert.strictEqual(result.exitCode, 0, `installed model read path failed: ${result.stdout}${result.stderr}`);
+      return JSON.parse(result.stdout);
+    };
+    const configPath = path.join(consumerRoot, '.work', 'config.json');
+    const originalConfigBytes = fs.readFileSync(configPath);
+    const inherited = generatedShow();
+    assert.deepStrictEqual(inherited.effective.codex.executor, { mode: 'inherit', model: null });
+    assert.deepStrictEqual(fs.readFileSync(configPath), originalConfigBytes,
+      'installed model read must not modify configuration');
+    const requestedModel = 'openai/gpt-6.1-sol';
+    const set = runProcess(process.execPath, [
+      initEntry, 'models', 'set', '--runtime', 'codex', '--agent', 'executor', '--model', requestedModel,
+    ], consumerRoot);
+    assert.strictEqual(set.exitCode, 0, set.stderr || set.stdout);
+    const configuredBytes = fs.readFileSync(configPath);
+    assert.deepStrictEqual(generatedShow().effective.codex.executor, {
+      mode: 'override', model: requestedModel,
+    });
+    const mutatingHelperAttempt = runProcess(process.execPath, [
+      generatedHelper, 'models', 'clear', '--runtime', 'codex', '--agent', 'executor',
+    ], consumerRoot);
+    assert.notStrictEqual(mutatingHelperAttempt.exitCode, 0,
+      'generated helper must not gain model mutation authority');
+    assert.deepStrictEqual(fs.readFileSync(configPath), configuredBytes);
+    const clear = runProcess(process.execPath, [
+      initEntry, 'models', 'clear', '--runtime', 'codex', '--agent', 'executor',
+    ], consumerRoot);
+    assert.strictEqual(clear.exitCode, 0, clear.stderr || clear.stdout);
+    assert.deepStrictEqual(generatedShow().effective.codex.executor, { mode: 'inherit', model: null });
     assert.ok(skill.includes('lifecycle-preflight execute {phase_num} --expects-mutation phase-status'),
       'generated execute skill must retain the positional execute preflight command');
     assert.ok(skill.includes('emitted positional `phases/{phase_dir}` selector'),
