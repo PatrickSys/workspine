@@ -558,8 +558,18 @@ function reconcileAnnotations(worktrees, annotations) {
   };
 }
 
-function classifyWorkflowState(planningDir) {
-  const lifecycle = evaluateLifecycleState({ planningDir });
+function classifyWorkflowState(planningDir, { lifecycleObservation = null, expectedWorkspaceRoot = resolve(planningDir, '..') } = {}) {
+  // A transient observation belongs to exactly one workspace and state root.
+  // An explicitly supplied mismatched observation is an error, never a hint
+  // to reuse another checkout's authority or skip its phase evidence.
+  if (lifecycleObservation && (
+    lifecycleObservation.workspaceRoot !== resolve(expectedWorkspaceRoot)
+    || lifecycleObservation.planningDir !== resolve(planningDir)
+    || !lifecycleObservation.lifecycle
+  )) {
+    throw new Error('Lifecycle observation workspace root or planning directory mismatch');
+  }
+  const lifecycle = lifecycleObservation?.lifecycle || evaluateLifecycleState({ planningDir });
   const checkpointPath = join(planningDir, '.continue-here.md');
   const workspaceRoot = resolve(planningDir, '..');
   const milestoneVersion = lifecycle.currentMilestone?.version || null;
@@ -798,6 +808,7 @@ export function buildControlMap({
   planningDir,
   annotationPath = null,
   includeIgnoredPaths = false,
+  lifecycleObservation = null,
   now = new Date(),
 } = {}) {
   const root = resolve(workspaceRoot || process.cwd());
@@ -810,7 +821,7 @@ export function buildControlMap({
   const canonical = reconciled.worktrees.find((entry) => resolve(entry.path) === root)
     || reconciled.worktrees[0]
     || readGitWorktree(root, root, { includeIgnoredCount: true });
-  const workflowState = classifyWorkflowState(planning);
+  const workflowState = classifyWorkflowState(planning, { lifecycleObservation, expectedWorkspaceRoot: root });
   const runtimeDirs = discoverRuntimeDirs(root);
   const annotationReport = {
     path: annotations.path,

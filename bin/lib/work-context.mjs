@@ -2205,7 +2205,7 @@ export function readContinuityCheckpoint(planningDir) {
   };
 }
 
-export function inspectWorkContext(cwd = process.cwd()) {
+export function inspectWorkContext(cwd = process.cwd(), { includeLifecycleObservation = false } = {}) {
   const paths = getWorkPaths(cwd);
   const state = readJsonIfExists(paths.state);
   const questions = readOpenQuestions(paths.workDir);
@@ -2229,7 +2229,7 @@ export function inspectWorkContext(cwd = process.cwd()) {
     phases: scanPhaseEvidence(planningDir, lifecycle),
     state_dir_name: stateDirName,
   };
-  return {
+  const context = {
     paths,
     exists: existsSync(paths.workDir),
     has_goal: existsSync(paths.goal),
@@ -2249,6 +2249,19 @@ export function inspectWorkContext(cwd = process.cwd()) {
     decisions: listMarkdownFiles(join(paths.workDir, 'decisions')),
     dogfood: listMarkdownFiles(join(paths.workDir, 'dogfood')),
   };
+  // Opt-in, invocation-local reuse for read-only consumers. Keep the entire
+  // evaluated lifecycle off the enumerable/public JSON context surface.
+  if (includeLifecycleObservation) {
+    Object.defineProperty(context, '_lifecycleObservation', {
+      value: Object.freeze({
+        workspaceRoot: resolve(paths.root),
+        planningDir: resolve(planningDir),
+        lifecycle,
+      }),
+      enumerable: false,
+    });
+  }
+  return context;
 }
 
 function listMarkdownFiles(dir) {

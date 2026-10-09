@@ -144,12 +144,13 @@ function userQuestionAction(questionIds, description) {
   };
 }
 
-function summarizeControlMap(cwd) {
+function summarizeControlMap(cwd, lifecycleObservation = null) {
   try {
     const stateDir = resolveStateDir(cwd).dir;
     return buildControlMap({
       workspaceRoot: cwd,
       planningDir: stateDir,
+      lifecycleObservation,
     });
   } catch (error) {
     return {
@@ -372,9 +373,11 @@ function routeFromStateObject(stateValue, workDir) {
   return null;
 }
 
-function routeNext(ctx) {
-  const context = inspectWorkContext(ctx.cwd);
-  const controlMap = summarizeControlMap(ctx.cwd);
+function routeNext(ctx, observedContext = null) {
+  const context = observedContext
+    ? assertNextObservationContext(ctx.cwd, observedContext)
+    : inspectWorkContext(ctx.cwd, { includeLifecycleObservation: true });
+  const controlMap = summarizeControlMap(ctx.cwd, context._lifecycleObservation);
   const inputsConsidered = ['repo truth: control-map'];
   const inputsSkipped = [];
   const traceRefs = [];
@@ -407,7 +410,7 @@ function routeNext(ctx) {
       privacy_notes: privacyNotes,
       inputs_considered: inputsConsidered,
       inputs_skipped: ['.work files: missing'],
-    }));
+    }), context);
   }
 
   inputsConsidered.push('.work/goal.md');
@@ -820,7 +823,12 @@ function readLifecycleTruth(cwd, context) {
   const malformed = [];
   let lifecycle = null;
   try {
-    lifecycle = evaluateLifecycleState({ planningDir });
+    const observation = context?._lifecycleObservation;
+    if (observation && (observation.workspaceRoot !== resolve(cwd)
+      || observation.planningDir !== resolve(planningDir))) {
+      throw new Error('Lifecycle observation workspace root or planning directory mismatch');
+    }
+    lifecycle = observation?.lifecycle || evaluateLifecycleState({ planningDir });
     malformed.push(...(lifecycle.malformedPlanFrontmatter || []));
   } catch (error) {
     if (!isMalformedPlanFrontmatterError(error)) throw error;
@@ -971,13 +979,29 @@ function hasDecisionsDigestSignal(digest) {
     || digest.truncated;
 }
 
-function projectDecisionsDigest(ctx, route) {
+function projectDecisionsDigest(ctx, route, observedContext = null) {
   const decisionsDigest = buildDecisionsDigest({ workDir: getWorkPaths(ctx.cwd).workDir });
   const inputsConsidered = hasDecisionsDigestSignal(decisionsDigest) && !route.inputs_considered.includes('.work/decisions/*.md')
     ? [...route.inputs_considered, '.work/decisions/*.md']
     : route.inputs_considered;
   const projectedRoute = { ...route, inputs_considered: inputsConsidered, decisionsDigest };
-  return { ...projectedRoute, continuity: continuityProjection(inspectWorkContext(ctx.cwd), projectedRoute) };
+  const context = observedContext
+    ? assertNextObservationContext(ctx.cwd, observedContext)
+    : inspectWorkContext(ctx.cwd);
+  return { ...projectedRoute, continuity: continuityProjection(context, projectedRoute) };
+}
+
+function assertNextObservationContext(cwd, context) {
+  const observation = context?._lifecycleObservation;
+  const workspaceRoot = resolve(cwd);
+  const planningDir = resolve(resolveStateDir(workspaceRoot).dir);
+  if (!observation || resolve(context.paths?.root || '') !== workspaceRoot
+    || observation.workspaceRoot !== workspaceRoot
+    || observation.planningDir !== planningDir
+    || !observation.lifecycle) {
+    throw new Error('Lifecycle observation workspace root or planning directory mismatch');
+  }
+  return context;
 }
 
 function routeFromWorkMilestone(context, manifest) {
@@ -1419,7 +1443,10 @@ export function createCmdNext(ctx) {
         return;
       }
 
-      const result = projectDecisionsDigest(effectiveCtx, routeNext(effectiveCtx));
+      // One fresh filesystem observation per read-only invocation. Each
+      // subsequent command call rereads current authority and phase evidence.
+      const observedContext = inspectWorkContext(effectiveCtx.cwd, { includeLifecycleObservation: true });
+      const result = projectDecisionsDigest(effectiveCtx, routeNext(effectiveCtx, observedContext), observedContext);
       const adopted = readJsonIfExists(join(workPaths.workDir, 'adoption-receipt.json'));
       if (adopted.exists && adopted.ok
         && adopted.value?.signature === 'GSD-roadmap-v1'
