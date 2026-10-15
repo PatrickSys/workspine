@@ -1643,6 +1643,105 @@ describe('next command routing', () => {
     assert.strictEqual(result.next_command, null);
   });
 
+  test('brownfield verification gaps route to remediation rather than recommending closeout', async () => {
+    await initWork();
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    const verificationPath = '.work/brownfield-change/VERIFICATION.md';
+    const statePath = path.join(tmpDir, '.work/state.json');
+    writeFile(changePath, brownfieldChange());
+    writeFile(verificationPath, brownfieldVerification('complete'));
+
+    await runJson(['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    await runJson(['lifecycle-transition', 'approve', '--plan', changePath, '--authority', 'owner', '--approval-ref', 'test-gaps-owner', '--json']);
+    await runJson(['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
+    writeFile(changePath, brownfieldChange({ posture: 'ready_for_verification', nextAction: 'Resolve evidence gaps.' }));
+    await runJson(['lifecycle-transition', 'verify', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    writeFile(verificationPath, [
+      '---', 'change: CHANGE-TEST', 'status: gaps_found', '---',
+      '# Brownfield Change Verification',
+      '## Goal Verification', '- Existing checks have failures.',
+      '## Evidence', '- Required test was run.',
+      '## Gaps', '- An existing test is failing.',
+      '## Closeout Decision', '- Resolve gaps; not passed.',
+    ].join('\n'));
+    await runJson(['lifecycle-transition', 'fix_gaps', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+
+    const beforeRead = fs.readFileSync(statePath);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const next = await runJson(['next', '--json']);
+      assert.strictEqual(next.state, 'fix_gaps');
+      assert.strictEqual(next.route_kind, 'brownfield_change_fix_gaps');
+      assert.strictEqual(next.authority, 'brownfield_change');
+      assert.strictEqual(next.next_command, null, 'gaps must not automatically restart execution');
+      assert.strictEqual(next.requires_user, false);
+      assert.ok(next.artifacts_to_read.includes(verificationPath));
+      assert.match(next.next_action.description, /resolve|address|repair/i);
+      assert.doesNotMatch(next.next_action.description, /close CHANGE/i);
+      assert.strictEqual(next.continuity.posture.approval.value, 'not_approved',
+        'current changed PLAN bytes must not regain executable owner approval');
+      assert.deepStrictEqual(next.continuity.posture.recorded_plan_approval, {
+        value: 'recorded',
+        source: '.work/state.json#workflow.plan.approved_sha256',
+      }, 'a completed workflow still preserves evidence of the previously recorded owner approval');
+      assert.deepStrictEqual(fs.readFileSync(statePath), beforeRead, 'next must not mutate state');
+    }
+
+    // A legitimate fix cycle must move forward even though the previous
+    // failed verification remains preserved as evidence in state.json.
+    // The earlier failed verification left CHANGE.md marked ready; planning
+    // is still a legal recovery transition before the operator updates it.
+    await runJson(['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    let next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'plan', 'prior gaps must not mask an unapproved remediation plan');
+    assert.strictEqual(next.route_kind, 'brownfield_change_remediation_plan');
+    assert.ok(next.blocked_by.includes('brownfield_change_posture'));
+
+    await runJson(['lifecycle-transition', 'approve', '--plan', changePath, '--authority', 'owner', '--approval-ref', 'test-ready-owner', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'plan', 'approval alone cannot execute a remediation while CHANGE is still marked ready');
+
+    writeFile(changePath, brownfieldChange({ posture: 'active', nextAction: 'Plan the bounded remediation.' }));
+    await runJson(['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'plan', 'changed contract requires fresh approval');
+    await runJson(['lifecycle-transition', 'approve', '--plan', changePath, '--authority', 'owner', '--approval-ref', 'test-remediation-owner', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'execute', 'fresh remediation approval must enable execution');
+    await runJson(['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'execute');
+    writeFile(changePath, brownfieldChange({ posture: 'ready_for_verification', nextAction: 'Recheck the remediated change.' }));
+    writeFile(verificationPath, brownfieldVerification('complete'));
+    await runJson(['lifecycle-transition', 'verify', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'verify', 'prior gaps must not mask a new verification pass');
+    assert.strictEqual(next.route_kind, 'brownfield_change_verification');
+    assert.strictEqual(next.continuity.posture.recorded_plan_approval?.value, 'recorded');
+
+    const savedState = fs.readFileSync(statePath);
+    const invalidRef = JSON.parse(savedState);
+    invalidRef.workflow.approval_ref = 'auto';
+    fs.writeFileSync(statePath, `${JSON.stringify(invalidRef, null, 2)}\n`);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.continuity.posture.recorded_plan_approval, undefined,
+      'a synthetic reference must not be presented as a recorded owner approval');
+
+    const mismatchedPlan = JSON.parse(savedState);
+    mismatchedPlan.workflow.plan.identity = '.work/brownfield-change/OTHER.md';
+    fs.writeFileSync(statePath, `${JSON.stringify(mismatchedPlan, null, 2)}\n`);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.continuity.posture.recorded_plan_approval, undefined,
+      'historical approval provenance requires a consistent recorded plan identity');
+
+    const missingIdentity = JSON.parse(savedState);
+    missingIdentity.workflow.plan.identity = null;
+    fs.writeFileSync(statePath, `${JSON.stringify(missingIdentity, null, 2)}\n`);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.continuity.posture.recorded_plan_approval, undefined,
+      'historical approval provenance requires both recorded plan pointers');
+    fs.writeFileSync(statePath, savedState);
+  });
+
   test('next does not advertise execution after approved brownfield bytes change', async () => {
     await initWork();
     const changePath = '.work/brownfield-change/CHANGE.md';

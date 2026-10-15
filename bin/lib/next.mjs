@@ -14,6 +14,7 @@ import {
   buildDecisionsDigest,
   getWorkPaths,
   hasDurableWorkflowApproval,
+  isValidApprovalReference,
   inspectWorkContext,
   readJsonIfExists,
   rebuildGraphIndex,
@@ -207,6 +208,11 @@ function hasCurrentPlanApproval(context, workflow = context.state?.value?.workfl
   return Boolean(plan && hasDurableWorkflowApproval(context.paths.workDir, plan, context.state?.value));
 }
 
+function isRemediatingRecordedGaps(workflow) {
+  return workflow?.verification?.status === 'gaps_found'
+    && ['plan', 'execute', 'verify'].includes(workflow.current_state);
+}
+
 function brownfieldLifecycleRoute(context) {
   if (!context.planning.has_brownfield_change || !isBoundBrownfieldLifecycle(context)) return null;
   const change = context.planning.brownfield_change;
@@ -271,6 +277,36 @@ function brownfieldLifecycleRoute(context) {
       artifacts_to_read: [...evidence, statePath(context, 'brownfield-change/VERIFICATION.md')], artifacts_to_write: [], requires_user: false,
     };
   }
+  if (workflow.current_state === 'fix_gaps'
+    || (workflow.verification?.status === 'gaps_found' && !isRemediatingRecordedGaps(workflow))) {
+    const verificationPath = statePath(context, 'brownfield-change/VERIFICATION.md');
+    return {
+      state: 'fix_gaps', reason: 'The bounded brownfield change has unresolved verification gaps.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_fix_gaps', blocked_by: [],
+      next_command: null,
+      next_action: manualReviewAction([...evidence, verificationPath],
+        'Resolve the verification gaps: update CHANGE.md, replan, record fresh owner approval, execute the fixes and verify again before closeout.'),
+      artifacts_to_read: [...evidence, verificationPath],
+      artifacts_to_write: [verificationPath, statePath(context, 'brownfield-change/CHANGE.md')],
+      requires_user: false,
+    };
+  }
+  if (workflow.current_state === 'plan'
+    && workflow.execution?.status === 'not_started'
+    && workflow.verification?.status === 'gaps_found'
+    && change.currentStatus === 'ready_for_verification') {
+    return {
+      state: 'plan',
+      reason: 'Remediation planning started, but CHANGE.md still claims ready for verification. Restore active posture and obtain fresh approval for its current bytes before executing.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_remediation_plan',
+      blocked_by: ['brownfield_change_posture', 'plan_approval'],
+      next_command: workflowId('plan'),
+      next_action: workflowAction(workflowId('plan'),
+        'Set the bounded CHANGE.md posture to active, review the remediation scope, replan and record a fresh owner approval before execution.'),
+      artifacts_to_read: evidence, artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md')],
+      requires_user: true,
+    };
+  }
   if (change.currentStatus === 'ready_for_verification' || workflow.execution?.status === 'complete') {
     return {
       state: 'verify', reason: 'The bounded brownfield change is ready for Done-When verification.',
@@ -329,7 +365,8 @@ function routeFromStateObject(stateValue, workDir) {
   if (workflow.execution?.status === 'complete' && workflow.verification?.status !== 'passed') {
     return { state: 'verify', reason: 'Execution is complete and verification has not passed.' };
   }
-  if (workflow.verification?.status === 'gaps_found' || workflow.audit?.status === 'gaps_found') {
+  if ((workflow.verification?.status === 'gaps_found' || workflow.audit?.status === 'gaps_found')
+    && !isRemediatingRecordedGaps(workflow)) {
     return { state: 'fix_gaps', reason: 'Verification or audit recorded gaps.' };
   }
   if (workflow.verification?.status === 'passed' && workflow.audit?.status !== 'passed') {
@@ -928,6 +965,21 @@ function continuityProjection(context, route) {
       : stateWorkflow?.plan && Object.hasOwn(stateWorkflow.plan, 'approved')
         ? { value: currentPlanApproval ? 'approved' : 'not_approved', source: `${stateDirName(context)}/state.json#${stateSource}.plan.approved` }
         : { value: 'not_recorded', source: 'structured_state_or_lifecycle_not_recorded' };
+  const recordedPath = stateWorkflow?.plan?.path || null;
+  const recordedIdentity = stateWorkflow?.plan?.identity || null;
+  const recordedPlanConsistent = recordedPath && recordedIdentity
+    && normalizeSlashes(recordedPath) === normalizeSlashes(recordedIdentity);
+  // A completed workflow can retain its former owner approval receipt even
+  // after the active plan bytes or last actor change. This display-only field
+  // never grants authority to resume execution of an amended plan.
+  const recordedPlanApproval = state?.workflow
+    && stateWorkflow?.execution?.status === 'complete'
+    && stateWorkflow?.plan?.approved === true
+    && recordedPlanConsistent
+    && /^[a-f0-9]{64}$/i.test(String(stateWorkflow.plan.approved_sha256 || ''))
+    && isValidApprovalReference(stateWorkflow.approval_ref)
+    ? { value: 'recorded', source: stateDirName(context) + '/state.json#workflow.plan.approved_sha256' }
+    : null;
   const result = typeof stateWorkflow?.execution?.status === 'string'
     ? { value: stateWorkflow.execution.status, source: `${stateDirName(context)}/state.json#${stateSource}.execution.status` }
     : { value: 'not_recorded', source: 'structured_state_or_lifecycle_not_recorded' };
@@ -956,6 +1008,7 @@ function continuityProjection(context, route) {
     checkpoint,
     posture: {
       approval,
+      ...(recordedPlanApproval ? { recorded_plan_approval: recordedPlanApproval } : {}),
       result,
       verification,
     },

@@ -787,7 +787,7 @@ function evaluateDecisionDispositionWarnings({ planningDir, decisionsDigest, pla
   const entries = Array.isArray(dispositions) ? dispositions : [];
   const byId = new Map(entries.filter((entry) => entry?.id).map((entry) => [entry.id, entry]));
   const missing = persisted.records.map((record) => record.id).filter((id) => !byId.has(id));
-  if (dispositions === null || missing.length > 0) {
+  if (persisted.records.length > 0 && (dispositions === null || missing.length > 0)) {
     warnings.push({
       code: 'decision_dispositions_missing',
       message: `PLAN.md decision dispositions are missing for persisted decision(s): ${(missing.length > 0 ? missing : persisted.records.map((record) => record.id)).join(', ')}.`,
