@@ -336,6 +336,11 @@ describe('gsdd init and update', () => {
       assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'templates', 'brownfield-change', file)),
         `brownfield-change/${file} template must be distributed during init`);
     }
+    const freshVerificationTemplate = fs.readFileSync(
+      path.join(tmpDir, '.work', 'templates', 'brownfield-change', 'VERIFICATION.md'), 'utf8');
+    assert.match(freshVerificationTemplate, /^verified: null$/m,
+      'a newly initialized, pending verification must not carry a historical verified date');
+    assert.match(freshVerificationTemplate, /^status: pending$/m);
 
     const statePath = path.join(tmpDir, '.work', 'state.json');
     const state = readJson(statePath);

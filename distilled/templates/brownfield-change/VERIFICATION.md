@@ -1,6 +1,6 @@
 ---
 change: CHANGE-001
-verified: 2026-04-21
+verified: null
 status: pending
 delivery_posture: repo_only
 required_evidence:
