@@ -4854,7 +4854,7 @@ describe('G57 - Final Rigor Workflow Contract', () => {
   test('final workflow surfaces remain within their established line budgets', () => {
     const limits = { 'plan.md': 640, 'execute.md': 460, 'verify.md': 440 };
     for (const [name, limit] of Object.entries(limits)) {
-      const lines = read(name).split('\n').length;
+      const lines = read(name).replace(/\n$/, '').split('\n').length;
       assert.ok(lines <= limit, `${name} is ${lines} lines (max ${limit}).`);
     }
   });
