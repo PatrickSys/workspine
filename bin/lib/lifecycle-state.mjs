@@ -643,10 +643,14 @@ export function resolveStandardPhaseSelection({ lifecycle, selector } = {}) {
 export function resolveStandardPlanSelection({ lifecycle, planPath, phaseSelection = null } = {}) {
   if (!lifecycle) throw new Error('lifecycle is required');
   const rawPath = String(planPath || '').trim().replace(/\\/g, '/');
-  if (!rawPath || rawPath.startsWith('/') || rawPath.includes('..') || !rawPath.startsWith('phases/')) {
+  // Generated work-* skills use repository-relative .work/phases paths while
+  // lifecycle inventory emits phases-relative identities. Accept both exact
+  // spellings; retain the same traversal and current-chain checks below.
+  const selectedPath = rawPath.startsWith('.work/') ? rawPath.slice('.work/'.length) : rawPath;
+  if (!rawPath || rawPath.startsWith('/') || rawPath.includes('..') || !selectedPath.startsWith('phases/')) {
     return { status: 'invalid', reason: 'invalid_plan_selector' };
   }
-  const relativePath = rawPath.slice('phases/'.length);
+  const relativePath = selectedPath.slice('phases/'.length);
   const plan = (lifecycle.phaseArtifacts || []).find(
     (artifact) => artifact.kind === 'plan' && artifact.displayPath === relativePath
   );

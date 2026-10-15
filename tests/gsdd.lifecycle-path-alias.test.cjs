@@ -113,6 +113,18 @@ test('canonical directory discovery retains logical artifact paths and ordinary 
   assert.equal(result.allowed, true);
 });
 
+test('documented .work/phases PLAN selector resolves to its exact current phase chain', async () => {
+  const root = fixture();
+  const evaluate = (await preflightModule).evaluateLifecyclePreflight;
+  const args = { planningDir: path.join(root, '.work'), surface: 'verify', phaseNumber: '12', expectsMutation: 'phase-status' };
+  const selected = evaluate({ ...args, planPath: '.work/phases/12-current/12-01-PLAN.md', planFlagPresent: true });
+  assert.equal(selected.allowed, true, JSON.stringify(selected.blockers));
+  const escape = evaluate({ ...args, planPath: '.work/phases/../12-current/12-01-PLAN.md', planFlagPresent: true });
+  assert.equal(escape.allowed, false);
+  const wrongPhase = evaluate({ ...args, planPath: '.work/phases/11-parked/11-01-PLAN.md', planFlagPresent: true });
+  assert.equal(wrongPhase.allowed, false);
+});
+
 test('a phase root junction cannot supply authority even when its target is a real directory', async () => {
   const root = fixture();
   const phases = path.join(root, '.work', 'phases');
@@ -177,4 +189,3 @@ test('Windows directory case aliases retain inventory without rewriting emitted 
   assert.equal(current.phaseArtifacts.length, 4);
   assert.ok(current.phaseArtifacts.every(artifact => artifact.path.startsWith(path.resolve(upper))));
 });
-
