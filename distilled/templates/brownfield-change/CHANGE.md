@@ -92,7 +92,7 @@ When possible, list repo-relative paths or module roots in `Owned files / module
 ## Implementation Plan
 
 Write ordered tasks with owned files, actions, verification commands, dependencies, and owner checkpoints here.
-Keep runtime, assurance, and approval metadata in the existing frontmatter and the checker result in this body.
+Keep runtime and assurance in the structured checker result in this body. The lifecycle helper records owner approval in state.json against the exact CHANGE.md bytes; do not add approval metadata to CHANGE.md after presenting it.
 
 ## Dependencies And Risks
 

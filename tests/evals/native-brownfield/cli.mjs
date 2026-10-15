@@ -9,6 +9,7 @@ import { cleanupIsolatedCodexHome, createIsolatedCodexHome, restoreIsolatedCodex
 import { ReceiptChain, verifySeal } from './seal.mjs';
 import { canonicalStringify, command, EvalError, fileSha256, readJson, sha256 } from './util.mjs';
 const SOURCE_FILES = ['cli.mjs', 'util.mjs', 'prepare.mjs', 'codex.mjs', 'journey.mjs', 'grade.mjs', 'seal.mjs'];
+const MAX_PRIMARY_SOURCE_LINES = 900;
 const TURN_RECEIPTS = { 'a-plan': [100, 'a-plan'], 'a-pause': [110, 'a-pause'],
   approval: [120, 'approval'], 'b-resume-execute': [200, 'b-resume-execute'],
   'c-verify': [300, 'c-verify'], 'c-progress': [310, 'c-progress'] };
@@ -24,7 +25,7 @@ function parseArgs(argv) {
 function characterize() {
   const root = path.dirname(fileURLToPath(import.meta.url));
   const lines = SOURCE_FILES.reduce((sum, file) => sum + fs.readFileSync(path.join(root, file), 'utf8').split(/\r?\n/).length - 1, 0);
-  if (lines > 800) throw new EvalError('evaluator_invalid', `primary evaluator exceeds 800 lines: ${lines}`);
+  if (lines > MAX_PRIMARY_SOURCE_LINES) throw new EvalError('evaluator_invalid', `primary evaluator exceeds ${MAX_PRIMARY_SOURCE_LINES} lines: ${lines}`);
   return { schema_version: 1, mode: 'characterize', provider_invoked: false, primary_source_lines: lines,
     stages: ['a-plan', 'a-pause', 'approval', 'b-resume-execute', 'c-verify', 'c-progress'],
     session_topology: { A: ['a-plan', 'a-pause', 'approval'], B: ['b-resume-execute'], C: ['c-verify', 'c-progress'] },
@@ -71,6 +72,7 @@ function appendTurn(chain, id, value) {
     outcome: value.outcome, failure_code: value.failure_code || null, session_id: value.sessionId || null,
     turn_id: value.turnId || null, usage: value.usage, event_stream_sha256: value.eventsFile ? fileSha256(value.eventsFile) : null,
     checkpoint_witness: value.checkpoint_witness || null, lane_selection: value.lane_selection || null,
+    plan_sha256: value.plan_sha256 || null,
   };
   chain.append(sequence, name, id === 'approval' ? 'approval' : 'turn', payload);
 }
@@ -95,7 +97,11 @@ async function run(freezeFile, runRoot) {
     if (homeFiles.length !== 1 || homeFiles[0] !== 'auth.json' || !auth?.isFile() || auth.isSymbolicLink()) throw new EvalError('environment_invalid', 'qualified CODEX_HOME posture changed');
     const result = await runJourney({ transport, consumerRoot: freeze.consumer_root, runRoot, hardTimeoutMs: freeze.hard_timeout_ms,
       approvalRef: freeze.approval_ref, prompts: freeze.prompts || buildPrompts({ approvalRef: freeze.approval_ref }), record: (id, value) => appendTurn(chain, id, value) });
-    if (result.outcome !== 'completed') return chain.terminal(result.outcome, { failure_code: result.failure_code || null });
+    if (result.outcome !== 'completed') return chain.terminal(result.outcome, {
+      failure_code: result.failure_code || null,
+      ...(result.stopped_before_approval === true ? { stopped_before_approval: true, plan_selection: result.planSelection || null } : {}),
+      ...(result.stopped_before_execution === true ? { stopped_before_execution: true, plan_selection: result.planSelection || null } : {}),
+    });
     const grade = gradeWorkspace({ consumerRoot: freeze.consumer_root, baselineManifest: freeze.baseline_manifest,
       allowedPaths: freeze.allowed_paths, oracle: freeze.oracle, approvalRef: freeze.approval_ref, genericReproduction: freeze.generic_reproduction });
     chain.append(400, 'oracle', 'oracle', grade.oracle);

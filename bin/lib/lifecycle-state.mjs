@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 
 const BROWNFIELD_CHANGE_DIR = 'brownfield-change';
@@ -40,12 +40,15 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     structuralPhaseArtifacts,
     { companionKinds: ['summary', 'verification'], malformedPlanFrontmatter }
   );
+  const parkedPhaseTokens = new Set(phaseStatusAlignment.parkedPhaseTokens);
   const enrichedPhases = phases.map((phase) => {
     const matchingArtifacts = phaseArtifacts.filter((artifact) => artifact.phaseToken === phase.number);
     const hasPlan = matchingArtifacts.some((artifact) => artifact.kind === 'plan');
     const hasSummary = matchingArtifacts.some((artifact) => artifact.kind === 'summary');
     return {
       ...phase,
+      // Owner parking is an execution disposition distinct from [ ] not_started.
+      parked: parkedPhaseTokens.has(phase.number),
       hasArtifacts: matchingArtifacts.length > 0,
       hasLifecycleArtifacts: hasPlan || hasSummary,
       hasPlan,
@@ -81,7 +84,7 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
     currentMilestone,
     phases: enrichedPhases,
     currentPhase: enrichedPhases.find((phase) => phase.status === 'in_progress') || null,
-    nextPhase: enrichedPhases.find((phase) => phase.status === 'not_started') || null,
+    nextPhase: enrichedPhases.find((phase) => phase.status === 'not_started' && !phase.parked) || null,
     counts,
     phaseArtifacts,
     historicalPhaseArtifacts,
@@ -101,31 +104,27 @@ export function evaluateLifecycleState({ planningDir, provenance = null } = {}) 
 }
 
 function evaluateRoadmapPhaseStatusAlignment(roadmap) {
-  if (!roadmap) return { mismatches: [] };
+  if (!roadmap) return { mismatches: [], parkedPhaseTokens: [] };
 
   const overview = new Map();
   const details = new Map();
-  const lines = normalizeContent(roadmap).split('\n');
-  let inDetails = false;
+  const parkedPhaseTokens = new Set();
+  const lines = activeRoadmapLines(roadmap);
   let currentDetailPhase = null;
+  let inPhaseDetails = false;
 
   for (const line of lines) {
-    if (DETAILS_OPEN_RE.test(line) && !DETAILS_CLOSE_RE.test(line)) {
-      inDetails = true;
-      currentDetailPhase = null;
-      continue;
+    if (/^#{1,2}\s+/.test(line)) {
+      inPhaseDetails = /^##\s+Phase Details\s*(?:#+\s*)?$/i.test(line);
     }
-    if (DETAILS_CLOSE_RE.test(line)) {
-      inDetails = false;
-      currentDetailPhase = null;
-      continue;
-    }
-    if (inDetails) continue;
 
     const phaseMatch = line.match(PHASE_LINE_RE);
     if (phaseMatch) {
       const phaseToken = normalizePhaseToken(phaseMatch[2]);
       const status = normalizePhaseStatus(phaseMatch[1]);
+      if (status === 'not_started' && isExplicitOwnerParkedStatusSuffix(line.slice(phaseMatch[0].length))) {
+        parkedPhaseTokens.add(phaseToken);
+      }
       if (!overview.has(phaseToken)) overview.set(phaseToken, []);
       overview.get(phaseToken).push(status);
       continue;
@@ -146,6 +145,10 @@ function evaluateRoadmapPhaseStatusAlignment(roadmap) {
     const statusMatch = line.match(PHASE_DETAIL_STATUS_RE);
     if (statusMatch && currentDetailPhase) {
       details.get(currentDetailPhase).push(normalizePhaseStatus(statusMatch[1]));
+      if (inPhaseDetails && normalizePhaseStatus(statusMatch[1]) === 'not_started'
+        && isExplicitOwnerParkedStatusSuffix(line.slice(statusMatch[0].length))) {
+        parkedPhaseTokens.add(currentDetailPhase);
+      }
     }
   }
 
@@ -171,7 +174,13 @@ function evaluateRoadmapPhaseStatusAlignment(roadmap) {
     }
   }
 
-  return { mismatches };
+  return { mismatches, parkedPhaseTokens: [...parkedPhaseTokens].sort(comparePhaseTokens) };
+}
+
+function isExplicitOwnerParkedStatusSuffix(suffix) {
+  // Only a recognized phase overview/detail status marker may declare parking.
+  // Body paragraphs, historical mentions and ordinary [ ] do not confer it.
+  return /^\s*[-—–]\s*(?:\*\*)?(?:parked\s+by\s+owner|owner[-\s]+parked)\b/i.test(suffix);
 }
 
 function comparePhaseTokens(a, b) {
@@ -184,6 +193,38 @@ function readTextIfExists(filePath) {
 
 function normalizeContent(content) {
   return String(content || '').replace(/\r\n/g, '\n');
+}
+
+// Phase enumeration and status alignment must read the same current document.
+// Fenced examples and nested HTML archives cannot supply lifecycle authority.
+function activeRoadmapLines(content) {
+  const result = [];
+  let fence = null;
+  let detailsDepth = 0;
+  for (const line of normalizeContent(content).split('\n')) {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (marker && marker[1][0] === fence.character && marker[1].length >= fence.length
+          && !marker[2].trim()) fence = null;
+      result.push('');
+      continue;
+    }
+    if (marker && (marker[1][0] !== '`' || !marker[2].includes('`'))) {
+      fence = { character: marker[1][0], length: marker[1].length };
+      result.push('');
+      continue;
+    }
+    // Archives use block tags. A prose/inline-code mention such as
+    // "read the `<details>` example" must not hide the later phase ledger.
+    const tags = /^ {0,3}<\/?details(?:\s|>)/i.test(line)
+      ? [...line.matchAll(/<\/?details\b[^>]*>/gi)] : [];
+    const wasArchived = detailsDepth > 0;
+    for (const [tag] of tags) {
+      detailsDepth = /^<\//.test(tag) ? Math.max(0, detailsDepth - 1) : detailsDepth + 1;
+    }
+    result.push(wasArchived || detailsDepth > 0 || tags.length ? '' : line);
+  }
+  return result;
 }
 
 function escapeRegExp(value) {
@@ -212,18 +253,7 @@ function parseActiveRoadmapPhases(roadmap) {
   if (!roadmap) return [];
 
   const phases = [];
-  let inDetails = false;
-
-  for (const line of normalizeContent(roadmap).split('\n')) {
-    if (DETAILS_OPEN_RE.test(line) && !DETAILS_CLOSE_RE.test(line)) {
-      inDetails = true;
-      continue;
-    }
-    if (DETAILS_CLOSE_RE.test(line)) {
-      inDetails = false;
-      continue;
-    }
-    if (inDetails) continue;
+  for (const line of activeRoadmapLines(roadmap)) {
 
     const match = line.match(PHASE_LINE_RE);
     if (!match) continue;
@@ -253,7 +283,12 @@ export function readBrownfieldChangeState(planningDir) {
       .filter((entry) => entry.isDirectory() && /^brownfield-change(?:-|\d)/i.test(entry.name) && entry.name.toLowerCase() !== BROWNFIELD_CHANGE_DIR)
       .map((entry) => join(planningDir, entry.name, 'CHANGE.md'))
       .filter((candidate) => existsSync(candidate))
-      .filter((candidate) => !/^\s*-\s*Current posture:\s*(?:closed|`closed`)\s*$/im.test(readTextIfExists(candidate)))
+      .filter((candidate) => {
+        const artifact = readMarkdownArtifact(candidate);
+        const posture = extractBulletLabel(extractMarkdownSection(artifact.body, 'Current Status'), 'Current posture')
+          || artifact.frontmatter.status;
+        return String(posture || '').trim().replace(/^`([^`]+)`$/, '$1').toLowerCase() !== 'closed';
+      })
     : [];
 
   if (!existsSync(changePath)) {
@@ -375,14 +410,13 @@ function collectPhaseArtifacts(phasesDir) {
   const declaredRoot = resolve(phasesDir);
   let phasesRoot;
   try {
-    phasesRoot = realpathSync(declaredRoot);
+    if (hasLinkedPhaseAncestor(declaredRoot)) return [];
+    phasesRoot = canonicalPhasePath(declaredRoot);
   } catch {
     return [];
   }
-  // A phase root that is itself a link is not the canonical planning root.
-  // Refuse it rather than allowing recursive discovery to escape the caller's
-  // state tree through a junction or symlink.
-  if (!isWithinRoot(declaredRoot, phasesRoot)) return [];
+  // Windows 8.3 spellings can name this same physical directory without a link.
+  // Use its canonical identity for containment while retaining logical output paths.
 
   const artifacts = [];
   const walk = (directory, relativeDirectory) => {
@@ -393,8 +427,10 @@ function collectPhaseArtifacts(phasesDir) {
       const artifactDirectory = relativeDirectory || '';
       if (entry.isSymbolicLink()) continue;
       if (entry.isFile()) {
-        if (!isContainedRealPath(phasesRoot, entryPath)) continue;
         const artifact = classifyPhaseArtifact(artifactDirectory, entry.name, entryPath);
+        // The parent directory was resolved and contained before enumeration.
+        // A regular, non-link immediate child cannot redirect outside it. Avoid
+        // resolving every file's complete ancestor chain again for this scan.
         if (artifact) artifacts.push(artifact);
         continue;
       }
@@ -408,6 +444,17 @@ function collectPhaseArtifacts(phasesDir) {
   return artifacts.sort(compareArtifactPaths);
 }
 
+function hasLinkedPhaseAncestor(candidate) {
+  // Match workspace-root's ancestor-link policy once per scan, not per artifact.
+  let current = resolve(candidate);
+  while (true) {
+    if (lstatSync(current).isSymbolicLink()) return true;
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
 function isWithinRoot(root, candidate) {
   const candidateRelative = relative(resolve(root), resolve(candidate));
   return candidateRelative === '' || (!candidateRelative.startsWith('..') && !isAbsolute(candidateRelative));
@@ -415,10 +462,18 @@ function isWithinRoot(root, candidate) {
 
 function isContainedRealPath(root, candidate) {
   try {
-    return isWithinRoot(root, realpathSync(candidate));
+    return isWithinRoot(root, canonicalPhasePath(candidate));
   } catch {
     return false;
   }
+}
+
+function canonicalPhasePath(candidate) {
+  // Native Windows resolution avoids repeating JS ancestor walks. Keep the
+  // existing resolver elsewhere: native realpath requires /proc on musl Linux.
+  return process.platform === 'win32' && realpathSync.native
+    ? realpathSync.native(candidate)
+    : realpathSync(candidate);
 }
 
 function classifyPhaseArtifact(dir, name, path) {
@@ -588,10 +643,14 @@ export function resolveStandardPhaseSelection({ lifecycle, selector } = {}) {
 export function resolveStandardPlanSelection({ lifecycle, planPath, phaseSelection = null } = {}) {
   if (!lifecycle) throw new Error('lifecycle is required');
   const rawPath = String(planPath || '').trim().replace(/\\/g, '/');
-  if (!rawPath || rawPath.startsWith('/') || rawPath.includes('..') || !rawPath.startsWith('phases/')) {
+  // Generated work-* skills use repository-relative .work/phases paths while
+  // lifecycle inventory emits phases-relative identities. Accept both exact
+  // spellings; retain the same traversal and current-chain checks below.
+  const selectedPath = rawPath.startsWith('.work/') ? rawPath.slice('.work/'.length) : rawPath;
+  if (!rawPath || rawPath.startsWith('/') || rawPath.includes('..') || !selectedPath.startsWith('phases/')) {
     return { status: 'invalid', reason: 'invalid_plan_selector' };
   }
-  const relativePath = rawPath.slice('phases/'.length);
+  const relativePath = selectedPath.slice('phases/'.length);
   const plan = (lifecycle.phaseArtifacts || []).find(
     (artifact) => artifact.kind === 'plan' && artifact.displayPath === relativePath
   );

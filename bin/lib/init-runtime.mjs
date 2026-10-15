@@ -277,13 +277,13 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 // reject them with a specific message; that message must still be the one a user sees.
 export const COMMAND_FLAGS = {
   setup: { '--global': false, '-g': false, '--agent': true, '--all': false, '-y': false, '--yes': false, '--dry-run': false, '--dry': false, '--workspace-root': true, '--migrate': false },
-  init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--workspace-root': true },
+  init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--adopt-legacy': false, '--workspace-root': true },
   update: { '--dry-run': false, '--dry': false, '--global': false, '-g': false, '--workspace-root': true },
   health: { '--json': false, '--global': false, '-g': false, '--workspace-root': true },
   install: { '--global': false, '-g': false, '--auto': false, '--dry-run': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
   scaffold: { '--workspace-root': true },
   'file-op': { '--missing': true, '--flags': true, '--workspace-root': true },
-  'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--json': false, '--workspace-root': true },
+  'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--amend': false, '--json': false, '--workspace-root': true },
   'lifecycle-preflight': { '--expects-mutation': true, '--plan': true, '--json': false, '--workspace-root': true },
   'phase-status': { '--workspace-root': true },
   remember: { '--type': true, '--scope': true, '--for': true, '--code': true, '--why': true, '--by-user': false, '--workspace-root': true },
@@ -410,7 +410,9 @@ function commandSpecificFlagError(command, positionals, commandArgs) {
     } else if (['verify', 'audit', 'next', 'fix_gaps'].includes(target)) {
       allowed = allow('--plan', '--artifact', '--authority', '--reason', '--json', '--workspace-root');
     } else {
-      allowed = allow('--plan', '--authority', '--reason', '--json', '--workspace-root');
+      allowed = target === 'plan'
+        ? allow('--plan', '--authority', '--reason', '--amend', '--json', '--workspace-root')
+        : allow('--plan', '--authority', '--reason', '--json', '--workspace-root');
     }
   } else if (command === 'decisions') {
     const subcommand = positionals[0];

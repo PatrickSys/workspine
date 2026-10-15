@@ -967,10 +967,13 @@ describe('S1 decision recall loop', () => {
 
     const state = JSON.parse(fs.readFileSync(path.join(stateDir, 'state.json'), 'utf-8'));
     state.lastDecisionsDigest.records = [];
+    fs.writeFileSync(path.join(phaseDir, '31-PLAN.md'), '---\nstatus: planned\n---\n# No dispositions for an empty persisted digest\n');
     fs.writeFileSync(path.join(stateDir, 'state.json'), `${JSON.stringify(state, null, 2)}\n`);
     result = await runCliAsMain(root, ['lifecycle-preflight', 'execute', '31', '--expects-mutation', 'phase-status']);
     output = JSON.parse(result.output);
     assert.ok(output.warnings.some((warning) => warning.code === 'decision_ack_stale'), output.warnings.map((warning) => warning.code).join(','));
+    assert.ok(!output.warnings.some((warning) => warning.code === 'decision_dispositions_missing'),
+      'an empty persisted digest cannot require dispositions for nonexistent decision IDs');
   });
 
   test('compact help discovers the decision surface while the reference exposes all verbs', async () => {

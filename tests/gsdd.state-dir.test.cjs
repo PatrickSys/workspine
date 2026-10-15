@@ -112,6 +112,65 @@ describe('canonical Workspine state classification', () => {
       assert.strictEqual(state.detectedInitVersion, 'v1.1');
   });
 
+  test('roadmap-style legacy project is an explicit adoption candidate, never an active root', async () => {
+    const { resolveStateDir, stateAuthorityGate } = await loadModule(STATE_DIR_MODULE);
+    fs.mkdirSync(path.join(tmp, '.planning', 'phases', '01-first'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, '.planning', 'SPEC.md'), '# Historical Requirements\nKeep previous design.\n');
+    fs.writeFileSync(path.join(tmp, '.planning', 'ROADMAP.md'), '# Historical Roadmap\n- [ ] Old phase\n');
+    fs.writeFileSync(path.join(tmp, '.planning', 'phases', '01-first', '01-PLAN.md'), '# Archived task\n');
+    const state = resolveStateDir(tmp);
+    assert.strictEqual(state.status, 'legacy_adoptable');
+    assert.strictEqual(state.action, 'adopt');
+    assert.strictEqual(state.signature, 'GSD-roadmap-v1');
+    assert.strictEqual(state.dir, path.join(tmp, '.work'));
+    const gate = stateAuthorityGate(state);
+    assert.strictEqual(gate.allowed, false);
+    assert.match(gate.message, /init --adopt-legacy/);
+    assert.strictEqual(fs.existsSync(path.join(tmp, '.work')), false);
+    fs.writeFileSync(path.join(tmp, '.planning', 'config.json'), JSON.stringify({ mode: 'interactive', model_profile: 'balanced' }));
+    assert.strictEqual(resolveStateDir(tmp).status, 'legacy_adoptable', 'recognize historic GSD config without Workspine initVersion');
+  });
+
+  test('unknown Workspine initVersion, malformed config, incomplete or linked history never become adoption candidates', async (t) => {
+    const { resolveStateDir } = await loadModule(STATE_DIR_MODULE);
+    const legacy = path.join(tmp, '.planning');
+    fs.mkdirSync(legacy);
+    fs.writeFileSync(path.join(legacy, 'SPEC.md'), '# Historic spec\n');
+    fs.writeFileSync(path.join(legacy, 'ROADMAP.md'), '# Historic roadmap\n');
+    for (const raw of ['{invalid', JSON.stringify({ initVersion: 'v9.9' }), JSON.stringify({ initVersion: 1 }), JSON.stringify({ initVersion: null })]) {
+      fs.writeFileSync(path.join(legacy, 'config.json'), raw);
+      assert.strictEqual(resolveStateDir(tmp).status, 'legacy_unsupported', 'unknown future Workspine config cannot be adopted');
+    }
+    fs.rmSync(path.join(legacy, 'config.json'));
+    fs.writeFileSync(path.join(legacy, 'migration-receipt.json'), '{}');
+    assert.strictEqual(resolveStateDir(tmp).status, 'legacy_unsupported', 'migration receipts cannot be reclassified as GSD adoption');
+    fs.rmSync(path.join(legacy, 'migration-receipt.json'));
+    fs.mkdirSync(path.join(legacy, 'decisions'));
+    fs.writeFileSync(path.join(legacy, 'decisions', 'retained.md'), '# Old approval\n');
+    assert.strictEqual(resolveStateDir(tmp).status, 'legacy_unsupported', 'decision records cannot silently become historical evidence');
+    fs.rmSync(path.join(legacy, 'decisions'), { recursive: true });
+    fs.rmSync(path.join(legacy, 'ROADMAP.md'));
+    assert.strictEqual(resolveStateDir(tmp).status, 'legacy_unsupported');
+    fs.writeFileSync(path.join(legacy, 'ROADMAP.md'), '# Historic roadmap\n');
+    fs.writeFileSync(path.join(legacy, 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+    fs.mkdirSync(path.join(legacy, 'decisions'));
+    fs.writeFileSync(path.join(legacy, 'decisions', 'retained.md'), '# Existing decision\n');
+    assert.strictEqual(resolveStateDir(tmp).reason, 'nonempty_legacy_decisions', 'do not relabel old Workspine approval as GSD history');
+    fs.rmSync(path.join(legacy, 'decisions'), { recursive: true });
+    fs.rmSync(path.join(legacy, 'config.json'));
+    const outside = createTempProject();
+    try {
+      try {
+        fs.symlinkSync(outside, path.join(legacy, 'linked'), 'junction');
+      } catch (error) {
+        if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return t.skip('symlink creation unavailable');
+        throw error;
+      }
+      assert.strictEqual(resolveStateDir(tmp).reason, 'linked_legacy_entry');
+      assert.strictEqual(resolveStateDir(tmp).status, 'legacy_unsupported');
+    } finally { cleanup(outside); }
+  });
+
   test('missing, malformed, non-object, and unknown-version legacy configs are unsupported', async () => {
     const { resolveStateDir } = await loadModule(STATE_DIR_MODULE);
     const cases = [

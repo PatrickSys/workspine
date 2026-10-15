@@ -2517,6 +2517,14 @@ Sub-gap (b) was closed by D28's `<persistence>` mandate and guarded by G30. Sub-
 - `progress` can report the active brownfield state without widening into a mutating workflow.
 - `resume` can restore brownfield continuity honestly while still stopping short of the broader routing and promotion work reserved for Phases 42-43.
 
+### D55 branch agreement amendment - 2026-10-03
+
+For active brownfield resume and execution, an unequivocal branch declared by `CHANGE.md` must agree with the resolved selected workspace's live Git branch. Existing lifecycle preflight reuses its computed control map; direct execute transitions apply the same comparison in the final mutation guard before a write or replay, with one map scan per command. Both compare that workspace's own worktree record, never a main/sibling fallback. A proven disagreement, or detached HEAD with a declared branch, blocks eligibility; owner acknowledgement does not override this branch agreement. This supersedes D55's acknowledgement path for declared-branch mismatch only.
+
+Recovery uses the intended checkout/worktree or the existing formal review path when the operational contract must change. An executed, approved CHANGE is not silently rewritten or reapproved to remove the mismatch. Checkpoint and handoff claims do not change the comparison or existing exact-plan/current-byte owner approval.
+
+Missing/freeform declarations, unavailable Git and unresolved selected-workspace facts remain explicitly unverified rather than guessed mismatches or a universal Git requirement. Ordinary dirty-state warnings, read-only progress, phase workflows, closed history, and genuine acknowledgement of other material context mismatches retain their existing behavior. Branch syntax is validated by Git after bounded Markdown/display decoration removal; no new ref parser, acknowledgement store, or bypass flag is introduced.
+
 ## D56 - Executable Brownfield Routing And Widen-Only Escalation
 
 **Decision (2026-04-21; revised 2026-06-30):** Brownfield routing should treat `CHANGE.md` as the default operational anchor and allow a surviving `phase` or `quick` checkpoint to outrank it only when one strict-match rule proves the checkpoint is still the active execution surface. From concrete brownfield state, `/work-new-project` remains available only as an intentional widen path into full milestone setup, not as an accidental fallback recommendation. Active bounded brownfield planning uses the existing `work-plan` workflow with explicit `brownfield-change` authority instead of being forced through unrelated ROADMAP phase membership.

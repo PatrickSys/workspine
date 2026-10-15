@@ -14,6 +14,7 @@ import {
   buildDecisionsDigest,
   getWorkPaths,
   hasDurableWorkflowApproval,
+  isValidApprovalReference,
   inspectWorkContext,
   readJsonIfExists,
   rebuildGraphIndex,
@@ -144,12 +145,13 @@ function userQuestionAction(questionIds, description) {
   };
 }
 
-function summarizeControlMap(cwd) {
+function summarizeControlMap(cwd, lifecycleObservation = null) {
   try {
     const stateDir = resolveStateDir(cwd).dir;
     return buildControlMap({
       workspaceRoot: cwd,
       planningDir: stateDir,
+      lifecycleObservation,
     });
   } catch (error) {
     return {
@@ -204,6 +206,11 @@ function isBoundBrownfieldLifecycle(context) {
 function hasCurrentPlanApproval(context, workflow = context.state?.value?.workflow || {}) {
   const plan = workflow?.plan?.path || workflow?.plan?.identity || null;
   return Boolean(plan && hasDurableWorkflowApproval(context.paths.workDir, plan, context.state?.value));
+}
+
+function isRemediatingRecordedGaps(workflow) {
+  return workflow?.verification?.status === 'gaps_found'
+    && ['plan', 'execute', 'verify'].includes(workflow.current_state);
 }
 
 function brownfieldLifecycleRoute(context) {
@@ -270,6 +277,36 @@ function brownfieldLifecycleRoute(context) {
       artifacts_to_read: [...evidence, statePath(context, 'brownfield-change/VERIFICATION.md')], artifacts_to_write: [], requires_user: false,
     };
   }
+  if (workflow.current_state === 'fix_gaps'
+    || (workflow.verification?.status === 'gaps_found' && !isRemediatingRecordedGaps(workflow))) {
+    const verificationPath = statePath(context, 'brownfield-change/VERIFICATION.md');
+    return {
+      state: 'fix_gaps', reason: 'The bounded brownfield change has unresolved verification gaps.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_fix_gaps', blocked_by: [],
+      next_command: null,
+      next_action: manualReviewAction([...evidence, verificationPath],
+        'Resolve the verification gaps: update CHANGE.md, replan, record fresh owner approval, execute the fixes and verify again before closeout.'),
+      artifacts_to_read: [...evidence, verificationPath],
+      artifacts_to_write: [verificationPath, statePath(context, 'brownfield-change/CHANGE.md')],
+      requires_user: false,
+    };
+  }
+  if (workflow.current_state === 'plan'
+    && workflow.execution?.status === 'not_started'
+    && workflow.verification?.status === 'gaps_found'
+    && change.currentStatus === 'ready_for_verification') {
+    return {
+      state: 'plan',
+      reason: 'Remediation planning started, but CHANGE.md still claims ready for verification. Restore active posture and obtain fresh approval for its current bytes before executing.',
+      authority: 'brownfield_change', route_kind: 'brownfield_change_remediation_plan',
+      blocked_by: ['brownfield_change_posture', 'plan_approval'],
+      next_command: workflowId('plan'),
+      next_action: workflowAction(workflowId('plan'),
+        'Set the bounded CHANGE.md posture to active, review the remediation scope, replan and record a fresh owner approval before execution.'),
+      artifacts_to_read: evidence, artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md')],
+      requires_user: true,
+    };
+  }
   if (change.currentStatus === 'ready_for_verification' || workflow.execution?.status === 'complete') {
     return {
       state: 'verify', reason: 'The bounded brownfield change is ready for Done-When verification.',
@@ -289,10 +326,16 @@ function brownfieldLifecycleRoute(context) {
     };
   }
   if (workflow.plan?.approved === true || workflow.execution?.status === 'in_progress') {
+    const inProgressAmendment = workflow.execution?.status === 'in_progress'
+      && workflow.plan?.approved === true;
     return {
-      state: 'plan', reason: 'The bounded brownfield approval is missing or no longer matches the current CHANGE.md bytes.',
+      state: 'plan', reason: inProgressAmendment
+        ? 'CHANGE.md changed during approved execution. Owner must review the amended scope and record lifecycle-transition plan --plan .work/brownfield-change/CHANGE.md --authority owner --amend --reason <review>, then separately approve with a fresh reference. Preserve existing execution evidence.'
+        : 'The bounded brownfield approval is missing or no longer matches the current CHANGE.md bytes.',
       authority: 'brownfield_change', route_kind: 'brownfield_change_approval_stale', blocked_by: ['plan_approval'],
-      next_command: workflowId('plan'), next_action: workflowAction(workflowId('plan'), 'Review and reapprove the current bounded CHANGE.md contract.'),
+      next_command: workflowId('plan'), next_action: workflowAction(workflowId('plan'), inProgressAmendment
+        ? 'Obtain owner-reviewed --amend and fresh approval for the changed bounded CHANGE.md. Do not resume prior execute without approval.'
+        : 'Review and reapprove the current bounded CHANGE.md contract.'),
       artifacts_to_read: evidence, artifacts_to_write: [statePath(context, 'brownfield-change/CHANGE.md')], requires_user: true,
     };
   }
@@ -322,7 +365,8 @@ function routeFromStateObject(stateValue, workDir) {
   if (workflow.execution?.status === 'complete' && workflow.verification?.status !== 'passed') {
     return { state: 'verify', reason: 'Execution is complete and verification has not passed.' };
   }
-  if (workflow.verification?.status === 'gaps_found' || workflow.audit?.status === 'gaps_found') {
+  if ((workflow.verification?.status === 'gaps_found' || workflow.audit?.status === 'gaps_found')
+    && !isRemediatingRecordedGaps(workflow)) {
     return { state: 'fix_gaps', reason: 'Verification or audit recorded gaps.' };
   }
   if (workflow.verification?.status === 'passed' && workflow.audit?.status !== 'passed') {
@@ -366,9 +410,11 @@ function routeFromStateObject(stateValue, workDir) {
   return null;
 }
 
-function routeNext(ctx) {
-  const context = inspectWorkContext(ctx.cwd);
-  const controlMap = summarizeControlMap(ctx.cwd);
+function routeNext(ctx, observedContext = null) {
+  const context = observedContext
+    ? assertNextObservationContext(ctx.cwd, observedContext)
+    : inspectWorkContext(ctx.cwd, { includeLifecycleObservation: true });
+  const controlMap = summarizeControlMap(ctx.cwd, context._lifecycleObservation);
   const inputsConsidered = ['repo truth: control-map'];
   const inputsSkipped = [];
   const traceRefs = [];
@@ -401,7 +447,7 @@ function routeNext(ctx) {
       privacy_notes: privacyNotes,
       inputs_considered: inputsConsidered,
       inputs_skipped: ['.work files: missing'],
-    }));
+    }), context);
   }
 
   inputsConsidered.push('.work/goal.md');
@@ -745,7 +791,7 @@ function routeNext(ctx) {
     });
   }
 
-  if (hasUnverifiedSummaries(context.planning.phases)) {
+  if (hasUnverifiedSummaries(context.planning.phases, lifecycleTruth.lifecycle)) {
     return enrichRoute({ state: 'verify', reason: `${statePath(context)} phase summaries exist without matching verification reports.` }, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
   }
 
@@ -812,8 +858,14 @@ function routeNext(ctx) {
 function readLifecycleTruth(cwd, context) {
   const planningDir = resolveStateDir(cwd).dir;
   const malformed = [];
+  let lifecycle = null;
   try {
-    const lifecycle = evaluateLifecycleState({ planningDir });
+    const observation = context?._lifecycleObservation;
+    if (observation && (observation.workspaceRoot !== resolve(cwd)
+      || observation.planningDir !== resolve(planningDir))) {
+      throw new Error('Lifecycle observation workspace root or planning directory mismatch');
+    }
+    lifecycle = observation?.lifecycle || evaluateLifecycleState({ planningDir });
     malformed.push(...(lifecycle.malformedPlanFrontmatter || []));
   } catch (error) {
     if (!isMalformedPlanFrontmatterError(error)) throw error;
@@ -842,7 +894,7 @@ function readLifecycleTruth(cwd, context) {
       });
     }
   }
-  return { malformed: malformed.filter((issue, index, all) => all.findIndex((candidate) => candidate.displayPath === issue.displayPath) === index) };
+  return { lifecycle, malformed: malformed.filter((issue, index, all) => all.findIndex((candidate) => candidate.displayPath === issue.displayPath) === index) };
 }
 
 function isMalformedPlanFrontmatterError(error) {
@@ -913,6 +965,21 @@ function continuityProjection(context, route) {
       : stateWorkflow?.plan && Object.hasOwn(stateWorkflow.plan, 'approved')
         ? { value: currentPlanApproval ? 'approved' : 'not_approved', source: `${stateDirName(context)}/state.json#${stateSource}.plan.approved` }
         : { value: 'not_recorded', source: 'structured_state_or_lifecycle_not_recorded' };
+  const recordedPath = stateWorkflow?.plan?.path || null;
+  const recordedIdentity = stateWorkflow?.plan?.identity || null;
+  const recordedPlanConsistent = recordedPath && recordedIdentity
+    && normalizeSlashes(recordedPath) === normalizeSlashes(recordedIdentity);
+  // A completed workflow can retain its former owner approval receipt even
+  // after the active plan bytes or last actor change. This display-only field
+  // never grants authority to resume execution of an amended plan.
+  const recordedPlanApproval = state?.workflow
+    && stateWorkflow?.execution?.status === 'complete'
+    && stateWorkflow?.plan?.approved === true
+    && recordedPlanConsistent
+    && /^[a-f0-9]{64}$/i.test(String(stateWorkflow.plan.approved_sha256 || ''))
+    && isValidApprovalReference(stateWorkflow.approval_ref)
+    ? { value: 'recorded', source: stateDirName(context) + '/state.json#workflow.plan.approved_sha256' }
+    : null;
   const result = typeof stateWorkflow?.execution?.status === 'string'
     ? { value: stateWorkflow.execution.status, source: `${stateDirName(context)}/state.json#${stateSource}.execution.status` }
     : { value: 'not_recorded', source: 'structured_state_or_lifecycle_not_recorded' };
@@ -941,6 +1008,7 @@ function continuityProjection(context, route) {
     checkpoint,
     posture: {
       approval,
+      ...(recordedPlanApproval ? { recorded_plan_approval: recordedPlanApproval } : {}),
       result,
       verification,
     },
@@ -964,13 +1032,29 @@ function hasDecisionsDigestSignal(digest) {
     || digest.truncated;
 }
 
-function projectDecisionsDigest(ctx, route) {
+function projectDecisionsDigest(ctx, route, observedContext = null) {
   const decisionsDigest = buildDecisionsDigest({ workDir: getWorkPaths(ctx.cwd).workDir });
   const inputsConsidered = hasDecisionsDigestSignal(decisionsDigest) && !route.inputs_considered.includes('.work/decisions/*.md')
     ? [...route.inputs_considered, '.work/decisions/*.md']
     : route.inputs_considered;
   const projectedRoute = { ...route, inputs_considered: inputsConsidered, decisionsDigest };
-  return { ...projectedRoute, continuity: continuityProjection(inspectWorkContext(ctx.cwd), projectedRoute) };
+  const context = observedContext
+    ? assertNextObservationContext(ctx.cwd, observedContext)
+    : inspectWorkContext(ctx.cwd);
+  return { ...projectedRoute, continuity: continuityProjection(context, projectedRoute) };
+}
+
+function assertNextObservationContext(cwd, context) {
+  const observation = context?._lifecycleObservation;
+  const workspaceRoot = resolve(cwd);
+  const planningDir = resolve(resolveStateDir(workspaceRoot).dir);
+  if (!observation || resolve(context.paths?.root || '') !== workspaceRoot
+    || observation.workspaceRoot !== workspaceRoot
+    || observation.planningDir !== planningDir
+    || !observation.lifecycle) {
+    throw new Error('Lifecycle observation workspace root or planning directory mismatch');
+  }
+  return context;
 }
 
 function routeFromWorkMilestone(context, manifest) {
@@ -1089,8 +1173,20 @@ function defaultWriteArtifacts(state) {
   return [];
 }
 
-function hasUnverifiedSummaries(phases) {
-  return phases.some((phase) => phase.summaries.length > 0 && phase.verifications.length === 0);
+function hasUnverifiedSummaries(phases, lifecycle) {
+  const byToken = new Map((lifecycle?.phases || []).map((phase) => [phase.number, phase]));
+  const currentSummaries = (lifecycle?.phaseArtifacts || []).filter((artifact) => artifact.kind === 'summary');
+  const classifiedDirectories = new Set(currentSummaries.map((artifact) => artifact.dir));
+  const eligibleDirectories = new Set(currentSummaries.filter((artifact) => {
+    const roadmapPhase = byToken.get(artifact.phaseToken);
+    return !roadmapPhase || (roadmapPhase.status !== 'done' && !roadmapPhase.parked);
+  }).map((artifact) => artifact.dir));
+  return phases.some((phase) => {
+    if (phase.summaries.length === 0 || phase.verifications.length > 0) return false;
+    // Preserve unclassified legacy orphan behavior, but never promote a
+    // classified DONE or owner-PARKED summary into a fresh verify assignment.
+    return !classifiedDirectories.has(phase.dir) || eligibleDirectories.has(phase.dir);
+  });
 }
 
 function findTrustGate(manifest) {
@@ -1400,10 +1496,39 @@ export function createCmdNext(ctx) {
         return;
       }
 
-      const result = projectDecisionsDigest(effectiveCtx, routeNext(effectiveCtx));
+      // One fresh filesystem observation per read-only invocation. Each
+      // subsequent command call rereads current authority and phase evidence.
+      const observedContext = inspectWorkContext(effectiveCtx.cwd, { includeLifecycleObservation: true });
+      const result = projectDecisionsDigest(effectiveCtx, routeNext(effectiveCtx, observedContext), observedContext);
+      const adopted = readJsonIfExists(join(workPaths.workDir, 'adoption-receipt.json'));
+      if (adopted.exists && adopted.ok
+        && adopted.value?.signature === 'GSD-roadmap-v1'
+        && adopted.value?.archive === '.work/.local/legacy-planning'
+        && adopted.value?.source === '.planning') {
+        result.artifacts_to_read = [...new Set([
+          ...result.artifacts_to_read,
+          '.work/adoption-receipt.json',
+          '.work/.local/legacy-planning/SPEC.md',
+          '.work/.local/legacy-planning/ROADMAP.md',
+        ])];
+        result.privacy_notes = [...result.privacy_notes,
+          'Historic .planning/ was archived under ignored .work/.local/legacy-planning/. Review as evidence only; do not execute its old phases or treat its decisions as Workspine approval.'];
+      }
       if (jsonMode) output(result);
       else printHuman(result);
     } catch (error) {
+      if (error.code === 'multiple_active_milestones') {
+        const response = packet({
+          state: 'blocked', confidence: 'high', authority: 'blocked', route_kind: 'authority_conflict',
+          reason: error.message, error_code: error.code, blocked_by: [error.code],
+          next_action: manualReviewAction(error.choices || [], 'Select one emitted milestone phase or PLAN identity before acting.'),
+          artifacts_to_read: error.choices || [], artifacts_to_write: [],
+        });
+        if (jsonMode) output(response);
+        else printHuman(response);
+        process.exitCode = 1;
+        return;
+      }
       const response = {
         schema_version: 1,
         operation: 'next',

@@ -11,6 +11,7 @@ import { parseFlagValue, output } from './cli-utils.mjs';
 import { validateCommandShape } from './init-runtime.mjs';
 import { assertStateAuthority, resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { getRuntimeExecutorModelState } from './executor-model-view.mjs';
 
 export const DEFAULT_GIT_PROTOCOL = {
   branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
@@ -87,6 +88,9 @@ export function effectiveRigorLevel(config, step) {
 
 export const VALID_MODEL_PROFILES = ['quality', 'balanced', 'budget'];
 export const PORTABLE_AGENT_IDS = ['plan-checker', 'approach-explorer'];
+// Executor selection is runtime-specific: unlike the portable checker profiles,
+// no model map can switch the already-running primary execution session.
+export const RUNTIME_OVERRIDABLE_AGENT_IDS = [...PORTABLE_AGENT_IDS, 'executor'];
 export const MODEL_RUNTIME_IDS = ['claude', 'opencode', 'codex'];
 export const MODEL_ID_PATTERN = /^[a-zA-Z0-9._\/:@-]+$/;
 
@@ -276,6 +280,7 @@ function cmdModelsShow(cwd) {
     runtimeModelOverrides: config.runtimeModelOverrides || {},
     effective: {
       claude: {
+        executor: getRuntimeExecutorModelState(config, 'claude'),
         'plan-checker': getRuntimeAgentModelState({
           config,
           runtime: 'claude',
@@ -290,6 +295,7 @@ function cmdModelsShow(cwd) {
         }),
       },
       opencode: {
+        executor: getRuntimeExecutorModelState(config, 'opencode'),
         'plan-checker': {
           mode: ocCheckerOverride ? 'override' : 'inherit',
           model: ocCheckerOverride,
@@ -302,6 +308,7 @@ function cmdModelsShow(cwd) {
         },
       },
       codex: {
+        executor: getRuntimeExecutorModelState(config, 'codex'),
         'plan-checker': {
           mode: codexCheckerOverride ? 'override' : 'inherit',
           model: codexCheckerOverride,
@@ -424,8 +431,8 @@ function cmdModelsSetRuntimeOverride(args, cwd) {
     process.exitCode = 1;
     return;
   }
-  if (!PORTABLE_AGENT_IDS.includes(agent)) {
-    console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${PORTABLE_AGENT_IDS.join(', ')}`);
+  if (!RUNTIME_OVERRIDABLE_AGENT_IDS.includes(agent)) {
+    console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${RUNTIME_OVERRIDABLE_AGENT_IDS.join(', ')}`);
     process.exitCode = 1;
     return;
   }
@@ -458,7 +465,8 @@ function cmdModelsSetRuntimeOverride(args, cwd) {
   result.config.runtimeModelOverrides[runtime][agent] = model.trim();
   writeProjectConfig(result.config, cwd);
   console.log(`  - set ${runtime} runtime override for ${agent}`);
-  console.log('  Run gsdd update to regenerate adapter files.');
+  if (agent === 'executor') console.log('  Applies to newly delegated executors when the runtime supports model selection; cannot change the current session model.');
+  else console.log('  Run gsdd update to regenerate adapter files.');
 }
 
 function cmdModelsClearRuntimeOverride(args, cwd) {
@@ -470,8 +478,8 @@ function cmdModelsClearRuntimeOverride(args, cwd) {
     process.exitCode = 1;
     return;
   }
-  if (!PORTABLE_AGENT_IDS.includes(agent)) {
-    console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${PORTABLE_AGENT_IDS.join(', ')}`);
+  if (!RUNTIME_OVERRIDABLE_AGENT_IDS.includes(agent)) {
+    console.error(`ERROR: Invalid agent "${agent}". Valid agents: ${RUNTIME_OVERRIDABLE_AGENT_IDS.join(', ')}`);
     process.exitCode = 1;
     return;
   }
@@ -500,7 +508,7 @@ function cmdModelsClearRuntimeOverride(args, cwd) {
   }
   writeProjectConfig(result.config, cwd);
   console.log(`  - cleared ${runtime} runtime override for ${agent}`);
-  console.log('  Run gsdd update to regenerate adapter files.');
+  if (agent !== 'executor') console.log('  Run gsdd update to regenerate adapter files.');
 }
 
 // --- The rigor knob ---------------------------------------------------------

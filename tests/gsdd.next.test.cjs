@@ -182,7 +182,7 @@ test('S8 refuses phase approve and execute under active brownfield authority wit
     if (target === 'approve') args.push('--approval-ref', 'owner-test');
     const result = await runCliAsMain(tmpDir, args);
     assert.strictEqual(result.exitCode, 1, result.output);
-    assert.strictEqual(JSON.parse(result.output).error_code, 'brownfield_plan_conflict');
+    assert.strictEqual(JSON.parse(result.output).error_code, 'wrong_brownfield_plan_identity');
     assert.match(JSON.parse(result.output).error, /--plan .work\/brownfield-change\/CHANGE.md/);
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work/state.json')), before);
   }
@@ -405,6 +405,115 @@ describe('next command bootstrap', () => {
     checkpoint = await readContinuityCheckpoint();
     assert.strictEqual(checkpoint.status, 'malformed');
     assert.deepStrictEqual(checkpoint.errors, ['checkpoint exceeds read limit']);
+  });
+
+  test('checkpoint readback preserves literal inline closing tags and fenced instructions', async () => {
+    const action = [
+      'Explain the literal `</next_action>` before continuing.',
+      '```xml',
+      '</next_action>',
+      '<next_action>fenced replacement</next_action>',
+      '```',
+      '~~~markdown',
+      '<judgment><anti_regression>fenced rule</anti_regression></judgment>',
+      '~~~',
+      'Then run the authorized focused check.',
+    ].join('\n');
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace('Run the authorized next recovery step.', action));
+    const before = snapshotTree(tmpDir);
+    const checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid', JSON.stringify(checkpoint.errors));
+    assert.strictEqual(checkpoint.sections.next_action, action);
+    assert.strictEqual(checkpoint.judgment.anti_regression, 'Do not weaken parser or product semantics.');
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('only canonical block sections and direct judgment children supply checkpoint fields', async () => {
+    const historical = [
+      '<historical_reconciliation date="2026-08-20">',
+      '<next_action>historical replacement</next_action>',
+      '<judgment>',
+      '<anti_regression>historical rule</anti_regression>',
+      '</judgment>',
+      '</historical_reconciliation>',
+      'Inline mention: <next_action>inline replacement</next_action>.',
+      '```xml',
+      '<next_action>example replacement</next_action>',
+      '```',
+    ].join('\n');
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace(CHECKPOINT_AUTHORITY_NOTICE, `${CHECKPOINT_AUTHORITY_NOTICE}\n${historical}`));
+    let checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid', JSON.stringify(checkpoint.errors));
+    assert.strictEqual(checkpoint.sections.next_action, 'Run the authorized next recovery step.');
+    assert.strictEqual(checkpoint.judgment.anti_regression, 'Do not weaken parser or product semantics.');
+
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace('<next_action>\nRun the authorized next recovery step.\n</next_action>', '<historical>\n<next_action>nested only</next_action>\n</historical>'));
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('missing checkpoint section: next_action'));
+
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace('<anti_regression>\nDo not weaken parser or product semantics.\n</anti_regression>', '<historical>\n<anti_regression>nested rule</anti_regression>\n</historical>'));
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('missing checkpoint judgment section: anti_regression'));
+  });
+
+  test('compact checkpoint sections preserve literal tags and CRLF readback', async () => {
+    const compact = R3_STYLE_CHECKPOINT.replace(/<([a-z_]+)>\n([^\n]+)\n<\/\1>/g, '<$1>$2</$1>');
+    writeCheckpoint(compact.replace('Run the authorized next recovery step.', 'Explain `</next_action>` and run the focused test.').replace(/\n/g, '\r\n'));
+    const checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid', JSON.stringify(checkpoint.errors));
+    assert.strictEqual(checkpoint.sections.next_action, 'Explain `</next_action>` and run the focused test.');
+    assert.strictEqual(checkpoint.judgment.active_constraints, 'Preserve fail-closed authority and the pinned journey.');
+  });
+
+  test('historical wrapper names with digits, hyphens and uppercase cannot supply canonical fields', async () => {
+    for (const wrapper of ['historical-reconciliation', 'history2', 'History2']) {
+      writeCheckpoint(R3_STYLE_CHECKPOINT.replace('<next_action>\nRun the authorized next recovery step.\n</next_action>', `<${wrapper}>\n<next_action>nested replacement</next_action>\n</${wrapper}>`));
+      const checkpoint = await readContinuityCheckpoint();
+      assert.strictEqual(checkpoint.status, 'malformed', wrapper);
+      assert.ok(checkpoint.errors.includes('missing checkpoint section: next_action'), wrapper);
+      assert.strictEqual(checkpoint.sections.next_action, undefined, wrapper);
+    }
+  });
+
+  test('fully compact judgment preserves its four direct children and literal inline tags', async () => {
+    const compact = '<judgment><active_constraints>Preserve `</active_constraints>` literally.</active_constraints><unresolved_uncertainty>The next result is unknown.</unresolved_uncertainty><decision_posture>Use the narrowest seam.</decision_posture><anti_regression>Explain the inline <next_action>example</next_action> safely.</anti_regression></judgment>';
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace(/<judgment>[\s\S]*<\/judgment>/, compact));
+    const before = snapshotTree(tmpDir);
+    let checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'valid', JSON.stringify(checkpoint.errors));
+    assert.strictEqual(checkpoint.sections.next_action, 'Run the authorized next recovery step.');
+    assert.deepStrictEqual(checkpoint.judgment, {
+      active_constraints: 'Preserve `</active_constraints>` literally.',
+      unresolved_uncertainty: 'The next result is unknown.',
+      decision_posture: 'Use the narrowest seam.',
+      anti_regression: 'Explain the inline <next_action>example</next_action> safely.',
+    });
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+
+    writeCheckpoint(R3_STYLE_CHECKPOINT.replace(/<judgment>[\s\S]*<\/judgment>/, compact.replace('</judgment>', '<anti_regression>duplicate rule</anti_regression></judgment>')));
+    checkpoint = await readContinuityCheckpoint();
+    assert.strictEqual(checkpoint.status, 'malformed');
+    assert.ok(checkpoint.errors.includes('duplicate checkpoint judgment section: anti_regression'));
+  });
+
+  test('malformed checkpoint nesting and closing delimiters fail closed with bounded errors', async () => {
+    const malformed = [
+      R3_STYLE_CHECKPOINT.replace('</next_action>', '</remaining_work>'),
+      R3_STYLE_CHECKPOINT.replace('</next_action>', ''),
+      R3_STYLE_CHECKPOINT.replace('Run the authorized next recovery step.', '<next_action>nested action</next_action>'),
+      `${R3_STYLE_CHECKPOINT}\n<judgment>\n</judgment>`,
+      `${R3_STYLE_CHECKPOINT}\n${'</unmatched>\n'.repeat(40)}`,
+    ];
+    for (const content of malformed) {
+      writeCheckpoint(content);
+      const before = snapshotTree(tmpDir);
+      const checkpoint = await readContinuityCheckpoint();
+      assert.strictEqual(checkpoint.status, 'malformed');
+      assert.ok(checkpoint.errors.length > 0 && checkpoint.errors.length <= 12);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before);
+    }
   });
 
   test('next rejects a checkpoint symlink without reading or rewriting its target', async (t) => {
@@ -1534,6 +1643,105 @@ describe('next command routing', () => {
     assert.strictEqual(result.next_command, null);
   });
 
+  test('brownfield verification gaps route to remediation rather than recommending closeout', async () => {
+    await initWork();
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    const verificationPath = '.work/brownfield-change/VERIFICATION.md';
+    const statePath = path.join(tmpDir, '.work/state.json');
+    writeFile(changePath, brownfieldChange());
+    writeFile(verificationPath, brownfieldVerification('complete'));
+
+    await runJson(['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    await runJson(['lifecycle-transition', 'approve', '--plan', changePath, '--authority', 'owner', '--approval-ref', 'test-gaps-owner', '--json']);
+    await runJson(['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
+    writeFile(changePath, brownfieldChange({ posture: 'ready_for_verification', nextAction: 'Resolve evidence gaps.' }));
+    await runJson(['lifecycle-transition', 'verify', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    writeFile(verificationPath, [
+      '---', 'change: CHANGE-TEST', 'status: gaps_found', '---',
+      '# Brownfield Change Verification',
+      '## Goal Verification', '- Existing checks have failures.',
+      '## Evidence', '- Required test was run.',
+      '## Gaps', '- An existing test is failing.',
+      '## Closeout Decision', '- Resolve gaps; not passed.',
+    ].join('\n'));
+    await runJson(['lifecycle-transition', 'fix_gaps', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+
+    const beforeRead = fs.readFileSync(statePath);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const next = await runJson(['next', '--json']);
+      assert.strictEqual(next.state, 'fix_gaps');
+      assert.strictEqual(next.route_kind, 'brownfield_change_fix_gaps');
+      assert.strictEqual(next.authority, 'brownfield_change');
+      assert.strictEqual(next.next_command, null, 'gaps must not automatically restart execution');
+      assert.strictEqual(next.requires_user, false);
+      assert.ok(next.artifacts_to_read.includes(verificationPath));
+      assert.match(next.next_action.description, /resolve|address|repair/i);
+      assert.doesNotMatch(next.next_action.description, /close CHANGE/i);
+      assert.strictEqual(next.continuity.posture.approval.value, 'not_approved',
+        'current changed PLAN bytes must not regain executable owner approval');
+      assert.deepStrictEqual(next.continuity.posture.recorded_plan_approval, {
+        value: 'recorded',
+        source: '.work/state.json#workflow.plan.approved_sha256',
+      }, 'a completed workflow still preserves evidence of the previously recorded owner approval');
+      assert.deepStrictEqual(fs.readFileSync(statePath), beforeRead, 'next must not mutate state');
+    }
+
+    // A legitimate fix cycle must move forward even though the previous
+    // failed verification remains preserved as evidence in state.json.
+    // The earlier failed verification left CHANGE.md marked ready; planning
+    // is still a legal recovery transition before the operator updates it.
+    await runJson(['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    let next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'plan', 'prior gaps must not mask an unapproved remediation plan');
+    assert.strictEqual(next.route_kind, 'brownfield_change_remediation_plan');
+    assert.ok(next.blocked_by.includes('brownfield_change_posture'));
+
+    await runJson(['lifecycle-transition', 'approve', '--plan', changePath, '--authority', 'owner', '--approval-ref', 'test-ready-owner', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'plan', 'approval alone cannot execute a remediation while CHANGE is still marked ready');
+
+    writeFile(changePath, brownfieldChange({ posture: 'active', nextAction: 'Plan the bounded remediation.' }));
+    await runJson(['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'plan', 'changed contract requires fresh approval');
+    await runJson(['lifecycle-transition', 'approve', '--plan', changePath, '--authority', 'owner', '--approval-ref', 'test-remediation-owner', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'execute', 'fresh remediation approval must enable execution');
+    await runJson(['lifecycle-transition', 'execute', '--plan', changePath, '--authority', 'workflow', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'execute');
+    writeFile(changePath, brownfieldChange({ posture: 'ready_for_verification', nextAction: 'Recheck the remediated change.' }));
+    writeFile(verificationPath, brownfieldVerification('complete'));
+    await runJson(['lifecycle-transition', 'verify', '--plan', changePath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.state, 'verify', 'prior gaps must not mask a new verification pass');
+    assert.strictEqual(next.route_kind, 'brownfield_change_verification');
+    assert.strictEqual(next.continuity.posture.recorded_plan_approval?.value, 'recorded');
+
+    const savedState = fs.readFileSync(statePath);
+    const invalidRef = JSON.parse(savedState);
+    invalidRef.workflow.approval_ref = 'auto';
+    fs.writeFileSync(statePath, `${JSON.stringify(invalidRef, null, 2)}\n`);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.continuity.posture.recorded_plan_approval, undefined,
+      'a synthetic reference must not be presented as a recorded owner approval');
+
+    const mismatchedPlan = JSON.parse(savedState);
+    mismatchedPlan.workflow.plan.identity = '.work/brownfield-change/OTHER.md';
+    fs.writeFileSync(statePath, `${JSON.stringify(mismatchedPlan, null, 2)}\n`);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.continuity.posture.recorded_plan_approval, undefined,
+      'historical approval provenance requires a consistent recorded plan identity');
+
+    const missingIdentity = JSON.parse(savedState);
+    missingIdentity.workflow.plan.identity = null;
+    fs.writeFileSync(statePath, `${JSON.stringify(missingIdentity, null, 2)}\n`);
+    next = await runJson(['next', '--json']);
+    assert.strictEqual(next.continuity.posture.recorded_plan_approval, undefined,
+      'historical approval provenance requires both recorded plan pointers');
+    fs.writeFileSync(statePath, savedState);
+  });
+
   test('next does not advertise execution after approved brownfield bytes change', async () => {
     await initWork();
     const changePath = '.work/brownfield-change/CHANGE.md';
@@ -1567,12 +1775,12 @@ describe('next command routing', () => {
     writeFile('.work/brownfield-change-2/CHANGE.md', brownfieldChange());
     result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
     assert.strictEqual(result.exitCode, 1, result.output);
-    assert.strictEqual(JSON.parse(result.output).error_code, 'brownfield_contract_invalid');
+    assert.strictEqual(JSON.parse(result.output).error_code, 'multiple_active_brownfield_streams');
 
     writeFile('.work/brownfield-change-2/CHANGE.md', brownfieldChange({ posture: 'active', nextAction: 'Widen to /work-new-milestone.' }));
     result = await runCliAsMain(tmpDir, ['lifecycle-transition', 'plan', '--plan', changePath, '--authority', 'workflow', '--json']);
     assert.strictEqual(result.exitCode, 1, result.output);
-    assert.strictEqual(JSON.parse(result.output).error_code, 'brownfield_contract_invalid');
+    assert.strictEqual(JSON.parse(result.output).error_code, 'multiple_active_brownfield_streams');
 
     fs.rmSync(path.join(tmpDir, '.work', 'brownfield-change-2'), { recursive: true, force: true });
     writeFile('.work/milestone/MILESTONE.md', '# Active milestone\n');
@@ -1593,6 +1801,306 @@ describe('next command routing', () => {
     const response = JSON.parse(result.output);
     assert.strictEqual(response.allowed, false);
     assert.ok(response.blockers.some(({ code }) => code === 'brownfield_contract_invalid'));
+  });
+
+  test('changed executing CHANGE requires explicit owner amendment and new approval before continuing', async () => {
+    await initWork();
+    const planPath = '.work/brownfield-change/CHANGE.md';
+    const statePath = path.join(tmpDir, '.work/state.json');
+    writeFile(planPath, brownfieldChange());
+    writeFile('.work/brownfield-change/HANDOFF.md', '# Historical review\n\nConstraints and completed tasks remain unchanged.\n');
+    writeFile('.work/phases/99-retained/HANDOFF.md', '# Another retained stream\n');
+    const untouchedPaths = ['.work/brownfield-change/HANDOFF.md', '.work/phases/99-retained/HANDOFF.md'];
+    const retainedBytes = untouchedPaths.map((name) => fs.readFileSync(path.join(tmpDir, name)));
+    const lifecycle = async (target, extra = []) => runCliAsMain(tmpDir, [
+      'lifecycle-transition', target, '--plan', planPath, ...extra, '--json', '--no-update-notice',
+    ]);
+    let receipt = await lifecycle('plan', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    receipt = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-first-scope']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    const firstApproval = readJson(statePath).workflow.plan.approved_sha256;
+    receipt = await lifecycle('execute', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    writeFile(planPath, brownfieldChange({ nextAction: 'Implement the amended bounded task.' }));
+    const stale = await runJson(['next', '--json']);
+    assert.strictEqual(stale.state, 'plan');
+    assert.strictEqual(stale.route_kind, 'brownfield_change_approval_stale');
+    assert.match(stale.reason, /--amend --reason/);
+    const stalePreflight = await runCliAsMain(tmpDir, [
+      'lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status',
+    ]);
+    assert.strictEqual(stalePreflight.exitCode, 1, stalePreflight.output);
+    assert.ok(JSON.parse(stalePreflight.output).blockers.some(({ code }) => code === 'plan_approval_stale'));
+    const beforeAmendment = fs.readFileSync(statePath);
+    for (const args of [
+      ['--authority', 'workflow'],
+      ['--authority', 'owner'],
+      ['--authority', 'workflow', '--amend', '--reason', 'reviewed scope change'],
+      ['--authority', 'owner', '--amend'],
+    ]) {
+      receipt = await lifecycle('plan', args);
+      assert.strictEqual(receipt.exitCode, 1, receipt.output);
+      assert.deepStrictEqual(fs.readFileSync(statePath), beforeAmendment);
+    }
+    receipt = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-new-scope']);
+    assert.strictEqual(receipt.exitCode, 1, receipt.output);
+    receipt = await lifecycle('execute', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 1, receipt.output);
+
+    receipt = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'Owner reviewed scope change']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    let state = readJson(statePath);
+    assert.strictEqual(state.workflow.current_state, 'plan');
+    assert.strictEqual(state.workflow.plan.approved, false);
+    assert.strictEqual(state.workflow.plan.approved_sha256, undefined);
+    assert.strictEqual(state.workflow.approval_ref, null);
+    assert.strictEqual(state.workflow.execution.status, 'not_started');
+    assert.strictEqual(state.workflow.amendments.length, 1);
+    assert.strictEqual(state.workflow.amendments[0].previous_approval_sha256, firstApproval);
+    assert.strictEqual(state.workflow.amendments[0].previous_approval_ref, 'owner-first-scope');
+    assert.strictEqual(state.workflow.amendments[0].reason, 'Owner reviewed scope change');
+    assert.strictEqual(state.workflow.amendments[0].previous_execution_status, 'in_progress');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, planPath)), Buffer.from(brownfieldChange({ nextAction: 'Implement the amended bounded task.' })));
+    const awaitingOwner = await runJson(['next', '--json']);
+    assert.strictEqual(awaitingOwner.state, 'plan');
+    let preflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(preflight.exitCode, 1, preflight.output);
+    assert.ok(JSON.parse(preflight.output).blockers.some(({ code }) => code === 'amendment_pending_approval'));
+    receipt = await lifecycle('execute', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 1, receipt.output);
+    receipt = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-first-scope']);
+    assert.strictEqual(receipt.exitCode, 1, receipt.output);
+    receipt = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-new-scope']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    state = readJson(statePath);
+    assert.notStrictEqual(state.workflow.plan.approved_sha256, firstApproval);
+    assert.strictEqual(state.workflow.amendments[0].approved_sha256, state.workflow.plan.approved_sha256);
+    assert.strictEqual(state.workflow.amendments[0].approval_ref, 'owner-new-scope');
+    preflight = await runCliAsMain(tmpDir, ['lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status']);
+    assert.strictEqual(preflight.exitCode, 0, preflight.output);
+    receipt = await lifecycle('execute', ['--authority', 'workflow']);
+    assert.strictEqual(receipt.exitCode, 0, receipt.output);
+    assert.strictEqual(readJson(statePath).workflow.current_state, 'execute');
+    untouchedPaths.forEach((name, index) => assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, name)), retainedBytes[index]));
+  });
+
+  for (const interruption of ['ask_user', 'blocked']) {
+    test(`interrupted in-progress CHANGE cannot bypass owner amendment through ${interruption}`, async () => {
+      await initWork();
+      const changePath = '.work/brownfield-change/CHANGE.md';
+      const statePath = path.join(tmpDir, '.work', 'state.json');
+      writeFile(changePath, brownfieldChange());
+      writeFile('.work/brownfield-change/HANDOFF.md', '# Preserved prior work\n');
+      const beforeHandoff = fs.readFileSync(path.join(tmpDir, '.work/brownfield-change/HANDOFF.md'));
+      const lifecycle = (target, flags = []) => runCliAsMain(tmpDir, [
+        'lifecycle-transition', target, '--plan', changePath, ...flags, '--json', '--no-update-notice',
+      ]);
+      const transitionWithoutPlan = (target) => runCliAsMain(tmpDir, [
+        'lifecycle-transition', target, '--reason', 'Synthetic interruption before amendment review', '--json', '--no-update-notice',
+      ]);
+      assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-original-ref'])).exitCode, 0);
+      const originalSha = readJson(statePath).workflow.plan.approved_sha256;
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+      writeFile(changePath, brownfieldChange({ nextAction: 'Execute the revised bounded change.' }));
+
+      const stop = await transitionWithoutPlan(interruption);
+      assert.strictEqual(stop.exitCode, 0, stop.output);
+      assert.strictEqual(readJson(statePath).workflow.execution.status, 'in_progress');
+      const stalePreflight = await runCliAsMain(tmpDir, [
+        'lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status',
+      ]);
+      assert.strictEqual(stalePreflight.exitCode, 1, stalePreflight.output);
+      assert.ok(JSON.parse(stalePreflight.output).blockers.some(({ code }) => code === 'plan_approval_stale'));
+      const beforeRefusal = fs.readFileSync(statePath);
+      for (const authority of ['workflow', 'owner']) {
+        const bypass = await lifecycle('plan', ['--authority', authority]);
+        assert.strictEqual(bypass.exitCode, 1, bypass.output);
+        assert.strictEqual(JSON.parse(bypass.output).error_code, 'owner_amendment_required');
+        assert.deepStrictEqual(fs.readFileSync(statePath), beforeRefusal,
+          `ordinary plan must preserve interrupted ${interruption} state`);
+      }
+
+      const amendment = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'Owner reviewed changed scope after interruption']);
+      assert.strictEqual(amendment.exitCode, 0, amendment.output);
+      const reviewed = readJson(statePath);
+      assert.strictEqual(reviewed.status, 'active');
+      assert.strictEqual(reviewed.workflow.status, 'active');
+      assert.strictEqual(reviewed.workflow.current_state, 'plan');
+      assert.strictEqual(reviewed.workflow.approval_ref, null);
+      assert.strictEqual(reviewed.workflow.plan.approved, false);
+      assert.strictEqual(reviewed.workflow.amendments.length, 1);
+      const recorded = reviewed.workflow.amendments[0];
+      assert.strictEqual(recorded.previous_approval_sha256, originalSha);
+      assert.strictEqual(recorded.previous_approval_ref, 'owner-original-ref');
+      assert.strictEqual(recorded.previous_execution_status, 'in_progress');
+      assert.strictEqual(recorded.previous_workflow_state, interruption);
+      assert.strictEqual(recorded.reason, 'Owner reviewed changed scope after interruption');
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 1);
+      const oldRef = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-original-ref']);
+      assert.strictEqual(oldRef.exitCode, 1, oldRef.output);
+      const approved = await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-revised-ref']);
+      assert.strictEqual(approved.exitCode, 0, approved.output);
+      assert.notStrictEqual(readJson(statePath).workflow.plan.approved_sha256, originalSha);
+      const resumedPreflight = await runCliAsMain(tmpDir, [
+        'lifecycle-preflight', 'execute', 'brownfield-change', '--expects-mutation', 'phase-status',
+      ]);
+      assert.strictEqual(resumedPreflight.exitCode, 0, resumedPreflight.output);
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+      assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work/brownfield-change/HANDOFF.md')), beforeHandoff);
+    });
+  }
+
+  test('in-progress amendment refuses an unchanged plan, other plan chains, and retained execution evidence', async () => {
+    await initWork();
+    const changePath = '.work/brownfield-change/CHANGE.md';
+    const statePath = path.join(tmpDir, '.work/state.json');
+    writeFile(changePath, brownfieldChange());
+    const lifecycle = async (target, args = []) => runCliAsMain(tmpDir, [
+      'lifecycle-transition', target, '--plan', changePath, ...args, '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-original'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+    const before = fs.readFileSync(statePath);
+    let refusal = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'unchanged']);
+    assert.strictEqual(refusal.exitCode, 1, refusal.output);
+    assert.deepStrictEqual(fs.readFileSync(statePath), before);
+    writeFile(changePath, brownfieldChange({ nextAction: 'Amended tasks with earlier proof.' }));
+    const changed = readJson(statePath);
+    changed.workflow.execution.artifact = '.work/brownfield-change/VERIFICATION.md';
+    writeJson('.work/state.json', changed);
+    const beforeEvidence = fs.readFileSync(statePath);
+    refusal = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'retain old evidence']);
+    assert.strictEqual(refusal.exitCode, 1, refusal.output);
+    assert.deepStrictEqual(fs.readFileSync(statePath), beforeEvidence);
+  });
+
+  for (const status of ['passed', '"completed" # terminal result', 'gaps_found', 'human_needed']) {
+    test(`owner amendment rejects current brownfield terminal VERIFICATION.md (${status}) even when state says executing`, async () => {
+      await initWork();
+      const planPath = '.work/brownfield-change/CHANGE.md';
+      const evidencePath = '.work/brownfield-change/VERIFICATION.md';
+      const lifecycle = (target, options = []) => runCliAsMain(tmpDir, [
+        'lifecycle-transition', target, '--plan', planPath, ...options, '--json', '--no-update-notice',
+      ]);
+      writeFile(planPath, brownfieldChange());
+      assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'terminal-original'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+      writeFile(evidencePath, brownfieldVerification(status));
+      writeFile(planPath, brownfieldChange({ nextAction: 'Amend the bounded work after the prior terminal report.' }));
+      const statePath = path.join(tmpDir, '.work', 'state.json');
+      assert.strictEqual(readJson(statePath).workflow.execution.status, 'in_progress');
+      const before = snapshotTree(tmpDir);
+      const refused = await lifecycle('plan', [
+        '--authority', 'owner', '--amend', '--reason', 'Owner reviewed the changed plan but terminal evidence exists',
+      ]);
+      assert.strictEqual(refused.exitCode, 1, refused.output);
+      const receipt = JSON.parse(refused.output);
+      assert.strictEqual(receipt.error_code, 'amendment_terminal_evidence_conflict');
+      assert.match(receipt.error, /current.*VERIFICATION\.md.*terminal/i);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, 'terminal refusal must leave state and all evidence unchanged');
+    });
+  }
+
+  for (const statuses of [
+    ['pending', 'passed'],
+    ['passed', 'pending'],
+    ['pending', 'pending'],
+  ]) {
+    test(`owner amendment refuses ambiguous duplicate top-level current verification statuses (${statuses.join(' then ')})`, async () => {
+      await initWork();
+      const planPath = '.work/brownfield-change/CHANGE.md';
+      const evidencePath = '.work/brownfield-change/VERIFICATION.md';
+      const lifecycle = (target, options = []) => runCliAsMain(tmpDir, [
+        'lifecycle-transition', target, '--plan', planPath, ...options, '--json', '--no-update-notice',
+      ]);
+      writeFile(planPath, brownfieldChange());
+      assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'duplicate-status-original'])).exitCode, 0);
+      assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+      writeFile(evidencePath, [
+        '---',
+        ...statuses.map((status) => `status: ${status}`),
+        'subrecord:',
+        '  status: passed',
+        '---',
+        '# Canonical verification report',
+        '```yaml',
+        'status: passed',
+        '```',
+        '',
+      ].join('\n'));
+      writeFile(planPath, brownfieldChange({ nextAction: 'Owner-reviewed amendment requires unambiguous current evidence.' }));
+      const statePath = path.join(tmpDir, '.work', 'state.json');
+      assert.strictEqual(readJson(statePath).workflow.execution.status, 'in_progress');
+      const before = snapshotTree(tmpDir);
+      const refused = await lifecycle('plan', [
+        '--authority', 'owner', '--amend', '--reason', 'Owner reviewed scope, but current proof has duplicate statuses',
+      ]);
+      assert.strictEqual(refused.exitCode, 1, refused.output);
+      const receipt = JSON.parse(refused.output);
+      assert.strictEqual(receipt.error_code, 'amendment_terminal_evidence_conflict');
+      assert.match(receipt.error, /current.*VERIFICATION\.md.*(?:ambiguous|multiple|duplicate)/i);
+      assert.deepStrictEqual(snapshotTree(tmpDir), before, 'ambiguous status refusal must preserve state, approval and evidence');
+    });
+  }
+
+  test('owner amendment still accepts a nonterminal current verification draft with unrelated passed history', async () => {
+    await initWork();
+    const planPath = '.work/brownfield-change/CHANGE.md';
+    const evidencePath = '.work/brownfield-change/VERIFICATION.md';
+    const lifecycle = (target, options = []) => runCliAsMain(tmpDir, [
+      'lifecycle-transition', target, '--plan', planPath, ...options, '--json', '--no-update-notice',
+    ]);
+    writeFile(planPath, brownfieldChange());
+    assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'draft-original'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+    writeFile(evidencePath, [
+      '---',
+      'status: pending',
+      'subrecord:',
+      '  status: passed',
+      '---',
+      '# Draft verification, not completed evidence',
+      '```yaml',
+      'status: passed',
+      '```',
+      '',
+    ].join('\n'));
+    writeFile('.work/phases/99-retained/99-VERIFICATION.md', brownfieldVerification('passed'));
+    const beforeEvidence = fs.readFileSync(path.join(tmpDir, evidencePath));
+    const beforeHistory = fs.readFileSync(path.join(tmpDir, '.work/phases/99-retained/99-VERIFICATION.md'));
+    writeFile(planPath, brownfieldChange({ nextAction: 'Owner-reviewed bounded amendment after a draft check.' }));
+    const changed = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'Only draft and old unrelated evidence exist']);
+    assert.strictEqual(changed.exitCode, 0, changed.output);
+    const state = readJson(path.join(tmpDir, '.work', 'state.json'));
+    assert.strictEqual(state.workflow.current_state, 'plan');
+    assert.strictEqual(state.workflow.plan.approved, false);
+    assert.strictEqual(state.workflow.amendments.length, 1);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, evidencePath)), beforeEvidence);
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work/phases/99-retained/99-VERIFICATION.md')), beforeHistory);
+  });
+
+  test('the brownfield owner-amendment exception never reopens an already executing phase plan', async () => {
+    await initWork();
+    const planPath = '.work/phases/01-protected/01-PLAN.md';
+    writeFile(planPath, '---\nstatus: approved\n---\n# Approved phase plan\n');
+    const lifecycle = async (target, extra = []) => runCliAsMain(tmpDir, [
+      'lifecycle-transition', target, '--plan', planPath, ...extra, '--json', '--no-update-notice',
+    ]);
+    assert.strictEqual((await lifecycle('plan', ['--authority', 'workflow'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('approve', ['--authority', 'owner', '--approval-ref', 'owner-phase-original'])).exitCode, 0);
+    assert.strictEqual((await lifecycle('execute', ['--authority', 'workflow'])).exitCode, 0);
+    writeFile(planPath, '---\nstatus: approved\n---\n# Amended phase plan\n');
+    const before = fs.readFileSync(path.join(tmpDir, '.work', 'state.json'));
+    const blocked = await lifecycle('plan', ['--authority', 'owner', '--amend', '--reason', 'This is a phase, not brownfield']);
+    assert.strictEqual(blocked.exitCode, 1, blocked.output);
+    assert.strictEqual(JSON.parse(blocked.output).error_code, 'amendment_not_allowed');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), before);
   });
 
   test('brownfield execute rejects operational HANDOFF conflicts before mutating approved state', async () => {
@@ -2164,6 +2672,54 @@ describe('next command routing', () => {
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.strictEqual(JSON.parse(result.output).status, 'replayed');
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), beforeReplay);
+  });
+
+  test('verification lifecycle reads only root status, even when nested frontmatter contradicts it', async () => {
+    await initWork();
+    const planPath = '.work/phases/01-transition/01-PLAN.md';
+    const summaryPath = '.work/phases/01-transition/01-SUMMARY.md';
+    const verificationPath = '.work/phases/01-transition/01-VERIFICATION.md';
+    writeFile(planPath, '---\nstatus: approved\n---\n# plan\n');
+    await runJson(['lifecycle-transition', 'plan', '--plan', planPath, '--authority', 'workflow', '--json']);
+    await runJson(['lifecycle-transition', 'approve', '--plan', planPath, '--authority', 'owner', '--approval-ref', 'owner-metadata-review', '--json']);
+    await runJson(['lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json']);
+    writeFile(summaryPath, '---\nstatus: complete\n---\n# summary\n');
+    await runJson(['lifecycle-transition', 'verify', '--plan', planPath, '--artifact', summaryPath, '--authority', 'workflow', '--json']);
+
+    writeFile(verificationPath, '---\nstatus: failed\nreview:\n  status: passed\n---\n# Verification\n');
+    const stateBeforeRefusal = fs.readFileSync(path.join(tmpDir, '.work', 'state.json'));
+    const falsePass = await runCliAsMain(tmpDir, [
+      'lifecycle-transition', 'audit', '--plan', planPath, '--artifact', verificationPath, '--authority', 'workflow', '--json',
+    ]);
+    assert.strictEqual(falsePass.exitCode, 1, falsePass.output);
+    assert.strictEqual(JSON.parse(falsePass.output).error_code, 'verification_not_passed');
+    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'state.json')), stateBeforeRefusal);
+
+    writeFile(verificationPath, '---\nstatus: gaps_found\nreview:\n  status: passed\n---\n# Verification\n');
+    const gaps = await runJson(['lifecycle-transition', 'fix_gaps', '--plan', planPath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+    assert.strictEqual(gaps.state.current_state, 'fix_gaps');
+  });
+
+  test('nested body or fenced status cannot substitute for top-level verification status', async () => {
+    await initWork();
+    const planPath = '.work/phases/01-transition/01-PLAN.md';
+    const verificationPath = '.work/phases/01-transition/01-VERIFICATION.md';
+    writeFile(planPath, '---\nstatus: approved\n---\n# plan\n');
+    await runJson(['lifecycle-transition', 'plan', '--plan', planPath, '--authority', 'workflow', '--json']);
+    await runJson(['lifecycle-transition', 'approve', '--plan', planPath, '--authority', 'owner', '--approval-ref', 'owner-body-review', '--json']);
+    await runJson(['lifecycle-transition', 'execute', '--plan', planPath, '--authority', 'workflow', '--json']);
+    writeFile('.work/phases/01-transition/01-SUMMARY.md', 'status: complete\n');
+    await runJson(['lifecycle-transition', 'verify', '--plan', planPath, '--artifact', '.work/phases/01-transition/01-SUMMARY.md', '--authority', 'workflow', '--json']);
+
+    for (const body of [
+      'status: failed\n\n### Nested result\n  status: passed\n',
+      'status: failed\n\n```yaml\nstatus: passed\n```\n',
+    ]) {
+      writeFile(verificationPath, body);
+      const invalid = await runCliAsMain(tmpDir, ['lifecycle-transition', 'audit', '--plan', planPath, '--artifact', verificationPath, '--authority', 'workflow', '--json']);
+      assert.strictEqual(invalid.exitCode, 1, invalid.output);
+      assert.strictEqual(JSON.parse(invalid.output).error_code, 'verification_not_passed');
+    }
   });
 
   test('approved PLAN transitions execute before implementation and verify only after complete SUMMARY', async () => {

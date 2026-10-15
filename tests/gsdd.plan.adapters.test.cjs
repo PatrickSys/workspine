@@ -98,6 +98,14 @@ describe('specialized plan adapter surfaces', () => {
     assert.match(claudePlanSkill, /Do NOT fork this skill into a subagent/);
     assert.match(claudePlanSkill, /not as a stop signal for this Claude-native adapter path/);
     assert.match(claudePlanSkill, /Maximum 3 checker cycles total/);
+    assert.match(claudePlanSkill, /for brownfield, use owner-confirmed decisions in CHANGE.md[\s\S]*skip the phase APPROACH procedure a-f/);
+    assert.match(claudePlanSkill, /an active bounded change owns the request/);
+    assert.match(claudePlanSkill, /brownfield writes CHANGE.md#Implementation Plan/);
+    const nativeChecker = fs.readFileSync(path.join(tmpDir, '.claude/agents/work-plan-checker.md'), 'utf8');
+    assert.match(nativeChecker, /Phase APPROACH.md and its alignment-proof fields are not required/);
+    assert.match(nativeChecker, /remaining APPROACH checks apply only to phase authority/);
+    assert.match(portablePlanSkill, /Owner approval is recorded only in existing lifecycle state/);
+    assert.match(portableExecuteSkill, /Skip phase discovery, phase SUMMARY output/);
     assert.match(claudePlanSkill, /blockers or warnings remain after cycle 3/);
     assert.match(claudePlanSkill, /"status": "issues_found"/);
     assert.match(claudePlanSkill, /Use "passed" only when "issues": \[\]/);

@@ -72,23 +72,23 @@ Native Claude adapter rule:
 
 Execution flow:
 1. Read \`.work/SPEC.md\` and \`.work/ROADMAP.md\` when present, \`.work/config.json\`, relevant phase research, and any existing phase plan files.
-2. Classify the target through the portable planning contract: a bounded multi-step change without a roadmap selects brownfield-change; a tiny self-contained change selects work-quick; an existing roadmap keeps phase selection. For brownfield use CHANGE.md as identity and plan body, HANDOFF.md as context-only, and the portable brownfield lifecycle commands in place of phase paths throughout this flow. Read SPEC/ROADMAP only when present.
-3. **Approach exploration** (before planning):
+2. Classify the target through the portable planning contract: a bounded multi-step change without a roadmap selects brownfield-change; a tiny self-contained change selects work-quick; an existing roadmap keeps phase selection unless an active bounded change owns the request or the owner selects a standalone change. For brownfield use CHANGE.md as identity and plan body, HANDOFF.md as context-only, and the portable brownfield lifecycle commands in place of phase paths throughout this flow. Read SPEC/ROADMAP only when present.
+3. **Approach exploration** (before planning): for brownfield, use owner-confirmed decisions in CHANGE.md, stop for unresolved material choices, and skip the phase APPROACH procedure a-f below. Do not create or require a phase APPROACH.md for brownfield.
    a. Check \`.work/config.json\` for \`workflow.discuss\`. If \`false\` or missing, skip to step 4 and report \`reduced_alignment\` in the summary.
    b. Check if \`{phase_dir}/{padded_phase}-APPROACH.md\` exists. If it does, offer the user: "Use existing" / "Update it" / "View it". If "Use existing", load decisions, then validate the alignment proof before step 4; proofless or invalid existing APPROACH.md must be updated, not silently trusted.
    c. If no APPROACH.md exists (or user chose "Update"): invoke the native \`${SUBAGENT_IDS.approachExplorer}\` subagent with the phase goal, requirement IDs, project config from \`.work/config.json\` (especially \`workflow.discuss\`), SPEC locked decisions, phase research, and relevant codebase files.
    d. The explorer runs a GSD-style interactive conversation with the user (gray areas, research, deep-dive questions, assumptions) and writes APPROACH.md.
    e. Before planning, confirm APPROACH.md records all canonical proof fields: \`alignment_status\`, \`alignment_method\`, \`user_confirmed_at\`, \`explicit_skip_approved\`, \`skip_scope\`, \`skip_rationale\`, and \`confirmed_decisions\`. For \`alignment_status: user_confirmed\`, \`confirmed_decisions\` must name the locked decisions and skip fields may be \`false\`/\`N/A\`; for \`alignment_status: approved_skip\`, \`explicit_skip_approved: true\`, \`skip_scope\`, and \`skip_rationale\` must be substantive. Agent-only "No questions needed" is not valid proof under \`workflow.discuss: true\`.
    f. Load APPROACH.md decisions as locked constraints alongside SPEC.md decisions.
-4. Produce the initial phase plan according to ${planningContract}. Pass APPROACH.md decisions (if any) as locked constraints to the planner.
-5. If \`.work/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the step 3 alignment-proof gate when \`workflow.discuss: true\`.
+4. Produce the selected plan according to ${planningContract}: brownfield writes CHANGE.md#Implementation Plan with its owner-confirmed decisions; phases write PLAN.md with APPROACH.md decisions (if any) as locked constraints.
+5. If \`.work/config.json\` has \`workflow.planCheck: false\`, stop after planner self-check and explicitly report reduced assurance. This only skips the independent checker; it does not skip the phase alignment-proof gate when \`workflow.discuss: true\`. Brownfield still requires owner-confirmed CHANGE.md decisions.
 6. If \`workflow.planCheck: true\`, invoke the native \`${SUBAGENT_IDS.planChecker}\` subagent with fresh context.
 7. Pass only explicit inputs to the checker:
    - target phase goal and requirement IDs
    - relevant locked decisions / deferred items from \`.work/SPEC.md\`
-   - project config from \`.work/config.json\`, especially \`workflow.discuss\` and \`workflow.planCheck\`
-   - approach decisions from \`.work/phases/*-APPROACH.md\` (if exists)
-   - relevant phase research file(s)
+   - project config from \`.work/config.json\`, especially \`workflow.discuss\` and \`workflow.planCheck\`; discuss controls phase APPROACH exploration
+   - for phases: approach decisions from \`.work/phases/*-APPROACH.md\` (if exists) and relevant phase research
+   - for brownfield: owner-confirmed decisions in CHANGE.md; HANDOFF.md is judgment-only context
    - produced \`.work/brownfield-change/CHANGE.md\` for brownfield (Goal, scope, Done When, and Implementation Plan replace phase inputs), or \`.work/phases/*-PLAN.md\` file(s) for roadmap phases
    - the exact persisted \`lastDecisionsDigest\` snapshot from the successful plan preflight, if present, including an explicitly persisted empty snapshot
 8. Require the checker to return a single JSON object with this shape:

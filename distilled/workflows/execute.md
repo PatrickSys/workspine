@@ -8,7 +8,7 @@ Resolve `requested_level`/`effective_level` from config/override; low/medium/hig
 <load_context>
 Load only the context needed for the next safe action. Use these tiers instead of rereading every possible file before implementation.
 ### mandatory_now
-For brownfield, load CHANGE.md and its Implementation Plan first; SPEC/ROADMAP are optional. For roadmap phases, read before mutation: target `PLAN.md` frontmatter/current task/boundaries; bounded `.work/SPEC.md` current state, active requirement IDs, and relevant constraints; `.work/ROADMAP.md` phase goal/status/success criteria; immediately prior `.work/phases/*-SUMMARY.md` `<judgment>` when present; and the preflight result from `<lifecycle_preflight>`.
+Read before mutation: for phase authority, read target phase `PLAN.md` frontmatter/current task/boundaries; bounded `.work/SPEC.md` current state, active requirement IDs, and constraints; `.work/ROADMAP.md` phase goal, status, and success criteria; prior phase SUMMARY `<judgment>` when present; and phase preflight. For brownfield authority, read `.work/brownfield-change/CHANGE.md#Implementation Plan`, `HANDOFF.md` as judgment context only, and brownfield preflight; do not require phase PLAN frontmatter, roadmap membership, or a phase SUMMARY.
 <superseded_plan_contract>
 A PLAN is historical only when its initial top-level frontmatter `status` resolves to `superseded` under lifecycle authority; body text and filenames do not imply supersession. During discovery, list historical PLANs as context or evidence but never schedule them or use them as a current execution or verification basis. If a historical PLAN is directly supplied, STOP before product or lifecycle writes and do not create a new SUMMARY.md or VERIFICATION.md from it. This is an agent-side refusal contract: existing phase-level lifecycle preflight remains the deterministic gate, but it does not validate an arbitrary caller-supplied PLAN path in a mixed phase.
 </superseded_plan_contract>
@@ -24,14 +24,13 @@ Read only when the current task or a deviation needs them: older phase summaries
 All `node .work/bin/gsdd.mjs ...` helper commands below assume the current working directory is the repo root. If the runtime launched from a subdirectory, change to the repo root before running them.
 </repo_root_helper_contract>
 <lifecycle_preflight>
-Before implementing or mutating any lifecycle artifact, run:
-- Roadmap phase: `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`; brownfield: use `<brownfield_change_execute>` below.
+Before implementing or mutating any lifecycle artifact, run the matching preflight: phase authority uses `node .work/bin/gsdd.mjs lifecycle-preflight execute {phase_num} --expects-mutation phase-status`; active brownfield authority uses `node .work/bin/gsdd.mjs lifecycle-preflight execute brownfield-change --expects-mutation phase-status` without `--plan` to select its owned-write lane, not to authorize phase-status updates.
 On `ambiguous_phase_selector`, rerun preflight with the emitted positional `phases/{phase_dir}` selector; keep the selected PLAN filesystem identity as `.work/phases/{phase_dir}/{plan_id}-PLAN.md` for reading and the lifecycle-transition commands below.
 If the preflight result is `blocked`, STOP and surface the blocker instead of inferring eligibility from workflow-local prose.
 Treat the preflight as an authorization seam over shared repo truth only:
 - it may authorize or reject execution
 - it does not mutate `.work/ROADMAP.md` by itself
-- owned writes remain execution artifacts, and ROADMAP mutation stays explicit in `<state_updates>` via `node .work/bin/gsdd.mjs phase-status`
+- owned writes remain execution artifacts; phase ROADMAP mutation stays explicit in `<state_updates>` via `node .work/bin/gsdd.mjs phase-status`
 </lifecycle_preflight>
 <brownfield_change_execute>
 Read the tasks under `## Implementation Plan` in CHANGE.md; HANDOFF.md stays context-only. Skip phase discovery, phase SUMMARY output, and ROADMAP phase-status updates. While execution is incomplete, preserve approved CHANGE.md bytes and capture task progress in the pause checkpoint. At implementation completion, update CHANGE.md and record closeout proof in VERIFICATION.md. Run `node .work/bin/gsdd.mjs lifecycle-preflight execute brownfield-change --expects-mutation phase-status`. Use this branch's commands in place of the phase commands below:
@@ -41,19 +40,20 @@ Read the tasks under `## Implementation Plan` in CHANGE.md; HANDOFF.md stays con
 - Implementation evidence complete: `node .work/bin/gsdd.mjs lifecycle-transition verify --plan .work/brownfield-change/CHANGE.md --artifact .work/brownfield-change/VERIFICATION.md --authority workflow --json`
 - Verification passed: `node .work/bin/gsdd.mjs lifecycle-transition audit --plan .work/brownfield-change/CHANGE.md --artifact .work/brownfield-change/VERIFICATION.md --authority workflow --json`
 On pause/resume, recover this identity from CHANGE.md and the checkpoint. Resume an already recorded execution from its current task; scope changes require replanning and fresh approval. When the selected plan identity is `.work/brownfield-change/CHANGE.md`, execute one bounded stream only. Re-read `CHANGE.md` as the operational authority and `HANDOFF.md` as judgment context; do not take scope or status from HANDOFF. Refuse execution without a concrete Done When list, when another active brownfield stream or milestone authority is present, when the posture is blocked or widening, or when the requested work exceeds the declared write scope. Reruns are read-before-write: preserve all existing user-authored text and evidence, and update only the approved bounded surfaces. After the approved work is complete, record its evidence and set `CHANGE.md` to `ready_for_verification`; do not close the lane from execution.
+The matching preflight and execute transition's write/replay guard block an unequivocal declared-branch mismatch or detached HEAD against the selected workspace. Acknowledgement cannot override that branch agreement: use the intended checkout/worktree or the existing formal review path. Do not silently edit or reapprove an executed CHANGE.md to make the gate pass: an amended in-progress CHANGE requires owner-reviewed `lifecycle-transition plan --plan .work/brownfield-change/CHANGE.md --authority owner --amend --reason {reviewed_reason}`, then a separate fresh owner `approve` before any new execute. Retain old partial-work evidence; completed or verified execution requires formal review. Unknown surfaces remain unverified warnings.
 </brownfield_change_execute>
 <control_map_check>Before code mutation, run `node .work/bin/gsdd.mjs control-map --json` when available. Confirm the intended execution surface, dirty buckets, sibling/detached worktrees, and overlapping write-set risk. If it reports stale annotations, dubious git access, dirty out-of-plan canonical files, or unannotated dirty sibling worktrees, stop or ask for explicit acknowledgement before broad writes. Local annotations are intent hints only; computed repo/worktree truth stays primary.
 </control_map_check>
 <runtime_contract>
 Execution uses the same `Runtime` and `Assurance` types as planning and verification; infer runtime from the launching surface when obvious: `.claude/` -> `claude-code`, `.codex/` or Codex portable skill -> `codex-cli`, `.opencode/` -> `opencode`, otherwise `other`.
-Assurance is ordered: `unreviewed` -> `self_checked` -> `cross_runtime_checked`; same-runtime helpers never count as cross-runtime evidence.
+Assurance is ordered: `unreviewed` -> `self_checked` -> `cross_runtime_checked`; same-runtime helpers never count as cross-runtime evidence. Before delegating implementation, read `node .work/bin/gsdd.mjs models show` and `effective.<runtime>.executor` (`claude`, `codex`, `opencode`). The default `inherit` preserves the runtime model; checker/explorer preferences do not select executors. An explicit `models set --runtime <runtime> --agent executor --model <id>` applies only to **new** executor delegates: verify runtime support, select the model, and record requested and observed model IDs. If selection or observation fails, stop delegation and report the unmet override. Workspine cannot change an active primary session's model; when the override cannot be honored inline, stop before mutation and require a correctly selected new session/delegate or an explicit override change. Keep lifecycle approval and integration serial.
 </runtime_contract>
 <assurance_check>
-Before executing tasks, read the plan artifact's `runtime`, `assurance`, and structured `<plan_check>` result; use `unreviewed` before any executor check, `self_checked` for self/same-runtime checking, and `cross_runtime_checked` only for a different runtime/vendor checker.
+Before executing tasks, read the phase PLAN's `runtime`, `assurance`, and structured `<plan_check>` result, or the equivalent values in the brownfield `CHANGE.md#Implementation Plan` check block; use `unreviewed` before any executor check, `self_checked` for self/same-runtime checking, and `cross_runtime_checked` only for a different runtime/vendor checker.
 If execution begins from a stronger plan artifact into a weaker execution context, emit a structured `<assurance_check>` with `source_artifact`, `source_runtime`, `source_assurance`, `current_runtime`, `current_assurance`, `status`, and `warning`; if plan runtime/assurance is missing, use `status: unknown`.
 </assurance_check>
 <multi_plan_orchestration>
-A phase often contains multiple plans. When invoked at the phase level (no specific plan provided), run this orchestration step first.
+A phase often contains multiple plans. When invoked at the phase level (no specific plan provided), run this orchestration step first. This multi-plan scan applies only to phase authority; active brownfield authority has one plan identity and reads its ordered tasks from `CHANGE.md#Implementation Plan`.
 ### Discover Plans and Group by Wave
 1. Scan `.work/phases/{phase_dir}/` for all `*-PLAN.md` files.
 2. For each plan, read its frontmatter `wave` field (default: `wave: 1` if absent).
@@ -92,17 +92,17 @@ If only a single plan was provided (the common case), skip this section entirely
 For each task in the plan, follow this loop:
 
 ```text
-1. Read the plan frontmatter and current task.
+1. Read the phase plan frontmatter and current task, or the current task from the brownfield `CHANGE.md#Implementation Plan`.
 2. Read the task_scoped files and focused references needed for that task.
-3. For roadmap phases, before implementation, run `node .work/bin/gsdd.mjs lifecycle-transition execute --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`; stop if it refuses, then implement the task action. Do not pass `--approved` or `--approval-ref` here: explicit approval is an owner-only transition, and workflow execution consumes the plan's already-durable approval.
-4. Run the task's verify steps.
+3. On first entry to execution for the selected plan only, run the lifecycle execute transition and stop if it refuses; implement the task action after it succeeds. For an active brownfield change, use `node .work/bin/gsdd.mjs lifecycle-transition execute --plan .work/brownfield-change/CHANGE.md --authority workflow --json`; for a phase, use `node .work/bin/gsdd.mjs lifecycle-transition execute --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`. Do not switch identities between planning, approval, and execution. Do not pass `--approved` or `--approval-ref` here: explicit approval is an owner-only transition, and workflow execution consumes the plan's already-durable approval.
+   For subsequent tasks or a fresh resume, complete the matching lifecycle preflight and confirm `.work/state.json` records `workflow.current_state: execute` and `workflow.execution.status: in_progress`, with both `workflow.plan.path` and `workflow.plan.identity` equal to the exact selected plan. Validate its durable owner approval against current plan bytes (`workflow.plan.approved_sha256`) using the existing approval rules, then continue the current task without replaying the execute transition. Missing, stale, mismatched, blocked, or completed execution cannot be restarted from checkpoint prose; stop and resolve its lifecycle posture through the existing workflow.
+4. Verify the task action using its planned steps.
 5. Handle any git actions using repo or user conventions.
 6. Re-read the plan's Objective and `non_goals`. Confirm the work just completed serves the objective and crossed no boundary; if not, record a deviation before continuing.
-7. Record task completion in your working notes and final SUMMARY.md.
+7. Record task completion in working notes; phase notes go in SUMMARY.md and brownfield evidence/next action go in CHANGE.md.
 ```
 ### Frontmatter And Task Semantics
-The executor consumes the plan schema defined by `/work-plan`:
-- frontmatter keys: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`, `tdd`
+For a phase, the executor consumes the `/work-plan` schema and its frontmatter keys: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`, `tdd`. For brownfield, consume task files/action/verify/done fields from `CHANGE.md#Implementation Plan`; phase frontmatter and phase task-state tracking are not required.
 - task types:
   - `type="auto"` - proceed without pausing
   - `type="checkpoint:user"` - stop for a required user decision or human-only step
@@ -147,7 +147,7 @@ If a task frontmatter includes `tdd: true`, switch to RED-GREEN-REFACTOR cycle f
 **REFACTOR — Clean up**
 1. Improve structure, naming, and clarity without changing behavior.
 2. Run the tests again. Confirm they still pass.
-3. Log the RED→GREEN→REFACTOR cycle in SUMMARY.md under the task entry.
+3. Log the RED→GREEN→REFACTOR cycle under the task entry in phase SUMMARY.md or brownfield CHANGE.md.
 
 Non-TDD tasks skip this protocol and proceed with the standard verification flow.
 
@@ -194,7 +194,7 @@ Git rules:
 - Do not mention phase, plan, task, or requirement IDs, or internal milestone labels, in commit messages, PR titles, or PR bodies unless explicitly requested.
 - Do not force one commit per task unless the repo or user asked for that.
 - **Commit-boundary identity check:** Only when this executor is about to make a Workspine-directed commit, before staging run `node .work/bin/gsdd.mjs git-identity check`. Capture and show the inspected author/committer identities, configuration origins, and fingerprint. A missing, placeholder, mismatch, or other refusal stops before staging. For an unusual bot/CI-style identity, obtain a cooperative explicit current-run confirmation for that exact fingerprint, then rerun with `--confirm <fingerprint>`; this is auditable workflow evidence, not authentication.
-- **Immediate recheck:** Immediately before the owned `git commit`, rerun `node .work/bin/gsdd.mjs git-identity check --expect <fingerprint>` (and the same `--confirm <fingerprint>` when confirmation was required). Drift or any refusal stops the commit. Record the fingerprint and resulting commit OID in SUMMARY.md. Do not run this identity check for planning, local lifecycle files, verification, or any other no-commit operation.
+- **Immediate recheck:** Immediately before the owned `git commit`, rerun `node .work/bin/gsdd.mjs git-identity check --expect <fingerprint>` (and the same `--confirm <fingerprint>` when confirmation was required). Drift or refusal stops the commit. Record fingerprint and commit OID in phase SUMMARY.md or brownfield CHANGE.md. Do not run this check for planning, lifecycle files, verification, or other no-commit work.
 - **No default push or PR:** A local commit remains local by default. Push or PR creation occurs only when the resolved current user/approved-plan request, repository/team convention, and configured `gitProtocol` explicitly call for it. Never create either as a default side effect.
 </execution_loop>
 
@@ -215,7 +215,7 @@ Treat only hard mismatches as blocking by default:
 - any `architecture_risk_conflict`
 - a `factual_discovery` that is not deterministically recoverable
 
-If a `factual_discovery` is local, deterministic, and recoverable, proceed with a recorded delta instead of bouncing immediately back to planning. That delta must be surfaced later in SUMMARY.md for downstream review and milestone audit.
+If a `factual_discovery` is local, deterministic, and recoverable, proceed with a recorded delta instead of bouncing back to planning. Surface it in phase SUMMARY.md or brownfield CHANGE.md for downstream review.
 
 ### Rule 1: Auto-Fix Bugs
 
@@ -271,7 +271,7 @@ Re-run failing `<verify>` commands character-for-character. Never reword, weaken
 </deviation_rules>
 
 <state_updates>
-After completing all tasks in the plan:
+For active brownfield authority, record task evidence and next action in `CHANGE.md`, set posture to `ready_for_verification`, then continue through brownfield `/work-verify`. Skip phase SPEC/ROADMAP updates, phase SUMMARY, and the phase transition below. The remaining procedure and summary template apply only to phase authority after all tasks complete.
 
 ### 1. Update `.work/SPEC.md` "Current State"
 Keep the update factual and compact:
@@ -371,9 +371,9 @@ Write the structured sections honestly:
 Do not invent an inline PLAN task-state mutation scheme if the plan does not define one.
 Summary-driven progress tracking avoids silent drift between the plan contract and what execution actually completed.
 
-**MANDATORY: You MUST write SUMMARY.md to disk at `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`. Output to conversation alone is NOT sufficient. If this file is not written to disk, execution is NOT complete.**
+**MANDATORY:** Write SUMMARY.md to disk at `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`; conversation output alone is not sufficient.
 
-After the SUMMARY artifact is durable and marked complete, record the execution-to-verification transition:
+After the SUMMARY artifact is durable and marked complete, record the phase execution-to-verification transition:
 `node .work/bin/gsdd.mjs lifecycle-transition verify --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --artifact .work/phases/{phase_dir}/{plan_id}-SUMMARY.md --authority workflow --json`.
 The helper validates the exact artifact chain and updates only existing `.work/state.json`; do not hand-edit
 lifecycle state or call this before the SUMMARY exists.
@@ -399,13 +399,13 @@ When encountering a checkpoint task:
 Auth errors (indicators: 401, 403, "Not authenticated", "Please run {tool} login", "Set {ENV_VAR}") are gates, not bugs. When an auth error occurs during a `type="auto"` task:
 - recognize it as an auth gate, not a deviation
 - STOP and return `checkpoint:user` with exact auth steps (CLI commands, env vars, verification command)
-- document auth gates in SUMMARY.md as normal flow, not deviations
+- document auth gates in phase SUMMARY.md or brownfield CHANGE.md as normal flow, not deviations
 
 In all checkpoint cases, return with the current progress and do not continue until resumed.
 </checkpoint_protocol>
 
 <self_check>
-After completing all tasks and state updates, verify your own claims:
+After completing tasks and the selected authority's updates, verify your claims:
 
 ```text
 For each completed task:
@@ -413,10 +413,9 @@ For each completed task:
   [ ] Local verification passed
 
 For state updates:
-  [ ] .work/SPEC.md "Current State" is accurate
-  [ ] ROADMAP.md status remains open (`[-]` if status was updated) until verification passes
-  [ ] `node .work/bin/gsdd.mjs next --json` ran after reviewed SPEC and phase-status updates
-  [ ] SUMMARY.md exists with `<checks>`, `<handoff>`, `<deltas>`, and `<judgment>` and reflects the actual work
+  [ ] Phase: SPEC Current State and ROADMAP status are accurate and remain open until verification
+  [ ] Phase: `gsdd next --json` ran after reviewed SPEC and phase-status updates; SUMMARY has `<checks>`, `<handoff>`, `<deltas>`, and `<judgment>` sections
+  [ ] Brownfield: CHANGE.md records evidence and next action with `ready_for_verification`; no phase state or SUMMARY is created
 
 Overall:
   [ ] Any git actions taken match what you are reporting
@@ -427,7 +426,7 @@ If any self-check fails, fix it and re-check before reporting completion.
 </self_check>
 
 <success_criteria>
-Execution is done when all of these are true:
+Phase authority is done when all of these are true:
 
 - [ ] All `type="auto"` tasks in the plan are implemented and verified
 - [ ] Any checkpoint task caused an explicit stop and handoff instead of silent continuation
@@ -442,13 +441,15 @@ Execution is done when all of these are true:
 - [ ] `SUMMARY.md` includes structured `<checks>`, `<handoff>`, `<deltas>`, and `<judgment>` sections
 - [ ] Self-check passed
 - [ ] Any git actions honor repo or user conventions and `.work/config.json`
+
+Brownfield authority is done when `CHANGE.md#Implementation Plan` tasks are complete and locally verified, evidence and next action are recorded in `CHANGE.md`, and posture is `ready_for_verification`; leave lifecycle verification and closure to brownfield `/work-verify`.
 </success_criteria>
 
 <completion>
 Report what was accomplished, then present the next step:
 ---
-**Completed:** Plan execution — created `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`.
-**Next step:** Check `.work/config.json` → `workflow.verifier`:
+**Completed:** Phase plan execution: created `.work/phases/{phase_dir}/{plan_id}-SUMMARY.md`; bounded brownfield execution: recorded evidence in `.work/brownfield-change/CHANGE.md` and moved the lane to `ready_for_verification`.
+**Next step:** For brownfield, run `/work-verify` when CHANGE.md is `ready_for_verification`. For phase authority, check `.work/config.json` → `workflow.verifier`:
 - If `true`: run `/work-verify` — verify that the phase goal was achieved
 - If `false` (or key missing): run `/work-progress` — check status and route to the next phase
 

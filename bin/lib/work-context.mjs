@@ -14,7 +14,7 @@ import {
 import { execFileSync } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
-import { collectNativePhaseArtifacts, evaluateLifecycleState, partitionPlanChains } from './lifecycle-state.mjs';
+import { collectNativePhaseArtifacts, evaluateLifecycleState, normalizePhaseToken, partitionPlanChains, readPlanStatus, resolveStandardPhaseSelection } from './lifecycle-state.mjs';
 import { resolveStateDir, stateAuthorityGate, STATE_DIR_NAME } from './state-dir.mjs';
 import { writeFileAtomic as replaceFileAtomically } from './atomic-write.mjs';
 
@@ -270,6 +270,83 @@ function transitionError(code, message, evidence = []) {
   return error;
 }
 
+export function assertLifecyclePlanIdentity(planningDir, target, planIdentity) {
+  if (!['plan', 'approve', 'execute'].includes(String(target || '').toLowerCase())) return;
+  const lifecycle = evaluateLifecycleState({ planningDir });
+  if (lifecycle.brownfieldChange.streamCount > 0) {
+    throw transitionError('multiple_active_brownfield_streams',
+      'Another active brownfield stream exists; resolve its authority before lifecycle state changes.',
+      lifecycle.brownfieldChange.contractErrors);
+  }
+  if (!lifecycle.brownfieldChange.exists || lifecycle.brownfieldChange.currentStatus === 'closed') return;
+  const workspaceRoot = resolve(planningDir, '..');
+  const canonicalPlan = normalizeSlashes(relative(workspaceRoot, join(planningDir, 'brownfield-change', 'CHANGE.md')));
+  const suppliedPlan = normalizeSlashes(String(planIdentity || '')).replace(/^\.\//, '');
+  if (suppliedPlan !== canonicalPlan) {
+    throw transitionError(
+      'wrong_brownfield_plan_identity',
+      `Active brownfield authority requires --plan ${canonicalPlan}, the canonical CHANGE.md identity; refusing ${suppliedPlan || 'an unbound plan'} before lifecycle state changes.`,
+      [canonicalPlan, suppliedPlan].filter(Boolean),
+    );
+  }
+}
+
+const BROWNFIELD_TERMINAL_VERIFICATION_STATUSES = new Set([
+  'complete', 'completed', 'done', 'passed', 'pass', 'verified',
+  'gaps_found', 'human_needed', 'failed', 'fail',
+]);
+
+function countTopLevelVerificationStatuses(content) {
+  // Match readPlanStatus's exact initial-frontmatter boundaries and unindented
+  // scalar grammar. The shared reader intentionally returns only the FIRST
+  // status; an amendment must not silently choose between duplicate values.
+  const lines = String(content).replace(/\r\n/g, '\n').split('\n');
+  if (lines[0] !== '---') return 0;
+  const closingIndex = lines.indexOf('---', 1);
+  // readPlanStatus separately rejects unclosed frontmatter.
+  if (closingIndex === -1) return 0;
+  return lines.slice(1, closingIndex).filter((line) => /^status:\s*(.*)$/.test(line)).length;
+}
+
+function assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir) {
+  // An owner amendment is allowed only for unfinished execution. State can
+  // still say in_progress after a verification result was written to disk.
+  // Inspect only the canonical artifact in THIS active brownfield chain:
+  // historical phase VERIFICATION files are evidence, not its completion.
+  const verificationPath = brownfield.brownfieldChange?.verificationPath;
+  if (!verificationPath || !existsSync(verificationPath)) return;
+  const label = normalizeSlashes(relative(resolve(workDir, '..'), verificationPath));
+  let declaredStatus;
+  let statusDeclarationCount = 0;
+  try {
+    const stat = lstatSync(verificationPath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('current verification artifact is not a regular file');
+    }
+    // Reuse the strict first-frontmatter top-level `status` reader: body
+    // examples, nested status and historical files cannot imply completion.
+    const content = readFileSync(verificationPath, 'utf8');
+    declaredStatus = readPlanStatus(content);
+    statusDeclarationCount = countTopLevelVerificationStatuses(content);
+  } catch {
+    throw transitionError('amendment_terminal_evidence_conflict',
+      `Current ${label} cannot be reconciled with in-progress execution; retain the artifact and use formal review.`,
+      [label, '.work/state.json']);
+  }
+  if (statusDeclarationCount > 1) {
+    throw transitionError('amendment_terminal_evidence_conflict',
+      `Current ${label} has ambiguous multiple top-level status declarations; retain the evidence and reconcile it through formal review before --amend.`,
+      [label, '.work/state.json']);
+  }
+  if (!declaredStatus) return;
+  const status = String(declaredStatus).trim().toLowerCase().replace(/[ -]+/g, '_');
+  if (BROWNFIELD_TERMINAL_VERIFICATION_STATUSES.has(status)) {
+    throw transitionError('amendment_terminal_evidence_conflict',
+      `Current ${label} declares terminal ${status} evidence while workflow execution is in_progress; preserve that proof and use formal review instead of --amend.`,
+      [label, '.work/state.json']);
+  }
+}
+
 /**
  * Persist one validated lifecycle transition without changing any other state
  * fields. Callers must validate artifact identity and authority before calling
@@ -286,6 +363,7 @@ export function transitionWorkflowState(workDir, {
   reason = null,
   question = null,
   approved = null,
+  amend = false,
   preWriteGuard = null,
   now = new Date(),
 } = {}) {
@@ -309,6 +387,12 @@ export function transitionWorkflowState(workDir, {
   const normalizedTarget = String(target || '').trim().toLowerCase();
   const allowed = new Set(['plan', 'execute', 'verify', 'audit', 'next', 'fix_gaps', 'blocked', 'ask_user', 'approve']);
   if (!allowed.has(normalizedTarget)) throw transitionError('unsupported_transition', `Unsupported lifecycle transition: ${target}.`);
+  if (amend && normalizedTarget !== 'plan') {
+    throw transitionError('invalid_amendment_target', 'Only the plan lifecycle transition accepts --amend.', ['--amend']);
+  }
+  if (amend && (authority !== 'owner' || !String(reason || '').trim() || approvalRef)) {
+    throw transitionError('owner_amendment_required', 'In-progress amendment requires owner authority, a non-empty --reason and no approval reference. Reapprove separately.', ['--authority owner', '--reason']);
+  }
   if (normalizedTarget === 'execute' && approvalRef !== null && approvalRef !== undefined) {
     throw transitionError('approval_ref_not_allowed', 'Execute cannot supply or replace the owner-recorded approval reference.', ['--approval-ref']);
   }
@@ -325,18 +409,38 @@ export function transitionWorkflowState(workDir, {
   }
 
   const expectedPlan = planPath || planIdentity;
+  assertLifecyclePlanIdentity(workDir, normalizedTarget, expectedPlan);
+  if (planIdentity) assertLifecyclePlanIdentity(workDir, normalizedTarget, planIdentity);
   const recordedPlan = workflow.plan.path || workflow.plan.identity || null;
   // Recover the historical phase-path brownfield approval through the existing
   // plan transition. Execution/evidence cannot be transferred to another chain.
-  const repairBrownfieldApproval = normalizedTarget === 'plan'
-    && authority === 'workflow' && typeof preWriteGuard === 'function'
-    && expectedPlan === '.work/brownfield-change/CHANGE.md'
-    && /^\.work\/phases\/.+-PLAN\.md$/i.test(recordedPlan || '')
-    && workflow.current_state === 'plan'
-    && workflow.execution.status === 'not_started'
-    && !workflow.execution.artifact && !workflow.verification.artifact;
+  const stateRoot = normalizeSlashes(relative(resolve(workDir, '..'), workDir));
+  const brownfield = evaluateLifecycleState({ planningDir: workDir });
+  const recordedPhasePlan = typeof recordedPlan === 'string'
+    && recordedPlan.startsWith(`${stateRoot}/phases/`) && /-PLAN\.md$/i.test(recordedPlan);
+  const recordedPhaseBase = recordedPlan?.replace(/-PLAN\.md$/i, '');
+  const oldChainArtifacts = recordedPhasePlan && ['SUMMARY', 'EXECUTE', 'VERIFICATION', 'VERIFY']
+    .some(kind => existsSync(resolve(workDir, '..', `${recordedPhaseBase}-${kind}.md`)));
+  const repairBrownfieldApproval = normalizedTarget === 'plan' && authority === 'workflow'
+    && expectedPlan === `${stateRoot}/brownfield-change/CHANGE.md` && recordedPhasePlan
+    && (!workflow.plan.identity || workflow.plan.identity === recordedPlan)
+    && brownfield.brownfieldChange.exists && brownfield.brownfieldChange.currentStatus === 'active'
+    && brownfield.brownfieldChange.contractErrors.length === 0 && !brownfield.brownfieldChange.wideningRequested
+    && (workflow.current_state || state.current_state) === 'plan'
+    && (!state.current_state || state.current_state === 'plan')
+    && [workflow.execution, workflow.verification, workflow.audit, workflow.dogfood]
+      .every(stage => stage.status === 'not_started' && !stage.artifact && !stage.identity)
+    && !oldChainArtifacts;
   if (recordedPlan && expectedPlan && recordedPlan !== expectedPlan && !repairBrownfieldApproval) {
     throw transitionError('stale_state', 'Recorded plan authority does not match the supplied plan artifact.', [String(recordedPlan), String(expectedPlan)]);
+  }
+  // ask_user/blocked can interrupt execute without clearing its execution
+  // status or old owner approval. They must never become a shortcut back to
+  // ordinary agent-controlled planning and reuse of the old approval ref.
+  if (normalizedTarget === 'plan' && !amend && workflow.execution.status === 'in_progress') {
+    throw transitionError('owner_amendment_required',
+      'An approved or interrupted execution still has in-progress lifecycle authority. Review its retained work and use explicit owner --amend for a bounded CHANGE, or formal review for other plans.',
+      [String(recordedPlan || '.work/state.json')]);
   }
   if (artifactPath && artifactIdentity) {
     const recordedArtifact = normalizedTarget === 'verify'
@@ -356,6 +460,32 @@ export function transitionWorkflowState(workDir, {
   next.workflow.dogfood = { ...workflow.dogfood };
   const normalizedPlan = planPath || planIdentity || null;
   const normalizedArtifact = artifactPath || artifactIdentity || null;
+  const currentState = workflow.current_state || state.current_state || 'plan';
+  const originalApprovalHash = workflow.plan.approved_sha256;
+  const amendedHash = amend && normalizedPlan ? planArtifactSha256(workDir, normalizedPlan) : null;
+  const brownfieldIdentity = `${stateRoot}/brownfield-change/CHANGE.md`;
+  const interruptedExecutionStates = ['execute', 'ask_user', 'blocked'];
+  const stagesHaveNoTerminalEvidence = [workflow.verification, workflow.audit, workflow.dogfood]
+    .every((stage) => stage.status === 'not_started' && !stage.artifact && !stage.identity);
+  if (amend && !(normalizedPlan === brownfieldIdentity && recordedPlan === normalizedPlan
+    && workflow.plan.identity === normalizedPlan && interruptedExecutionStates.includes(currentState)
+    && (!state.current_state || state.current_state === currentState)
+    && workflow.execution.status === 'in_progress'
+    && !workflow.execution.artifact && !workflow.execution.identity
+    && stagesHaveNoTerminalEvidence && workflow.plan.approved === true
+    && workflow.authority === 'owner' && isValidApprovalReference(workflow.approval_ref)
+    && typeof originalApprovalHash === 'string' && /^[a-f0-9]{64}$/.test(originalApprovalHash)
+    && brownfield.brownfieldChange.exists && brownfield.brownfieldChange.currentStatus === 'active'
+    && brownfield.brownfieldChange.contractErrors.length === 0
+    && !brownfield.brownfieldChange.wideningRequested && amendedHash)) {
+    throw transitionError('amendment_not_allowed',
+      'Only an in-progress, owner-approved bounded CHANGE without terminal execution evidence can be amended. Retain proof and use formal review for a different posture.',
+      [String(normalizedPlan || ''), '.work/state.json']);
+  }
+  if (amend) assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir);
+  if (amend && amendedHash === originalApprovalHash) {
+    throw transitionError('amendment_not_needed', 'CHANGE.md still matches its approved bytes; do not reset execution.', [normalizedPlan]);
+  }
   const explicitOwnerApproval = normalizedTarget === 'approve'
     && approved === true
     && authority === 'owner'
@@ -366,11 +496,18 @@ export function transitionWorkflowState(workDir, {
   if (explicitOwnerApproval && !approvedPlanSha256) {
     throw transitionError('approval_plan_unreadable', 'Owner approval requires a readable regular PLAN artifact.', [String(normalizedPlan || '')]);
   }
+  const latestAmendment = Array.isArray(workflow.amendments) ? workflow.amendments.at(-1) : null;
+  if (explicitOwnerApproval && latestAmendment && !latestAmendment.approved_sha256
+    && approvalRef === latestAmendment.previous_approval_ref) {
+    throw transitionError('fresh_approval_ref_required', 'An amended CHANGE needs a fresh owner approval reference.', [normalizedPlan]);
+  }
   const durableOwnerApproval = normalizedTarget === 'execute' && normalizedPlan
     ? hasDurableWorkflowApproval(workDir, normalizedPlan, state)
     : false;
   const validatedPlanSha256 = explicitOwnerApproval
     ? approvedPlanSha256
+    : amend
+      ? amendedHash
     : durableOwnerApproval
       ? workflow.plan.approved_sha256
       : null;
@@ -384,9 +521,8 @@ export function transitionWorkflowState(workDir, {
   if (approvalRef) next.workflow.approval_ref = approvalRef;
 
   const effectiveTarget = normalizedTarget === 'next' ? 'audit' : normalizedTarget;
-  const currentState = workflow.current_state || state.current_state || 'plan';
   const allowedPredecessors = {
-    plan: ['plan', 'fix_gaps', 'blocked', 'ask_user'],
+    plan: amend ? interruptedExecutionStates : ['plan', 'fix_gaps', 'blocked', 'ask_user'],
     approve: ['plan'],
     execute: ['plan', 'execute'],
     verify: ['execute', 'verify'],
@@ -403,12 +539,43 @@ export function transitionWorkflowState(workDir, {
     next.workflow.plan.approved_sha256 = approvedPlanSha256;
     next.workflow.execution.status = 'not_started';
     next.workflow.current_state = 'plan';
+    if (latestAmendment && !latestAmendment.approved_sha256) {
+      next.workflow.amendments = [
+        ...workflow.amendments.slice(0, -1),
+        { ...latestAmendment, approved_sha256: approvedPlanSha256, approval_ref: approvalRef, approved_at: now.toISOString() },
+      ];
+    }
   } else if (effectiveTarget === 'plan') {
+    if (amend) {
+      next.workflow.amendments = [
+        ...(Array.isArray(workflow.amendments) ? workflow.amendments : []),
+        {
+          plan_identity: normalizedPlan,
+          previous_approval_sha256: originalApprovalHash,
+          amended_plan_sha256: amendedHash,
+          previous_approval_ref: workflow.approval_ref,
+          previous_execution_status: workflow.execution.status,
+          previous_workflow_state: currentState,
+          previous_workflow_status: workflow.status || 'active',
+          previous_blocker_reason: workflow.reason || null,
+          previous_human_gate: workflow.human_gate || null,
+          reason: String(reason).trim(),
+          amended_at: now.toISOString(),
+        },
+      ];
+      // The owner has explicitly replaced the interrupted posture with fresh
+      // planning. Keep its reason/gate in the amendment receipt, then clear
+      // stale blocked/ask_user flags without authorizing execution.
+      next.workflow.status = 'active';
+      delete next.workflow.reason;
+      delete next.workflow.human_gate;
+      next.status = 'active';
+    }
     next.workflow.plan.approved = false;
     delete next.workflow.plan.approved_sha256;
     next.workflow.execution.status = 'not_started';
     next.workflow.current_state = 'plan';
-    if (repairBrownfieldApproval) next.workflow.approval_ref = null;
+    next.workflow.approval_ref = null;
   } else if (effectiveTarget === 'execute') {
     if (!explicitOwnerApproval && !durableOwnerApproval) {
       throw transitionError('not_approved', 'The plan artifact is not approved; approve the plan before execution.', [normalizedPlan || '.work/state.json']);
@@ -469,6 +636,9 @@ export function transitionWorkflowState(workDir, {
     throw transitionError('stale_plan', 'The approved PLAN changed while the transition was being validated.', [String(normalizedPlan)]);
   }
   if (typeof preWriteGuard === 'function') preWriteGuard();
+  // Reconcile current-chain proof again at the mutation boundary. Another
+  // process may have written a terminal VERIFICATION since initial validation.
+  if (amend) assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir);
   if (JSON.stringify(beforeComparable) === JSON.stringify(nextComparable)) {
     return { status: 'replayed', changed: false, state };
   }
@@ -1888,11 +2058,84 @@ function parseCheckpointFrontmatter(content, errors) {
   return { frontmatter, body: content.slice(end + 5) };
 }
 
-function extractCheckpointSections(content, sectionNames, errors, label = 'checkpoint') {
+// Checkpoint tags are Markdown block delimiters, not arbitrary XML in prose.
+// Only whole-line delimiters (or a whole compact section) are structural. Keep
+// unknown historical wrappers in the tree so their children cannot impersonate
+// the canonical top-level sections, without imposing a new wrapper vocabulary.
+function parseCheckpointBlocks(content, errors) {
+  const roots = [];
+  const stack = [];
+  let fence = null;
+  let offset = 0;
+  for (const line of content.split('\n')) {
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (fenceMatch && fenceMatch[1][0] === fence.character
+        && fenceMatch[1].length >= fence.length && !fenceMatch[2].trim()) fence = null;
+    } else if (fenceMatch && (fenceMatch[1][0] !== '`' || !fenceMatch[2].includes('`'))) {
+      fence = { character: fenceMatch[1][0], length: fenceMatch[1].length };
+    } else {
+      const compact = line.match(/^ {0,3}<([A-Za-z_][A-Za-z0-9_.:-]*)(?:\s+[^<>]*)?>(.*)<\/\1>\s*$/);
+      const opening = line.match(/^ {0,3}<([A-Za-z_][A-Za-z0-9_.:-]*)(?:\s+[^<>]*)?>\s*$/);
+      const closing = line.match(/^ {0,3}<\/([A-Za-z_][A-Za-z0-9_.:-]*)>\s*$/);
+      if (compact || opening) {
+        const name = (compact || opening)[1];
+        const node = { name, children: [], compactContent: compact ? compact[2] : null, start: offset + line.length + 1, end: null, closed: Boolean(compact) };
+        (stack.length ? stack[stack.length - 1].children : roots).push(node);
+        if (!compact) stack.push(node);
+      } else if (closing) {
+        const node = stack[stack.length - 1];
+        if (!node || node.name !== closing[1]) {
+          checkpointError(errors, 'malformed checkpoint section closing delimiter');
+        } else {
+          node.end = offset;
+          node.closed = true;
+          stack.pop();
+        }
+      }
+    }
+    offset += line.length + 1;
+  }
+  if (stack.length) checkpointError(errors, 'unclosed checkpoint section');
+  return roots;
+}
+
+// A fully compact judgment is the existing four-child layout written on one
+// line. Read its adjacent complete child blocks without interpreting inline
+// tags in a child's prose. Backtick spans keep literal closing tags inert.
+function parseCompactCheckpointJudgment(content, errors) {
+  const visible = content.replace(/(?<!`)(`+)(?!`)([\s\S]*?)(?<!`)\1(?!`)/g, (span) => ' '.repeat(span.length));
+  const children = [];
+  let cursor = 0;
+  while (visible.slice(cursor).trim()) {
+    cursor += visible.slice(cursor).match(/^\s*/)[0].length;
+    const opening = visible.slice(cursor).match(/^<([A-Za-z_][A-Za-z0-9_.:-]*)(?:\s+[^<>]*)?>/);
+    if (!opening) {
+      checkpointError(errors, 'malformed compact checkpoint judgment');
+      break;
+    }
+    const start = cursor + opening[0].length;
+    const delimiter = `</${opening[1]}>`;
+    let closing = visible.indexOf(delimiter, start);
+    while (closing !== -1) {
+      const remainder = visible.slice(closing + delimiter.length).trimStart();
+      if (!remainder || /^<[A-Za-z_][A-Za-z0-9_.:-]*(?:\s+[^<>]*)?>/.test(remainder)) break;
+      closing = visible.indexOf(delimiter, closing + delimiter.length);
+    }
+    if (closing === -1) {
+      checkpointError(errors, 'unclosed compact checkpoint judgment section');
+      break;
+    }
+    children.push({ name: opening[1], children: [], compactContent: content.slice(start, closing), closed: true });
+    cursor = closing + delimiter.length;
+  }
+  return children;
+}
+
+function extractCheckpointSections(blocks, content, sectionNames, errors, label = 'checkpoint') {
   const sections = {};
   for (const name of sectionNames) {
-    const matcher = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'g');
-    const matches = [...content.matchAll(matcher)];
+    const matches = blocks.filter((block) => block.name === name && block.closed);
     if (matches.length === 0) {
       checkpointError(errors, `missing ${label} section: ${name}`);
       continue;
@@ -1901,7 +2144,10 @@ function extractCheckpointSections(content, sectionNames, errors, label = 'check
       checkpointError(errors, `duplicate ${label} section: ${name}`);
       continue;
     }
-    sections[name] = matches[0][1].trim();
+    sections[name] = (matches[0].compactContent ?? content.slice(matches[0].start, matches[0].end)).trim();
+    if (matches[0].children.some((child) => sectionNames.includes(child.name) || child.name === 'judgment')) {
+      checkpointError(errors, `invalid nested ${label} section: ${name}`);
+    }
   }
   return sections;
 }
@@ -1935,13 +2181,18 @@ export function readContinuityCheckpoint(planningDir) {
 
   const errors = [];
   const { frontmatter, body } = parseCheckpointFrontmatter(content, errors);
-  const sections = extractCheckpointSections(body, CHECKPOINT_REQUIRED_SECTIONS, errors);
-  const judgmentMatches = [...body.matchAll(/<judgment>([\s\S]*?)<\/judgment>/g)];
+  const blocks = parseCheckpointBlocks(body, errors);
+  const sections = extractCheckpointSections(blocks, body, CHECKPOINT_REQUIRED_SECTIONS, errors);
+  const judgmentMatches = blocks.filter((block) => block.name === 'judgment' && block.closed);
   let judgment = null;
   if (judgmentMatches.length > 1) {
     checkpointError(errors, 'duplicate checkpoint judgment block');
   } else if (judgmentMatches.length === 1) {
-    judgment = extractCheckpointSections(judgmentMatches[0][1], CHECKPOINT_JUDGMENT_SECTIONS, errors, 'checkpoint judgment');
+    const block = judgmentMatches[0];
+    const children = block.compactContent === null
+      ? block.children
+      : parseCompactCheckpointJudgment(block.compactContent, errors);
+    judgment = extractCheckpointSections(children, body, CHECKPOINT_JUDGMENT_SECTIONS, errors, 'checkpoint judgment');
   }
 
   return {
@@ -1954,7 +2205,7 @@ export function readContinuityCheckpoint(planningDir) {
   };
 }
 
-export function inspectWorkContext(cwd = process.cwd()) {
+export function inspectWorkContext(cwd = process.cwd(), { includeLifecycleObservation = false } = {}) {
   const paths = getWorkPaths(cwd);
   const state = readJsonIfExists(paths.state);
   const questions = readOpenQuestions(paths.workDir);
@@ -1978,7 +2229,7 @@ export function inspectWorkContext(cwd = process.cwd()) {
     phases: scanPhaseEvidence(planningDir, lifecycle),
     state_dir_name: stateDirName,
   };
-  return {
+  const context = {
     paths,
     exists: existsSync(paths.workDir),
     has_goal: existsSync(paths.goal),
@@ -1998,6 +2249,19 @@ export function inspectWorkContext(cwd = process.cwd()) {
     decisions: listMarkdownFiles(join(paths.workDir, 'decisions')),
     dogfood: listMarkdownFiles(join(paths.workDir, 'dogfood')),
   };
+  // Opt-in, invocation-local reuse for read-only consumers. Keep the entire
+  // evaluated lifecycle off the enumerable/public JSON context surface.
+  if (includeLifecycleObservation) {
+    Object.defineProperty(context, '_lifecycleObservation', {
+      value: Object.freeze({
+        workspaceRoot: resolve(paths.root),
+        planningDir: resolve(planningDir),
+        lifecycle,
+      }),
+      enumerable: false,
+    });
+  }
+  return context;
 }
 
 function listMarkdownFiles(dir) {
@@ -2007,7 +2271,33 @@ function listMarkdownFiles(dir) {
     .map((name) => normalizeSlashes(join(basename(dir), name)));
 }
 
-export function resolveActiveMilestoneDir(workDir) {
+// A saved milestone is a separate authority. Never infer which of two simultaneously
+// active authorities a bare phase number means from their folder names.
+function milestoneStatusIsActive(content) {
+  const text = String(content || '').replace(/\r\n/g, '\n');
+  if (text.startsWith('---\n')) {
+    const end = text.indexOf('\n---', 4);
+    if (end === -1) return false;
+    return /^status:\s*in_progress\b/im.test(text.slice(4, end));
+  }
+  // Match the existing no-frontmatter milestone convention, including a
+  // heading above status; only closed frontmatter has distinct body authority.
+  return /^status:\s*in_progress\b/im.test(text);
+}
+
+function milestoneScopeSlug(value) {
+  const selector = String(value || '').trim().replace(/\\/g, '/').replace(/^\.work\//, '');
+  return selector.match(/^milestones\/([^/]+)\/phases\/[^/]+(?:\/[^/]+)?$/)?.[1] || null;
+}
+
+function milestoneAuthorityError(code, message, names) {
+  const error = new Error(message);
+  error.code = code;
+  error.choices = names.map((name) => `.work/milestones/${name}`);
+  return error;
+}
+
+export function resolveActiveMilestoneDir(workDir, { phaseSelector = null, planSelector = null, rootLifecycle = null } = {}) {
   const pluralDir = join(workDir, 'milestones');
   if (existsSync(pluralDir)) {
     let candidates = [];
@@ -2029,8 +2319,64 @@ export function resolveActiveMilestoneDir(workDir) {
     if (candidates.length > 0) {
       const inProgress = candidates.filter((name) => {
         const text = candidateText.get(name) || '';
-        return /^status:\s*in_progress\b/im.test(text);
+        return milestoneStatusIsActive(text);
       });
+      const selectedNames = [...new Set([phaseSelector, planSelector].map(milestoneScopeSlug).filter(Boolean))];
+      if (selectedNames.length > 1) {
+        throw milestoneAuthorityError('conflicting_milestone_selectors',
+          'Phase and PLAN selectors name different Workspine milestones.', selectedNames);
+      }
+      if (selectedNames.length === 1) {
+        const selected = selectedNames[0];
+        if (!candidates.includes(selected) || (inProgress.length > 0 && !inProgress.includes(selected))) {
+          throw milestoneAuthorityError('inactive_milestone_selector',
+            `Selected Workspine milestone ${selected} is absent or not active.`, candidates);
+        }
+        return join(pluralDir, selected);
+      }
+      const exactStandardScope = [phaseSelector, planSelector].some((value) =>
+        /^(?:phases\/|ROADMAP\.md#phase-)/.test(String(value || '').replace(/\\/g, '/')));
+      if (exactStandardScope && inProgress.length > 1) return join(workDir, 'milestone');
+      if (inProgress.length > 1 && rootLifecycle && /^\d+(?:\.\d+)*[a-z]?$/i.test(String(phaseSelector || '').trim())) {
+        // A bare phase token identifies a *phase*, not a particular native
+        // milestone. Examine the current-plan identities across every active
+        // milestone plus the already-observed root. The existing single-
+        // milestone classifier remains the source of truth after selection.
+        const token = normalizePhaseToken(phaseSelector);
+        const standard = resolveStandardPhaseSelection({ lifecycle: rootLifecycle, selector: phaseSelector });
+        const nativeMatchEntries = inProgress.flatMap((name) => {
+          const phasesDir = join(pluralDir, name, 'phases');
+          const artifacts = partitionPlanChains(
+            collectNativePhaseArtifacts({ workspaceRoot: resolve(workDir, '..'), phasesDir }),
+            { companionKinds: ['execute', 'verification'] },
+          ).currentArtifacts;
+          return artifacts
+            .filter((artifact) => artifact.kind === 'plan' && artifact.phaseToken === token)
+            .map((artifact) => ({ name, identity: `milestones/${name}/phases/${artifact.dir}` }));
+        });
+        if (standard.status === 'ambiguous') {
+          const failure = milestoneAuthorityError('ambiguous_phase_selector',
+            `Root phase ${token} has multiple current identities; use an exact emitted phase identity.`, []);
+          failure.choices = standard.choices;
+          throw failure;
+        }
+        const rootMatch = standard.status === 'selected';
+        if (rootMatch && nativeMatchEntries.length === 0) return join(workDir, 'milestone');
+        const uniqueNative = [...new Set(nativeMatchEntries.map((entry) => entry.identity))];
+        if (!rootMatch && uniqueNative.length === 1) return join(pluralDir, nativeMatchEntries[0].name);
+        if (!rootMatch && uniqueNative.length === 0) return join(workDir, 'milestone');
+        const failure = milestoneAuthorityError('multiple_active_milestones',
+          `Phase ${token} has multiple possible current authorities; choose one emitted phase identity.`, []);
+        failure.choices = [
+          ...(rootMatch ? [standard.candidate.identity] : []),
+          ...uniqueNative,
+        ];
+        throw failure;
+      }
+      if (inProgress.length > 1) {
+        throw milestoneAuthorityError('multiple_active_milestones',
+          `Multiple Workspine milestones are in progress (${inProgress.join(', ')}); choose an emitted milestones/<slug>/phases/<phase> identity.`, inProgress);
+      }
       const pool = inProgress.length > 0 ? inProgress : candidates;
       return join(pluralDir, pool.sort().at(-1));
     }
@@ -2038,8 +2384,8 @@ export function resolveActiveMilestoneDir(workDir) {
   return join(workDir, 'milestone');
 }
 
-export function inspectWorkMilestone(workDir) {
-  const milestoneDir = resolveActiveMilestoneDir(workDir);
+export function inspectWorkMilestone(workDir, { selectedMilestoneDir = null } = {}) {
+  const milestoneDir = selectedMilestoneDir || resolveActiveMilestoneDir(workDir);
   const roadmapPath = join(milestoneDir, 'ROADMAP.md');
   const auditPath = join(milestoneDir, 'AUDIT.md');
   const milestonePath = join(milestoneDir, 'MILESTONE.md');

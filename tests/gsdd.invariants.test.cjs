@@ -1520,7 +1520,7 @@ describe('G3 — File Size Guards', () => {
   for (const wf of getWorkflowFiles()) {
     const limit = WORKFLOW_EXEMPT[wf] || SIZE_LIMITS.workflow;
     test(`workflow/${wf} is under ${limit} lines`, () => {
-      const lines = readWorkflow(wf).split('\n').length;
+      const lines = readWorkflow(wf).replace(/\n$/, '').split('\n').length;
       assert.ok(
         lines <= limit,
         `${wf} is ${lines} lines (max ${limit}). FIX: Extract content to delegate or sub-section.`

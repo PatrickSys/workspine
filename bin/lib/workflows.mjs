@@ -19,7 +19,7 @@ export const WORKFLOWS = [
   defineWorkflow({ name: 'work-new-milestone', workflow: 'new-milestone.md', description: 'Start the next milestone of a project that already has SPEC and ROADMAP and a completed milestone in MILESTONES' }),
   defineWorkflow({ name: 'work-quick', workflow: 'quick.md', description: 'Finish one small self-contained task with at most 3 tasks in one sitting and no owner decision that must survive a break; otherwise, or if an owner-approved plan is needed, use work-plan' }),
   defineWorkflow({ name: 'work-pause', workflow: 'pause.md', description: 'Pause work - save session context for seamless resumption' }),
-  defineWorkflow({ name: 'work-resume', workflow: 'resume.md', description: 'Resume work - restore context and route to next action' }),
+  defineWorkflow({ name: 'work-resume', workflow: 'resume.md', description: 'Resume after a session break - reconcile saved context and current repo truth before continuing edits' }),
   defineWorkflow({ name: 'work-progress', workflow: 'progress.md', description: 'Check progress - show project status and route to next action', mutatesArtifacts: false }),
 ];
 
