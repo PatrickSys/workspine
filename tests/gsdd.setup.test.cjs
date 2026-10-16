@@ -34,6 +34,47 @@ function runInstalled(entryPath, cwd, args, env = {}) {
   });
 }
 
+function assertRootGuidance(root) {
+  const agentsPath = path.join(root, 'AGENTS.md');
+  assert.ok(fs.existsSync(agentsPath), 'normal setup must expose Workspine in root AGENTS.md');
+  const guidance = fs.readFileSync(agentsPath, 'utf8');
+  assert.match(guidance, /\.agents\/skills\/work-\*\/SKILL\.md/);
+  assert.match(guidance, /\$work-plan/);
+  assert.match(guidance, /\/work-plan/);
+  assert.match(guidance, /owner approval/);
+  for (const workflow of ['work-plan', 'work-execute', 'work-verify', 'work-progress']) {
+    assert.ok(guidance.includes(workflow), `root guidance must route to ${workflow}`);
+    assert.ok(fs.existsSync(path.join(root, '.agents', 'skills', workflow, 'SKILL.md')));
+  }
+  assert.strictEqual((guidance.match(/<!-- BEGIN GSDD -->/g) || []).length, 1);
+  return guidance;
+}
+
+const BEGIN = '<!-- BEGIN GSDD -->';
+const END = '<!-- END GSDD -->';
+const MALFORMED_ROOT_BLOCKS = [
+  ['duplicate begin', `${BEGIN}\nOwner policy\n${BEGIN}\nOld guide\n${END}\n`],
+  ['duplicate end', `${BEGIN}\nOld guide\n${END}\nOwner policy\n${END}\n`],
+  ['nested pair', `${BEGIN}\nOwner policy\n${BEGIN}\nOld guide\n${END}\n${END}\n`],
+  ['two pairs', `${BEGIN}\nFirst\n${END}\nOwner policy\n${BEGIN}\nSecond\n${END}\n`],
+  ['reversed pair', `${END}\nOwner policy\n${BEGIN}\n`],
+  ['inline begin', `Owner policy ${BEGIN}\nOld guide\n${END}\n`],
+  ['inline end', `${BEGIN}\nOld guide\n${END} Owner policy\n`],
+  ['indented marker', `  ${BEGIN}\nOld guide\n${END}\n`],
+  ['same line pair', `${BEGIN} Owner policy ${END}\n`],
+];
+
+async function createLegacyPortableFixture(root, run = (args) => runCliAsMain(root, args)) {
+  const seeded = await run(['setup', '--no-agents', '-y']);
+  assert.strictEqual(seeded.exitCode ?? seeded.status, 0, seeded.output || seeded.stderr);
+  fs.renameSync(path.join(root, '.work'), path.join(root, '.planning'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, '.planning', 'generation-manifest.json'), 'utf8'));
+  assert.ok(manifest.adapterFiles['.agents/skills/work-plan/SKILL.md']);
+  assert.ok(!Object.hasOwn(manifest.adapterFiles, 'AGENTS.md'));
+  writeFile(path.join(root, '.planning', 'consumer.bin'), Buffer.from([0, 255, 13, 10, 128]));
+  writeFile(path.join(root, 'AGENTS.md'), '# Owner rules\r\n\r\nKeep all bytes.  \r\n');
+}
+
 function installPackedEntry() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gsdd-setup-packed-'));
   const pack = path.join(root, 'pack');
@@ -42,6 +83,11 @@ function installPackedEntry() {
   fs.mkdirSync(install, { recursive: true });
   const packed = JSON.parse(execFileSync(NPM, [...NPM_PREFIX, 'pack', '--ignore-scripts', '--offline', '--json', '--pack-destination', pack], { cwd: ROOT, encoding: 'utf8' }));
   assert.strictEqual(packed.length, 1);
+  const shipped = new Set(packed[0].files.map((file) => file.path));
+  for (const required of ['bin/lib/setup.mjs', 'bin/lib/manifest.mjs', 'bin/lib/rendering.mjs', 'bin/adapters/agents.mjs', 'distilled/templates/agents.block.md', 'distilled/workflows/plan.md']) {
+    assert.ok(shipped.has(required), `package missing ${required}`);
+  }
+  assert.ok(![...shipped].some((file) => file.startsWith('.factory-038-smoke/')), 'local evidence must not ship');
   const tarball = path.join(pack, packed[0].filename);
   writeFile(path.join(install, 'package.json'), '{"name":"packed-setup-consumer","private":true}\n');
   execFileSync(NPM, [...NPM_PREFIX, 'install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', tarball], { cwd: install, stdio: 'pipe' });
@@ -114,12 +160,208 @@ describe('gsdd setup facade', () => {
     assert.strictEqual(first.exitCode, 0, first.output);
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'config.json')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-quick', 'SKILL.md')));
-    assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')), 'generic governance is opt-in');
-    const before = fs.readFileSync(path.join(tmpDir, '.work', 'generation-manifest.json'));
+    assertRootGuidance(tmpDir);
+    const before = snapshotTree(tmpDir);
     const second = await runCliAsMain(tmpDir, ['setup', '-y']);
     assert.strictEqual(second.exitCode, 0, second.output);
     assert.match(second.output, /state already exists/);
-    assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'generation-manifest.json')), before);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('setup appends guidance without changing consumer governance bytes and update preserves it', async () => {
+    const original = '# Team rules\r\n\r\n\r\nKeep owner approval.  \r\nUse our build command.';
+    const agentsPath = path.join(tmpDir, 'AGENTS.md');
+    fs.writeFileSync(agentsPath, original);
+    const first = await runCliAsMain(tmpDir, ['setup', '--agent', 'codex', '-y']);
+    assert.strictEqual(first.exitCode, 0, first.output);
+    const guidance = assertRootGuidance(tmpDir);
+    assert.ok(guidance.startsWith(original), 'consumer content must remain byte-for-byte at the start');
+    fs.appendFileSync(agentsPath, '\nTeam addition after setup.\r\n');
+    const beforeUpdate = fs.readFileSync(agentsPath);
+    const update = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(update.exitCode, 0, update.output);
+    assert.deepStrictEqual(fs.readFileSync(agentsPath), beforeUpdate);
+    assertRootGuidance(tmpDir);
+  });
+
+  for (const [label, open, close, example] of [
+    ['backticks', '```markdown', '```', `${BEGIN}\nTeam-authored example\n${END}`],
+    ['tildes', '~~~markdown', '~~~', `${BEGIN}\nTeam-authored example\n${END}`],
+    ['long indented fence', '   ````markdown', '   `````', `${BEGIN}\n~~~\n\x60\x60\x60\nTeam-authored example\n${END}`],
+    ['partial example', '~~~', '~~~', `Example ${BEGIN}\n${END}`],
+  ]) {
+    test(`fenced AGENTS ${label} example remains byte-identical through setup and update`, async () => {
+      const original = Buffer.from(`# Team rules\r\n\r\n${open}\r\n${example.replace(/\n/g, '\r\n')}\r\n${close}\r\nKeep this line.  \r\n`);
+      const agentsPath = path.join(tmpDir, 'AGENTS.md');
+      fs.writeFileSync(agentsPath, original);
+      const result = await runCliAsMain(tmpDir, ['setup', '-y']);
+      const after = fs.readFileSync(agentsPath);
+      assert.deepStrictEqual(after.subarray(0, original.length), original, 'setup must preserve every preexisting AGENTS byte');
+      assert.strictEqual(result.exitCode, 0, result.output);
+      const { findBoundedBlock } = await import(pathToFileURL(path.join(ROOT, 'bin/lib/rendering.mjs')).href);
+      const range = findBoundedBlock(after.toString('utf8'));
+      assert.ok(range.start >= original.length, 'the genuine managed block must be outside the example');
+      assert.match(after.subarray(original.length).toString('utf8'), /## GSDD Governance \(Generated\)/);
+      const update = await runCliAsMain(tmpDir, ['update']);
+      assert.strictEqual(update.exitCode, 0, update.output);
+      assert.deepStrictEqual(fs.readFileSync(agentsPath), after);
+    });
+  }
+
+  test('bounded marker detection keeps exact ranges and refuses malformed markers outside examples', async () => {
+    const { findBoundedBlock, upsertBoundedBlock } = await import(pathToFileURL(path.join(ROOT, 'bin/lib/rendering.mjs')).href);
+    const prefix = `\x60\x60\x60markdown\n${BEGIN}\nExample\n${END}\n\x60\x60\x60\n`;
+    const managed = `${BEGIN}\r\nOld guide\r\n${END}`;
+    const suffix = '\r\nKeep after.  \r\n';
+    assert.strictEqual(findBoundedBlock(prefix), null);
+    assert.deepStrictEqual(findBoundedBlock(prefix + managed + suffix), { start: prefix.length, end: prefix.length + managed.length });
+    assert.strictEqual(upsertBoundedBlock(prefix + managed + suffix, 'New guide'), `${prefix}${BEGIN}\nNew guide\n${END}${suffix}`);
+    const inline = 'Inline ```example``` and ~~~example~~~.\n```inline code```\n';
+    assert.deepStrictEqual(findBoundedBlock(inline + managed), { start: inline.length, end: inline.length + managed.length });
+    for (const [, malformed] of MALFORMED_ROOT_BLOCKS) {
+      assert.throws(() => findBoundedBlock(prefix + malformed), /malformed GSDD markers/);
+    }
+  });
+
+  test('unclosed AGENTS fences refuse setup before any consumer bytes change', async () => {
+    for (const [index, open, falseClose] of [
+      [0, '```markdown', '~~~'],
+      [1, '~~~~markdown', '~~~'],
+      [2, '```markdown', '``` trailing text'],
+    ]) {
+      const root = path.join(tmpDir, `unclosed-${index}`);
+      writeFile(path.join(root, 'AGENTS.md'), `# Team rules\r\n${open}\r\n${falseClose}\r\n${BEGIN}\r\nKeep this example.\r\n${END}\r\n`);
+      const before = snapshotTree(root);
+      const result = await runCliAsMain(root, ['setup', '-y']);
+      assert.deepStrictEqual(snapshotTree(root), before);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.match(result.output, /unclosed Markdown fence/);
+    }
+  });
+
+  test('project --no-agents preserves root governance while still installing portable and requested native skills', async () => {
+    for (const [index, flags] of [[], ['--agent', 'codex'], ['--all'], ['--agent', 'generic']].entries()) {
+      const root = path.join(tmpDir, `opt-out-${index}`);
+      fs.mkdirSync(root);
+      const original = '# Consumer-only rules\r\nKeep exactly.\r\n';
+      if (index % 2) fs.writeFileSync(path.join(root, 'AGENTS.md'), original);
+      const result = await runCliAsMain(root, ['setup', '-y', '--no-agents', ...flags]);
+      assert.strictEqual(result.exitCode, 0, result.output);
+      assert.ok(fs.existsSync(path.join(root, '.agents/skills/work-plan/SKILL.md')));
+      if (index % 2) assert.strictEqual(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), original);
+      else assert.ok(!fs.existsSync(path.join(root, 'AGENTS.md')));
+      if (index === 1 || index === 2) assert.ok(fs.existsSync(path.join(root, '.codex/agents')));
+    }
+    const before = snapshotTree(tmpDir);
+    const global = await runCliAsMain(tmpDir, ['setup', '--global', '--agent', 'codex', '--no-agents', '-y']);
+    assert.strictEqual(global.exitCode, 1);
+    assert.match(global.output, /--no-agents applies only to project setup/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before);
+  });
+
+  test('setup refuses partial root markers and non-file targets before writing generated surfaces', async () => {
+    for (const [index, content] of ['<!-- BEGIN GSDD -->\nunfinished', '<!-- END GSDD -->\norphan', null].entries()) {
+      const root = path.join(tmpDir, `unsafe-root-${index}`);
+      fs.mkdirSync(root);
+      const agentsPath = path.join(root, 'AGENTS.md');
+      if (content === null) fs.mkdirSync(agentsPath);
+      else fs.writeFileSync(agentsPath, content);
+      const before = snapshotTree(root);
+      const result = await runCliAsMain(root, ['setup', '-y']);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.match(result.output, /Refusing adapter update/);
+      assert.deepStrictEqual(snapshotTree(root), before);
+    }
+  });
+
+  for (const [label, malformed] of MALFORMED_ROOT_BLOCKS) {
+    test(`malformed root ${label} refuses fresh setup, init and owned update without writes`, async () => {
+      for (const mode of ['setup', 'init', 'update']) {
+        const root = path.join(tmpDir, mode);
+        fs.mkdirSync(root);
+        if (mode === 'update') {
+          const seeded = await runCliAsMain(root, ['setup', '-y']);
+          assert.strictEqual(seeded.exitCode, 0, seeded.output);
+        }
+        const agentsPath = path.join(root, 'AGENTS.md');
+        const original = Buffer.from(`# Owner rules\r\n\r\n${malformed}Keep this policy.  \r\n`);
+        fs.writeFileSync(agentsPath, original);
+        writeFile(path.join(root, 'consumer.bin'), Buffer.from([0, 255, 128]));
+        const before = snapshotTree(root);
+        const args = mode === 'setup' ? ['setup', '-y']
+          : mode === 'init' ? ['init', '--auto', '--tools', 'agents'] : ['update'];
+        const result = await runCliAsMain(root, args);
+        // Assert byte preservation first: a nonzero exit after writes is also unsafe.
+        assert.deepStrictEqual(fs.readFileSync(agentsPath), original, `${mode}: ${label} changed owner policy`);
+        assert.deepStrictEqual(snapshotTree(root), before, `${mode}: ${label} wrote repository bytes`);
+        assert.strictEqual(result.exitCode, 1, result.output);
+        assert.match(result.output, /Refusing adapter update/);
+      }
+    });
+  }
+
+  test('a single standalone root pair preserves surrounding CRLF bytes through setup and owned update', async () => {
+    const prefix = '# Owner rules\r\nKeep before.  \r\n';
+    const suffix = '\r\n\r\nKeep after.  \r\n';
+    const agentsPath = path.join(tmpDir, 'AGENTS.md');
+    fs.writeFileSync(agentsPath, `${prefix}${BEGIN}\r\nOld guide\r\n${END}${suffix}`);
+    const setup = await runCliAsMain(tmpDir, ['setup', '-y']);
+    assert.strictEqual(setup.exitCode, 0, setup.output);
+    let guidance = assertRootGuidance(tmpDir);
+    assert.ok(guidance.startsWith(prefix));
+    assert.ok(guidance.endsWith(suffix));
+    fs.writeFileSync(agentsPath, guidance.replace('## GSDD Governance (Generated)', '## Outdated managed guide'));
+    const update = await runCliAsMain(tmpDir, ['update']);
+    assert.strictEqual(update.exitCode, 0, update.output);
+    guidance = assertRootGuidance(tmpDir);
+    assert.ok(guidance.startsWith(prefix));
+    assert.ok(guidance.endsWith(suffix));
+    assert.match(guidance, /## GSDD Governance \(Generated\)/);
+  });
+
+  test('owned legacy root adapter aliases refuse malformed markers before update writes', async () => {
+    for (const runtime of ['cursor', 'copilot', 'gemini']) {
+      const root = path.join(tmpDir, runtime);
+      fs.mkdirSync(root);
+      const seeded = await runCliAsMain(root, ['init', '--auto', '--tools', runtime]);
+      assert.strictEqual(seeded.exitCode, 0, seeded.output);
+      writeFile(path.join(root, 'AGENTS.md'), `${BEGIN}\nOwner policy\n${BEGIN}\nOld guide\n${END}\n`);
+      const before = snapshotTree(root);
+      const refused = await runCliAsMain(root, ['update']);
+      assert.strictEqual(refused.exitCode, 1, refused.output);
+      assert.deepStrictEqual(snapshotTree(root), before, `${runtime} update wrote before refusing malformed root markers`);
+    }
+  });
+
+  test('setup migration refuses unowned root guidance before moving a valid portable generation manifest', async () => {
+    await createLegacyPortableFixture(tmpDir);
+    const before = snapshotTree(tmpDir);
+    const result = await runCliAsMain(tmpDir, ['setup', '--migrate', '-y']);
+    assert.strictEqual(result.exitCode, 1, result.output);
+    assert.match(result.output, /AGENTS\.md is not generation-manifest-owned/);
+    assert.deepStrictEqual(snapshotTree(tmpDir), before, 'refusal must preserve .planning, root policy and every repository byte');
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.work')));
+    const optedOut = await runCliAsMain(tmpDir, ['setup', '--migrate', '--no-agents', '-y']);
+    assert.strictEqual(optedOut.exitCode, 0, optedOut.output);
+    assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'migration-receipt.json')));
+    assert.ok(!fs.existsSync(path.join(tmpDir, '.planning')));
+    assert.strictEqual(fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf8'), '# Owner rules\r\n\r\nKeep all bytes.  \r\n');
+  });
+
+  test('setup migration checks all selected portable and native collisions before renaming legacy state', async () => {
+    for (const [index, relativePath] of ['.agents/skills/work-plan/SKILL.md', '.codex/agents/work-plan-checker.toml'].entries()) {
+      const root = path.join(tmpDir, `legacy-collision-${index}`);
+      writeFile(path.join(root, '.planning', 'config.json'), '{"initVersion":"v1.1"}\n');
+      writeFile(path.join(root, '.planning', 'consumer.bin'), Buffer.from([0, 255, 128]));
+      writeFile(path.join(root, 'AGENTS.md'), '# Consumer policy\r\nKeep exactly.\r\n');
+      writeFile(path.join(root, relativePath), 'Consumer-owned target\r\n');
+      const before = snapshotTree(root);
+      const result = await runCliAsMain(root, ['setup', '--migrate', '--agent', 'codex', '-y']);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.match(result.output, /Refusing adapter update/);
+      assert.deepStrictEqual(snapshotTree(root), before);
+      assert.ok(!fs.existsSync(path.join(root, '.work')));
+    }
   });
 
   test('dry run is zero-write and hidden --dry remains compatible', async () => {
@@ -127,6 +369,7 @@ describe('gsdd setup facade', () => {
     const result = await runCliAsMain(tmpDir, ['setup', '--dry-run']);
     assert.strictEqual(result.exitCode, 0, result.output);
     assert.match(result.output, /dry run/);
+    assert.match(result.output, /AGENTS\.md/);
     assert.deepStrictEqual(fs.readdirSync(tmpDir), before);
     const hidden = await runCliAsMain(tmpDir, ['setup', '--dry']);
     assert.strictEqual(hidden.exitCode, 0, hidden.output);
@@ -185,7 +428,7 @@ describe('gsdd setup facade', () => {
       confirmSetup: async ({ details }) => {
         consentPrompts += 1;
         assert.match(details.join(' '), /Bounded write set: \.work\//);
-        assert.match(details.join(' '), /portable selected project surfaces/);
+        assert.match(details.join(' '), /AGENTS\.md/);
         return true;
       },
     });
@@ -194,7 +437,7 @@ describe('gsdd setup facade', () => {
     assert.strictEqual(consentPrompts, 1);
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-plan', 'SKILL.md')));
     assert.ok(!fs.existsSync(path.join(tmpDir, '.codex')), 'native targets stay explicit');
-    assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')), 'root governance stays explicit');
+    assertRootGuidance(tmpDir);
     const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.work', 'config.json'), 'utf8'));
     assert.strictEqual(config.rigorProfile, 'high');
     assert.strictEqual(config.researchDepth, 'deep');
@@ -348,7 +591,7 @@ describe('gsdd setup facade', () => {
     }
   });
 
-  test('offline packed installed entry covers the setup matrix in one install', () => {
+  test('offline packed installed entry covers the setup matrix in one install', async () => {
     const packed = installPackedEntry();
     try {
       const repo = path.join(packed.root, 'repo');
@@ -356,6 +599,7 @@ describe('gsdd setup facade', () => {
       const first = runInstalled(packed.entry, repo, ['setup', '-y']);
       assert.strictEqual(first.status, 0, first.stderr || first.stdout);
       assert.ok(fs.existsSync(path.join(repo, '.agents', 'skills', 'work-quick', 'SKILL.md')));
+      assertRootGuidance(repo);
       const repoBeforeRerun = snapshotTree(repo);
       const second = runInstalled(packed.entry, repo, ['setup', '--yes']);
       assert.strictEqual(second.status, 0, second.stderr || second.stdout);
@@ -367,6 +611,44 @@ describe('gsdd setup facade', () => {
       const codex = runInstalled(packed.entry, projectCodex, ['setup', '--agent', 'codex', '--yes']);
       assert.strictEqual(codex.status, 0, codex.stderr || codex.stdout);
       assert.ok(fs.existsSync(path.join(projectCodex, '.codex', 'agents')));
+      assertRootGuidance(projectCodex);
+
+      const projectExisting = path.join(packed.root, 'project-existing');
+      fs.mkdirSync(projectExisting);
+      const original = '# Consumer governance\r\n\r\nKeep this exactly.\r\n';
+      writeFile(path.join(projectExisting, 'AGENTS.md'), original);
+      const existing = runInstalled(packed.entry, projectExisting, ['setup', '--yes']);
+      assert.strictEqual(existing.status, 0, existing.stderr || existing.stdout);
+      assert.ok(assertRootGuidance(projectExisting).startsWith(original));
+
+      for (const [index, [label, content]] of MALFORMED_ROOT_BLOCKS.entries()) {
+        const malformedRoot = path.join(packed.root, `malformed-${index}`);
+        writeFile(path.join(malformedRoot, 'AGENTS.md'), `# Owner rules\r\n${content}Keep this.\r\n`);
+        const before = snapshotTree(malformedRoot);
+        const refused = runInstalled(packed.entry, malformedRoot, ['setup', '--yes']);
+        assert.notStrictEqual(refused.status, 0, label);
+        assert.match(refused.stdout + refused.stderr, /Refusing adapter update/);
+        assert.deepStrictEqual(snapshotTree(malformedRoot), before, `installed ${label} changed consumer bytes`);
+      }
+
+      const ownedLegacy = path.join(packed.root, 'owned-legacy');
+      fs.mkdirSync(ownedLegacy);
+      const runLegacy = (args) => runInstalled(packed.entry, ownedLegacy, args);
+      await createLegacyPortableFixture(ownedLegacy, runLegacy);
+      const ownedLegacyBefore = snapshotTree(ownedLegacy);
+      const refusedLegacy = runLegacy(['setup', '--migrate', '-y']);
+      assert.notStrictEqual(refusedLegacy.status, 0);
+      assert.match(refusedLegacy.stdout + refusedLegacy.stderr, /AGENTS\.md is not generation-manifest-owned/);
+      assert.deepStrictEqual(snapshotTree(ownedLegacy), ownedLegacyBefore);
+      assert.ok(!fs.existsSync(path.join(ownedLegacy, '.work')));
+
+      const projectOptOut = path.join(packed.root, 'project-opt-out');
+      fs.mkdirSync(projectOptOut);
+      writeFile(path.join(projectOptOut, 'AGENTS.md'), original);
+      const optOut = runInstalled(packed.entry, projectOptOut, ['setup', '--no-agents', '--yes']);
+      assert.strictEqual(optOut.status, 0, optOut.stderr || optOut.stdout);
+      assert.strictEqual(fs.readFileSync(path.join(projectOptOut, 'AGENTS.md'), 'utf8'), original);
+      assert.ok(fs.existsSync(path.join(projectOptOut, '.agents/skills/work-plan/SKILL.md')));
 
       const projectAll = path.join(packed.root, 'project-all');
       fs.mkdirSync(projectAll);

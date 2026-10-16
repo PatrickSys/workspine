@@ -1306,6 +1306,17 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
   if (target === 'fix_gaps' && !['gaps_found', 'human_needed', 'blocked', 'failed', 'fail'].includes(artifactStatus)) {
     throw transitionErrorForCli('gaps_not_recorded', 'The supplied verification artifact does not record gaps or a human gate.', [artifact.relative]);
   }
+  // Carry the validated report result to persistence, and check its bytes
+  // again on both writes and replays. A path alone is not fresh evidence.
+  if (['audit', 'next', 'fix_gaps'].includes(target)) {
+    const preceding = preWriteGuard;
+    preWriteGuard = () => {
+      preceding?.();
+      if (readFileSync(artifact.path, 'utf8') !== artifactMeta.content) {
+        throw transitionErrorForCli('stale_artifact', 'Verification report changed while the transition was being validated.', [artifact.relative]);
+      }
+    };
+  }
   const warnings = [];
   if (brownfieldChain && target === 'execute') {
     const contractGuard = preWriteGuard;
@@ -1334,6 +1345,8 @@ function validateTransitionArtifact({ planningDir, target, planArg, artifactArg,
     authority: authority || planMeta?.metadata?.authority || null,
     approvalRef: authority === 'owner' ? normalizedApprovalRef || null : null,
     approvalRequested,
+    verificationStatus: ['audit', 'next'].includes(target) ? 'passed'
+      : target === 'fix_gaps' ? artifactStatus : null,
     preWriteGuard,
     warnings,
     stateLabel,
@@ -1363,7 +1376,7 @@ export function cmdLifecycleTransition(...args) {
   try {
     assertStateAuthority(state);
     if (normalizedArgs.includes('--help') || normalizedArgs[0] === 'help') {
-      console.log('Usage: lifecycle-transition <plan|approve|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--amend (owner plan only)] [--question <text>] [--json]');
+      console.log('Usage: lifecycle-transition <plan|approve|execute|verify|audit|next|fix_gaps|blocked|ask_user> --plan <path> [--artifact <path>] --authority <value> [--reason <text>] [--amend (owner plan only) | --start-new (distinct phase plan; requires --reason)] [--question <text>] [--json]');
       return;
     }
     const target = String(normalizedArgs.find((arg) => !arg.startsWith('--')) || '').toLowerCase();
@@ -1379,6 +1392,7 @@ export function cmdLifecycleTransition(...args) {
     const approvalRefProvided = normalizedArgs.includes('--approval-ref');
     const reason = flag('--reason');
     const amend = normalizedArgs.includes('--amend');
+    const startNew = normalizedArgs.includes('--start-new');
     const question = flag('--question');
     const approved = String(flag('--approved') || '').toLowerCase() === 'true' || target === 'approve';
     const approvalRequested = target === 'approve' || String(flag('--approved') || '').toLowerCase() === 'true';
@@ -1393,6 +1407,8 @@ export function cmdLifecycleTransition(...args) {
       approvalRef: validated.approvalRef,
       reason,
       amend,
+      startNew,
+      verificationStatus: validated.verificationStatus,
       question,
       approved,
       preWriteGuard: validated.preWriteGuard,

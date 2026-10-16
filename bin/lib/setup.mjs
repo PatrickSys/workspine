@@ -7,7 +7,6 @@ import { promptConfirm, promptMultiSelect } from './init-prompts.mjs';
 import { parseFlagValue } from './cli-utils.mjs';
 import { GLOBAL_AGENT_OPTIONS, validateCommandShape } from './init-runtime.mjs';
 import { resolveStateDir, stateAuthorityGate } from './state-dir.mjs';
-import { migrateLegacyState } from './state-migration.mjs';
 import { buildDefaultConfig } from './config.mjs';
 
 const PROJECT_AGENTS = new Set(['claude', 'opencode', 'codex', 'generic']);
@@ -16,7 +15,7 @@ const PROJECT_ALL = ['claude', 'opencode', 'codex', 'agents'];
 const GLOBAL_ALL = ['claude', 'opencode', 'codex', 'copilot'];
 
 function setupUsage() {
-  return 'Usage: workspine setup [-g|--global] [--agent <claude|opencode|codex|generic|copilot>] [--all] [-y|--yes] [--dry-run] [--workspace-root <path>] [--migrate]';
+  return 'Usage: workspine setup [-g|--global] [--agent <claude|opencode|codex|generic|copilot>] [--all] [--no-agents] [-y|--yes] [--dry-run] [--workspace-root <path>] [--migrate]';
 }
 
 function gitTopLevel(cwd) {
@@ -51,12 +50,12 @@ function setupRoot(rawArgs, cwd) {
   return { root: gitTopLevel(cwd) ?? resolve(cwd) };
 }
 
-function selectedProjectTools(agent, all) {
-  if (all) return [...PROJECT_ALL];
-  if (agent === 'generic') return ['agents'];
-  // `portable` is an intentionally internal init-flow selector: it satisfies the retained
-  // init --auto grammar while leaving optional root AGENTS.md governance opt-in.
-  return agent ? [agent] : ['portable'];
+function selectedProjectTools(agent, all, noAgents) {
+  const tools = all ? [...PROJECT_ALL] : (agent && agent !== 'generic' ? [agent, 'agents'] : ['agents']);
+  const selected = noAgents ? tools.filter((tool) => tool !== 'agents') : tools;
+  // The internal portable selector bypasses init's runtime wizard without
+  // selecting any native adapter. Shared skills are always generated.
+  return selected.length ? selected : ['portable'];
 }
 
 function detectGlobalTargets(roots) {
@@ -115,6 +114,7 @@ export function createCmdSetup(ctx) {
 
     const globalScope = setupArgs.includes('-g') || setupArgs.includes('--global');
     const all = setupArgs.includes('--all');
+    const noAgents = setupArgs.includes('--no-agents');
     const yes = setupArgs.includes('-y') || setupArgs.includes('--yes');
     const dryRun = setupArgs.includes('--dry-run') || setupArgs.includes('--dry');
     let migrate = setupArgs.includes('--migrate');
@@ -127,6 +127,7 @@ export function createCmdSetup(ctx) {
     }
     if (all && agent) return fail('--all and --agent cannot be combined. Choose one target selection.');
     if (migrate && globalScope) return fail('--migrate applies only to project setup.');
+    if (noAgents && globalScope) return fail('--no-agents applies only to project setup.');
 
     const scope = globalScope ? 'global' : 'project';
     const interactive = Boolean(process.stdin.isTTY && !yes && !dryRun);
@@ -182,12 +183,13 @@ export function createCmdSetup(ctx) {
       }
     }
 
-    const tools = selectedProjectTools(agent, all);
+    const tools = selectedProjectTools(agent, all, noAgents);
     if (!agent && !all && detectGlobalTargets(resolveGlobalInstallRoots(ctx.globalInstallRootOptions)).includes('claude')) {
       console.log('Claude home detected. For Claude skills in a fresh repo: npx -y workspine setup --agent claude --yes. After portable setup, add them with: npx -y workspine init --tools claude');
     }
     if (dryRun) return printProjectDryRun(root, tools);
-    if (!yes && !(await confirmSetup({ promptApi: ctx.setupPromptApi, details: [`Bounded write set: .work/, .agents/skills/work-*, and ${tools.join(', ')} selected project surfaces.`] }))) {
+    const rootGuidance = tools.includes('agents') ? ' Root AGENTS.md gets a bounded workflow guide; existing consumer content is preserved. Use --no-agents to skip it.' : '';
+    if (!yes && !(await confirmSetup({ promptApi: ctx.setupPromptApi, details: [`Bounded write set: .work/, .agents/skills/work-*, and ${tools.join(', ')} selected project surfaces.${rootGuidance}`] }))) {
       return fail('Setup cancelled; no files were written.');
     }
 
@@ -198,17 +200,13 @@ export function createCmdSetup(ctx) {
     // contextAtWorkspaceRoot then rebuilds cwd-bound native adapters when the
     // selected workspace differs. Pre-setting cwd=root would make that rebind
     // look unnecessary while retaining adapter closures for the invocation cwd.
-    const initCtx = { ...ctx, initPromptApi };
-    if (migrate) {
-      try {
-        migrateLegacyState(root);
-      } catch (error) {
-        return fail(`Legacy state migration failed: ${error.message}`);
-      }
+    const initCtx = { ...ctx, initPromptApi, allowUnmarkedRootAgents: !noAgents };
+    if (migrate && state.status !== 'legacy_migratable') {
+      return fail(`Legacy state migration failed: Legacy state is not migratable (${state.status}${state.reason ? `: ${state.reason}` : ''}).`);
     }
     // Setup owns consent and explicit scope/target flags; init-flow owns the established filesystem
-    // preflight and generation transaction. Supplying targets avoids reopening its runtime wizard.
-    return createCmdInit(initCtx)('--tools', tools.join(','), '--workspace-root', root);
+    // preflight and migration transaction. Supplying targets avoids reopening its runtime wizard.
+    return createCmdInit(initCtx)('--tools', tools.join(','), '--workspace-root', root, ...(migrate ? ['--migrate'] : []));
   };
 }
 

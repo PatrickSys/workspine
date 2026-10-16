@@ -249,6 +249,10 @@ export function hasDurableWorkflowApproval(workDir, normalizedPlan, stateValue =
     : { exists: true, ok: true, value: stateValue };
   if (!current.exists || !current.ok || !current.value || typeof current.value !== 'object' || Array.isArray(current.value)) return false;
   const workflow = workflowStateWithDefaults(current.value.workflow);
+  return workflow.authority === 'owner' && hasWorkflowPlanApprovalProof(workDir, normalizedPlan, workflow);
+}
+
+function hasWorkflowPlanApprovalProof(workDir, normalizedPlan, workflow) {
   const recordedPlan = workflow.plan;
   const expected = normalizeSlashes(String(normalizedPlan || '')).replace(/^\.\//, '');
   const recordedPath = normalizeSlashes(String(recordedPlan.path || '')).replace(/^\.\//, '');
@@ -259,7 +263,6 @@ export function hasDurableWorkflowApproval(workDir, normalizedPlan, stateValue =
     && recordedIdentity === expected
     && typeof recordedPlan.approved_sha256 === 'string'
     && recordedPlan.approved_sha256 === currentPlanSha256
-    && workflow.authority === 'owner'
     && isValidApprovalReference(workflow.approval_ref);
 }
 
@@ -364,6 +367,8 @@ export function transitionWorkflowState(workDir, {
   question = null,
   approved = null,
   amend = false,
+  startNew = false,
+  verificationStatus = null,
   preWriteGuard = null,
   now = new Date(),
 } = {}) {
@@ -387,6 +392,9 @@ export function transitionWorkflowState(workDir, {
   const normalizedTarget = String(target || '').trim().toLowerCase();
   const allowed = new Set(['plan', 'execute', 'verify', 'audit', 'next', 'fix_gaps', 'blocked', 'ask_user', 'approve']);
   if (!allowed.has(normalizedTarget)) throw transitionError('unsupported_transition', `Unsupported lifecycle transition: ${target}.`);
+  if (startNew && (normalizedTarget !== 'plan' || amend || !String(reason || '').trim() || approvalRef || approved === true)) {
+    throw transitionError('new_plan_not_allowed', 'Starting a distinct phase plan requires plan --start-new --reason and separate approval; it cannot amend or approve work.', ['--start-new', '--reason']);
+  }
   if (amend && normalizedTarget !== 'plan') {
     throw transitionError('invalid_amendment_target', 'Only the plan lifecycle transition accepts --amend.', ['--amend']);
   }
@@ -412,6 +420,9 @@ export function transitionWorkflowState(workDir, {
   assertLifecyclePlanIdentity(workDir, normalizedTarget, expectedPlan);
   if (planIdentity) assertLifecyclePlanIdentity(workDir, normalizedTarget, planIdentity);
   const recordedPlan = workflow.plan.path || workflow.plan.identity || null;
+  if (recordedPlan && workflow.plan.identity && workflow.plan.path && workflow.plan.path !== workflow.plan.identity) {
+    throw transitionError(startNew ? 'new_plan_not_allowed' : 'stale_state', 'Recorded plan path and identity disagree.', [workflow.plan.path, workflow.plan.identity]);
+  }
   // Recover the historical phase-path brownfield approval through the existing
   // plan transition. Execution/evidence cannot be transferred to another chain.
   const stateRoot = normalizeSlashes(relative(resolve(workDir, '..'), workDir));
@@ -431,7 +442,51 @@ export function transitionWorkflowState(workDir, {
     && [workflow.execution, workflow.verification, workflow.audit, workflow.dogfood]
       .every(stage => stage.status === 'not_started' && !stage.artifact && !stage.identity)
     && !oldChainArtifacts;
-  if (recordedPlan && expectedPlan && recordedPlan !== expectedPlan && !repairBrownfieldApproval) {
+  // This is an explicit handoff, never an approval/execute identity repair.
+  // Keep completed execution and unresolved verification in the same state
+  // document; new approval must bind only the freshly selected plan.
+  const assertNewPlan = () => {
+    if (!startNew) return;
+    const lifecycle = evaluateLifecycleState({ planningDir: workDir });
+    const findPlan = identity => lifecycle.phaseArtifacts.find(item => item.kind === 'plan'
+      && normalizeSlashes(relative(resolve(workDir, '..'), item.path)) === identity);
+    const previous = findPlan(recordedPlan);
+    const selected = findPlan(expectedPlan);
+    const phase = selected && lifecycle.phases.find(item => item.number === selected.phaseToken);
+    const history = Array.isArray(workflow.plan_history) ? workflow.plan_history : [];
+    const previousExecution = workflow.execution.artifact;
+    const matchingSummary = lifecycle.phaseArtifacts.find(item => item.kind === 'summary'
+      && item.chainKey === previous?.chainKey
+      && normalizeSlashes(relative(resolve(workDir, '..'), item.path)) === previousExecution);
+    if (!previous || !selected || previous.chainKey === selected.chainKey
+      || previous.dir !== selected.dir || !phase || phase.status === 'done' || phase.parked
+      || workflow.plan.path !== recordedPlan || workflow.plan.identity !== recordedPlan
+      // Phase verify/audit transitions legitimately record workflow authority.
+      // Retaining their approval proof still requires the exact owner-approved
+      // bytes and reference; this does not authorize another execution.
+      || !['owner', 'workflow'].includes(workflow.authority)
+      || !hasWorkflowPlanApprovalProof(workDir, recordedPlan, workflow)
+      || !['verify', 'audit', 'fix_gaps'].includes(workflow.current_state || state.current_state)
+      || (state.current_state && state.current_state !== workflow.current_state)
+      || state.status === 'blocked' || state.status === 'paused'
+      || state.status === 'complete' || state.status === 'completed'
+      || workflow.status === 'blocked' || workflow.status === 'paused'
+      || workflow.status === 'complete' || workflow.status === 'completed'
+      || workflow.completion_approved === true
+      || (workflow.human_gate && workflow.human_gate.approved !== true)
+      || workflow.execution.status !== 'complete' || !matchingSummary
+      || workflow.execution.identity !== previousExecution
+      || !['complete', 'completed', 'done', 'passed', 'pass'].includes(readPlanStatus(readFileSync(matchingSummary.path, 'utf8')))
+      || history.some(entry => entry.workflow?.plan?.path === expectedPlan)
+      || lifecycle.phaseArtifacts.some(item => item.chainKey === selected.chainKey && ['summary', 'verification'].includes(item.kind))
+      || !planArtifactSha256(workDir, expectedPlan)) {
+      throw transitionError('new_plan_not_allowed',
+        'Start-new requires a distinct unexecuted current plan in the same open phase, intact prior approval and completed execution proof, and no blocked or pending owner gate. Retained plans cannot be reopened.',
+        [String(recordedPlan || ''), String(expectedPlan || ''), '.work/state.json']);
+    }
+  };
+  assertNewPlan();
+  if (recordedPlan && expectedPlan && recordedPlan !== expectedPlan && !repairBrownfieldApproval && !startNew) {
     throw transitionError('stale_state', 'Recorded plan authority does not match the supplied plan artifact.', [String(recordedPlan), String(expectedPlan)]);
   }
   // ask_user/blocked can interrupt execute without clearing its execution
@@ -443,16 +498,15 @@ export function transitionWorkflowState(workDir, {
       [String(recordedPlan || '.work/state.json')]);
   }
   if (artifactPath && artifactIdentity) {
-    const recordedArtifact = normalizedTarget === 'verify'
-      ? workflow.execution.artifact || workflow.execution.identity
-      : workflow.verification.artifact || workflow.verification.identity;
-    if (recordedArtifact && recordedArtifact !== artifactPath && recordedArtifact !== artifactIdentity) {
+    const stage = normalizedTarget === 'verify' ? workflow.execution : workflow.verification;
+    const recordedArtifact = stage.artifact || stage.identity;
+    if ([stage.artifact, stage.identity].some(value => value && value !== artifactPath && value !== artifactIdentity)) {
       throw transitionError('stale_state', 'Recorded lifecycle artifact does not match the supplied artifact.', [String(recordedArtifact), String(artifactPath)]);
     }
   }
 
   const next = JSON.parse(JSON.stringify(state));
-  next.workflow = workflow;
+  next.workflow = workflowStateWithDefaults(workflow);
   next.workflow.plan = { ...workflow.plan };
   next.workflow.execution = { ...workflow.execution };
   next.workflow.verification = { ...workflow.verification };
@@ -522,17 +576,20 @@ export function transitionWorkflowState(workDir, {
 
   const effectiveTarget = normalizedTarget === 'next' ? 'audit' : normalizedTarget;
   const allowedPredecessors = {
-    plan: amend ? interruptedExecutionStates : ['plan', 'fix_gaps', 'blocked', 'ask_user'],
+    plan: startNew ? ['verify', 'audit', 'fix_gaps'] : amend ? interruptedExecutionStates : ['plan', 'fix_gaps', 'blocked', 'ask_user'],
     approve: ['plan'],
     execute: ['plan', 'execute'],
     verify: ['execute', 'verify'],
-    audit: ['verify', 'audit'],
+    audit: ['verify', 'audit', 'fix_gaps'],
     fix_gaps: ['verify', 'audit', 'fix_gaps'],
     blocked: ['plan', 'execute', 'verify', 'audit', 'fix_gaps', 'blocked', 'ask_user'],
     ask_user: ['plan', 'execute', 'verify', 'audit', 'fix_gaps', 'ask_user'],
   };
   if (allowedPredecessors[effectiveTarget] && !allowedPredecessors[effectiveTarget].includes(currentState)) {
     throw transitionError('out_of_order', `Cannot transition from ${currentState} to ${effectiveTarget}; resolve the recorded lifecycle posture first.`, ['.work/state.json']);
+  }
+  if (effectiveTarget === 'audit' && currentState === 'fix_gaps' && workflow.execution.status !== 'complete') {
+    throw transitionError('execution_incomplete', 'Fresh verification can resolve gaps only for completed execution.', [String(normalizedPlan || '')]);
   }
   if (effectiveTarget === 'approve') {
     next.workflow.plan.approved = true;
@@ -546,6 +603,17 @@ export function transitionWorkflowState(workDir, {
       ];
     }
   } else if (effectiveTarget === 'plan') {
+    if (startNew) {
+      const { plan_history: history = [], ...retained } = workflow;
+      next.workflow.plan_history = [...history, { workflow: retained, reason: String(reason).trim(), retained_at: now.toISOString() }];
+      next.workflow.plan = { path: normalizedPlan, identity: normalizedPlan, approved: false };
+      for (const stage of ['execution', 'verification', 'audit', 'dogfood']) {
+        next.workflow[stage] = { ...WORKFLOW_DEFAULTS[stage] };
+      }
+      delete next.workflow.amendments;
+      delete next.workflow.human_gate;
+      delete next.workflow.reason;
+    }
     if (amend) {
       next.workflow.amendments = [
         ...(Array.isArray(workflow.amendments) ? workflow.amendments : []),
@@ -598,7 +666,10 @@ export function transitionWorkflowState(workDir, {
     }
     next.workflow.current_state = 'audit';
   } else if (effectiveTarget === 'fix_gaps') {
-    next.workflow.verification.status = 'gaps_found';
+    if (verificationStatus !== null && !['gaps_found', 'human_needed', 'blocked', 'failed', 'fail'].includes(verificationStatus)) {
+      throw transitionError('gaps_not_recorded', 'Verification reconciliation requires a validated gap or human-gate status.', [String(normalizedArtifact || '')]);
+    }
+    next.workflow.verification.status = verificationStatus || 'gaps_found';
     if (normalizedArtifact) {
       next.workflow.verification.artifact = artifactPath || workflow.verification.artifact || null;
       next.workflow.verification.identity = artifactIdentity || workflow.verification.identity || normalizedArtifact;
@@ -636,6 +707,7 @@ export function transitionWorkflowState(workDir, {
     throw transitionError('stale_plan', 'The approved PLAN changed while the transition was being validated.', [String(normalizedPlan)]);
   }
   if (typeof preWriteGuard === 'function') preWriteGuard();
+  assertNewPlan();
   // Reconcile current-chain proof again at the mutation boundary. Another
   // process may have written a terminal VERIFICATION since initial validation.
   if (amend) assertNoCurrentBrownfieldTerminalEvidence(brownfield, workDir);

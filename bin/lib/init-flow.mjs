@@ -368,7 +368,9 @@ export function createCmdInit(ctx) {
           targets: migrationAdapterTargets,
           manifest: readManifest(state.legacyDir),
           stateDirName: initCtx.stateDirName,
+          allowUnmarkedRootAgents: initCtx.allowUnmarkedRootAgents === true,
         });
+        preflightPlanningCliHelpersReadOnly({ ...initCtx, planningDir: state.legacyDir });
         migrateLegacyState(initCtx.cwd);
       } catch (error) {
         console.error(`ERROR: Legacy state migration failed: ${error.message}`);
@@ -428,6 +430,7 @@ export function createCmdInit(ctx) {
         targets: initAdapterTargets,
         manifest: readManifest(planningDir),
         stateDirName,
+        allowUnmarkedRootAgents: initCtx.allowUnmarkedRootAgents === true,
       });
       preflightPlanningCliHelpersReadOnly(initCtx);
       applyAdapterRecovery(adapterPlan);

@@ -276,14 +276,14 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 // `install` lists --local/--verify-runtime/--live-runtime because it recognises them only to
 // reject them with a specific message; that message must still be the one a user sees.
 export const COMMAND_FLAGS = {
-  setup: { '--global': false, '-g': false, '--agent': true, '--all': false, '-y': false, '--yes': false, '--dry-run': false, '--dry': false, '--workspace-root': true, '--migrate': false },
+  setup: { '--global': false, '-g': false, '--agent': true, '--all': false, '--no-agents': false, '-y': false, '--yes': false, '--dry-run': false, '--dry': false, '--workspace-root': true, '--migrate': false },
   init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--adopt-legacy': false, '--workspace-root': true },
   update: { '--dry-run': false, '--dry': false, '--global': false, '-g': false, '--workspace-root': true },
   health: { '--json': false, '--global': false, '-g': false, '--workspace-root': true },
   install: { '--global': false, '-g': false, '--auto': false, '--dry-run': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
   scaffold: { '--workspace-root': true },
   'file-op': { '--missing': true, '--flags': true, '--workspace-root': true },
-  'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--amend': false, '--json': false, '--workspace-root': true },
+  'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--amend': false, '--start-new': false, '--json': false, '--workspace-root': true },
   'lifecycle-preflight': { '--expects-mutation': true, '--plan': true, '--json': false, '--workspace-root': true },
   'phase-status': { '--workspace-root': true },
   remember: { '--type': true, '--scope': true, '--for': true, '--code': true, '--why': true, '--by-user': false, '--workspace-root': true },
@@ -411,7 +411,7 @@ function commandSpecificFlagError(command, positionals, commandArgs) {
       allowed = allow('--plan', '--artifact', '--authority', '--reason', '--json', '--workspace-root');
     } else {
       allowed = target === 'plan'
-        ? allow('--plan', '--authority', '--reason', '--amend', '--json', '--workspace-root')
+        ? allow('--plan', '--authority', '--reason', '--amend', '--start-new', '--json', '--workspace-root')
         : allow('--plan', '--authority', '--reason', '--json', '--workspace-root');
     }
   } else if (command === 'decisions') {
@@ -451,7 +451,7 @@ export function validateCommandShape(command, commandArgs = []) {
   if (commandArgs.includes('--help') || commandArgs.includes('-h')) return null;
   const positionals = commandPositionals(command, commandArgs);
   const usage = {
-    setup: 'Usage: workspine setup [-g|--global] [--agent <target>] [--all] [-y|--yes] [--dry-run] [--workspace-root <path>] [--migrate]',
+    setup: 'Usage: workspine setup [-g|--global] [--agent <target>] [--all] [--no-agents] [-y|--yes] [--dry-run] [--workspace-root <path>] [--migrate]',
     init: 'Usage: workspine init [flags]',
     update: 'Usage: workspine update [--dry-run] [-g|--global]',
     health: 'Usage: workspine health [--json] [-g|--global] [--workspace-root <path>]',
@@ -562,7 +562,8 @@ First use:
   work-quick is the lighter shortcut; work-new-project is for fuzzy or broader scope
 
 Everyday commands:
-  setup [-y|--yes] [--dry-run]  Set up portable skills in this repo
+  setup [-y|--yes] [--dry-run]  Set up portable skills and root AGENTS.md guidance
+    --no-agents                 Skip root guidance (project setup only)
   health [--json] [-g|--global] Check generated files without changing them
   update [--dry-run] [-g|--global] Repair or refresh generated files
   next [--json]                 Show the next file-backed action
