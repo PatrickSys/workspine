@@ -49,6 +49,18 @@ That is the first-use path. Everything below is reference material for deeper li
 
 ---
 
+## Phase Plan Handoffs
+
+The lifecycle records one selected plan at a time. To start a distinct unexecuted PLAN in the same open phase after the recorded plan has a complete matching SUMMARY, explicitly hand off:
+
+```sh
+node .work/bin/gsdd.mjs lifecycle-transition plan --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --start-new --reason "Start the independently scoped next plan; retain previous proof" --json
+```
+
+This retains the previous workflow and approval receipt in `workflow.plan_history`, including unresolved verification, and selects the new plan without approval. Obtain separate owner approval of its exact bytes and reference before execution. Existing artifacts remain evidence; the handoff does not resolve earlier gaps, human proof debt, or close the phase. It refuses in-progress execution, blocked or pending owner gates, completed phases, and previously executed plans. Resolve refusals through review; preserve state and artifacts rather than switching identities by hand. Ordinary `plan`, `approve`, and `execute` still reject a mismatched recorded plan.
+
+After updating the selected plan's VERIFICATION report, replay `lifecycle-transition fix_gaps` with the same `--plan`, `--artifact`, and `--authority workflow` to record its fresh gap or `human_needed` status. When the report passes, use `lifecycle-transition audit` with those paths, including from `fix_gaps`. A passing report does not approve an explicit owner gate; an unchanged reconciliation replays without writing state.
+
 ## First Change, End to End
 
 Suppose you need to change behavior in an existing application and there is at least one product decision the agent

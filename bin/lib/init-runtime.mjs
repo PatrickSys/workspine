@@ -283,7 +283,7 @@ export const COMMAND_FLAGS = {
   install: { '--global': false, '-g': false, '--auto': false, '--dry-run': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
   scaffold: { '--workspace-root': true },
   'file-op': { '--missing': true, '--flags': true, '--workspace-root': true },
-  'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--amend': false, '--json': false, '--workspace-root': true },
+  'lifecycle-transition': { '--plan': true, '--artifact': true, '--authority': true, '--approval-ref': true, '--reason': true, '--question': true, '--approved': true, '--amend': false, '--start-new': false, '--json': false, '--workspace-root': true },
   'lifecycle-preflight': { '--expects-mutation': true, '--plan': true, '--json': false, '--workspace-root': true },
   'phase-status': { '--workspace-root': true },
   remember: { '--type': true, '--scope': true, '--for': true, '--code': true, '--why': true, '--by-user': false, '--workspace-root': true },
@@ -411,7 +411,7 @@ function commandSpecificFlagError(command, positionals, commandArgs) {
       allowed = allow('--plan', '--artifact', '--authority', '--reason', '--json', '--workspace-root');
     } else {
       allowed = target === 'plan'
-        ? allow('--plan', '--authority', '--reason', '--amend', '--json', '--workspace-root')
+        ? allow('--plan', '--authority', '--reason', '--amend', '--start-new', '--json', '--workspace-root')
         : allow('--plan', '--authority', '--reason', '--json', '--workspace-root');
     }
   } else if (command === 'decisions') {

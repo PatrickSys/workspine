@@ -398,6 +398,7 @@ For phase authority only, after the verification artifact is durable, record lif
 `node .work/bin/gsdd.mjs lifecycle-transition audit --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --artifact .work/phases/{phase_dir}/{plan_id}-VERIFICATION.md --authority workflow --json`.
 For phase authority with `gaps_found` or `human_needed`, use `lifecycle-transition fix_gaps` with the same artifact and preserve the
 human gate; a missing, stale, or mismatched artifact must fail closed without changing state.
+Re-verification uses those same commands: `fix_gaps` reconciles the recorded status to the current report (including `human_needed`); once the report passes, use `audit` from the recorded `fix_gaps` posture. Reconciliation preserves plan approval and any explicit owner gate; it never grants human approval. An unchanged report/status replays without writing state.
 
 For phase authority, `gaps_found`/`human_needed` keeps ROADMAP open; if currently `[x]`, reopen with `phase-status ... in_progress`. Brownfield uses `fix_gaps` and leaves CHANGE open.
 </persistence>
