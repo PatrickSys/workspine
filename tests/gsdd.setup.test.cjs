@@ -184,6 +184,61 @@ describe('gsdd setup facade', () => {
     assertRootGuidance(tmpDir);
   });
 
+  for (const [label, open, close, example] of [
+    ['backticks', '```markdown', '```', `${BEGIN}\nTeam-authored example\n${END}`],
+    ['tildes', '~~~markdown', '~~~', `${BEGIN}\nTeam-authored example\n${END}`],
+    ['long indented fence', '   ````markdown', '   `````', `${BEGIN}\n~~~\n\x60\x60\x60\nTeam-authored example\n${END}`],
+    ['partial example', '~~~', '~~~', `Example ${BEGIN}\n${END}`],
+  ]) {
+    test(`fenced AGENTS ${label} example remains byte-identical through setup and update`, async () => {
+      const original = Buffer.from(`# Team rules\r\n\r\n${open}\r\n${example.replace(/\n/g, '\r\n')}\r\n${close}\r\nKeep this line.  \r\n`);
+      const agentsPath = path.join(tmpDir, 'AGENTS.md');
+      fs.writeFileSync(agentsPath, original);
+      const result = await runCliAsMain(tmpDir, ['setup', '-y']);
+      const after = fs.readFileSync(agentsPath);
+      assert.deepStrictEqual(after.subarray(0, original.length), original, 'setup must preserve every preexisting AGENTS byte');
+      assert.strictEqual(result.exitCode, 0, result.output);
+      const { findBoundedBlock } = await import(pathToFileURL(path.join(ROOT, 'bin/lib/rendering.mjs')).href);
+      const range = findBoundedBlock(after.toString('utf8'));
+      assert.ok(range.start >= original.length, 'the genuine managed block must be outside the example');
+      assert.match(after.subarray(original.length).toString('utf8'), /## GSDD Governance \(Generated\)/);
+      const update = await runCliAsMain(tmpDir, ['update']);
+      assert.strictEqual(update.exitCode, 0, update.output);
+      assert.deepStrictEqual(fs.readFileSync(agentsPath), after);
+    });
+  }
+
+  test('bounded marker detection keeps exact ranges and refuses malformed markers outside examples', async () => {
+    const { findBoundedBlock, upsertBoundedBlock } = await import(pathToFileURL(path.join(ROOT, 'bin/lib/rendering.mjs')).href);
+    const prefix = `\x60\x60\x60markdown\n${BEGIN}\nExample\n${END}\n\x60\x60\x60\n`;
+    const managed = `${BEGIN}\r\nOld guide\r\n${END}`;
+    const suffix = '\r\nKeep after.  \r\n';
+    assert.strictEqual(findBoundedBlock(prefix), null);
+    assert.deepStrictEqual(findBoundedBlock(prefix + managed + suffix), { start: prefix.length, end: prefix.length + managed.length });
+    assert.strictEqual(upsertBoundedBlock(prefix + managed + suffix, 'New guide'), `${prefix}${BEGIN}\nNew guide\n${END}${suffix}`);
+    const inline = 'Inline ```example``` and ~~~example~~~.\n```inline code```\n';
+    assert.deepStrictEqual(findBoundedBlock(inline + managed), { start: inline.length, end: inline.length + managed.length });
+    for (const [, malformed] of MALFORMED_ROOT_BLOCKS) {
+      assert.throws(() => findBoundedBlock(prefix + malformed), /malformed GSDD markers/);
+    }
+  });
+
+  test('unclosed AGENTS fences refuse setup before any consumer bytes change', async () => {
+    for (const [index, open, falseClose] of [
+      [0, '```markdown', '~~~'],
+      [1, '~~~~markdown', '~~~'],
+      [2, '```markdown', '``` trailing text'],
+    ]) {
+      const root = path.join(tmpDir, `unclosed-${index}`);
+      writeFile(path.join(root, 'AGENTS.md'), `# Team rules\r\n${open}\r\n${falseClose}\r\n${BEGIN}\r\nKeep this example.\r\n${END}\r\n`);
+      const before = snapshotTree(root);
+      const result = await runCliAsMain(root, ['setup', '-y']);
+      assert.deepStrictEqual(snapshotTree(root), before);
+      assert.strictEqual(result.exitCode, 1, result.output);
+      assert.match(result.output, /unclosed Markdown fence/);
+    }
+  });
+
   test('project --no-agents preserves root governance while still installing portable and requested native skills', async () => {
     for (const [index, flags] of [[], ['--agent', 'codex'], ['--all'], ['--agent', 'generic']].entries()) {
       const root = path.join(tmpDir, `opt-out-${index}`);

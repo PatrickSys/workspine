@@ -370,6 +370,7 @@ export function createCmdInit(ctx) {
           stateDirName: initCtx.stateDirName,
           allowUnmarkedRootAgents: initCtx.allowUnmarkedRootAgents === true,
         });
+        preflightPlanningCliHelpersReadOnly({ ...initCtx, planningDir: state.legacyDir });
         migrateLegacyState(initCtx.cwd);
       } catch (error) {
         console.error(`ERROR: Legacy state migration failed: ${error.message}`);
