@@ -358,8 +358,21 @@ function renderAgentsFileContent(options = {}) {
   return `# AGENTS.md - GSDD Governance\n\n<!-- BEGIN GSDD -->\n${block}\n<!-- END GSDD -->\n`;
 }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function findBoundedBlock(existing) {
+  const begins = [...existing.matchAll(/<!-- BEGIN GSDD -->/g)];
+  const ends = [...existing.matchAll(/<!-- END GSDD -->/g)];
+  if (begins.length === 0 && ends.length === 0) return null;
+
+  const isStandalone = (match) => {
+    const after = match.index + match[0].length;
+    return (match.index === 0 || existing[match.index - 1] === '\n')
+      && (after === existing.length || existing[after] === '\n' || existing.startsWith('\r\n', after));
+  };
+  if (begins.length !== 1 || ends.length !== 1
+    || begins[0].index >= ends[0].index || !isStandalone(begins[0]) || !isStandalone(ends[0])) {
+    throw new Error('Refusing adapter update: AGENTS.md has malformed GSDD markers; require exactly one standalone BEGIN/END pair in that order. Preserve the consumer policy and repair the markers before retrying.');
+  }
+  return { start: begins[0].index, end: ends[0].index + ends[0][0].length };
 }
 
 function upsertBoundedBlock(existing, blockContent) {
@@ -367,29 +380,18 @@ function upsertBoundedBlock(existing, blockContent) {
   const end = '<!-- END GSDD -->';
   const bounded = `${begin}\n${blockContent.trimEnd()}\n${end}`;
 
-  const re = new RegExp(`${escapeRegExp(begin)}[\\s\\S]*?${escapeRegExp(end)}`, 'm');
-  if (re.test(existing)) return existing.replace(re, bounded);
+  const range = findBoundedBlock(existing);
+  if (range) return existing.slice(0, range.start) + bounded + existing.slice(range.end);
 
-  const lines = existing.split(/\r?\n/);
-  const h1Idx = lines.findIndex((line) => /^#\s+/.test(line));
-  if (h1Idx !== -1) {
-    const insertAt = h1Idx + 1;
-    const out = [
-      ...lines.slice(0, insertAt),
-      '',
-      bounded,
-      '',
-      ...lines.slice(insertAt),
-    ];
-    return out.join('\n').replace(/\n{3,}/g, '\n\n');
-  }
-
-  return `${bounded}\n\n${existing}`.replace(/\n{3,}/g, '\n\n');
+  // Append without normalizing consumer whitespace or line endings. Only the
+  // bounded block is replaced on later runs; all surrounding bytes stay intact.
+  return `${existing}${existing.endsWith('\n') ? '\n' : '\n\n'}${bounded}\n`;
 }
 
 export {
   buildPlanningCliHelperEntries,
   buildPortableSkillEntries,
+  findBoundedBlock,
   getDelegateContent,
   getWorkflowContent,
   localizeStateDirReferences,

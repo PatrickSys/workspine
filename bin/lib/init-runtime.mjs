@@ -276,7 +276,7 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 // `install` lists --local/--verify-runtime/--live-runtime because it recognises them only to
 // reject them with a specific message; that message must still be the one a user sees.
 export const COMMAND_FLAGS = {
-  setup: { '--global': false, '-g': false, '--agent': true, '--all': false, '-y': false, '--yes': false, '--dry-run': false, '--dry': false, '--workspace-root': true, '--migrate': false },
+  setup: { '--global': false, '-g': false, '--agent': true, '--all': false, '--no-agents': false, '-y': false, '--yes': false, '--dry-run': false, '--dry': false, '--workspace-root': true, '--migrate': false },
   init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--adopt-legacy': false, '--workspace-root': true },
   update: { '--dry-run': false, '--dry': false, '--global': false, '-g': false, '--workspace-root': true },
   health: { '--json': false, '--global': false, '-g': false, '--workspace-root': true },
@@ -451,7 +451,7 @@ export function validateCommandShape(command, commandArgs = []) {
   if (commandArgs.includes('--help') || commandArgs.includes('-h')) return null;
   const positionals = commandPositionals(command, commandArgs);
   const usage = {
-    setup: 'Usage: workspine setup [-g|--global] [--agent <target>] [--all] [-y|--yes] [--dry-run] [--workspace-root <path>] [--migrate]',
+    setup: 'Usage: workspine setup [-g|--global] [--agent <target>] [--all] [--no-agents] [-y|--yes] [--dry-run] [--workspace-root <path>] [--migrate]',
     init: 'Usage: workspine init [flags]',
     update: 'Usage: workspine update [--dry-run] [-g|--global]',
     health: 'Usage: workspine health [--json] [-g|--global] [--workspace-root <path>]',
@@ -562,7 +562,8 @@ First use:
   work-quick is the lighter shortcut; work-new-project is for fuzzy or broader scope
 
 Everyday commands:
-  setup [-y|--yes] [--dry-run]  Set up portable skills in this repo
+  setup [-y|--yes] [--dry-run]  Set up portable skills and root AGENTS.md guidance
+    --no-agents                 Skip root guidance (project setup only)
   health [--json] [-g|--global] Check generated files without changing them
   update [--dry-run] [-g|--global] Repair or refresh generated files
   next [--json]                 Show the next file-backed action
