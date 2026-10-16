@@ -3006,6 +3006,30 @@ describe('gsdd init and update', () => {
       });
     }
 
+    for (const collision of ['bin', 'bin/gsdd.mjs']) {
+      test(`legacy migration refuses helper collision at ${collision} before changing any bytes`, async () => {
+        const legacy = path.join(tmpDir, '.planning');
+        fs.mkdirSync(legacy);
+        fs.writeFileSync(path.join(legacy, 'config.json'), JSON.stringify({ initVersion: 'v1.1' }));
+        fs.writeFileSync(path.join(legacy, 'consumer.bin'), Buffer.from([0, 255, 13, 10, 128]));
+        if (collision === 'bin') fs.writeFileSync(path.join(legacy, 'bin'), 'Consumer-owned file\r\n');
+        else fs.mkdirSync(path.join(legacy, 'bin', 'gsdd.mjs'), { recursive: true });
+        const before = snapshotTree(tmpDir);
+
+        for (const args of [
+          ['init', '--migrate', '--auto', '--tools', 'agents'],
+          ['setup', '--migrate', '-y'],
+        ]) {
+          const result = runPublicCli(tmpDir, args);
+          assert.deepStrictEqual(snapshotTree(tmpDir), before, 'helper refusal must preserve every path and byte');
+          assert.strictEqual(result.status, 1, result.stdout + result.stderr);
+          assert.match(result.stdout + result.stderr, /Refusing to write generated runtime helper/);
+          assert.ok(fs.existsSync(legacy), 'helper refusal must precede the rename');
+          assert.strictEqual(fs.existsSync(path.join(tmpDir, '.work')), false);
+        }
+      });
+    }
+
     for (const ownership of ['missing', 'corrupt', 'incomplete', 'unowned']) {
       test(`legacy migration preflight preserves bytes for ${ownership} template ownership`, async () => {
         const legacy = path.join(tmpDir, '.planning');

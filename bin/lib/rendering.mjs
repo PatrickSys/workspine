@@ -359,8 +359,33 @@ function renderAgentsFileContent(options = {}) {
 }
 
 function findBoundedBlock(existing) {
-  const begins = [...existing.matchAll(/<!-- BEGIN GSDD -->/g)];
-  const ends = [...existing.matchAll(/<!-- END GSDD -->/g)];
+  const begins = [];
+  const ends = [];
+  let fence = null;
+  // Only track fenced-code boundaries, not Markdown structure. Keep original
+  // offsets so replacement never normalizes consumer bytes or line endings.
+  for (const line of existing.matchAll(/[^\n]*(?:\n|$)/g)) {
+    const content = line[0].replace(/\r?\n$/, '');
+    const delimiter = content.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (delimiter && delimiter[1][0] === fence.character
+        && delimiter[1].length >= fence.length && /^[ \t]*$/.test(delimiter[2])) {
+        fence = null;
+      }
+      continue;
+    }
+    if (delimiter && (delimiter[1][0] !== '`' || !delimiter[2].includes('`'))) {
+      fence = { character: delimiter[1][0], length: delimiter[1].length };
+      continue;
+    }
+    for (const marker of content.matchAll(/<!-- (BEGIN|END) GSDD -->/g)) {
+      const match = { 0: marker[0], index: line.index + marker.index };
+      (marker[1] === 'BEGIN' ? begins : ends).push(match);
+    }
+  }
+  if (fence) {
+    throw new Error('Refusing adapter update: AGENTS.md has an unclosed Markdown fence; close the example before retrying.');
+  }
   if (begins.length === 0 && ends.length === 0) return null;
 
   const isStandalone = (match) => {
