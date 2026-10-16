@@ -249,6 +249,10 @@ export function hasDurableWorkflowApproval(workDir, normalizedPlan, stateValue =
     : { exists: true, ok: true, value: stateValue };
   if (!current.exists || !current.ok || !current.value || typeof current.value !== 'object' || Array.isArray(current.value)) return false;
   const workflow = workflowStateWithDefaults(current.value.workflow);
+  return workflow.authority === 'owner' && hasWorkflowPlanApprovalProof(workDir, normalizedPlan, workflow);
+}
+
+function hasWorkflowPlanApprovalProof(workDir, normalizedPlan, workflow) {
   const recordedPlan = workflow.plan;
   const expected = normalizeSlashes(String(normalizedPlan || '')).replace(/^\.\//, '');
   const recordedPath = normalizeSlashes(String(recordedPlan.path || '')).replace(/^\.\//, '');
@@ -259,7 +263,6 @@ export function hasDurableWorkflowApproval(workDir, normalizedPlan, stateValue =
     && recordedIdentity === expected
     && typeof recordedPlan.approved_sha256 === 'string'
     && recordedPlan.approved_sha256 === currentPlanSha256
-    && workflow.authority === 'owner'
     && isValidApprovalReference(workflow.approval_ref);
 }
 
@@ -458,6 +461,11 @@ export function transitionWorkflowState(workDir, {
     if (!previous || !selected || previous.chainKey === selected.chainKey
       || previous.dir !== selected.dir || !phase || phase.status === 'done' || phase.parked
       || workflow.plan.path !== recordedPlan || workflow.plan.identity !== recordedPlan
+      // Phase verify/audit transitions legitimately record workflow authority.
+      // Retaining their approval proof still requires the exact owner-approved
+      // bytes and reference; this does not authorize another execution.
+      || !['owner', 'workflow'].includes(workflow.authority)
+      || !hasWorkflowPlanApprovalProof(workDir, recordedPlan, workflow)
       || !['verify', 'audit', 'fix_gaps'].includes(workflow.current_state || state.current_state)
       || (state.current_state && state.current_state !== workflow.current_state)
       || state.status === 'blocked' || state.status === 'paused'
@@ -473,7 +481,7 @@ export function transitionWorkflowState(workDir, {
       || lifecycle.phaseArtifacts.some(item => item.chainKey === selected.chainKey && ['summary', 'verification'].includes(item.kind))
       || !planArtifactSha256(workDir, expectedPlan)) {
       throw transitionError('new_plan_not_allowed',
-        'Start-new requires a distinct unexecuted current plan in the same open phase, consistent completed execution proof, and no blocked or pending owner gate. Retained plans cannot be reopened.',
+        'Start-new requires a distinct unexecuted current plan in the same open phase, intact prior approval and completed execution proof, and no blocked or pending owner gate. Retained plans cannot be reopened.',
         [String(recordedPlan || ''), String(expectedPlan || ''), '.work/state.json']);
     }
   };

@@ -778,31 +778,41 @@ export function evaluateStandardPlanClosure({ lifecycle, selection, readFile = r
   if (!lifecycle || !selection?.candidate) throw new Error('selected phase identity is required');
   const plans = selection.candidate.plans || [];
   const artifacts = lifecycle.phaseArtifacts || [];
-  const chains = plans.map((plan) => {
-    const matching = artifacts.filter((artifact) => artifact.chainKey === plan.chainKey);
-    const summary = matching.find((artifact) => artifact.kind === 'summary') || null;
-    const verification = matching.find((artifact) => artifact.kind === 'verification') || null;
-    let verificationStatus = null;
-    let verificationError = null;
-    if (verification) {
-      try {
-        verificationStatus = readPlanStatus(readFile(verification.path, 'utf-8'));
-      } catch (error) {
-        verificationError = error.message;
-      }
-    }
-    return {
-      plan,
-      summary,
-      verification,
-      verificationStatus,
-      verificationError,
-      complete: Boolean(summary && verification && verificationStatus === 'passed'),
-    };
-  });
+  const chains = plans.map((plan) => evaluateStandardVerificationChain(plan, artifacts, readFile));
   return {
     complete: plans.length > 0 && chains.every((chain) => chain.complete),
     chains,
+  };
+}
+
+/** Include legacy orphan summaries, using the same exact proof as phase closure. */
+export function evaluateStandardSummaryChains({ lifecycle, readFile = readFileSync } = {}) {
+  const artifacts = lifecycle?.phaseArtifacts || [];
+  return artifacts.filter((artifact) => artifact.kind === 'summary')
+    .map((summary) => evaluateStandardVerificationChain(summary, artifacts, readFile));
+}
+
+function evaluateStandardVerificationChain(anchor, artifacts, readFile) {
+  const matching = artifacts.filter((artifact) => artifact.chainKey === anchor.chainKey);
+  const plan = matching.find((artifact) => artifact.kind === 'plan') || null;
+  const summary = matching.find((artifact) => artifact.kind === 'summary') || null;
+  const verification = matching.find((artifact) => artifact.kind === 'verification') || null;
+  let verificationStatus = null;
+  let verificationError = null;
+  if (verification) {
+    try {
+      verificationStatus = readPlanStatus(readFile(verification.path, 'utf-8'));
+    } catch (error) {
+      verificationError = error.message;
+    }
+  }
+  return {
+    plan,
+    summary,
+    verification,
+    verificationStatus,
+    verificationError,
+    complete: Boolean(summary && verification && verificationStatus === 'passed'),
   };
 }
 

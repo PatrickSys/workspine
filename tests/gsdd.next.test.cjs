@@ -2569,6 +2569,46 @@ describe('next command routing', () => {
     assert.match(result.reason, /summaries exist without matching verification/);
   });
 
+  test('standard verification routing joins exact orphan chains and rereads report status', async () => {
+    await initWork();
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeFile('.work/ROADMAP.md', '# Roadmap\n- [-] **Phase 1: Verify**\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    writeFile('.work/phases/01-verify/01-SUMMARY.md', '# First orphan summary\n');
+    writeFile('.work/phases/01-verify/01-VERIFICATION.md', '---\nstatus: passed\n---\n');
+    writeFile('.work/phases/01-verify/02-SUMMARY.md', '# Second orphan summary\n');
+    let routed = await runJson(['next', '--json']);
+    assert.strictEqual(routed.state, 'verify');
+    assert.ok(routed.artifacts_to_write.includes('.work/phases/01-verify/02-VERIFICATION.md'));
+    for (const status of ['gaps_found', 'human_needed', 'failed', 'blocked', null, 'passed']) {
+      writeFile('.work/phases/01-verify/02-VERIFICATION.md', status ? `---\nstatus: ${status}\n---\n` : '# Unproven report\n');
+      routed = await runJson(['next', '--json']);
+      assert.strictEqual(routed.state, status === 'passed' ? 'plan' : status ? 'fix_gaps' : 'verify', status);
+    }
+  });
+
+  test('multi-plan verification debt respects done, owner-parked and superseded phase semantics', async () => {
+    await initWork();
+    writeFile('.work/SPEC.md', '# Spec\n');
+    writeFile('.work/MILESTONES.md', '# Milestones\n');
+    for (const id of ['01', '02']) {
+      writeFile(`.work/phases/01-verify/${id}-PLAN.md`, '# Plan\n');
+      writeFile(`.work/phases/01-verify/${id}-SUMMARY.md`, '# Summary\n');
+    }
+    writeFile('.work/phases/01-verify/01-VERIFICATION.md', '---\nstatus: human_needed\n---\n');
+    for (const roadmap of [
+      '# Roadmap\n- [x] **Phase 1: Verify**\n',
+      '# Roadmap\n- [ ] **Phase 1: Verify** - Parked by owner until review.\n',
+    ]) {
+      writeFile('.work/ROADMAP.md', roadmap);
+      const routed = await runJson(['next', '--json']);
+      assert.strictEqual(routed.state, 'plan', JSON.stringify(routed));
+    }
+    writeFile('.work/ROADMAP.md', '# Roadmap\n- [-] **Phase 1: Verify**\n');
+    for (const id of ['01', '02']) writeFile(`.work/phases/01-verify/${id}-PLAN.md`, '---\nstatus: superseded\n---\n');
+    assert.strictEqual((await runJson(['next', '--json'])).state, 'plan');
+  });
+
   test('historical-only standard plan chain keeps every companion historical and routes to plan', async () => {
     await initWork();
     writeFile('.work/SPEC.md', '# Spec\n');

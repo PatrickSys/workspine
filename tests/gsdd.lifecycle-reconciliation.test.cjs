@@ -53,6 +53,17 @@ async function verified(status, id = '01') {
   await ok(status === 'passed' ? 'audit' : 'fix_gaps', id, ['--artifact', report(id)]);
 }
 const start = ['--start-new', '--reason', 'Start the independently scoped second plan; retain first-plan proof'];
+async function nextRoute() {
+  const result = await runCliAsMain(root, ['next', '--json', '--no-update-notice']);
+  assert.equal(result.exitCode, 0, result.output);
+  return JSON.parse(result.output);
+}
+async function closePhase(allowed) {
+  const before = bytes('.work/ROADMAP.md');
+  const result = await runCliAsMain(root, ['phase-status', 'phases/01-parallel-issues', 'done']);
+  assert.equal(result.exitCode, allowed ? 0 : 1, result.output);
+  if (!allowed) assert.deepEqual(bytes('.work/ROADMAP.md'), before);
+}
 
 beforeEach(async () => {
   root = createTempProject();
@@ -179,4 +190,70 @@ test('verification reconciliation rejects another chain and conflicting artifact
   changed.workflow.verification.identity = report('02');
   write('.work/state.json', JSON.stringify(changed));
   await refused('fix_gaps', '01', ['--artifact', report('01')], 'stale_state');
+});
+
+test('next verifies the exact second summary before phase closeout despite a passed first report', async () => {
+  await verified('passed');
+  await ok('plan', '02', start);
+  await approve('02');
+  await ok('execute', '02');
+  write(summary('02'), '---\nstatus: complete\n---\n# Second execution\n');
+  await ok('verify', '02', ['--artifact', summary('02')]);
+  const routed = await nextRoute();
+  assert.equal(routed.state, 'verify', JSON.stringify(routed));
+  assert.ok(routed.artifacts_to_read.includes(summary('02')));
+  assert.ok(routed.artifacts_to_write.includes(report('02')));
+  await closePhase(false);
+  write(report('02'), '---\nstatus: passed\n---\n# Second verification\n');
+  await ok('audit', '02', ['--artifact', report('02')]);
+  assert.notEqual((await nextRoute()).state, 'verify');
+  await closePhase(true);
+});
+
+test('next retains old human-needed debt after the later plan passes and rereads the old report', async () => {
+  await verified('human_needed');
+  const retained = bytes(report('01'));
+  await ok('plan', '02', start);
+  await approve('02');
+  await ok('execute', '02');
+  write(summary('02'), '---\nstatus: complete\n---\n# Second execution\n');
+  await ok('verify', '02', ['--artifact', summary('02')]);
+  write(report('02'), '---\nstatus: passed\n---\n# Second verification\n');
+  await ok('audit', '02', ['--artifact', report('02')]);
+  let routed = await nextRoute();
+  assert.equal(routed.state, 'fix_gaps', JSON.stringify(routed));
+  assert.ok(routed.artifacts_to_read.includes(report('01')));
+  assert.match(routed.reason, /human_needed/);
+  assert.deepEqual(bytes(report('01')), retained);
+  await closePhase(false);
+  write(report('01'), '---\nstatus: passed\n---\n# Fresh first-plan verification\n');
+  routed = await nextRoute();
+  assert.notEqual(routed.state, 'fix_gaps');
+  assert.equal(state().workflow.plan_history[0].workflow.verification.status, 'human_needed');
+  await closePhase(true);
+});
+
+test('start-new refuses tampered prior approval proof without changing state or artifacts', async () => {
+  await verified('passed');
+  const validState = bytes('.work/state.json');
+  const original = bytes(plan('01'));
+  const retained = [summary('01'), report('01'), plan('02')].map(bytes);
+  write(plan('01'), original.toString() + '\nChanged after approved execution\n');
+  await refused('plan', '02', start, 'new_plan_not_allowed');
+  assert.deepEqual(bytes(plan('01')), Buffer.from(original.toString() + '\nChanged after approved execution\n'));
+  write(plan('01'), original);
+  for (const change of [
+    s => { s.workflow.plan.approved_sha256 = '0'.repeat(64); },
+    s => { s.workflow.plan.approved = false; },
+    s => { s.workflow.approval_ref = null; },
+    s => { s.workflow.authority = 'unknown'; },
+  ]) {
+    const changed = JSON.parse(validState);
+    change(changed);
+    write('.work/state.json', JSON.stringify(changed));
+    await refused('plan', '02', start, 'new_plan_not_allowed');
+  }
+  write('.work/state.json', validState);
+  await ok('plan', '02', start);
+  assert.deepEqual([summary('01'), report('01'), plan('02')].map(bytes), retained);
 });

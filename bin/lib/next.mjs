@@ -5,7 +5,7 @@ import { buildControlMap } from './control-map.mjs';
 import { resolveStateDir, stateAuthorityGate } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 import { workflowId } from './workflows.mjs';
-import { evaluateLifecycleState, collectNativePhaseArtifacts, partitionPlanChains } from './lifecycle-state.mjs';
+import { evaluateLifecycleState, evaluateStandardSummaryChains, collectNativePhaseArtifacts, partitionPlanChains } from './lifecycle-state.mjs';
 import {
   NEXT_STATES,
   addOpenQuestion,
@@ -791,8 +791,9 @@ function routeNext(ctx, observedContext = null) {
     });
   }
 
-  if (hasUnverifiedSummaries(context.planning.phases, lifecycleTruth.lifecycle)) {
-    return enrichRoute({ state: 'verify', reason: `${statePath(context)} phase summaries exist without matching verification reports.` }, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
+  const phaseVerificationRoute = routeFromPhaseVerification(context, lifecycleTruth.lifecycle);
+  if (phaseVerificationRoute) {
+    return enrichRoute(phaseVerificationRoute, { context, controlMap, constraints, privacyNotes, inputsConsidered, inputsSkipped, traceRefs });
   }
 
   const workMilestoneRoute = routeFromWorkMilestone(context, manifest);
@@ -1173,20 +1174,29 @@ function defaultWriteArtifacts(state) {
   return [];
 }
 
-function hasUnverifiedSummaries(phases, lifecycle) {
+function routeFromPhaseVerification(context, lifecycle) {
   const byToken = new Map((lifecycle?.phases || []).map((phase) => [phase.number, phase]));
-  const currentSummaries = (lifecycle?.phaseArtifacts || []).filter((artifact) => artifact.kind === 'summary');
-  const classifiedDirectories = new Set(currentSummaries.map((artifact) => artifact.dir));
-  const eligibleDirectories = new Set(currentSummaries.filter((artifact) => {
-    const roadmapPhase = byToken.get(artifact.phaseToken);
+  const unresolved = evaluateStandardSummaryChains({ lifecycle }).filter((chain) => {
+    const roadmapPhase = byToken.get(chain.summary.phaseToken);
+    // Completed/owner-parked phases and superseded chains remain historical.
     return !roadmapPhase || (roadmapPhase.status !== 'done' && !roadmapPhase.parked);
-  }).map((artifact) => artifact.dir));
-  return phases.some((phase) => {
-    if (phase.summaries.length === 0 || phase.verifications.length > 0) return false;
-    // Preserve unclassified legacy orphan behavior, but never promote a
-    // classified DONE or owner-PARKED summary into a fresh verify assignment.
-    return !classifiedDirectories.has(phase.dir) || eligibleDirectories.has(phase.dir);
-  });
+  }).filter((chain) => !chain.complete);
+  if (unresolved.length === 0) return null;
+  const gapStatuses = new Set(['gaps_found', 'human_needed', 'blocked', 'failed', 'fail']);
+  // Finish missing proof before revisiting other retained chains' findings.
+  const needsVerification = unresolved.filter((chain) => !gapStatuses.has(chain.verificationStatus));
+  const chains = needsVerification.length > 0 ? needsVerification : unresolved;
+  const artifactPath = (artifact) => normalizeSlashes(relative(context.paths.root, artifact.path));
+  return {
+    state: needsVerification.length > 0 ? 'verify' : 'fix_gaps',
+    reason: needsVerification.length > 0
+      ? `${statePath(context)} phase summaries exist without matching verification reports proving status: passed.`
+      : `Phase verification has unresolved findings: ${chains.map((chain) => `${artifactPath(chain.verification)} (${chain.verificationStatus})`).join(', ')}.`,
+    artifacts_to_read: chains.flatMap((chain) => [chain.plan, chain.summary, chain.verification].filter(Boolean).map(artifactPath)),
+    artifacts_to_write: chains.map((chain) => chain.verification
+      ? artifactPath(chain.verification)
+      : artifactPath(chain.summary).replace(/-SUMMARY\.md$/i, '-VERIFICATION.md')),
+  };
 }
 
 function findTrustGate(manifest) {
