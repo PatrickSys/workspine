@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { writeFileAtomic } from './atomic-write.mjs';
 import { ADAPTER_SOURCE_FILES } from '../adapters/index.mjs';
 import {
+  findBoundedBlock,
   renderAgentsBoundedBlock,
   renderSkillContent,
   upsertBoundedBlock,
@@ -459,7 +460,7 @@ export function applyHistoricalAdapterPruning(plan, { isDry = false } = {}) {
  * Read-only preflight for all local generated adapter/shared-skill targets.
  * No directory, recovery, manifest, or target bytes are written here.
  */
-export function planAdapterGeneration({ cwd, planningDir, targets, manifest, stateDirName = '.work', requireManifest = false, requireExistingNativeTargets = false, replacementHashes = null }) {
+export function planAdapterGeneration({ cwd, planningDir, targets, manifest, stateDirName = '.work', requireManifest = false, requireExistingNativeTargets = false, replacementHashes = null, allowUnmarkedRootAgents = false }) {
   const manifestPath = join(planningDir, MANIFEST_FILENAME);
   const hasManifest = existsSync(manifestPath);
   const ownership = adapterOwnershipEntries(manifest);
@@ -498,15 +499,21 @@ export function planAdapterGeneration({ cwd, planningDir, targets, manifest, sta
       continue;
     }
 
+    // Validate root markers even for manifest-owned files, before recovery or
+    // any generated writes. Rendering uses this same parser for replacement.
+    const rootBlock = relativePath === 'AGENTS.md'
+      ? findBoundedBlock(readFileSync(absolutePath, 'utf-8')) : null;
     const owned = ownership?.get(relativePath);
     if (!owned) {
-      // A pre-existing AGENTS.md with the bounded marker is the one
-      // compatibility case where init may extend a consumer file before the
-      // first local manifest exists. The adapter's bounded upsert preserves
-      // everything outside that marker; an unmarked file remains a collision.
+      // Init may refresh an existing bounded AGENTS.md before the first local
+      // manifest exists. Setup can also request a first bounded insertion;
+      // the adapter preserves everything outside the managed block.
       if (!hasManifest && target.adapter === 'agents') {
-        const existing = readFileSync(absolutePath, 'utf-8');
-        if (existing.includes('<!-- BEGIN GSDD -->') && existing.includes('<!-- END GSDD -->')) continue;
+        if (rootBlock) continue;
+        // First-time setup may append a bounded guide to this one consumer
+        // file. Keep init/update collision rules and filesystem checks intact;
+        // partial markers must be resolved rather than silently duplicated.
+        if (allowUnmarkedRootAgents && !requireManifest && relativePath === 'AGENTS.md') continue;
       }
       const reason = hasManifest
         ? 'is not generation-manifest-owned'

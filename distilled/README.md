@@ -29,7 +29,7 @@ Workspine is a small set of workflow sources plus the `workspine` CLI that:
 - scaffolds a project planning workspace (`.work/`)
 - generates compact open-standard workflow entrypoints as skills (`.agents/skills/work-*/SKILL.md`)
 - generates an internal repo-local helper runtime at `.work/bin/gsdd.mjs` for deterministic workflow commands run from the repo root
-- optionally generates tool-specific adapters for runtimes that need extra native surfaces (root `AGENTS.md`, Claude skills + plan-command alias + native agents, OpenCode commands + native agents, Codex CLI checker agent)
+- normal project `setup` also adds a bounded root `AGENTS.md` routing guide (`--no-agents` skips it); native adapters remain optional (Claude skills + plan-command alias + native agents, OpenCode commands + native agents, Codex CLI checker agent)
 
 It gives serious AI-assisted work one durable, repo-native workflow for planning, checking, execution, verification, and handoff — plain files, no hosted service.
 
@@ -81,12 +81,12 @@ Notes:
 - `--tools claude` also generates native agents at `.claude/agents/work-*.md` and a compatibility plan command alias at `.claude/commands/work-plan.md`.
 - `--tools opencode` also generates native agents at `.opencode/agents/work-*.md`.
 - `--tools codex` generates `.codex/agents/work-plan-checker.toml` and `.codex/agents/work-approach-explorer.toml`; the portable `.agents/skills/work-plan/` surface remains the Codex entry path and internal helper commands route through `.work/bin/gsdd.mjs`.
-- Root `AGENTS.md` is only written when explicitly requested (`--tools agents`, `--tools all`, legacy runtime aliases, or the wizard governance opt-in). Governance and native adapter surfaces are optional ergonomics; the compact `.agents/skills/` files remain the baseline agent entrypoints.
+- Project `setup` adds concise root `AGENTS.md` guidance by default, preserving existing consumer content; `setup --no-agents` skips it. Lower-level `init` retains explicit selection (`--tools agents`, `--tools all`, legacy runtime aliases, or the wizard governance opt-in). The root guide routes to workflows; compact `.agents/skills/` files remain the baseline agent entrypoints.
 
 ## The Workflow
 
 ```
-npx -y workspine setup     -> bootstrap (create .work/, copy templates, generate portable skills)
+npx -y workspine setup     -> bootstrap (create .work/, copy templates, generate portable skills and root guidance)
 /work-new-project          -> .work/SPEC.md + .work/ROADMAP.md  (questioning + codebase audit + research)
 /work-plan N               -> phases/N/PLAN.md      (task breakdown + research)
 /work-execute N            -> code changes           (plan execution with quality gates)

@@ -8,7 +8,7 @@ The package runtime floor is Node >=22. Update awareness is limited to the suppo
 
 Human repo setup and repair commands in this document use `npx -y workspine ...` because that works without a global install. If you installed `workspine` globally, the equivalent bare `gsdd ...` command is fine. For fresh cross-repo setup, run `npx -y workspine install --global` interactively or pass `--tools <targets>`. For an existing Workspine-owned global install, run `npx -y workspine health --global` first; it emits `update --global` only when the whole discovered set is safe to reconcile automatically. `--auto` detects existing agent homes for install/setup and is not the generic repair path.
 
-Normal first use starts with `npx -y workspine setup`. The lower-level `npx -y workspine init` command remains available for compatibility and scripted advanced setup.
+Normal first use starts with `npx -y workspine setup`. Project setup also creates a bounded root `AGENTS.md` guide pointing to the installed portable skills and native invocation paths, preserving existing consumer content. `setup --no-agents` skips root guidance. This routing guide does not replace skill discovery. The lower-level `npx -y workspine init` command retains its explicit governance selection for compatibility and scripted advanced setup.
 
 The install contract is deliberately skills-first: `npx -y workspine init` always creates `.agents/skills/work-*` and `.work/bin/gsdd*`; runtime-specific adapters are optional discovery or orchestration helpers layered on top.
 

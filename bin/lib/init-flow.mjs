@@ -368,6 +368,7 @@ export function createCmdInit(ctx) {
           targets: migrationAdapterTargets,
           manifest: readManifest(state.legacyDir),
           stateDirName: initCtx.stateDirName,
+          allowUnmarkedRootAgents: initCtx.allowUnmarkedRootAgents === true,
         });
         migrateLegacyState(initCtx.cwd);
       } catch (error) {
@@ -428,6 +429,7 @@ export function createCmdInit(ctx) {
         targets: initAdapterTargets,
         manifest: readManifest(planningDir),
         stateDirName,
+        allowUnmarkedRootAgents: initCtx.allowUnmarkedRootAgents === true,
       });
       preflightPlanningCliHelpersReadOnly(initCtx);
       applyAdapterRecovery(adapterPlan);

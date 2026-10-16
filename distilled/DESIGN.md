@@ -1647,8 +1647,10 @@ That conflation was survivable while Cursor and Copilot were incorrectly treated
 **Key architectural rule:** runtime selection and adapter generation are separate concerns.
 
 - In the wizard, choosing Cursor/Copilot/Gemini affects post-init routing and user-facing install intent, but does **not** silently write root `AGENTS.md`.
-- Root `AGENTS.md` is generated only when the user explicitly opts into governance (wizard) or explicitly requests a governance-writing flag path (`--tools agents`, `--tools all`, or legacy runtime aliases).
+- Lower-level `init` generates root `AGENTS.md` only when the user explicitly opts into governance (wizard) or explicitly requests a governance-writing flag path (`--tools agents`, `--tools all`, or legacy runtime aliases).
 - This keeps D35's capability split honest instead of re-conflating skills-native runtime choice with governance-file generation.
+
+**Normal setup refinement (FACTORY-038 #6):** Project `setup` now includes the same concise root routing guide by default, with `--no-agents` as an explicit opt-out. This makes installed workflows visible to an agent reading root instructions without replacing `.agents/skills/work-*/SKILL.md`. First-time setup may append a bounded guide to an unmarked consumer `AGENTS.md`, preserving its existing bytes; partial markers and unsafe filesystem targets still fail closed. Lower-level `init` selection and collision rules remain unchanged, and existing setup reruns remain zero-write. Updates retain manifest ownership/recovery and replace only the bounded guide.
 
 **Phase 17 refinement:**
 
