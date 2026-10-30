@@ -176,6 +176,13 @@ function repoWarningsFromControlMap(controlMap) {
     .map((risk) => risk.message);
 }
 
+function artifactsThatExist(cwd, relativePaths) {
+  return relativePaths.filter((relativePath) => {
+    if (!relativePath || relativePath.includes('*')) return false;
+    return existsSync(join(cwd, relativePath));
+  });
+}
+
 function controlMapBlockers(controlMap) {
   return (controlMap.risks || [])
     .filter((risk) => risk.severity === 'block')
@@ -763,7 +770,12 @@ function routeNext(ctx) {
         : 'Lane: brownfield-change via work-plan for bounded multi-step work without a roadmap; work-quick for tiny changes.',
       confidence: context.planning.exists ? 'medium' : 'high',
       next_command: workflowId('plan'),
-      next_action: workflowAction(workflowId('plan'), 'Classify the request and plan from `.work` truth.'),
+      next_action: workflowAction(
+        workflowId('plan'),
+        context.planning.has_roadmap
+          ? 'Plan the Workspine-native milestone from `.work` truth.'
+          : 'Classify the request and start a brownfield CHANGE via work-plan (or work-quick for tiny work).',
+      ),
       authority: 'work',
       route_kind: 'work_native_plan',
       blocked_by: controlMapBlockers(controlMap),
@@ -774,7 +786,7 @@ function routeNext(ctx) {
         `Do not infer normal ${statePath(context)} milestone progress when SPEC.md, ROADMAP.md, or MILESTONES.md are missing.`,
       ],
       evidence_required: ['Plan must map `.work/goal.md` requirements to implementation and verification artifacts.'],
-      artifacts_to_read: ['.work/goal.md', '.work/research/2026-06-20-long-term-agent-harness-consistency.md'],
+      artifacts_to_read: artifactsThatExist(ctx.cwd, ['.work/goal.md']),
       artifacts_to_write: ['.work/focus/current.md', '.work/graph/events.jsonl'],
       privacy_notes: privacyNotes,
       inputs_considered: inputsConsidered,

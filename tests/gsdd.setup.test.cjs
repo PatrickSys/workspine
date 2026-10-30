@@ -112,8 +112,11 @@ describe('gsdd setup facade', () => {
   test('defaults to project scope, creates portable skills, and reruns without writes', async () => {
     const first = await runCliAsMain(tmpDir, ['setup', '-y']);
     assert.strictEqual(first.exitCode, 0, first.output);
+    assert.match(first.output, /workspine setup - setting up your workspace/);
+    assert.doesNotMatch(first.output, /workspine init - setting up your workspace/);
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'config.json')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-quick', 'SKILL.md')));
+    assert.match(fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf8'), /\.work\/bin\//);
     assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')), 'generic governance is opt-in');
     const before = fs.readFileSync(path.join(tmpDir, '.work', 'generation-manifest.json'));
     const second = await runCliAsMain(tmpDir, ['setup', '-y']);

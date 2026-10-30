@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const { createHash } = require('node:crypto');
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('url');
 
 const { cleanup, createTempProject, runCliAsMain, readJson } = require('./gsdd.helpers.cjs');
@@ -1353,6 +1354,19 @@ describe('next command routing', () => {
     assert.ok(result.inputs_skipped.includes('.work/SPEC.md: missing'));
     assert.ok(result.inputs_skipped.includes('.work/ROADMAP.md: missing'));
     assert.ok(result.inputs_skipped.includes('.work/MILESTONES.md: missing'));
+    assert.ok(!result.artifacts_to_read.includes('.work/research/2026-06-20-long-term-agent-harness-consistency.md'));
+  });
+
+  test('workspine bootstrap-only dirty worktree does not emit canonical_dirty repo warnings', async () => {
+    await initWork();
+    spawnSync('git', ['init'], { cwd: tmpDir, encoding: 'utf8' });
+    const result = await runJson(['next', '--json']);
+    assert.ok(!result.repo_warnings.some((message) => /tracked\/untracked changes/i.test(message)),
+      'bootstrap-only dirty state should not warn');
+    writeFile('notes.md', 'local note\n');
+    const dirty = await runJson(['next', '--json']);
+    assert.ok(dirty.repo_warnings.some((message) => /tracked\/untracked changes/i.test(message)),
+      'non-bootstrap dirty files should still warn');
   });
 
   test('active brownfield change routes to brownfield planning before unrelated roadmap phase preflight', async () => {
