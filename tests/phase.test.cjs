@@ -3793,3 +3793,14 @@ describe('Phase 32 runtime-freshness helper', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // milestone complete command
 // ─────────────────────────────────────────────────────────────────────────────
+
+describe('proof staleness lane', () => {
+  test('tracked proof runners pin only git objects that still exist in this repository', () => {
+    const result = spawnSync(process.execPath, [path.join(__dirname, 'run-proof.cjs')], {
+      encoding: 'utf-8',
+      cwd: path.join(__dirname, '..'),
+    });
+    assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /CLEAN \(/);
+  });
+});
