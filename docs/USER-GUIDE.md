@@ -492,6 +492,8 @@ Each adds quality but costs tokens and time:
 
 Inspect status with `node .work/bin/gsdd.mjs integrations show --json`. Enable with `node .work/bin/gsdd.mjs integrations codebase-context enable` after installing the CLI. When disabled or unavailable, workflows skip the bridge with no behavior change.
 
+`plan-context` and `edit-preflight` are Workspine helper subcommands only. They call the real codebase-context CLI: `patterns` and `search --intent explore` for planning (MCP `get_team_patterns` / `search_codebase`), and `search --intent edit` before edits (MCP `search_codebase` preflight).
+
 Disable these to speed up phases in familiar domains or when conserving tokens. Disabling `planCheck` engages reduced-assurance mode: the planner self-checks without the independent reviewer.
 
 ### Model Control

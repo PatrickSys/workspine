@@ -23,6 +23,9 @@ const HELPER_LIB_FILES = Object.freeze([
   'work-context.mjs',
   'workflows.mjs',
   'workspace-root.mjs',
+  'integrations-config.mjs',
+  'integrations-cli.mjs',
+  'integrations/codebase-context.mjs',
 ]);
 const DEFAULT_STATE_DIR_NAME = '.work';
 
@@ -88,7 +91,7 @@ const PACKAGE_NAME = ${embeddedPackageName};
 const PACKAGE_VERSION = ${embeddedPackageVersion};
 const cmdNext = createCmdNext(HELPER_CONTEXT);
 const cmdGitIdentity = createCmdGitIdentity(HELPER_CONTEXT);
-const cmdIntegrations = createCmdIntegrations(HELPER_CONTEXT);
+const cmdIntegrations = createCmdIntegrations({ getCwd: () => HELPER_CONTEXT.cwd });
 
 function cmdControlMap(...controlArgs) {
   const context = resolveWorkspaceContext([], { cwd: HELPER_CONTEXT.cwd });

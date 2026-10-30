@@ -11,19 +11,15 @@ import { parseFlagValue, output } from './cli-utils.mjs';
 import { validateCommandShape } from './init-runtime.mjs';
 import { assertStateAuthority, resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { DEFAULT_INTEGRATIONS, mergeIntegrations } from './integrations-config.mjs';
+
+export { DEFAULT_INTEGRATIONS };
 
 export const DEFAULT_GIT_PROTOCOL = {
   branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
   commit: 'Group changes logically and follow the existing repo conventions. Do not mention phase, plan, or task IDs unless explicitly requested.',
   pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
 };
-
-export const DEFAULT_INTEGRATIONS = Object.freeze({
-  codebaseContext: Object.freeze({
-    enabled: false,
-    command: 'codebase-context',
-  }),
-});
 
 // Rigor controls the current workflow's alignment and quality gates. Model profiles
 // remain a separate cost/quality selection axis. `max` is accepted only for stored
@@ -122,19 +118,7 @@ export function buildDefaultConfig({ autoAdvance = false } = {}) {
 }
 
 function defaultIntegrations() {
-  return {
-    codebaseContext: { ...DEFAULT_INTEGRATIONS.codebaseContext },
-  };
-}
-
-function mergeIntegrations(existing = {}) {
-  return {
-    codebaseContext: {
-      ...DEFAULT_INTEGRATIONS.codebaseContext,
-      ...(existing.codebaseContext ?? {}),
-      enabled: existing.codebaseContext?.enabled === true,
-    },
-  };
+  return mergeIntegrations({});
 }
 
 function buildExistingConfigDefaults(existing = {}, { autoAdvance = false } = {}) {

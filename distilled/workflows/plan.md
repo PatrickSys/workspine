@@ -97,7 +97,7 @@ Use these sections:
 Quality gate: do not proceed to goal-backward planning if you have unresolved uncertainties about the implementation approach. If research was skipped (skip conditions above apply), document the skip reason in the plan Notes section so the plan checker can verify the skip was justified.
 </research_check>
 <codebase_context_integration>
-Optional bridge to the [codebase-context](https://github.com/PatrickSys/codebase-context) CLI when it is installed and enabled in \`.work/config.json\` (\`integrations.codebaseContext.enabled: true\`). Default is off; when disabled or the CLI is missing, skip this block with no behavior change.
+Optional bridge to the [codebase-context](https://github.com/PatrickSys/codebase-context) CLI when it is installed and enabled in \`.work/config.json\` (\`integrations.codebaseContext.enabled: true\`). Default is off; when disabled or the CLI is missing, skip this block with no behavior change. \`plan-context\` is a Workspine helper name (not a codebase-context subcommand); it runs \`codebase-context patterns\` (MCP \`get_team_patterns\`) and per-file \`codebase-context search --intent explore\` (MCP \`search_codebase\`).
 After the planned write set is known (repo-relative paths the tasks will touch), run:
 \`node .work/bin/gsdd.mjs integrations codebase-context plan-context --files <comma-separated-paths> --plan <plan-artifact-path> --json\`
 Read \`.work/integrations/codebase-context/plan-context.json\` when \`status\` is \`ok\` and fold relevant team patterns into planning context. When \`status\` is \`disabled\` or \`unavailable\`, continue without codebase-context.

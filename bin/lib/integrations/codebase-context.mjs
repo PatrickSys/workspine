@@ -2,25 +2,39 @@ import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { dirname, join, relative, resolve } from 'path';
 import { createHash } from 'crypto';
-import { DEFAULT_INTEGRATIONS, loadProjectModelConfig, writeProjectConfig } from '../config.mjs';
+import {
+  DEFAULT_INTEGRATIONS,
+  loadProjectModelConfig,
+  mergeCodebaseContextIntegration,
+  patchIntegrations,
+} from '../integrations-config.mjs';
 import { output, parseFlagValue } from '../cli-utils.mjs';
 import { resolveStateDir } from '../state-dir.mjs';
 import { writeFileAtomic } from '../atomic-write.mjs';
 
 export const INTEGRATION_DIR = 'integrations/codebase-context';
 
+/**
+ * Workspine helper subcommands (plan-context, edit-preflight) are not codebase-context CLI
+ * commands. They invoke the published CLI, which wraps MCP tools:
+ * - plan-context → `patterns` (get_team_patterns) + per-file `search --intent explore` (search_codebase)
+ * - edit-preflight → `search --intent edit` (search_codebase preflight card)
+ */
+export const CODEBASE_CONTEXT_BRIDGE = Object.freeze({
+  planContext: Object.freeze([
+    { argv: ['patterns', '--json'], mcpTool: 'get_team_patterns' },
+    { argv: ['search', '--query', '<file>', '--intent', 'explore', '--json', '--limit', '3'], mcpTool: 'search_codebase' },
+  ]),
+  editPreflight: Object.freeze([
+    { argv: ['search', '--query', '<query>', '--intent', 'edit', '--json', '--limit', '10'], mcpTool: 'search_codebase' },
+  ]),
+});
+
 function normalizeSlashes(value) {
   return String(value || '').replace(/\\/g, '/');
 }
 
-export function mergeCodebaseContextIntegration(config = {}) {
-  const existing = config?.integrations?.codebaseContext ?? {};
-  return {
-    ...DEFAULT_INTEGRATIONS.codebaseContext,
-    ...existing,
-    enabled: existing.enabled === true,
-  };
-}
+export { mergeCodebaseContextIntegration };
 
 export function integrationArtifactDir(workDir) {
   return join(workDir, INTEGRATION_DIR);
@@ -40,18 +54,6 @@ function parseFilesFlag(flagArgs) {
   return raw.split(',').map((part) => normalizeSlashes(part).trim()).filter(Boolean);
 }
 
-function directoryScopes(files, workspaceRoot) {
-  const scopes = new Set();
-  for (const file of files) {
-    const absolute = resolve(workspaceRoot, file);
-    const rel = normalizeSlashes(relative(workspaceRoot, absolute));
-    if (!rel || rel.startsWith('..')) continue;
-    const dir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '.';
-    scopes.add(dir === '' ? '.' : dir);
-  }
-  return [...scopes].slice(0, 12);
-}
-
 function parseCliJson(stdout) {
   const trimmed = String(stdout || '').trim();
   if (!trimmed) return null;
@@ -62,6 +64,22 @@ function parseCliJson(stdout) {
   }
 }
 
+function resolveCliInvocation(command, args) {
+  if (command.endsWith('.js')) {
+    return { executable: process.execPath, argv: [command, ...args], displayCommand: command };
+  }
+  return { executable: command, argv: args, displayCommand: command };
+}
+
+function recordInvocation(invocations, command, argv, mcpTool) {
+  const { executable, argv: execArgv, displayCommand } = resolveCliInvocation(command, argv);
+  invocations.push({
+    command: displayCommand,
+    argv: executable === process.execPath ? [process.execPath, ...execArgv] : [displayCommand, ...argv],
+    mcpTool,
+  });
+}
+
 export function createCodebaseContextRunner({ execFile, exists = existsSync } = {}) {
   if (typeof execFile !== 'function') {
     throw new Error('createCodebaseContextRunner requires execFile');
@@ -69,7 +87,8 @@ export function createCodebaseContextRunner({ execFile, exists = existsSync } = 
 
   function probeCli(command, cwd) {
     try {
-      execFile(command, ['--version'], {
+      const { executable, argv } = resolveCliInvocation(command, ['--version']);
+      execFile(executable, argv, {
         cwd,
         encoding: 'utf-8',
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -82,7 +101,8 @@ export function createCodebaseContextRunner({ execFile, exists = existsSync } = 
   }
 
   function runCli(command, args, cwd) {
-    return execFile(command, args, {
+    const { executable, argv } = resolveCliInvocation(command, args);
+    return execFile(executable, argv, {
       cwd,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -91,7 +111,7 @@ export function createCodebaseContextRunner({ execFile, exists = existsSync } = 
     });
   }
 
-  return { probeCli, runCli, exists };
+  return { probeCli, runCli, exists, resolveCliInvocation };
 }
 
 export function buildSkippedReceipt(reason, extra = {}) {
@@ -100,6 +120,7 @@ export function buildSkippedReceipt(reason, extra = {}) {
     integration: 'codebase-context',
     status: reason === 'disabled' ? 'disabled' : 'unavailable',
     reason,
+    bridge: CODEBASE_CONTEXT_BRIDGE,
     ...extra,
   };
 }
@@ -117,6 +138,7 @@ export function runPlanContext({
   const integration = mergeCodebaseContextIntegration(config);
   const artifactPath = join(integrationArtifactDir(workDir), 'plan-context.json');
   const relativeArtifact = normalizeSlashes(relative(workspaceRoot, artifactPath));
+  const ccInvocations = [];
 
   if (!integration.enabled) {
     const body = buildSkippedReceipt('disabled', { artifact: relativeArtifact, files, plan_path: planPath });
@@ -146,6 +168,7 @@ export function runPlanContext({
       error: 'missing_files',
       message: 'plan-context requires --files with at least one repo-relative path',
       artifact: relativeArtifact,
+      bridge: CODEBASE_CONTEXT_BRIDGE,
     };
     if (json) output(body);
     else console.error(body.message);
@@ -153,29 +176,19 @@ export function runPlanContext({
     return body;
   }
 
-  const patternsStdout = runner.runCli(command, ['patterns', '--json'], workspaceRoot);
-  const patterns = parseCliJson(patternsStdout);
+  const patternsArgv = ['patterns', '--json'];
+  recordInvocation(ccInvocations, command, patternsArgv, 'get_team_patterns');
+  const patterns = parseCliJson(runner.runCli(command, patternsArgv, workspaceRoot));
 
-  const scopes = directoryScopes(files, workspaceRoot);
-  const scopedSearches = [];
-  for (const scope of scopes) {
-    const query = scope === '.'
-      ? 'team patterns and conventions for repository root files'
-      : `team patterns and conventions for files under ${scope}`;
-    const stdout = runner.runCli(command, [
-      'search',
-      '--query',
+  const fileSearches = [];
+  for (const file of files.slice(0, 8)) {
+    const query = `implementation and conventions for ${file}`;
+    const searchArgv = ['search', '--query', query, '--intent', 'explore', '--json', '--limit', '3'];
+    recordInvocation(ccInvocations, command, searchArgv, 'search_codebase');
+    fileSearches.push({
+      file,
       query,
-      '--intent',
-      'explore',
-      '--json',
-      '--limit',
-      '5',
-    ], workspaceRoot);
-    scopedSearches.push({
-      scope,
-      query,
-      response: parseCliJson(stdout),
+      response: parseCliJson(runner.runCli(command, searchArgv, workspaceRoot)),
     });
   }
 
@@ -185,11 +198,12 @@ export function runPlanContext({
     status: 'ok',
     recorded_at: now.toISOString(),
     command,
+    bridge: CODEBASE_CONTEXT_BRIDGE,
+    codebase_context_invocations: ccInvocations,
     plan_path: planPath,
     files,
-    directory_scopes: scopes,
     patterns,
-    scoped_searches: scopedSearches,
+    file_searches: fileSearches,
     artifact: relativeArtifact,
   };
 
@@ -216,6 +230,7 @@ export function runEditPreflight({
   const artifactPath = join(integrationArtifactDir(workDir), 'preflight', `${safeTask}.json`);
   const relativeArtifact = normalizeSlashes(relative(workspaceRoot, artifactPath));
   const logPath = join(integrationArtifactDir(workDir), 'preflight-log.jsonl');
+  const ccInvocations = [];
 
   if (!integration.enabled) {
     const body = buildSkippedReceipt('disabled', {
@@ -251,6 +266,7 @@ export function runEditPreflight({
       error: 'missing_query',
       message: 'edit-preflight requires --query describing the intended edit',
       artifact: relativeArtifact,
+      bridge: CODEBASE_CONTEXT_BRIDGE,
     };
     if (json) output(body);
     else console.error(body.message);
@@ -260,17 +276,9 @@ export function runEditPreflight({
 
   const fileHint = files.length > 0 ? ` Files: ${files.join(', ')}.` : '';
   const searchQuery = `${String(query).trim()}.${fileHint}`;
-  const stdout = runner.runCli(command, [
-    'search',
-    '--query',
-    searchQuery,
-    '--intent',
-    'edit',
-    '--json',
-    '--limit',
-    '10',
-  ], workspaceRoot);
-  const response = parseCliJson(stdout);
+  const searchArgv = ['search', '--query', searchQuery, '--intent', 'edit', '--json', '--limit', '10'];
+  recordInvocation(ccInvocations, command, searchArgv, 'search_codebase');
+  const response = parseCliJson(runner.runCli(command, searchArgv, workspaceRoot));
 
   const body = {
     schema_version: 1,
@@ -278,6 +286,8 @@ export function runEditPreflight({
     status: 'ok',
     recorded_at: now.toISOString(),
     command,
+    bridge: CODEBASE_CONTEXT_BRIDGE,
+    codebase_context_invocations: ccInvocations,
     task_id: taskId,
     files,
     query: String(query).trim(),
@@ -308,7 +318,7 @@ export function runEditPreflight({
 export function showIntegrationStatus({ config, workspaceRoot, runner } = {}) {
   const integration = mergeCodebaseContextIntegration(config);
   const command = integration.command || DEFAULT_INTEGRATIONS.codebaseContext.command;
-  const cliAvailable = integration.enabled ? runner.probeCli(command, workspaceRoot) : false;
+  const cliAvailable = runner.probeCli(command, workspaceRoot);
   return {
     schema_version: 1,
     integrations: {
@@ -317,20 +327,14 @@ export function showIntegrationStatus({ config, workspaceRoot, runner } = {}) {
         command,
         cli_available: cliAvailable,
         artifact_dir: `.work/${INTEGRATION_DIR}`,
+        bridge: CODEBASE_CONTEXT_BRIDGE,
       },
     },
   };
 }
 
-export function setIntegrationEnabled(cwd, enabled, { writeConfig = writeProjectConfig, loadConfig = loadProjectModelConfig } = {}) {
-  const config = loadConfig(cwd);
-  config.integrations = config.integrations || {};
-  config.integrations.codebaseContext = {
-    ...mergeCodebaseContextIntegration(config),
-    enabled: Boolean(enabled),
-  };
-  writeConfig(config, cwd);
-  return config.integrations.codebaseContext;
+export function setIntegrationEnabled(cwd, enabled) {
+  return patchIntegrations(cwd, { codebaseContext: { enabled: Boolean(enabled) } });
 }
 
 export function cmdCodebaseContextSubcommand(subcommand, flagArgs, {
@@ -368,11 +372,11 @@ export function cmdCodebaseContextSubcommand(subcommand, flagArgs, {
         runner: execRunner,
       });
     case 'enable':
-      setIntegrationEnabled(workspaceRoot, true, { loadConfig, writeConfig: writeProjectConfig });
+      setIntegrationEnabled(workspaceRoot, true);
       console.log('  - enabled integrations.codebaseContext');
       return null;
     case 'disable':
-      setIntegrationEnabled(workspaceRoot, false, { loadConfig, writeConfig: writeProjectConfig });
+      setIntegrationEnabled(workspaceRoot, false);
       console.log('  - disabled integrations.codebaseContext');
       return null;
     case 'show':
@@ -380,6 +384,7 @@ export function cmdCodebaseContextSubcommand(subcommand, flagArgs, {
       return null;
     default:
       console.error('Usage: integrations codebase-context <plan-context|edit-preflight|enable|disable|show> [flags]');
+      console.error('  (Workspine helpers; codebase-context CLI: patterns, search --intent explore|edit, map, …)');
       process.exitCode = 1;
       return null;
   }

@@ -33,7 +33,7 @@ const cmdHealth = createCmdHealth(INIT_CONTEXT);
 const cmdNext = createCmdNext(INIT_CONTEXT);
 const cmdJourney = createCmdJourney(INIT_CONTEXT);
 const cmdGitIdentity = createCmdGitIdentity(INIT_CONTEXT);
-const cmdIntegrations = createCmdIntegrations(INIT_CONTEXT);
+const cmdIntegrations = createCmdIntegrations({ getCwd: () => INIT_CONTEXT.cwd });
 
 const cmdUpdate = (...updateArgs) => {
   if (updateArgs.includes('--global') || updateArgs.includes('-g')) {
