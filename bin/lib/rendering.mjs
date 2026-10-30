@@ -74,6 +74,7 @@ import { cmdPhaseStatus, cmdVerify } from './lib/phase.mjs';
 import { buildControlMap } from './lib/control-map.mjs';
 import { cmdDecisionsQuery, cmdRememberCandidate } from './lib/decision-cli.mjs';
 import { createCmdNext } from './lib/next.mjs';
+import { createCmdIntegrations } from './lib/integrations-cli.mjs';
 import { maybeShowUpdateNotice } from './lib/update-awareness.mjs';
 import { bootstrapHelperWorkspace, consumeWorkspaceRootArg, resolveWorkspaceContext } from './lib/workspace-root.mjs';
 import { assertStateAuthority } from './lib/state-dir.mjs';
@@ -87,6 +88,7 @@ const PACKAGE_NAME = ${embeddedPackageName};
 const PACKAGE_VERSION = ${embeddedPackageVersion};
 const cmdNext = createCmdNext(HELPER_CONTEXT);
 const cmdGitIdentity = createCmdGitIdentity(HELPER_CONTEXT);
+const cmdIntegrations = createCmdIntegrations(HELPER_CONTEXT);
 
 function cmdControlMap(...controlArgs) {
   const context = resolveWorkspaceContext([], { cwd: HELPER_CONTEXT.cwd });
@@ -121,6 +123,7 @@ const COMMANDS = {
   remember: cmdRememberCandidate,
   verify: cmdVerify,
   next: cmdNext,
+  integrations: cmdIntegrations,
 };
 
 const RESOLVER_BASED_COMMANDS = new Set([
@@ -166,6 +169,8 @@ function printHelp() {
     '                               Example: node ${helperPath} lifecycle-transition verify --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --artifact .work/phases/{phase_dir}/{plan_id}-SUMMARY.md --authority workflow --json',
     '  next [--json] [--format auto|json|human]',
     '                               Route to the next safe Workspine action from ${normalizeStateDirName(stateDirName)}, brownfield, planning, and repo truth',
+    '  integrations [show] | codebase-context <plan-context|edit-preflight|enable|disable|show>',
+    '                               Optional codebase-context bridge (off unless enabled in ${normalizeStateDirName(stateDirName)}/config.json)',
     '  supported package runtime floor: Node >=22',
     '  next/verify update notice: sequential/best-effort network-bounded checks; no lock or cross-process concurrency guarantee; use --no-update-notice, WORKSPINE_UPDATE_AWARENESS=0, or the legacy GSDD_UPDATE_AWARENESS=0 to opt out',
     '                               health and update remain network-free; run \`npx -y workspine update\` for explicit repair',

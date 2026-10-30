@@ -96,6 +96,13 @@ Use these sections:
 - The phase uses only technologies already established in previous phases
 Quality gate: do not proceed to goal-backward planning if you have unresolved uncertainties about the implementation approach. If research was skipped (skip conditions above apply), document the skip reason in the plan Notes section so the plan checker can verify the skip was justified.
 </research_check>
+<codebase_context_integration>
+Optional bridge to the [codebase-context](https://github.com/PatrickSys/codebase-context) CLI when it is installed and enabled in \`.work/config.json\` (\`integrations.codebaseContext.enabled: true\`). Default is off; when disabled or the CLI is missing, skip this block with no behavior change.
+After the planned write set is known (repo-relative paths the tasks will touch), run:
+\`node .work/bin/gsdd.mjs integrations codebase-context plan-context --files <comma-separated-paths> --plan <plan-artifact-path> --json\`
+Read \`.work/integrations/codebase-context/plan-context.json\` when \`status\` is \`ok\` and fold relevant team patterns into planning context. When \`status\` is \`disabled\` or \`unavailable\`, continue without codebase-context.
+Enable once per repo with \`node .work/bin/gsdd.mjs integrations codebase-context enable\` after installing the CLI (\`npx -y codebase-context\` or a local checkout).
+</codebase_context_integration>
 <spec_quality_check>
 ### When This Runs
 After research_check, before goal_backward_planning.

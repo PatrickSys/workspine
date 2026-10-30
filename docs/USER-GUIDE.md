@@ -452,6 +452,12 @@ only brief-driven `SPEC.md`/`ROADMAP.md` bootstrap; it does not authorize or cha
     "branch": "Follow existing repo conventions",
     "commit": "Logical grouping, no phase/task IDs",
     "pr": "Follow existing review workflow"
+  },
+  "integrations": {
+    "codebaseContext": {
+      "enabled": false,
+      "command": "codebase-context"
+    }
   }
 }
 ```
@@ -476,6 +482,15 @@ Each adds quality but costs tokens and time:
 | `workflow.discuss` | `true` | Surface material approach ambiguity for owner alignment before planning |
 | `workflow.planCheck` | `true` | Fresh-context adversarial plan checking (max-3 cycle loop) |
 | `workflow.verifier` | `true` | 3-level verification gate after execution |
+
+### Optional integrations
+
+| Setting | Default | What it Controls |
+|---------|---------|------------------|
+| `integrations.codebaseContext.enabled` | `false` | When `true` and the CLI is on `PATH`, `/work-plan` and `/work-execute` may call [codebase-context](https://github.com/PatrickSys/codebase-context) helpers and record receipts under `.work/integrations/codebase-context/` |
+| `integrations.codebaseContext.command` | `codebase-context` | Executable used for `patterns` / `search --intent edit` calls |
+
+Inspect status with `node .work/bin/gsdd.mjs integrations show --json`. Enable with `node .work/bin/gsdd.mjs integrations codebase-context enable` after installing the CLI. When disabled or unavailable, workflows skip the bridge with no behavior change.
 
 Disable these to speed up phases in familiar domains or when conserving tokens. Disabling `planCheck` engages reduced-assurance mode: the planner self-checks without the independent reviewer.
 

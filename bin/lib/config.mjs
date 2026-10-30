@@ -18,6 +18,13 @@ export const DEFAULT_GIT_PROTOCOL = {
   pr: 'Follow the existing repo or team review workflow. Do not assume PR creation, timing, or naming unless explicitly requested.',
 };
 
+export const DEFAULT_INTEGRATIONS = Object.freeze({
+  codebaseContext: Object.freeze({
+    enabled: false,
+    command: 'codebase-context',
+  }),
+});
+
 // Rigor controls the current workflow's alignment and quality gates. Model profiles
 // remain a separate cost/quality selection axis. `max` is accepted only for stored
 // configuration and CLI compatibility; it resolves to the currently implemented
@@ -94,7 +101,7 @@ export function normalizeModelProfile(value) {
   return VALID_MODEL_PROFILES.includes(value) ? value : 'balanced';
 }
 
-function buildConfigDefaults({ autoAdvance = false, rigorProfile }) {
+function buildConfigDefaults({ autoAdvance = false, rigorProfile, integrations = defaultIntegrations() }) {
   const rigor = resolveRigor(rigorProfile);
   const cost = resolveCost('balanced');
   const config = {
@@ -103,6 +110,7 @@ function buildConfigDefaults({ autoAdvance = false, rigorProfile }) {
     ...cost,
     commitDocs: true,
     gitProtocol: { ...DEFAULT_GIT_PROTOCOL },
+    integrations,
     initVersion: 'v1.1',
   };
   if (autoAdvance) config.autoAdvance = true;
@@ -110,7 +118,23 @@ function buildConfigDefaults({ autoAdvance = false, rigorProfile }) {
 }
 
 export function buildDefaultConfig({ autoAdvance = false } = {}) {
-  return buildConfigDefaults({ autoAdvance, rigorProfile: 'high' });
+  return buildConfigDefaults({ autoAdvance, rigorProfile: 'high', integrations: defaultIntegrations() });
+}
+
+function defaultIntegrations() {
+  return {
+    codebaseContext: { ...DEFAULT_INTEGRATIONS.codebaseContext },
+  };
+}
+
+function mergeIntegrations(existing = {}) {
+  return {
+    codebaseContext: {
+      ...DEFAULT_INTEGRATIONS.codebaseContext,
+      ...(existing.codebaseContext ?? {}),
+      enabled: existing.codebaseContext?.enabled === true,
+    },
+  };
 }
 
 function buildExistingConfigDefaults(existing = {}, { autoAdvance = false } = {}) {
@@ -139,6 +163,7 @@ export function loadProjectModelConfig(cwd = process.cwd()) {
       ...defaults,
       ...existing,
       workflow: { ...defaults.workflow, ...(existing.workflow ?? {}) },
+      integrations: mergeIntegrations(existing.integrations),
     };
   } catch (e) {
     console.error(`WARNING: ${configPathLabel(cwd)} is malformed (${e.message}). Using defaults.`);
@@ -166,6 +191,7 @@ function loadConfigForMutation(cwd = process.cwd()) {
         ...defaults,
         ...existing,
         workflow: { ...defaults.workflow, ...(existing.workflow ?? {}) },
+        integrations: mergeIntegrations(existing.integrations),
       },
     };
   } catch (e) {

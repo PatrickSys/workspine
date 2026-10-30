@@ -291,6 +291,7 @@ export const COMMAND_FLAGS = {
   next: { '--json': false, '--format': true, '--init': false, '--id': true, '--prompt': true, '--default': true, '--gate': true, '--blocking': true, '--answer': true, '--replace': false, '--title': true, '--body': true, '--supersedes': true, '--privacy': true, '--backlog': true },
   models: { '--agent': true, '--profile': true, '--runtime': true, '--model': true },
   rigor: {},
+  integrations: { '--json': false, '--workspace-root': true, '--files': true, '--plan': true, '--query': true, '--task': true },
 };
 
 // Bare words count only in the command position, so a positional argument that happens to read
@@ -464,6 +465,7 @@ export function validateCommandShape(command, commandArgs = []) {
     next: 'Usage: workspine next [graph rebuild|question add|question answer|decision record|dogfood capture] [flags]',
     models: 'Usage: workspine models [show|profile|agent-profile|clear-agent-profile|set|clear] [flags]',
     rigor: 'Usage: workspine rigor [show|low|medium|high|max|<step> <level>]',
+    integrations: 'Usage: workspine integrations [show] | codebase-context <plan-context|edit-preflight|enable|disable|show> [flags]',
   }[command];
   if (!usage) return null;
 
@@ -520,6 +522,14 @@ export function validateCommandShape(command, commandArgs = []) {
     const valid = !first || first === 'show' && !second
       || RIGOR_LEVEL_NAMES.has(first) && !second
       || RIGOR_STEP_NAMES.has(first) && RIGOR_LEVEL_NAMES.has(second) && rest.length === 0;
+    if (!valid) return shapeError(command, usage);
+  }
+  if (command === 'integrations') {
+    const valid = positionals.length === 0
+      || positionals[0] === 'show'
+      || (positionals[0] === 'codebase-context'
+        && positionals.length >= 2
+        && ['plan-context', 'edit-preflight', 'enable', 'disable', 'show'].includes(positionals[1]));
     if (!valid) return shapeError(command, usage);
   }
   return commandSpecificFlagError(command, positionals, commandArgs);

@@ -87,7 +87,9 @@ lifecycle and helper machinery stays in the repository for the agents and for in
 - [Verification Discipline](docs/VERIFICATION-DISCIPLINE.md) for what the checks do and do not establish.
 - [Changelog](CHANGELOG.md) for migration and compatibility notes.
 
-Workspine requires Node `>=22`. The compatibility command `workspine init` remains available throughout
+README requires Node `>=22`. The compatibility command `workspine init` remains available throughout
 the `0.35.x` release line. The `gsdd` binary alias is removed in the next minor release.
+
+Optional [codebase-context](https://github.com/PatrickSys/codebase-context) integration (off by default) can enrich `/work-plan` and `/work-execute` when enabled in `.work/config.json`; see [User Guide](docs/USER-GUIDE.md#optional-integrations).
 
 MIT. See [LICENSE](LICENSE).
