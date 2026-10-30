@@ -9,6 +9,21 @@ import { resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const MAX_DIRTY_BUCKET_ENTRIES = 200;
+
+function isWorkspineBootstrapRepoPath(repoPath) {
+  const normalized = normalizeSlashes(String(repoPath || '').replace(/\\/g, '/'));
+  if (!normalized || normalized.includes('..')) return false;
+  return normalized === 'goal.md'
+    || normalized === 'AGENTS.md'
+    || normalized.startsWith('.work/')
+    || normalized.startsWith('.agents/');
+}
+
+function nonBootstrapDirtyCounts(worktree) {
+  const tracked = (worktree.dirty?.tracked || []).filter((entry) => !isWorkspineBootstrapRepoPath(entry)).length;
+  const untracked = (worktree.dirty?.untracked || []).filter((entry) => !isWorkspineBootstrapRepoPath(entry)).length;
+  return { tracked, untracked };
+}
 const CLEANUP_STATES = Object.freeze(['active', 'paused', 'merged', 'abandoned', 'superseded', 'cleanup_deferred']);
 const ACTIVE_ANNOTATION_STATES = Object.freeze(['active', 'paused', 'cleanup_deferred']);
 const AUTHORITY_ORDER = Object.freeze([
@@ -642,16 +657,17 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
     risks.push(risk);
   }
   addBranchStateRisks(risks, canonical, { canonical: true });
-  if (canonical.dirty.counts.tracked > 0 || canonical.dirty.counts.untracked > 0) {
+  const canonicalDirty = nonBootstrapDirtyCounts(canonical);
+  if (canonicalDirty.tracked > 0 || canonicalDirty.untracked > 0) {
     const risk = {
       code: 'canonical_dirty',
       severity: 'warn',
-      message: `Canonical worktree has tracked/untracked changes (${canonical.dirty.counts.tracked} tracked, ${canonical.dirty.counts.untracked} untracked).`,
+      message: `Canonical worktree has tracked/untracked changes (${canonicalDirty.tracked} tracked, ${canonicalDirty.untracked} untracked).`,
     };
     risk.fix_hint = fixHintForRisk(risk);
     risks.push(risk);
   }
-  if (canonical.dirty.counts.tracked > 0 && (canonical.ahead_behind?.behind || 0) > 0) {
+  if (canonicalDirty.tracked > 0 && (canonical.ahead_behind?.behind || 0) > 0) {
     const risk = {
       code: 'canonical_dirty_behind_upstream',
       severity: 'block',

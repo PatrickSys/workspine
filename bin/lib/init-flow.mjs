@@ -239,7 +239,9 @@ export function createCmdInit(ctx) {
     const normalizedArgs = workspace.args;
     let initCtx = contextAtWorkspaceRoot(ctx, workspace.workspaceRoot);
 
-    console.log('workspine init - setting up your workspace\n');
+    const invokedAsFlag = parseFlagValue(normalizedArgs, '--invoked-as');
+    const invokedAs = invokedAsFlag.invalid || !invokedAsFlag.value ? 'init' : invokedAsFlag.value;
+    console.log(`workspine ${invokedAs} - setting up your workspace\n`);
 
     const isAuto = parseAutoFlag(normalizedArgs);
     const wantsMigration = normalizedArgs.includes('--migrate');
@@ -410,6 +412,7 @@ export function createCmdInit(ctx) {
       ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/`, `  - ensured ${stateDirName}/ is gitignored`);
     }
     ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/.local/`, `  - ensured ${stateDirName}/.local/ is gitignored`);
+    ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/bin/`, `  - ensured ${stateDirName}/bin/ is gitignored`);
 
     if (briefSource) {
       cpSync(briefSource, join(planningDir, 'PROJECT_BRIEF.md'));

@@ -208,7 +208,7 @@ export function createCmdSetup(ctx) {
     }
     // Setup owns consent and explicit scope/target flags; init-flow owns the established filesystem
     // preflight and generation transaction. Supplying targets avoids reopening its runtime wizard.
-    return createCmdInit(initCtx)('--tools', tools.join(','), '--workspace-root', root);
+    return createCmdInit(initCtx)('--tools', tools.join(','), '--workspace-root', root, '--invoked-as', 'setup');
   };
 }
 

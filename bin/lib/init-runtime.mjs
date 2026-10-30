@@ -277,7 +277,7 @@ export function getPostInitRoutingLines(selectedRuntimes) {
 // reject them with a specific message; that message must still be the one a user sees.
 export const COMMAND_FLAGS = {
   setup: { '--global': false, '-g': false, '--agent': true, '--all': false, '-y': false, '--yes': false, '--dry-run': false, '--dry': false, '--workspace-root': true, '--migrate': false },
-  init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--workspace-root': true },
+  init: { '--tools': true, '--brief': true, '--auto': false, '--migrate': false, '--workspace-root': true, '--invoked-as': true },
   update: { '--dry-run': false, '--dry': false, '--global': false, '-g': false, '--workspace-root': true },
   health: { '--json': false, '--global': false, '-g': false, '--workspace-root': true },
   install: { '--global': false, '-g': false, '--auto': false, '--dry-run': false, '--dry': false, '--tools': true, '--local': false, '--verify-runtime': false, '--live-runtime': false },
