@@ -346,6 +346,7 @@ Details worth knowing before you script it:
 | `npx -y workspine journey` | Inspect journey receipts |
 | `npx -y workspine git-identity` | Inspect Git identity and root |
 | `npx -y workspine phase-status` | Inspect phase status |
+| `npx -y workspine integrations show --json` | Inspect optional local integrations; Codebase Context is disabled unless enabled explicitly |
 | `npx -y workspine help` | Show the concise first-use and core-command summary; this guide owns the detailed command reference |
 
 If `workspine` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .work/bin/gsdd.mjs ...` from the repo root. The `gsdd` binary alias is removed at the next minor release, so new scripts and CI should call `workspine ...` directly.

@@ -65,7 +65,6 @@ Before planning, acknowledge what is locked:
 - Patterns from previous phases - match existing conventions. Do not introduce new patterns without cause.
 - Deferred items - items marked v2, nice-to-have, or out of scope in SPEC.md or APPROACH.md. Do not plan for them.
 - Cross-check: if SPEC.md and APPROACH.md disagree on whether an item is must-have or deferred, stop and ask the user before planning. Do not silently adopt one classification over the other.
-
 If you need to challenge a locked decision: stop, ask the developer, and document the new decision explicitly.
 </context_fidelity>
 <research_check>
@@ -97,11 +96,7 @@ Use these sections:
 Quality gate: do not proceed to goal-backward planning if you have unresolved uncertainties about the implementation approach. If research was skipped (skip conditions above apply), document the skip reason in the plan Notes section so the plan checker can verify the skip was justified.
 </research_check>
 <codebase_context_integration>
-Optional bridge to the [codebase-context](https://github.com/PatrickSys/codebase-context) CLI when it is installed and enabled in \`.work/config.json\` (\`integrations.codebaseContext.enabled: true\`). Default is off; when disabled or the CLI is missing, skip this block with no behavior change. \`plan-context\` is a Workspine helper name (not a codebase-context subcommand); it runs \`codebase-context patterns\` (MCP \`get_team_patterns\`) and per-file \`codebase-context search --intent explore\` (MCP \`search_codebase\`).
-After the planned write set is known (repo-relative paths the tasks will touch), run:
-\`node .work/bin/gsdd.mjs integrations codebase-context plan-context --files <comma-separated-paths> --plan <plan-artifact-path> --json\`
-Read \`.work/integrations/codebase-context/plan-context.json\` when \`status\` is \`ok\` and fold relevant team patterns into planning context. When \`status\` is \`disabled\` or \`unavailable\`, continue without codebase-context.
-Enable once per repo with \`node .work/bin/gsdd.mjs integrations codebase-context enable\` after installing the CLI (\`npx -y codebase-context\` or a local checkout).
+Optional (default off): once integrations.codebaseContext.enabled is true and the CLI is installed, after identifying the planned write set run node .work/bin/gsdd.mjs integrations codebase-context plan-context --files <comma-separated-paths> --plan <plan-artifact-path> --json. The Workspine helper calls Codebase Context patterns and search --intent explore; read .work/integrations/codebase-context/plan-context.json on status ok, otherwise continue unchanged. Enable using node .work/bin/gsdd.mjs integrations codebase-context enable; see docs/USER-GUIDE.md for setup.
 </codebase_context_integration>
 <spec_quality_check>
 ### When This Runs
@@ -279,9 +274,7 @@ Task type semantics:
 - `type="checkpoint:review"` - executor stops for explicit review before continuing
 
 If any task uses `checkpoint:*`, the plan frontmatter must set `autonomous: false`.
-
 ### Specificity Rules
-
 | Too Vague | Just Right |
 |-------------|-------------|
 | "Set up the database" | "Create the user schema, wire it into the repository layer, then run `npm test -- --runInBand tests/user-schema.test.ts`" |

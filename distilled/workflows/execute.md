@@ -67,7 +67,6 @@ Plans to execute:
   Wave 2: {plan-03-NAME.md}
 Plans already complete (have SUMMARY): {list}
 ```
-
 Confirm with the user before proceeding if any existing SUMMARYs look stale or incomplete.
 ### Execute Wave by Wave
 For each wave in ascending order:
@@ -102,7 +101,7 @@ For each task in the plan, follow this loop:
 7. Record task completion in your working notes and final SUMMARY.md.
 ```
 <codebase_context_integration>
-Same optional bridge as `/work-plan`: enable with `integrations.codebaseContext.enabled: true` after installing [codebase-context](https://github.com/PatrickSys/codebase-context). Artifacts live under `.work/integrations/codebase-context/`.
+Same opt-in bridge as /work-plan; install Codebase Context and set integrations.codebaseContext.enabled: true. Receipts live under .work/integrations/codebase-context/.
 </codebase_context_integration>
 ### Frontmatter And Task Semantics
 The executor consumes the plan schema defined by `/work-plan`:
@@ -204,9 +203,7 @@ Git rules:
 
 <deviation_rules>
 Reality rarely matches the plan perfectly. Handle deviations with these rules in priority order:
-
 ### Structured mismatch taxonomy
-
 All execution-time deltas must be classified as one of:
 - `factual_discovery` - the repo/runtime reality differs from the plan in a concrete, local way (wrong path, stale API shape, moved module, outdated dependency assumption)
 - `intent_scope_change` - the requested outcome or scope needs to change
