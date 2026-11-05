@@ -96,7 +96,7 @@ Use these sections:
 Quality gate: do not proceed to goal-backward planning if you have unresolved uncertainties about the implementation approach. If research was skipped (skip conditions above apply), document the skip reason in the plan Notes section so the plan checker can verify the skip was justified.
 </research_check>
 <codebase_context_integration>
-Optional (default off): once integrations.codebaseContext.enabled is true and the CLI is installed, after identifying the planned write set run node .work/bin/gsdd.mjs integrations codebase-context plan-context --files <comma-separated-paths> --plan <plan-artifact-path> --json. The Workspine helper calls Codebase Context patterns and search --intent explore; read .work/integrations/codebase-context/plan-context.json on status ok, otherwise continue unchanged. Enable using node .work/bin/gsdd.mjs integrations codebase-context enable; see docs/USER-GUIDE.md for setup.
+Optional, off by default: after selecting the write set and enabling `integrations.codebaseContext.enabled` with the CLI installed, run `node .work/bin/gsdd.mjs integrations codebase-context plan-context --files <paths> --plan <artifact> --json`. The helper uses Codebase Context patterns and explore search. On `status: ok`, read `.work/integrations/codebase-context/plan-context.json`; otherwise continue unchanged. Setup: `docs/USER-GUIDE.md`.
 </codebase_context_integration>
 <spec_quality_check>
 ### When This Runs

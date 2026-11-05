@@ -101,7 +101,7 @@ For each task in the plan, follow this loop:
 7. Record task completion in your working notes and final SUMMARY.md.
 ```
 <codebase_context_integration>
-Same opt-in bridge as /work-plan; install Codebase Context and set integrations.codebaseContext.enabled: true. Receipts live under .work/integrations/codebase-context/.
+Same opt-in bridge as `/work-plan`: install Codebase Context and enable `integrations.codebaseContext.enabled`. Receipts: `.work/integrations/codebase-context/`.
 </codebase_context_integration>
 ### Frontmatter And Task Semantics
 The executor consumes the plan schema defined by `/work-plan`:
