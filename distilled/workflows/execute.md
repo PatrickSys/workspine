@@ -67,7 +67,6 @@ Plans to execute:
   Wave 2: {plan-03-NAME.md}
 Plans already complete (have SUMMARY): {list}
 ```
-
 Confirm with the user before proceeding if any existing SUMMARYs look stale or incomplete.
 ### Execute Wave by Wave
 For each wave in ascending order:
@@ -94,12 +93,16 @@ For each task in the plan, follow this loop:
 ```text
 1. Read the plan frontmatter and current task.
 2. Read the task_scoped files and focused references needed for that task.
+2b. Optional codebase-context edit preflight (off by default): when `integrations.codebaseContext.enabled` is true in `.work/config.json` and the CLI is installed, before mutating files for this task run `node .work/bin/gsdd.mjs integrations codebase-context edit-preflight --files <comma-separated-paths> --query "<task action summary>" --task <task-id> --json`. `edit-preflight` is a Workspine helper that calls `codebase-context search --intent edit` (MCP `search_codebase` preflight card). Read `.work/integrations/codebase-context/last-preflight.json` when `status` is `ok`; honor `preflight` warnings but do not treat them as a hard gate unless the plan says so. When `status` is `disabled` or `unavailable`, skip with no behavior change.
 3. For roadmap phases, before implementation, run `node .work/bin/gsdd.mjs lifecycle-transition execute --plan .work/phases/{phase_dir}/{plan_id}-PLAN.md --authority workflow --json`; stop if it refuses, then implement the task action. Do not pass `--approved` or `--approval-ref` here: explicit approval is an owner-only transition, and workflow execution consumes the plan's already-durable approval.
 4. Run the task's verify steps.
 5. Handle any git actions using repo or user conventions.
 6. Re-read the plan's Objective and `non_goals`. Confirm the work just completed serves the objective and crossed no boundary; if not, record a deviation before continuing.
 7. Record task completion in your working notes and final SUMMARY.md.
 ```
+<codebase_context_integration>
+Same opt-in bridge as `/work-plan`: install Codebase Context and enable `integrations.codebaseContext.enabled`. Receipts: `.work/integrations/codebase-context/`.
+</codebase_context_integration>
 ### Frontmatter And Task Semantics
 The executor consumes the plan schema defined by `/work-plan`:
 - frontmatter keys: `phase`, `plan`, `type`, `wave`, `depends_on`, `files-modified`, `autonomous`, `requirements`, `browser_proof_required`, `browser_proof_rationale`, `must_haves`, `tdd`
@@ -200,9 +203,7 @@ Git rules:
 
 <deviation_rules>
 Reality rarely matches the plan perfectly. Handle deviations with these rules in priority order:
-
 ### Structured mismatch taxonomy
-
 All execution-time deltas must be classified as one of:
 - `factual_discovery` - the repo/runtime reality differs from the plan in a concrete, local way (wrong path, stale API shape, moved module, outdated dependency assumption)
 - `intent_scope_change` - the requested outcome or scope needs to change

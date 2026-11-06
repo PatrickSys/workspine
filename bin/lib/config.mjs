@@ -11,6 +11,9 @@ import { parseFlagValue, output } from './cli-utils.mjs';
 import { validateCommandShape } from './init-runtime.mjs';
 import { assertStateAuthority, resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
+import { DEFAULT_INTEGRATIONS, mergeIntegrations } from './integrations-config.mjs';
+
+export { DEFAULT_INTEGRATIONS };
 
 export const DEFAULT_GIT_PROTOCOL = {
   branch: 'Follow the existing repo or team branching convention. Use a feature branch for significant changes when no convention exists.',
@@ -94,7 +97,7 @@ export function normalizeModelProfile(value) {
   return VALID_MODEL_PROFILES.includes(value) ? value : 'balanced';
 }
 
-function buildConfigDefaults({ autoAdvance = false, rigorProfile }) {
+function buildConfigDefaults({ autoAdvance = false, rigorProfile, integrations = defaultIntegrations() }) {
   const rigor = resolveRigor(rigorProfile);
   const cost = resolveCost('balanced');
   const config = {
@@ -103,6 +106,7 @@ function buildConfigDefaults({ autoAdvance = false, rigorProfile }) {
     ...cost,
     commitDocs: true,
     gitProtocol: { ...DEFAULT_GIT_PROTOCOL },
+    integrations,
     initVersion: 'v1.1',
   };
   if (autoAdvance) config.autoAdvance = true;
@@ -110,7 +114,11 @@ function buildConfigDefaults({ autoAdvance = false, rigorProfile }) {
 }
 
 export function buildDefaultConfig({ autoAdvance = false } = {}) {
-  return buildConfigDefaults({ autoAdvance, rigorProfile: 'high' });
+  return buildConfigDefaults({ autoAdvance, rigorProfile: 'high', integrations: defaultIntegrations() });
+}
+
+function defaultIntegrations() {
+  return mergeIntegrations({});
 }
 
 function buildExistingConfigDefaults(existing = {}, { autoAdvance = false } = {}) {
@@ -139,6 +147,7 @@ export function loadProjectModelConfig(cwd = process.cwd()) {
       ...defaults,
       ...existing,
       workflow: { ...defaults.workflow, ...(existing.workflow ?? {}) },
+      integrations: mergeIntegrations(existing.integrations),
     };
   } catch (e) {
     console.error(`WARNING: ${configPathLabel(cwd)} is malformed (${e.message}). Using defaults.`);
@@ -166,6 +175,7 @@ function loadConfigForMutation(cwd = process.cwd()) {
         ...defaults,
         ...existing,
         workflow: { ...defaults.workflow, ...(existing.workflow ?? {}) },
+        integrations: mergeIntegrations(existing.integrations),
       },
     };
   } catch (e) {

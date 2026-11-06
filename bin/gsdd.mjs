@@ -16,6 +16,7 @@ import { createCmdNext } from './lib/next.mjs';
 import { resolveWorkspaceContext } from './lib/workspace-root.mjs';
 import { createCmdGitIdentity } from './lib/git-identity.mjs';
 import { maybeShowUpdateNotice } from './lib/update-awareness.mjs';
+import { createCmdIntegrations } from './lib/integrations-cli.mjs';
 import { classifyInformationRequest, reportCommandShapeError, validateCommandShape } from './lib/init-runtime.mjs';
 import { FRAMEWORK_VERSION } from './lib/workflows.mjs';
 const __filename = fileURLToPath(import.meta.url);
@@ -32,6 +33,7 @@ const cmdHealth = createCmdHealth(INIT_CONTEXT);
 const cmdNext = createCmdNext(INIT_CONTEXT);
 const cmdJourney = createCmdJourney(INIT_CONTEXT);
 const cmdGitIdentity = createCmdGitIdentity(INIT_CONTEXT);
+const cmdIntegrations = createCmdIntegrations({ getCwd: () => INIT_CONTEXT.cwd });
 
 const cmdUpdate = (...updateArgs) => {
   if (updateArgs.includes('--global') || updateArgs.includes('-g')) {
@@ -64,6 +66,7 @@ const COMMANDS = {
   'phase-status': cmdPhaseStatus,
   verify: cmdVerify,
   scaffold: cmdScaffold,
+  integrations: cmdIntegrations,
   help: cmdHelp,
 };
 // Setup is the first-run facade; keep it outside the retained compatibility table while help

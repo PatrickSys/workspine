@@ -65,7 +65,6 @@ Before planning, acknowledge what is locked:
 - Patterns from previous phases - match existing conventions. Do not introduce new patterns without cause.
 - Deferred items - items marked v2, nice-to-have, or out of scope in SPEC.md or APPROACH.md. Do not plan for them.
 - Cross-check: if SPEC.md and APPROACH.md disagree on whether an item is must-have or deferred, stop and ask the user before planning. Do not silently adopt one classification over the other.
-
 If you need to challenge a locked decision: stop, ask the developer, and document the new decision explicitly.
 </context_fidelity>
 <research_check>
@@ -96,6 +95,9 @@ Use these sections:
 - The phase uses only technologies already established in previous phases
 Quality gate: do not proceed to goal-backward planning if you have unresolved uncertainties about the implementation approach. If research was skipped (skip conditions above apply), document the skip reason in the plan Notes section so the plan checker can verify the skip was justified.
 </research_check>
+<codebase_context_integration>
+Optional, off by default: after selecting the write set and enabling `integrations.codebaseContext.enabled` with the CLI installed, run `node .work/bin/gsdd.mjs integrations codebase-context plan-context --files <paths> --plan <artifact> --json`. The helper uses Codebase Context patterns and explore search. On `status: ok`, read `.work/integrations/codebase-context/plan-context.json`; otherwise continue unchanged. Setup: `docs/USER-GUIDE.md`.
+</codebase_context_integration>
 <spec_quality_check>
 ### When This Runs
 After research_check, before goal_backward_planning.
@@ -272,9 +274,7 @@ Task type semantics:
 - `type="checkpoint:review"` - executor stops for explicit review before continuing
 
 If any task uses `checkpoint:*`, the plan frontmatter must set `autonomous: false`.
-
 ### Specificity Rules
-
 | Too Vague | Just Right |
 |-------------|-------------|
 | "Set up the database" | "Create the user schema, wire it into the repository layer, then run `npm test -- --runInBand tests/user-schema.test.ts`" |
