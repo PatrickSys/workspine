@@ -153,6 +153,12 @@ describe('public surface language gate', () => {
     assert.match(readme, /!\[[^\]]+\]\(assets\/workspine-hero\.webp\)/,
       'README must show the relaunch hero from the packed asset path');
     assert.strictEqual(setupCtas.length, 1, 'README must have one exact setup CTA');
+    assert.match(readme, /npm.s published `latest`/i,
+      'the setup command must identify the published package channel');
+    assert.match(readme, /`main`[^.]*unreleased/i,
+      'repository instructions must not imply candidate changes are published');
+    assert.match(readme, /installed `\.agents\/skills\/work-\*\/SKILL\.md`/i,
+      'a stranger must know which workflow instructions match the installed version');
     for (const route of ['work-quick', 'work-plan', 'work-new-project']) {
       assert.match(routeSection, new RegExp(`\\b${route}\\b`), `README route section must include ${route}`);
     }

@@ -967,7 +967,7 @@ Implementation lives under `bin/lib/`:
 | W2 | WARN | Manifest-tracked installed templates/helpers modified locally (hash mismatch vs manifest) |
 | W3 | WARN | Manifest-tracked installed templates/helpers missing from disk but listed in manifest |
 | W4 | WARN | Active non-archived phases marked in progress/done are missing from `.planning/phases/` |
-| W5 | WARN | Phase artifact set has PLAN but no matching SUMMARY (stale in-progress) |
+| W5 | WARN | Phase artifact set has PLAN but no matching execution SUMMARY |
 | W6 | WARN | No generated workflow adapter surfaces detected |
 | W7 | WARN | `distilled/DESIGN.md` health check table differs from implemented check IDs |
 | W8 | WARN | `distilled/README.md` workflow inventory differs from `distilled/workflows/` |
