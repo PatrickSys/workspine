@@ -451,6 +451,29 @@ describe('Health — WARN: ROADMAP references nonexistent phase', () => {
 });
 
 describe('Health — WARN: phase with PLAN but no SUMMARY', () => {
+  test('unapproved plan keeps W5 but routes through progress before execution', async () => {
+    await initWorkspace();
+    const phaseDir = path.join(tmpDir, '.work', 'phases', '01-foundation');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '---\nstatus: pending\n---\n# Phase 1 Plan\n');
+    const statePath = path.join(tmpDir, '.work', 'state.json');
+    const before = fs.readFileSync(statePath, 'utf8');
+
+    const result = await runCliAsMain(tmpDir, ['health', '--json']);
+    const warning = JSON.parse(result.output).warnings.find((entry) => entry.id === 'W5');
+
+    assert.ok(warning, 'a missing summary must still be reported');
+    assert.strictEqual(warning.severity, 'WARN');
+    assert.doesNotMatch(warning.message, /stale|in-progress/i,
+      'an unapproved plan without execution evidence is not necessarily stale or in progress');
+    assert.match(warning.fix, /work-progress/);
+    assert.match(warning.fix, /approval/);
+    assert.doesNotMatch(warning.fix, /^Run (?:the )?work-execute/);
+    assert.match(warning.fix, /01-foundation\/01-01-SUMMARY\.md/);
+    assert.strictEqual(fs.readFileSync(statePath, 'utf8'), before,
+      'health advice must not approve or execute the plan');
+  });
+
   test('nested PLAN without SUMMARY → W5', async () => {
     await initWorkspace();
     const phaseDir = path.join(tmpDir, '.work', 'phases', '01-foundation');
@@ -458,7 +481,7 @@ describe('Health — WARN: phase with PLAN but no SUMMARY', () => {
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Phase 1 Plan\n');
     const result = await runCliAsMain(tmpDir, ['health', '--json']);
     const json = JSON.parse(result.output);
-    assert.ok(json.warnings.some((w) => w.id === 'W5'), 'should warn about stale in-progress phase');
+    assert.ok(json.warnings.some((w) => w.id === 'W5'), 'should warn about a missing execution summary');
   });
 
   test('nested PLAN with SUMMARY → no W5', async () => {

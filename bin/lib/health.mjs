@@ -290,15 +290,15 @@ export function buildHealthReport(ctx, healthArgs = []) {
       }
     }
 
-    // W5: Phase dir has PLAN but no SUMMARY (stale in-progress)
+    // W5: A plan has no recorded execution summary; approval may still be pending.
     if (lifecycle.incompletePlans.length > 0) {
       for (const plan of lifecycle.incompletePlans) {
         const expectedSummary = statePath(stateDirName, `phases/${plan.dir}/${plan.baseId}-SUMMARY.md`);
         warnings.push({
           id: 'W5',
           severity: 'WARN',
-          message: `${plan.displayPath} exists but no matching SUMMARY found (stale in-progress?)`,
-          fix: `Run the ${WORKFLOW_ID_PREFIX}execute workflow for ${plan.phaseToken} to write ${expectedSummary}.`,
+          message: `${plan.displayPath} exists but no matching SUMMARY found; execution is not recorded.`,
+          fix: `Run the ${WORKFLOW_ID_PREFIX}progress workflow to check plan approval and the next action. After approved execution, ${WORKFLOW_ID_PREFIX}execute records ${expectedSummary}.`,
         });
       }
     }
