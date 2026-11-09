@@ -116,7 +116,7 @@ describe('gsdd setup facade', () => {
     assert.doesNotMatch(first.output, /workspine init - setting up your workspace/);
     assert.ok(fs.existsSync(path.join(tmpDir, '.work', 'config.json')));
     assert.ok(fs.existsSync(path.join(tmpDir, '.agents', 'skills', 'work-quick', 'SKILL.md')));
-    assert.match(fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf8'), /\.work\/bin\//);
+    assert.doesNotMatch(fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf8'), /\.work\/bin\//);
     assert.ok(!fs.existsSync(path.join(tmpDir, 'AGENTS.md')), 'generic governance is opt-in');
     const before = fs.readFileSync(path.join(tmpDir, '.work', 'generation-manifest.json'));
     const second = await runCliAsMain(tmpDir, ['setup', '-y']);
@@ -125,6 +125,38 @@ describe('gsdd setup facade', () => {
     assert.deepStrictEqual(fs.readFileSync(path.join(tmpDir, '.work', 'generation-manifest.json')), before);
   });
 
+  test('tracked setup helper survives an exported consumer checkout', async () => {
+    execFileSync('git', ['init'], { cwd: tmpDir, stdio: 'pipe' });
+    const setup = await runCliAsMain(tmpDir, ['setup', '-y']);
+    assert.strictEqual(setup.exitCode, 0, setup.output);
+
+    execFileSync('git', ['add', '--all'], { cwd: tmpDir, stdio: 'pipe' });
+    assert.strictEqual(
+      execFileSync('git', ['ls-files', '--error-unmatch', '.work/bin/gsdd.mjs'], { cwd: tmpDir, encoding: 'utf8' }).trim(),
+      '.work/bin/gsdd.mjs',
+    );
+    execFileSync('git', [
+      '-c', 'user.name=Workspine Fixture',
+      '-c', 'user.email=fixture@example.invalid',
+      'commit', '-m', 'setup consumer fixture',
+    ], { cwd: tmpDir, stdio: 'pipe' });
+
+    const archive = path.join(tmpDir, 'consumer.tar');
+    fs.writeFileSync(archive, execFileSync('git', ['archive', '--format=tar', 'HEAD'], { cwd: tmpDir, maxBuffer: 32 * 1024 * 1024 }));
+    const consumer = fs.mkdtempSync(path.join(os.tmpdir(), 'gsdd-setup-consumer-'));
+    try {
+      const tar = process.platform === 'win32'
+        ? path.join(process.env.SystemRoot || process.env.SYSTEMROOT || 'C:\\Windows', 'System32', 'tar.exe')
+        : 'tar';
+      const unpacked = spawnSync(tar, ['-xf', archive, '-C', consumer], { encoding: 'utf8' });
+      assert.strictEqual(unpacked.status, 0, unpacked.stderr || unpacked.stdout);
+      const next = runInstalled(path.join(consumer, '.work/bin/gsdd.mjs'), consumer, ['next', '--json']);
+      assert.strictEqual(next.status, 0, next.stderr || next.stdout);
+      assert.doesNotThrow(() => JSON.parse(next.stdout));
+    } finally {
+      cleanup(consumer);
+    }
+  });
   test('dry run is zero-write and hidden --dry remains compatible', async () => {
     const before = fs.readdirSync(tmpDir);
     const result = await runCliAsMain(tmpDir, ['setup', '--dry-run']);

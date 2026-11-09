@@ -412,7 +412,6 @@ export function createCmdInit(ctx) {
       ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/`, `  - ensured ${stateDirName}/ is gitignored`);
     }
     ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/.local/`, `  - ensured ${stateDirName}/.local/ is gitignored`);
-    ensureGitignoreEntry(initCtx.cwd, `${stateDirName}/bin/`, `  - ensured ${stateDirName}/bin/ is gitignored`);
 
     if (briefSource) {
       cpSync(briefSource, join(planningDir, 'PROJECT_BRIEF.md'));
