@@ -9,6 +9,33 @@ import { resolveStateDir } from './state-dir.mjs';
 import { resolveWorkspaceContext } from './workspace-root.mjs';
 
 const MAX_DIRTY_BUCKET_ENTRIES = 200;
+
+function isWorkspineBootstrapRepoPath(repoPath) {
+  const normalized = normalizeSlashes(String(repoPath || '').replace(/\\/g, '/'));
+  if (!normalized || normalized.includes('..')) return false;
+  return normalized === 'goal.md'
+    || normalized === 'AGENTS.md'
+    || normalized.startsWith('.work/')
+    || normalized.startsWith('.agents/');
+}
+
+function nonBootstrapDirtyCountsFromStatusBuckets(buckets) {
+  const countEntries = (entries, pathsForEntry) => entries.filter((entry) => (
+    pathsForEntry(entry).some((repoPath) => !isWorkspineBootstrapRepoPath(repoPath))
+  )).length;
+  return {
+    tracked: countEntries(buckets.tracked, trackedStatusEntryPaths),
+    untracked: countEntries(buckets.untracked, (repoPath) => [repoPath]),
+  };
+}
+
+function nonBootstrapDirtyCounts(worktree) {
+  if (worktree.dirty?.non_bootstrap_counts) return worktree.dirty.non_bootstrap_counts;
+  return nonBootstrapDirtyCountsFromStatusBuckets({
+    tracked: worktree.dirty?.tracked || [],
+    untracked: worktree.dirty?.untracked || [],
+  });
+}
 const CLEANUP_STATES = Object.freeze(['active', 'paused', 'merged', 'abandoned', 'superseded', 'cleanup_deferred']);
 const ACTIVE_ANNOTATION_STATES = Object.freeze(['active', 'paused', 'cleanup_deferred']);
 const AUTHORITY_ORDER = Object.freeze([
@@ -260,6 +287,7 @@ function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false
   const head = runGit(pathValue, ['rev-parse', 'HEAD']);
   const gitTopLevel = runGit(pathValue, ['rev-parse', '--show-toplevel']);
   const buckets = status.ok ? parseStatusBuckets(status.stdout) : parseStatusBuckets('');
+  const nonBootstrapCounts = nonBootstrapDirtyCountsFromStatusBuckets(buckets);
   const ignoredCountResult = includeIgnoredCount && !includeIgnoredPaths ? runIgnoredCount(pathValue) : null;
   const ignoredEntries = includeIgnoredPaths ? capBucket(buckets.ignored) : [];
   const ignoredCount = includeIgnoredPaths
@@ -281,6 +309,7 @@ function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false
       tracked: capBucket(buckets.tracked),
       untracked: capBucket(buckets.untracked),
       ignored: ignoredEntries,
+      non_bootstrap_counts: nonBootstrapCounts,
       counts: {
         tracked: buckets.tracked.length,
         untracked: buckets.untracked.length,
@@ -642,16 +671,17 @@ function buildRisks({ canonical, worktrees, annotations, rawAnnotations, runtime
     risks.push(risk);
   }
   addBranchStateRisks(risks, canonical, { canonical: true });
-  if (canonical.dirty.counts.tracked > 0 || canonical.dirty.counts.untracked > 0) {
+  const canonicalDirty = nonBootstrapDirtyCounts(canonical);
+  if (canonicalDirty.tracked > 0 || canonicalDirty.untracked > 0) {
     const risk = {
       code: 'canonical_dirty',
       severity: 'warn',
-      message: `Canonical worktree has tracked/untracked changes (${canonical.dirty.counts.tracked} tracked, ${canonical.dirty.counts.untracked} untracked).`,
+      message: `Canonical worktree has tracked/untracked changes (${canonicalDirty.tracked} tracked, ${canonicalDirty.untracked} untracked).`,
     };
     risk.fix_hint = fixHintForRisk(risk);
     risks.push(risk);
   }
-  if (canonical.dirty.counts.tracked > 0 && (canonical.ahead_behind?.behind || 0) > 0) {
+  if (canonicalDirty.tracked > 0 && (canonical.ahead_behind?.behind || 0) > 0) {
     const risk = {
       code: 'canonical_dirty_behind_upstream',
       severity: 'block',

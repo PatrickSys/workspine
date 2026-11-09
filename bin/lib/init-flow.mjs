@@ -239,7 +239,9 @@ export function createCmdInit(ctx) {
     const normalizedArgs = workspace.args;
     let initCtx = contextAtWorkspaceRoot(ctx, workspace.workspaceRoot);
 
-    console.log('workspine init - setting up your workspace\n');
+    const invokedAsFlag = parseFlagValue(normalizedArgs, '--invoked-as');
+    const invokedAs = invokedAsFlag.invalid || !invokedAsFlag.value ? 'init' : invokedAsFlag.value;
+    console.log(`workspine ${invokedAs} - setting up your workspace\n`);
 
     const isAuto = parseAutoFlag(normalizedArgs);
     const wantsMigration = normalizedArgs.includes('--migrate');
