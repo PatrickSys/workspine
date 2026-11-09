@@ -19,10 +19,22 @@ function isWorkspineBootstrapRepoPath(repoPath) {
     || normalized.startsWith('.agents/');
 }
 
+function nonBootstrapDirtyCountsFromStatusBuckets(buckets) {
+  const countEntries = (entries, pathsForEntry) => entries.filter((entry) => (
+    pathsForEntry(entry).some((repoPath) => !isWorkspineBootstrapRepoPath(repoPath))
+  )).length;
+  return {
+    tracked: countEntries(buckets.tracked, trackedStatusEntryPaths),
+    untracked: countEntries(buckets.untracked, (repoPath) => [repoPath]),
+  };
+}
+
 function nonBootstrapDirtyCounts(worktree) {
-  const tracked = (worktree.dirty?.tracked || []).filter((entry) => !isWorkspineBootstrapRepoPath(entry)).length;
-  const untracked = (worktree.dirty?.untracked || []).filter((entry) => !isWorkspineBootstrapRepoPath(entry)).length;
-  return { tracked, untracked };
+  if (worktree.dirty?.non_bootstrap_counts) return worktree.dirty.non_bootstrap_counts;
+  return nonBootstrapDirtyCountsFromStatusBuckets({
+    tracked: worktree.dirty?.tracked || [],
+    untracked: worktree.dirty?.untracked || [],
+  });
 }
 const CLEANUP_STATES = Object.freeze(['active', 'paused', 'merged', 'abandoned', 'superseded', 'cleanup_deferred']);
 const ACTIVE_ANNOTATION_STATES = Object.freeze(['active', 'paused', 'cleanup_deferred']);
@@ -275,6 +287,7 @@ function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false
   const head = runGit(pathValue, ['rev-parse', 'HEAD']);
   const gitTopLevel = runGit(pathValue, ['rev-parse', '--show-toplevel']);
   const buckets = status.ok ? parseStatusBuckets(status.stdout) : parseStatusBuckets('');
+  const nonBootstrapCounts = nonBootstrapDirtyCountsFromStatusBuckets(buckets);
   const ignoredCountResult = includeIgnoredCount && !includeIgnoredPaths ? runIgnoredCount(pathValue) : null;
   const ignoredEntries = includeIgnoredPaths ? capBucket(buckets.ignored) : [];
   const ignoredCount = includeIgnoredPaths
@@ -296,6 +309,7 @@ function readGitWorktree(pathValue, workspaceRoot, { includeIgnoredPaths = false
       tracked: capBucket(buckets.tracked),
       untracked: capBucket(buckets.untracked),
       ignored: ignoredEntries,
+      non_bootstrap_counts: nonBootstrapCounts,
       counts: {
         tracked: buckets.tracked.length,
         untracked: buckets.untracked.length,

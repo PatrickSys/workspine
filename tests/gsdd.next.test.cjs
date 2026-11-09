@@ -46,6 +46,11 @@ async function initWork() {
   return result;
 }
 
+async function readControlMap() {
+  const modulePath = pathToFileURL(path.join(__dirname, '..', 'bin', 'lib', 'control-map.mjs')).href;
+  const { buildControlMap } = await import(`${modulePath}?t=${Date.now()}-${Math.random()}`);
+  return buildControlMap({ workspaceRoot: tmpDir, planningDir: path.join(tmpDir, '.work') });
+}
 function typedDecision(id, decision, overrides = {}) {
   return {
     id,
@@ -1369,6 +1374,51 @@ describe('next command routing', () => {
       'non-bootstrap dirty files should still warn');
   });
 
+  test('canonical dirty classification scans complete buckets while retaining raw caps', async () => {
+    await initWork();
+    const initialized = spawnSync('git', ['init'], { cwd: tmpDir, encoding: 'utf8' });
+    assert.strictEqual(initialized.status, 0, initialized.stderr || initialized.stdout);
+
+    for (let index = 0; index < 201; index += 1) {
+      writeFile(`.work/bootstrap-${String(index).padStart(3, '0')}.md`, 'bootstrap\n');
+    }
+    writeFile('notes.md', 'application change\n');
+
+    const next = await runJson(['next', '--json']);
+    assert.ok(next.repo_warnings.some((message) => /tracked\/untracked changes \(0 tracked, 1 untracked\)/i.test(message)),
+      'app dirt after the display cap must still be reported');
+
+    const raw = spawnSync('git', ['status', '--short', '--untracked-files=all'], { cwd: tmpDir, encoding: 'utf8' });
+    assert.strictEqual(raw.status, 0, raw.stderr || raw.stdout);
+    const rawUntracked = raw.stdout.split(/\r?\n/).filter((line) => line.slice(0, 2) === '??');
+    assert.strictEqual(rawUntracked.filter((line) => line.slice(3) === 'notes.md').length, 1);
+
+    const controlMap = await readControlMap();
+    const dirty = controlMap.canonical_worktree.dirty;
+    assert.strictEqual(dirty.counts.untracked, rawUntracked.length, 'full raw count remains exact');
+    assert.strictEqual(dirty.untracked.length, Math.min(200, rawUntracked.length), 'displayed paths retain their cap');
+    assert.strictEqual(dirty.omitted_counts.untracked, Math.max(0, rawUntracked.length - 200), 'omitted count remains exact');
+  });
+
+  test('tracked bootstrap-only edits remain excluded from canonical dirty warnings', async () => {
+    await initWork();
+    const initialized = spawnSync('git', ['init'], { cwd: tmpDir, encoding: 'utf8' });
+    assert.strictEqual(initialized.status, 0, initialized.stderr || initialized.stdout);
+    writeFile('.work/bootstrap.md', 'baseline\n');
+
+    const added = spawnSync('git', ['add', '--all'], { cwd: tmpDir, encoding: 'utf8' });
+    assert.strictEqual(added.status, 0, added.stderr || added.stdout);
+    const committed = spawnSync('git', ['-c', 'user.name=Workspine Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'bootstrap baseline'], { cwd: tmpDir, encoding: 'utf8' });
+    assert.strictEqual(committed.status, 0, committed.stderr || committed.stdout);
+
+    writeFile('.work/bootstrap.md', 'local bootstrap edit\n');
+    const next = await runJson(['next', '--json']);
+    assert.ok(!next.repo_warnings.some((message) => /tracked\/untracked changes/i.test(message)),
+      'tracked Workspine bootstrap paths must be classified by their porcelain path, not the raw status line');
+    const controlMap = await readControlMap();
+    assert.strictEqual(controlMap.canonical_worktree.dirty.counts.tracked, 1);
+    assert.strictEqual(controlMap.canonical_worktree.dirty.counts.untracked, 0);
+  });
   test('active brownfield change routes to brownfield planning before unrelated roadmap phase preflight', async () => {
     await initWork();
     writeFile('.work/SPEC.md', '# Spec\n');
