@@ -346,6 +346,7 @@ Details worth knowing before you script it:
 | `npx -y workspine journey` | Inspect journey receipts |
 | `npx -y workspine git-identity` | Inspect Git identity and root |
 | `npx -y workspine phase-status` | Inspect phase status |
+| `npx -y workspine integrations show --json` | **After this integration is released** (not in current npm `latest`): inspect optional integrations. Until then use `node bin/gsdd.mjs integrations show --json` from a checkout of this branch, or `node .work/bin/gsdd.mjs integrations show --json` in a project set up from this build. Codebase Context stays disabled by default. |
 | `npx -y workspine help` | Show the concise first-use and core-command summary; this guide owns the detailed command reference |
 
 If `workspine` is globally installed, you can use the shorter `gsdd ...` form for the same commands. Generated workflow helper calls do not use the global binary; they run through `node .work/bin/gsdd.mjs ...` from the repo root. The `gsdd` binary alias is removed at the next minor release, so new scripts and CI should call `workspine ...` directly.
@@ -452,6 +453,12 @@ only brief-driven `SPEC.md`/`ROADMAP.md` bootstrap; it does not authorize or cha
     "branch": "Follow existing repo conventions",
     "commit": "Logical grouping, no phase/task IDs",
     "pr": "Follow existing review workflow"
+  },
+  "integrations": {
+    "codebaseContext": {
+      "enabled": false,
+      "command": "codebase-context"
+    }
   }
 }
 ```
@@ -476,6 +483,17 @@ Each adds quality but costs tokens and time:
 | `workflow.discuss` | `true` | Surface material approach ambiguity for owner alignment before planning |
 | `workflow.planCheck` | `true` | Fresh-context adversarial plan checking (max-3 cycle loop) |
 | `workflow.verifier` | `true` | 3-level verification gate after execution |
+
+### Optional integrations
+
+| Setting | Default | What it Controls |
+|---------|---------|------------------|
+| `integrations.codebaseContext.enabled` | `false` | When `true` and the CLI is on `PATH`, `/work-plan` and `/work-execute` may call [codebase-context](https://github.com/PatrickSys/codebase-context) helpers and record receipts under `.work/integrations/codebase-context/` |
+| `integrations.codebaseContext.command` | `codebase-context` | Executable used for `patterns` / `search --intent edit` calls |
+
+Inspect status with `node .work/bin/gsdd.mjs integrations show --json`. Enable with `node .work/bin/gsdd.mjs integrations codebase-context enable` after installing the CLI. When disabled or unavailable, workflows skip the bridge with no behavior change.
+
+`plan-context` and `edit-preflight` are Workspine helper subcommands only. They call the real codebase-context CLI: `patterns` and `search --intent explore` for planning (MCP `get_team_patterns` / `search_codebase`), and `search --intent edit` before edits (MCP `search_codebase` preflight).
 
 Disable these to speed up phases in familiar domains or when conserving tokens. Disabling `planCheck` engages reduced-assurance mode: the planner self-checks without the independent reviewer.
 
